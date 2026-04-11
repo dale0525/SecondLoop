@@ -158,6 +158,14 @@ PRAGMA user_version = 34;
     Ok(())
 }
 
+fn execute_batch_allowing_duplicate_columns(conn: &Connection, sql: &str) -> Result<()> {
+    match conn.execute_batch(sql) {
+        Ok(()) => Ok(()),
+        Err(err) if err.to_string().contains("duplicate column name") => Ok(()),
+        Err(err) => Err(err.into()),
+    }
+}
+
 fn ensure_todo_manual_nudge_columns(conn: &Connection) -> Result<()> {
     let has_manual_importance_nudge_score: bool = {
         let mut stmt = conn.prepare(r#"PRAGMA table_info(todos);"#)?;
@@ -173,7 +181,8 @@ fn ensure_todo_manual_nudge_columns(conn: &Connection) -> Result<()> {
         found
     };
     if !has_manual_importance_nudge_score {
-        conn.execute_batch(
+        execute_batch_allowing_duplicate_columns(
+            conn,
             "ALTER TABLE todos ADD COLUMN manual_importance_nudge_score INTEGER NOT NULL DEFAULT 0;",
         )?;
     }
@@ -192,7 +201,8 @@ fn ensure_todo_manual_nudge_columns(conn: &Connection) -> Result<()> {
         found
     };
     if !has_manual_urgency_nudge_score {
-        conn.execute_batch(
+        execute_batch_allowing_duplicate_columns(
+            conn,
             "ALTER TABLE todos ADD COLUMN manual_urgency_nudge_score INTEGER NOT NULL DEFAULT 0;",
         )?;
     }
@@ -278,7 +288,8 @@ fn migrate_from_v36_to_v37(conn: &Connection) -> Result<()> {
         .collect::<std::result::Result<Vec<_>, _>>()?;
 
     if !columns.iter().any(|column| column == "attempt_id") {
-        conn.execute_batch(
+        execute_batch_allowing_duplicate_columns(
+            conn,
             r#"
 ALTER TABLE semantic_parse_jobs
   ADD COLUMN attempt_id INTEGER NOT NULL DEFAULT 0;
@@ -297,7 +308,8 @@ fn migrate_from_v37_to_v38(conn: &Connection) -> Result<()> {
         .collect::<std::result::Result<Vec<_>, _>>()?;
 
     if !columns.iter().any(|column| column == "citations_json") {
-        conn.execute_batch(
+        execute_batch_allowing_duplicate_columns(
+            conn,
             r#"
 ALTER TABLE messages
   ADD COLUMN citations_json TEXT;
@@ -334,14 +346,15 @@ PRAGMA user_version = 39;
 }
 
 fn migrate_from_v39_to_v40(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        r#"
-ALTER TABLE knowledge_documents ADD COLUMN memory_section TEXT;
-ALTER TABLE knowledge_documents ADD COLUMN memory_source_count INTEGER NOT NULL DEFAULT 0;
-
-PRAGMA user_version = 40;
-"#,
+    execute_batch_allowing_duplicate_columns(
+        conn,
+        "ALTER TABLE knowledge_documents ADD COLUMN memory_section TEXT;",
     )?;
+    execute_batch_allowing_duplicate_columns(
+        conn,
+        "ALTER TABLE knowledge_documents ADD COLUMN memory_source_count INTEGER NOT NULL DEFAULT 0;",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 40;")?;
     Ok(())
 }
 
@@ -365,6 +378,47 @@ pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
         return Ok(parent.to_path_buf());
     }
     Err(anyhow!("unable to derive app_dir from sqlite connection"))
+}
+
+#[cfg(test)]
+mod migrate_tail_tests {
+    use super::*;
+
+    #[test]
+    fn add_column_migration_tolerates_duplicate_column_errors() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE messages (
+  id TEXT PRIMARY KEY,
+  citations_json TEXT
+);
+"#,
+        )
+        .expect("create table");
+
+        execute_batch_allowing_duplicate_columns(
+            &conn,
+            r#"
+ALTER TABLE messages
+  ADD COLUMN citations_json TEXT;
+"#,
+        )
+        .expect("duplicate column should be ignored");
+    }
+
+    #[test]
+    fn add_column_migration_still_surfaces_real_sql_errors() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+
+        let err = execute_batch_allowing_duplicate_columns(
+            &conn,
+            "ALTER TABLE missing_table ADD COLUMN citations_json TEXT;",
+        )
+        .expect_err("missing table should still fail");
+
+        assert!(err.to_string().contains("missing_table"));
+    }
 }
 
 pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()> {
