@@ -33,6 +33,7 @@ use knowledge_contexts::{
 
 const DEFAULT_MAX_HISTORY_MESSAGES: usize = 6;
 const DEFAULT_MAX_HISTORY_MESSAGE_CHARS: usize = 1200;
+const DETACHED_ASK_REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
 
 fn format_history_line(role: &str, message_id: &str, content: &str) -> String {
     match message_citation_link(message_id) {
@@ -630,9 +631,19 @@ fn ask_ai_stream_and_persist(
 ) -> Result<AskAiResult> {
     let mut has_text = false;
     let mut assistant_text = String::new();
+    let mut detached_request_id: Option<String> = None;
     let result = provider.stream_answer(prompt, &mut |ev| {
         let done = ev.done;
         let text_delta = ev.text_delta.clone();
+        if detached_request_id.is_none() {
+            detached_request_id = ev
+                .role
+                .as_deref()
+                .and_then(|role| role.strip_prefix(DETACHED_ASK_REQUEST_ID_ROLE_PREFIX))
+                .map(str::trim)
+                .filter(|request_id| !request_id.is_empty())
+                .map(ToOwned::to_owned);
+        }
         on_event(ev)?;
 
         if !done && !text_delta.is_empty() {
@@ -660,6 +671,13 @@ fn ask_ai_stream_and_persist(
                 &assistant_text,
                 citations_json.as_deref(),
             )?;
+            if let Some(request_id) = detached_request_id.as_deref() {
+                let _ = db::claim_detached_ask_completion_request_id(
+                    conn,
+                    request_id,
+                    conversation_id,
+                )?;
+            }
 
             Ok(AskAiResult {
                 user_message_id: user_message.id,

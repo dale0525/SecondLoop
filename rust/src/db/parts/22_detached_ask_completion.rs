@@ -1,3 +1,29 @@
+pub fn claim_detached_ask_completion_request_id(
+    conn: &Connection,
+    request_id: &str,
+    conversation_id: &str,
+) -> Result<bool> {
+    let request_id = request_id.trim();
+    let conversation_id = conversation_id.trim();
+    if request_id.is_empty() || conversation_id.is_empty() {
+        return Ok(false);
+    }
+
+    let now = now_ms();
+    let claimed = conn.execute(
+        r#"
+INSERT INTO detached_ask_completion_claims (
+  request_id, conversation_id, created_at_ms, updated_at_ms
+)
+VALUES (?1, ?2, ?3, ?3)
+ON CONFLICT(request_id) DO NOTHING
+"#,
+        params![request_id, conversation_id, now],
+    )?;
+
+    Ok(claimed != 0)
+}
+
 pub fn apply_detached_ask_completion_once(
     conn: &Connection,
     key: &[u8; 32],
@@ -18,19 +44,7 @@ pub fn apply_detached_ask_completion_once(
     conn.execute_batch("BEGIN IMMEDIATE;")?;
 
     let result: Result<bool> = (|| {
-        let now = now_ms();
-        let claimed = conn.execute(
-            r#"
-INSERT INTO detached_ask_completion_claims (
-  request_id, conversation_id, created_at_ms, updated_at_ms
-)
-VALUES (?1, ?2, ?3, ?3)
-ON CONFLICT(request_id) DO NOTHING
-"#,
-            params![request_id, conversation_id, now],
-        )?;
-
-        if claimed == 0 {
+        if !claim_detached_ask_completion_request_id(conn, request_id, conversation_id)? {
             return Ok(false);
         }
 
