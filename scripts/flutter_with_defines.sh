@@ -12,6 +12,14 @@ if [[ -f "${dotenv_file}" ]]; then
 fi
 
 all_args=("$@")
+macos_xcrun_wrapper_dir=""
+
+cleanup() {
+  if [[ -n "${macos_xcrun_wrapper_dir}" ]]; then
+    rm -rf "${macos_xcrun_wrapper_dir}" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
 
 has_dart_define() {
   local key="$1"
@@ -151,6 +159,47 @@ maybe_clear_macos_stale_app_bundle_for_speech_privacy() {
   fi
 }
 
+create_macos_xcrun_wrapper() {
+  local wrapper_dir
+  wrapper_dir="$(mktemp -d -t secondloop_xcrun.XXXXXX)" || {
+    echo "SecondLoop: failed to create temporary xcrun wrapper" >&2
+    exit 1
+  }
+  cat > "${wrapper_dir}/xcrun" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "xcodebuild" ]]; then
+  shift
+  exec /usr/bin/xcrun xcodebuild -allowProvisioningUpdates "$@"
+fi
+
+exec /usr/bin/xcrun "$@"
+EOF
+  chmod +x "${wrapper_dir}/xcrun" || {
+    echo "SecondLoop: failed to mark temporary xcrun wrapper as executable" >&2
+    exit 1
+  }
+  printf '%s\n' "${wrapper_dir}"
+}
+
+maybe_enable_macos_provisioning_updates() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return 0
+  fi
+
+  if ! should_sanitize_macos_module_cache; then
+    return 0
+  fi
+
+  if [[ -n "${macos_xcrun_wrapper_dir}" ]]; then
+    return 0
+  fi
+
+  macos_xcrun_wrapper_dir="$(create_macos_xcrun_wrapper)"
+  export PATH="${macos_xcrun_wrapper_dir}:${PATH}"
+}
+
 if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL+set}" == "set" ]]; then
   cat >&2 <<'EOF'
 SecondLoop: do not set SECONDLOOP_CLOUD_GATEWAY_BASE_URL in `.env.local`.
@@ -232,17 +281,20 @@ run_flutter_command() {
   local project_flutter="${repo_root}/.fvm/flutter_sdk/bin/flutter"
 
   if [[ -x "${project_flutter}" ]]; then
-    exec "${project_flutter}" "${args[@]}"
+    "${project_flutter}" "${args[@]}"
+    return $?
   fi
 
   if command -v dart >/dev/null 2>&1; then
     if dart pub global list 2>/dev/null | awk '{print $1}' | grep -qx 'fvm'; then
-      exec dart pub global run fvm:main flutter "${args[@]}"
+      dart pub global run fvm:main flutter "${args[@]}"
+      return $?
     fi
 
     if command -v flutter >/dev/null 2>&1; then
       echo "SecondLoop: No active package fvm. Falling back to flutter on PATH." >&2
-      exec flutter "${args[@]}"
+      flutter "${args[@]}"
+      return $?
     fi
 
     cat >&2 <<'EOF'
@@ -253,7 +305,8 @@ EOF
   fi
 
   if command -v flutter >/dev/null 2>&1; then
-    exec flutter "${args[@]}"
+    flutter "${args[@]}"
+    return $?
   fi
 
   cat >&2 <<'EOF'
@@ -302,6 +355,7 @@ sanitize_macos_native_toolchain_env() {
 }
 
 sanitize_macos_native_toolchain_env
+maybe_enable_macos_provisioning_updates
 
 if (( ${#defines[@]} > 0 )); then
   run_flutter_command "${all_args[@]}" "${defines[@]}"
