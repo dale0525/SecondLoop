@@ -52,6 +52,21 @@ extension NativeAppBackendKnowledgeExtension on NativeAppBackend {
     );
   }
 
+  Future<List<rust_knowledge_models.ContentKnowledgeDocument>>
+      listGeneratedMemoryDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbListGeneratedMemoryDocuments(
+      appDir: appDir,
+      key: key,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
   Future<rust_knowledge_models.KnowledgeMemoryFeedback>
       upsertKnowledgeMemoryFeedback(
     Uint8List key, {

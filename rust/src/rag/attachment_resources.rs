@@ -57,23 +57,12 @@ fn chunk_citation_link(sha: &str, kind: &str, chunk_index: i64) -> String {
     format!("secondloop://attachment/{sha}?kind={kind}&chunk={chunk_index}")
 }
 
-fn build_catalog_markdown(
+fn build_catalog_markdown_from_attachment_shas(
     conn: &Connection,
     key: &[u8; 32],
+    resource_shas: Vec<String>,
     hits: &[db::SimilarAttachmentChunk],
 ) -> Result<Option<String>> {
-    let mut resource_shas = Vec::<String>::new();
-    let mut seen = std::collections::HashSet::<String>::new();
-
-    for hit in hits {
-        if seen.insert(hit.attachment_sha256.clone()) {
-            resource_shas.push(hit.attachment_sha256.clone());
-            if resource_shas.len() >= RESOURCES_CATALOG_CAP {
-                break;
-            }
-        }
-    }
-
     if resource_shas.is_empty() {
         return Ok(None);
     }
@@ -103,6 +92,26 @@ fn build_catalog_markdown(
     }
 
     Ok(Some(out))
+}
+
+fn build_catalog_markdown(
+    conn: &Connection,
+    key: &[u8; 32],
+    hits: &[db::SimilarAttachmentChunk],
+) -> Result<Option<String>> {
+    let mut resource_shas = Vec::<String>::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+
+    for hit in hits {
+        if seen.insert(hit.attachment_sha256.clone()) {
+            resource_shas.push(hit.attachment_sha256.clone());
+            if resource_shas.len() >= RESOURCES_CATALOG_CAP {
+                break;
+            }
+        }
+    }
+
+    build_catalog_markdown_from_attachment_shas(conn, key, resource_shas, hits)
 }
 
 fn bundle_from_hits(
@@ -207,4 +216,29 @@ pub(crate) fn collect_attachment_resources_by_embedding(
         hit_limit,
     )?;
     bundle_from_hits(conn, key, hits)
+}
+
+pub(crate) fn collect_attachment_resources_for_attachment_shas(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_shas: Vec<String>,
+) -> Result<AttachmentResourcesBundle> {
+    let mut resource_shas = Vec::<String>::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+    for sha in attachment_shas {
+        if !seen.insert(sha.clone()) {
+            continue;
+        }
+        resource_shas.push(sha);
+        if resource_shas.len() >= RESOURCES_CATALOG_CAP {
+            break;
+        }
+    }
+
+    let catalog_markdown =
+        build_catalog_markdown_from_attachment_shas(conn, key, resource_shas, &[])?;
+    Ok(AttachmentResourcesBundle {
+        chunks: Vec::new(),
+        catalog_markdown,
+    })
 }

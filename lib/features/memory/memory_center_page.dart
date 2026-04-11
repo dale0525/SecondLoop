@@ -43,14 +43,20 @@ class _MemoryCenterPageState extends State<MemoryCenterPage> {
     final memoryDocuments = <ContentKnowledgeDocument>[];
     var offset = 0;
     while (true) {
-      final page = await knowledgeBackend.listKnowledgeDocuments(
-        sessionKey,
-        limit: pageSize,
-        offset: offset,
-      );
-      memoryDocuments.addAll(
-        page.where(isMemoryCenterDocument),
-      );
+      final page = switch (knowledgeBackend) {
+        final GeneratedMemoryKnowledgeBackend generatedBackend =>
+          await generatedBackend.listGeneratedMemoryDocuments(
+            sessionKey,
+            limit: pageSize,
+            offset: offset,
+          ),
+        _ => await knowledgeBackend.listKnowledgeDocuments(
+            sessionKey,
+            limit: pageSize,
+            offset: offset,
+          ),
+      };
+      memoryDocuments.addAll(page.where(isMemoryCenterDocument));
       if (page.length < pageSize) {
         break;
       }

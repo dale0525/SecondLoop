@@ -161,6 +161,58 @@ void main() {
     },
   );
 
+  testWidgets(
+      'MemoryCenterPage uses generated-memory backend filtering when available',
+      (
+    tester,
+  ) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _GeneratedMemoryBackend(
+      documents: [
+        for (var index = 0; index < 205; index += 1)
+          _document(
+            documentId: 'message:seed-$index',
+            title: 'Source $index',
+            summary: 'Non-memory source document.',
+            updatedAtMs: nowMs - index,
+            originType: KnowledgeOriginType.message,
+          ),
+        _document(
+          documentId: 'generated:preference:response-language',
+          title: 'Response language',
+          summary: 'User prefers Chinese.',
+          updatedAtMs: nowMs - 10000,
+          memoryDisplay: const KnowledgeMemoryDisplay(
+            section: KnowledgeMemorySection.preference,
+            sourceCount: 2,
+            status: KnowledgeMemoryStatus.inferred,
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const MemoryCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Response language'), findsOneWidget);
+    expect(backend.generatedListOffsets, <int>[0]);
+    expect(backend.listOffsets, isEmpty);
+  });
+
   testWidgets('MemoryCenterPage uses backend-native section metadata', (
     tester,
   ) async {
@@ -401,6 +453,27 @@ final class _MemoryBackend extends TestAppBackend
     int limit = 20,
   }) async =>
       const <KnowledgeSearchResult>[];
+}
+
+final class _GeneratedMemoryBackend extends _MemoryBackend
+    implements GeneratedMemoryKnowledgeBackend {
+  _GeneratedMemoryBackend({required super.documents});
+
+  final List<int> generatedListOffsets = <int>[];
+
+  @override
+  Future<List<ContentKnowledgeDocument>> listGeneratedMemoryDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    generatedListOffsets.add(offset);
+    return documents
+        .where((document) => isMemoryCenterDocument(document))
+        .skip(offset)
+        .take(limit)
+        .toList(growable: false);
+  }
 }
 
 ContentKnowledgeDocument _document({

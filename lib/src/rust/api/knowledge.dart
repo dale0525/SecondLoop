@@ -42,6 +42,14 @@ Future<List<ContentKnowledgeDocument>> dbListKnowledgeDocuments(
     RustLib.instance.api.crateApiKnowledgeDbListKnowledgeDocuments(
         appDir: appDir, key: key, limit: limit, offset: offset);
 
+Future<List<ContentKnowledgeDocument>> dbListGeneratedMemoryDocuments(
+        {required String appDir,
+        required List<int> key,
+        required int limit,
+        required int offset}) =>
+    RustLib.instance.api.crateApiKnowledgeDbListGeneratedMemoryDocuments(
+        appDir: appDir, key: key, limit: limit, offset: offset);
+
 Future<KnowledgeMemoryFeedback> dbUpsertKnowledgeMemoryFeedback(
         {required String appDir,
         required List<int> key,

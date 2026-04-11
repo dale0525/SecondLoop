@@ -22,7 +22,7 @@ mod knowledge_contexts;
 
 use attachment_resources::{
     collect_attachment_resources_active, collect_attachment_resources_by_embedding,
-    collect_attachment_resources_default,
+    collect_attachment_resources_default, collect_attachment_resources_for_attachment_shas,
 };
 use citations_prompt::{build_prompt as build_prompt_base, build_prompt_with_actions_and_history};
 use context_selection::{build_contexts_v2, ContextItem, ContextSource};
@@ -754,6 +754,30 @@ fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -
     Ok(out)
 }
 
+fn collect_time_window_attachment_resources(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: Option<&str>,
+    time_start_ms: i64,
+    time_end_ms: i64,
+) -> Result<attachment_resources::AttachmentResourcesBundle> {
+    let mut attachment_shas = Vec::<String>::new();
+    for message in db::list_memory_messages_in_range(
+        conn,
+        key,
+        conversation_id,
+        time_start_ms,
+        time_end_ms,
+        800,
+    )? {
+        for attachment in db::list_message_attachments(conn, key, &message.id)? {
+            attachment_shas.push(attachment.sha256);
+        }
+    }
+
+    collect_attachment_resources_for_attachment_shas(conn, key, attachment_shas)
+}
+
 fn ask_ai_stream_and_persist(
     conn: &Connection,
     key: &[u8; 32],
@@ -1462,6 +1486,10 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
     let mut contexts: Vec<ContextWithEvidence> = Vec::new();
+    let conversation_filter = match focus {
+        Focus::AllMemories => None,
+        Focus::ThisThread => Some(conversation_id),
+    };
     if top_k > 0 {
         let knowledge_entries = try_build_knowledge_context_entries(
             conn,
@@ -1477,11 +1505,6 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
             .map(|entry| entry.rendered_text.clone())
             .collect::<Vec<_>>();
         if fallback::should_use_legacy_retrieval_fallback(&knowledge_contexts) {
-            let conversation_filter = match focus {
-                Focus::AllMemories => None,
-                Focus::ThisThread => Some(conversation_id),
-            };
-
             let legacy_top_k = top_k.saturating_sub(knowledge_contexts.len()).max(1);
             let mut candidates: Vec<ContextItem> = Vec::new();
 
@@ -1651,6 +1674,13 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         }
     }
 
+    let attachment_resources = collect_time_window_attachment_resources(
+        conn,
+        key,
+        conversation_filter,
+        time_start_ms,
+        time_end_ms,
+    )?;
     let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history_in_range(
         conn,
@@ -1667,7 +1697,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
             .collect::<Vec<_>>(),
         actions.as_deref(),
         history.as_deref(),
-        None,
+        attachment_resources.catalog_markdown.as_deref(),
     );
 
     ask_ai_stream_and_persist(

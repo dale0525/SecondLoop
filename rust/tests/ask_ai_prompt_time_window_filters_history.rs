@@ -128,3 +128,93 @@ fn ask_ai_time_window_prompt_filters_conversation_history_by_range() {
         "expected unrelated attachment deep link to stay out of prompt: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_time_window_prompt_includes_attachments_linked_inside_range() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    let time_start_ms: i64 = 2_000_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    let in_range_message = db::insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "Please summarize the launch brief attachment.",
+    )
+    .expect("in range message");
+    conn.execute(
+        "UPDATE messages SET created_at = ?2, updated_at = ?2 WHERE id = ?1",
+        params![in_range_message.id, time_start_ms + 10],
+    )
+    .expect("update in range message ts");
+
+    let attachment = db::insert_attachment(&conn, &key, &app_dir, b"launch brief", "text/plain")
+        .expect("attachment");
+    db::link_attachment_to_message(&conn, &key, &in_range_message.id, &attachment.sha256)
+        .expect("link attachment");
+    db::upsert_attachment_metadata(
+        &conn,
+        &key,
+        &attachment.sha256,
+        Some("Launch brief"),
+        &["launch-brief.txt".to_string()],
+        &[],
+    )
+    .expect("metadata");
+
+    let unrelated = db::insert_attachment(&conn, &key, &app_dir, b"unrelated", "text/plain")
+        .expect("unrelated attachment");
+    db::upsert_attachment_metadata(
+        &conn,
+        &key,
+        &unrelated.sha256,
+        Some("Unrelated note"),
+        &["unrelated.txt".to_string()],
+        &[],
+    )
+    .expect("unrelated metadata");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "今天这个时间范围里的附件讲了什么？",
+        4,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+
+    assert!(
+        prompt.contains("Resources catalog (attachments):"),
+        "expected attachment catalog in prompt: {prompt}"
+    );
+    assert!(
+        prompt.contains(&format!("secondloop://attachment/{}", attachment.sha256)),
+        "expected in-range attachment deep link in prompt: {prompt}"
+    );
+    assert!(
+        !prompt.contains(&format!("secondloop://attachment/{}", unrelated.sha256)),
+        "expected unrelated attachment to stay out of prompt: {prompt}"
+    );
+}

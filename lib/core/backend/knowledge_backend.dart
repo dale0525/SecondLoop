@@ -44,13 +44,22 @@ abstract interface class KnowledgeBackend {
   });
 }
 
+abstract interface class GeneratedMemoryKnowledgeBackend {
+  Future<List<ContentKnowledgeDocument>> listGeneratedMemoryDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  });
+}
+
 KnowledgeBackend? maybeKnowledgeBackendFor(AppBackend backend) {
   if (backend is KnowledgeBackend) return backend as KnowledgeBackend;
   if (backend is NativeAppBackend) return NativeKnowledgeBackend(backend);
   return null;
 }
 
-final class NativeKnowledgeBackend implements KnowledgeBackend {
+final class NativeKnowledgeBackend
+    implements KnowledgeBackend, GeneratedMemoryKnowledgeBackend {
   NativeKnowledgeBackend(this._backend);
 
   final NativeAppBackend _backend;
@@ -85,6 +94,18 @@ final class NativeKnowledgeBackend implements KnowledgeBackend {
     int offset = 0,
   }) =>
       _backend.listKnowledgeDocuments(key, limit: limit, offset: offset);
+
+  @override
+  Future<List<ContentKnowledgeDocument>> listGeneratedMemoryDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) =>
+      _backend.listGeneratedMemoryDocuments(
+        key,
+        limit: limit,
+        offset: offset,
+      );
 
   @override
   Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(

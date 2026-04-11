@@ -676,3 +676,50 @@ fn generated_memory_cards_expose_backend_native_section_status_and_source_count(
     );
     assert_eq!(pattern_display.source_count, 2);
 }
+
+#[test]
+fn generated_memory_documents_api_excludes_non_generated_documents() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [27u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "A normal source message that should not show in memory center listings.",
+    )
+    .expect("source message");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let generated = crate::api::knowledge::db_list_generated_memory_documents(
+        app_dir_string,
+        key.to_vec(),
+        100,
+        0,
+    )
+    .expect("generated memory docs");
+
+    assert!(!generated.is_empty());
+    assert!(generated
+        .iter()
+        .all(|document| document.origin_type == crate::knowledge::KnowledgeOriginType::Generated));
+    assert!(generated
+        .iter()
+        .all(|document| !document.document_id.starts_with("message:")));
+}

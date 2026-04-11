@@ -26,12 +26,12 @@ Answer...
     expect(parsed.suggestions!.suggestions.single.title, 'Pay rent');
   });
 
-  test('strips display-only citation UUID markers from assistant text', () {
+  test('preserves literal UUID text in assistant content', () {
     const text = '你之前提到要分析视频开头台词 [08dc5d82-01d1-414d-821f-105df5a2c62e]，'
         '这和今天计划制作短视频 [eca28b30-5614-41a5-9758-662859e9cdfc] 有关。';
 
     final parsed = parseAssistantMessageActions(text);
 
-    expect(parsed.displayText, '你之前提到要分析视频开头台词，这和今天计划制作短视频有关。');
+    expect(parsed.displayText, text);
   });
 }

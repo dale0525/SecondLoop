@@ -139,6 +139,24 @@ pub fn db_list_knowledge_documents(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_list_generated_memory_documents(
+    app_dir: String,
+    key: Vec<u8>,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<knowledge::ContentKnowledgeDocument>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    knowledge::list_knowledge_documents_by_origin(
+        &conn,
+        &key,
+        knowledge::KnowledgeOriginType::Generated,
+        limit as usize,
+        offset as usize,
+    )
+}
+
+#[flutter_rust_bridge::frb]
 #[allow(clippy::too_many_arguments)]
 pub fn db_upsert_knowledge_memory_feedback(
     app_dir: String,
