@@ -41,6 +41,14 @@ struct ManagedVaultCursorRemoteDiagnostics {
     local_last_pushed_seq_by_device: BTreeMap<String, i64>,
     local_last_pushed_seq_legacy: Option<i64>,
     local_pending_apply_op_ids: Vec<String>,
+    managed_vault_protocol_version: Option<u32>,
+    managed_vault_generation_id: Option<String>,
+    managed_vault_checkpoint_token_present: bool,
+    managed_vault_last_route: Option<String>,
+    managed_vault_last_state: Option<String>,
+    blob_repair_queue_depth: u64,
+    blob_repair_last_attempted_at_ms: Option<i64>,
+    blob_repair_last_error: Option<String>,
     remote_device_seq_map: Option<RemoteDeviceSeqMap>,
     remote_device_seq_map_source: Option<String>,
     remote_probe_error: Option<String>,
@@ -73,6 +81,16 @@ fn kv_get_i64(conn: &Connection, key: &str) -> Result<Option<i64>> {
         )
         .optional()?;
     Ok(value.and_then(|v| v.parse::<i64>().ok()))
+}
+
+fn kv_get_string(conn: &Connection, key: &str) -> Result<Option<String>> {
+    conn.query_row(
+        r#"SELECT value FROM kv WHERE key = ?1"#,
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(Into::into)
 }
 
 fn kv_scan_i64_map_by_prefix(conn: &Connection, prefix: &str) -> Result<BTreeMap<String, i64>> {
@@ -224,6 +242,19 @@ fn build_managed_vault_cursor_remote_diagnostics(
     let local_last_pushed_seq_by_device = kv_scan_i64_map_by_prefix(conn, &last_pushed_prefix)?;
     let local_pending_apply_op_ids = kv_scan_keys_by_prefix(conn, &pending_prefix)?;
     let local_last_pushed_seq_legacy = kv_get_i64(conn, &legacy_last_pushed_key)?;
+    let managed_vault_protocol_version =
+        kv_get_string(conn, &format!("managed_vault.protocol_version:{scope_id}"))?
+            .and_then(|value| value.parse::<u32>().ok());
+    let managed_vault_generation_id =
+        kv_get_string(conn, &format!("managed_vault.generation_id:{scope_id}"))?;
+    let managed_vault_checkpoint_token_present =
+        kv_get_string(conn, &format!("managed_vault.checkpoint_token:{scope_id}"))?.is_some();
+    let managed_vault_last_route =
+        kv_get_string(conn, &format!("managed_vault.last_route:{scope_id}"))?;
+    let managed_vault_last_state =
+        crate::sync::managed_vault::state_machine::load_state(conn, &scope_id)?
+            .map(|state| state.as_str().to_string());
+    let blob_repair = crate::sync::blob_repair::load_blob_repair_diagnostics(conn, &scope_id)?;
     let local_device_id = read_local_device_id(conn)?;
     let local_device_id_for_output = local_device_id
         .clone()
@@ -264,6 +295,14 @@ fn build_managed_vault_cursor_remote_diagnostics(
         local_last_pushed_seq_by_device,
         local_last_pushed_seq_legacy,
         local_pending_apply_op_ids,
+        managed_vault_protocol_version,
+        managed_vault_generation_id,
+        managed_vault_checkpoint_token_present,
+        managed_vault_last_route,
+        managed_vault_last_state,
+        blob_repair_queue_depth: blob_repair.queued_count,
+        blob_repair_last_attempted_at_ms: blob_repair.last_attempted_at_ms,
+        blob_repair_last_error: blob_repair.last_error,
         remote_device_seq_map,
         remote_device_seq_map_source,
         remote_probe_error,

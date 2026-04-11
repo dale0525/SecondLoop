@@ -142,11 +142,36 @@ pub(super) fn update_since_map(
     scope_id: &str,
     next: &BTreeMap<String, i64>,
 ) -> Result<()> {
-    for (device_id, last_seq) in next {
-        let key = format!("managed_vault.last_pulled_seq:{scope_id}:{device_id}");
-        super::super::kv_set_i64(conn, &key, *last_seq)?;
-    }
-    Ok(())
+    super::with_immediate_transaction(conn, || {
+        let prefix = format!("managed_vault.last_pulled_seq:{scope_id}:");
+        let pattern = format!("{prefix}%");
+        let _ = conn.execute(r#"DELETE FROM kv WHERE key LIKE ?1"#, params![pattern])?;
+        for (device_id, last_seq) in next {
+            let key = format!("managed_vault.last_pulled_seq:{scope_id}:{device_id}");
+            super::super::kv_set_i64(conn, &key, *last_seq)?;
+        }
+        Ok(())
+    })
+}
+
+pub(super) fn remote_ahead_cursor_devices(
+    since: &BTreeMap<String, i64>,
+    remote_max: &BTreeMap<String, i64>,
+    local_device_id: &str,
+) -> Vec<String> {
+    remote_max
+        .iter()
+        .filter_map(|(device_id, max_seq)| {
+            if device_id == local_device_id {
+                return None;
+            }
+            let last_pulled_seq = since.get(device_id).copied().unwrap_or(0);
+            if last_pulled_seq <= 0 || *max_seq <= last_pulled_seq {
+                return None;
+            }
+            Some(device_id.clone())
+        })
+        .collect()
 }
 
 pub(super) fn cursor_repair_marker_key(scope_id: &str, device_id: &str) -> String {
@@ -232,6 +257,37 @@ mod cursor_repair_marker_tests {
             )
             .expect("get v2"),
             Some(1)
+        );
+    }
+
+    #[test]
+    fn update_since_map_replaces_entries_inside_existing_transaction() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+
+        kv_set_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-a", 7).expect("seed a");
+        kv_set_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-b", 3).expect("seed b");
+
+        conn.execute_batch("BEGIN IMMEDIATE;").expect("begin");
+        let mut next = BTreeMap::new();
+        next.insert("device-c".to_string(), 11);
+        update_since_map(&conn, "scope-a", &next).expect("update since");
+        conn.execute_batch("COMMIT;").expect("commit");
+
+        assert_eq!(
+            kv_get_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-a")
+                .expect("load old a"),
+            None
+        );
+        assert_eq!(
+            kv_get_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-b")
+                .expect("load old b"),
+            None
+        );
+        assert_eq!(
+            kv_get_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-c")
+                .expect("load new c"),
+            Some(11)
         );
     }
 }

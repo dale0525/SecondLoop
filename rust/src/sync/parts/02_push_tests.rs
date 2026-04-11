@@ -47,6 +47,7 @@ mod push_progress_tests {
         list_calls: AtomicUsize,
         mkdir_calls: AtomicUsize,
         get_calls: AtomicUsize,
+        byte_probe_get_calls: AtomicUsize,
         put_calls: AtomicUsize,
     }
 
@@ -58,6 +59,7 @@ mod push_progress_tests {
                 list_calls: AtomicUsize::new(0),
                 mkdir_calls: AtomicUsize::new(0),
                 get_calls: AtomicUsize::new(0),
+                byte_probe_get_calls: AtomicUsize::new(0),
                 put_calls: AtomicUsize::new(0),
             }
         }
@@ -67,6 +69,7 @@ mod push_progress_tests {
             self.list_calls.store(0, Ordering::Relaxed);
             self.mkdir_calls.store(0, Ordering::Relaxed);
             self.get_calls.store(0, Ordering::Relaxed);
+            self.byte_probe_get_calls.store(0, Ordering::Relaxed);
             self.put_calls.store(0, Ordering::Relaxed);
         }
 
@@ -101,6 +104,9 @@ mod push_progress_tests {
 
         fn get(&self, path: &str) -> Result<Vec<u8>> {
             self.get_calls.fetch_add(1, Ordering::Relaxed);
+            if path.contains("/attachments/") || path.contains("/embedding_artifacts/") {
+                self.byte_probe_get_calls.fetch_add(1, Ordering::Relaxed);
+            }
             self.inner.get(path)
         }
 
@@ -305,9 +311,13 @@ mod push_progress_tests {
         assert_eq!(remote.put_calls.load(Ordering::Relaxed), 0);
         assert_eq!(remote.mkdir_calls.load(Ordering::Relaxed), 0);
         assert_eq!(
-            remote.get_calls.load(Ordering::Relaxed),
+            remote.byte_probe_get_calls.load(Ordering::Relaxed),
             0,
-            "fresh device probe should not download remote bytes"
+            "fresh device probe should not download attachment or artifact bytes"
+        );
+        assert!(
+            remote.get_calls.load(Ordering::Relaxed) > 0,
+            "fresh device probe may read remote manifests while checking generation"
         );
         assert!(
             remote.exists_calls.load(Ordering::Relaxed) > 0,

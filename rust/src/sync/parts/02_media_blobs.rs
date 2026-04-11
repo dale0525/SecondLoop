@@ -7,6 +7,8 @@ pub fn download_attachment_bytes(
     sha256: &str,
 ) -> Result<()> {
     let app_dir = crate::db::app_dir_from_conn(conn)?;
+    let remote_root_dir = normalize_dir(remote_root);
+    let scope_id = sync_scope_id(remote, &remote_root_dir);
 
     let stored_path: Option<String> = conn
         .query_row(
@@ -17,9 +19,21 @@ pub fn download_attachment_bytes(
         .optional()?;
     let stored_path = stored_path.ok_or_else(|| anyhow!("attachment not found"))?;
 
-    let remote_root_dir = normalize_dir(remote_root);
     let remote_path = format!("{remote_root_dir}attachments/{sha256}.bin");
-    let ciphertext = remote.get(&remote_path)?;
+    let ciphertext = match remote.get(&remote_path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.is::<NotFound>() => {
+            blob_repair::enqueue_blob_repair(
+                conn,
+                &scope_id,
+                blob_repair::BlobRepairKind::DownloadAttachment {
+                    sha256: sha256.to_string(),
+                },
+            )?;
+            return Err(e);
+        }
+        Err(e) => return Err(e),
+    };
     let aad = format!("sync.attachment.bytes:{sha256}");
     let plaintext = decrypt_bytes(sync_key, &ciphertext, aad.as_bytes())?;
 
@@ -48,6 +62,7 @@ pub fn upload_attachment_bytes(
 ) -> Result<bool> {
     let app_dir = crate::db::app_dir_from_conn(conn)?;
     let remote_root_dir = normalize_dir(remote_root);
+    let scope_id = sync_scope_id(remote, &remote_root_dir);
     let attachments_dir = format!("{remote_root_dir}attachments/");
     remote.mkdir_all(&attachments_dir)?;
     upload_attachment_bytes_if_present(
@@ -55,6 +70,7 @@ pub fn upload_attachment_bytes(
         db_key,
         sync_key,
         remote,
+        &scope_id,
         &attachments_dir,
         app_dir.as_path(),
         sha256,
@@ -66,6 +82,7 @@ fn upload_all_local_attachment_bytes(
     db_key: &[u8; 32],
     sync_key: &[u8; 32],
     remote: &impl RemoteStore,
+    scope_id: &str,
     attachments_dir: &str,
     app_dir: &Path,
 ) -> Result<u64> {
@@ -88,6 +105,7 @@ fn upload_all_local_attachment_bytes(
             db_key,
             sync_key,
             remote,
+            scope_id,
             attachments_dir,
             app_dir,
             &sha256,
@@ -106,6 +124,7 @@ fn upload_attachment_bytes_if_present(
     db_key: &[u8; 32],
     sync_key: &[u8; 32],
     remote: &impl RemoteStore,
+    scope_id: &str,
     attachments_dir: &str,
     app_dir: &Path,
     sha256: &str,
@@ -127,6 +146,13 @@ fn upload_attachment_bytes_if_present(
             if e.downcast_ref::<std::io::Error>()
                 .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound) =>
         {
+            blob_repair::enqueue_blob_repair(
+                conn,
+                scope_id,
+                blob_repair::BlobRepairKind::UploadAttachment {
+                    sha256: sha256.to_string(),
+                },
+            )?;
             return Ok(false);
         }
         Err(e) => return Err(e),
@@ -147,6 +173,7 @@ fn upload_all_local_embedding_artifact_blobs(
     remote_root_dir: &str,
     app_dir: &Path,
 ) -> Result<u64> {
+    let scope_id = sync_scope_id(remote, remote_root_dir);
     let artifacts_dir = format!("{remote_root_dir}embedding_artifacts/");
     remote.mkdir_all(&artifacts_dir)?;
     let existing = remote.list(&artifacts_dir)?;
@@ -161,9 +188,11 @@ fn upload_all_local_embedding_artifact_blobs(
             continue;
         }
         if upload_embedding_artifact_blob_if_present(
+            conn,
             db_key,
             sync_key,
             remote,
+            &scope_id,
             remote_root_dir,
             app_dir,
             &blob_ref,
@@ -175,14 +204,23 @@ fn upload_all_local_embedding_artifact_blobs(
 }
 
 fn upload_embedding_artifact_blob_if_present(
+    conn: &Connection,
     db_key: &[u8; 32],
     sync_key: &[u8; 32],
     remote: &impl RemoteStore,
+    scope_id: &str,
     remote_root_dir: &str,
     app_dir: &Path,
     blob_ref: &str,
 ) -> Result<bool> {
     if !crate::db::has_embedding_artifact_blob(app_dir, blob_ref) {
+        blob_repair::enqueue_blob_repair(
+            conn,
+            scope_id,
+            blob_repair::BlobRepairKind::UploadArtifact {
+                blob_ref: blob_ref.to_string(),
+            },
+        )?;
         return Ok(false);
     }
 
@@ -216,6 +254,7 @@ struct EmbeddingArtifactBlobDownloadOutcome {
 }
 
 fn download_embedding_artifact_blobs_by_refs(
+    conn: &Connection,
     db_key: &[u8; 32],
     sync_key: &[u8; 32],
     remote: &impl RemoteStore,
@@ -225,6 +264,7 @@ fn download_embedding_artifact_blobs_by_refs(
     mut on_downloaded: Option<&mut dyn FnMut(u64)>,
 ) -> Result<EmbeddingArtifactBlobDownloadOutcome> {
     let remote_root_dir = normalize_dir(remote_root);
+    let scope_id = sync_scope_id(remote, &remote_root_dir);
     let mut downloaded = 0u64;
     let mut missing_remote = 0u64;
 
@@ -237,6 +277,13 @@ fn download_embedding_artifact_blobs_by_refs(
             Ok(bytes) => bytes,
             Err(e) if e.is::<NotFound>() => {
                 missing_remote += 1;
+                blob_repair::enqueue_blob_repair(
+                    conn,
+                    &scope_id,
+                    blob_repair::BlobRepairKind::DownloadArtifact {
+                        blob_ref: blob_ref.to_string(),
+                    },
+                )?;
                 continue;
             }
             Err(e) => return Err(e),
@@ -252,6 +299,81 @@ fn download_embedding_artifact_blobs_by_refs(
 
     let _ = downloaded;
     Ok(EmbeddingArtifactBlobDownloadOutcome { missing_remote })
+}
+
+fn process_pending_blob_repairs_for_scope(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    remote: &impl RemoteStore,
+    remote_root: &str,
+    limit: usize,
+) -> Result<blob_repair::BlobRepairProcessStats> {
+    let remote_root_dir = normalize_dir(remote_root);
+    let scope_id = sync_scope_id(remote, &remote_root_dir);
+    blob_repair::process_blob_repairs(conn, &scope_id, limit, |item| {
+        let outcome = match &item.kind {
+            blob_repair::BlobRepairKind::DownloadAttachment { sha256 } => {
+                match download_attachment_bytes(conn, db_key, sync_key, remote, remote_root, sha256) {
+                    Ok(()) => blob_repair::RepairAttemptOutcome::Done,
+                    Err(error) if error.is::<NotFound>() => blob_repair::RepairAttemptOutcome::RetryLater,
+                    Err(error) => {
+                        blob_repair::record_blob_repair_error(conn, &scope_id, &error.to_string())?;
+                        blob_repair::RepairAttemptOutcome::StopProcessing
+                    }
+                }
+            }
+            blob_repair::BlobRepairKind::DownloadArtifact { blob_ref } => {
+                let app_dir = crate::db::app_dir_from_conn(conn)?;
+                let outcome = download_embedding_artifact_blobs_by_refs(
+                    conn,
+                    db_key,
+                    sync_key,
+                    remote,
+                    remote_root,
+                    app_dir.as_path(),
+                    &[blob_ref.clone()],
+                    None,
+                )?;
+                if outcome.missing_remote > 0 {
+                    blob_repair::RepairAttemptOutcome::RetryLater
+                } else {
+                    blob_repair::RepairAttemptOutcome::Done
+                }
+            }
+            blob_repair::BlobRepairKind::UploadAttachment { sha256 } => {
+                match upload_attachment_bytes(conn, db_key, sync_key, remote, remote_root, sha256) {
+                    Ok(true) => blob_repair::RepairAttemptOutcome::Done,
+                    Ok(false) => blob_repair::RepairAttemptOutcome::RetryLater,
+                    Err(error) => {
+                        blob_repair::record_blob_repair_error(conn, &scope_id, &error.to_string())?;
+                        blob_repair::RepairAttemptOutcome::StopProcessing
+                    }
+                }
+            }
+            blob_repair::BlobRepairKind::UploadArtifact { blob_ref } => {
+                let app_dir = crate::db::app_dir_from_conn(conn)?;
+                if upload_embedding_artifact_blob_if_present(
+                    conn,
+                    db_key,
+                    sync_key,
+                    remote,
+                    &scope_id,
+                    &remote_root_dir,
+                    app_dir.as_path(),
+                    blob_ref,
+                )? {
+                    blob_repair::RepairAttemptOutcome::Done
+                } else {
+                    blob_repair::RepairAttemptOutcome::RetryLater
+                }
+            }
+        };
+        if matches!(outcome, blob_repair::RepairAttemptOutcome::Done) {
+            blob_repair::clear_blob_repair_error(conn, &scope_id)?;
+        }
+        Ok(outcome)
+    })
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {

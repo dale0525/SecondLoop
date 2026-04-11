@@ -1,19 +1,28 @@
-use std::collections::BTreeMap;
-
+use super::progress_metrics::{pull_progress_counts, report_pull_progress};
+use super::pull_recovery::{
+    attempt_remote_ahead_repair, maybe_recover_stale_since_map, repeated_remote_ahead_repair_error,
+    PullResponseWithMax, RemoteAheadRepairOutcome, RemoteAheadRepairTracker,
+};
+use crate::crypto::{decrypt_bytes, encrypt_bytes};
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::Deserialize;
+use std::collections::BTreeMap;
 
-use crate::crypto::{decrypt_bytes, encrypt_bytes};
-
-#[derive(Debug, Deserialize)]
-struct PullResponseWithMax {
-    ops: Vec<super::PullOp>,
-    next: BTreeMap<String, i64>,
-    #[serde(default)]
-    max: BTreeMap<String, i64>,
+fn reset_progress_baseline(
+    since: &BTreeMap<String, i64>,
+    progress_start_since: &mut BTreeMap<String, i64>,
+    progress_high_water_since: &mut BTreeMap<String, i64>,
+    total_ops: &mut Option<u64>,
+    done_ops: &mut u64,
+    reported_done: &mut u64,
+) {
+    *progress_start_since = since.clone();
+    *progress_high_water_since = since.clone();
+    *total_ops = None;
+    *done_ops = 0;
+    *reported_done = 0;
 }
 
 pub fn pull_with_progress(
@@ -26,7 +35,6 @@ pub fn pull_with_progress(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<u64> {
     const PULL_LIMIT: i64 = 500;
-
     let http = super::runtime::client()?;
     let local_device_id = super::super::get_or_create_device_id(conn)?;
     let _ = super::runtime::ensure_device_registered(
@@ -36,138 +44,336 @@ pub fn pull_with_progress(
         id_token,
         &local_device_id,
     )?;
-
     let scope_id = super::runtime::scope_id(base_url, vault_id);
+    let _ = super::state_machine::transition(
+        conn,
+        &scope_id,
+        super::state_machine::ManagedVaultSyncState::PullingIncremental,
+    );
     let mut since = super::load_since_map(conn, &scope_id)?;
-
+    let mut progress_start_since = since.clone();
+    let mut progress_high_water_since = progress_start_since.clone();
     let endpoint_json = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
+    let endpoint_json_v2 =
+        super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull_v2"))?;
     let mut applied: u64 = 0;
-
     let mut total_ops: Option<u64> = None;
     let mut done_ops = 0u64;
-
+    let mut reported_done = 0u64;
+    let mut remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
+    let mut stale_cursor_recovery_attempted = false;
     loop {
+        let checkpoint_state = super::checkpoint::load_checkpoint_state(conn, &scope_id)?;
+        let should_try_v2 = checkpoint_state.supports_pull_v2 != Some(false);
+        if should_try_v2 {
+            let request_v2 = super::v2_client::PullRequestV2 {
+                device_id: local_device_id.as_str(),
+                checkpoint_token: checkpoint_state.checkpoint_token.as_deref(),
+                since: if checkpoint_state.checkpoint_token.is_none() && !since.is_empty() {
+                    Some(&since)
+                } else {
+                    None
+                },
+                limit: PULL_LIMIT,
+            };
+            match super::v2_client::fetch_pull_v2_json(
+                &http,
+                &endpoint_json_v2,
+                id_token,
+                &request_v2,
+            )? {
+                super::v2_client::PullV2RouteResult::Parsed(parsed) => {
+                    super::checkpoint::mark_pull_v2_supported(conn, &scope_id, "ops:pull_v2")?;
+                    if parsed.meta.reseed_required {
+                        let _ = super::state_machine::transition(
+                            conn,
+                            &scope_id,
+                            super::state_machine::ManagedVaultSyncState::ReseedRequired,
+                        );
+                        since = super::reseed::apply_history_lower_bound_reset(
+                            conn,
+                            &scope_id,
+                            parsed.meta.history_lower_bound.as_ref(),
+                            None,
+                        )?;
+                        let _ = super::state_machine::transition(
+                            conn,
+                            &scope_id,
+                            super::state_machine::ManagedVaultSyncState::Rebootstrapping,
+                        );
+                        reset_progress_baseline(
+                            &since,
+                            &mut progress_start_since,
+                            &mut progress_high_water_since,
+                            &mut total_ops,
+                            &mut done_ops,
+                            &mut reported_done,
+                        );
+                        stale_cursor_recovery_attempted = false;
+                        remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
+                        continue;
+                    }
+
+                    if let Some(high_water) = parsed.meta.high_water {
+                        let computed_done = super::v2_client::sum_since(&since);
+                        total_ops = Some(high_water);
+                        done_ops = report_pull_progress(
+                            progress,
+                            &mut reported_done,
+                            computed_done.min(high_water),
+                            high_water,
+                        );
+                    }
+
+                    let decoded_ops: Vec<super::apply_batch::PullCipherOp> = parsed
+                        .ops
+                        .iter()
+                        .map(|op| {
+                            Ok(super::apply_batch::PullCipherOp {
+                                device_id: op.device_id.clone(),
+                                seq: op.seq,
+                                op_id: op.op_id.clone(),
+                                ciphertext: B64_STD
+                                    .decode(op.ciphertext_b64.as_bytes())
+                                    .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?,
+                            })
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    let mut next_since =
+                        super::apply_batch::next_since_from_ops(&since, &decoded_ops);
+                    if next_since == since && (!decoded_ops.is_empty() || parsed.meta.has_more) {
+                        return Err(anyhow!("managed-vault pull_v2 made no progress"));
+                    }
+
+                    let batch_applied = super::apply_batch::apply_pull_cipher_ops(
+                        conn,
+                        db_key,
+                        sync_key,
+                        &scope_id,
+                        &since,
+                        &mut next_since,
+                        &decoded_ops,
+                    )?;
+                    applied += batch_applied;
+
+                    if let Some(high_water) = parsed.meta.high_water {
+                        let computed_done = super::v2_client::sum_since(&next_since);
+                        total_ops = Some(high_water);
+                        done_ops = report_pull_progress(
+                            progress,
+                            &mut reported_done,
+                            computed_done.min(high_water),
+                            high_water,
+                        );
+                    }
+                    for (device_id, next_seq) in &next_since {
+                        progress_high_water_since
+                            .entry(device_id.clone())
+                            .and_modify(|seq| *seq = (*seq).max(*next_seq))
+                            .or_insert(*next_seq);
+                    }
+                    super::checkpoint::store_checkpoint_success(
+                        conn,
+                        &scope_id,
+                        &parsed.meta.generation_id,
+                        parsed.meta.checkpoint_token.as_deref(),
+                        parsed.meta.protocol_version,
+                        "ops:pull_v2",
+                    )?;
+                    since = next_since;
+
+                    if parsed.meta.has_more {
+                        continue;
+                    }
+                    break;
+                }
+                super::v2_client::PullV2RouteResult::Unsupported => {
+                    super::checkpoint::mark_pull_v2_unsupported(conn, &scope_id)?;
+                }
+                super::v2_client::PullV2RouteResult::RetryLegacy => {}
+            }
+        }
+
         let request = super::PullRequest {
             device_id: local_device_id.as_str(),
             since: since.clone(),
             limit: PULL_LIMIT,
         };
-
         let resp = http
             .post(&endpoint_json)
             .bearer_auth(id_token)
             .json(&request)
             .send()?;
-
         let status = resp.status();
         if !status.is_success() {
             let text = resp.text().unwrap_or_default();
             return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));
         }
-
         let body = resp.bytes()?;
         let parsed: PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
-
-        if total_ops.is_none() && !parsed.max.is_empty() {
-            let mut total = 0u64;
-            for (device_id, max_seq) in &parsed.max {
-                let last_pulled_seq = since.get(device_id).copied().unwrap_or(0);
-                if *max_seq > last_pulled_seq {
-                    total += (*max_seq - last_pulled_seq) as u64;
-                }
-            }
-            total_ops = Some(total);
-            progress(0, total);
+        if !parsed.needs_reseed.is_empty() {
+            since = super::reseed::apply_history_lower_bound_reset(
+                conn,
+                &scope_id,
+                Some(&parsed.history_lower_bound),
+                Some(&parsed.needs_reseed),
+            )?;
+            reset_progress_baseline(
+                &since,
+                &mut progress_start_since,
+                &mut progress_high_water_since,
+                &mut total_ops,
+                &mut done_ops,
+                &mut reported_done,
+            );
+            stale_cursor_recovery_attempted = false;
+            remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
+            continue;
         }
-
+        if !parsed.max.is_empty() {
+            let (computed_done, computed_total) =
+                pull_progress_counts(&progress_start_since, &since, &parsed.max);
+            total_ops = Some(computed_total);
+            done_ops =
+                report_pull_progress(progress, &mut reported_done, computed_done, computed_total);
+        }
         let mut next_since = since.clone();
         for (device_id, last_seq) in &parsed.next {
             next_since.insert(device_id.to_string(), *last_seq);
         }
-
         if next_since == since && !parsed.ops.is_empty() {
             return Err(anyhow!("managed-vault pull made no progress"));
         }
-
-        let mut batch_applied = 0u64;
-        super::with_immediate_transaction(conn, || {
-            let mut pending = super::load_pending_apply_op_ids(conn, &scope_id)?;
-            for op in &parsed.ops {
-                let ciphertext = B64_STD
-                    .decode(op.ciphertext_b64.as_bytes())
-                    .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?;
-                let plaintext = decrypt_bytes(
-                    sync_key,
-                    &ciphertext,
-                    format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
-                )?;
-                let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-                let op_id = op_json["op_id"]
-                    .as_str()
-                    .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-                if op_id != op.op_id.as_str() {
-                    return Err(anyhow!(
-                        "managed vault pull op_id mismatch: envelope={} plaintext={}",
-                        op.op_id,
-                        op_id
-                    ));
-                }
-
-                let inserted =
-                    super::super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
-                if !inserted {
+        if parsed.ops.is_empty() {
+            match attempt_remote_ahead_repair(
+                &mut remote_ahead_repair_tracker,
+                conn,
+                &scope_id,
+                &local_device_id,
+                &mut since,
+                &parsed.max,
+            )? {
+                RemoteAheadRepairOutcome::Recovered => {
+                    let (computed_done, computed_total) =
+                        pull_progress_counts(&progress_start_since, &since, &parsed.max);
+                    total_ops = Some(computed_total);
+                    done_ops = report_pull_progress(
+                        progress,
+                        &mut reported_done,
+                        computed_done,
+                        computed_total,
+                    );
                     continue;
                 }
-
-                match super::super::apply_op(conn, db_key, &op_json) {
-                    Ok(_) => {
-                        batch_applied += 1;
-                    }
-                    Err(e) if super::is_foreign_key_constraint_error(&e) => {
-                        pending.insert(op_id.to_string());
-                        super::super::kv_set_i64(
-                            conn,
-                            &super::pending_apply_key(&scope_id, op_id),
-                            1,
-                        )?;
-                    }
-                    Err(e) => return Err(e),
+                RemoteAheadRepairOutcome::Exhausted(devices) => {
+                    return Err(repeated_remote_ahead_repair_error(&devices));
                 }
+                RemoteAheadRepairOutcome::NotNeeded => {}
             }
 
-            super::apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
-            super::rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
-
-            if next_since != since {
-                super::update_since_map(conn, &scope_id, &next_since)?;
+            if !stale_cursor_recovery_attempted
+                && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
+            {
+                stale_cursor_recovery_attempted = true;
+                continue;
             }
-
-            Ok(())
-        })?;
+        }
+        let decoded_ops: Vec<super::apply_batch::PullCipherOp> = parsed
+            .ops
+            .iter()
+            .map(|op| {
+                Ok(super::apply_batch::PullCipherOp {
+                    device_id: op.device_id.clone(),
+                    seq: op.seq,
+                    op_id: op.op_id.clone(),
+                    ciphertext: B64_STD
+                        .decode(op.ciphertext_b64.as_bytes())
+                        .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let batch_applied = super::apply_batch::apply_pull_cipher_ops(
+            conn,
+            db_key,
+            sync_key,
+            &scope_id,
+            &since,
+            &mut next_since,
+            &decoded_ops,
+        )?;
         applied += batch_applied;
 
-        let mut delta = 0u64;
-        for (device_id, next_seq) in &next_since {
-            let prev = since.get(device_id).copied().unwrap_or(0);
-            if *next_seq > prev {
-                delta += (*next_seq - prev) as u64;
+        if !parsed.max.is_empty() {
+            let (computed_done, computed_total) =
+                pull_progress_counts(&progress_start_since, &next_since, &parsed.max);
+            total_ops = Some(computed_total);
+            done_ops =
+                report_pull_progress(progress, &mut reported_done, computed_done, computed_total);
+        } else if let Some(total) = total_ops {
+            let mut delta = 0u64;
+            for (device_id, next_seq) in &next_since {
+                let prev = progress_high_water_since
+                    .get(device_id)
+                    .copied()
+                    .unwrap_or(0);
+                if *next_seq > prev {
+                    delta += (*next_seq - prev) as u64;
+                }
+            }
+            done_ops += delta;
+            done_ops = report_pull_progress(progress, &mut reported_done, done_ops, total);
+        } else {
+            let mut delta = 0u64;
+            for (device_id, next_seq) in &next_since {
+                let prev = since.get(device_id).copied().unwrap_or(0);
+                if *next_seq > prev {
+                    delta += (*next_seq - prev) as u64;
+                }
+            }
+            done_ops += delta;
+            if delta > 0 {
+                progress(done_ops, done_ops.saturating_add(1));
+                reported_done = done_ops;
             }
         }
-        done_ops += delta;
-
-        if let Some(total) = total_ops {
-            progress(done_ops.min(total), total);
-        } else if delta > 0 {
-            progress(done_ops, done_ops.saturating_add(1));
+        for (device_id, next_seq) in &next_since {
+            progress_high_water_since
+                .entry(device_id.clone())
+                .and_modify(|seq| *seq = (*seq).max(*next_seq))
+                .or_insert(*next_seq);
         }
-
         since = next_since;
-
         if parsed.ops.len() < (PULL_LIMIT as usize) {
+            match attempt_remote_ahead_repair(
+                &mut remote_ahead_repair_tracker,
+                conn,
+                &scope_id,
+                &local_device_id,
+                &mut since,
+                &parsed.max,
+            )? {
+                RemoteAheadRepairOutcome::Recovered => continue,
+                RemoteAheadRepairOutcome::Exhausted(devices) => {
+                    return Err(repeated_remote_ahead_repair_error(&devices));
+                }
+                RemoteAheadRepairOutcome::NotNeeded => {}
+            }
+
+            if !stale_cursor_recovery_attempted
+                && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
+            {
+                stale_cursor_recovery_attempted = true;
+                continue;
+            }
             break;
         }
     }
 
+    let _ = super::state_machine::transition(
+        conn,
+        &scope_id,
+        super::state_machine::ManagedVaultSyncState::BlobBackfill,
+    );
     let app_dir = super::super::app_dir_from_conn(conn)?;
     let download_ctx = super::attachments::AttachmentUploadContext {
         conn,
@@ -205,7 +411,14 @@ pub fn pull_with_progress(
         done_units = done_units.min(total_units);
     }
 
+    let _ = super::blob_repair::process_pending_blob_repairs(&download_ctx, 8)?;
+
     progress(done_units, total_units);
+    let _ = super::state_machine::transition(
+        conn,
+        &scope_id,
+        super::state_machine::ManagedVaultSyncState::Completed,
+    );
 
     Ok(applied)
 }
@@ -463,3 +676,6 @@ pub fn push_ops_only_with_progress(
     progress(done_ops, total_ops);
     Ok(pushed_total)
 }
+
+#[cfg(test)]
+mod tests;

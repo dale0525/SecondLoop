@@ -1,10 +1,12 @@
 // This module is split into smaller files to keep each file under ~1000 lines.
 // The pieces are `include!`'d so everything remains in `crate::sync`.
 
+pub mod blob_repair;
 pub mod localdir;
 pub mod managed_vault;
 pub mod recovery_key;
 pub mod webdav;
+pub mod webdav_manifest;
 
 include!("parts/01_prelude.rs");
 include!("parts/02_push.rs");

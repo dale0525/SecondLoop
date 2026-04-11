@@ -224,7 +224,24 @@ fn push_internal(
     let scope_id = sync_scope_id(remote, &remote_root_dir);
 
     let last_pushed_key = format!("sync.last_pushed_seq:{scope_id}");
-    let last_pushed_seq = kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
+    let mut last_pushed_seq = kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
+    let local_pending_ops = conn
+        .query_row(
+            r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
+            params![device_id, last_pushed_seq],
+            |row| row.get::<_, i64>(0),
+        )?
+        .max(0) as u64;
+
+    if !upload_attachment_bytes && local_pending_ops == 0 && last_pushed_seq == 0 {
+        if let Some(cb) = progress.as_deref_mut() {
+            cb(0, 0);
+        }
+        return Ok(0);
+    }
+
+    reconcile_remote_generation_before_push(conn, remote, &remote_root_dir, &scope_id)?;
+    last_pushed_seq = kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
     let local_pending_ops = conn
         .query_row(
             r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
@@ -261,14 +278,6 @@ fn push_internal(
     }
 
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
-
-    let local_pending_ops = conn
-        .query_row(
-            r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
-            params![device_id, last_pushed_seq],
-            |row| row.get::<_, i64>(0),
-        )?
-        .max(0) as u64;
 
     if !upload_attachment_bytes
         && local_pending_ops == 0
@@ -328,6 +337,7 @@ fn push_internal(
                 db_key,
                 sync_key,
                 remote,
+                &scope_id,
                 &attachments_dir,
                 app_dir_path,
             )?;
@@ -357,6 +367,7 @@ fn push_internal(
         db_key: &'a [u8; 32],
         sync_key: &'a [u8; 32],
         remote: &'a R,
+        scope_id: &'a str,
         device_id: &'a str,
         ops_dir: &'a str,
         packs_dir: &'a str,
@@ -370,6 +381,7 @@ fn push_internal(
         db_key,
         sync_key,
         remote,
+        scope_id: &scope_id,
         device_id: &device_id,
         ops_dir: &ops_dir,
         packs_dir: &packs_dir,
@@ -503,6 +515,7 @@ fn push_internal(
                         ctx.db_key,
                         ctx.sync_key,
                         ctx.remote,
+                        ctx.scope_id,
                         ctx.attachments_dir,
                         ctx.app_dir,
                         &sha256,
@@ -521,9 +534,11 @@ fn push_internal(
 
         for blob_ref in artifact_blob_refs {
             let _ = upload_embedding_artifact_blob_if_present(
+                ctx.conn,
                 ctx.db_key,
                 ctx.sync_key,
                 ctx.remote,
+                ctx.scope_id,
                 &remote_root_dir,
                 ctx.app_dir,
                 &blob_ref,
@@ -554,6 +569,62 @@ fn push_internal(
         let path = format!("{remote_root_dir}{device_id}/cursor.json");
         let payload = serde_json::json!({ "max_seq": max_seq });
         remote.put(&path, payload.to_string().into_bytes())?;
+        Ok(())
+    }
+
+    fn write_sync_manifests(
+        conn: &Connection,
+        remote: &impl RemoteStore,
+        remote_root_dir: &str,
+        scope_id: &str,
+        device_id: &str,
+        max_seq: i64,
+    ) -> Result<()> {
+        let generation_key = format!("sync.webdav.generation_id:{scope_id}");
+        let generation_id = if let Some(existing) = kv_get_string(conn, &generation_key)? {
+            existing
+        } else if let Some(existing) = webdav_manifest::read_sync_manifest(remote, remote_root_dir)?
+            .map(|manifest| manifest.generation_id)
+        {
+            kv_set_string(conn, &generation_key, &existing)?;
+            existing
+        } else {
+            let generated = uuid::Uuid::new_v4().to_string();
+            kv_set_string(conn, &generation_key, &generated)?;
+            generated
+        };
+
+        let updated_at_ms = current_unix_ms();
+        webdav_manifest::write_sync_manifest(
+            remote,
+            remote_root_dir,
+            &webdav_manifest::WebDavSyncManifest {
+                protocol_version: 1,
+                backend: "webdav".to_string(),
+                generation_id,
+                updated_at_ms,
+            },
+        )?;
+
+        let history_min_seq = conn
+            .query_row(
+                r#"SELECT min(seq) FROM oplog WHERE device_id = ?1"#,
+                params![device_id],
+                |row| row.get::<_, Option<i64>>(0),
+            )?
+            .unwrap_or(1)
+            .max(1);
+        webdav_manifest::write_device_manifest(
+            remote,
+            remote_root_dir,
+            &webdav_manifest::WebDavDeviceManifest {
+                protocol_version: 1,
+                device_id: device_id.to_string(),
+                max_seq: max_seq.max(0),
+                history_min_seq,
+                updated_at_ms,
+            },
+        )?;
         Ok(())
     }
 
@@ -589,12 +660,50 @@ fn push_internal(
 
     // Best-effort: this is only metadata for progress reporting.
     let _ = write_cursor_json(remote, &remote_root_dir, &device_id, final_max_seq);
+    let _ = write_sync_manifests(
+        conn,
+        remote,
+        &remote_root_dir,
+        &scope_id,
+        &device_id,
+        final_max_seq,
+    );
+    let _ = process_pending_blob_repairs_for_scope(conn, db_key, sync_key, remote, remote_root, 8)?;
 
     if pushed_out > 0 {
         maybe_run_oplog_retention_after_push(conn, &scope_id, remote)?;
     }
 
     Ok(pushed_out)
+}
+
+fn reconcile_remote_generation_before_push(
+    conn: &Connection,
+    remote: &impl RemoteStore,
+    remote_root_dir: &str,
+    scope_id: &str,
+) -> Result<()> {
+    let local_generation = webdav_manifest::load_local_generation_id(conn, scope_id)?;
+    let remote_generation = webdav_manifest::read_sync_manifest(remote, remote_root_dir)?
+        .map(|manifest| manifest.generation_id);
+
+    match (local_generation, remote_generation) {
+        (Some(local), Some(remote)) if local != remote => {
+            webdav_manifest::clear_local_scope_state(conn, scope_id)?;
+            webdav_manifest::store_local_generation_id(conn, scope_id, &remote)?;
+        }
+        (None, Some(remote)) => {
+            webdav_manifest::store_local_generation_id(conn, scope_id, &remote)?;
+        }
+        (Some(_), None) => {
+            webdav_manifest::clear_local_scope_state(conn, scope_id)?;
+            let next_generation = uuid::Uuid::new_v4().to_string();
+            webdav_manifest::store_local_generation_id(conn, scope_id, &next_generation)?;
+        }
+        (None, None) => {}
+        (Some(_), Some(_)) => {}
+    }
+    Ok(())
 }
 
 fn backend_from_target_id(target_id: &str) -> Option<crate::db::OplogRetentionBackend> {
