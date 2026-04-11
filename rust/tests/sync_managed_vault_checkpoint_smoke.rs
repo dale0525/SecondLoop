@@ -57,6 +57,7 @@ fn write_json_response(stream: &mut TcpStream, status: u16, body: serde_json::Va
     let status_text = match status {
         200 => "OK",
         404 => "Not Found",
+        500 => "Internal Server Error",
         _ => "OK",
     };
     let resp = format!(
@@ -64,6 +65,83 @@ fn write_json_response(stream: &mut TcpStream, status: u16, body: serde_json::Va
         body_str.len()
     );
     stream.write_all(resp.as_bytes()).expect("write response");
+}
+
+fn start_v2_unavailable_server(
+    encrypted_op_b64: String,
+) -> (String, mpsc::Sender<()>, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    listener.set_nonblocking(true).expect("nonblocking");
+    let addr = listener.local_addr().expect("local addr");
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+
+    let handle = thread::spawn(move || loop {
+        if stop_rx.try_recv().is_ok() {
+            break;
+        }
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                let (method, path, body) = read_request(&mut stream);
+                if method != "POST" {
+                    write_json_response(&mut stream, 404, json!({"error":"not_found"}));
+                    continue;
+                }
+
+                if path.ends_with("/devices") {
+                    write_json_response(&mut stream, 200, json!({ "device_id": "server-device" }));
+                    continue;
+                }
+
+                if path.ends_with("/ops:pull_bin_v2") || path.ends_with("/ops:pull_v2") {
+                    write_json_response(
+                        &mut stream,
+                        500,
+                        json!({ "error": "temporarily_unavailable" }),
+                    );
+                    continue;
+                }
+
+                if path.ends_with("/ops:pull") {
+                    let request_json: serde_json::Value =
+                        serde_json::from_slice(&body).expect("pull body");
+                    let remote_since = request_json["since"]["remote-a"].as_i64().unwrap_or(0);
+                    let ops = if remote_since == 0 {
+                        vec![json!({
+                            "device_id": "remote-a",
+                            "seq": 1,
+                            "op_id": "op-conversation-fallback-a",
+                            "ciphertext_b64": encrypted_op_b64
+                        })]
+                    } else {
+                        Vec::new()
+                    };
+                    let next = if remote_since == 0 {
+                        json!({ "remote-a": 1 })
+                    } else {
+                        json!({})
+                    };
+                    write_json_response(
+                        &mut stream,
+                        200,
+                        json!({
+                            "ops": ops,
+                            "next": next,
+                            "max": { "remote-a": 1 }
+                        }),
+                    );
+                    continue;
+                }
+
+                write_json_response(&mut stream, 404, json!({"error":"not_found"}));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => panic!("accept failed: {error}"),
+        }
+    });
+
+    (format!("http://{}", addr), stop_tx, handle)
 }
 
 fn encrypted_conversation_op(
@@ -294,6 +372,46 @@ fn managed_vault_pull_with_progress_probes_v2_before_any_checkpoint_state_exists
         diagnostics_json["managed_vault_checkpoint_token_present"].as_bool(),
         Some(true)
     );
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_falls_back_when_v2_routes_temporarily_fail() {
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+    let encrypted_op_b64 = encrypted_conversation_op(
+        &sync_key,
+        "remote-a",
+        1,
+        "conversation-fallback-a",
+        "op-conversation-fallback-a",
+    );
+    let (base_url, stop_tx, handle) = start_v2_unavailable_server(encrypted_op_b64);
+
+    let applied =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull should fall back to legacy routes");
+    assert_eq!(applied, 1);
+
+    let conversations = db::list_conversations(&conn_b, &key_b).expect("list conversations");
+    assert!(conversations
+        .iter()
+        .any(|conversation| conversation.id == "conversation-fallback-a"));
 
     let _ = stop_tx.send(());
     handle.join().expect("join");

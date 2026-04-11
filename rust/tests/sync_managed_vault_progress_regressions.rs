@@ -156,6 +156,56 @@ fn spawn_progress_recovery_server(
     (addr, state)
 }
 
+fn spawn_v2_reseed_progress_server(encrypted_op_b64: String) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = format!("http://{}", listener.local_addr().expect("local addr"));
+
+    thread::spawn(move || {
+        for _ in 0..3 {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let (headers, body) = read_http_request(&mut stream);
+            let request_line = headers.lines().next().unwrap_or_default().to_string();
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/devices ") {
+                respond_json(
+                    &mut stream,
+                    "200 OK",
+                    r#"{"device_id":"local-device-progress"}"#,
+                );
+                continue;
+            }
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/ops:pull_v2 ") {
+                let payload: serde_json::Value =
+                    serde_json::from_slice(&body).expect("parse pull_v2 body");
+                let checkpoint = payload["checkpoint_token"].as_str().unwrap_or_default();
+                if checkpoint == "checkpoint-stale" {
+                    respond_json(
+                        &mut stream,
+                        "200 OK",
+                        r#"{"protocol_version":2,"generation_id":"generation-new","checkpoint_token":null,"has_more":false,"high_water":150,"history_lower_bound":{"remote-a":1},"reseed_required":true,"ops":[]}"#,
+                    );
+                    continue;
+                }
+
+                respond_json(
+                    &mut stream,
+                    "200 OK",
+                    &format!(
+                        r#"{{"protocol_version":2,"generation_id":"generation-new","checkpoint_token":"checkpoint-fresh","has_more":false,"high_water":150,"history_lower_bound":{{"remote-a":1}},"reseed_required":false,"ops":[{{"device_id":"remote-a","seq":1,"op_id":"op-conversation-v2-reseed-progress","ciphertext_b64":"{ciphertext}"}}]}}"#,
+                        ciphertext = encrypted_op_b64,
+                    ),
+                );
+                continue;
+            }
+
+            respond_json(&mut stream, "404 Not Found", r#"{"error":"not_found"}"#);
+        }
+    });
+
+    addr
+}
+
 fn spawn_missing_max_after_large_first_page_server(
     remote_device_id: String,
     first_page_ops: Vec<(i64, String, String)>,
@@ -471,6 +521,68 @@ fn managed_vault_pull_with_progress_keeps_total_stable_during_cursor_repair() {
 
     let snapshot = state.lock().expect("lock state");
     assert_eq!(snapshot.seen_since_values, vec![174, 0]);
+}
+
+#[test]
+fn managed_vault_pull_with_progress_resets_baseline_after_v2_reseed() {
+    let db_key = [63u8; 32];
+    let sync_key = [64u8; 32];
+    let remote_device_id = "remote-a";
+
+    let dir = tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('device_id', 'local-device-progress')"#,
+        [],
+    )
+    .expect("set local device id");
+
+    let base_url = spawn_v2_reseed_progress_server(encrypted_conversation_op(
+        &sync_key,
+        remote_device_id,
+        1,
+        "conversation-v2-reseed-progress",
+        "Reseeded title",
+        1_775_811_648_900,
+    ));
+    let scope_id = scope_id(&base_url, "test-vault");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        [
+            format!("managed_vault.last_pulled_seq:{scope_id}:{remote_device_id}"),
+            "100".to_string(),
+        ],
+    )
+    .expect("set stale since");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        [
+            format!("managed_vault.checkpoint_token:{scope_id}"),
+            "checkpoint-stale".to_string(),
+        ],
+    )
+    .expect("set stale checkpoint");
+
+    let mut seen_progress = Vec::new();
+    let applied = sync::managed_vault::pull_with_progress(
+        &conn,
+        &db_key,
+        &sync_key,
+        &base_url,
+        "test-vault",
+        "test-token",
+        &mut |done, total| seen_progress.push((done, total)),
+    )
+    .expect("pull with v2 reseed");
+
+    assert_eq!(applied, 1);
+    assert!(
+        seen_progress.contains(&(0, 150)),
+        "expected progress to reset after reseed, got {seen_progress:?}"
+    );
+    assert_eq!(seen_progress.last().copied(), Some((1, 150)));
 }
 
 #[test]

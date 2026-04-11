@@ -13,12 +13,22 @@ pub(super) struct PullRequestV2<'a> {
     pub(super) limit: i64,
 }
 
+pub(super) enum PullV2RouteResult<T> {
+    Parsed(T),
+    Unsupported,
+    RetryLegacy,
+}
+
+fn should_retry_legacy_v2(status: reqwest::StatusCode) -> bool {
+    matches!(status.as_u16(), 404 | 405 | 408 | 429) || status.is_server_error()
+}
+
 pub(super) fn fetch_pull_v2_json(
     http: &Client,
     endpoint: &str,
     id_token: &str,
     request: &PullRequestV2<'_>,
-) -> Result<Option<PullEnvelopeV2>> {
+) -> Result<PullV2RouteResult<PullEnvelopeV2>> {
     let resp = http
         .post(endpoint)
         .bearer_auth(id_token)
@@ -26,7 +36,10 @@ pub(super) fn fetch_pull_v2_json(
         .send()?;
     let status = resp.status();
     if matches!(status.as_u16(), 404 | 405) {
-        return Ok(None);
+        return Ok(PullV2RouteResult::Unsupported);
+    }
+    if should_retry_legacy_v2(status) {
+        return Ok(PullV2RouteResult::RetryLegacy);
     }
     if !status.is_success() {
         let text = resp.text().unwrap_or_default();
@@ -36,7 +49,7 @@ pub(super) fn fetch_pull_v2_json(
     }
     let body = resp.bytes()?;
     let parsed: PullEnvelopeV2 = serde_json::from_slice(body.as_ref())?;
-    Ok(Some(parsed))
+    Ok(PullV2RouteResult::Parsed(parsed))
 }
 
 pub(super) fn fetch_pull_bin_v2(
@@ -44,7 +57,7 @@ pub(super) fn fetch_pull_bin_v2(
     endpoint: &str,
     id_token: &str,
     request: &PullRequestV2<'_>,
-) -> Result<Option<PullOpBinV2>> {
+) -> Result<PullV2RouteResult<PullOpBinV2>> {
     let resp = http
         .post(endpoint)
         .bearer_auth(id_token)
@@ -52,7 +65,10 @@ pub(super) fn fetch_pull_bin_v2(
         .send()?;
     let status = resp.status();
     if matches!(status.as_u16(), 404 | 405) {
-        return Ok(None);
+        return Ok(PullV2RouteResult::Unsupported);
+    }
+    if should_retry_legacy_v2(status) {
+        return Ok(PullV2RouteResult::RetryLegacy);
     }
     if !status.is_success() {
         let text = resp.text().unwrap_or_default();
@@ -61,7 +77,9 @@ pub(super) fn fetch_pull_bin_v2(
         ));
     }
     let body = resp.bytes()?;
-    Ok(Some(decode_pull_bin_v2_response(body.as_ref())?))
+    Ok(PullV2RouteResult::Parsed(decode_pull_bin_v2_response(
+        body.as_ref(),
+    )?))
 }
 
 pub(super) fn sum_since(map: &BTreeMap<String, i64>) -> u64 {

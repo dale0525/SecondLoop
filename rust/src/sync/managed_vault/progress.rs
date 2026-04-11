@@ -8,6 +8,23 @@ use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::BTreeMap;
+
+fn reset_progress_baseline(
+    since: &BTreeMap<String, i64>,
+    progress_start_since: &mut BTreeMap<String, i64>,
+    progress_high_water_since: &mut BTreeMap<String, i64>,
+    total_ops: &mut Option<u64>,
+    done_ops: &mut u64,
+    reported_done: &mut u64,
+) {
+    *progress_start_since = since.clone();
+    *progress_high_water_since = since.clone();
+    *total_ops = None;
+    *done_ops = 0;
+    *reported_done = 0;
+}
+
 pub fn pull_with_progress(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -34,7 +51,7 @@ pub fn pull_with_progress(
         super::state_machine::ManagedVaultSyncState::PullingIncremental,
     );
     let mut since = super::load_since_map(conn, &scope_id)?;
-    let progress_start_since = since.clone();
+    let mut progress_start_since = since.clone();
     let mut progress_high_water_since = progress_start_since.clone();
     let endpoint_json = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
     let endpoint_json_v2 =
@@ -60,7 +77,7 @@ pub fn pull_with_progress(
                 id_token,
                 &request_v2,
             )? {
-                Some(parsed) => {
+                super::v2_client::PullV2RouteResult::Parsed(parsed) => {
                     super::checkpoint::mark_pull_v2_supported(conn, &scope_id, "ops:pull_v2")?;
                     if let Some(high_water) = parsed.meta.high_water {
                         let computed_done = super::v2_client::sum_since(&since);
@@ -86,6 +103,14 @@ pub fn pull_with_progress(
                             super::state_machine::ManagedVaultSyncState::Rebootstraping,
                         );
                         since.clear();
+                        reset_progress_baseline(
+                            &since,
+                            &mut progress_start_since,
+                            &mut progress_high_water_since,
+                            &mut total_ops,
+                            &mut done_ops,
+                            &mut reported_done,
+                        );
                         stale_cursor_recovery_attempted = false;
                         remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
                         continue;
@@ -153,7 +178,10 @@ pub fn pull_with_progress(
                     }
                     break;
                 }
-                None => super::checkpoint::mark_pull_v2_unsupported(conn, &scope_id)?,
+                super::v2_client::PullV2RouteResult::Unsupported => {
+                    super::checkpoint::mark_pull_v2_unsupported(conn, &scope_id)?;
+                }
+                super::v2_client::PullV2RouteResult::RetryLegacy => {}
             }
         }
 
