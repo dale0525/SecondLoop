@@ -156,6 +156,32 @@ pub(super) fn clear_checkpoint_state(conn: &Connection, scope_id: &str) -> Resul
     delete_key(conn, scope_id, "generation_id")?;
     delete_key(conn, scope_id, "checkpoint_token")?;
     delete_key(conn, scope_id, "protocol_version")?;
+    delete_key(conn, scope_id, "supports_pull_v2")?;
+    delete_key(conn, scope_id, "supports_pull_bin_v2")?;
     delete_key(conn, scope_id, "last_route")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clear_checkpoint_state_removes_negative_v2_support_cache() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(temp.path()).expect("open db");
+        let scope_id = "managed-vault-scope";
+
+        set_string(&conn, scope_id, "supports_pull_v2", "0").expect("seed pull_v2 support");
+        set_string(&conn, scope_id, "supports_pull_bin_v2", "0").expect("seed pull_bin_v2 support");
+        set_string(&conn, scope_id, "checkpoint_token", "checkpoint-stale")
+            .expect("seed checkpoint");
+
+        clear_checkpoint_state(&conn, scope_id).expect("clear checkpoint state");
+
+        let state = load_checkpoint_state(&conn, scope_id).expect("load state");
+        assert_eq!(state.checkpoint_token, None);
+        assert_eq!(state.supports_pull_v2, None);
+        assert_eq!(state.supports_pull_bin_v2, None);
+    }
 }
