@@ -502,7 +502,11 @@ fn list_remote_sync_device_ids(
     remote_root_dir: &str,
 ) -> Result<Vec<String>> {
     let mut device_ids = std::collections::BTreeSet::new();
+    let sync_manifest_path = webdav_manifest::sync_manifest_path(remote_root_dir);
     for entry in remote.list(remote_root_dir)? {
+        if entry == sync_manifest_path {
+            continue;
+        }
         let Some(device_id) = device_id_from_child_dir(remote_root_dir, &entry) else {
             continue;
         };

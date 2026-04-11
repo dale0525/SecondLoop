@@ -30,6 +30,19 @@ mod read_cursor_tests {
             read_remote_cursor_max_seq(&remote, &remote_root_dir, &device_id).expect("read");
         assert_eq!(max_seq, Some(1));
     }
+
+    #[test]
+    fn device_id_from_child_dir_accepts_root_dirs_without_trailing_slash() {
+        let root = normalize_dir("SecondLoop");
+        assert_eq!(
+            device_id_from_child_dir(&root, &format!("{root}device-a")),
+            Some("device-a".to_string())
+        );
+        assert_eq!(
+            device_id_from_child_dir(&root, &format!("{root}device-a/")),
+            Some("device-a".to_string())
+        );
+    }
 }
 
 #[cfg(test)]
