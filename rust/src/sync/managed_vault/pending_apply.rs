@@ -142,14 +142,16 @@ pub(super) fn update_since_map(
     scope_id: &str,
     next: &BTreeMap<String, i64>,
 ) -> Result<()> {
-    let prefix = format!("managed_vault.last_pulled_seq:{scope_id}:");
-    let pattern = format!("{prefix}%");
-    let _ = conn.execute(r#"DELETE FROM kv WHERE key LIKE ?1"#, params![pattern])?;
-    for (device_id, last_seq) in next {
-        let key = format!("managed_vault.last_pulled_seq:{scope_id}:{device_id}");
-        super::super::kv_set_i64(conn, &key, *last_seq)?;
-    }
-    Ok(())
+    super::with_immediate_transaction(conn, || {
+        let prefix = format!("managed_vault.last_pulled_seq:{scope_id}:");
+        let pattern = format!("{prefix}%");
+        let _ = conn.execute(r#"DELETE FROM kv WHERE key LIKE ?1"#, params![pattern])?;
+        for (device_id, last_seq) in next {
+            let key = format!("managed_vault.last_pulled_seq:{scope_id}:{device_id}");
+            super::super::kv_set_i64(conn, &key, *last_seq)?;
+        }
+        Ok(())
+    })
 }
 
 pub(super) fn remote_ahead_cursor_devices(
@@ -255,6 +257,37 @@ mod cursor_repair_marker_tests {
             )
             .expect("get v2"),
             Some(1)
+        );
+    }
+
+    #[test]
+    fn update_since_map_replaces_entries_inside_existing_transaction() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+
+        kv_set_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-a", 7).expect("seed a");
+        kv_set_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-b", 3).expect("seed b");
+
+        conn.execute_batch("BEGIN IMMEDIATE;").expect("begin");
+        let mut next = BTreeMap::new();
+        next.insert("device-c".to_string(), 11);
+        update_since_map(&conn, "scope-a", &next).expect("update since");
+        conn.execute_batch("COMMIT;").expect("commit");
+
+        assert_eq!(
+            kv_get_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-a")
+                .expect("load old a"),
+            None
+        );
+        assert_eq!(
+            kv_get_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-b")
+                .expect("load old b"),
+            None
+        );
+        assert_eq!(
+            kv_get_i64(&conn, "managed_vault.last_pulled_seq:scope-a:device-c")
+                .expect("load new c"),
+            Some(11)
         );
     }
 }

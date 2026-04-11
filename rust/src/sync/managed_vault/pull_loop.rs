@@ -29,7 +29,7 @@ fn reset_after_v2_reseed(
     let _ = super::state_machine::transition(
         conn,
         scope_id,
-        super::state_machine::ManagedVaultSyncState::Rebootstraping,
+        super::state_machine::ManagedVaultSyncState::Rebootstrapping,
     );
     *stale_cursor_recovery_attempted = false;
     *remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();

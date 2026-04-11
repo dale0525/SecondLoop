@@ -5,7 +5,7 @@ pub(crate) enum ManagedVaultSyncState {
     PullingIncremental,
     CheckpointRejected,
     ReseedRequired,
-    Rebootstraping,
+    Rebootstrapping,
     BlobBackfill,
     Completed,
     FailedRecoverable,
@@ -19,7 +19,7 @@ impl ManagedVaultSyncState {
             ManagedVaultSyncState::PullingIncremental => "pulling_incremental",
             ManagedVaultSyncState::CheckpointRejected => "checkpoint_rejected",
             ManagedVaultSyncState::ReseedRequired => "reseed_required",
-            ManagedVaultSyncState::Rebootstraping => "rebootstraping",
+            ManagedVaultSyncState::Rebootstrapping => "rebootstrapping",
             ManagedVaultSyncState::BlobBackfill => "blob_backfill",
             ManagedVaultSyncState::Completed => "completed",
             ManagedVaultSyncState::FailedRecoverable => "failed_recoverable",
@@ -42,7 +42,9 @@ pub(crate) fn load_state(
         Some("pulling_incremental") => Some(ManagedVaultSyncState::PullingIncremental),
         Some("checkpoint_rejected") => Some(ManagedVaultSyncState::CheckpointRejected),
         Some("reseed_required") => Some(ManagedVaultSyncState::ReseedRequired),
-        Some("rebootstraping") => Some(ManagedVaultSyncState::Rebootstraping),
+        Some("rebootstrapping") | Some("rebootstraping") => {
+            Some(ManagedVaultSyncState::Rebootstrapping)
+        }
         Some("blob_backfill") => Some(ManagedVaultSyncState::BlobBackfill),
         Some("completed") => Some(ManagedVaultSyncState::Completed),
         Some("failed_recoverable") => Some(ManagedVaultSyncState::FailedRecoverable),
@@ -57,4 +59,22 @@ pub(crate) fn transition(
     next: ManagedVaultSyncState,
 ) -> anyhow::Result<()> {
     super::super::kv_set_string(conn, &state_key(scope_id), next.as_str())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_state_accepts_legacy_rebootstraping_value() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        super::super::super::kv_set_string(&conn, "managed_vault.state:scope-a", "rebootstraping")
+            .expect("seed legacy state");
+
+        assert_eq!(
+            load_state(&conn, "scope-a").expect("load"),
+            Some(ManagedVaultSyncState::Rebootstrapping)
+        );
+    }
 }

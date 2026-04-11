@@ -99,7 +99,7 @@ pub fn pull_with_progress(
                         let _ = super::state_machine::transition(
                             conn,
                             &scope_id,
-                            super::state_machine::ManagedVaultSyncState::Rebootstraping,
+                            super::state_machine::ManagedVaultSyncState::Rebootstrapping,
                         );
                         reset_progress_baseline(
                             &since,

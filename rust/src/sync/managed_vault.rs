@@ -605,6 +605,10 @@ fn rebase_local_device_seqs(
 }
 
 fn with_immediate_transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    if !conn.is_autocommit() {
+        return f();
+    }
+
     conn.execute_batch("BEGIN IMMEDIATE;")?;
     match f() {
         Ok(v) => {

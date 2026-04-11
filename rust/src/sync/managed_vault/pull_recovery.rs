@@ -155,6 +155,8 @@ pub(super) fn probe_requires_json_retry(
     probe: &PullResponseWithMax,
 ) -> bool {
     !probe.ops.is_empty()
+        || !probe.needs_reseed.is_empty()
+        || !probe.history_lower_bound.is_empty()
         || probe
             .next
             .iter()
@@ -252,4 +254,37 @@ pub(super) fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
     }
 
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probe_requires_json_retry_when_reseed_metadata_arrives_without_ops() {
+        let since = BTreeMap::from([("remote-a".to_string(), 4)]);
+        let probe = PullResponseWithMax {
+            ops: Vec::new(),
+            next: BTreeMap::from([("remote-a".to_string(), 4)]),
+            max: BTreeMap::new(),
+            needs_reseed: BTreeMap::from([("remote-a".to_string(), true)]),
+            history_lower_bound: BTreeMap::new(),
+        };
+
+        assert!(probe_requires_json_retry(&since, &probe));
+    }
+
+    #[test]
+    fn probe_requires_json_retry_when_history_lower_bound_arrives_without_ops() {
+        let since = BTreeMap::from([("remote-a".to_string(), 4)]);
+        let probe = PullResponseWithMax {
+            ops: Vec::new(),
+            next: BTreeMap::from([("remote-a".to_string(), 4)]),
+            max: BTreeMap::new(),
+            needs_reseed: BTreeMap::new(),
+            history_lower_bound: BTreeMap::from([("remote-a".to_string(), 5)]),
+        };
+
+        assert!(probe_requires_json_retry(&since, &probe));
+    }
 }
