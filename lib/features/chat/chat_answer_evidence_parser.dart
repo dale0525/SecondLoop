@@ -75,6 +75,7 @@ ChatAnswerEvidenceMemoryCard? _parseMemoryCard(Object? raw) {
     documentId: documentId,
     title: _readString(raw['title']),
     summary: _readString(raw['summary']),
+    body: _readString(raw['body']),
     sourceKind: _readString(raw['source_kind']) ?? '',
     role: _readString(raw['role']) ?? '',
     createdAtMs: _readInt(raw['created_at_ms']) ?? 0,

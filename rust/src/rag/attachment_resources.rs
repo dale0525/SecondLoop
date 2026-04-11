@@ -16,9 +16,17 @@ pub(crate) struct AttachmentChunkCandidate {
     pub(crate) text: String,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct AttachmentResourceRef {
+    pub(crate) attachment_sha256: String,
+    pub(crate) label: String,
+    pub(crate) created_at_ms: i64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct AttachmentResourcesBundle {
     pub(crate) chunks: Vec<AttachmentChunkCandidate>,
+    pub(crate) resources: Vec<AttachmentResourceRef>,
     pub(crate) catalog_markdown: Option<String>,
 }
 
@@ -120,6 +128,8 @@ fn bundle_from_hits(
     hits: Vec<db::SimilarAttachmentChunk>,
 ) -> Result<AttachmentResourcesBundle> {
     let mut chunks = Vec::<AttachmentChunkCandidate>::new();
+    let mut resources = Vec::<AttachmentResourceRef>::new();
+    let mut seen_resource_shas = std::collections::HashSet::<String>::new();
     for hit in &hits {
         let chunk_text = db::read_attachment_chunk_text(
             conn,
@@ -146,11 +156,20 @@ fn bundle_from_hits(
             distance: hit.distance,
             text: chunk_text,
         });
+
+        if seen_resource_shas.insert(hit.attachment_sha256.clone()) {
+            resources.push(AttachmentResourceRef {
+                attachment_sha256: hit.attachment_sha256.clone(),
+                label: attachment_label(conn, key, &hit.attachment_sha256),
+                created_at_ms,
+            });
+        }
     }
 
     let catalog_markdown = build_catalog_markdown(conn, key, &hits)?;
     Ok(AttachmentResourcesBundle {
         chunks,
+        resources,
         catalog_markdown,
     })
 }
@@ -223,6 +242,7 @@ pub(crate) fn collect_attachment_resources_for_attachment_shas(
     key: &[u8; 32],
     attachment_shas: Vec<String>,
 ) -> Result<AttachmentResourcesBundle> {
+    let attachment_shas_for_resources = attachment_shas.clone();
     let mut resource_shas = Vec::<String>::new();
     let mut seen = std::collections::HashSet::<String>::new();
     for sha in attachment_shas {
@@ -239,6 +259,26 @@ pub(crate) fn collect_attachment_resources_for_attachment_shas(
         build_catalog_markdown_from_attachment_shas(conn, key, resource_shas, &[])?;
     Ok(AttachmentResourcesBundle {
         chunks: Vec::new(),
+        resources: attachment_shas_for_resources
+            .into_iter()
+            .scan(std::collections::HashSet::<String>::new(), |seen, sha| {
+                if !seen.insert(sha.clone()) {
+                    return Some(None);
+                }
+                let created_at_ms = db::read_attachment_by_sha256(conn, &sha)
+                    .ok()
+                    .flatten()
+                    .map(|attachment| attachment.created_at_ms)
+                    .unwrap_or(0);
+                Some(Some(AttachmentResourceRef {
+                    label: attachment_label(conn, key, &sha),
+                    attachment_sha256: sha,
+                    created_at_ms,
+                }))
+            })
+            .flatten()
+            .take(RESOURCES_CATALOG_CAP)
+            .collect(),
         catalog_markdown,
     })
 }

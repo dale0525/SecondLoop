@@ -239,7 +239,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                 context.t,
                                 documentId: item.documentId,
                                 explicitSummary: item.summary,
-                                rawText: item.summary,
+                                rawText: item.body ?? item.summary,
                               ),
                               style: theme.textTheme.bodyMedium,
                             ),
@@ -275,7 +275,8 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                           await showMemoryCorrectionDialog(
                                         context,
                                         initialTitle: item.title ?? '',
-                                        initialSummary: item.summary ?? '',
+                                        initialSummary:
+                                            item.body ?? item.summary ?? '',
                                       );
                                       if (draft == null) return;
                                       final updated =
@@ -384,8 +385,7 @@ class _DirectSourceList extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   _MetaPill(
-                    label:
-                        '[${evidence.directSourceIndexForHref(item.href) ?? index + 1}]',
+                    label: '[${index + 1}]',
                   ),
                   _MetaPill(
                     label: _localizedSourceTypeLabel(context, item),

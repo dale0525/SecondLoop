@@ -72,4 +72,38 @@ void main() {
     expect(parseChatAnswerEvidence('{"direct_sources":[],"memory_cards":[]}'),
         isNull);
   });
+
+  test('parseChatAnswerEvidence aggregates duplicate href citations', () {
+    const raw = '''
+{
+  "direct_sources": [
+    {
+      "id": "attachment:sha:chunk:1",
+      "href": "secondloop://attachment/sha",
+      "source_type": "attachment",
+      "label": "Attachment",
+      "snippet": "First excerpt",
+      "unit_id": "unit-a"
+    },
+    {
+      "id": "attachment:sha:chunk:2",
+      "href": "secondloop://attachment/sha",
+      "source_type": "attachment",
+      "label": "Attachment",
+      "snippet": "Second excerpt",
+      "unit_id": "unit-b"
+    }
+  ],
+  "memory_cards": []
+}
+''';
+
+    final evidence = parseChatAnswerEvidence(raw);
+
+    expect(evidence, isNotNull);
+    expect(
+      evidence!.chipLabelForHref('secondloop://attachment/sha'),
+      '[1, 2]',
+    );
+  });
 }

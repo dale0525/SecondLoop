@@ -159,8 +159,10 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
       context,
       initialTitle:
           document.memoryFeedback.correctedTitle ?? document.title ?? '',
-      initialSummary:
-          document.memoryFeedback.correctedSummary ?? document.summary ?? '',
+      initialSummary: document.memoryFeedback.correctedSummary ??
+          (document.rawText.trim().isNotEmpty
+              ? document.rawText
+              : (document.summary ?? '')),
     );
     if (draft == null) return;
     await _submitFeedback(

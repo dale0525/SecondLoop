@@ -263,11 +263,58 @@ void main() {
     expect(backend.recentListRequestCount, 1);
     expect(backend.viewerListOffsets, isEmpty);
   });
+
+  testWidgets(
+    'MemoryDetailPage starts editing generated memories from the full body',
+    (tester) async {
+      final backend = _MemoryDetailBackend(
+        documentSummary: 'User is actively working across these task threads:',
+        documentRawText:
+            'User is actively working across these task threads:\n- Draft roadmap [in_progress]\n- Review launch notes [open]',
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const MemoryDetailPage(
+                  documentId: 'generated:pattern:active-task-focus',
+                  startInEditMode: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final summaryField = tester.widget<TextField>(
+        find.byKey(const ValueKey('memory_correction_summary_field')),
+      );
+      expect(
+        summaryField.controller?.text,
+        'User is actively working across these task threads:\n- Draft roadmap [in_progress]\n- Review launch notes [open]',
+      );
+    },
+  );
 }
 
 final class _MemoryDetailBackend extends TestAppBackend
     implements KnowledgeBackend, KnowledgeViewerBackend {
-  _MemoryDetailBackend({this.unitsPageBuilder});
+  _MemoryDetailBackend({
+    this.unitsPageBuilder,
+    String? documentTitle,
+    String? documentSummary,
+    String? documentRawText,
+  })  : _documentTitle = documentTitle ?? 'Response language',
+        _documentSummary = documentSummary ?? 'User prefers Chinese.',
+        _documentRawText =
+            documentRawText ?? documentSummary ?? 'User prefers Chinese.';
 
   final List<KnowledgeUnit> Function({required int limit, required int offset})?
       unitsPageBuilder;
@@ -294,8 +341,8 @@ final class _MemoryDetailBackend extends TestAppBackend
           anchors: const KnowledgeAnchorSet(),
           title: _correctedTitle ?? _documentTitle,
           summary: _correctedSummary ?? _documentSummary,
-          rawText: _correctedSummary ?? _documentSummary,
-          normalizedText: _correctedSummary ?? _documentSummary,
+          rawText: _correctedSummary ?? _documentRawText,
+          normalizedText: _correctedSummary ?? _documentRawText,
           memoryFeedback: KnowledgeMemoryFeedback(
             status: _status,
             useForAskAi: _useForAskAi,
@@ -311,8 +358,9 @@ final class _MemoryDetailBackend extends TestAppBackend
         chunkCount: 1,
       );
 
-  final String _documentTitle = 'Response language';
-  final String _documentSummary = 'User prefers Chinese.';
+  final String _documentTitle;
+  final String _documentSummary;
+  final String _documentRawText;
   String? _correctedTitle;
   String? _correctedSummary;
   KnowledgeMemoryStatus? _status = KnowledgeMemoryStatus.inferred;

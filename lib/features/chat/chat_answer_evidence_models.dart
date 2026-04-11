@@ -9,30 +9,36 @@ class ChatAnswerEvidence {
 
   bool get hasEvidence => directSources.isNotEmpty || memoryCards.isNotEmpty;
 
-  ChatAnswerEvidenceDirectSource? findDirectSourceByHref(String href) {
+  List<ChatAnswerEvidenceDirectSource> findDirectSourcesByHref(String href) {
     final normalized = href.trim();
-    if (normalized.isEmpty) return null;
-    for (final source in directSources) {
-      if (source.href == normalized) return source;
-    }
-    return null;
+    if (normalized.isEmpty) return const <ChatAnswerEvidenceDirectSource>[];
+    return directSources
+        .where((source) => source.href == normalized)
+        .toList(growable: false);
   }
 
-  int? directSourceIndexForHref(String href) {
+  bool hasDirectSourceForHref(String href) =>
+      findDirectSourcesByHref(href).isNotEmpty;
+
+  List<int> directSourceIndexesForHref(String href) {
     final normalized = href.trim();
-    if (normalized.isEmpty) return null;
+    if (normalized.isEmpty) return const <int>[];
+    final indexes = <int>[];
     for (var i = 0; i < directSources.length; i += 1) {
       if (directSources[i].href == normalized) {
-        return i + 1;
+        indexes.add(i + 1);
       }
     }
-    return null;
+    return indexes;
   }
 
   String? chipLabelForHref(String href) {
-    final index = directSourceIndexForHref(href);
-    if (index == null) return null;
-    return '[$index]';
+    final indexes = directSourceIndexesForHref(href);
+    if (indexes.isEmpty) return null;
+    if (indexes.length == 1) {
+      return '[${indexes.single}]';
+    }
+    return '[${indexes.join(', ')}]';
   }
 }
 
@@ -103,6 +109,7 @@ class ChatAnswerEvidenceMemoryCard {
     required this.documentId,
     required this.title,
     required this.summary,
+    this.body,
     required this.sourceKind,
     required this.role,
     required this.createdAtMs,
@@ -115,6 +122,7 @@ class ChatAnswerEvidenceMemoryCard {
   final String documentId;
   final String? title;
   final String? summary;
+  final String? body;
   final String sourceKind;
   final String role;
   final int createdAtMs;
@@ -126,6 +134,7 @@ class ChatAnswerEvidenceMemoryCard {
   ChatAnswerEvidenceMemoryCard copyWith({
     String? title,
     String? summary,
+    String? body,
     String? status,
     int? sourceCount,
     String? whyUsed,
@@ -135,6 +144,7 @@ class ChatAnswerEvidenceMemoryCard {
       documentId: documentId,
       title: title ?? this.title,
       summary: summary ?? this.summary,
+      body: body ?? this.body,
       sourceKind: sourceKind,
       role: role,
       createdAtMs: createdAtMs,

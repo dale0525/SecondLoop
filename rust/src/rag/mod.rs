@@ -104,6 +104,27 @@ struct ContextWithEvidence {
     memory_cards: Vec<AnswerEvidenceMemoryCard>,
 }
 
+fn find_latest_message_id_by_role_and_content(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    role: &str,
+    content: &str,
+) -> Result<Option<String>> {
+    let target_role = role.trim();
+    let target_content = content.trim();
+    if target_role.is_empty() || target_content.is_empty() {
+        return Ok(None);
+    }
+
+    let messages = db::list_messages(conn, key, conversation_id)?;
+    Ok(messages
+        .into_iter()
+        .rev()
+        .find(|message| message.role == target_role && message.content.trim() == target_content)
+        .map(|message| message.id))
+}
+
 fn compact_snippet(value: &str, max_chars: usize) -> String {
     let normalized = value
         .lines()
@@ -187,6 +208,30 @@ fn build_attachment_direct_source(
     }
 }
 
+fn build_attachment_resource_direct_source(
+    attachment_sha256: &str,
+    label: &str,
+    created_at_ms: i64,
+) -> AnswerEvidenceDirectSource {
+    AnswerEvidenceDirectSource {
+        id: format!("attachment-resource:{attachment_sha256}"),
+        href: format!("secondloop://attachment/{attachment_sha256}"),
+        source_type: "attachment".to_string(),
+        label: "Attachment".to_string(),
+        source_type_label: Some("attachment".to_string()),
+        scope_label: None,
+        confidence_label: None,
+        title: Some(label.trim().to_string()).filter(|value| !value.is_empty()),
+        snippet: label.trim().to_string(),
+        highlighted_text: None,
+        created_at_ms: Some(created_at_ms),
+        updated_at_ms: Some(created_at_ms),
+        anchors: None,
+        document_id: None,
+        unit_id: None,
+    }
+}
+
 fn build_memory_card_from_document(
     conn: &Connection,
     key: &[u8; 32],
@@ -207,6 +252,7 @@ fn build_memory_card_from_document(
         document_id: document.document_id,
         title: document.title,
         summary: document.summary,
+        body: Some(document.raw_text),
         source_kind: document.source_kind,
         role: document.role,
         created_at_ms: document.created_at_ms,
@@ -366,6 +412,7 @@ fn rendered_highlighted_text(rendered_text: &str) -> Option<String> {
 fn encode_context_evidence_json_for_question(
     question: &str,
     contexts: &[ContextWithEvidence],
+    extra_direct_sources: &[AnswerEvidenceDirectSource],
 ) -> Option<String> {
     let mut direct_sources = Vec::<AnswerEvidenceDirectSource>::new();
     let mut memory_cards = Vec::<AnswerEvidenceMemoryCard>::new();
@@ -373,6 +420,7 @@ fn encode_context_evidence_json_for_question(
         direct_sources.extend(context.direct_sources.clone());
         memory_cards.extend(context.memory_cards.clone());
     }
+    direct_sources.extend(extra_direct_sources.iter().cloned());
     let filtered_sources = filter_direct_sources_for_question(question, direct_sources);
     encode_answer_evidence_json(filtered_sources, memory_cards)
 }
@@ -796,6 +844,7 @@ fn ask_ai_stream_and_persist(
     question: &str,
     prompt: &str,
     contexts: &[ContextWithEvidence],
+    extra_direct_sources: &[AnswerEvidenceDirectSource],
     provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
@@ -830,29 +879,68 @@ fn ask_ai_stream_and_persist(
                 return Err(anyhow!("empty response from LLM"));
             }
 
-            let user_message =
-                db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-            let citations_json = encode_context_evidence_json_for_question(question, contexts);
-            let assistant_message = db::insert_message_non_memory_with_citations(
-                conn,
-                key,
-                conversation_id,
-                "assistant",
-                &assistant_text,
-                citations_json.as_deref(),
-            )?;
-            if let Some(request_id) = detached_request_id.as_deref() {
-                let _ = db::claim_detached_ask_completion_request_id(
-                    conn,
-                    request_id,
-                    conversation_id,
-                )?;
-            }
+            conn.execute_batch("BEGIN IMMEDIATE;")?;
+            let persist_result: Result<AskAiResult> = (|| {
+                if let Some(request_id) = detached_request_id.as_deref() {
+                    let claimed = db::claim_detached_ask_completion_request_id(
+                        conn,
+                        request_id,
+                        conversation_id,
+                    )?;
+                    if !claimed {
+                        return Ok(AskAiResult {
+                            user_message_id: find_latest_message_id_by_role_and_content(
+                                conn,
+                                key,
+                                conversation_id,
+                                "user",
+                                question,
+                            )?
+                            .unwrap_or_default(),
+                            assistant_message_id: find_latest_message_id_by_role_and_content(
+                                conn,
+                                key,
+                                conversation_id,
+                                "assistant",
+                                &assistant_text,
+                            )?
+                            .unwrap_or_default(),
+                        });
+                    }
+                }
 
-            Ok(AskAiResult {
-                user_message_id: user_message.id,
-                assistant_message_id: assistant_message.id,
-            })
+                let user_message =
+                    db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
+                let citations_json = encode_context_evidence_json_for_question(
+                    question,
+                    contexts,
+                    extra_direct_sources,
+                );
+                let assistant_message = db::insert_message_non_memory_with_citations(
+                    conn,
+                    key,
+                    conversation_id,
+                    "assistant",
+                    &assistant_text,
+                    citations_json.as_deref(),
+                )?;
+
+                Ok(AskAiResult {
+                    user_message_id: user_message.id,
+                    assistant_message_id: assistant_message.id,
+                })
+            })();
+
+            match persist_result {
+                Ok(result) => {
+                    conn.execute_batch("COMMIT;")?;
+                    Ok(result)
+                }
+                Err(err) => {
+                    let _ = conn.execute_batch("ROLLBACK;");
+                    Err(err)
+                }
+            }
         }
         Err(e) => Err(e),
     }
@@ -990,6 +1078,17 @@ pub fn ask_ai_with_provider(
         .collect();
     let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let attachment_direct_sources = attachment_resources
+        .resources
+        .iter()
+        .map(|resource| {
+            build_attachment_resource_direct_source(
+                &resource.attachment_sha256,
+                &resource.label,
+                resource.created_at_ms,
+            )
+        })
+        .collect::<Vec<_>>();
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
@@ -1008,6 +1107,7 @@ pub fn ask_ai_with_provider(
         question,
         &prompt,
         &contexts,
+        &attachment_direct_sources,
         provider,
         on_event,
     )
@@ -1027,6 +1127,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
 ) -> Result<AskAiResult> {
     let mut contexts: Vec<ContextWithEvidence> = Vec::new();
     let mut resources_catalog: Option<String> = None;
+    let mut attachment_direct_sources = Vec::<AnswerEvidenceDirectSource>::new();
     if top_k > 0 {
         // Avoid wiping the current index if the embedder is misconfigured/unreachable.
         let mut probe = embedder.embed(&[format!("query: {question}")])?;
@@ -1081,6 +1182,17 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             top_k,
         )
         .unwrap_or_default();
+        attachment_direct_sources = attachment_resources
+            .resources
+            .iter()
+            .map(|resource| {
+                build_attachment_resource_direct_source(
+                    &resource.attachment_sha256,
+                    &resource.label,
+                    resource.created_at_ms,
+                )
+            })
+            .collect();
         let app_dir = db::app_dir_from_conn(conn).ok();
         let external_chunks = app_dir
             .as_ref()
@@ -1209,6 +1321,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
         question,
         &prompt,
         &contexts,
+        &attachment_direct_sources,
         provider,
         on_event,
     )
@@ -1228,6 +1341,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
 ) -> Result<AskAiResult> {
     let mut contexts: Vec<ContextWithEvidence> = Vec::new();
     let mut resources_catalog: Option<String> = None;
+    let mut attachment_direct_sources = Vec::<AnswerEvidenceDirectSource>::new();
     if top_k > 0 {
         let knowledge_entries = try_build_knowledge_context_entries(
             conn,
@@ -1298,6 +1412,17 @@ pub fn ask_ai_with_provider_using_active_embeddings(
             let attachment_resources =
                 collect_attachment_resources_active(conn, key, app_dir, question, legacy_top_k)
                     .unwrap_or_default();
+            attachment_direct_sources = attachment_resources
+                .resources
+                .iter()
+                .map(|resource| {
+                    build_attachment_resource_direct_source(
+                        &resource.attachment_sha256,
+                        &resource.label,
+                        resource.created_at_ms,
+                    )
+                })
+                .collect();
             let external_chunks = db::search_similar_external_document_chunks_active(
                 app_dir,
                 key,
@@ -1477,6 +1602,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
         question,
         &prompt,
         &contexts,
+        &attachment_direct_sources,
         provider,
         on_event,
     )
@@ -1700,6 +1826,17 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         time_start_ms,
         time_end_ms,
     )?;
+    let attachment_direct_sources = attachment_resources
+        .resources
+        .iter()
+        .map(|resource| {
+            build_attachment_resource_direct_source(
+                &resource.attachment_sha256,
+                &resource.label,
+                resource.created_at_ms,
+            )
+        })
+        .collect::<Vec<_>>();
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
@@ -1718,6 +1855,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         question,
         &prompt,
         &contexts,
+        &attachment_direct_sources,
         provider,
         on_event,
     )

@@ -12,7 +12,7 @@ class ChatAnswerCitationController {
   bool get hasEvidence => evidence?.hasEvidence ?? false;
 
   bool handlesHref(String href) =>
-      evidence?.findDirectSourceByHref(href) != null;
+      evidence?.hasDirectSourceForHref(href) ?? false;
 
   String? chipLabelForHref(String href) => evidence?.chipLabelForHref(href);
 

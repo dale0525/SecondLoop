@@ -307,3 +307,78 @@ fn ask_ai_time_window_prompt_keeps_latest_in_range_attachment_when_window_is_lar
         "latest in-range attachment should stay in prompt even with many older window messages: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_time_window_persists_attachment_evidence_for_catalog_resources() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 4_000_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    let in_range_message = db::insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "Please inspect the launch brief attachment.",
+    )
+    .expect("in range message");
+    conn.execute(
+        "UPDATE messages SET created_at = ?2, updated_at = ?2 WHERE id = ?1",
+        params![in_range_message.id, time_start_ms + 10],
+    )
+    .expect("update in range message ts");
+
+    let attachment = db::insert_attachment(&conn, &key, &app_dir, b"launch brief", "text/plain")
+        .expect("attachment");
+    db::link_attachment_to_message(&conn, &key, &in_range_message.id, &attachment.sha256)
+        .expect("link attachment");
+    db::upsert_attachment_metadata(
+        &conn,
+        &key,
+        &attachment.sha256,
+        Some("Launch brief"),
+        &["launch-brief.txt".to_string()],
+        &[],
+    )
+    .expect("metadata");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "今天这个时间范围里的附件讲了什么？",
+        0,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let messages = db::list_messages(&conn, &key, &conversation.id).expect("list messages");
+    let assistant = messages.last().expect("assistant message");
+    let raw = assistant
+        .citations_json
+        .as_deref()
+        .expect("citations json should be stored");
+    let value: serde_json::Value = serde_json::from_str(raw).expect("valid json");
+    let direct_sources = value["direct_sources"]
+        .as_array()
+        .expect("direct_sources array");
+    assert!(
+        direct_sources.iter().any(|source| {
+            source["href"].as_str()
+                == Some(&format!("secondloop://attachment/{}", attachment.sha256))
+        }),
+        "expected time-window attachment catalog resource in citations json: {value}"
+    );
+}

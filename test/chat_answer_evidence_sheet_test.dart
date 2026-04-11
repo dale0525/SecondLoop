@@ -248,8 +248,66 @@ void main() {
         findsOneWidget);
     expect(find.byType(Dialog), findsNothing);
   });
+
+  testWidgets(
+    'ChatAnswerEvidencePanel prefills correction from memory body when available',
+    (tester) async {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          const MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:pattern:active-task-focus',
+                    title: 'Active task focus',
+                    summary:
+                        'User is actively working across these task threads:',
+                    body:
+                        'User is actively working across these task threads:\n- Draft roadmap [in_progress]\n- Review launch notes [open]',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 4,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: 'Summarize the current focus',
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+              onOpenMemoryCard: _noopOpenMemoryCard,
+              onCorrectMemoryCard: _returnUpdatedCard,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Correct'));
+      await tester.pumpAndSettle();
+
+      final summaryField = tester.widget<TextField>(
+        find.byKey(const ValueKey('memory_correction_summary_field')),
+      );
+      expect(
+        summaryField.controller?.text,
+        'User is actively working across these task threads:\n- Draft roadmap [in_progress]\n- Review launch notes [open]',
+      );
+    },
+  );
 }
 
 Future<void> _noopOpenDirectSource(String _) async {}
 
 Future<void> _noopOpenMemoryCard(String _) async {}
+
+Future<ChatAnswerEvidenceMemoryCard?> _returnUpdatedCard(
+  ChatAnswerEvidenceMemoryCard card,
+  String title,
+  String summary,
+) async =>
+    card.copyWith(title: title, summary: summary, body: summary);
