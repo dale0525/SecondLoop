@@ -10,6 +10,8 @@ pub(super) struct PullRequestV2<'a> {
     pub(super) device_id: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) checkpoint_token: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) since: Option<&'a BTreeMap<String, i64>>,
     pub(super) limit: i64,
 }
 

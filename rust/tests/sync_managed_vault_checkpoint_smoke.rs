@@ -4,7 +4,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use base64::engine::general_purpose::STANDARD as B64_STD;
+use base64::engine::general_purpose::{STANDARD as B64_STD, URL_SAFE_NO_PAD as B64_URL};
 use base64::Engine as _;
 use secondloop_rust::auth;
 use secondloop_rust::crypto::{derive_root_key, encrypt_bytes, KdfParams};
@@ -251,6 +251,205 @@ fn start_v2_pull_server(
     (format!("http://{}", addr), stop_tx, handle)
 }
 
+fn start_v2_reseed_history_server(
+    encrypted_op_b64: String,
+) -> (String, mpsc::Sender<()>, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    listener.set_nonblocking(true).expect("nonblocking");
+    let addr = listener.local_addr().expect("local addr");
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+
+    let handle = thread::spawn(move || {
+        let mut saw_reseed = false;
+        loop {
+            if stop_rx.try_recv().is_ok() {
+                break;
+            }
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let (method, path, body) = read_request(&mut stream);
+                    if method != "POST" {
+                        write_json_response(&mut stream, 404, json!({"error":"not_found"}));
+                        continue;
+                    }
+
+                    if path.ends_with("/devices") {
+                        write_json_response(
+                            &mut stream,
+                            200,
+                            json!({ "device_id": "server-device" }),
+                        );
+                        continue;
+                    }
+
+                    if path.ends_with("/ops:pull_bin_v2") {
+                        write_json_response(&mut stream, 404, json!({"error":"not_found"}));
+                        continue;
+                    }
+
+                    if path.ends_with("/ops:pull_v2") {
+                        let request_json: serde_json::Value =
+                            serde_json::from_slice(&body).expect("pull_v2 body");
+                        let checkpoint = request_json
+                            .get("checkpoint_token")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or("");
+                        let since_remote = request_json
+                            .get("since")
+                            .and_then(|value| value.get("remote-a"))
+                            .and_then(|value| value.as_i64());
+
+                        if checkpoint == "checkpoint-stale" {
+                            saw_reseed = true;
+                            write_json_response(
+                                &mut stream,
+                                200,
+                                json!({
+                                    "protocol_version": 2,
+                                    "generation_id": "generation-b",
+                                    "checkpoint_token": null,
+                                    "has_more": false,
+                                    "high_water": 5,
+                                    "history_lower_bound": { "remote-a": 5 },
+                                    "reseed_required": true,
+                                    "ops": []
+                                }),
+                            );
+                            continue;
+                        }
+
+                        assert!(saw_reseed, "expected reseed response before retry");
+                        assert_eq!(checkpoint, "");
+                        assert_eq!(since_remote, Some(4));
+                        write_json_response(
+                            &mut stream,
+                            200,
+                            json!({
+                                "protocol_version": 2,
+                                "generation_id": "generation-b",
+                                "checkpoint_token": "checkpoint-fresh",
+                                "has_more": false,
+                                "high_water": 5,
+                                "history_lower_bound": { "remote-a": 5 },
+                                "reseed_required": false,
+                                "ops": [{
+                                    "device_id": "remote-a",
+                                    "seq": 5,
+                                    "op_id": "op-conversation-v2-reseed-bounds",
+                                    "ciphertext_b64": encrypted_op_b64
+                                }]
+                            }),
+                        );
+                        continue;
+                    }
+
+                    write_json_response(&mut stream, 404, json!({"error":"not_found"}));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("accept failed: {error}"),
+            }
+        }
+    });
+
+    (format!("http://{}", addr), stop_tx, handle)
+}
+
+fn start_legacy_reseed_history_server(
+    encrypted_op_b64: String,
+) -> (String, mpsc::Sender<()>, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    listener.set_nonblocking(true).expect("nonblocking");
+    let addr = listener.local_addr().expect("local addr");
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+
+    let handle = thread::spawn(move || {
+        let mut saw_reseed = false;
+        loop {
+            if stop_rx.try_recv().is_ok() {
+                break;
+            }
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let (method, path, body) = read_request(&mut stream);
+                    if method != "POST" {
+                        write_json_response(&mut stream, 404, json!({"error":"not_found"}));
+                        continue;
+                    }
+
+                    if path.ends_with("/devices") {
+                        write_json_response(
+                            &mut stream,
+                            200,
+                            json!({ "device_id": "server-device" }),
+                        );
+                        continue;
+                    }
+
+                    if path.ends_with("/ops:pull_bin_v2")
+                        || path.ends_with("/ops:pull_v2")
+                        || path.ends_with("/ops:pull_bin")
+                    {
+                        write_json_response(&mut stream, 404, json!({"error":"not_found"}));
+                        continue;
+                    }
+
+                    if path.ends_with("/ops:pull") {
+                        let request_json: serde_json::Value =
+                            serde_json::from_slice(&body).expect("pull body");
+                        let since_remote = request_json["since"]["remote-a"].as_i64().unwrap_or(0);
+
+                        if since_remote == 0 {
+                            saw_reseed = true;
+                            write_json_response(
+                                &mut stream,
+                                200,
+                                json!({
+                                    "ops": [],
+                                    "next": {},
+                                    "max": { "remote-a": 5 },
+                                    "needs_reseed": { "remote-a": true },
+                                    "history_lower_bound": { "remote-a": 5 }
+                                }),
+                            );
+                            continue;
+                        }
+
+                        assert!(saw_reseed, "expected reseed response before retry");
+                        assert_eq!(since_remote, 4);
+                        write_json_response(
+                            &mut stream,
+                            200,
+                            json!({
+                                "ops": [{
+                                    "device_id": "remote-a",
+                                    "seq": 5,
+                                    "op_id": "op-conversation-legacy-reseed-bounds",
+                                    "ciphertext_b64": encrypted_op_b64
+                                }],
+                                "next": { "remote-a": 5 },
+                                "max": { "remote-a": 5 },
+                                "needs_reseed": {},
+                                "history_lower_bound": { "remote-a": 5 }
+                            }),
+                        );
+                        continue;
+                    }
+
+                    write_json_response(&mut stream, 404, json!({"error":"not_found"}));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("accept failed: {error}"),
+            }
+        }
+    });
+
+    (format!("http://{}", addr), stop_tx, handle)
+}
+
 #[test]
 fn managed_vault_pull_uses_v2_checkpoint_route_when_available() {
     let vault_id = "v1".to_string();
@@ -372,6 +571,87 @@ fn managed_vault_pull_with_progress_probes_v2_before_any_checkpoint_state_exists
         diagnostics_json["managed_vault_checkpoint_token_present"].as_bool(),
         Some(true)
     );
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_retries_v2_with_history_lower_bound_after_reseed() {
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop_reseed_v2");
+    let db_key =
+        auth::init_master_password(&app_dir, "pw-v2", KdfParams::for_test()).expect("init db");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+    let encrypted_op_b64 = encrypted_conversation_op(
+        &sync_key,
+        "remote-a",
+        5,
+        "conversation-reseed-v2-bounds",
+        "op-conversation-v2-reseed-bounds",
+    );
+    let (base_url, stop_tx, handle) = start_v2_reseed_history_server(encrypted_op_b64);
+    let scope_id =
+        B64_URL.encode(format!("managed_vault|{}|{}", base_url.trim(), vault_id.trim()).as_bytes());
+
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)"#,
+        rusqlite::params![
+            format!("managed_vault.checkpoint_token:{scope_id}"),
+            "checkpoint-stale"
+        ],
+    )
+    .expect("seed stale checkpoint");
+
+    let applied =
+        sync::managed_vault::pull(&conn, &db_key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull after reseed");
+    assert_eq!(applied, 1);
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_retries_legacy_with_history_lower_bound_after_reseed() {
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop_reseed_legacy");
+    let db_key =
+        auth::init_master_password(&app_dir, "pw-legacy", KdfParams::for_test()).expect("init db");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+    let encrypted_op_b64 = encrypted_conversation_op(
+        &sync_key,
+        "remote-a",
+        5,
+        "conversation-reseed-legacy-bounds",
+        "op-conversation-legacy-reseed-bounds",
+    );
+    let (base_url, stop_tx, handle) = start_legacy_reseed_history_server(encrypted_op_b64);
+
+    let applied =
+        sync::managed_vault::pull(&conn, &db_key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("legacy pull after reseed");
+    assert_eq!(applied, 1);
 
     let _ = stop_tx.send(());
     handle.join().expect("join");

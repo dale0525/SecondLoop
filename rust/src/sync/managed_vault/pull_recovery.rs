@@ -14,6 +14,10 @@ pub(super) struct PullResponseWithMax {
     pub(super) next: BTreeMap<String, i64>,
     #[serde(default)]
     pub(super) max: BTreeMap<String, i64>,
+    #[serde(default)]
+    pub(super) needs_reseed: BTreeMap<String, bool>,
+    #[serde(default)]
+    pub(super) history_lower_bound: BTreeMap<String, i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

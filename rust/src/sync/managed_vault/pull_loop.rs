@@ -15,6 +15,7 @@ fn reset_after_v2_reseed(
     conn: &Connection,
     scope_id: &str,
     since: &mut BTreeMap<String, i64>,
+    history_lower_bound: Option<&BTreeMap<String, i64>>,
     stale_cursor_recovery_attempted: &mut bool,
     remote_ahead_repair_tracker: &mut RemoteAheadRepairTracker,
 ) -> Result<()> {
@@ -23,13 +24,13 @@ fn reset_after_v2_reseed(
         scope_id,
         super::state_machine::ManagedVaultSyncState::ReseedRequired,
     );
-    super::reseed::restart_incremental_pull(conn, scope_id)?;
+    *since =
+        super::reseed::apply_history_lower_bound_reset(conn, scope_id, history_lower_bound, None)?;
     let _ = super::state_machine::transition(
         conn,
         scope_id,
         super::state_machine::ManagedVaultSyncState::Rebootstraping,
     );
-    since.clear();
     *stale_cursor_recovery_attempted = false;
     *remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
     Ok(())
@@ -81,6 +82,11 @@ pub fn pull(
         let request_v2 = super::v2_client::PullRequestV2 {
             device_id: local_device_id.as_str(),
             checkpoint_token: checkpoint_state.checkpoint_token.as_deref(),
+            since: if checkpoint_state.checkpoint_token.is_none() && !since.is_empty() {
+                Some(&since)
+            } else {
+                None
+            },
             limit: PULL_LIMIT,
         };
 
@@ -102,6 +108,7 @@ pub fn pull(
                             conn,
                             &scope_id,
                             &mut since,
+                            parsed.meta.history_lower_bound.as_ref(),
                             &mut stale_cursor_recovery_attempted,
                             &mut remote_ahead_repair_tracker,
                         )?;
@@ -169,6 +176,7 @@ pub fn pull(
                             conn,
                             &scope_id,
                             &mut since,
+                            parsed.meta.history_lower_bound.as_ref(),
                             &mut stale_cursor_recovery_attempted,
                             &mut remote_ahead_repair_tracker,
                         )?;
@@ -426,6 +434,17 @@ pub fn pull(
             let body = resp.bytes()?;
             serde_json::from_slice(body.as_ref())?
         };
+        if !parsed.needs_reseed.is_empty() {
+            since = super::reseed::apply_history_lower_bound_reset(
+                conn,
+                &scope_id,
+                Some(&parsed.history_lower_bound),
+                Some(&parsed.needs_reseed),
+            )?;
+            stale_cursor_recovery_attempted = false;
+            remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
+            continue;
+        }
         let mut next_since = since.clone();
         for (device_id, last_seq) in &parsed.next {
             next_since.insert(device_id.to_string(), *last_seq);

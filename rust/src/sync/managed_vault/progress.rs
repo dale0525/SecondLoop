@@ -69,6 +69,11 @@ pub fn pull_with_progress(
             let request_v2 = super::v2_client::PullRequestV2 {
                 device_id: local_device_id.as_str(),
                 checkpoint_token: checkpoint_state.checkpoint_token.as_deref(),
+                since: if checkpoint_state.checkpoint_token.is_none() && !since.is_empty() {
+                    Some(&since)
+                } else {
+                    None
+                },
                 limit: PULL_LIMIT,
             };
             match super::v2_client::fetch_pull_v2_json(
@@ -79,30 +84,23 @@ pub fn pull_with_progress(
             )? {
                 super::v2_client::PullV2RouteResult::Parsed(parsed) => {
                     super::checkpoint::mark_pull_v2_supported(conn, &scope_id, "ops:pull_v2")?;
-                    if let Some(high_water) = parsed.meta.high_water {
-                        let computed_done = super::v2_client::sum_since(&since);
-                        total_ops = Some(high_water);
-                        done_ops = report_pull_progress(
-                            progress,
-                            &mut reported_done,
-                            computed_done.min(high_water),
-                            high_water,
-                        );
-                    }
-
                     if parsed.meta.reseed_required {
                         let _ = super::state_machine::transition(
                             conn,
                             &scope_id,
                             super::state_machine::ManagedVaultSyncState::ReseedRequired,
                         );
-                        super::reseed::restart_incremental_pull(conn, &scope_id)?;
+                        since = super::reseed::apply_history_lower_bound_reset(
+                            conn,
+                            &scope_id,
+                            parsed.meta.history_lower_bound.as_ref(),
+                            None,
+                        )?;
                         let _ = super::state_machine::transition(
                             conn,
                             &scope_id,
                             super::state_machine::ManagedVaultSyncState::Rebootstraping,
                         );
-                        since.clear();
                         reset_progress_baseline(
                             &since,
                             &mut progress_start_since,
@@ -114,6 +112,17 @@ pub fn pull_with_progress(
                         stale_cursor_recovery_attempted = false;
                         remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
                         continue;
+                    }
+
+                    if let Some(high_water) = parsed.meta.high_water {
+                        let computed_done = super::v2_client::sum_since(&since);
+                        total_ops = Some(high_water);
+                        done_ops = report_pull_progress(
+                            progress,
+                            &mut reported_done,
+                            computed_done.min(high_water),
+                            high_water,
+                        );
                     }
 
                     let decoded_ops: Vec<super::apply_batch::PullCipherOp> = parsed
@@ -202,6 +211,25 @@ pub fn pull_with_progress(
         }
         let body = resp.bytes()?;
         let parsed: PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
+        if !parsed.needs_reseed.is_empty() {
+            since = super::reseed::apply_history_lower_bound_reset(
+                conn,
+                &scope_id,
+                Some(&parsed.history_lower_bound),
+                Some(&parsed.needs_reseed),
+            )?;
+            reset_progress_baseline(
+                &since,
+                &mut progress_start_since,
+                &mut progress_high_water_since,
+                &mut total_ops,
+                &mut done_ops,
+                &mut reported_done,
+            );
+            stale_cursor_recovery_attempted = false;
+            remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
+            continue;
+        }
         if !parsed.max.is_empty() {
             let (computed_done, computed_total) =
                 pull_progress_counts(&progress_start_since, &since, &parsed.max);
