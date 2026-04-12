@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import tomllib
 import unittest
 
@@ -71,6 +72,19 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
 
         self.assertIn("create_macos_xcrun_wrapper", script)
         self.assertIn("xcodebuild -allowProvisioningUpdates", script)
+
+    def test_flutter_with_defines_exits_after_running_with_injected_defines(self) -> None:
+        script = FLUTTER_WITH_DEFINES_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            script,
+            re.compile(
+                r'if \(\( \$\{#defines\[@\]\} > 0 \)\); then\s+'
+                r'run_flutter_command "\$\{all_args\[@\]\}" "\$\{defines\[@\]\}"\s+'
+                r'exit \$\?\s+fi',
+                re.MULTILINE,
+            ),
+        )
 
     def test_ios_bg_task_identifier_is_derived_from_bundle_id(self) -> None:
         info_plist = IOS_INFO_PLIST.read_text(encoding="utf-8")

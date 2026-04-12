@@ -43,6 +43,17 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+  bool _memoryTabInitialized = false;
+
+  void _selectTab(int index) {
+    setState(() {
+      _selectedIndex = index;
+      if (index == AppTab.memory.index) {
+        _memoryTabInitialized = true;
+      }
+    });
+  }
+
   QuickCaptureController? _quickCaptureController;
 
   @override
@@ -91,12 +102,16 @@ class _AppShellState extends State<AppShell> {
         final useRail = !useCollapsedShell && constraints.maxWidth >= 720;
         final useDesktopBottomNav =
             !useCollapsedShell && !useRail && isDesktopPlatform;
+        final shouldBuildMemoryTab =
+            _memoryTabInitialized || _selectedIndex == AppTab.memory.index;
         final content = useRail || useDesktopBottomNav
             ? IndexedStack(
                 index: _selectedIndex,
                 children: <Widget>[
                   _ChatTab(isActive: _selectedIndex == 0),
-                  const _MemoryTab(),
+                  shouldBuildMemoryTab
+                      ? const _MemoryTab()
+                      : const SizedBox.shrink(),
                   const _SettingsTab(),
                 ],
               )
@@ -125,8 +140,7 @@ class _AppShellState extends State<AppShell> {
                                       const EdgeInsets.symmetric(vertical: 8),
                                   child: NavigationRail(
                                     selectedIndex: _selectedIndex,
-                                    onDestinationSelected: (index) =>
-                                        setState(() => _selectedIndex = index),
+                                    onDestinationSelected: _selectTab,
                                     labelType: NavigationRailLabelType.all,
                                     destinations: [
                                       for (final t in AppTab.values)
@@ -189,8 +203,7 @@ class _AppShellState extends State<AppShell> {
               ? NavigationBar(
                   key: const ValueKey('app_shell_bottom_nav'),
                   selectedIndex: _selectedIndex,
-                  onDestinationSelected: (index) =>
-                      setState(() => _selectedIndex = index),
+                  onDestinationSelected: _selectTab,
                   destinations: [
                     for (final t in AppTab.values)
                       NavigationDestination(

@@ -429,6 +429,83 @@ void main() {
   );
 
   testWidgets(
+    'ChatAnswerEvidencePanel starts memory refreshes concurrently',
+    (tester) async {
+      final started = <String>[];
+      final completers = <String, Completer<ChatAnswerEvidenceMemoryCard?>>{
+        'generated:preference:response-language':
+            Completer<ChatAnswerEvidenceMemoryCard?>(),
+        'generated:project:launch-work':
+            Completer<ChatAnswerEvidenceMemoryCard?>(),
+      };
+
+      Future<ChatAnswerEvidenceMemoryCard?> refresh(
+        ChatAnswerEvidenceMemoryCard card,
+      ) {
+        started.add(card.documentId);
+        return completers[card.documentId]!.future;
+      }
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: const ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:preference:response-language',
+                    title: 'Response language',
+                    summary: 'User prefers Chinese.',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 4,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: '用中文总结一下最近变化',
+                  ),
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:project:launch-work',
+                    title: 'Launch work',
+                    summary: 'Ship the release companion.',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 5,
+                    updatedAtMs: 6,
+                    status: 'confirmed',
+                    sourceCount: 1,
+                    whyUsed: '整理当前工作重点',
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+              onOpenMemoryCard: _noopOpenMemoryCard,
+              onRefreshMemoryCard: refresh,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      expect(
+        started,
+        containsAll(<String>[
+          'generated:preference:response-language',
+          'generated:project:launch-work',
+        ]),
+      );
+
+      for (final completer in completers.values) {
+        completer.complete();
+      }
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
     'ChatAnswerEvidencePanel ignores stale refresh results after evidence updates',
     (tester) async {
       final staleRefresh = Completer<ChatAnswerEvidenceMemoryCard?>();

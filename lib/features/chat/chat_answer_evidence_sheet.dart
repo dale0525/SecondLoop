@@ -155,17 +155,18 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
     final refreshEpoch = ++_refreshEpoch;
     final cardsToRefresh =
         List<ChatAnswerEvidenceMemoryCard>.from(_memoryCards);
-
-    final refreshed = <ChatAnswerEvidenceMemoryCard>[];
-    for (final card in cardsToRefresh) {
-      try {
-        if (refreshEpoch != _refreshEpoch) return;
-        refreshed.add(await refresh(card) ?? card);
-      } catch (_) {
-        if (refreshEpoch != _refreshEpoch) return;
-        refreshed.add(card);
-      }
-    }
+    final refreshed = await Future.wait(
+      cardsToRefresh.map((card) async {
+        try {
+          final updated = await refresh(card);
+          if (refreshEpoch != _refreshEpoch) return card;
+          return updated ?? card;
+        } catch (_) {
+          if (refreshEpoch != _refreshEpoch) return card;
+          return card;
+        }
+      }),
+    );
     if (!mounted || refreshEpoch != _refreshEpoch) return;
     setState(() {
       _memoryCards = refreshed;

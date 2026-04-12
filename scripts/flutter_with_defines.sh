@@ -359,6 +359,7 @@ maybe_enable_macos_provisioning_updates
 
 if (( ${#defines[@]} > 0 )); then
   run_flutter_command "${all_args[@]}" "${defines[@]}"
+  exit $?
 fi
 
 run_flutter_command "${all_args[@]}"
