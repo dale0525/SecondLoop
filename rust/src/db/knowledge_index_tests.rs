@@ -196,3 +196,47 @@ fn backfill_knowledge_memory_feedback_oplog_rolls_back_partial_progress_on_error
         .expect("sentinel lookup");
     assert!(sentinel.is_none());
 }
+
+#[test]
+fn upsert_knowledge_memory_feedback_rolls_back_when_oplog_insert_fails() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [73u8; 32];
+
+    conn.execute_batch(
+        r#"CREATE TRIGGER abort_knowledge_feedback_oplog_insert
+           BEFORE INSERT ON oplog
+           BEGIN
+             SELECT RAISE(ABORT, 'stop oplog');
+           END;"#,
+    )
+    .expect("create oplog abort trigger");
+
+    let error = upsert_knowledge_memory_feedback(
+        &conn,
+        &key,
+        "generated:preference:atomicity",
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        false,
+        Some("trimmed title".to_string()),
+        Some("trimmed summary".to_string()),
+    )
+    .expect_err("upsert should abort when oplog insert fails");
+    assert!(error.to_string().contains("stop oplog"));
+
+    let feedback_row_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM knowledge_document_feedback WHERE document_id = ?1",
+            params!["generated:preference:atomicity"],
+            |row| row.get(0),
+        )
+        .expect("feedback row count");
+    assert_eq!(feedback_row_count, 0);
+
+    let oplog_rows: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("oplog count");
+    assert_eq!(oplog_rows, 0);
+}

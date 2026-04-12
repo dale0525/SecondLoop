@@ -264,68 +264,85 @@ pub fn upsert_knowledge_memory_feedback(
         .as_ref()
         .map(|row| row.6)
         .unwrap_or(now);
-    let device_id = get_or_create_device_id(conn)?;
-    let seq = next_device_seq(conn, &device_id)?;
-    conn.execute(
-        r#"INSERT INTO knowledge_document_feedback(
-               document_id,
-               status,
-               use_for_ask_ai,
-               is_deleted,
-               marked_inaccurate,
-               corrected_title,
-               corrected_summary,
-               created_at_ms,
-               updated_at_ms,
-               updated_by_device_id,
-               updated_by_seq
-           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-           ON CONFLICT(document_id) DO UPDATE SET
-             status = excluded.status,
-             use_for_ask_ai = excluded.use_for_ask_ai,
-             is_deleted = excluded.is_deleted,
-             marked_inaccurate = excluded.marked_inaccurate,
-             corrected_title = excluded.corrected_title,
-             corrected_summary = excluded.corrected_summary,
-             updated_at_ms = excluded.updated_at_ms,
-             updated_by_device_id = excluded.updated_by_device_id,
-             updated_by_seq = excluded.updated_by_seq"#,
-        params![
-            document_id,
-            encoded_status,
-            if use_for_ask_ai { 1 } else { 0 },
-            if is_deleted { 1 } else { 0 },
-            if marked_inaccurate { 1 } else { 0 },
-            corrected_title,
-            corrected_summary,
-            created_at_ms,
-            now,
-            device_id.as_str(),
-            seq,
-        ],
-    )?;
-    let op = serde_json::json!({
-        "op_id": uuid::Uuid::new_v4().to_string(),
-        "device_id": device_id.as_str(),
-        "seq": seq,
-        "ts_ms": now,
-        "type": "knowledge.memory_feedback.upsert.v1",
-        "payload": {
-            "document_id": document_id,
-            "status": status.map(|value| serde_json::to_string(&value))
-                .transpose()?
-                .map(|value| value.trim_matches('"').to_string()),
-            "use_for_ask_ai": use_for_ask_ai,
-            "is_deleted": is_deleted,
-            "marked_inaccurate": marked_inaccurate,
-            "corrected_title": corrected_title,
-            "corrected_summary": corrected_summary,
-            "created_at_ms": created_at_ms,
-            "updated_at_ms": now,
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result = (|| -> Result<crate::knowledge::KnowledgeMemoryFeedback> {
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        conn.execute(
+            r#"INSERT INTO knowledge_document_feedback(
+                   document_id,
+                   status,
+                   use_for_ask_ai,
+                   is_deleted,
+                   marked_inaccurate,
+                   corrected_title,
+                   corrected_summary,
+                   created_at_ms,
+                   updated_at_ms,
+                   updated_by_device_id,
+                   updated_by_seq
+               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+               ON CONFLICT(document_id) DO UPDATE SET
+                 status = excluded.status,
+                 use_for_ask_ai = excluded.use_for_ask_ai,
+                 is_deleted = excluded.is_deleted,
+                 marked_inaccurate = excluded.marked_inaccurate,
+                 corrected_title = excluded.corrected_title,
+                 corrected_summary = excluded.corrected_summary,
+                 updated_at_ms = excluded.updated_at_ms,
+                 updated_by_device_id = excluded.updated_by_device_id,
+                 updated_by_seq = excluded.updated_by_seq"#,
+            params![
+                document_id,
+                encoded_status,
+                if use_for_ask_ai { 1 } else { 0 },
+                if is_deleted { 1 } else { 0 },
+                if marked_inaccurate { 1 } else { 0 },
+                corrected_title,
+                corrected_summary,
+                created_at_ms,
+                now,
+                device_id.as_str(),
+                seq,
+            ],
+        )?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id.as_str(),
+            "seq": seq,
+            "ts_ms": now,
+            "type": "knowledge.memory_feedback.upsert.v1",
+            "payload": {
+                "document_id": document_id,
+                "status": status.map(|value| serde_json::to_string(&value))
+                    .transpose()?
+                    .map(|value| value.trim_matches('"').to_string()),
+                "use_for_ask_ai": use_for_ask_ai,
+                "is_deleted": is_deleted,
+                "marked_inaccurate": marked_inaccurate,
+                "corrected_title": corrected_title,
+                "corrected_summary": corrected_summary,
+                "created_at_ms": created_at_ms,
+                "updated_at_ms": now,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+        get_knowledge_memory_feedback(conn, document_id)
+    })();
+
+    match result {
+        Ok(feedback) => match conn.execute_batch("COMMIT;") {
+            Ok(()) => Ok(feedback),
+            Err(error) => {
+                let _ = conn.execute_batch("ROLLBACK;");
+                Err(error.into())
+            }
+        },
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(error)
         }
-    });
-    insert_oplog(conn, key, &op)?;
-    get_knowledge_memory_feedback(conn, document_id)
+    }
 }
 
 const KV_KNOWLEDGE_MEMORY_FEEDBACK_OPLOG_BACKFILLED: &str =
