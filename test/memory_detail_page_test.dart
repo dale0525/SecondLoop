@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/attachments_backend.dart';
 import 'package:secondloop/core/backend/knowledge_backend.dart';
 import 'package:secondloop/core/backend/knowledge_viewer_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
 import 'package:secondloop/features/memory/memory_detail_page.dart';
+import 'package:secondloop/src/rust/db.dart';
 import 'package:secondloop/src/rust/knowledge/models.dart';
 
 import 'test_backend.dart';
@@ -47,6 +50,72 @@ void main() {
     expect(find.text('Kickoff note confirms the user prefers Chinese.'),
         findsOneWidget);
     expect(find.text('View original'), findsOneWidget);
+  });
+
+  testWidgets(
+      'MemoryDetailPage opens attachment evidence with preserved citation target',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final backend = _MemoryDetailBackend(
+      unitsPageBuilder: ({required int limit, required int offset}) =>
+          <KnowledgeUnit>[
+        KnowledgeUnit(
+          unitId: 'attachment:sha-attachment:transcript:chunk:4',
+          documentId: 'attachment:sha-attachment:transcript',
+          parentUnitId: null,
+          unitKind: KnowledgeUnitKind.chunk,
+          sourceKind: KnowledgeSourceKind.transcript,
+          role: KnowledgeRole.evidence,
+          ordinal: 4,
+          tokenCount: 16,
+          rawText: 'Transcript chunk four.',
+          normalizedText: 'transcript chunk four.',
+          anchors: const KnowledgeAnchorSet(
+            attachmentSha256: 'sha-attachment',
+          ),
+          prevUnitId: null,
+          nextUnitId: null,
+          createdAtMs: now,
+          updatedAtMs: now,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const MemoryDetailPage(
+                documentId: 'generated:preference:response-language',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final openSourceButton = find.widgetWithText(TextButton, 'View original');
+    await tester.scrollUntilVisible(
+      openSourceButton,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(openSourceButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final page = tester.widget<AttachmentViewerPage>(
+      find.byType(AttachmentViewerPage),
+    );
+    expect(page.initialContentKind, 'transcript_full');
+    expect(page.initialChunkIndex, 4);
   });
 
   testWidgets(
@@ -305,7 +374,7 @@ void main() {
 }
 
 final class _MemoryDetailBackend extends TestAppBackend
-    implements KnowledgeBackend, KnowledgeViewerBackend {
+    implements KnowledgeBackend, KnowledgeViewerBackend, AttachmentsBackend {
   _MemoryDetailBackend({
     this.unitsPageBuilder,
     String? documentTitle,
@@ -367,6 +436,13 @@ final class _MemoryDetailBackend extends TestAppBackend
   bool _useForAskAi = true;
   bool _isDeleted = false;
   bool _markedInaccurate = false;
+  static const Attachment _attachment = Attachment(
+    sha256: 'sha-attachment',
+    mimeType: 'text/plain',
+    path: 'attachments/sha-attachment.txt',
+    byteLen: 16,
+    createdAtMs: 1,
+  );
 
   String? get correctedTitle => _correctedTitle;
   String? get correctedSummary => _correctedSummary;
@@ -526,6 +602,59 @@ final class _MemoryDetailBackend extends TestAppBackend
     int limit = 20,
   }) async =>
       const <KnowledgeSearchResult>[];
+
+  @override
+  Future<Attachment?> readAttachmentBySha256(String attachmentSha256) async =>
+      attachmentSha256 == _attachment.sha256 ? _attachment : null;
+
+  @override
+  Future<List<Attachment>> listMessageAttachments(
+    Uint8List key,
+    String messageId,
+  ) async =>
+      const <Attachment>[];
+
+  @override
+  Future<void> linkAttachmentToMessage(
+    Uint8List key,
+    String messageId, {
+    required String attachmentSha256,
+  }) async {}
+
+  @override
+  Future<List<Attachment>> listRecentAttachments(
+    Uint8List key, {
+    int limit = 50,
+  }) async =>
+      <Attachment>[_attachment];
+
+  @override
+  Future<String?> readAttachmentAnnotationCaptionLong(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
+  Future<Uint8List> readAttachmentBytes(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      Uint8List.fromList(const <int>[1, 2, 3]);
+
+  @override
+  Future<AttachmentExifMetadata?> readAttachmentExifMetadata(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
+
+  @override
+  Future<String?> readAttachmentPlaceDisplayName(
+    Uint8List key, {
+    required String sha256,
+  }) async =>
+      null;
 }
 
 final class _RecentMemoryDetailBackend extends _MemoryDetailBackend

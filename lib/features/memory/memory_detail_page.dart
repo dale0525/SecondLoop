@@ -113,9 +113,12 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
   Future<void> _openUnitSource(BuildContext context, KnowledgeUnit unit) async {
     final attachmentSha = unit.anchors.attachmentSha256?.trim() ?? '';
     if (attachmentSha.isNotEmpty) {
+      final target = _attachmentCitationTargetForUnit(unit);
       await AttachmentViewerPage.openBySha(
         context,
         attachmentSha256: attachmentSha,
+        initialContentKind: target.$1,
+        initialChunkIndex: target.$2,
       );
       return;
     }
@@ -495,6 +498,22 @@ bool _unitHasOpenableSource(KnowledgeUnit unit) {
   final attachmentSha = unit.anchors.attachmentSha256?.trim() ?? '';
   return parseAttachmentDeepLink('secondloop://attachment/$attachmentSha') !=
       null;
+}
+
+(String?, int?) _attachmentCitationTargetForUnit(KnowledgeUnit unit) {
+  final documentId = unit.documentId.trim();
+  final initialContentKind = switch (documentId.split(':').last) {
+    'extracted_text' => 'extracted_text_full',
+    'readable_text' => 'readable_text_full',
+    'ocr_text' => 'ocr_text_full',
+    'transcript' => 'transcript_full',
+    'metadata' => 'metadata',
+    _ => null,
+  };
+  final chunkMatch = RegExp(r':chunk:(\d+)$').firstMatch(unit.unitId.trim());
+  final initialChunkIndex =
+      chunkMatch == null ? null : int.tryParse(chunkMatch.group(1)!);
+  return (initialContentKind, initialChunkIndex);
 }
 
 String _unitAnchorLabel(BuildContext context, KnowledgeUnit unit) {

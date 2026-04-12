@@ -236,11 +236,12 @@ fn build_external_document_direct_source(
     let unit_id = format!("{document_id}:chunk:{chunk_index:04}");
     let normalized_title = title.trim();
     let normalized_snippet = compact_snippet(snippet, 180);
+    let encoded_document_id = encode_deeplink_component(&document_id);
+    let encoded_unit_id = encode_deeplink_component(&unit_id);
     AnswerEvidenceDirectSource {
         id: format!("external-document:{doc_id}:{chunk_index}"),
         href: format!(
-            "secondloop://knowledge-document/{}?chunk={chunk_index}&unit={unit_id}",
-            document_id,
+            "secondloop://knowledge-document/{encoded_document_id}?chunk={chunk_index}&unit={encoded_unit_id}",
         ),
         source_type: "document".to_string(),
         label: "Document".to_string(),
@@ -256,6 +257,21 @@ fn build_external_document_direct_source(
         document_id: Some(document_id),
         unit_id: Some(unit_id),
     }
+}
+
+fn encode_deeplink_component(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        let is_unreserved =
+            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~');
+        if is_unreserved {
+            out.push(char::from(byte));
+        } else {
+            out.push('%');
+            out.push_str(&format!("{byte:02X}"));
+        }
+    }
+    out
 }
 
 fn build_external_document_direct_source_from_context(
@@ -2065,9 +2081,9 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_direct_sources_for_context_candidate, build_message_direct_source,
-        filter_direct_sources_for_question, format_history_line, should_include_actions_context,
-        ContextItem, ContextSource,
+        build_direct_sources_for_context_candidate, build_external_document_direct_source,
+        build_message_direct_source, filter_direct_sources_for_question, format_history_line,
+        should_include_actions_context, ContextItem, ContextSource,
     };
     use crate::auth;
     use crate::crypto::KdfParams;
@@ -2287,6 +2303,40 @@ mod tests {
             !source.snippet.contains("[Attachment]("),
             "expected markdown citation suffix to stay out of fallback snippet: {}",
             source.snippet
+        );
+    }
+
+    #[test]
+    fn external_document_direct_source_percent_encodes_deeplink_targets() {
+        let source = build_external_document_direct_source(
+            "doc/with slash",
+            7,
+            "Budget notes",
+            "Relevant chunk text",
+            1,
+        );
+
+        assert_eq!(
+            source.document_id.as_deref(),
+            Some("external:doc/with slash")
+        );
+        assert_eq!(
+            source.unit_id.as_deref(),
+            Some("external:doc/with slash:chunk:0007")
+        );
+        assert!(
+            source
+                .href
+                .contains("secondloop://knowledge-document/external%3Adoc%2Fwith%20slash"),
+            "expected encoded document id in href: {}",
+            source.href
+        );
+        assert!(
+            source
+                .href
+                .contains("unit=external%3Adoc%2Fwith%20slash%3Achunk%3A0007"),
+            "expected encoded unit id in href: {}",
+            source.href
         );
     }
 }

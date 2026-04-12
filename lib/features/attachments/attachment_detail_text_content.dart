@@ -58,6 +58,7 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
 
     switch (normalizedKind) {
       case 'transcript':
+      case 'transcript_full':
         final excerpt = firstNonEmpty(<String?>[
           read('transcript_excerpt'),
           read('transcript_full'),
@@ -67,6 +68,7 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
         if (excerpt.isEmpty && full.isEmpty) return null;
         return AttachmentDetailTextContent(summary: excerpt, full: full);
       case 'ocr_text':
+      case 'ocr_text_full':
         final excerpt = firstNonEmpty(<String?>[
           read('ocr_text_excerpt', normalizeOcr: true),
           read('ocr_text_full', normalizeOcr: true),
@@ -87,6 +89,16 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
         ]);
         final full =
             firstNonEmpty(<String?>[read('readable_text_full'), excerpt]);
+        if (excerpt.isEmpty && full.isEmpty) return null;
+        return AttachmentDetailTextContent(summary: excerpt, full: full);
+      case 'extracted_text':
+      case 'extracted_text_full':
+        final excerpt = firstNonEmpty(<String?>[
+          read('extracted_text_excerpt'),
+          read('extracted_text_full'),
+        ]);
+        final full =
+            firstNonEmpty(<String?>[read('extracted_text_full'), excerpt]);
         if (excerpt.isEmpty && full.isEmpty) return null;
         return AttachmentDetailTextContent(summary: excerpt, full: full);
       case 'summary':

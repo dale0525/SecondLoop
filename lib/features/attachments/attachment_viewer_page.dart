@@ -1119,6 +1119,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     actions: _buildWorkspaceActions(
                       bytes.isEmpty ? null : bytes,
                     ),
+                    initialContentKind: widget.initialContentKind,
+                    initialChunkIndex: widget.initialChunkIndex,
                   ),
                 );
               }

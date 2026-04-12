@@ -12,4 +12,15 @@ void main() {
     expect(parsed.chunkIndex, 7);
     expect(parsed.unitId, 'external:doc-1:chunk:0007');
   });
+
+  test('parseKnowledgeDocumentDeepLink preserves encoded slash characters', () {
+    final parsed = parseKnowledgeDocumentDeepLink(
+      'secondloop://knowledge-document/external%3Adoc%2F1?chunk=7&unit=external%3Adoc%2F1%3Achunk%3A0007',
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed!.documentId, 'external:doc/1');
+    expect(parsed.chunkIndex, 7);
+    expect(parsed.unitId, 'external:doc/1:chunk:0007');
+  });
 }

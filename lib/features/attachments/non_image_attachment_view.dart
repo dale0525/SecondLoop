@@ -205,6 +205,8 @@ class NonImageAttachmentView extends StatefulWidget {
     this.onSaveFull,
     this.isWebOverride,
     this.actions = const <AttachmentDetailAction>[],
+    this.initialContentKind,
+    this.initialChunkIndex,
     super.key,
   });
 
@@ -225,6 +227,8 @@ class NonImageAttachmentView extends StatefulWidget {
   final Future<void> Function(String value)? onSaveFull;
   final bool? isWebOverride;
   final List<AttachmentDetailAction> actions;
+  final String? initialContentKind;
+  final int? initialChunkIndex;
 
   @override
   State<NonImageAttachmentView> createState() => _NonImageAttachmentViewState();
@@ -954,6 +958,8 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
         emptyText: attachmentDetailEmptyTextLabel(context),
         extraAction: regenerateAction ?? retryRecognitionAction,
         onSave: widget.onSaveFull,
+        initialContentKind: widget.initialContentKind,
+        initialChunkIndex: widget.initialChunkIndex,
       ),
       metadataItems: metadataItems,
       actions: [...widget.actions, ...actions],

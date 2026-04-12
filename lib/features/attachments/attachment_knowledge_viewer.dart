@@ -10,6 +10,7 @@ import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_surface.dart';
 import '../knowledge_viewer/knowledge_document_models.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
+import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
 
@@ -53,9 +54,25 @@ bool shouldUseAttachmentKnowledgeViewer({
 List<String> candidateAttachmentKnowledgeDocumentIds(
   Attachment attachment,
   Map<String, Object?>? payload,
+  String? preferredContentKind,
 ) {
   final sha = attachment.sha256.trim();
   if (sha.isEmpty) return const <String>[];
+
+  String? preferredDocumentIdFromKind(String? rawKind) {
+    final normalized = (rawKind ?? '').trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+    final suffix = switch (normalized) {
+      'extracted_text' || 'extracted_text_full' => 'extracted_text',
+      'readable_text' || 'readable_text_full' => 'readable_text',
+      'ocr_text' || 'ocr_text_full' => 'ocr_text',
+      'transcript' || 'transcript_full' => 'transcript',
+      'metadata' => 'metadata',
+      _ => null,
+    };
+    if (suffix == null) return null;
+    return 'attachment:$sha:$suffix';
+  }
 
   String? fromSelection(AttachmentTextSource source) {
     switch (source) {
@@ -72,6 +89,10 @@ List<String> candidateAttachmentKnowledgeDocumentIds(
 
   final selected = selectAttachmentDisplayText(payload).source;
   final raw = <String?>[
+    preferredDocumentIdFromKind(preferredContentKind),
+    preferredDocumentIdFromKind(
+      (payload?[kPreferredAttachmentContentKindKey] ?? '').toString(),
+    ),
     fromSelection(selected),
     'attachment:$sha:readable_text',
     'attachment:$sha:extracted_text',
@@ -95,6 +116,8 @@ class AttachmentKnowledgeContentPane extends StatefulWidget {
     required this.emptyText,
     this.onSave,
     this.extraAction,
+    this.initialContentKind,
+    this.initialChunkIndex,
     super.key,
   });
 
@@ -104,6 +127,8 @@ class AttachmentKnowledgeContentPane extends StatefulWidget {
   final String emptyText;
   final Future<void> Function(String value)? onSave;
   final AttachmentTextEditorCardAction? extraAction;
+  final String? initialContentKind;
+  final int? initialChunkIndex;
 
   @override
   State<AttachmentKnowledgeContentPane> createState() =>
@@ -126,7 +151,9 @@ class _AttachmentKnowledgeContentPaneState
     if (oldWidget.attachment.sha256 != widget.attachment.sha256 ||
         oldWidget.attachment.mimeType != widget.attachment.mimeType ||
         oldWidget.text != widget.text ||
-        oldWidget.payload != widget.payload) {
+        oldWidget.payload != widget.payload ||
+        oldWidget.initialContentKind != widget.initialContentKind ||
+        oldWidget.initialChunkIndex != widget.initialChunkIndex) {
       _refreshDocumentFuture();
     }
   }
@@ -154,15 +181,29 @@ class _AttachmentKnowledgeContentPaneState
       return null;
     }
 
+    final initialChunkIndex = _resolveInitialChunkIndex(
+      explicitChunkIndex: widget.initialChunkIndex,
+      payload: widget.payload,
+    );
+
     for (final documentId in candidateAttachmentKnowledgeDocumentIds(
-        widget.attachment, widget.payload)) {
+      widget.attachment,
+      widget.payload,
+      widget.initialContentKind,
+    )) {
       try {
         final document = await viewerBackend.getKnowledgeViewerDocument(
           sessionKey,
           documentId: documentId,
         );
         return _ResolvedKnowledgeDocument(
-            documentId: documentId, document: document);
+          documentId: documentId,
+          document: document,
+          initialHighlightedUnitId: _deriveChunkUnitId(
+            documentId,
+            initialChunkIndex,
+          ),
+        );
       } catch (_) {
         continue;
       }
@@ -226,6 +267,7 @@ class _AttachmentKnowledgeContentPaneState
           documentId: resolved.documentId,
           initialDocument: resolved.document,
           fallbackText: widget.text,
+          initialHighlightedUnitId: resolved.initialHighlightedUnitId,
           onSave: widget.onSave,
           extraAction: widget.extraAction,
         );
@@ -238,10 +280,12 @@ final class _ResolvedKnowledgeDocument {
   const _ResolvedKnowledgeDocument({
     required this.documentId,
     required this.document,
+    required this.initialHighlightedUnitId,
   });
 
   final String documentId;
   final KnowledgeViewerDocument document;
+  final String? initialHighlightedUnitId;
 }
 
 class AttachmentKnowledgeViewer extends StatelessWidget {
@@ -251,6 +295,7 @@ class AttachmentKnowledgeViewer extends StatelessWidget {
     required this.documentId,
     required this.initialDocument,
     required this.fallbackText,
+    this.initialHighlightedUnitId,
     this.onSave,
     this.extraAction,
     this.pageSize = 48,
@@ -262,6 +307,7 @@ class AttachmentKnowledgeViewer extends StatelessWidget {
   final String documentId;
   final KnowledgeViewerDocument initialDocument;
   final String fallbackText;
+  final String? initialHighlightedUnitId;
   final Future<void> Function(String value)? onSave;
   final AttachmentTextEditorCardAction? extraAction;
   final int pageSize;
@@ -287,9 +333,28 @@ class AttachmentKnowledgeViewer extends StatelessWidget {
       documentId: documentId,
       initialDocument: initialDocument,
       fallbackText: fallbackText,
+      initialHighlightedUnitId: initialHighlightedUnitId,
       onSave: onSave,
       extraActions: extraActions,
       pageSize: pageSize,
     );
   }
+}
+
+String? _deriveChunkUnitId(String documentId, int? chunkIndex) {
+  if (chunkIndex == null) return null;
+  final normalizedDocumentId = documentId.trim();
+  if (normalizedDocumentId.isEmpty) return null;
+  return '$normalizedDocumentId:chunk:$chunkIndex';
+}
+
+int? _resolveInitialChunkIndex({
+  required int? explicitChunkIndex,
+  required Map<String, Object?>? payload,
+}) {
+  if (explicitChunkIndex != null) return explicitChunkIndex;
+  final raw = payload?[kPreferredAttachmentChunkIndexKey];
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  return int.tryParse((raw ?? '').toString().trim());
 }
