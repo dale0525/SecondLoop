@@ -359,6 +359,7 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
       MessageViewerPage(
         content: message.content,
         messageId: message.id,
+        citationsJson: message.citationsJson,
       ),
     );
   }

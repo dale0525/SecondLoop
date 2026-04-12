@@ -4,7 +4,6 @@ use rusqlite::Connection;
 use crate::db;
 
 const RESOURCES_CATALOG_CAP: usize = 20;
-const RECENT_RESOURCES_FALLBACK: usize = 10;
 const CHUNK_EVIDENCE_CAP: usize = 12;
 
 #[derive(Clone, Debug)]
@@ -17,9 +16,17 @@ pub(crate) struct AttachmentChunkCandidate {
     pub(crate) text: String,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct AttachmentResourceRef {
+    pub(crate) attachment_sha256: String,
+    pub(crate) label: String,
+    pub(crate) created_at_ms: i64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct AttachmentResourcesBundle {
     pub(crate) chunks: Vec<AttachmentChunkCandidate>,
+    pub(crate) resources: Vec<AttachmentResourceRef>,
     pub(crate) catalog_markdown: Option<String>,
 }
 
@@ -58,36 +65,12 @@ fn chunk_citation_link(sha: &str, kind: &str, chunk_index: i64) -> String {
     format!("secondloop://attachment/{sha}?kind={kind}&chunk={chunk_index}")
 }
 
-fn build_catalog_markdown(
+fn build_catalog_markdown_from_attachment_shas(
     conn: &Connection,
     key: &[u8; 32],
+    resource_shas: Vec<String>,
     hits: &[db::SimilarAttachmentChunk],
 ) -> Result<Option<String>> {
-    let mut resource_shas = Vec::<String>::new();
-    let mut seen = std::collections::HashSet::<String>::new();
-
-    for hit in hits {
-        if seen.insert(hit.attachment_sha256.clone()) {
-            resource_shas.push(hit.attachment_sha256.clone());
-            if resource_shas.len() >= RESOURCES_CATALOG_CAP {
-                break;
-            }
-        }
-    }
-
-    if resource_shas.len() < RESOURCES_CATALOG_CAP {
-        for attachment in
-            db::list_recent_attachments_for_resources(conn, RECENT_RESOURCES_FALLBACK)?
-        {
-            if seen.insert(attachment.sha256.clone()) {
-                resource_shas.push(attachment.sha256);
-                if resource_shas.len() >= RESOURCES_CATALOG_CAP {
-                    break;
-                }
-            }
-        }
-    }
-
     if resource_shas.is_empty() {
         return Ok(None);
     }
@@ -119,12 +102,34 @@ fn build_catalog_markdown(
     Ok(Some(out))
 }
 
+fn build_catalog_markdown(
+    conn: &Connection,
+    key: &[u8; 32],
+    hits: &[db::SimilarAttachmentChunk],
+) -> Result<Option<String>> {
+    let mut resource_shas = Vec::<String>::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+
+    for hit in hits {
+        if seen.insert(hit.attachment_sha256.clone()) {
+            resource_shas.push(hit.attachment_sha256.clone());
+            if resource_shas.len() >= RESOURCES_CATALOG_CAP {
+                break;
+            }
+        }
+    }
+
+    build_catalog_markdown_from_attachment_shas(conn, key, resource_shas, hits)
+}
+
 fn bundle_from_hits(
     conn: &Connection,
     key: &[u8; 32],
     hits: Vec<db::SimilarAttachmentChunk>,
 ) -> Result<AttachmentResourcesBundle> {
     let mut chunks = Vec::<AttachmentChunkCandidate>::new();
+    let mut resources = Vec::<AttachmentResourceRef>::new();
+    let mut seen_resource_shas = std::collections::HashSet::<String>::new();
     for hit in &hits {
         let chunk_text = db::read_attachment_chunk_text(
             conn,
@@ -151,11 +156,20 @@ fn bundle_from_hits(
             distance: hit.distance,
             text: chunk_text,
         });
+
+        if seen_resource_shas.insert(hit.attachment_sha256.clone()) {
+            resources.push(AttachmentResourceRef {
+                attachment_sha256: hit.attachment_sha256.clone(),
+                label: attachment_label(conn, key, &hit.attachment_sha256),
+                created_at_ms,
+            });
+        }
     }
 
     let catalog_markdown = build_catalog_markdown(conn, key, &hits)?;
     Ok(AttachmentResourcesBundle {
         chunks,
+        resources,
         catalog_markdown,
     })
 }
@@ -200,18 +214,6 @@ pub(crate) fn collect_attachment_resources_active(
     bundle_from_hits(conn, key, hits)
 }
 
-pub(crate) fn collect_attachment_resources_recent(
-    conn: &Connection,
-    key: &[u8; 32],
-) -> Result<AttachmentResourcesBundle> {
-    let hits = Vec::<db::SimilarAttachmentChunk>::new();
-    let catalog_markdown = build_catalog_markdown(conn, key, &hits)?;
-    Ok(AttachmentResourcesBundle {
-        chunks: Vec::new(),
-        catalog_markdown,
-    })
-}
-
 pub(crate) fn collect_attachment_resources_by_embedding(
     conn: &Connection,
     key: &[u8; 32],
@@ -233,4 +235,50 @@ pub(crate) fn collect_attachment_resources_by_embedding(
         hit_limit,
     )?;
     bundle_from_hits(conn, key, hits)
+}
+
+pub(crate) fn collect_attachment_resources_for_attachment_shas(
+    conn: &Connection,
+    key: &[u8; 32],
+    attachment_shas: Vec<String>,
+) -> Result<AttachmentResourcesBundle> {
+    let attachment_shas_for_resources = attachment_shas.clone();
+    let mut resource_shas = Vec::<String>::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+    for sha in attachment_shas {
+        if !seen.insert(sha.clone()) {
+            continue;
+        }
+        resource_shas.push(sha);
+        if resource_shas.len() >= RESOURCES_CATALOG_CAP {
+            break;
+        }
+    }
+
+    let catalog_markdown =
+        build_catalog_markdown_from_attachment_shas(conn, key, resource_shas, &[])?;
+    Ok(AttachmentResourcesBundle {
+        chunks: Vec::new(),
+        resources: attachment_shas_for_resources
+            .into_iter()
+            .scan(std::collections::HashSet::<String>::new(), |seen, sha| {
+                if !seen.insert(sha.clone()) {
+                    return Some(None);
+                }
+                let created_at_ms = db::read_attachment_by_sha256(conn, &sha)
+                    .ok()
+                    .flatten()
+                    .map(|attachment| attachment.created_at_ms)
+                    .unwrap_or(0);
+                Some(Some(AttachmentResourceRef {
+                    label: attachment_label(conn, key, &sha),
+                    attachment_sha256: sha,
+                    created_at_ms,
+                }))
+            })
+            .flatten()
+            .take(RESOURCES_CATALOG_CAP)
+            .collect(),
+        catalog_markdown,
+    })
 }

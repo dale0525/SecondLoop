@@ -298,10 +298,21 @@ pub fn db_insert_message(
     conversation_id: String,
     role: String,
     content: String,
+    citations_json: Option<String>,
 ) -> Result<db::Message> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::insert_message(&conn, &key, &conversation_id, &role, &content)
+    match citations_json.as_deref() {
+        Some(value) => db::insert_message_non_memory_with_citations(
+            &conn,
+            &key,
+            &conversation_id,
+            &role,
+            &content,
+            Some(value),
+        ),
+        None => db::insert_message(&conn, &key, &conversation_id, &role, &content),
+    }
 }
 
 #[flutter_rust_bridge::frb]

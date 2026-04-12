@@ -8,7 +8,8 @@ void main() {
 
     expect(content, contains('.fvm/flutter_sdk/bin/flutter'));
     expect(content, contains(r'if [[ -x "${project_flutter}" ]]'));
-    expect(content, contains(r'exec "${project_flutter}" "${args[@]}"'));
+    expect(content, contains(r'run_flutter_command()'));
+    expect(content, contains(r'"${project_flutter}" "${args[@]}"'));
 
     final projectFlutterIndex = content.indexOf('.fvm/flutter_sdk/bin/flutter');
     final dartProbeIndex = content.indexOf('if command -v dart');

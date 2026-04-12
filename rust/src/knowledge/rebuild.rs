@@ -4,10 +4,43 @@ use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::knowledge::{
-    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeIndexStatus, KnowledgeOriginType,
-    KnowledgeUnit, KnowledgeUnitKind, KnowledgeVersionSet, KnowledgeViewerDocument,
-    KnowledgeViewerPage,
+    infer_generated_memory_section, infer_memory_status, ContentKnowledgeDocument,
+    KnowledgeAnchorSet, KnowledgeIndexStatus, KnowledgeMemoryDisplay, KnowledgeMemoryFeedback,
+    KnowledgeMemoryStatus, KnowledgeOriginType, KnowledgeUnit, KnowledgeUnitKind,
+    KnowledgeVersionSet, KnowledgeViewerDocument, KnowledgeViewerPage,
 };
+
+fn normalize_optional_trimmed(value: Option<String>) -> Option<String> {
+    value.and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn decode_memory_feedback(
+    row: &rusqlite::Row<'_>,
+    offset: usize,
+) -> Result<KnowledgeMemoryFeedback> {
+    let status: Option<String> = row.get(offset)?;
+    Ok(KnowledgeMemoryFeedback {
+        status: status
+            .map(|value| {
+                serde_json::from_str::<KnowledgeMemoryStatus>(&format!("\"{value}\""))
+                    .map_err(anyhow::Error::from)
+            })
+            .transpose()?,
+        use_for_ask_ai: row.get::<_, i64>(offset + 1)? != 0,
+        is_deleted: row.get::<_, i64>(offset + 2)? != 0,
+        marked_inaccurate: row.get::<_, i64>(offset + 3)? != 0,
+        corrected_title: normalize_optional_trimmed(row.get(offset + 4)?),
+        corrected_summary: normalize_optional_trimmed(row.get(offset + 5)?),
+        updated_at_ms: row.get(offset + 6)?,
+    })
+}
 
 fn decode_document_row(
     _conn: &Connection,
@@ -27,33 +60,87 @@ fn decode_document_row(
     let normalized_blob: Vec<u8> = row.get(10)?;
     let created_at_ms: i64 = row.get(11)?;
     let updated_at_ms: i64 = row.get(12)?;
+    let memory_section_json: Option<String> = row.get(13)?;
+    let memory_source_count: i64 = row.get(14)?;
     let versions = KnowledgeVersionSet {
-        schema_version: row.get(13)?,
-        normalization_version: row.get(14)?,
-        segmentation_version: row.get(15)?,
-        embedding_policy_version: row.get(16)?,
-        retrieval_policy_version: row.get(17)?,
+        schema_version: row.get(15)?,
+        normalization_version: row.get(16)?,
+        segmentation_version: row.get(17)?,
+        embedding_policy_version: row.get(18)?,
+        retrieval_policy_version: row.get(19)?,
+    };
+    let origin_type: KnowledgeOriginType =
+        serde_json::from_str(&format!("\"{origin_type_json}\""))?;
+    let source_kind = serde_json::from_str(&format!("\"{source_kind_json}\""))?;
+    let role = serde_json::from_str(&format!("\"{role_json}\""))?;
+    let memory_feedback = decode_memory_feedback(row, 20)?;
+    let effective_updated_at_ms = memory_feedback
+        .updated_at_ms
+        .map(|value| value.max(updated_at_ms))
+        .unwrap_or(updated_at_ms);
+    let mut title = title;
+    let mut summary = summary;
+    let mut raw_text =
+        crate::db::decode_knowledge_document_text(key, &document_id, "raw", &raw_blob)?;
+    let mut normalized_text = crate::db::decode_knowledge_document_text(
+        key,
+        &document_id,
+        "normalized",
+        &normalized_blob,
+    )?;
+    if let Some(corrected_title) = memory_feedback.corrected_title.as_ref() {
+        title = Some(corrected_title.clone());
+    }
+    if let Some(corrected_summary) = memory_feedback.corrected_summary.as_ref() {
+        summary = Some(corrected_summary.clone());
+        if origin_type == KnowledgeOriginType::Generated {
+            raw_text = corrected_summary.clone();
+            normalized_text =
+                crate::knowledge::normalize_text_for_source(source_kind, corrected_summary);
+        }
+    }
+    let memory_display = if origin_type == KnowledgeOriginType::Generated {
+        let section = memory_section_json
+            .as_deref()
+            .map(|value| {
+                serde_json::from_str::<crate::knowledge::KnowledgeMemorySection>(&format!(
+                    "\"{value}\""
+                ))
+            })
+            .transpose()?
+            .or_else(|| {
+                infer_generated_memory_section(
+                    &document_id,
+                    title.as_deref(),
+                    summary.as_deref(),
+                    &raw_text,
+                )
+            });
+        section.map(|section| KnowledgeMemoryDisplay {
+            section,
+            source_count: memory_source_count.max(1),
+            status: infer_memory_status(&document_id, updated_at_ms, &memory_feedback),
+        })
+    } else {
+        None
     };
     Ok(ContentKnowledgeDocument {
         document_id: document_id.clone(),
-        origin_type: serde_json::from_str(&format!("\"{origin_type_json}\""))?,
-        source_kind: serde_json::from_str(&format!("\"{source_kind_json}\""))?,
-        role: serde_json::from_str(&format!("\"{role_json}\""))?,
+        origin_type,
+        source_kind,
+        role,
         language,
         quality_score,
         created_at_ms,
-        updated_at_ms,
+        updated_at_ms: effective_updated_at_ms,
         versions,
         anchors: serde_json::from_str(&anchor_json)?,
         title,
         summary,
-        raw_text: crate::db::decode_knowledge_document_text(key, &document_id, "raw", &raw_blob)?,
-        normalized_text: crate::db::decode_knowledge_document_text(
-            key,
-            &document_id,
-            "normalized",
-            &normalized_blob,
-        )?,
+        raw_text,
+        normalized_text,
+        memory_display,
+        memory_feedback,
     })
 }
 
@@ -104,26 +191,39 @@ pub fn list_knowledge_documents(
     offset: usize,
 ) -> Result<Vec<ContentKnowledgeDocument>> {
     let mut stmt = conn.prepare(
-        r#"SELECT document_id,
-                  origin_type,
-                  source_kind,
-                  role,
-                  language,
-                  quality_score,
-                  title,
-                  summary,
-                  anchor_json,
-                  raw_text,
-                  normalized_text,
-                  created_at_ms,
-                  updated_at_ms,
-                  schema_version,
-                  normalization_version,
-                  segmentation_version,
-                  embedding_policy_version,
-                  retrieval_policy_version
-           FROM knowledge_documents
-           ORDER BY updated_at_ms DESC, document_id ASC
+        r#"SELECT d.document_id,
+                  d.origin_type,
+                  d.source_kind,
+                  d.role,
+                  d.language,
+                  d.quality_score,
+                  d.title,
+                  d.summary,
+                  d.anchor_json,
+                  d.raw_text,
+                  d.normalized_text,
+                  d.created_at_ms,
+                  d.updated_at_ms,
+                  d.memory_section,
+                  d.memory_source_count,
+                  d.schema_version,
+                  d.normalization_version,
+                  d.segmentation_version,
+                  d.embedding_policy_version,
+                  d.retrieval_policy_version,
+                  f.status,
+                  COALESCE(f.use_for_ask_ai, 1),
+                  COALESCE(f.is_deleted, 0),
+                  COALESCE(f.marked_inaccurate, 0),
+                  f.corrected_title,
+                  f.corrected_summary,
+                  f.updated_at_ms
+           FROM knowledge_documents d
+           LEFT JOIN knowledge_document_feedback f
+             ON f.document_id = d.document_id
+           WHERE COALESCE(f.is_deleted, 0) = 0
+           ORDER BY MAX(d.updated_at_ms, COALESCE(f.updated_at_ms, 0)) DESC,
+                    d.document_id ASC
            LIMIT ?1 OFFSET ?2"#,
     )?;
     let mut rows = stmt.query(params![limit as i64, offset as i64])?;
@@ -149,27 +249,40 @@ pub fn list_knowledge_documents_by_origin(
         .trim_matches('"')
         .to_string();
     let mut stmt = conn.prepare(
-        r#"SELECT document_id,
-                  origin_type,
-                  source_kind,
-                  role,
-                  language,
-                  quality_score,
-                  title,
-                  summary,
-                  anchor_json,
-                  raw_text,
-                  normalized_text,
-                  created_at_ms,
-                  updated_at_ms,
-                  schema_version,
-                  normalization_version,
-                  segmentation_version,
-                  embedding_policy_version,
-                  retrieval_policy_version
-           FROM knowledge_documents
-           WHERE origin_type = ?1
-           ORDER BY updated_at_ms DESC, document_id ASC
+        r#"SELECT d.document_id,
+                  d.origin_type,
+                  d.source_kind,
+                  d.role,
+                  d.language,
+                  d.quality_score,
+                  d.title,
+                  d.summary,
+                  d.anchor_json,
+                  d.raw_text,
+                  d.normalized_text,
+                  d.created_at_ms,
+                  d.updated_at_ms,
+                  d.memory_section,
+                  d.memory_source_count,
+                  d.schema_version,
+                  d.normalization_version,
+                  d.segmentation_version,
+                  d.embedding_policy_version,
+                  d.retrieval_policy_version,
+                  f.status,
+                  COALESCE(f.use_for_ask_ai, 1),
+                  COALESCE(f.is_deleted, 0),
+                  COALESCE(f.marked_inaccurate, 0),
+                  f.corrected_title,
+                  f.corrected_summary,
+                  f.updated_at_ms
+           FROM knowledge_documents d
+           LEFT JOIN knowledge_document_feedback f
+             ON f.document_id = d.document_id
+           WHERE d.origin_type = ?1
+             AND COALESCE(f.is_deleted, 0) = 0
+           ORDER BY MAX(d.updated_at_ms, COALESCE(f.updated_at_ms, 0)) DESC,
+                    d.document_id ASC
            LIMIT ?2 OFFSET ?3"#,
     )?;
     let mut rows = stmt.query(params![origin_type, limit as i64, offset as i64])?;
@@ -262,26 +375,37 @@ pub fn get_knowledge_document(
     document_id: &str,
 ) -> Result<Option<ContentKnowledgeDocument>> {
     let mut stmt = conn.prepare(
-        r#"SELECT document_id,
-                  origin_type,
-                  source_kind,
-                  role,
-                  language,
-                  quality_score,
-                  title,
-                  summary,
-                  anchor_json,
-                  raw_text,
-                  normalized_text,
-                  created_at_ms,
-                  updated_at_ms,
-                  schema_version,
-                  normalization_version,
-                  segmentation_version,
-                  embedding_policy_version,
-                  retrieval_policy_version
-           FROM knowledge_documents
-           WHERE document_id = ?1"#,
+        r#"SELECT d.document_id,
+                  d.origin_type,
+                  d.source_kind,
+                  d.role,
+                  d.language,
+                  d.quality_score,
+                  d.title,
+                  d.summary,
+                  d.anchor_json,
+                  d.raw_text,
+                  d.normalized_text,
+                  d.created_at_ms,
+                  d.updated_at_ms,
+                  d.memory_section,
+                  d.memory_source_count,
+                  d.schema_version,
+                  d.normalization_version,
+                  d.segmentation_version,
+                  d.embedding_policy_version,
+                  d.retrieval_policy_version,
+                  f.status,
+                  COALESCE(f.use_for_ask_ai, 1),
+                  COALESCE(f.is_deleted, 0),
+                  COALESCE(f.marked_inaccurate, 0),
+                  f.corrected_title,
+                  f.corrected_summary,
+                  f.updated_at_ms
+           FROM knowledge_documents d
+           LEFT JOIN knowledge_document_feedback f
+             ON f.document_id = d.document_id
+           WHERE d.document_id = ?1"#,
     )?;
     let mut rows = stmt.query(params![document_id])?;
     let Some(row) = rows.next()? else {
@@ -323,6 +447,48 @@ pub fn list_knowledge_viewer_units(
         total,
         units,
     })
+}
+
+pub fn list_recent_knowledge_viewer_units(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    unit_kind: Option<KnowledgeUnitKind>,
+    limit: usize,
+) -> Result<Vec<KnowledgeUnit>> {
+    let kind_filter = unit_kind
+        .map(|value| -> Result<String> {
+            Ok(serde_json::to_string(&value)?.trim_matches('"').to_string())
+        })
+        .transpose()?;
+    let mut stmt = conn.prepare(
+        r#"SELECT unit_id,
+                  document_id,
+                  parent_unit_id,
+                  unit_kind,
+                  source_kind,
+                  role,
+                  ordinal,
+                  token_count,
+                  anchor_json,
+                  raw_text,
+                  normalized_text,
+                  prev_unit_id,
+                  next_unit_id,
+                  created_at_ms,
+                  updated_at_ms
+           FROM knowledge_units
+           WHERE document_id = ?1
+             AND (?2 IS NULL OR unit_kind = ?2)
+           ORDER BY updated_at_ms DESC, ordinal DESC, unit_id DESC
+           LIMIT ?3"#,
+    )?;
+    let mut rows = stmt.query(params![document_id, kind_filter, limit as i64])?;
+    let mut out = Vec::<KnowledgeUnit>::new();
+    while let Some(row) = rows.next()? {
+        out.push(decode_unit_row(key, row)?);
+    }
+    Ok(out)
 }
 
 fn anchor_match_score(query: &KnowledgeAnchorSet, candidate: &KnowledgeAnchorSet) -> i64 {

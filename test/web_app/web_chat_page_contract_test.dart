@@ -55,4 +55,10 @@ void main() {
     expect(source, contains('finally {'));
     expect(source, contains("setState(() => _busy = false);"));
   });
+
+  test('web chat forwards citations into message viewer', () {
+    final source = File('lib/web_app/web_chat_page.dart').readAsStringSync();
+
+    expect(source, contains('citationsJson: message.citationsJson'));
+  });
 }

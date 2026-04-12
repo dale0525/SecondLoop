@@ -18,6 +18,11 @@ final class AttachmentDetailTextContent {
   bool get hasAny => summary.isNotEmpty || full.isNotEmpty;
 }
 
+const String kPreferredAttachmentContentKindKey =
+    '_secondloop_preferred_attachment_kind';
+const String kPreferredAttachmentChunkIndexKey =
+    '_secondloop_preferred_attachment_chunk';
+
 String attachmentDetailEmptyTextLabel(BuildContext context) {
   return context.t.attachments.content.emptyText;
 }
@@ -41,7 +46,87 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     return '';
   }
 
+  AttachmentDetailTextContent? resolvePreferredContent(String rawKind) {
+    final normalizedKind = rawKind.trim().toLowerCase();
+    if (normalizedKind.isEmpty) return null;
+
+    String content(String excerpt, String full) {
+      final normalizedExcerpt = excerpt.trim();
+      final normalizedFull = full.trim();
+      return normalizedFull.isNotEmpty ? normalizedFull : normalizedExcerpt;
+    }
+
+    switch (normalizedKind) {
+      case 'transcript':
+      case 'transcript_full':
+        final excerpt = firstNonEmpty(<String?>[
+          read('transcript_excerpt'),
+          read('transcript_full'),
+        ]);
+        final full =
+            content(read('transcript_excerpt'), read('transcript_full'));
+        if (excerpt.isEmpty && full.isEmpty) return null;
+        return AttachmentDetailTextContent(summary: excerpt, full: full);
+      case 'ocr_text':
+      case 'ocr_text_full':
+        final excerpt = firstNonEmpty(<String?>[
+          read('ocr_text_excerpt', normalizeOcr: true),
+          read('ocr_text_full', normalizeOcr: true),
+          read('ocr_text', normalizeOcr: true),
+        ]);
+        final full = firstNonEmpty(<String?>[
+          read('ocr_text_full', normalizeOcr: true),
+          read('ocr_text', normalizeOcr: true),
+          read('ocr_text_excerpt', normalizeOcr: true),
+        ]);
+        if (excerpt.isEmpty && full.isEmpty) return null;
+        return AttachmentDetailTextContent(summary: excerpt, full: full);
+      case 'readable_text':
+      case 'readable_text_full':
+        final excerpt = firstNonEmpty(<String?>[
+          read('readable_text_excerpt'),
+          read('readable_text_full'),
+        ]);
+        final full =
+            firstNonEmpty(<String?>[read('readable_text_full'), excerpt]);
+        if (excerpt.isEmpty && full.isEmpty) return null;
+        return AttachmentDetailTextContent(summary: excerpt, full: full);
+      case 'extracted_text':
+      case 'extracted_text_full':
+        final excerpt = firstNonEmpty(<String?>[
+          read('extracted_text_excerpt'),
+          read('extracted_text_full'),
+        ]);
+        final full =
+            firstNonEmpty(<String?>[read('extracted_text_full'), excerpt]);
+        if (excerpt.isEmpty && full.isEmpty) return null;
+        return AttachmentDetailTextContent(summary: excerpt, full: full);
+      case 'summary':
+      case 'metadata':
+        final excerpt = firstNonEmpty(<String?>[
+          read('manual_summary'),
+          read('llm_summary'),
+          read('summary'),
+        ]);
+        final full = firstNonEmpty(<String?>[
+          read('manual_full_text'),
+          read('full_text'),
+          excerpt,
+        ]);
+        if (excerpt.isEmpty && full.isEmpty) return null;
+        return AttachmentDetailTextContent(summary: excerpt, full: full);
+    }
+
+    return null;
+  }
+
   final selected = selectAttachmentDisplayText(payload);
+  final preferredKind = read(kPreferredAttachmentContentKindKey);
+  final preferredContent =
+      preferredKind.isEmpty ? null : resolvePreferredContent(preferredKind);
+  if (preferredContent != null && preferredContent.hasAny) {
+    return preferredContent;
+  }
   final caption = firstNonEmpty(<String?>[
     read('caption_long'),
     annotationCaption,

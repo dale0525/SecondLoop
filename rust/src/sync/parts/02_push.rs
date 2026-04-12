@@ -278,6 +278,7 @@ fn push_internal(
     }
 
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
+    crate::db::backfill_knowledge_memory_feedback_oplog_if_needed(conn, db_key)?;
 
     if !upload_attachment_bytes
         && local_pending_ops == 0

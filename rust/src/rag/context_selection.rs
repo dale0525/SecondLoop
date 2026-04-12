@@ -1,6 +1,10 @@
 const DEFAULT_MAX_CONTEXT_CHARS: usize = 6000;
 const DEFAULT_COMPRESS_SENTENCES: usize = 3;
 const DEFAULT_MMR_LAMBDA: f64 = 0.55;
+const DEFAULT_MIN_RELEVANCE: f64 = 0.20;
+const DEFAULT_MIN_RELEVANCE_WITHOUT_LEXICAL_MATCH: f64 = 0.55;
+const DEFAULT_RELATIVE_RELEVANCE_FLOOR: f64 = 0.45;
+const DEFAULT_MAX_DISTANCE_WITHOUT_LEXICAL_MATCH: f64 = 0.35;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ContextSource {
@@ -62,7 +66,7 @@ fn lite_collect_bigrams(chars: &[char]) -> std::collections::HashSet<u64> {
     set
 }
 
-fn lite_score(query: &str, candidate: &str) -> u64 {
+pub(crate) fn lite_score(query: &str, candidate: &str) -> u64 {
     let query_norm = lite_normalize_text(query);
     let query_compact = lite_compact_text(&query_norm);
     if query_compact.is_empty() {
@@ -245,9 +249,16 @@ fn compress_context_text(query: &str, text: &str) -> String {
     selected.join("\n")
 }
 
-fn rank_context_items(question: &str, candidates: &[ContextItem]) -> Vec<(f64, usize)> {
+#[derive(Clone, Copy, Debug)]
+struct RankedContextItem {
+    relevance: f64,
+    lexical_score: u64,
+    idx: usize,
+}
+
+fn rank_context_items(question: &str, candidates: &[ContextItem]) -> Vec<RankedContextItem> {
     let now = now_ms();
-    let mut scored: Vec<(f64, usize)> = Vec::new();
+    let mut scored: Vec<RankedContextItem> = Vec::new();
 
     for (i, item) in candidates.iter().enumerate() {
         let semantic = item
@@ -255,11 +266,11 @@ fn rank_context_items(question: &str, candidates: &[ContextItem]) -> Vec<(f64, u
             .map(|d| 1.0 / (1.0 + d.max(0.0)))
             .unwrap_or(0.0);
 
-        let lex_score = lite_score(question, &item.text);
-        let lexical = if lex_score == 0 {
+        let lexical_score = lite_score(question, &item.text);
+        let lexical = if lexical_score == 0 {
             0.0
         } else {
-            let s = lex_score as f64;
+            let s = lexical_score as f64;
             (s / (s + 4000.0)).clamp(0.0, 1.0)
         };
 
@@ -273,22 +284,61 @@ fn rank_context_items(question: &str, candidates: &[ContextItem]) -> Vec<(f64, u
         let recency_w = 0.1;
 
         let relevance = (semantic_w * semantic) + (lexical_w * lexical) + (recency_w * recency);
-        scored.push((relevance, i));
+        scored.push(RankedContextItem {
+            relevance,
+            lexical_score,
+            idx: i,
+        });
     }
 
-    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    scored.sort_by(|a, b| {
+        b.relevance
+            .partial_cmp(&a.relevance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     scored
+}
+
+fn passes_relevance_gate(
+    item: &ContextItem,
+    ranked: RankedContextItem,
+    best_relevance: f64,
+) -> bool {
+    let has_lexical_match = ranked.lexical_score > 0;
+    let strong_semantic_match = item
+        .distance
+        .is_some_and(|distance| distance <= DEFAULT_MAX_DISTANCE_WITHOUT_LEXICAL_MATCH);
+
+    if !has_lexical_match && !strong_semantic_match {
+        return false;
+    }
+
+    let min_relevance = if has_lexical_match {
+        DEFAULT_MIN_RELEVANCE
+    } else {
+        DEFAULT_MIN_RELEVANCE_WITHOUT_LEXICAL_MATCH
+    };
+    let relative_floor = (best_relevance * DEFAULT_RELATIVE_RELEVANCE_FLOOR).max(min_relevance);
+    ranked.relevance >= relative_floor
 }
 
 fn mmr_select_indices(question: &str, candidates: &[ContextItem], max_items: usize) -> Vec<usize> {
     let ranked = rank_context_items(question, candidates);
-    let max_items = max_items.min(ranked.len());
+    let Some(best_relevance) = ranked.first().map(|item| item.relevance) else {
+        return Vec::new();
+    };
+
+    let eligible_ranked = ranked
+        .into_iter()
+        .filter(|ranked| passes_relevance_gate(&candidates[ranked.idx], *ranked, best_relevance))
+        .collect::<Vec<_>>();
+    let max_items = max_items.min(eligible_ranked.len());
     if max_items == 0 {
         return Vec::new();
     }
 
     let mut selected: Vec<usize> = Vec::new();
-    let mut remaining: Vec<usize> = ranked.iter().map(|(_, idx)| *idx).collect();
+    let mut remaining: Vec<usize> = eligible_ranked.iter().map(|ranked| ranked.idx).collect();
 
     // Start with highest relevance.
     if let Some(first) = remaining.first().copied() {
@@ -296,9 +346,9 @@ fn mmr_select_indices(question: &str, candidates: &[ContextItem], max_items: usi
         remaining.retain(|i| *i != first);
     }
 
-    let relevance_by_idx: std::collections::HashMap<usize, f64> = ranked
+    let relevance_by_idx: std::collections::HashMap<usize, f64> = eligible_ranked
         .into_iter()
-        .map(|(relevance, idx)| (idx, relevance))
+        .map(|ranked| (ranked.idx, ranked.relevance))
         .collect();
 
     while selected.len() < max_items && !remaining.is_empty() {
@@ -344,35 +394,9 @@ pub(crate) fn build_contexts_v2(
 
     for idx in selected_indices {
         let item = &candidates[idx];
-        let mut text = compress_context_text(question, &item.text);
-        if text.is_empty() {
+        let Some(text) = render_context_item_for_prompt(question, item) else {
             continue;
-        }
-
-        // Add lightweight source tags for debugability without bloating too much.
-        let prefix = match item.source {
-            ContextSource::Message => None,
-            ContextSource::TodoThread => Some(format!("TODO_THREAD id={}\n", item.id)),
-            ContextSource::Event => Some(format!("EVENT id={}\n", item.id)),
-            ContextSource::TodoActivity => Some(format!("TODO_ACTIVITY id={}\n", item.id)),
-            ContextSource::AttachmentChunk => Some(format!("ATTACHMENT_CHUNK id={}\n", item.id)),
-            ContextSource::ExternalDocument => Some(format!("EXTERNAL_DOCUMENT id={}\n", item.id)),
         };
-        if let Some(p) = prefix {
-            let mut combined = String::with_capacity(p.len() + text.len());
-            combined.push_str(&p);
-            combined.push_str(&text);
-            text = combined;
-        }
-
-        if let Some(suffix) = item.citation_suffix.as_deref() {
-            if !suffix.is_empty() && !text.contains(suffix) {
-                if !text.is_empty() && !text.ends_with('\n') {
-                    text.push('\n');
-                }
-                text.push_str(suffix);
-            }
-        }
 
         if !seen.insert(text.clone()) {
             continue;
@@ -393,4 +417,87 @@ pub(crate) fn build_contexts_v2(
     }
 
     out
+}
+
+pub(crate) fn render_context_item_for_prompt(question: &str, item: &ContextItem) -> Option<String> {
+    let mut text = compress_context_text(question, &item.text);
+    if text.is_empty() {
+        return None;
+    }
+
+    let prefix = match item.source {
+        ContextSource::Message => None,
+        ContextSource::TodoThread => Some(format!("TODO_THREAD id={}\n", item.id)),
+        ContextSource::Event => Some(format!("EVENT id={}\n", item.id)),
+        ContextSource::TodoActivity => Some(format!("TODO_ACTIVITY id={}\n", item.id)),
+        ContextSource::AttachmentChunk => Some(format!("ATTACHMENT_CHUNK id={}\n", item.id)),
+        ContextSource::ExternalDocument => Some(format!("EXTERNAL_DOCUMENT id={}\n", item.id)),
+    };
+    if let Some(prefix) = prefix {
+        let mut combined = String::with_capacity(prefix.len() + text.len());
+        combined.push_str(&prefix);
+        combined.push_str(&text);
+        text = combined;
+    }
+
+    if let Some(suffix) = item.citation_suffix.as_deref() {
+        if !suffix.is_empty() && !text.contains(suffix) {
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+            text.push_str(suffix);
+        }
+    }
+
+    Some(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_contexts_v2, ContextItem, ContextSource};
+
+    #[test]
+    fn build_contexts_v2_drops_low_relevance_tail_candidates() {
+        let contexts = build_contexts_v2(
+            "分析最近的视频开头台词",
+            vec![
+                ContextItem {
+                    source: ContextSource::Message,
+                    id: "video-script".to_string(),
+                    created_at_ms: 1_800_000_000_000,
+                    distance: Some(0.05),
+                    text: "分析叁月聚粮最近的视频，尤其是开头部分的台词".to_string(),
+                    citation_suffix: None,
+                },
+                ContextItem {
+                    source: ContextSource::Message,
+                    id: "github".to_string(),
+                    created_at_ms: 1_800_000_000_000,
+                    distance: Some(0.8),
+                    text: "https://github.com/QwenLM/Qwen3-ASR".to_string(),
+                    citation_suffix: None,
+                },
+                ContextItem {
+                    source: ContextSource::TodoThread,
+                    id: "todo-work".to_string(),
+                    created_at_ms: 1_800_000_000_000,
+                    distance: Some(0.85),
+                    text: "TODO_THREAD todo_id=1\nTODO [in_progress] 今天上班要穿西装".to_string(),
+                    citation_suffix: None,
+                },
+                ContextItem {
+                    source: ContextSource::AttachmentChunk,
+                    id: "wav".to_string(),
+                    created_at_ms: 1_800_000_000_000,
+                    distance: Some(0.9),
+                    text: "罗妈.WAV".to_string(),
+                    citation_suffix: None,
+                },
+            ],
+            4,
+        );
+
+        assert_eq!(contexts.len(), 1);
+        assert!(contexts[0].contains("开头部分的台词"));
+    }
 }

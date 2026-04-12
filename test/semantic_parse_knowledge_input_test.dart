@@ -261,6 +261,11 @@ KnowledgeViewerDocument _viewerDocument({
       summary: summary,
       rawText: summary,
       normalizedText: summary.toLowerCase(),
+      memoryFeedback: const KnowledgeMemoryFeedback(
+        useForAskAi: true,
+        isDeleted: false,
+        markedInaccurate: false,
+      ),
     ),
     totalUnits: 1,
     sectionCount: 1,

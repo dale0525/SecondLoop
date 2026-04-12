@@ -118,6 +118,83 @@ final class KnowledgeDocumentController extends ChangeNotifier {
     await loadPage(reset: true);
   }
 
+  Future<void> showUnitId(String unitId) async {
+    final targetUnitId = unitId.trim();
+    if (targetUnitId.isEmpty) return;
+    if (_units.any((unit) => unit.unitId == targetUnitId)) {
+      _highlightedUnitId = targetUnitId;
+      notifyListeners();
+      return;
+    }
+
+    final epoch = ++_loadEpoch;
+    _loadingPage = true;
+    _loadingMore = false;
+    _loadError = null;
+    _anchorMode = false;
+    notifyListeners();
+
+    try {
+      final loadedUnits = <KnowledgeUnit>[];
+      var offset = 0;
+      var total = _total;
+
+      while (true) {
+        final page = await backend.listKnowledgeViewerUnits(
+          sessionKey,
+          documentId: documentId,
+          limit: pageSize,
+          offset: offset,
+        );
+        if (epoch != _loadEpoch) return;
+
+        _viewerDocument = KnowledgeViewerDocument(
+          document: _viewerDocument.document,
+          totalUnits: page.total,
+          sectionCount: _viewerDocument.sectionCount,
+          chunkCount: _viewerDocument.chunkCount,
+        );
+        total = page.total.toInt();
+        final mergedUnits = _mergeUnits(loadedUnits, page.units);
+        loadedUnits
+          ..clear()
+          ..addAll(mergedUnits);
+        _units = List<KnowledgeUnit>.from(loadedUnits);
+
+        if (_units.any((unit) => unit.unitId == targetUnitId) ||
+            page.units.isEmpty ||
+            _units.length >= total ||
+            page.units.length < pageSize) {
+          break;
+        }
+        offset = _units.length;
+      }
+
+      final targetIndex =
+          _units.indexWhere((unit) => unit.unitId == targetUnitId);
+      if (targetIndex >= 0) {
+        final start = (targetIndex - 2).clamp(0, targetIndex);
+        final end = (targetIndex + 4).clamp(0, _units.length);
+        _units = _units.sublist(start, end);
+        _anchorMode = true;
+        _highlightedUnitId = targetUnitId;
+      } else {
+        _anchorMode = false;
+        _highlightedUnitId = null;
+      }
+      _total = total;
+    } catch (error) {
+      if (epoch != _loadEpoch) return;
+      _loadError = error;
+    } finally {
+      if (epoch == _loadEpoch) {
+        _loadingPage = false;
+        _loadingMore = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> searchDocument(String query) async {
     final epoch = ++_searchEpoch;
     _searching = true;
@@ -162,6 +239,17 @@ final class KnowledgeDocumentController extends ChangeNotifier {
         after: 3,
       );
       if (epoch != _loadEpoch) return;
+      if (units.isEmpty) {
+        _loadingPage = false;
+        _loadingMore = false;
+        notifyListeners();
+        if (targetUnitId != null) {
+          await showUnitId(targetUnitId);
+        } else {
+          await loadPage(reset: true);
+        }
+        return;
+      }
       final highlighted =
           targetUnitId ?? (units.isEmpty ? null : units.first.unitId);
       _anchorMode = true;

@@ -334,6 +334,7 @@ final class DetachedAskRecoveryService {
     required String conversationId,
     required String question,
     required String answer,
+    String? citationsJson,
     String? gatewayBaseUrl,
   }) async {
     final rid = requestId.trim();
@@ -353,58 +354,42 @@ final class DetachedAskRecoveryService {
         conversationId: cid,
         question: q,
         answer: a,
+        citationsJson: citationsJson,
       );
     } catch (_) {
-      return _applyCompletionViaLegacyEventMarker(
+      return _applyCompletionViaBackendRecovery(
         backend: backend,
         sessionKey: sessionKey,
         requestId: rid,
         conversationId: cid,
         question: q,
         answer: a,
-        gatewayBaseUrl: gatewayBaseUrl,
+        citationsJson: citationsJson,
       );
     }
   }
 
-  static Future<bool> _applyCompletionViaLegacyEventMarker({
+  static Future<bool> _applyCompletionViaBackendRecovery({
     required AppBackend backend,
     required Uint8List sessionKey,
     required String requestId,
     required String conversationId,
     required String question,
     required String answer,
-    String? gatewayBaseUrl,
+    String? citationsJson,
   }) async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final marker = await backend.upsertEvent(
+    if (backend is! DetachedAskCompletionRecoveryBackend) {
+      return false;
+    }
+    final recoveryBackend = backend as DetachedAskCompletionRecoveryBackend;
+    return recoveryBackend.applyDetachedAskCompletionOnce(
       sessionKey,
-      id: 'detached_ask_completion:$requestId',
-      title:
-          'detached_ask_completion_marker_v1:${gatewayBaseUrl?.trim() ?? ''}',
-      startAtMs: nowMs,
-      endAtMs: nowMs + 1,
-      tz: 'UTC',
-      sourceEntryId: conversationId,
+      requestId: requestId,
+      conversationId: conversationId,
+      question: question,
+      answer: answer,
+      citationsJson: citationsJson,
     );
-
-    final firstClaim = marker.createdAtMs == marker.updatedAtMs;
-    if (!firstClaim) return false;
-
-    await backend.insertMessage(
-      sessionKey,
-      conversationId,
-      role: 'user',
-      content: question,
-    );
-    await backend.insertMessage(
-      sessionKey,
-      conversationId,
-      role: 'assistant',
-      content: answer,
-    );
-
-    return true;
   }
 
   static Future<void> trackMetric({

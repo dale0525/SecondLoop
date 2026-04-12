@@ -1,7 +1,8 @@
-use crate::knowledge::models::GeneratedMemoryKind;
+use crate::knowledge::models::{infer_generated_memory_section, GeneratedMemoryKind};
 use crate::knowledge::{
-    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeOriginType, KnowledgeRole,
-    KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind, KnowledgeVersionSet,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeMemoryFeedback, KnowledgeMemorySection,
+    KnowledgeOriginType, KnowledgeRole, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind,
+    KnowledgeVersionSet,
 };
 
 #[test]
@@ -32,6 +33,8 @@ fn knowledge_model_document_round_trips_through_json() {
         summary: None,
         raw_text: "raw text".to_string(),
         normalized_text: "raw text".to_string(),
+        memory_display: None,
+        memory_feedback: KnowledgeMemoryFeedback::default(),
     };
 
     let json = serde_json::to_string(&value).expect("serialize");
@@ -93,4 +96,45 @@ fn generated_memory_kind_round_trips_through_json() {
     let round_trip: GeneratedMemoryKind = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(round_trip, GeneratedMemoryKind::Preference);
     assert_eq!(round_trip.as_str(), "preference");
+}
+
+#[test]
+fn infer_generated_memory_section_detects_chinese_project_signals() {
+    let section = infer_generated_memory_section(
+        "generated:profile:current-focus",
+        Some("当前项目"),
+        Some("用户正在推进新应用发布计划"),
+        "这个项目的上线节奏需要和产品 roadmap 对齐。",
+    );
+
+    assert_eq!(section, Some(KnowledgeMemorySection::Project));
+}
+
+#[test]
+fn infer_generated_memory_section_avoids_ascii_substring_false_positives() {
+    for text in [
+        "The user feels happy about the outcome.",
+        "This usually happens after lunch.",
+        "The wrapper hides the implementation details.",
+    ] {
+        let section =
+            infer_generated_memory_section("generated:profile:current-focus", None, None, text);
+        assert_ne!(
+            section,
+            Some(KnowledgeMemorySection::Project),
+            "unexpected project match for {text}"
+        );
+    }
+}
+
+#[test]
+fn infer_generated_memory_section_matches_ascii_project_tokens() {
+    let section = infer_generated_memory_section(
+        "generated:profile:current-focus",
+        Some("Current focus"),
+        Some("Shipping the app build next week"),
+        "The project launch depends on the product roadmap.",
+    );
+
+    assert_eq!(section, Some(KnowledgeMemorySection::Project));
 }

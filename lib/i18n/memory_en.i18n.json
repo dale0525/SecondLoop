@@ -1,0 +1,73 @@
+{
+  "title": "Memory",
+  "emptyState": "No memory cards yet.",
+  "sections": {
+    "preferences": "Preferences",
+    "people": "People",
+    "projects": "Projects",
+    "topics": "Topics",
+    "recentEvents": "Recent events"
+  },
+  "meta": {
+    "sourceCount": "$count sources",
+    "updatedToday": "Updated today",
+    "updatedDaysAgo": "Updated $count d ago",
+    "updatedOn": "Updated $date"
+  },
+  "status": {
+    "confirmed": "Confirmed",
+    "inferred": "Inferred",
+    "maybeOutdated": "Maybe outdated"
+  },
+  "detail": {
+    "currentConclusion": "Current conclusion",
+    "evidenceTimeline": "Evidence timeline",
+    "usedByAskAi": "Used by Ask AI",
+    "notUsedByAskAi": "Not used by Ask AI",
+    "markedInaccurate": "Marked inaccurate",
+    "deleted": "Memory deleted",
+    "actions": "Actions",
+    "sourceTypes": {
+      "message": "Chat message",
+      "attachment": "Attachment",
+      "transcript": "Transcript",
+      "summary": "Summary",
+      "evidence": "Evidence"
+    },
+    "sourceTitles": {
+      "message": "Message source",
+      "attachment": "Attachment source",
+      "transcript": "Transcript excerpt",
+      "summary": "Summary source",
+      "evidence": "Evidence item"
+    }
+  },
+  "actions": {
+    "editMemory": "Edit memory",
+    "markInaccurate": "Mark inaccurate",
+    "clearInaccurate": "Clear inaccurate mark",
+    "stopUsingForAskAi": "Stop using for Ask AI",
+    "useForAskAiAgain": "Use for Ask AI again",
+    "deleteMemory": "Delete memory",
+    "restoreMemory": "Restore memory",
+    "fields": {
+      "title": "Title",
+      "summary": "Summary"
+    }
+  },
+  "generatedTitles": {
+    "activeTaskPattern": "Active task pattern",
+    "weeklyFocus": "Weekly focus",
+    "responseLanguage": "Response language",
+    "responseStyle": "Response style",
+    "responseFormat": "Response format",
+    "selfProfile": "Self profile",
+    "decisionMemory": "Decision memory"
+  },
+  "generatedSummaries": {
+    "responseLanguage": "User prefers responses in $language.",
+    "responseStyle": "User prefers concise, practical responses.",
+    "responseFormat": "User prefers bullet-style structure when possible.",
+    "activeTaskPattern": "User is actively working across these task threads:"
+  }
+}

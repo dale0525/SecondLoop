@@ -83,3 +83,160 @@ fn knowledge_schema_migration_seeds_rebuild_policy_versions() {
 
     assert_eq!(row, (1, 1, 1, 1, 1));
 }
+
+#[test]
+fn load_knowledge_memory_feedback_map_returns_defaults_for_missing_rows() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [71u8; 32];
+
+    upsert_knowledge_memory_feedback(
+        &conn,
+        &key,
+        "generated:preference:hidden",
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        false,
+        None,
+        None,
+    )
+    .expect("upsert feedback");
+
+    let document_ids = std::collections::BTreeSet::from([
+        "generated:preference:hidden".to_string(),
+        "generated:preference:missing".to_string(),
+    ]);
+    let feedback = load_knowledge_memory_feedback_map(&conn, &document_ids).expect("load map");
+
+    assert_eq!(feedback.len(), 2);
+    assert!(!feedback["generated:preference:hidden"].use_for_ask_ai);
+    assert_eq!(
+        feedback["generated:preference:missing"],
+        crate::knowledge::KnowledgeMemoryFeedback::default()
+    );
+}
+
+#[test]
+fn backfill_knowledge_memory_feedback_oplog_rolls_back_partial_progress_on_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [72u8; 32];
+
+    conn.execute(
+        r#"INSERT INTO knowledge_document_feedback(
+               document_id,
+               status,
+               use_for_ask_ai,
+               is_deleted,
+               marked_inaccurate,
+               corrected_title,
+               corrected_summary,
+               created_at_ms,
+               updated_at_ms,
+               updated_by_device_id,
+               updated_by_seq
+           ) VALUES (?1, NULL, 1, 0, 0, NULL, NULL, ?2, ?2, '', 0)"#,
+        params!["generated:preference:first", 100i64],
+    )
+    .expect("insert first feedback");
+    conn.execute(
+        r#"INSERT INTO knowledge_document_feedback(
+               document_id,
+               status,
+               use_for_ask_ai,
+               is_deleted,
+               marked_inaccurate,
+               corrected_title,
+               corrected_summary,
+               created_at_ms,
+               updated_at_ms,
+               updated_by_device_id,
+               updated_by_seq
+           ) VALUES (?1, NULL, 1, 0, 0, NULL, NULL, ?2, ?2, '', 0)"#,
+        params!["generated:preference:second", 200i64],
+    )
+    .expect("insert second feedback");
+    conn.execute_batch(
+        r#"CREATE TRIGGER abort_second_feedback_backfill
+           BEFORE UPDATE ON knowledge_document_feedback
+           WHEN NEW.document_id = 'generated:preference:second'
+           BEGIN
+             SELECT RAISE(ABORT, 'stop backfill');
+           END;"#,
+    )
+    .expect("create abort trigger");
+
+    let error = backfill_knowledge_memory_feedback_oplog_if_needed(&conn, &key)
+        .expect_err("backfill should abort");
+    assert!(error.to_string().contains("stop backfill"));
+
+    let oplog_rows: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("oplog count");
+    assert_eq!(oplog_rows, 0);
+
+    let updated_rows: i64 = conn
+        .query_row(
+            r#"SELECT COUNT(*) FROM knowledge_document_feedback
+               WHERE updated_by_device_id != '' OR updated_by_seq != 0"#,
+            [],
+            |row| row.get(0),
+        )
+        .expect("updated rows count");
+    assert_eq!(updated_rows, 0);
+
+    let sentinel = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key = 'oplog.backfill.knowledge_memory_feedback.v1'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .expect("sentinel lookup");
+    assert!(sentinel.is_none());
+}
+
+#[test]
+fn upsert_knowledge_memory_feedback_rolls_back_when_oplog_insert_fails() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [73u8; 32];
+
+    conn.execute_batch(
+        r#"CREATE TRIGGER abort_knowledge_feedback_oplog_insert
+           BEFORE INSERT ON oplog
+           BEGIN
+             SELECT RAISE(ABORT, 'stop oplog');
+           END;"#,
+    )
+    .expect("create oplog abort trigger");
+
+    let error = upsert_knowledge_memory_feedback(
+        &conn,
+        &key,
+        "generated:preference:atomicity",
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        false,
+        Some("trimmed title".to_string()),
+        Some("trimmed summary".to_string()),
+    )
+    .expect_err("upsert should abort when oplog insert fails");
+    assert!(error.to_string().contains("stop oplog"));
+
+    let feedback_row_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM knowledge_document_feedback WHERE document_id = ?1",
+            params!["generated:preference:atomicity"],
+            |row| row.get(0),
+        )
+        .expect("feedback row count");
+    assert_eq!(feedback_row_count, 0);
+
+    let oplog_rows: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("oplog count");
+    assert_eq!(oplog_rows, 0);
+}

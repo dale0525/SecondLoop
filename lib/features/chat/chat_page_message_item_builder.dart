@@ -238,6 +238,43 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
           : rawDisplayText;
       final actionSuggestions = assistantActions?.suggestions?.suggestions ??
           const <ActionSuggestion>[];
+      final citationController = ChatAnswerCitationController(
+        parseChatAnswerEvidence(stableMsg.citationsJson),
+      );
+      final evidence = citationController.evidence;
+      final backend = AppBackendScope.of(context);
+      final viewerBackend = maybeKnowledgeViewerBackendFor(backend);
+      final knowledgeBackend = maybeKnowledgeBackendFor(backend);
+      final openMemoryCard = viewerBackend == null
+          ? null
+          : (String documentId) => MemoryDetailPage.openDocumentId(
+                context,
+                documentId: documentId,
+              );
+      final correctMemoryCard =
+          knowledgeBackend == null || viewerBackend == null
+              ? null
+              : (
+                  ChatAnswerEvidenceMemoryCard card,
+                  String title,
+                  String summary,
+                ) =>
+                  _correctMemoryFromEvidence(
+                    card,
+                    title: title,
+                    summary: summary,
+                  );
+      final refreshMemoryCard =
+          knowledgeBackend == null || viewerBackend == null
+              ? null
+              : _refreshMemoryFromEvidence;
+      final disableMemoryCard =
+          knowledgeBackend == null || viewerBackend == null
+              ? null
+              : (String documentId) => _disableMemoryFromEvidence(documentId);
+      final deleteMemoryCard = knowledgeBackend == null || viewerBackend == null
+          ? null
+          : (String documentId) => _deleteMemoryFromEvidence(documentId);
       final todoBadgeMeta = _todoMessageBadgeMetaForMessage(
           message: stableMsg,
           jobsByMessageId: jobsByMessageId,
@@ -375,7 +412,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                           );
                           if (openedDetail) return;
                           if (shouldCollapse && !isDesktopPlatform) {
-                            await _openMessageViewer(displayText);
+                            await _openMessageViewer(stableMsg, displayText);
                           }
                         }(),
                       ),
@@ -448,6 +485,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                         child: _buildMessageMarkdown(
                                           displayText,
                                           isDesktopPlatform: isDesktopPlatform,
+                                          citationsJson:
+                                              stableMsg.citationsJson,
                                         ),
                                       ),
                                     ),
@@ -504,6 +543,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                               displayText,
                                               isDesktopPlatform:
                                                   isDesktopPlatform,
+                                              citationsJson:
+                                                  stableMsg.citationsJson,
                                             ),
                                           if (showAskAiTypingIndicator)
                                             Padding(
@@ -533,6 +574,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                     : _buildMessageMarkdown(
                                         displayText,
                                         isDesktopPlatform: isDesktopPlatform,
+                                        citationsJson: stableMsg.citationsJson,
                                       )),
                           if (todoBadgeMeta != null)
                             _buildRelatedTodoRootQuote(
@@ -547,47 +589,66 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   'message_view_full_${stableMsg.id}',
                                 ),
                                 onPressed: () => unawaited(
-                                  _openMessageViewer(displayText),
+                                  _openMessageViewer(stableMsg, displayText),
                                 ),
                                 child: Text(context.t.chat.viewFull),
                               ),
                             ),
-                          if (actionSuggestions.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  for (var i = 0;
-                                      i < actionSuggestions.length;
-                                      i++)
-                                    SlButton(
-                                      variant: SlButtonVariant.outline,
-                                      onPressed: () =>
-                                          _handleAssistantSuggestion(
-                                        stableMsg,
-                                        actionSuggestions[i],
-                                        i,
-                                      ),
-                                      icon: Icon(
-                                        actionSuggestions[i].type == 'event'
-                                            ? Icons.event_rounded
-                                            : Icons
-                                                .check_circle_outline_rounded,
-                                        size: 18,
-                                      ),
-                                      child: Text(
-                                        actionSuggestions[i]
-                                                    .whenText
-                                                    ?.trim()
-                                                    .isNotEmpty ==
-                                                true
-                                            ? '${actionSuggestions[i].title} (${actionSuggestions[i].whenText})'
-                                            : actionSuggestions[i].title,
-                                      ),
-                                    ),
-                                ],
+                          if ((evidence != null && evidence.hasEvidence) ||
+                              actionSuggestions.isNotEmpty)
+                            ChatAssistantMessageFooter(
+                              evidence: evidence,
+                              onOpenSources: () => unawaited(
+                                citationController.openEvidence(
+                                  context,
+                                  initialTab:
+                                      ChatAnswerEvidenceTab.directSources,
+                                  onOpenDirectSource: (href) async {
+                                    await _handleMarkdownInAppLink(href);
+                                  },
+                                  onOpenMemoryCard: openMemoryCard,
+                                  canOpenDirectSource: _canOpenKnowledgeHref,
+                                  onCorrectMemoryCard: correctMemoryCard,
+                                  onRefreshMemoryCard: refreshMemoryCard,
+                                  onDisableMemoryCard: disableMemoryCard,
+                                  onDeleteMemoryCard: deleteMemoryCard,
+                                ),
+                              ),
+                              onOpenMemory: () => unawaited(
+                                citationController.openEvidence(
+                                  context,
+                                  initialTab: ChatAnswerEvidenceTab.memoryCards,
+                                  onOpenDirectSource: (href) async {
+                                    await _handleMarkdownInAppLink(href);
+                                  },
+                                  onOpenMemoryCard: openMemoryCard,
+                                  canOpenDirectSource: _canOpenKnowledgeHref,
+                                  onCorrectMemoryCard: correctMemoryCard,
+                                  onRefreshMemoryCard: refreshMemoryCard,
+                                  onDisableMemoryCard: disableMemoryCard,
+                                  onDeleteMemoryCard: deleteMemoryCard,
+                                ),
+                              ),
+                              onOpenEvidence: () => unawaited(
+                                citationController.openEvidence(
+                                  context,
+                                  onOpenDirectSource: (href) async {
+                                    await _handleMarkdownInAppLink(href);
+                                  },
+                                  onOpenMemoryCard: openMemoryCard,
+                                  canOpenDirectSource: _canOpenKnowledgeHref,
+                                  onCorrectMemoryCard: correctMemoryCard,
+                                  onRefreshMemoryCard: refreshMemoryCard,
+                                  onDisableMemoryCard: disableMemoryCard,
+                                  onDeleteMemoryCard: deleteMemoryCard,
+                                ),
+                              ),
+                              actionSuggestions: actionSuggestions,
+                              onTapActionSuggestion: (suggestion, index) =>
+                                  _handleAssistantSuggestion(
+                                stableMsg,
+                                suggestion,
+                                index,
                               ),
                             ),
                           if (supportsAttachments)

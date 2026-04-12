@@ -33,7 +33,10 @@ final class UnsupportedCloudWebChatClient implements CloudWebChatClient {
 
 final class CloudWebBackend extends AppBackend
     with _CloudWebBackendTasksRecurrenceMixin, _CloudWebBackendTasksMixin
-    implements AttachmentsBackend {
+    implements
+        AttachmentsBackend,
+        AssistantCitationWriteBackend,
+        DetachedAskCompletionRecoveryBackend {
   CloudWebBackend({
     required this.chatClient,
     Future<Map<String, Object?>> Function({
@@ -70,6 +73,7 @@ final class CloudWebBackend extends AppBackend
       <String, List<String>>{};
   final Map<String, _DeletedMessageSnapshot> _deletedMessagesById =
       <String, _DeletedMessageSnapshot>{};
+  final Set<String> _detachedAskCompletionClaims = <String>{};
   var _idCounter = 0;
 
   Future<T> _unsupportedFuture<T>(String feature) {
@@ -139,6 +143,7 @@ final class CloudWebBackend extends AppBackend
     _todoRecurrenceSeriesIdByTodoId.clear();
     _todoRecurrenceOccurrenceIndexByTodoId.clear();
     _deletedMessagesById.clear();
+    _detachedAskCompletionClaims.clear();
     _idCounter = 0;
   }
 
@@ -147,6 +152,38 @@ final class CloudWebBackend extends AppBackend
       conversationId,
       () => <Message>[],
     );
+  }
+
+  Message _appendMessage(
+    String conversationId, {
+    required String role,
+    required String content,
+    required bool isMemory,
+    String? citationsJson,
+  }) {
+    _ensureConversationExists(conversationId);
+    final now = _touchNow();
+    final message = Message(
+      id: _nextId('message'),
+      conversationId: conversationId,
+      role: role,
+      content: content,
+      createdAtMs: _asPlatformInt64(now),
+      isMemory: isMemory,
+      citationsJson: citationsJson,
+    );
+    _messageBucket(conversationId).add(message);
+
+    final conversation = _conversationById(conversationId)!;
+    _replaceConversation(
+      Conversation(
+        id: conversation.id,
+        title: conversation.title,
+        createdAtMs: conversation.createdAtMs,
+        updatedAtMs: _asPlatformInt64(now),
+      ),
+    );
+    return message;
   }
 
   @override
@@ -246,28 +283,69 @@ final class CloudWebBackend extends AppBackend
     required String role,
     required String content,
   }) async {
-    _ensureConversationExists(conversationId);
-    final now = _touchNow();
-    final message = Message(
-      id: _nextId('message'),
-      conversationId: conversationId,
+    return _appendMessage(
+      conversationId,
       role: role,
       content: content,
-      createdAtMs: _asPlatformInt64(now),
       isMemory: false,
     );
-    _messageBucket(conversationId).add(message);
+  }
 
-    final conversation = _conversationById(conversationId)!;
-    _replaceConversation(
-      Conversation(
-        id: conversation.id,
-        title: conversation.title,
-        createdAtMs: conversation.createdAtMs,
-        updatedAtMs: _asPlatformInt64(now),
-      ),
+  @override
+  Future<Message> insertAssistantMessageWithCitations(
+    Uint8List key,
+    String conversationId, {
+    required String content,
+    String? citationsJson,
+  }) async {
+    return _appendMessage(
+      conversationId,
+      role: 'assistant',
+      content: content,
+      isMemory: false,
+      citationsJson: citationsJson,
     );
-    return message;
+  }
+
+  @override
+  Future<bool> applyDetachedAskCompletionOnce(
+    Uint8List key, {
+    required String requestId,
+    required String conversationId,
+    required String question,
+    required String answer,
+    String? citationsJson,
+  }) async {
+    final normalizedRequestId = requestId.trim();
+    final normalizedConversationId = conversationId.trim();
+    final normalizedQuestion = question.trim();
+    final normalizedAnswer = answer.trim();
+    if (normalizedRequestId.isEmpty ||
+        normalizedConversationId.isEmpty ||
+        normalizedQuestion.isEmpty ||
+        normalizedAnswer.isEmpty) {
+      return false;
+    }
+
+    final claimKey = '$normalizedConversationId::$normalizedRequestId';
+    if (!_detachedAskCompletionClaims.add(claimKey)) {
+      return false;
+    }
+
+    _appendMessage(
+      normalizedConversationId,
+      role: 'user',
+      content: normalizedQuestion,
+      isMemory: false,
+    );
+    _appendMessage(
+      normalizedConversationId,
+      role: 'assistant',
+      content: normalizedAnswer,
+      isMemory: false,
+      citationsJson: citationsJson,
+    );
+    return true;
   }
 
   @override

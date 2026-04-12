@@ -66,6 +66,8 @@ fn emit_document_if_text(
         summary: snippet(&normalized_text, 120),
         raw_text: trimmed.to_string(),
         normalized_text,
+        memory_display: None,
+        memory_feedback: crate::knowledge::KnowledgeMemoryFeedback::default(),
     })
 }
 

@@ -24,10 +24,29 @@ abstract interface class KnowledgeBackend {
     int offset = 0,
   });
 
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  });
+
   Future<List<KnowledgeUnit>> listKnowledgeUnits(
     Uint8List key, {
     required String documentId,
     KnowledgeUnitKind? unitKind,
+    int limit = 100,
+    int offset = 0,
+  });
+}
+
+abstract interface class GeneratedMemoryKnowledgeBackend {
+  Future<List<ContentKnowledgeDocument>> listGeneratedMemoryDocuments(
+    Uint8List key, {
     int limit = 100,
     int offset = 0,
   });
@@ -39,7 +58,8 @@ KnowledgeBackend? maybeKnowledgeBackendFor(AppBackend backend) {
   return null;
 }
 
-final class NativeKnowledgeBackend implements KnowledgeBackend {
+final class NativeKnowledgeBackend
+    implements KnowledgeBackend, GeneratedMemoryKnowledgeBackend {
   NativeKnowledgeBackend(this._backend);
 
   final NativeAppBackend _backend;
@@ -74,6 +94,40 @@ final class NativeKnowledgeBackend implements KnowledgeBackend {
     int offset = 0,
   }) =>
       _backend.listKnowledgeDocuments(key, limit: limit, offset: offset);
+
+  @override
+  Future<List<ContentKnowledgeDocument>> listGeneratedMemoryDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) =>
+      _backend.listGeneratedMemoryDocuments(
+        key,
+        limit: limit,
+        offset: offset,
+      );
+
+  @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) =>
+      _backend.upsertKnowledgeMemoryFeedback(
+        key,
+        documentId: documentId,
+        status: status,
+        useForAskAi: useForAskAi,
+        isDeleted: isDeleted,
+        markedInaccurate: markedInaccurate,
+        correctedTitle: correctedTitle,
+        correctedSummary: correctedSummary,
+      );
 
   @override
   Future<List<KnowledgeUnit>> listKnowledgeUnits(

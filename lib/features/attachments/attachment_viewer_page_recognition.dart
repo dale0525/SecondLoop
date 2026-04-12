@@ -136,16 +136,19 @@ extension _AttachmentViewerPageRecognition on _AttachmentViewerPageState {
       _awaitingAttachmentRecognitionResult = false;
       _preserveRetryFallbackText = false;
       _documentOcrStatusText = null;
-      _lastNonEmptyAnnotationPayload = nextPayload;
-      return nextPayload;
+      final decorated = _decoratePayloadWithCitationTarget(nextPayload);
+      _lastNonEmptyAnnotationPayload = decorated;
+      return decorated;
     }
 
     final partialTranscribePayload =
         _resolvePartialTranscribePayload(payload: nextPayload);
     if (partialTranscribePayload != null) {
       _preserveRetryFallbackText = true;
-      _lastNonEmptyAnnotationPayload = partialTranscribePayload;
-      return partialTranscribePayload;
+      final decorated =
+          _decoratePayloadWithCitationTarget(partialTranscribePayload);
+      _lastNonEmptyAnnotationPayload = decorated;
+      return decorated;
     }
 
     final recognitionIssue = _resolveAttachmentRecognitionIssue();
@@ -153,9 +156,11 @@ extension _AttachmentViewerPageRecognition on _AttachmentViewerPageState {
       _awaitingAttachmentRecognitionResult = false;
       _preserveRetryFallbackText = false;
       _documentOcrStatusText = _recognitionIssueMessage(recognitionIssue);
-      return _overlayRecognitionIssuePlaceholderPayload(
-        nextPayload,
-        recognitionIssue,
+      return _decoratePayloadWithCitationTarget(
+        _overlayRecognitionIssuePlaceholderPayload(
+          nextPayload,
+          recognitionIssue,
+        ),
       );
     }
 
@@ -177,10 +182,10 @@ extension _AttachmentViewerPageRecognition on _AttachmentViewerPageState {
         fallbackTextContent.hasAny;
 
     if (shouldPreserveCurrentText) {
-      return fallbackPayload;
+      return _decoratePayloadWithCitationTarget(fallbackPayload);
     }
 
-    return nextPayload;
+    return _decoratePayloadWithCitationTarget(nextPayload);
   }
 
   _AttachmentRecognitionIssue? _resolveAttachmentRecognitionIssue({

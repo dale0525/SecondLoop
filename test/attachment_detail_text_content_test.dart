@@ -123,6 +123,22 @@ void main() {
     expect(content.full, 'Document full text body');
   });
 
+  test('preferred attachment content kind accepts full chunk kinds', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'application/pdf',
+        'readable_text_excerpt': 'Readable excerpt',
+        'readable_text_full': 'Readable full',
+        'transcript_excerpt': 'Transcript excerpt',
+        'transcript_full': 'Transcript full',
+        kPreferredAttachmentContentKindKey: 'transcript_full',
+      },
+    );
+
+    expect(content.summary, 'Transcript excerpt');
+    expect(content.full, 'Transcript full');
+  });
+
   test('url detail summary prefers llm_summary when available', () {
     final content = resolveAttachmentDetailTextContent(
       const <String, Object?>{

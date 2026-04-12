@@ -237,6 +237,19 @@ final class _ErrorKnowledgeBackend extends TestAppBackend
   final String? lastError;
 
   @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {
     if (failCancel) {
       throw StateError('cancel backend unavailable');
@@ -337,6 +350,19 @@ final class _KickFailureKnowledgeBackend extends TestAppBackend
     implements KnowledgeBackend {
   String? persistedLastError;
   bool running = false;
+
+  @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {

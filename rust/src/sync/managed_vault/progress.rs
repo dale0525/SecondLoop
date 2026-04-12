@@ -479,6 +479,7 @@ pub fn push_ops_only_with_progress(
     }
 
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
+    crate::db::backfill_knowledge_memory_feedback_oplog_if_needed(conn, db_key)?;
 
     total_ops = conn
         .query_row(

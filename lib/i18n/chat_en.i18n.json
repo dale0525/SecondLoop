@@ -257,5 +257,47 @@
   },
   "recordingRecovery": {
     "recoveredToDraftSnack": "Recovered recording was added to draft. Tap Send to submit."
+  },
+  "answerEvidence": {
+    "title": "Evidence",
+    "summary": {
+      "sourcesUsed": "$count sources",
+      "memoryCardsUsed": "$count memory cards",
+      "openEvidence": "Open evidence"
+    },
+    "tabs": {
+      "directSources": "Direct sources ($count)",
+      "memoryCards": "Memory cards ($count)"
+    },
+    "actions": {
+      "viewOriginal": "View original",
+      "inspectMemory": "Inspect memory",
+      "correct": "Correct",
+      "dontUse": "Don't use",
+      "deleteMemory": "Delete"
+    },
+    "labels": {
+      "whyUsed": "Why it was used",
+      "whyUsedForQuery": "Used because it was relevant to this question: $query",
+      "sourceCount": "$count sources"
+    },
+    "sourceTypeLabels": {
+      "chatMessage": "Chat message",
+      "attachment": "Attachment",
+      "attachmentOcr": "Attachment OCR",
+      "attachmentTranscript": "Attachment transcript",
+      "attachmentText": "Attachment text",
+      "attachmentSummary": "Attachment summary",
+      "attachmentMetadata": "Attachment metadata",
+      "attachmentExcerpt": "Attachment excerpt"
+    },
+    "scopeLabels": {
+      "thisThread": "This thread"
+    },
+    "confidenceLabels": {
+      "highRelevance": "High relevance",
+      "relevant": "Relevant",
+      "possibleMatch": "Possible match"
+    }
   }
 }

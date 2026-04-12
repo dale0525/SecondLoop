@@ -21,6 +21,7 @@ pub fn db_apply_detached_ask_completion_once(
     conversation_id: String,
     question: String,
     answer: String,
+    citations_json: Option<String>,
 ) -> Result<bool> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
@@ -31,5 +32,6 @@ pub fn db_apply_detached_ask_completion_once(
         &conversation_id,
         &question,
         &answer,
+        citations_json.as_deref(),
     )
 }

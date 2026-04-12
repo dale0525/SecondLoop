@@ -277,3 +277,509 @@ fn touch_knowledge_documents_usage_succeeds_inside_active_transaction() {
         .expect("usage row count");
     assert_eq!(usage_rows, 1);
 }
+
+#[test]
+fn knowledge_memory_feedback_overrides_detail_and_can_stop_ask_ai_usage() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [27u8; 32];
+
+    let preference_conv =
+        db::create_conversation(&conn, &key, "Preferences").expect("preference conversation");
+    let planning_conv =
+        db::create_conversation(&conn, &key, "Planning").expect("planning conversation");
+
+    db::insert_message(
+        &conn,
+        &key,
+        &preference_conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+    db::insert_message(
+        &conn,
+        &key,
+        &planning_conv.id,
+        "user",
+        "Help me plan next week's launch checklist.",
+    )
+    .expect("planning");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let document_id = "generated:preference:response-language".to_string();
+
+    crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+        app_dir_string.clone(),
+        key.to_vec(),
+        document_id.clone(),
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        true,
+        false,
+        true,
+        Some("Preferred reply language".to_string()),
+        Some("Always reply in Chinese unless I ask for another language.".to_string()),
+    )
+    .expect("update feedback");
+
+    let updated = crate::api::knowledge::db_get_knowledge_document(
+        app_dir_string.clone(),
+        key.to_vec(),
+        document_id.clone(),
+    )
+    .expect("updated document");
+    assert_eq!(
+        updated.document.title.as_deref(),
+        Some("Preferred reply language")
+    );
+    assert_eq!(
+        updated.document.summary.as_deref(),
+        Some("Always reply in Chinese unless I ask for another language.")
+    );
+    assert_eq!(
+        updated.document.memory_feedback.status,
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed)
+    );
+    assert!(updated.document.memory_feedback.use_for_ask_ai);
+    assert!(updated.document.memory_feedback.marked_inaccurate);
+
+    let contexts = crate::rag::try_build_knowledge_contexts_for_tests(
+        &conn,
+        &key,
+        "Help me plan next week's launch checklist.",
+        6,
+        crate::rag::Focus::ThisThread,
+        &planning_conv.id,
+        None,
+    )
+    .expect("knowledge contexts");
+    assert!(
+        contexts.iter().any(|ctx| {
+            ctx.contains("Always reply in Chinese unless I ask for another language.")
+        }),
+        "contexts: {contexts:?}"
+    );
+
+    crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+        app_dir_string.clone(),
+        key.to_vec(),
+        document_id.clone(),
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        true,
+        Some("Preferred reply language".to_string()),
+        Some("Always reply in Chinese unless I ask for another language.".to_string()),
+    )
+    .expect("disable ask ai usage");
+
+    let contexts = crate::rag::try_build_knowledge_contexts_for_tests(
+        &conn,
+        &key,
+        "Help me plan next week's launch checklist.",
+        6,
+        crate::rag::Focus::ThisThread,
+        &planning_conv.id,
+        None,
+    )
+    .expect("knowledge contexts after disable");
+    assert!(
+        contexts.iter().all(|ctx| {
+            !ctx.contains("Always reply in Chinese unless I ask for another language.")
+        }),
+        "contexts: {contexts:?}"
+    );
+}
+
+#[test]
+fn knowledge_memory_delete_hides_cards_from_list_but_keeps_detail_restorable() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [26u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let document_id = "generated:preference:response-language".to_string();
+    let listed_before = crate::api::knowledge::db_list_knowledge_documents(
+        app_dir_string.clone(),
+        key.to_vec(),
+        100,
+        0,
+    )
+    .expect("list before delete");
+    assert!(listed_before
+        .iter()
+        .any(|document| document.document_id == document_id));
+
+    crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+        app_dir_string.clone(),
+        key.to_vec(),
+        document_id.clone(),
+        None,
+        true,
+        true,
+        false,
+        None,
+        None,
+    )
+    .expect("delete feedback");
+
+    let listed_after = crate::api::knowledge::db_list_knowledge_documents(
+        app_dir_string.clone(),
+        key.to_vec(),
+        100,
+        0,
+    )
+    .expect("list after delete");
+    assert!(listed_after
+        .iter()
+        .all(|document| document.document_id != document_id));
+
+    let deleted_detail = crate::api::knowledge::db_get_knowledge_document(
+        app_dir_string.clone(),
+        key.to_vec(),
+        document_id.clone(),
+    )
+    .expect("deleted detail");
+    assert!(deleted_detail.document.memory_feedback.is_deleted);
+
+    crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+        app_dir_string,
+        key.to_vec(),
+        document_id.clone(),
+        None,
+        true,
+        false,
+        false,
+        None,
+        None,
+    )
+    .expect("restore memory");
+
+    let listed_restored = crate::api::knowledge::db_list_knowledge_documents(
+        app_dir.to_string_lossy().into_owned(),
+        key.to_vec(),
+        100,
+        0,
+    )
+    .expect("list after restore");
+    assert!(listed_restored
+        .iter()
+        .any(|document| document.document_id == document_id));
+}
+
+#[test]
+fn knowledge_memory_feedback_bumps_effective_updated_at_and_sort_order() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [24u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "I'm a developer building a release companion for launch week.",
+    )
+    .expect("profile");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let target_document_id = "generated:preference:response-language";
+    let other_document_id = "generated:profile:self-profile";
+    conn.execute(
+        "UPDATE knowledge_documents SET updated_at_ms = ?2 WHERE document_id = ?1",
+        params![target_document_id, 10_i64],
+    )
+    .expect("age target document");
+    conn.execute(
+        "UPDATE knowledge_documents SET updated_at_ms = ?2 WHERE document_id = ?1",
+        params![other_document_id, 20_i64],
+    )
+    .expect("age comparison document");
+
+    let feedback = crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+        app_dir_string.clone(),
+        key.to_vec(),
+        target_document_id.to_string(),
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        true,
+        false,
+        false,
+        None,
+        None,
+    )
+    .expect("update feedback");
+    let feedback_updated_at = feedback.updated_at_ms.expect("feedback timestamp");
+
+    let listed =
+        crate::api::knowledge::db_list_knowledge_documents(app_dir_string, key.to_vec(), 100, 0)
+            .expect("list documents");
+    let target = listed
+        .iter()
+        .find(|document| document.document_id == target_document_id)
+        .expect("target document");
+
+    assert_eq!(
+        listed.first().map(|document| document.document_id.as_str()),
+        Some(target_document_id)
+    );
+    assert!(target.updated_at_ms >= feedback_updated_at);
+}
+
+#[test]
+fn generated_memory_cards_expose_backend_native_section_status_and_source_count() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [25u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+    let _ = db::upsert_todo(
+        &conn,
+        &key,
+        "todo-pattern-a",
+        "Draft roadmap",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo a");
+    let _ = db::upsert_todo(
+        &conn,
+        &key,
+        "todo-pattern-b",
+        "Review launch notes",
+        None,
+        "in_progress",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo b");
+
+    let generated =
+        crate::knowledge::memory_synthesis::collect_generated_memory_documents(&conn, &key)
+            .expect("collect generated");
+    let generated_pattern = generated
+        .iter()
+        .find(|document| document.document_id == "generated:pattern:active-task-focus")
+        .expect("generated pattern");
+    assert_eq!(
+        generated_pattern
+            .memory_display
+            .as_ref()
+            .expect("generated pattern display")
+            .source_count,
+        2
+    );
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let stored_pattern_source_count: i64 = conn
+        .query_row(
+            "SELECT memory_source_count FROM knowledge_documents WHERE document_id = ?1",
+            rusqlite::params!["generated:pattern:active-task-focus"],
+            |row| row.get(0),
+        )
+        .expect("stored pattern source count");
+    assert_eq!(stored_pattern_source_count, 2);
+
+    let documents =
+        crate::api::knowledge::db_list_knowledge_documents(app_dir_string, key.to_vec(), 100, 0)
+            .expect("list documents");
+
+    let preference = documents
+        .iter()
+        .find(|document| document.document_id == "generated:preference:response-language")
+        .expect("preference document");
+    let preference_display = preference
+        .memory_display
+        .as_ref()
+        .expect("preference memory display");
+    assert_eq!(
+        preference_display.section,
+        crate::knowledge::KnowledgeMemorySection::Preference
+    );
+    assert_eq!(
+        preference_display.status,
+        crate::knowledge::KnowledgeMemoryStatus::Inferred
+    );
+    assert_eq!(preference_display.source_count, 1);
+
+    let pattern = documents
+        .iter()
+        .find(|document| document.document_id == "generated:pattern:active-task-focus")
+        .expect("pattern document");
+    let pattern_display = pattern
+        .memory_display
+        .as_ref()
+        .expect("pattern memory display");
+    assert_eq!(
+        pattern_display.section,
+        crate::knowledge::KnowledgeMemorySection::Project
+    );
+    assert_eq!(
+        pattern_display.status,
+        crate::knowledge::KnowledgeMemoryStatus::Inferred
+    );
+    assert_eq!(pattern_display.source_count, 2);
+}
+
+#[test]
+fn generated_memory_documents_api_excludes_non_generated_documents() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [27u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "A normal source message that should not show in memory center listings.",
+    )
+    .expect("source message");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let generated = crate::api::knowledge::db_list_generated_memory_documents(
+        app_dir_string,
+        key.to_vec(),
+        100,
+        0,
+    )
+    .expect("generated memory docs");
+
+    assert!(!generated.is_empty());
+    assert!(generated
+        .iter()
+        .all(|document| document.origin_type == crate::knowledge::KnowledgeOriginType::Generated));
+    assert!(generated
+        .iter()
+        .all(|document| !document.document_id.starts_with("message:")));
+}
+
+#[test]
+fn knowledge_memory_feedback_survives_rebuild_reset() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [28u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let document_id = "generated:preference:response-language".to_string();
+    crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+        app_dir_string.clone(),
+        key.to_vec(),
+        document_id.clone(),
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        true,
+        Some("Preferred reply language".to_string()),
+        Some("Always reply in Chinese unless I ask for another language.".to_string()),
+    )
+    .expect("seed feedback");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild again");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs again");
+
+    let rebuilt =
+        crate::api::knowledge::db_get_knowledge_document(app_dir_string, key.to_vec(), document_id)
+            .expect("rebuilt document");
+
+    assert_eq!(
+        rebuilt.document.title.as_deref(),
+        Some("Preferred reply language")
+    );
+    assert_eq!(
+        rebuilt.document.summary.as_deref(),
+        Some("Always reply in Chinese unless I ask for another language.")
+    );
+    assert_eq!(
+        rebuilt.document.memory_feedback.status,
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed)
+    );
+    assert!(!rebuilt.document.memory_feedback.use_for_ask_ai);
+    assert!(rebuilt.document.memory_feedback.marked_inaccurate);
+}

@@ -42,6 +42,35 @@ Future<List<ContentKnowledgeDocument>> dbListKnowledgeDocuments(
     RustLib.instance.api.crateApiKnowledgeDbListKnowledgeDocuments(
         appDir: appDir, key: key, limit: limit, offset: offset);
 
+Future<List<ContentKnowledgeDocument>> dbListGeneratedMemoryDocuments(
+        {required String appDir,
+        required List<int> key,
+        required int limit,
+        required int offset}) =>
+    RustLib.instance.api.crateApiKnowledgeDbListGeneratedMemoryDocuments(
+        appDir: appDir, key: key, limit: limit, offset: offset);
+
+Future<KnowledgeMemoryFeedback> dbUpsertKnowledgeMemoryFeedback(
+        {required String appDir,
+        required List<int> key,
+        required String documentId,
+        KnowledgeMemoryStatus? status,
+        required bool useForAskAi,
+        required bool isDeleted,
+        required bool markedInaccurate,
+        String? correctedTitle,
+        String? correctedSummary}) =>
+    RustLib.instance.api.crateApiKnowledgeDbUpsertKnowledgeMemoryFeedback(
+        appDir: appDir,
+        key: key,
+        documentId: documentId,
+        status: status,
+        useForAskAi: useForAskAi,
+        isDeleted: isDeleted,
+        markedInaccurate: markedInaccurate,
+        correctedTitle: correctedTitle,
+        correctedSummary: correctedSummary);
+
 Future<List<KnowledgeUnit>> dbListKnowledgeUnits(
         {required String appDir,
         required List<int> key,
@@ -93,6 +122,19 @@ Future<KnowledgeViewerPage> dbListKnowledgeViewerUnits(
         unitKind: unitKind,
         limit: limit,
         offset: offset);
+
+Future<List<KnowledgeUnit>> dbListRecentKnowledgeViewerUnits(
+        {required String appDir,
+        required List<int> key,
+        required String documentId,
+        KnowledgeUnitKind? unitKind,
+        required int limit}) =>
+    RustLib.instance.api.crateApiKnowledgeDbListRecentKnowledgeViewerUnits(
+        appDir: appDir,
+        key: key,
+        documentId: documentId,
+        unitKind: unitKind,
+        limit: limit);
 
 Future<List<KnowledgeSearchResult>> dbSearchKnowledgeDocumentUnits(
         {required String appDir,

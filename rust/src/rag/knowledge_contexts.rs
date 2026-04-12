@@ -8,6 +8,12 @@ use crate::message_citations::append_message_citation_if_missing;
 
 use super::Focus;
 
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct KnowledgeRenderedContextEntry {
+    pub(super) block: knowledge::KnowledgeContextBlock,
+    pub(super) rendered_text: String,
+}
+
 fn collect_generated_preferred_contexts(
     conn: &Connection,
     key: &[u8; 32],
@@ -29,6 +35,9 @@ fn collect_generated_preferred_contexts(
             break;
         }
         for document in documents {
+            if !document.memory_feedback.use_for_ask_ai {
+                continue;
+            }
             if let Some(expected) = conversation_scope {
                 if let Some(actual) = document.anchors.conversation_id.as_deref() {
                     if actual != expected {
@@ -104,6 +113,35 @@ fn rebalance_planning_contexts(
     blocks.insert(replace_index, evidence);
 }
 
+fn filter_disabled_generated_memory_blocks(
+    conn: &Connection,
+    blocks: Vec<knowledge::KnowledgeContextBlock>,
+) -> Result<Vec<knowledge::KnowledgeContextBlock>> {
+    let generated_document_ids = blocks
+        .iter()
+        .filter(|block| block.document_id.starts_with("generated:"))
+        .map(|block| block.document_id.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    let feedback_by_document_id =
+        crate::db::load_knowledge_memory_feedback_map(conn, &generated_document_ids)?;
+    let mut out = Vec::with_capacity(blocks.len());
+    for block in blocks {
+        if !block.document_id.starts_with("generated:") {
+            out.push(block);
+            continue;
+        }
+        let feedback = feedback_by_document_id
+            .get(&block.document_id)
+            .cloned()
+            .unwrap_or_default();
+        if feedback.use_for_ask_ai && !feedback.is_deleted {
+            out.push(block);
+        }
+    }
+    Ok(out)
+}
+
+#[allow(dead_code)]
 pub(super) fn try_build_knowledge_contexts(
     conn: &Connection,
     key: &[u8; 32],
@@ -113,6 +151,29 @@ pub(super) fn try_build_knowledge_contexts(
     conversation_id: &str,
     time_window: Option<(i64, i64)>,
 ) -> Result<Vec<String>> {
+    Ok(try_build_knowledge_context_entries(
+        conn,
+        key,
+        question,
+        top_k,
+        focus,
+        conversation_id,
+        time_window,
+    )?
+    .into_iter()
+    .map(|entry| entry.rendered_text)
+    .collect())
+}
+
+pub(super) fn try_build_knowledge_context_entries(
+    conn: &Connection,
+    key: &[u8; 32],
+    question: &str,
+    top_k: usize,
+    focus: Focus,
+    conversation_id: &str,
+    time_window: Option<(i64, i64)>,
+) -> Result<Vec<KnowledgeRenderedContextEntry>> {
     if top_k == 0 {
         return Ok(Vec::new());
     }
@@ -140,7 +201,10 @@ pub(super) fn try_build_knowledge_contexts(
     } else {
         Vec::new()
     };
-    let mut retrieved = knowledge::retrieve_context_blocks(conn, key, &request)?;
+    let mut retrieved = filter_disabled_generated_memory_blocks(
+        conn,
+        knowledge::retrieve_context_blocks(conn, key, &request)?,
+    )?;
     blocks.append(&mut retrieved);
 
     if is_planning_query {
@@ -177,10 +241,15 @@ pub(super) fn try_build_knowledge_contexts(
     Ok(blocks
         .into_iter()
         .map(|block| {
-            let rendered = block.rendered_text;
-            match block.anchors.message_id.as_deref() {
-                Some(message_id) => append_message_citation_if_missing(rendered, message_id),
-                None => rendered,
+            let rendered = match block.anchors.message_id.as_deref() {
+                Some(message_id) => {
+                    append_message_citation_if_missing(block.rendered_text.clone(), message_id)
+                }
+                None => block.rendered_text.clone(),
+            };
+            KnowledgeRenderedContextEntry {
+                block,
+                rendered_text: rendered,
             }
         })
         .collect())
@@ -241,8 +310,9 @@ pub(super) fn merge_knowledge_and_legacy_contexts(
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_generated_preferred_contexts, merge_knowledge_and_legacy_contexts,
-        rebalance_planning_contexts, try_build_knowledge_contexts,
+        collect_generated_preferred_contexts, filter_disabled_generated_memory_blocks,
+        merge_knowledge_and_legacy_contexts, rebalance_planning_contexts,
+        try_build_knowledge_contexts,
     };
     use crate::db;
     use crate::knowledge;
@@ -382,6 +452,134 @@ mod tests {
         assert!(blocks
             .iter()
             .any(|block| { block.document_id == "generated:preference:response-language" }));
+    }
+
+    #[test]
+    fn collect_generated_preferred_contexts_skips_deleted_memory_cards() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [64u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+        insert_document(
+            &conn,
+            &key,
+            "generated:preference:response-language",
+            "generated",
+            1,
+            Some(&conv.id),
+            "User prefers responses in Chinese.",
+        );
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            &key,
+            "generated:preference:response-language",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            true,
+            true,
+            false,
+            None,
+            None,
+        )
+        .expect("mark deleted");
+
+        let blocks = collect_generated_preferred_contexts(&conn, &key, Some(&conv.id), 4)
+            .expect("generated preferred contexts");
+
+        assert!(
+            blocks
+                .iter()
+                .all(|block| block.document_id != "generated:preference:response-language"),
+            "blocks: {blocks:?}"
+        );
+    }
+
+    #[test]
+    fn filter_disabled_generated_memory_blocks_uses_bulk_feedback_and_keeps_real_documents() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [65u8; 32];
+
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            &key,
+            "generated:preference:hidden",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            false,
+            false,
+            false,
+            None,
+            None,
+        )
+        .expect("disable generated memory");
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            &key,
+            "generated:profile:deleted",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            true,
+            true,
+            false,
+            None,
+            None,
+        )
+        .expect("delete generated memory");
+
+        let filtered = filter_disabled_generated_memory_blocks(
+            &conn,
+            vec![
+                knowledge::KnowledgeContextBlock {
+                    document_id: "generated:preference:visible".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::Summary,
+                    role: knowledge::KnowledgeRole::Summary,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.5,
+                    rendered_text: "visible".to_string(),
+                },
+                knowledge::KnowledgeContextBlock {
+                    document_id: "generated:preference:hidden".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::Summary,
+                    role: knowledge::KnowledgeRole::Summary,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.4,
+                    rendered_text: "hidden".to_string(),
+                },
+                knowledge::KnowledgeContextBlock {
+                    document_id: "generated:profile:deleted".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::Summary,
+                    role: knowledge::KnowledgeRole::Summary,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.3,
+                    rendered_text: "deleted".to_string(),
+                },
+                knowledge::KnowledgeContextBlock {
+                    document_id: "message:evidence-1".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::RawText,
+                    role: knowledge::KnowledgeRole::Evidence,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.2,
+                    rendered_text: "evidence".to_string(),
+                },
+            ],
+        )
+        .expect("filter blocks");
+
+        let document_ids = filtered
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            document_ids,
+            vec!["generated:preference:visible", "message:evidence-1"]
+        );
     }
 
     #[test]

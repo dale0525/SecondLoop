@@ -1,0 +1,73 @@
+{
+  "title": "记忆",
+  "emptyState": "还没有记忆卡。",
+  "sections": {
+    "preferences": "偏好",
+    "people": "人物",
+    "projects": "项目",
+    "topics": "主题",
+    "recentEvents": "最近事件"
+  },
+  "meta": {
+    "sourceCount": "$count 个来源",
+    "updatedToday": "今天更新",
+    "updatedDaysAgo": "$count 天前更新",
+    "updatedOn": "$date 更新"
+  },
+  "status": {
+    "confirmed": "已确认",
+    "inferred": "推断",
+    "maybeOutdated": "可能过时"
+  },
+  "detail": {
+    "currentConclusion": "当前结论",
+    "evidenceTimeline": "证据时间线",
+    "usedByAskAi": "会用于 Ask AI",
+    "notUsedByAskAi": "不会用于 Ask AI",
+    "markedInaccurate": "已标记不准确",
+    "deleted": "记忆已删除",
+    "actions": "操作",
+    "sourceTypes": {
+      "message": "聊天消息",
+      "attachment": "附件",
+      "transcript": "转录内容",
+      "summary": "摘要",
+      "evidence": "证据"
+    },
+    "sourceTitles": {
+      "message": "消息来源",
+      "attachment": "附件来源",
+      "transcript": "转录片段",
+      "summary": "摘要来源",
+      "evidence": "证据条目"
+    }
+  },
+  "actions": {
+    "editMemory": "编辑记忆",
+    "markInaccurate": "标记不准确",
+    "clearInaccurate": "清除不准确标记",
+    "stopUsingForAskAi": "停止用于 Ask AI",
+    "useForAskAiAgain": "重新用于 Ask AI",
+    "deleteMemory": "删除记忆",
+    "restoreMemory": "恢复记忆",
+    "fields": {
+      "title": "标题",
+      "summary": "摘要"
+    }
+  },
+  "generatedTitles": {
+    "activeTaskPattern": "当前任务模式",
+    "weeklyFocus": "每周重点",
+    "responseLanguage": "回复语言",
+    "responseStyle": "回复风格",
+    "responseFormat": "回复格式",
+    "selfProfile": "自我画像",
+    "decisionMemory": "决策记录"
+  },
+  "generatedSummaries": {
+    "responseLanguage": "用户偏好使用$language回复。",
+    "responseStyle": "用户偏好简洁、务实的回复风格。",
+    "responseFormat": "用户偏好尽量使用要点式结构。",
+    "activeTaskPattern": "用户当前主要在推进这些任务："
+  }
+}

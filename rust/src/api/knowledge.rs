@@ -139,6 +139,52 @@ pub fn db_list_knowledge_documents(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_list_generated_memory_documents(
+    app_dir: String,
+    key: Vec<u8>,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<knowledge::ContentKnowledgeDocument>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    knowledge::list_knowledge_documents_by_origin(
+        &conn,
+        &key,
+        knowledge::KnowledgeOriginType::Generated,
+        limit as usize,
+        offset as usize,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_upsert_knowledge_memory_feedback(
+    app_dir: String,
+    key: Vec<u8>,
+    document_id: String,
+    status: Option<knowledge::KnowledgeMemoryStatus>,
+    use_for_ask_ai: bool,
+    is_deleted: bool,
+    marked_inaccurate: bool,
+    corrected_title: Option<String>,
+    corrected_summary: Option<String>,
+) -> Result<knowledge::KnowledgeMemoryFeedback> {
+    let validated_key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_knowledge_memory_feedback(
+        &conn,
+        &validated_key,
+        &document_id,
+        status,
+        use_for_ask_ai,
+        is_deleted,
+        marked_inaccurate,
+        corrected_title,
+        corrected_summary,
+    )
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_knowledge_units(
     app_dir: String,
     key: Vec<u8>,
@@ -210,6 +256,25 @@ pub fn db_list_knowledge_viewer_units(
         unit_kind,
         limit as usize,
         offset as usize,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_recent_knowledge_viewer_units(
+    app_dir: String,
+    key: Vec<u8>,
+    document_id: String,
+    unit_kind: Option<knowledge::KnowledgeUnitKind>,
+    limit: u32,
+) -> Result<Vec<knowledge::KnowledgeUnit>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    knowledge::list_recent_knowledge_viewer_units(
+        &conn,
+        &key,
+        &document_id,
+        unit_kind,
+        limit as usize,
     )
 }
 

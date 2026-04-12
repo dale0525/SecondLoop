@@ -1006,7 +1006,37 @@ PRAGMA user_version = 29;
         user_version = 37;
     }
 
-    debug_assert!(user_version >= 37);
+    if user_version < 38 {
+        migrate_from_v37_to_v38(conn)?;
+        user_version = 38;
+    }
+
+    if user_version < 39 {
+        migrate_from_v38_to_v39(conn)?;
+        user_version = 39;
+    }
+
+    if user_version < 40 {
+        migrate_from_v39_to_v40(conn)?;
+        user_version = 40;
+    }
+
+    if user_version < 41 {
+        migrate_from_v40_to_v41(conn)?;
+        user_version = 41;
+    }
+
+    if user_version < 42 {
+        migrate_from_v41_to_v42(conn)?;
+        user_version = 42;
+    }
+
+    if user_version < 43 {
+        migrate_from_v42_to_v43(conn)?;
+        user_version = 43;
+    }
+
+    debug_assert!(user_version >= 43);
 
     Ok(())
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/backend/app_backend.dart';
@@ -6,6 +7,7 @@ import '../core/quick_capture/quick_capture_scope.dart';
 import '../core/session/session_scope.dart';
 import '../core/update/update_badge_prefs.dart';
 import '../features/chat/chat_page.dart';
+import '../features/memory/memory_center_page.dart';
 import '../features/settings/settings_page.dart';
 import '../i18n/strings.g.dart';
 import '../src/rust/db.dart';
@@ -17,6 +19,7 @@ const _kDesktopShellMaxWidth = 1240.0;
 
 enum AppTab {
   chat(Icons.chat_bubble_outline, Icons.chat_bubble),
+  memory(Icons.auto_stories_outlined, Icons.auto_stories_rounded),
   settings(Icons.settings_outlined, Icons.settings);
 
   const AppTab(this.icon, this.selectedIcon);
@@ -26,6 +29,7 @@ enum AppTab {
 
   String label(BuildContext context) => switch (this) {
         AppTab.chat => context.t.app.tabs.main,
+        AppTab.memory => context.t.app.tabs.memory,
         AppTab.settings => context.t.app.tabs.settings,
       };
 }
@@ -39,6 +43,17 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+  bool _memoryTabInitialized = false;
+
+  void _selectTab(int index) {
+    setState(() {
+      _selectedIndex = index;
+      if (index == AppTab.memory.index) {
+        _memoryTabInitialized = true;
+      }
+    });
+  }
+
   QuickCaptureController? _quickCaptureController;
 
   @override
@@ -77,15 +92,26 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
     final mediaQuery = MediaQuery.of(context);
+    final isDesktopPlatform = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux);
     return LayoutBuilder(
       builder: (context, constraints) {
         final useCollapsedShell = constraints.maxHeight < 180;
         final useRail = !useCollapsedShell && constraints.maxWidth >= 720;
-        final content = useRail
+        final useDesktopBottomNav =
+            !useCollapsedShell && !useRail && isDesktopPlatform;
+        final shouldBuildMemoryTab =
+            _memoryTabInitialized || _selectedIndex == AppTab.memory.index;
+        final content = useRail || useDesktopBottomNav
             ? IndexedStack(
                 index: _selectedIndex,
                 children: <Widget>[
                   _ChatTab(isActive: _selectedIndex == 0),
+                  shouldBuildMemoryTab
+                      ? const _MemoryTab()
+                      : const SizedBox.shrink(),
                   const _SettingsTab(),
                 ],
               )
@@ -114,8 +140,7 @@ class _AppShellState extends State<AppShell> {
                                       const EdgeInsets.symmetric(vertical: 8),
                                   child: NavigationRail(
                                     selectedIndex: _selectedIndex,
-                                    onDestinationSelected: (index) =>
-                                        setState(() => _selectedIndex = index),
+                                    onDestinationSelected: _selectTab,
                                     labelType: NavigationRailLabelType.all,
                                     destinations: [
                                       for (final t in AppTab.values)
@@ -174,7 +199,35 @@ class _AppShellState extends State<AppShell> {
                         ),
                       ),
                     ),
-          bottomNavigationBar: null,
+          bottomNavigationBar: useDesktopBottomNav
+              ? NavigationBar(
+                  key: const ValueKey('app_shell_bottom_nav'),
+                  selectedIndex: _selectedIndex,
+                  onDestinationSelected: _selectTab,
+                  destinations: [
+                    for (final t in AppTab.values)
+                      NavigationDestination(
+                        icon: t == AppTab.settings
+                            ? _AppUpdateBadgeIcon(
+                                icon: t.icon,
+                                badgeKey: const ValueKey(
+                                  'app_tab_settings_update_badge_bottom_nav',
+                                ),
+                              )
+                            : Icon(t.icon),
+                        selectedIcon: t == AppTab.settings
+                            ? _AppUpdateBadgeIcon(
+                                icon: t.selectedIcon,
+                                badgeKey: const ValueKey(
+                                  'app_tab_settings_update_badge_bottom_nav_selected',
+                                ),
+                              )
+                            : Icon(t.selectedIcon),
+                        label: t.label(context),
+                      ),
+                  ],
+                )
+              : null,
         );
       },
     );
@@ -285,5 +338,14 @@ final class _SettingsTab extends StatelessWidget {
       appBar: AppBar(title: Text(context.t.settings.title)),
       body: const SettingsPage(),
     );
+  }
+}
+
+final class _MemoryTab extends StatelessWidget {
+  const _MemoryTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const MemoryCenterPage();
   }
 }

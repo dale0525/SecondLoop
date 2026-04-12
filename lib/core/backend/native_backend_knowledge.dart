@@ -52,6 +52,46 @@ extension NativeAppBackendKnowledgeExtension on NativeAppBackend {
     );
   }
 
+  Future<List<rust_knowledge_models.ContentKnowledgeDocument>>
+      listGeneratedMemoryDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbListGeneratedMemoryDocuments(
+      appDir: appDir,
+      key: key,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  Future<rust_knowledge_models.KnowledgeMemoryFeedback>
+      upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    rust_knowledge_models.KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbUpsertKnowledgeMemoryFeedback(
+      appDir: appDir,
+      key: key,
+      documentId: documentId,
+      status: status,
+      useForAskAi: useForAskAi,
+      isDeleted: isDeleted,
+      markedInaccurate: markedInaccurate,
+      correctedTitle: correctedTitle,
+      correctedSummary: correctedSummary,
+    );
+  }
+
   Future<List<rust_knowledge_models.KnowledgeUnit>> listKnowledgeUnits(
     Uint8List key, {
     required String documentId,
@@ -116,6 +156,23 @@ extension NativeAppBackendKnowledgeExtension on NativeAppBackend {
       unitKind: unitKind,
       limit: limit,
       offset: offset,
+    );
+  }
+
+  Future<List<rust_knowledge_models.KnowledgeUnit>>
+      listRecentKnowledgeViewerUnits(
+    Uint8List key, {
+    required String documentId,
+    rust_knowledge_models.KnowledgeUnitKind? unitKind,
+    int limit = 16,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbListRecentKnowledgeViewerUnits(
+      appDir: appDir,
+      key: key,
+      documentId: documentId,
+      unitKind: unitKind,
+      limit: limit,
     );
   }
 
