@@ -241,7 +241,7 @@ pub fn infer_generated_memory_section(
 }
 
 fn looks_like_project_memory(value: &str) -> bool {
-    const SIGNALS: [&str; 19] = [
+    const ASCII_SIGNALS: [&str; 8] = [
         "project",
         "prototype",
         "launch",
@@ -250,6 +250,8 @@ fn looks_like_project_memory(value: &str) -> bool {
         "product",
         "app",
         "rollout",
+    ];
+    const CJK_SIGNALS: [&str; 11] = [
         "项目",
         "產品",
         "产品",
@@ -262,7 +264,17 @@ fn looks_like_project_memory(value: &str) -> bool {
         "版本",
         "迭代",
     ];
-    SIGNALS.iter().any(|signal| value.contains(signal))
+
+    ASCII_SIGNALS
+        .iter()
+        .any(|signal| contains_ascii_signal_token(value, signal))
+        || CJK_SIGNALS.iter().any(|signal| value.contains(signal))
+}
+
+fn contains_ascii_signal_token(value: &str, signal: &str) -> bool {
+    value
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .any(|token| token == signal)
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -117,13 +117,23 @@ fn filter_disabled_generated_memory_blocks(
     conn: &Connection,
     blocks: Vec<knowledge::KnowledgeContextBlock>,
 ) -> Result<Vec<knowledge::KnowledgeContextBlock>> {
+    let generated_document_ids = blocks
+        .iter()
+        .filter(|block| block.document_id.starts_with("generated:"))
+        .map(|block| block.document_id.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    let feedback_by_document_id =
+        crate::db::load_knowledge_memory_feedback_map(conn, &generated_document_ids)?;
     let mut out = Vec::with_capacity(blocks.len());
     for block in blocks {
         if !block.document_id.starts_with("generated:") {
             out.push(block);
             continue;
         }
-        let feedback = crate::db::get_knowledge_memory_feedback(conn, &block.document_id)?;
+        let feedback = feedback_by_document_id
+            .get(&block.document_id)
+            .cloned()
+            .unwrap_or_default();
         if feedback.use_for_ask_ai && !feedback.is_deleted {
             out.push(block);
         }
@@ -300,8 +310,9 @@ pub(super) fn merge_knowledge_and_legacy_contexts(
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_generated_preferred_contexts, merge_knowledge_and_legacy_contexts,
-        rebalance_planning_contexts, try_build_knowledge_contexts,
+        collect_generated_preferred_contexts, filter_disabled_generated_memory_blocks,
+        merge_knowledge_and_legacy_contexts, rebalance_planning_contexts,
+        try_build_knowledge_contexts,
     };
     use crate::db;
     use crate::knowledge;
@@ -480,6 +491,94 @@ mod tests {
                 .iter()
                 .all(|block| block.document_id != "generated:preference:response-language"),
             "blocks: {blocks:?}"
+        );
+    }
+
+    #[test]
+    fn filter_disabled_generated_memory_blocks_uses_bulk_feedback_and_keeps_real_documents() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [65u8; 32];
+
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            &key,
+            "generated:preference:hidden",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            false,
+            false,
+            false,
+            None,
+            None,
+        )
+        .expect("disable generated memory");
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            &key,
+            "generated:profile:deleted",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            true,
+            true,
+            false,
+            None,
+            None,
+        )
+        .expect("delete generated memory");
+
+        let filtered = filter_disabled_generated_memory_blocks(
+            &conn,
+            vec![
+                knowledge::KnowledgeContextBlock {
+                    document_id: "generated:preference:visible".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::Summary,
+                    role: knowledge::KnowledgeRole::Summary,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.5,
+                    rendered_text: "visible".to_string(),
+                },
+                knowledge::KnowledgeContextBlock {
+                    document_id: "generated:preference:hidden".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::Summary,
+                    role: knowledge::KnowledgeRole::Summary,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.4,
+                    rendered_text: "hidden".to_string(),
+                },
+                knowledge::KnowledgeContextBlock {
+                    document_id: "generated:profile:deleted".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::Summary,
+                    role: knowledge::KnowledgeRole::Summary,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.3,
+                    rendered_text: "deleted".to_string(),
+                },
+                knowledge::KnowledgeContextBlock {
+                    document_id: "message:evidence-1".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::RawText,
+                    role: knowledge::KnowledgeRole::Evidence,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.2,
+                    rendered_text: "evidence".to_string(),
+                },
+            ],
+        )
+        .expect("filter blocks");
+
+        let document_ids = filtered
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            document_ids,
+            vec!["generated:preference:visible", "message:evidence-1"]
         );
     }
 

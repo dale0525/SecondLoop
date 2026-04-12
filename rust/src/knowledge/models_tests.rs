@@ -109,3 +109,32 @@ fn infer_generated_memory_section_detects_chinese_project_signals() {
 
     assert_eq!(section, Some(KnowledgeMemorySection::Project));
 }
+
+#[test]
+fn infer_generated_memory_section_avoids_ascii_substring_false_positives() {
+    for text in [
+        "The user feels happy about the outcome.",
+        "This usually happens after lunch.",
+        "The wrapper hides the implementation details.",
+    ] {
+        let section =
+            infer_generated_memory_section("generated:profile:current-focus", None, None, text);
+        assert_ne!(
+            section,
+            Some(KnowledgeMemorySection::Project),
+            "unexpected project match for {text}"
+        );
+    }
+}
+
+#[test]
+fn infer_generated_memory_section_matches_ascii_project_tokens() {
+    let section = infer_generated_memory_section(
+        "generated:profile:current-focus",
+        Some("Current focus"),
+        Some("Shipping the app build next week"),
+        "The project launch depends on the product roadmap.",
+    );
+
+    assert_eq!(section, Some(KnowledgeMemorySection::Project));
+}
