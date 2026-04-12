@@ -509,7 +509,8 @@ abstract class RustLibApi extends BaseApi {
       required List<int> key,
       required String conversationId,
       required String role,
-      required String content});
+      required String content,
+      String? citationsJson});
 
   Future<void> crateApiCoreDbLinkAttachmentToMessage(
       {required String appDir,
@@ -1435,7 +1436,8 @@ abstract class RustLibApi extends BaseApi {
       required String requestId,
       required String conversationId,
       required String question,
-      required String answer});
+      required String answer,
+      String? citationsJson});
 
   Future<bool> crateApiEmbeddingLifecycleDbReleaseLocalEmbeddingModelIfIdle(
       {required String appDir, required List<int> key, required int maxIdleMs});
@@ -4338,7 +4340,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       required List<int> key,
       required String conversationId,
       required String role,
-      required String content}) {
+      required String content,
+      String? citationsJson}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -4347,6 +4350,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(conversationId, serializer);
         sse_encode_String(role, serializer);
         sse_encode_String(content, serializer);
+        sse_encode_opt_String(citationsJson, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 66, port: port_);
       },
@@ -4355,7 +4359,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiCoreDbInsertMessageConstMeta,
-      argValues: [appDir, key, conversationId, role, content],
+      argValues: [appDir, key, conversationId, role, content, citationsJson],
       apiImpl: this,
     ));
   }
@@ -4363,7 +4367,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiCoreDbInsertMessageConstMeta =>
       const TaskConstMeta(
         debugName: "db_insert_message",
-        argNames: ["appDir", "key", "conversationId", "role", "content"],
+        argNames: [
+          "appDir",
+          "key",
+          "conversationId",
+          "role",
+          "content",
+          "citationsJson"
+        ],
       );
 
   @override
@@ -9701,7 +9712,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       required String requestId,
       required String conversationId,
       required String question,
-      required String answer}) {
+      required String answer,
+      String? citationsJson}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -9711,6 +9723,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(conversationId, serializer);
         sse_encode_String(question, serializer);
         sse_encode_String(answer, serializer);
+        sse_encode_opt_String(citationsJson, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 196, port: port_);
       },
@@ -9719,7 +9732,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiDetachedAskDbApplyDetachedAskCompletionOnceConstMeta,
-      argValues: [appDir, key, requestId, conversationId, question, answer],
+      argValues: [
+        appDir,
+        key,
+        requestId,
+        conversationId,
+        question,
+        answer,
+        citationsJson
+      ],
       apiImpl: this,
     ));
   }
@@ -9734,7 +9755,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
               "requestId",
               "conversationId",
               "question",
-              "answer"
+              "answer",
+              "citationsJson"
             ],
           );
 

@@ -1636,6 +1636,16 @@ abstract class AppBackend {
   }
 }
 
+abstract interface class MessageCitationWriteBackend {
+  Future<Message> insertMessageWithCitations(
+    Uint8List key,
+    String conversationId, {
+    required String role,
+    required String content,
+    String? citationsJson,
+  });
+}
+
 class AppBackendScope extends InheritedWidget {
   const AppBackendScope({
     required this.backend,

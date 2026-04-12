@@ -334,6 +334,7 @@ final class DetachedAskRecoveryService {
     required String conversationId,
     required String question,
     required String answer,
+    String? citationsJson,
     String? gatewayBaseUrl,
   }) async {
     final rid = requestId.trim();
@@ -353,6 +354,7 @@ final class DetachedAskRecoveryService {
         conversationId: cid,
         question: q,
         answer: a,
+        citationsJson: citationsJson,
       );
     } catch (_) {
       return _applyCompletionViaLegacyEventMarker(
@@ -362,6 +364,7 @@ final class DetachedAskRecoveryService {
         conversationId: cid,
         question: q,
         answer: a,
+        citationsJson: citationsJson,
         gatewayBaseUrl: gatewayBaseUrl,
       );
     }
@@ -374,6 +377,7 @@ final class DetachedAskRecoveryService {
     required String conversationId,
     required String question,
     required String answer,
+    String? citationsJson,
     String? gatewayBaseUrl,
   }) async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -397,12 +401,23 @@ final class DetachedAskRecoveryService {
       role: 'user',
       content: question,
     );
-    await backend.insertMessage(
-      sessionKey,
-      conversationId,
-      role: 'assistant',
-      content: answer,
-    );
+    if (backend is MessageCitationWriteBackend) {
+      final citationBackend = backend as MessageCitationWriteBackend;
+      await citationBackend.insertMessageWithCitations(
+        sessionKey,
+        conversationId,
+        role: 'assistant',
+        content: answer,
+        citationsJson: citationsJson,
+      );
+    } else {
+      await backend.insertMessage(
+        sessionKey,
+        conversationId,
+        role: 'assistant',
+        content: answer,
+      );
+    }
 
     return true;
   }

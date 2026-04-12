@@ -77,6 +77,7 @@ typedef DbInsertMessageFn = Future<Message> Function({
   required String conversationId,
   required String role,
   required String content,
+  String? citationsJson,
 });
 
 typedef DbProcessPendingMessageEmbeddingsFn = Future<int> Function({
@@ -307,7 +308,8 @@ class NativeAppBackend extends _NativeAppBackendAccess
         AppBackend,
         AttachmentsBackend,
         AttachmentAnnotationMutationsBackend,
-        SemanticParseAttemptAwareBackend {
+        SemanticParseAttemptAwareBackend,
+        MessageCitationWriteBackend {
   @override
   bool get supportsTodoFollowupSuggestions => true;
 
@@ -816,6 +818,25 @@ class NativeAppBackend extends _NativeAppBackendAccess
     );
 
     return message;
+  }
+
+  @override
+  Future<Message> insertMessageWithCitations(
+    Uint8List key,
+    String conversationId, {
+    required String role,
+    required String content,
+    String? citationsJson,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbInsertMessage(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      role: role,
+      content: content,
+      citationsJson: citationsJson,
+    );
   }
 
   @override

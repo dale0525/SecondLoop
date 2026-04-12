@@ -25,6 +25,7 @@ fn api_core_smoke_happy_path() {
         conversation.id.clone(),
         "user".to_string(),
         "hello".to_string(),
+        None,
     )
     .expect("insert message");
 

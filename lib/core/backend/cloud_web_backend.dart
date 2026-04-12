@@ -33,7 +33,7 @@ final class UnsupportedCloudWebChatClient implements CloudWebChatClient {
 
 final class CloudWebBackend extends AppBackend
     with _CloudWebBackendTasksRecurrenceMixin, _CloudWebBackendTasksMixin
-    implements AttachmentsBackend {
+    implements AttachmentsBackend, MessageCitationWriteBackend {
   CloudWebBackend({
     required this.chatClient,
     Future<Map<String, Object?>> Function({
@@ -255,6 +255,39 @@ final class CloudWebBackend extends AppBackend
       content: content,
       createdAtMs: _asPlatformInt64(now),
       isMemory: false,
+    );
+    _messageBucket(conversationId).add(message);
+
+    final conversation = _conversationById(conversationId)!;
+    _replaceConversation(
+      Conversation(
+        id: conversation.id,
+        title: conversation.title,
+        createdAtMs: conversation.createdAtMs,
+        updatedAtMs: _asPlatformInt64(now),
+      ),
+    );
+    return message;
+  }
+
+  @override
+  Future<Message> insertMessageWithCitations(
+    Uint8List key,
+    String conversationId, {
+    required String role,
+    required String content,
+    String? citationsJson,
+  }) async {
+    _ensureConversationExists(conversationId);
+    final now = _touchNow();
+    final message = Message(
+      id: _nextId('message'),
+      conversationId: conversationId,
+      role: role,
+      content: content,
+      createdAtMs: _asPlatformInt64(now),
+      isMemory: false,
+      citationsJson: citationsJson,
     );
     _messageBucket(conversationId).add(message);
 

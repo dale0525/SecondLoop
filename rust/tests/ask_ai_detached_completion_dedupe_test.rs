@@ -6,6 +6,7 @@ use secondloop_rust::{auth, db, rag};
 const STREAM_REQUEST_ID: &str = "req_stream_completion_is_claimed";
 const PARTIAL_CLAIM_REQUEST_ID: &str = "req_partial_claim_needs_completion";
 const CROSS_CONVERSATION_REQUEST_ID: &str = "req_shared_across_conversations";
+const DETACHED_CITATIONS_JSON: &str = r#"{"direct_sources":[{"id":"message:history-1","href":"secondloop://message/history-1"}],"memory_cards":[]}"#;
 
 struct FakeProviderWithRequestId {
     request_id: &'static str,
@@ -69,6 +70,7 @@ fn streamed_cloud_completion_blocks_detached_recovery_reinsertion() {
         &conversation.id,
         "Only ask once",
         "Recovered answer should not be inserted twice.",
+        None,
     )
     .expect("apply detached completion");
 
@@ -108,6 +110,7 @@ fn detached_recovery_inserted_first_blocks_stream_completion_reinsertion() {
         &conversation.id,
         "Only ask once",
         "Recovered answer should not be inserted twice.",
+        None,
     )
     .expect("apply detached completion first");
     assert!(applied, "detached recovery should insert the first copy");
@@ -171,6 +174,7 @@ fn detached_recovery_keeps_exact_message_ids_for_duplicate_content() {
         &conversation.id,
         "Only ask once",
         "Recovered answer should not be inserted twice.",
+        None,
     )
     .expect("apply detached completion first");
     assert!(
@@ -285,6 +289,37 @@ fn partial_detached_claim_without_message_ids_is_completed_by_stream_persistence
     );
     assert_eq!(result.user_message_id, messages[0].id);
     assert_eq!(result.assistant_message_id, messages[1].id);
+}
+
+#[test]
+fn detached_recovery_persists_answer_citations_json() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    let applied = db::apply_detached_ask_completion_once(
+        &conn,
+        &key,
+        "req_detached_with_citations",
+        &conversation.id,
+        "Only ask once",
+        "Recovered answer with evidence.",
+        Some(DETACHED_CITATIONS_JSON),
+    )
+    .expect("apply detached completion");
+
+    assert!(applied);
+
+    let messages = db::list_messages(&conn, &key, &conversation.id).expect("list messages");
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[1].role, "assistant");
+    assert_eq!(
+        messages[1].citations_json.as_deref(),
+        Some(DETACHED_CITATIONS_JSON)
+    );
 }
 
 #[test]

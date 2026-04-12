@@ -101,6 +101,7 @@ pub fn apply_detached_ask_completion_once(
     conversation_id: &str,
     question: &str,
     answer: &str,
+    citations_json: Option<&str>,
 ) -> Result<bool> {
     let request_id = request_id.trim();
     let conversation_id = conversation_id.trim();
@@ -122,8 +123,14 @@ pub fn apply_detached_ask_completion_once(
         }
 
         let user_message = insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-        let assistant_message =
-            insert_message_non_memory(conn, key, conversation_id, "assistant", answer)?;
+        let assistant_message = insert_message_non_memory_with_citations(
+            conn,
+            key,
+            conversation_id,
+            "assistant",
+            answer,
+            citations_json,
+        )?;
         record_detached_ask_completion_message_ids(
             conn,
             request_id,

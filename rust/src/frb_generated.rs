@@ -2737,6 +2737,7 @@ fn wire__crate__api__core__db_insert_message_impl(
             let api_conversation_id = <String>::sse_decode(&mut deserializer);
             let api_role = <String>::sse_decode(&mut deserializer);
             let api_content = <String>::sse_decode(&mut deserializer);
+            let api_citations_json = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
@@ -2746,6 +2747,7 @@ fn wire__crate__api__core__db_insert_message_impl(
                         api_conversation_id,
                         api_role,
                         api_content,
+                        api_citations_json,
                     )
                 })())
             }
@@ -8196,6 +8198,7 @@ fn wire__crate__api__detached_ask__db_apply_detached_ask_completion_once_impl(
             let api_conversation_id = <String>::sse_decode(&mut deserializer);
             let api_question = <String>::sse_decode(&mut deserializer);
             let api_answer = <String>::sse_decode(&mut deserializer);
+            let api_citations_json = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
@@ -8206,6 +8209,7 @@ fn wire__crate__api__detached_ask__db_apply_detached_ask_completion_once_impl(
                         api_conversation_id,
                         api_question,
                         api_answer,
+                        api_citations_json,
                     )
                 })())
             }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/backend/app_backend.dart';
@@ -80,11 +81,17 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
     final mediaQuery = MediaQuery.of(context);
+    final isDesktopPlatform = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux);
     return LayoutBuilder(
       builder: (context, constraints) {
         final useCollapsedShell = constraints.maxHeight < 180;
         final useRail = !useCollapsedShell && constraints.maxWidth >= 720;
-        final content = useRail
+        final useDesktopBottomNav =
+            !useCollapsedShell && !useRail && isDesktopPlatform;
+        final content = useRail || useDesktopBottomNav
             ? IndexedStack(
                 index: _selectedIndex,
                 children: <Widget>[
@@ -178,7 +185,22 @@ class _AppShellState extends State<AppShell> {
                         ),
                       ),
                     ),
-          bottomNavigationBar: null,
+          bottomNavigationBar: useDesktopBottomNav
+              ? NavigationBar(
+                  key: const ValueKey('app_shell_bottom_nav'),
+                  selectedIndex: _selectedIndex,
+                  onDestinationSelected: (index) =>
+                      setState(() => _selectedIndex = index),
+                  destinations: [
+                    for (final t in AppTab.values)
+                      NavigationDestination(
+                        icon: Icon(t.icon),
+                        selectedIcon: Icon(t.selectedIcon),
+                        label: t.label(context),
+                      ),
+                  ],
+                )
+              : null,
         );
       },
     );

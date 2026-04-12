@@ -912,6 +912,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
 
     if (state == 'completed') {
       final resultText = (status['result_text'] as String?)?.trim() ?? '';
+      final citationsJson = (status['citations_json'] as String?)?.trim();
       if (resultText.isEmpty) {
         await prefs.remove(_kAskAiDetachedJobPrefsKey);
         return;
@@ -925,6 +926,9 @@ extension _ChatPageStateMethodsE on _ChatPageState {
         conversationId: widget.conversation.id,
         question: question,
         answer: resultText,
+        citationsJson: citationsJson == null || citationsJson.isEmpty
+            ? null
+            : citationsJson,
         gatewayBaseUrl: gatewayBaseUrl,
       );
       await _finalizeDetachedAskSnapshot(

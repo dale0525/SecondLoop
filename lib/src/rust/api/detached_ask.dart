@@ -14,11 +14,13 @@ Future<bool> dbApplyDetachedAskCompletionOnce(
         required String requestId,
         required String conversationId,
         required String question,
-        required String answer}) =>
+        required String answer,
+        String? citationsJson}) =>
     RustLib.instance.api.crateApiDetachedAskDbApplyDetachedAskCompletionOnce(
         appDir: appDir,
         key: key,
         requestId: requestId,
         conversationId: conversationId,
         question: question,
-        answer: answer);
+        answer: answer,
+        citationsJson: citationsJson);

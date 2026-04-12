@@ -162,6 +162,17 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
     });
   }
 
+  void _showActionError(Object error) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(context.t.errors.loadFailed(error: '$error')),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -303,15 +314,23 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                             item.body ?? item.summary ?? '',
                                       );
                                       if (draft == null) return;
-                                      final updated =
-                                          await widget.onCorrectMemoryCard!(
-                                        item,
-                                        draft.title,
-                                        draft.summary,
-                                      );
+                                      ChatAnswerEvidenceMemoryCard? updated;
+                                      try {
+                                        updated =
+                                            await widget.onCorrectMemoryCard!(
+                                          item,
+                                          draft.title,
+                                          draft.summary,
+                                        );
+                                      } catch (error) {
+                                        if (!mounted) return;
+                                        _showActionError(error);
+                                        return;
+                                      }
                                       if (!mounted || updated == null) return;
+                                      final updatedCard = updated;
                                       setState(() {
-                                        _memoryCards[index] = updated;
+                                        _memoryCards[index] = updatedCard;
                                       });
                                     },
                                     child: Text(
@@ -325,9 +344,15 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                     onPressed: isDisabled
                                         ? null
                                         : () async {
-                                            await widget.onDisableMemoryCard!(
-                                              item.documentId,
-                                            );
+                                            try {
+                                              await widget.onDisableMemoryCard!(
+                                                item.documentId,
+                                              );
+                                            } catch (error) {
+                                              if (!mounted) return;
+                                              _showActionError(error);
+                                              return;
+                                            }
                                             if (!mounted) return;
                                             setState(() {
                                               _memoryCards[index] =
@@ -346,9 +371,15 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                     onPressed: isDeleted
                                         ? null
                                         : () async {
-                                            await widget.onDeleteMemoryCard!(
-                                              item.documentId,
-                                            );
+                                            try {
+                                              await widget.onDeleteMemoryCard!(
+                                                item.documentId,
+                                              );
+                                            } catch (error) {
+                                              if (!mounted) return;
+                                              _showActionError(error);
+                                              return;
+                                            }
                                             if (!mounted) return;
                                             setState(() {
                                               _memoryCards[index] =

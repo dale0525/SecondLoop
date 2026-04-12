@@ -397,6 +397,97 @@ void main() {
       expect(find.text('User prefers Chinese.'), findsNothing);
     },
   );
+
+  testWidgets(
+    'ChatAnswerEvidencePanel shows an error and keeps state when correction fails',
+    (tester) async {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          const MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:preference:response-language',
+                    title: 'Response language',
+                    summary: 'User prefers Chinese.',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 4,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: '用中文总结一下最近变化',
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+              onOpenMemoryCard: _noopOpenMemoryCard,
+              onCorrectMemoryCard: _throwOnCorrect,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Correct'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('correct failed'), findsOneWidget);
+      expect(find.text('Response language'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'ChatAnswerEvidencePanel shows an error and keeps memory enabled when disable fails',
+    (tester) async {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          const MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:preference:response-language',
+                    title: 'Response language',
+                    summary: 'User prefers Chinese.',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 4,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: '用中文总结一下最近变化',
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+              onOpenMemoryCard: _noopOpenMemoryCard,
+              onDisableMemoryCard: _throwOnDisable,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Used by Ask AI'), findsOneWidget);
+
+      await tester.tap(find.text('Don\'t use'));
+      await tester.pump();
+
+      expect(find.textContaining('disable failed'), findsOneWidget);
+      expect(find.text('Used by Ask AI'), findsOneWidget);
+      expect(find.text('Not used by Ask AI'), findsNothing);
+    },
+  );
 }
 
 Future<void> _noopOpenDirectSource(String _) async {}
@@ -419,3 +510,13 @@ Future<ChatAnswerEvidenceMemoryCard?> _refreshDisabledDeletedCard(
       isDeleted: true,
       useForAskAi: false,
     );
+
+Future<ChatAnswerEvidenceMemoryCard?> _throwOnCorrect(
+  ChatAnswerEvidenceMemoryCard card,
+  String title,
+  String summary,
+) async =>
+    throw StateError('correct failed');
+
+Future<void> _throwOnDisable(String _) async =>
+    throw StateError('disable failed');

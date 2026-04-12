@@ -18,6 +18,7 @@ void main() {
         required String conversationId,
         required String role,
         required String content,
+        String? citationsJson,
       }) async {
         insertCalls++;
         return Message(

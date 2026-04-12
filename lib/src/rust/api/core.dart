@@ -85,13 +85,15 @@ Future<Message> dbInsertMessage(
         required List<int> key,
         required String conversationId,
         required String role,
-        required String content}) =>
+        required String content,
+        String? citationsJson}) =>
     RustLib.instance.api.crateApiCoreDbInsertMessage(
         appDir: appDir,
         key: key,
         conversationId: conversationId,
         role: role,
-        content: content);
+        content: content,
+        citationsJson: citationsJson);
 
 Future<Todo> dbUpsertTodo(
         {required String appDir,

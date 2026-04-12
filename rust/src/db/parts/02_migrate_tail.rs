@@ -372,8 +372,12 @@ fn migrate_from_v40_to_v41(conn: &Connection) -> Result<()> {
 }
 
 fn migrate_from_v41_to_v42(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        r#"
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<()> = (|| {
+        conn.execute_batch(
+            r#"
+DROP TABLE IF EXISTS detached_ask_completion_claims_v42;
+
 CREATE TABLE detached_ask_completion_claims_v42 (
   request_id TEXT NOT NULL,
   conversation_id TEXT NOT NULL,
@@ -407,8 +411,20 @@ CREATE INDEX IF NOT EXISTS idx_detached_ask_completion_claims_conversation
 
 PRAGMA user_version = 42;
 "#,
-    )?;
-    Ok(())
+        )?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(err) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(err)
+        }
+    }
 }
 
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
@@ -471,6 +487,81 @@ ALTER TABLE messages
         .expect_err("missing table should still fail");
 
         assert!(err.to_string().contains("missing_table"));
+    }
+
+    #[test]
+    fn v42_detached_claim_migration_recovers_from_stale_temp_table() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE detached_ask_completion_claims (
+  request_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  user_message_id TEXT,
+  assistant_message_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(request_id, conversation_id)
+);
+INSERT INTO detached_ask_completion_claims(
+  request_id,
+  conversation_id,
+  user_message_id,
+  assistant_message_id,
+  created_at_ms,
+  updated_at_ms
+)
+VALUES ('req-1', 'conv-1', 'user-1', 'assistant-1', 10, 20);
+
+CREATE TABLE detached_ask_completion_claims_v42 (
+  request_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  user_message_id TEXT,
+  assistant_message_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(request_id, conversation_id)
+);
+"#,
+        )
+        .expect("seed pre-migration state");
+
+        migrate_from_v41_to_v42(&conn).expect("rerun v42 migration");
+
+        let row: (String, String, String, String, i64, i64) = conn
+            .query_row(
+                r#"SELECT request_id,
+                          conversation_id,
+                          user_message_id,
+                          assistant_message_id,
+                          created_at_ms,
+                          updated_at_ms
+                   FROM detached_ask_completion_claims"#,
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("migrated row");
+
+        assert_eq!(
+            row,
+            (
+                "req-1".to_string(),
+                "conv-1".to_string(),
+                "user-1".to_string(),
+                "assistant-1".to_string(),
+                10,
+                20,
+            )
+        );
     }
 }
 

@@ -14,6 +14,7 @@ fn api_can_link_list_and_read_attachments() {
         conversation.id,
         "user".to_string(),
         "hello".to_string(),
+        None,
     )
     .expect("insert message");
 
