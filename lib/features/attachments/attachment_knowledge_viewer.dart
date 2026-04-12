@@ -345,7 +345,7 @@ String? _deriveChunkUnitId(String documentId, int? chunkIndex) {
   if (chunkIndex == null) return null;
   final normalizedDocumentId = documentId.trim();
   if (normalizedDocumentId.isEmpty) return null;
-  return '$normalizedDocumentId:chunk:$chunkIndex';
+  return '$normalizedDocumentId:chunk:${chunkIndex.toString().padLeft(4, '0')}';
 }
 
 int? _resolveInitialChunkIndex({

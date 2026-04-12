@@ -444,6 +444,45 @@ mod tests {
     }
 
     #[test]
+    fn collect_generated_preferred_contexts_skips_deleted_memory_cards() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [64u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+        insert_document(
+            &conn,
+            &key,
+            "generated:preference:response-language",
+            "generated",
+            1,
+            Some(&conv.id),
+            "User prefers responses in Chinese.",
+        );
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            "generated:preference:response-language",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            true,
+            true,
+            false,
+            None,
+            None,
+        )
+        .expect("mark deleted");
+
+        let blocks = collect_generated_preferred_contexts(&conn, &key, Some(&conv.id), 4)
+            .expect("generated preferred contexts");
+
+        assert!(
+            blocks
+                .iter()
+                .all(|block| block.document_id != "generated:preference:response-language"),
+            "blocks: {blocks:?}"
+        );
+    }
+
+    #[test]
     fn try_build_knowledge_contexts_tracks_real_documents_without_digest_ids() {
         let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
 

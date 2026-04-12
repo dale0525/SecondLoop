@@ -225,6 +225,40 @@ fn build_attachment_resource_direct_source(
     }
 }
 
+fn attachment_content_kind_for_document_id(document_id: &str) -> Option<&'static str> {
+    match document_id.split(':').next_back()?.trim() {
+        "extracted_text" => Some("extracted_text_full"),
+        "readable_text" => Some("readable_text_full"),
+        "ocr_text" => Some("ocr_text_full"),
+        "transcript" => Some("transcript_full"),
+        "metadata" => Some("metadata"),
+        _ => None,
+    }
+}
+
+fn attachment_chunk_index_from_unit_id(unit_id: Option<&str>) -> Option<i64> {
+    unit_id
+        .and_then(|value| value.trim().rsplit_once(":chunk:"))
+        .and_then(|(_, raw_chunk)| raw_chunk.parse::<i64>().ok())
+}
+
+fn build_attachment_knowledge_direct_source_href(
+    attachment_sha256: &str,
+    document_id: &str,
+    unit_id: Option<&str>,
+) -> String {
+    let mut href = format!("secondloop://attachment/{attachment_sha256}");
+    let Some(kind) = attachment_content_kind_for_document_id(document_id) else {
+        return href;
+    };
+
+    href.push_str(&format!("?kind={kind}"));
+    if let Some(chunk_index) = attachment_chunk_index_from_unit_id(unit_id) {
+        href.push_str(&format!("&chunk={chunk_index}"));
+    }
+    href
+}
+
 fn build_external_document_direct_source(
     doc_id: &str,
     chunk_index: i64,
@@ -378,7 +412,11 @@ fn build_direct_sources_from_knowledge_entry(
                 block.document_id,
                 block.unit_id.as_deref().unwrap_or("document")
             ),
-            href: format!("secondloop://attachment/{attachment_sha256}"),
+            href: build_attachment_knowledge_direct_source_href(
+                attachment_sha256,
+                &block.document_id,
+                block.unit_id.as_deref(),
+            ),
             source_type: "attachment".to_string(),
             label: "Attachment".to_string(),
             source_type_label: Some(readable_source_type_label(
@@ -2081,14 +2119,20 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_direct_sources_for_context_candidate, build_external_document_direct_source,
+        build_direct_sources_for_context_candidate, build_direct_sources_from_knowledge_entry,
+        build_external_document_direct_source, build_memory_card_from_document,
         build_message_direct_source, filter_direct_sources_for_question, format_history_line,
         should_include_actions_context, ContextItem, ContextSource,
     };
     use crate::auth;
     use crate::crypto::KdfParams;
     use crate::db;
+    use crate::knowledge::{
+        KnowledgeAnchorSet, KnowledgeContextBlock, KnowledgeRole, KnowledgeSourceKind,
+        KnowledgeUnitKind,
+    };
     use crate::message_citations::AnswerEvidenceDirectSource;
+    use crate::rag::knowledge_contexts::KnowledgeRenderedContextEntry;
     use rusqlite::params;
 
     #[test]
@@ -2303,6 +2347,102 @@ mod tests {
             !source.snippet.contains("[Attachment]("),
             "expected markdown citation suffix to stay out of fallback snippet: {}",
             source.snippet
+        );
+    }
+
+    #[test]
+    fn knowledge_attachment_direct_sources_preserve_kind_and_chunk_target() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let app_dir = temp_dir.path().join("secondloop");
+        let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+        let conn = db::open(&app_dir).expect("open db");
+
+        let entry = KnowledgeRenderedContextEntry {
+            block: KnowledgeContextBlock {
+                document_id: "attachment:sha-doc:readable_text".to_string(),
+                unit_id: Some("attachment:sha-doc:readable_text:chunk:0004".to_string()),
+                unit_kind: Some(KnowledgeUnitKind::Chunk),
+                source_kind: KnowledgeSourceKind::ReadableText,
+                role: KnowledgeRole::Evidence,
+                anchors: KnowledgeAnchorSet {
+                    attachment_sha256: Some("sha-doc".to_string()),
+                    source_filename: Some("notes.txt".to_string()),
+                    ..KnowledgeAnchorSet::default()
+                },
+                score: 0.9,
+                rendered_text: "Relevant launch notes".to_string(),
+            },
+            rendered_text: "Relevant launch notes".to_string(),
+        };
+
+        let direct_sources = build_direct_sources_from_knowledge_entry(&conn, &key, &entry);
+        let source = direct_sources
+            .first()
+            .expect("attachment direct source from knowledge entry");
+
+        assert_eq!(
+            source.href,
+            "secondloop://attachment/sha-doc?kind=readable_text_full&chunk=4"
+        );
+        assert_eq!(
+            source.document_id.as_deref(),
+            Some("attachment:sha-doc:readable_text")
+        );
+        assert_eq!(
+            source.unit_id.as_deref(),
+            Some("attachment:sha-doc:readable_text:chunk:0004")
+        );
+    }
+
+    #[test]
+    fn generated_memory_cards_use_corrected_feedback_fields() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let app_dir = temp_dir.path().join("secondloop");
+        let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+        let conn = db::open(&app_dir).expect("open db");
+        let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+        db::insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            "Please answer in Chinese and keep responses short and practical.",
+        )
+        .expect("preference");
+
+        crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+        crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+            .expect("process jobs");
+
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            "generated:preference:response-language",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            true,
+            false,
+            false,
+            Some("Preferred reply language".to_string()),
+            Some("Always reply in Chinese unless I ask for another language.".to_string()),
+        )
+        .expect("update generated memory");
+
+        let card = build_memory_card_from_document(
+            &conn,
+            &key,
+            "generated:preference:response-language",
+            "How should you answer me?",
+        )
+        .expect("generated memory card");
+
+        assert_eq!(card.title.as_deref(), Some("Preferred reply language"));
+        assert_eq!(
+            card.summary.as_deref(),
+            Some("Always reply in Chinese unless I ask for another language.")
+        );
+        assert_eq!(
+            card.body.as_deref(),
+            Some("Always reply in Chinese unless I ask for another language.")
         );
     }
 

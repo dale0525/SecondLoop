@@ -62,7 +62,7 @@ void main() {
     expect(
       find.byKey(
         const ValueKey(
-          'knowledge_viewer_unit_highlight_attachment:sha-doc:readable_text:chunk:4',
+          'knowledge_viewer_unit_highlight_attachment:sha-doc:readable_text:chunk:0004',
         ),
       ),
       findsOneWidget,
@@ -113,7 +113,8 @@ final class _AttachmentKnowledgeViewerBackend extends TestAppBackend
   late final List<KnowledgeUnit> units = List<KnowledgeUnit>.generate(
     6,
     (index) => KnowledgeUnit(
-      unitId: 'attachment:sha-doc:readable_text:chunk:$index',
+      unitId:
+          'attachment:sha-doc:readable_text:chunk:${index.toString().padLeft(4, '0')}',
       documentId: documentId,
       parentUnitId: 'attachment:sha-doc:readable_text:section:0',
       unitKind: KnowledgeUnitKind.chunk,
@@ -126,10 +127,10 @@ final class _AttachmentKnowledgeViewerBackend extends TestAppBackend
       anchors: const KnowledgeAnchorSet(attachmentSha256: 'sha-doc'),
       prevUnitId: index == 0
           ? null
-          : 'attachment:sha-doc:readable_text:chunk:${index - 1}',
+          : 'attachment:sha-doc:readable_text:chunk:${(index - 1).toString().padLeft(4, '0')}',
       nextUnitId: index == 5
           ? null
-          : 'attachment:sha-doc:readable_text:chunk:${index + 1}',
+          : 'attachment:sha-doc:readable_text:chunk:${(index + 1).toString().padLeft(4, '0')}',
       createdAtMs: 1,
       updatedAtMs: 2,
     ),
