@@ -20,15 +20,12 @@ KnowledgeDocumentDeepLink? parseKnowledgeDocumentDeepLink(String href) {
   if (uri.scheme.toLowerCase() != 'secondloop') return null;
   if (uri.host.toLowerCase() != 'knowledge-document') return null;
 
-  final rawDocumentId = uri.pathSegments.isEmpty
-      ? ''
-      : Uri.decodeComponent(uri.pathSegments.first);
+  final rawDocumentId = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
   final documentId = rawDocumentId.trim();
   if (documentId.isEmpty) return null;
 
   final chunkIndex = int.tryParse((uri.queryParameters['chunk'] ?? '').trim());
-  final rawUnitId =
-      Uri.decodeComponent((uri.queryParameters['unit'] ?? '').trim());
+  final rawUnitId = (uri.queryParameters['unit'] ?? '').trim();
   final unitId = rawUnitId.isEmpty
       ? _deriveChunkUnitId(documentId, chunkIndex)
       : rawUnitId;

@@ -465,6 +465,38 @@ void main() {
     expect(backend.viewerListOffsets, isEmpty);
   });
 
+  testWidgets('MemoryDetailPage shows an error when feedback save fails',
+      (tester) async {
+    final backend = _FailingMemoryDetailBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const MemoryDetailPage(
+                documentId: 'generated:preference:response-language',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Stop using for Ask AI'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(find.textContaining('save_failed'), findsOneWidget);
+    expect(find.text('Used by Ask AI'), findsOneWidget);
+    expect(find.text('Not used by Ask AI'), findsNothing);
+  });
+
   test('effectiveMemoryStatus uses memory display status when present', () {
     final now = DateTime.now().millisecondsSinceEpoch;
     final document = ContentKnowledgeDocument(
@@ -843,5 +875,21 @@ final class _RecentMemoryDetailBackend extends _MemoryDetailBackend
   }) async {
     recentListRequestCount += 1;
     return recentUnits.take(limit).toList(growable: false);
+  }
+}
+
+final class _FailingMemoryDetailBackend extends _MemoryDetailBackend {
+  @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async {
+    throw StateError('save_failed');
   }
 }

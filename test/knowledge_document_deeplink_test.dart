@@ -23,4 +23,16 @@ void main() {
     expect(parsed.chunkIndex, 7);
     expect(parsed.unitId, 'external:doc/1:chunk:0007');
   });
+
+  test('parseKnowledgeDocumentDeepLink preserves literal percent characters',
+      () {
+    final parsed = parseKnowledgeDocumentDeepLink(
+      'secondloop://knowledge-document/external%3Adoc%2525budget?chunk=7&unit=external%3Adoc%2525budget%3Achunk%3A0007',
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed!.documentId, 'external:doc%25budget');
+    expect(parsed.chunkIndex, 7);
+    expect(parsed.unitId, 'external:doc%25budget:chunk:0007');
+  });
 }

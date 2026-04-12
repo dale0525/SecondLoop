@@ -54,6 +54,7 @@ class MemoryDetailPage extends StatefulWidget {
 class _MemoryDetailPageState extends State<MemoryDetailPage> {
   Future<_MemoryDetailData>? _future;
   bool _didAutoOpenEdit = false;
+  bool _submittingFeedback = false;
 
   Future<_MemoryDetailData> _load() async {
     final viewerBackend =
@@ -140,7 +141,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
     }
   }
 
-  Future<void> _submitFeedback(
+  Future<bool> _submitFeedback(
     ContentKnowledgeDocument document, {
     KnowledgeMemoryStatus? status,
     bool? useForAskAi,
@@ -151,21 +152,52 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
   }) async {
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     if (backend == null) {
-      throw StateError('knowledge_backend_unavailable');
+      _showFeedbackError(StateError('knowledge_backend_unavailable'));
+      return false;
     }
+    if (_submittingFeedback) return false;
+
     final feedback = document.memoryFeedback;
-    await backend.upsertKnowledgeMemoryFeedback(
-      SessionScope.of(context).sessionKey,
-      documentId: document.documentId,
-      status: status ?? feedback.status,
-      useForAskAi: useForAskAi ?? feedback.useForAskAi,
-      isDeleted: isDeleted ?? feedback.isDeleted,
-      markedInaccurate: markedInaccurate ?? feedback.markedInaccurate,
-      correctedTitle: correctedTitle ?? feedback.correctedTitle,
-      correctedSummary: correctedSummary ?? feedback.correctedSummary,
+    setState(() {
+      _submittingFeedback = true;
+    });
+    try {
+      await backend.upsertKnowledgeMemoryFeedback(
+        SessionScope.of(context).sessionKey,
+        documentId: document.documentId,
+        status: status ?? feedback.status,
+        useForAskAi: useForAskAi ?? feedback.useForAskAi,
+        isDeleted: isDeleted ?? feedback.isDeleted,
+        markedInaccurate: markedInaccurate ?? feedback.markedInaccurate,
+        correctedTitle: correctedTitle ?? feedback.correctedTitle,
+        correctedSummary: correctedSummary ?? feedback.correctedSummary,
+      );
+      if (!mounted) return true;
+      _reload();
+      return true;
+    } catch (error) {
+      if (mounted) {
+        _showFeedbackError(error);
+      }
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submittingFeedback = false;
+        });
+      }
+    }
+  }
+
+  void _showFeedbackError(Object error) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(context.t.errors.saveFailed(error: '$error')),
+        duration: const Duration(seconds: 3),
+      ),
     );
-    if (!mounted) return;
-    _reload();
   }
 
   Future<void> _openEditDialog(ContentKnowledgeDocument document) async {
@@ -316,7 +348,11 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                     if (feedback.isDeleted)
                       FilledButton(
                         key: const ValueKey('memory_restore_button'),
-                        onPressed: () => _submitFeedback(doc, isDeleted: false),
+                        onPressed: _submittingFeedback
+                            ? null
+                            : () => unawaited(
+                                  _submitFeedback(doc, isDeleted: false),
+                                ),
                         child: Text(context.t.memory.actions.restoreMemory),
                       )
                     else
@@ -326,15 +362,22 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                         children: [
                           OutlinedButton(
                             key: const ValueKey('memory_edit_button'),
-                            onPressed: () => _openEditDialog(doc),
+                            onPressed: _submittingFeedback
+                                ? null
+                                : () => unawaited(_openEditDialog(doc)),
                             child: Text(context.t.memory.actions.editMemory),
                           ),
                           OutlinedButton(
                             key: const ValueKey('memory_inaccurate_button'),
-                            onPressed: () => _submitFeedback(
-                              doc,
-                              markedInaccurate: !feedback.markedInaccurate,
-                            ),
+                            onPressed: _submittingFeedback
+                                ? null
+                                : () => unawaited(
+                                      _submitFeedback(
+                                        doc,
+                                        markedInaccurate:
+                                            !feedback.markedInaccurate,
+                                      ),
+                                    ),
                             child: Text(
                               feedback.markedInaccurate
                                   ? context.t.memory.actions.clearInaccurate
@@ -343,10 +386,14 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                           ),
                           OutlinedButton(
                             key: const ValueKey('memory_use_toggle_button'),
-                            onPressed: () => _submitFeedback(
-                              doc,
-                              useForAskAi: !feedback.useForAskAi,
-                            ),
+                            onPressed: _submittingFeedback
+                                ? null
+                                : () => unawaited(
+                                      _submitFeedback(
+                                        doc,
+                                        useForAskAi: !feedback.useForAskAi,
+                                      ),
+                                    ),
                             child: Text(
                               feedback.useForAskAi
                                   ? context.t.memory.actions.stopUsingForAskAi
@@ -355,8 +402,11 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                           ),
                           FilledButton.tonal(
                             key: const ValueKey('memory_delete_button'),
-                            onPressed: () =>
-                                _submitFeedback(doc, isDeleted: true),
+                            onPressed: _submittingFeedback
+                                ? null
+                                : () => unawaited(
+                                      _submitFeedback(doc, isDeleted: true),
+                                    ),
                             child: Text(context.t.memory.actions.deleteMemory),
                           ),
                         ],
