@@ -87,6 +87,29 @@ String resolveMemoryDisplayBody(
   return normalized;
 }
 
+String formatMemoryUpdatedLabel(
+  Translations t, {
+  required int updatedAtMs,
+  DateTime? now,
+}) {
+  final nowMs = (now ?? DateTime.now()).millisecondsSinceEpoch;
+  if (updatedAtMs > nowMs) {
+    return t.memory.meta.updatedOn(date: _formatMemoryDate(updatedAtMs));
+  }
+
+  final delta = nowMs - updatedAtMs;
+  if (delta < const Duration(days: 1).inMilliseconds) {
+    return t.memory.meta.updatedToday;
+  }
+
+  final dayCount = (delta / const Duration(days: 1).inMilliseconds).floor();
+  if (dayCount <= 7) {
+    return t.memory.meta.updatedDaysAgo(count: dayCount);
+  }
+
+  return t.memory.meta.updatedOn(date: _formatMemoryDate(updatedAtMs));
+}
+
 String? resolveMemorySectionLabel(
   Translations t, {
   required String? rawSectionLabel,
@@ -243,4 +266,9 @@ String _titleCase(String value) {
             : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
       )
       .join(' ');
+}
+
+String _formatMemoryDate(int updatedAtMs) {
+  final date = DateTime.fromMillisecondsSinceEpoch(updatedAtMs);
+  return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 }

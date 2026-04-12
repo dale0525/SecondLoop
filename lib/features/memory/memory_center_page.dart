@@ -10,6 +10,7 @@ import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_surface.dart';
 import 'memory_center_models.dart';
 import 'memory_detail_page.dart';
+import 'memory_display_text.dart';
 
 class MemoryCenterPage extends StatefulWidget {
   const MemoryCenterPage({super.key});
@@ -197,16 +198,8 @@ String _sectionLabel(BuildContext context, MemoryCenterSection section) {
 }
 
 String _updatedLabel(BuildContext context, {required int updatedAtMs}) {
-  final delta = DateTime.now().millisecondsSinceEpoch - updatedAtMs;
-  if (delta < const Duration(days: 1).inMilliseconds) {
-    return context.t.memory.meta.updatedToday;
-  }
-  final dayCount = (delta / const Duration(days: 1).inMilliseconds).floor();
-  if (dayCount <= 7) {
-    return context.t.memory.meta.updatedDaysAgo(count: dayCount);
-  }
-  final date = DateTime.fromMillisecondsSinceEpoch(updatedAtMs);
-  final formatted =
-      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  return context.t.memory.meta.updatedOn(date: formatted);
+  return formatMemoryUpdatedLabel(
+    context.t,
+    updatedAtMs: updatedAtMs,
+  );
 }

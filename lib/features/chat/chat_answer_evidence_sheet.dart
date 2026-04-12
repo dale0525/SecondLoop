@@ -126,6 +126,7 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
 
 class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
   late List<ChatAnswerEvidenceMemoryCard> _memoryCards;
+  int _refreshEpoch = 0;
 
   @override
   void initState() {
@@ -151,19 +152,28 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
   Future<void> _refreshMemoryCards() async {
     final refresh = widget.onRefreshMemoryCard;
     if (refresh == null || _memoryCards.isEmpty) return;
+    final refreshEpoch = ++_refreshEpoch;
+    final cardsToRefresh =
+        List<ChatAnswerEvidenceMemoryCard>.from(_memoryCards);
 
     final refreshed = <ChatAnswerEvidenceMemoryCard>[];
-    for (final card in _memoryCards) {
+    for (final card in cardsToRefresh) {
       try {
+        if (refreshEpoch != _refreshEpoch) return;
         refreshed.add(await refresh(card) ?? card);
       } catch (_) {
+        if (refreshEpoch != _refreshEpoch) return;
         refreshed.add(card);
       }
     }
-    if (!mounted) return;
+    if (!mounted || refreshEpoch != _refreshEpoch) return;
     setState(() {
       _memoryCards = refreshed;
     });
+  }
+
+  void _invalidatePendingRefreshes() {
+    _refreshEpoch += 1;
   }
 
   void _showActionError(Object error) {
@@ -337,6 +347,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                       }
                                       if (!mounted || updated == null) return;
                                       final updatedCard = updated;
+                                      _invalidatePendingRefreshes();
                                       setState(() {
                                         _memoryCards[index] = updatedCard;
                                       });
@@ -363,6 +374,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                               return;
                                             }
                                             if (!mounted) return;
+                                            _invalidatePendingRefreshes();
                                             setState(() {
                                               _memoryCards[index] =
                                                   item.copyWith(
@@ -391,6 +403,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                               return;
                                             }
                                             if (!mounted) return;
+                                            _invalidatePendingRefreshes();
                                             setState(() {
                                               _memoryCards[index] =
                                                   item.copyWith(

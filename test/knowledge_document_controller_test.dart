@@ -318,6 +318,77 @@ void main() {
     expect(controller.units.map((unit) => unit.unitId), contains('unit-5'));
     expect(backend.offsets, <int>[0, 2, 4]);
   });
+
+  test('jumpToResult falls back to paged loading when anchor lookup is empty',
+      () async {
+    const documentId = 'doc1';
+    final backend = _PagedKnowledgeViewerBackend(
+      pages: <KnowledgeViewerPage>[
+        KnowledgeViewerPage(
+          documentId: documentId,
+          unitKind: null,
+          offset: 0,
+          limit: 2,
+          total: 5,
+          units: <KnowledgeUnit>[
+            _unit(documentId, 'unit-1'),
+            _unit(documentId, 'unit-2'),
+          ],
+        ),
+        KnowledgeViewerPage(
+          documentId: documentId,
+          unitKind: null,
+          offset: 2,
+          limit: 2,
+          total: 5,
+          units: <KnowledgeUnit>[
+            _unit(documentId, 'unit-3'),
+            _unit(documentId, 'unit-4'),
+          ],
+        ),
+      ],
+      aroundUnits: const <KnowledgeUnit>[],
+    );
+    final initial = KnowledgeViewerDocument(
+      document: _doc(documentId),
+      totalUnits: 5,
+      sectionCount: 0,
+      chunkCount: 5,
+    );
+    final controller = KnowledgeDocumentController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      documentId: documentId,
+      initialDocument: initial,
+      pageSize: 2,
+    );
+
+    await controller.jumpToResult(
+      const KnowledgeSearchResult(
+        documentId: documentId,
+        unitId: 'unit-4',
+        unitKind: KnowledgeUnitKind.chunk,
+        layer: KnowledgeRetrievalLayer.chunk,
+        sourceKind: KnowledgeSourceKind.rawText,
+        role: KnowledgeRole.body,
+        title: null,
+        summary: null,
+        snippet: 'snippet',
+        score: 1.0,
+        semanticScore: 0.0,
+        lexicalScore: 0.0,
+        anchors: KnowledgeAnchorSet(messageId: 'm1'),
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      ),
+    );
+
+    expect(controller.anchorMode, isTrue);
+    expect(controller.highlightedUnitId, 'unit-4');
+    expect(controller.units.map((unit) => unit.unitId),
+        <String>['unit-2', 'unit-3', 'unit-4']);
+    expect(backend.offsets, <int>[0, 2]);
+  });
 }
 
 final class _PagedKnowledgeViewerBackend implements KnowledgeViewerBackend {

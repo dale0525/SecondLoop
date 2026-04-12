@@ -239,6 +239,17 @@ final class KnowledgeDocumentController extends ChangeNotifier {
         after: 3,
       );
       if (epoch != _loadEpoch) return;
+      if (units.isEmpty) {
+        _loadingPage = false;
+        _loadingMore = false;
+        notifyListeners();
+        if (targetUnitId != null) {
+          await showUnitId(targetUnitId);
+        } else {
+          await loadPage(reset: true);
+        }
+        return;
+      }
       final highlighted =
           targetUnitId ?? (units.isEmpty ? null : units.first.unitId);
       _anchorMode = true;

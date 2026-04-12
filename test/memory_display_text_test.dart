@@ -101,4 +101,19 @@ void main() {
       '用户当前主要在推进这些任务：\n- 做视频 [进行中]\n- 复盘选题 [未开始]',
     );
   });
+
+  test('formatMemoryUpdatedLabel does not map future timestamps to today', () {
+    final t = AppLocale.en.build();
+    final now = DateTime(2026, 4, 12, 10);
+    final future = now.add(const Duration(days: 2));
+
+    expect(
+      formatMemoryUpdatedLabel(
+        t,
+        updatedAtMs: future.millisecondsSinceEpoch,
+        now: now,
+      ),
+      t.memory.meta.updatedOn(date: '2026-04-14'),
+    );
+  });
 }

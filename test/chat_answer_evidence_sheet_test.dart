@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -423,6 +425,125 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('User prefers Chinese.'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'ChatAnswerEvidencePanel ignores stale refresh results after evidence updates',
+    (tester) async {
+      final staleRefresh = Completer<ChatAnswerEvidenceMemoryCard?>();
+      final freshRefresh = Completer<ChatAnswerEvidenceMemoryCard?>();
+
+      Future<ChatAnswerEvidenceMemoryCard?> refresh(
+        ChatAnswerEvidenceMemoryCard card,
+      ) {
+        if (card.title == 'Old title') {
+          return staleRefresh.future;
+        }
+        return freshRefresh.future;
+      }
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: const ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:preference:response-language',
+                    title: 'Old title',
+                    summary: 'Old summary',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 4,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: 'latest query',
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+              onOpenMemoryCard: _noopOpenMemoryCard,
+              onRefreshMemoryCard: refresh,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: const ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:preference:response-language',
+                    title: 'New title',
+                    summary: 'New summary',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 5,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: 'latest query',
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+              onOpenMemoryCard: _noopOpenMemoryCard,
+              onRefreshMemoryCard: refresh,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      freshRefresh.complete(
+        const ChatAnswerEvidenceMemoryCard(
+          documentId: 'generated:preference:response-language',
+          title: 'Fresh title',
+          summary: 'Fresh summary',
+          sourceKind: 'summary',
+          role: 'summary',
+          createdAtMs: 3,
+          updatedAtMs: 6,
+          status: 'confirmed',
+          sourceCount: 2,
+          whyUsed: 'latest query',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Fresh title'), findsOneWidget);
+      expect(find.text('Old title'), findsNothing);
+
+      staleRefresh.complete(
+        const ChatAnswerEvidenceMemoryCard(
+          documentId: 'generated:preference:response-language',
+          title: 'Stale title',
+          summary: 'Stale summary',
+          sourceKind: 'summary',
+          role: 'summary',
+          createdAtMs: 3,
+          updatedAtMs: 4,
+          status: 'confirmed',
+          sourceCount: 2,
+          whyUsed: 'latest query',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Fresh title'), findsOneWidget);
+      expect(find.text('Stale title'), findsNothing);
     },
   );
 
