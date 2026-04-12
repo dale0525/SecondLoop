@@ -9,6 +9,7 @@ import 'package:secondloop/core/backend/knowledge_backend.dart';
 import 'package:secondloop/core/backend/knowledge_viewer_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
+import 'package:secondloop/features/knowledge_viewer/knowledge_document_viewer_page.dart';
 import 'package:secondloop/features/memory/memory_detail_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 import 'package:secondloop/src/rust/knowledge/models.dart';
@@ -116,6 +117,71 @@ void main() {
     );
     expect(page.initialContentKind, 'transcript_full');
     expect(page.initialChunkIndex, 4);
+  });
+
+  testWidgets(
+      'MemoryDetailPage opens external document evidence with highlighted unit target',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final backend = _MemoryDetailBackend(
+      unitsPageBuilder: ({required int limit, required int offset}) =>
+          <KnowledgeUnit>[
+        KnowledgeUnit(
+          unitId: 'external:travel/doc-1:chunk:0007',
+          documentId: 'external:travel/doc-1',
+          parentUnitId: null,
+          unitKind: KnowledgeUnitKind.chunk,
+          sourceKind: KnowledgeSourceKind.summary,
+          role: KnowledgeRole.evidence,
+          ordinal: 7,
+          tokenCount: 24,
+          rawText: 'Budget cap is documented in the imported expense sheet.',
+          normalizedText:
+              'budget cap is documented in the imported expense sheet.',
+          anchors: const KnowledgeAnchorSet(sourceFilename: 'expense-sheet.md'),
+          prevUnitId: null,
+          nextUnitId: null,
+          createdAtMs: now,
+          updatedAtMs: now,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const MemoryDetailPage(
+                documentId: 'generated:preference:response-language',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final openSourceButton = find.widgetWithText(TextButton, 'View original');
+    await tester.scrollUntilVisible(
+      openSourceButton,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(openSourceButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final page = tester.widget<KnowledgeDocumentViewerPage>(
+      find.byType(KnowledgeDocumentViewerPage),
+    );
+    expect(page.documentId, 'external:travel/doc-1');
+    expect(page.initialHighlightedUnitId, 'external:travel/doc-1:chunk:0007');
   });
 
   testWidgets(

@@ -14,6 +14,7 @@ import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../chat/message_deeplink.dart';
 import '../chat/message_viewer_page.dart';
+import '../knowledge_viewer/knowledge_document_viewer_page.dart';
 import 'memory_correction_dialog.dart';
 import 'memory_center_models.dart';
 import 'memory_display_text.dart';
@@ -111,6 +112,16 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
   }
 
   Future<void> _openUnitSource(BuildContext context, KnowledgeUnit unit) async {
+    final documentId = unit.documentId.trim();
+    if (documentId.startsWith('external:')) {
+      await KnowledgeDocumentViewerPage.openDocumentId(
+        context,
+        documentId: documentId,
+        initialHighlightedUnitId: unit.unitId,
+      );
+      return;
+    }
+
     final attachmentSha = unit.anchors.attachmentSha256?.trim() ?? '';
     if (attachmentSha.isNotEmpty) {
       final target = _attachmentCitationTargetForUnit(unit);
@@ -491,6 +502,10 @@ String statusLabel(BuildContext context, MemoryCardStatus status) {
 }
 
 bool _unitHasOpenableSource(KnowledgeUnit unit) {
+  final documentId = unit.documentId.trim();
+  if (documentId.startsWith('external:')) {
+    return true;
+  }
   final messageId = unit.anchors.messageId?.trim() ?? '';
   if (parseMessageDeepLink('secondloop://message/$messageId') != null) {
     return true;

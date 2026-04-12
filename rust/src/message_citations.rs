@@ -36,6 +36,9 @@ pub struct AnswerEvidenceMemoryCard {
     pub status: KnowledgeMemoryStatus,
     pub source_count: i64,
     pub why_used: Option<String>,
+    pub use_for_ask_ai: bool,
+    pub is_deleted: bool,
+    pub marked_inaccurate: bool,
     pub anchors: KnowledgeAnchorSet,
 }
 
@@ -189,6 +192,9 @@ mod tests {
             status: KnowledgeMemoryStatus::Inferred,
             source_count: 1,
             why_used: Some("What style should I use?".to_string()),
+            use_for_ask_ai: true,
+            is_deleted: false,
+            marked_inaccurate: false,
             anchors: KnowledgeAnchorSet::default(),
         };
 
@@ -198,5 +204,37 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&raw).expect("valid json");
         assert_eq!(parsed["direct_sources"].as_array().map(Vec::len), Some(1));
         assert_eq!(parsed["memory_cards"].as_array().map(Vec::len), Some(1));
+    }
+
+    #[test]
+    fn encode_answer_evidence_json_preserves_memory_card_feedback_flags() {
+        let raw = encode_answer_evidence_json(
+            Vec::new(),
+            vec![AnswerEvidenceMemoryCard {
+                document_id: "generated:preference:response-language".to_string(),
+                title: Some("Response language preference".to_string()),
+                summary: Some("User prefers Chinese.".to_string()),
+                body: Some("User prefers Chinese.".to_string()),
+                source_kind: KnowledgeSourceKind::Summary,
+                role: KnowledgeRole::Summary,
+                created_at_ms: 1,
+                updated_at_ms: 2,
+                status: KnowledgeMemoryStatus::Confirmed,
+                source_count: 3,
+                why_used: Some("How should you answer me?".to_string()),
+                use_for_ask_ai: false,
+                is_deleted: true,
+                marked_inaccurate: true,
+                anchors: KnowledgeAnchorSet::default(),
+            }],
+        )
+        .expect("json");
+
+        let parsed: serde_json::Value = serde_json::from_str(&raw).expect("valid json");
+        let memory = parsed["memory_cards"][0].clone();
+
+        assert_eq!(memory["use_for_ask_ai"].as_bool(), Some(false));
+        assert_eq!(memory["is_deleted"].as_bool(), Some(true));
+        assert_eq!(memory["marked_inaccurate"].as_bool(), Some(true));
     }
 }

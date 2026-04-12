@@ -148,6 +148,62 @@ fn ask_ai_citations_json_includes_external_document_direct_sources() {
 }
 
 #[test]
+fn active_embeddings_citations_json_keeps_external_document_direct_sources() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    let source = create_external_markdown_source(temp_dir.path());
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, secondloop_rust::embedding::DEFAULT_MODEL_NAME)
+        .expect("model");
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    db::run_external_import_with_callbacks(&app_dir, &key, &source, &mut |_| {}, &|| false)
+        .expect("import external docs");
+    secondloop_rust::knowledge::ensure_knowledge_rebuild_requested(&conn)
+        .expect("request knowledge rebuild");
+    secondloop_rust::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process knowledge jobs");
+
+    let provider = FakeProvider;
+    let result = rag::ask_ai_with_provider_using_active_embeddings(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Where is the budget cap documented?",
+        4,
+        rag::Focus::AllMemories,
+        &provider,
+        &mut |_event| Ok(()),
+    )
+    .expect("ask ai");
+
+    let assistant = db::get_message_by_id_optional(&conn, &key, &result.assistant_message_id)
+        .expect("message lookup")
+        .expect("assistant message");
+    let raw = assistant.citations_json.as_deref().expect("citations json");
+    let value: serde_json::Value = serde_json::from_str(raw).expect("valid json");
+    let direct_sources = value["direct_sources"]
+        .as_array()
+        .expect("direct_sources array");
+
+    assert!(direct_sources.iter().any(|source| {
+        source["source_type"].as_str() == Some("document")
+            && source["document_id"]
+                .as_str()
+                .is_some_and(|value| value.starts_with("external:"))
+            && source["unit_id"]
+                .as_str()
+                .is_some_and(|value| value.starts_with("external:") && value.contains(":chunk:"))
+            && source["href"].as_str().is_some_and(|value| {
+                value.contains("secondloop://knowledge-document/") && value.contains("unit=")
+            })
+    }));
+}
+
+#[test]
 fn ask_ai_citations_json_includes_attachment_resource_direct_sources_for_time_window_catalog() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
