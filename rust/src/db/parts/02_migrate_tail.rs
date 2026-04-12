@@ -427,6 +427,76 @@ PRAGMA user_version = 42;
     }
 }
 
+fn migrate_from_v42_to_v43(conn: &Connection) -> Result<()> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<()> = (|| {
+        conn.execute_batch(
+            r#"
+DROP TABLE IF EXISTS knowledge_document_feedback_v43;
+
+CREATE TABLE knowledge_document_feedback_v43 (
+  document_id TEXT PRIMARY KEY,
+  status TEXT,
+  use_for_ask_ai INTEGER NOT NULL DEFAULT 1,
+  is_deleted INTEGER NOT NULL DEFAULT 0,
+  marked_inaccurate INTEGER NOT NULL DEFAULT 0,
+  corrected_title TEXT,
+  corrected_summary TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  updated_by_device_id TEXT NOT NULL DEFAULT '',
+  updated_by_seq INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT INTO knowledge_document_feedback_v43(
+  document_id,
+  status,
+  use_for_ask_ai,
+  is_deleted,
+  marked_inaccurate,
+  corrected_title,
+  corrected_summary,
+  created_at_ms,
+  updated_at_ms,
+  updated_by_device_id,
+  updated_by_seq
+)
+SELECT document_id,
+       status,
+       use_for_ask_ai,
+       is_deleted,
+       marked_inaccurate,
+       corrected_title,
+       corrected_summary,
+       created_at_ms,
+       updated_at_ms,
+       '',
+       0
+  FROM knowledge_document_feedback;
+
+DROP TABLE knowledge_document_feedback;
+ALTER TABLE knowledge_document_feedback_v43 RENAME TO knowledge_document_feedback;
+CREATE INDEX IF NOT EXISTS idx_knowledge_document_feedback_visibility
+  ON knowledge_document_feedback(is_deleted, use_for_ask_ai, updated_at_ms DESC);
+
+PRAGMA user_version = 43;
+"#,
+        )?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(err) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(err)
+        }
+    }
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;

@@ -268,6 +268,20 @@ class MessageViewerPage extends StatelessWidget {
   ) async {
     final parsed = parseKnowledgeDocumentDeepLink(href);
     if (parsed == null) return false;
+    if (maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) == null) {
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            context.t.errors.loadFailed(
+              error: 'knowledge_viewer_backend_unavailable',
+            ),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return true;
+    }
 
     await KnowledgeDocumentViewerPage.openDocumentId(
       context,
@@ -330,6 +344,38 @@ class MessageViewerPage extends StatelessWidget {
     required String normalized,
     required ChatAnswerCitationController citationController,
   }) {
+    final backend = AppBackendScope.maybeOf(context);
+    final viewerBackend =
+        backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
+    final knowledgeBackend =
+        backend == null ? null : maybeKnowledgeBackendFor(backend);
+    final openMemoryCard = viewerBackend == null
+        ? null
+        : (String documentId) => _openMemoryCard(context, documentId);
+    final correctMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (
+            ChatAnswerEvidenceMemoryCard card,
+            String title,
+            String summary,
+          ) =>
+            _correctMemoryFromEvidence(
+              context,
+              card,
+              title: title,
+              summary: summary,
+            );
+    final refreshMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (ChatAnswerEvidenceMemoryCard card) =>
+            _refreshMemoryFromEvidence(context, card);
+    final disableMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (String documentId) =>
+            _disableMemoryFromEvidence(context, documentId);
+    final deleteMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (String documentId) => _deleteMemoryFromEvidence(context, documentId);
     final previewTheme = resolveChatMarkdownTheme(
         ChatMarkdownThemePreset.studio, Theme.of(context));
     return Markdown(
@@ -351,21 +397,11 @@ class MessageViewerPage extends StatelessWidget {
             context,
             href: href,
             onOpenDirectSource: (target) => _openInAppLink(context, target),
-            onOpenMemoryCard: (documentId) =>
-                _openMemoryCard(context, documentId),
-            onCorrectMemoryCard: (card, title, summary) =>
-                _correctMemoryFromEvidence(
-              context,
-              card,
-              title: title,
-              summary: summary,
-            ),
-            onRefreshMemoryCard: (card) =>
-                _refreshMemoryFromEvidence(context, card),
-            onDisableMemoryCard: (documentId) =>
-                _disableMemoryFromEvidence(context, documentId),
-            onDeleteMemoryCard: (documentId) =>
-                _deleteMemoryFromEvidence(context, documentId),
+            onOpenMemoryCard: openMemoryCard,
+            onCorrectMemoryCard: correctMemoryCard,
+            onRefreshMemoryCard: refreshMemoryCard,
+            onDisableMemoryCard: disableMemoryCard,
+            onDeleteMemoryCard: deleteMemoryCard,
           );
           if (handledCitation) {
             return;
@@ -445,6 +481,38 @@ class MessageViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = sanitizeChatMarkdown(content);
+    final backend = AppBackendScope.maybeOf(context);
+    final viewerBackend =
+        backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
+    final knowledgeBackend =
+        backend == null ? null : maybeKnowledgeBackendFor(backend);
+    final openMemoryCard = viewerBackend == null
+        ? null
+        : (String documentId) => _openMemoryCard(context, documentId);
+    final correctMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (
+            ChatAnswerEvidenceMemoryCard card,
+            String title,
+            String summary,
+          ) =>
+            _correctMemoryFromEvidence(
+              context,
+              card,
+              title: title,
+              summary: summary,
+            );
+    final refreshMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (ChatAnswerEvidenceMemoryCard card) =>
+            _refreshMemoryFromEvidence(context, card);
+    final disableMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (String documentId) =>
+            _disableMemoryFromEvidence(context, documentId);
+    final deleteMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (String documentId) => _deleteMemoryFromEvidence(context, documentId);
     final citationController = ChatAnswerCitationController(
       parseChatAnswerEvidence(citationsJson),
     );
@@ -491,21 +559,13 @@ class MessageViewerPage extends StatelessWidget {
                       initialTab: ChatAnswerEvidenceTab.directSources,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
-                      onOpenMemoryCard: (documentId) =>
-                          _openMemoryCard(context, documentId),
-                      onCorrectMemoryCard: (card, title, summary) =>
-                          _correctMemoryFromEvidence(
-                        context,
-                        card,
-                        title: title,
-                        summary: summary,
-                      ),
-                      onRefreshMemoryCard: (card) =>
-                          _refreshMemoryFromEvidence(context, card),
-                      onDisableMemoryCard: (documentId) =>
-                          _disableMemoryFromEvidence(context, documentId),
-                      onDeleteMemoryCard: (documentId) =>
-                          _deleteMemoryFromEvidence(context, documentId),
+                      onOpenMemoryCard: openMemoryCard,
+                      canOpenDirectSource: (href) =>
+                          _canOpenDirectSourceHref(context, href),
+                      onCorrectMemoryCard: correctMemoryCard,
+                      onRefreshMemoryCard: refreshMemoryCard,
+                      onDisableMemoryCard: disableMemoryCard,
+                      onDeleteMemoryCard: deleteMemoryCard,
                     ),
                   ),
                   onOpenMemory: () => unawaited(
@@ -514,21 +574,13 @@ class MessageViewerPage extends StatelessWidget {
                       initialTab: ChatAnswerEvidenceTab.memoryCards,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
-                      onOpenMemoryCard: (documentId) =>
-                          _openMemoryCard(context, documentId),
-                      onCorrectMemoryCard: (card, title, summary) =>
-                          _correctMemoryFromEvidence(
-                        context,
-                        card,
-                        title: title,
-                        summary: summary,
-                      ),
-                      onRefreshMemoryCard: (card) =>
-                          _refreshMemoryFromEvidence(context, card),
-                      onDisableMemoryCard: (documentId) =>
-                          _disableMemoryFromEvidence(context, documentId),
-                      onDeleteMemoryCard: (documentId) =>
-                          _deleteMemoryFromEvidence(context, documentId),
+                      onOpenMemoryCard: openMemoryCard,
+                      canOpenDirectSource: (href) =>
+                          _canOpenDirectSourceHref(context, href),
+                      onCorrectMemoryCard: correctMemoryCard,
+                      onRefreshMemoryCard: refreshMemoryCard,
+                      onDisableMemoryCard: disableMemoryCard,
+                      onDeleteMemoryCard: deleteMemoryCard,
                     ),
                   ),
                   onOpenEvidence: () => unawaited(
@@ -536,21 +588,13 @@ class MessageViewerPage extends StatelessWidget {
                       context,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
-                      onOpenMemoryCard: (documentId) =>
-                          _openMemoryCard(context, documentId),
-                      onCorrectMemoryCard: (card, title, summary) =>
-                          _correctMemoryFromEvidence(
-                        context,
-                        card,
-                        title: title,
-                        summary: summary,
-                      ),
-                      onRefreshMemoryCard: (card) =>
-                          _refreshMemoryFromEvidence(context, card),
-                      onDisableMemoryCard: (documentId) =>
-                          _disableMemoryFromEvidence(context, documentId),
-                      onDeleteMemoryCard: (documentId) =>
-                          _deleteMemoryFromEvidence(context, documentId),
+                      onOpenMemoryCard: openMemoryCard,
+                      canOpenDirectSource: (href) =>
+                          _canOpenDirectSourceHref(context, href),
+                      onCorrectMemoryCard: correctMemoryCard,
+                      onRefreshMemoryCard: refreshMemoryCard,
+                      onDisableMemoryCard: disableMemoryCard,
+                      onDeleteMemoryCard: deleteMemoryCard,
                     ),
                   ),
                 ),
@@ -577,4 +621,11 @@ final class _ResolvedMessageKnowledgeDocument {
 
   final String documentId;
   final KnowledgeViewerDocument document;
+}
+
+bool _canOpenDirectSourceHref(BuildContext context, String href) {
+  if (parseKnowledgeDocumentDeepLink(href) != null) {
+    return maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) != null;
+  }
+  return true;
 }

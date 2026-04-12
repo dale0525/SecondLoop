@@ -516,6 +516,46 @@ void main() {
       expect(find.text('Not used by Ask AI'), findsNothing);
     },
   );
+
+  testWidgets(
+    'ChatAnswerEvidencePanel hides memory actions when memory backends are unavailable',
+    (tester) async {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          const MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:preference:response-language',
+                    title: 'Response language',
+                    summary: 'User prefers Chinese.',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 4,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: '用中文总结一下最近变化',
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Inspect memory'), findsNothing);
+      expect(find.text('Correct'), findsNothing);
+      expect(find.text('Don\'t use'), findsNothing);
+      expect(find.text('Delete'), findsNothing);
+    },
+  );
 }
 
 Future<void> _noopOpenDirectSource(String _) async {}

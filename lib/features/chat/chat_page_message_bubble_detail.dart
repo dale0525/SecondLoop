@@ -50,6 +50,20 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
 
     final knowledgeDocumentLink = parseKnowledgeDocumentDeepLink(href);
     if (knowledgeDocumentLink != null) {
+      if (maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) == null) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        messenger?.showSnackBar(
+          SnackBar(
+            content: Text(
+              context.t.errors.loadFailed(
+                error: 'knowledge_viewer_backend_unavailable',
+              ),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return true;
+      }
       await KnowledgeDocumentViewerPage.openDocumentId(
         context,
         documentId: knowledgeDocumentLink.documentId,

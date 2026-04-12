@@ -49,6 +49,56 @@ fn decode_knowledge_memory_status(
     .transpose()
 }
 
+fn load_existing_knowledge_memory_feedback_row(
+    conn: &Connection,
+    document_id: &str,
+) -> Result<
+    Option<(
+        Option<String>,
+        i64,
+        i64,
+        i64,
+        Option<String>,
+        Option<String>,
+        i64,
+        i64,
+        String,
+        i64,
+    )>,
+> {
+    conn.query_row(
+        r#"SELECT status,
+                  use_for_ask_ai,
+                  is_deleted,
+                  marked_inaccurate,
+                  corrected_title,
+                  corrected_summary,
+                  created_at_ms,
+                  updated_at_ms,
+                  COALESCE(updated_by_device_id, ''),
+                  COALESCE(updated_by_seq, 0)
+           FROM knowledge_document_feedback
+           WHERE document_id = ?1"#,
+        params![document_id],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+                row.get(9)?,
+            ))
+        },
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
 pub fn encode_knowledge_document_text(
     key: &[u8; 32],
     document_id: &str,
@@ -133,6 +183,7 @@ pub fn get_knowledge_memory_feedback(
 #[allow(clippy::too_many_arguments)]
 pub fn upsert_knowledge_memory_feedback(
     conn: &Connection,
+    key: &[u8; 32],
     document_id: &str,
     status: Option<crate::knowledge::KnowledgeMemoryStatus>,
     use_for_ask_ai: bool,
@@ -145,6 +196,13 @@ pub fn upsert_knowledge_memory_feedback(
     let encoded_status = encode_knowledge_memory_status(status)?;
     let corrected_title = normalize_optional_trimmed(corrected_title);
     let corrected_summary = normalize_optional_trimmed(corrected_summary);
+    let existing = load_existing_knowledge_memory_feedback_row(conn, document_id)?;
+    let created_at_ms = existing
+        .as_ref()
+        .map(|row| row.6)
+        .unwrap_or(now);
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
     conn.execute(
         r#"INSERT INTO knowledge_document_feedback(
                document_id,
@@ -155,8 +213,10 @@ pub fn upsert_knowledge_memory_feedback(
                corrected_title,
                corrected_summary,
                created_at_ms,
-               updated_at_ms
-           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+               updated_at_ms,
+               updated_by_device_id,
+               updated_by_seq
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
            ON CONFLICT(document_id) DO UPDATE SET
              status = excluded.status,
              use_for_ask_ai = excluded.use_for_ask_ai,
@@ -164,7 +224,9 @@ pub fn upsert_knowledge_memory_feedback(
              marked_inaccurate = excluded.marked_inaccurate,
              corrected_title = excluded.corrected_title,
              corrected_summary = excluded.corrected_summary,
-             updated_at_ms = excluded.updated_at_ms"#,
+             updated_at_ms = excluded.updated_at_ms,
+             updated_by_device_id = excluded.updated_by_device_id,
+             updated_by_seq = excluded.updated_by_seq"#,
         params![
             document_id,
             encoded_status,
@@ -173,10 +235,107 @@ pub fn upsert_knowledge_memory_feedback(
             if marked_inaccurate { 1 } else { 0 },
             corrected_title,
             corrected_summary,
+            created_at_ms,
             now,
+            device_id.as_str(),
+            seq,
         ],
     )?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id.as_str(),
+        "seq": seq,
+        "ts_ms": now,
+        "type": "knowledge.memory_feedback.upsert.v1",
+        "payload": {
+            "document_id": document_id,
+            "status": status.map(|value| serde_json::to_string(&value))
+                .transpose()?
+                .map(|value| value.trim_matches('"').to_string()),
+            "use_for_ask_ai": use_for_ask_ai,
+            "is_deleted": is_deleted,
+            "marked_inaccurate": marked_inaccurate,
+            "corrected_title": corrected_title,
+            "corrected_summary": corrected_summary,
+            "created_at_ms": created_at_ms,
+            "updated_at_ms": now,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
     get_knowledge_memory_feedback(conn, document_id)
+}
+
+const KV_KNOWLEDGE_MEMORY_FEEDBACK_OPLOG_BACKFILLED: &str =
+    "oplog.backfill.knowledge_memory_feedback.v1";
+
+pub fn backfill_knowledge_memory_feedback_oplog_if_needed(
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<u64> {
+    if kv_get_string(conn, KV_KNOWLEDGE_MEMORY_FEEDBACK_OPLOG_BACKFILLED)?.is_some() {
+        return Ok(0);
+    }
+
+    let device_id = get_or_create_device_id(conn)?;
+    let mut stmt = conn.prepare(
+        r#"SELECT document_id,
+                  status,
+                  use_for_ask_ai,
+                  is_deleted,
+                  marked_inaccurate,
+                  corrected_title,
+                  corrected_summary,
+                  created_at_ms,
+                  updated_at_ms
+           FROM knowledge_document_feedback
+           ORDER BY updated_at_ms ASC, document_id ASC"#,
+    )?;
+    let mut rows = stmt.query([])?;
+    let mut inserted = 0u64;
+    while let Some(row) = rows.next()? {
+        let document_id: String = row.get(0)?;
+        let status: Option<String> = row.get(1)?;
+        let use_for_ask_ai: i64 = row.get(2)?;
+        let is_deleted: i64 = row.get(3)?;
+        let marked_inaccurate: i64 = row.get(4)?;
+        let corrected_title: Option<String> = row.get(5)?;
+        let corrected_summary: Option<String> = row.get(6)?;
+        let created_at_ms: i64 = row.get(7)?;
+        let updated_at_ms: i64 = row.get(8)?;
+        let seq = next_device_seq(conn, &device_id)?;
+
+        conn.execute(
+            r#"UPDATE knowledge_document_feedback
+               SET updated_by_device_id = ?2,
+                   updated_by_seq = ?3
+               WHERE document_id = ?1"#,
+            params![document_id, device_id.as_str(), seq],
+        )?;
+
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id.as_str(),
+            "seq": seq,
+            "ts_ms": updated_at_ms,
+            "type": "knowledge.memory_feedback.upsert.v1",
+            "payload": {
+                "document_id": document_id,
+                "status": status,
+                "use_for_ask_ai": use_for_ask_ai != 0,
+                "is_deleted": is_deleted != 0,
+                "marked_inaccurate": marked_inaccurate != 0,
+                "corrected_title": normalize_optional_trimmed(corrected_title),
+                "corrected_summary": normalize_optional_trimmed(corrected_summary),
+                "created_at_ms": created_at_ms,
+                "updated_at_ms": updated_at_ms,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+        inserted += 1;
+    }
+
+    kv_set_string(conn, KV_KNOWLEDGE_MEMORY_FEEDBACK_OPLOG_BACKFILLED, "1")?;
+    Ok(inserted)
 }
 
 pub fn ensure_knowledge_rebuild_state_defaults(conn: &Connection) -> Result<()> {

@@ -109,6 +109,115 @@ fn apply_message_insert(
     Ok(())
 }
 
+fn apply_knowledge_memory_feedback_upsert(
+    conn: &Connection,
+    op: &serde_json::Value,
+) -> Result<()> {
+    let device_id = op["device_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing device_id"))?;
+    let seq = op["seq"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing seq"))?;
+    let payload = &op["payload"];
+
+    let document_id = payload["document_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing document_id"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing created_at_ms"))?;
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing updated_at_ms"))?;
+    let use_for_ask_ai = payload["use_for_ask_ai"]
+        .as_bool()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing use_for_ask_ai"))?;
+    let is_deleted = payload["is_deleted"]
+        .as_bool()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing is_deleted"))?;
+    let marked_inaccurate = payload["marked_inaccurate"].as_bool().ok_or_else(|| {
+        anyhow!("knowledge.memory_feedback.upsert.v1 missing marked_inaccurate")
+    })?;
+
+    let existing: Option<(i64, String, i64)> = conn
+        .query_row(
+            r#"SELECT updated_at_ms,
+                      COALESCE(updated_by_device_id, ''),
+                      COALESCE(updated_by_seq, 0)
+               FROM knowledge_document_feedback
+               WHERE document_id = ?1"#,
+            params![document_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+    if let Some((existing_updated_at_ms, existing_device_id, existing_seq)) = existing {
+        if !message_version_newer(
+            updated_at_ms,
+            device_id,
+            seq,
+            existing_updated_at_ms,
+            &existing_device_id,
+            existing_seq,
+        ) {
+            return Ok(());
+        }
+    }
+
+    let normalize_optional = |value: Option<&str>| -> Option<String> {
+        value.and_then(|raw| {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+    };
+
+    conn.execute(
+        r#"INSERT INTO knowledge_document_feedback(
+               document_id,
+               status,
+               use_for_ask_ai,
+               is_deleted,
+               marked_inaccurate,
+               corrected_title,
+               corrected_summary,
+               created_at_ms,
+               updated_at_ms,
+               updated_by_device_id,
+               updated_by_seq
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+           ON CONFLICT(document_id) DO UPDATE SET
+             status = excluded.status,
+             use_for_ask_ai = excluded.use_for_ask_ai,
+             is_deleted = excluded.is_deleted,
+             marked_inaccurate = excluded.marked_inaccurate,
+             corrected_title = excluded.corrected_title,
+             corrected_summary = excluded.corrected_summary,
+             created_at_ms = excluded.created_at_ms,
+             updated_at_ms = excluded.updated_at_ms,
+             updated_by_device_id = excluded.updated_by_device_id,
+             updated_by_seq = excluded.updated_by_seq"#,
+        params![
+            document_id,
+            payload["status"].as_str(),
+            if use_for_ask_ai { 1 } else { 0 },
+            if is_deleted { 1 } else { 0 },
+            if marked_inaccurate { 1 } else { 0 },
+            normalize_optional(payload["corrected_title"].as_str()),
+            normalize_optional(payload["corrected_summary"].as_str()),
+            created_at_ms,
+            updated_at_ms,
+            device_id,
+            seq,
+        ],
+    )?;
+
+    Ok(())
+}
+
 fn message_version_newer(
     incoming_updated_at: i64,
     incoming_device_id: &str,

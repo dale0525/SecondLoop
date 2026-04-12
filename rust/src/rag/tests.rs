@@ -291,6 +291,7 @@ fn generated_memory_cards_use_corrected_feedback_fields() {
 
     crate::db::upsert_knowledge_memory_feedback(
         &conn,
+        &key,
         "generated:preference:response-language",
         Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
         true,

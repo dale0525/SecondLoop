@@ -461,6 +461,7 @@ mod tests {
         );
         crate::db::upsert_knowledge_memory_feedback(
             &conn,
+            &key,
             "generated:preference:response-language",
             Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
             true,

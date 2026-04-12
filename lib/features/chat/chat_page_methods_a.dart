@@ -426,6 +426,36 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     required bool isDesktopPlatform,
     String? citationsJson,
   }) {
+    final backend = AppBackendScope.of(context);
+    final viewerBackend = maybeKnowledgeViewerBackendFor(backend);
+    final knowledgeBackend = maybeKnowledgeBackendFor(backend);
+    final openMemoryCard = viewerBackend == null
+        ? null
+        : (String documentId) => MemoryDetailPage.openDocumentId(
+              context,
+              documentId: documentId,
+            );
+    final correctMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (
+            ChatAnswerEvidenceMemoryCard card,
+            String title,
+            String summary,
+          ) =>
+            _correctMemoryFromEvidence(
+              card,
+              title: title,
+              summary: summary,
+            );
+    final refreshMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : _refreshMemoryFromEvidence;
+    final disableMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (String documentId) => _disableMemoryFromEvidence(documentId);
+    final deleteMemoryCard = knowledgeBackend == null || viewerBackend == null
+        ? null
+        : (String documentId) => _deleteMemoryFromEvidence(documentId);
     final citationController = ChatAnswerCitationController(
       parseChatAnswerEvidence(citationsJson),
     );
@@ -441,19 +471,11 @@ extension _ChatPageStateMethodsA on _ChatPageState {
           onOpenDirectSource: (target) async {
             await _handleMarkdownInAppLink(target);
           },
-          onOpenMemoryCard: (documentId) =>
-              MemoryDetailPage.openDocumentId(context, documentId: documentId),
-          onCorrectMemoryCard: (card, title, summary) =>
-              _correctMemoryFromEvidence(
-            card,
-            title: title,
-            summary: summary,
-          ),
-          onRefreshMemoryCard: _refreshMemoryFromEvidence,
-          onDisableMemoryCard: (documentId) =>
-              _disableMemoryFromEvidence(documentId),
-          onDeleteMemoryCard: (documentId) =>
-              _deleteMemoryFromEvidence(documentId),
+          onOpenMemoryCard: openMemoryCard,
+          onCorrectMemoryCard: correctMemoryCard,
+          onRefreshMemoryCard: refreshMemoryCard,
+          onDisableMemoryCard: disableMemoryCard,
+          onDeleteMemoryCard: deleteMemoryCard,
         );
         if (handledCitation) {
           return;
@@ -508,6 +530,14 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       correctedTitle: feedback.correctedTitle,
       correctedSummary: feedback.correctedSummary,
     );
+  }
+
+  bool _canOpenKnowledgeHref(String href) {
+    if (parseKnowledgeDocumentDeepLink(href) != null) {
+      return maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) !=
+          null;
+    }
+    return true;
   }
 
   Future<void> _deleteMemoryFromEvidence(String documentId) async {

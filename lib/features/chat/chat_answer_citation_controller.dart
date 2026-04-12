@@ -20,7 +20,7 @@ class ChatAnswerCitationController {
     BuildContext context, {
     required String href,
     required Future<void> Function(String href) onOpenDirectSource,
-    required Future<void> Function(String documentId) onOpenMemoryCard,
+    Future<void> Function(String documentId)? onOpenMemoryCard,
     Future<ChatAnswerEvidenceMemoryCard?> Function(
       ChatAnswerEvidenceMemoryCard card,
       String title,
@@ -54,7 +54,8 @@ class ChatAnswerCitationController {
     ChatAnswerEvidenceTab initialTab = ChatAnswerEvidenceTab.directSources,
     String? highlightedHref,
     required Future<void> Function(String href) onOpenDirectSource,
-    required Future<void> Function(String documentId) onOpenMemoryCard,
+    Future<void> Function(String documentId)? onOpenMemoryCard,
+    bool Function(String href)? canOpenDirectSource,
     Future<ChatAnswerEvidenceMemoryCard?> Function(
       ChatAnswerEvidenceMemoryCard card,
       String title,
@@ -75,6 +76,7 @@ class ChatAnswerCitationController {
       highlightedHref: highlightedHref,
       onOpenDirectSource: onOpenDirectSource,
       onOpenMemoryCard: onOpenMemoryCard,
+      canOpenDirectSource: canOpenDirectSource,
       onCorrectMemoryCard: onCorrectMemoryCard,
       onRefreshMemoryCard: onRefreshMemoryCard,
       onDisableMemoryCard: onDisableMemoryCard,

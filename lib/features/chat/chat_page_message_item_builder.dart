@@ -242,6 +242,39 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
         parseChatAnswerEvidence(stableMsg.citationsJson),
       );
       final evidence = citationController.evidence;
+      final backend = AppBackendScope.of(context);
+      final viewerBackend = maybeKnowledgeViewerBackendFor(backend);
+      final knowledgeBackend = maybeKnowledgeBackendFor(backend);
+      final openMemoryCard = viewerBackend == null
+          ? null
+          : (String documentId) => MemoryDetailPage.openDocumentId(
+                context,
+                documentId: documentId,
+              );
+      final correctMemoryCard =
+          knowledgeBackend == null || viewerBackend == null
+              ? null
+              : (
+                  ChatAnswerEvidenceMemoryCard card,
+                  String title,
+                  String summary,
+                ) =>
+                  _correctMemoryFromEvidence(
+                    card,
+                    title: title,
+                    summary: summary,
+                  );
+      final refreshMemoryCard =
+          knowledgeBackend == null || viewerBackend == null
+              ? null
+              : _refreshMemoryFromEvidence;
+      final disableMemoryCard =
+          knowledgeBackend == null || viewerBackend == null
+              ? null
+              : (String documentId) => _disableMemoryFromEvidence(documentId);
+      final deleteMemoryCard = knowledgeBackend == null || viewerBackend == null
+          ? null
+          : (String documentId) => _deleteMemoryFromEvidence(documentId);
       final todoBadgeMeta = _todoMessageBadgeMetaForMessage(
           message: stableMsg,
           jobsByMessageId: jobsByMessageId,
@@ -573,23 +606,12 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   onOpenDirectSource: (href) async {
                                     await _handleMarkdownInAppLink(href);
                                   },
-                                  onOpenMemoryCard: (documentId) =>
-                                      MemoryDetailPage.openDocumentId(
-                                    context,
-                                    documentId: documentId,
-                                  ),
-                                  onCorrectMemoryCard: (card, title, summary) =>
-                                      _correctMemoryFromEvidence(
-                                    card,
-                                    title: title,
-                                    summary: summary,
-                                  ),
-                                  onRefreshMemoryCard:
-                                      _refreshMemoryFromEvidence,
-                                  onDisableMemoryCard: (documentId) =>
-                                      _disableMemoryFromEvidence(documentId),
-                                  onDeleteMemoryCard: (documentId) =>
-                                      _deleteMemoryFromEvidence(documentId),
+                                  onOpenMemoryCard: openMemoryCard,
+                                  canOpenDirectSource: _canOpenKnowledgeHref,
+                                  onCorrectMemoryCard: correctMemoryCard,
+                                  onRefreshMemoryCard: refreshMemoryCard,
+                                  onDisableMemoryCard: disableMemoryCard,
+                                  onDeleteMemoryCard: deleteMemoryCard,
                                 ),
                               ),
                               onOpenMemory: () => unawaited(
@@ -599,23 +621,12 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   onOpenDirectSource: (href) async {
                                     await _handleMarkdownInAppLink(href);
                                   },
-                                  onOpenMemoryCard: (documentId) =>
-                                      MemoryDetailPage.openDocumentId(
-                                    context,
-                                    documentId: documentId,
-                                  ),
-                                  onCorrectMemoryCard: (card, title, summary) =>
-                                      _correctMemoryFromEvidence(
-                                    card,
-                                    title: title,
-                                    summary: summary,
-                                  ),
-                                  onRefreshMemoryCard:
-                                      _refreshMemoryFromEvidence,
-                                  onDisableMemoryCard: (documentId) =>
-                                      _disableMemoryFromEvidence(documentId),
-                                  onDeleteMemoryCard: (documentId) =>
-                                      _deleteMemoryFromEvidence(documentId),
+                                  onOpenMemoryCard: openMemoryCard,
+                                  canOpenDirectSource: _canOpenKnowledgeHref,
+                                  onCorrectMemoryCard: correctMemoryCard,
+                                  onRefreshMemoryCard: refreshMemoryCard,
+                                  onDisableMemoryCard: disableMemoryCard,
+                                  onDeleteMemoryCard: deleteMemoryCard,
                                 ),
                               ),
                               onOpenEvidence: () => unawaited(
@@ -624,23 +635,12 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   onOpenDirectSource: (href) async {
                                     await _handleMarkdownInAppLink(href);
                                   },
-                                  onOpenMemoryCard: (documentId) =>
-                                      MemoryDetailPage.openDocumentId(
-                                    context,
-                                    documentId: documentId,
-                                  ),
-                                  onCorrectMemoryCard: (card, title, summary) =>
-                                      _correctMemoryFromEvidence(
-                                    card,
-                                    title: title,
-                                    summary: summary,
-                                  ),
-                                  onRefreshMemoryCard:
-                                      _refreshMemoryFromEvidence,
-                                  onDisableMemoryCard: (documentId) =>
-                                      _disableMemoryFromEvidence(documentId),
-                                  onDeleteMemoryCard: (documentId) =>
-                                      _deleteMemoryFromEvidence(documentId),
+                                  onOpenMemoryCard: openMemoryCard,
+                                  canOpenDirectSource: _canOpenKnowledgeHref,
+                                  onCorrectMemoryCard: correctMemoryCard,
+                                  onRefreshMemoryCard: refreshMemoryCard,
+                                  onDisableMemoryCard: disableMemoryCard,
+                                  onDeleteMemoryCard: deleteMemoryCard,
                                 ),
                               ),
                               actionSuggestions: actionSuggestions,

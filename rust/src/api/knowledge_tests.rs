@@ -723,3 +723,63 @@ fn generated_memory_documents_api_excludes_non_generated_documents() {
         .iter()
         .all(|document| !document.document_id.starts_with("message:")));
 }
+
+#[test]
+fn knowledge_memory_feedback_survives_rebuild_reset() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [28u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let document_id = "generated:preference:response-language".to_string();
+    crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+        app_dir_string.clone(),
+        key.to_vec(),
+        document_id.clone(),
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        true,
+        Some("Preferred reply language".to_string()),
+        Some("Always reply in Chinese unless I ask for another language.".to_string()),
+    )
+    .expect("seed feedback");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild again");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs again");
+
+    let rebuilt =
+        crate::api::knowledge::db_get_knowledge_document(app_dir_string, key.to_vec(), document_id)
+            .expect("rebuilt document");
+
+    assert_eq!(
+        rebuilt.document.title.as_deref(),
+        Some("Preferred reply language")
+    );
+    assert_eq!(
+        rebuilt.document.summary.as_deref(),
+        Some("Always reply in Chinese unless I ask for another language.")
+    );
+    assert_eq!(
+        rebuilt.document.memory_feedback.status,
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed)
+    );
+    assert!(!rebuilt.document.memory_feedback.use_for_ask_ai);
+    assert!(rebuilt.document.memory_feedback.marked_inaccurate);
+}

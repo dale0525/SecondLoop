@@ -60,6 +60,38 @@ void main() {
     expect(page.initialContentKind, 'readable_text_full');
     expect(page.initialChunkIndex, 1);
   });
+
+  testWidgets(
+      'message viewer knowledge-document link degrades gracefully without knowledge backend',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: TestAppBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+              lock: () {},
+              child: const MessageViewerPage(
+                content:
+                    '[Open Knowledge](secondloop://knowledge-document/external%3Adoc-1?chunk=7&unit=external%3Adoc-1%3Achunk%3A0007)',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open Knowledge', findRichText: true));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('message_viewer_page')), findsOneWidget);
+    expect(find.textContaining('knowledge_viewer_backend_unavailable'),
+        findsOneWidget);
+    expect(find.byType(AttachmentViewerPage), findsNothing);
+  });
 }
 
 final class _Backend extends TestAppBackend implements AttachmentsBackend {

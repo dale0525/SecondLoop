@@ -169,10 +169,11 @@ pub fn db_upsert_knowledge_memory_feedback(
     corrected_title: Option<String>,
     corrected_summary: Option<String>,
 ) -> Result<knowledge::KnowledgeMemoryFeedback> {
-    let _validated_key = key_from_bytes(key)?;
+    let validated_key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::upsert_knowledge_memory_feedback(
         &conn,
+        &validated_key,
         &document_id,
         status,
         use_for_ask_ai,

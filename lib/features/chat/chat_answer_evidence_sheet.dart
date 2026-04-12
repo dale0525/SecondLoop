@@ -17,7 +17,8 @@ Future<void> showChatAnswerEvidenceSheet(
   ChatAnswerEvidenceTab initialTab = ChatAnswerEvidenceTab.directSources,
   String? highlightedHref,
   required Future<void> Function(String href) onOpenDirectSource,
-  required Future<void> Function(String documentId) onOpenMemoryCard,
+  Future<void> Function(String documentId)? onOpenMemoryCard,
+  bool Function(String href)? canOpenDirectSource,
   Future<ChatAnswerEvidenceMemoryCard?> Function(
     ChatAnswerEvidenceMemoryCard card,
     String title,
@@ -36,6 +37,7 @@ Future<void> showChatAnswerEvidenceSheet(
     highlightedHref: highlightedHref,
     onOpenDirectSource: onOpenDirectSource,
     onOpenMemoryCard: onOpenMemoryCard,
+    canOpenDirectSource: canOpenDirectSource,
     onCorrectMemoryCard: onCorrectMemoryCard,
     onRefreshMemoryCard: onRefreshMemoryCard,
     onDisableMemoryCard: onDisableMemoryCard,
@@ -90,7 +92,8 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
     required this.evidence,
     required this.initialTab,
     required this.onOpenDirectSource,
-    required this.onOpenMemoryCard,
+    this.onOpenMemoryCard,
+    this.canOpenDirectSource,
     this.onCorrectMemoryCard,
     this.onRefreshMemoryCard,
     this.onDisableMemoryCard,
@@ -103,7 +106,8 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
   final ChatAnswerEvidenceTab initialTab;
   final String? highlightedHref;
   final Future<void> Function(String href) onOpenDirectSource;
-  final Future<void> Function(String documentId) onOpenMemoryCard;
+  final Future<void> Function(String documentId)? onOpenMemoryCard;
+  final bool Function(String href)? canOpenDirectSource;
   final Future<ChatAnswerEvidenceMemoryCard?> Function(
     ChatAnswerEvidenceMemoryCard card,
     String title,
@@ -216,6 +220,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                 ChatAnswerEvidenceTab.directSources => _DirectSourceList(
                     evidence: widget.evidence,
                     highlightedHref: widget.highlightedHref,
+                    canOpenDirectSource: widget.canOpenDirectSource,
                     onOpenDirectSource: widget.onOpenDirectSource,
                   ),
                 ChatAnswerEvidenceTab.memoryCards => ListView.separated(
@@ -295,15 +300,18 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                TextButton(
-                                  onPressed: () =>
-                                      widget.onOpenMemoryCard(item.documentId),
-                                  child: Text(
-                                    context.t.chat.answerEvidence.actions
-                                        .inspectMemory,
+                                if (widget.onOpenMemoryCard != null)
+                                  TextButton(
+                                    onPressed: () => widget.onOpenMemoryCard!(
+                                      item.documentId,
+                                    ),
+                                    child: Text(
+                                      context.t.chat.answerEvidence.actions
+                                          .inspectMemory,
+                                    ),
                                   ),
-                                ),
-                                if (widget.onCorrectMemoryCard != null)
+                                if (widget.onOpenMemoryCard != null &&
+                                    widget.onCorrectMemoryCard != null)
                                   TextButton(
                                     onPressed: () async {
                                       final draft =
@@ -338,7 +346,8 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                           .correct,
                                     ),
                                   ),
-                                if (widget.onDisableMemoryCard != null &&
+                                if (widget.onOpenMemoryCard != null &&
+                                    widget.onDisableMemoryCard != null &&
                                     !isDeleted)
                                   TextButton(
                                     onPressed: isDisabled
@@ -366,7 +375,8 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                           .dontUse,
                                     ),
                                   ),
-                                if (widget.onDeleteMemoryCard != null)
+                                if (widget.onOpenMemoryCard != null &&
+                                    widget.onDeleteMemoryCard != null)
                                   TextButton(
                                     onPressed: isDeleted
                                         ? null
@@ -415,11 +425,13 @@ class _DirectSourceList extends StatelessWidget {
     required this.evidence,
     required this.highlightedHref,
     required this.onOpenDirectSource,
+    this.canOpenDirectSource,
   });
 
   final ChatAnswerEvidence evidence;
   final String? highlightedHref;
   final Future<void> Function(String href) onOpenDirectSource;
+  final bool Function(String href)? canOpenDirectSource;
 
   @override
   Widget build(BuildContext context) {
@@ -431,6 +443,7 @@ class _DirectSourceList extends StatelessWidget {
         final item = evidence.directSources[index];
         final isHighlighted =
             highlightedHref != null && item.href == highlightedHref;
+        final canOpen = canOpenDirectSource?.call(item.href) ?? true;
         return SlSurface(
           color: isHighlighted
               ? theme.colorScheme.secondaryContainer.withOpacity(0.65)
@@ -476,7 +489,8 @@ class _DirectSourceList extends StatelessWidget {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () => onOpenDirectSource(item.href),
+                  onPressed:
+                      canOpen ? () => onOpenDirectSource(item.href) : null,
                   child: Text(
                     context.t.chat.answerEvidence.actions.viewOriginal,
                   ),
