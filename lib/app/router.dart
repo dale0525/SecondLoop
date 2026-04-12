@@ -194,8 +194,22 @@ class _AppShellState extends State<AppShell> {
                   destinations: [
                     for (final t in AppTab.values)
                       NavigationDestination(
-                        icon: Icon(t.icon),
-                        selectedIcon: Icon(t.selectedIcon),
+                        icon: t == AppTab.settings
+                            ? _AppUpdateBadgeIcon(
+                                icon: t.icon,
+                                badgeKey: const ValueKey(
+                                  'app_tab_settings_update_badge_bottom_nav',
+                                ),
+                              )
+                            : Icon(t.icon),
+                        selectedIcon: t == AppTab.settings
+                            ? _AppUpdateBadgeIcon(
+                                icon: t.selectedIcon,
+                                badgeKey: const ValueKey(
+                                  'app_tab_settings_update_badge_bottom_nav_selected',
+                                ),
+                              )
+                            : Icon(t.selectedIcon),
                         label: t.label(context),
                       ),
                   ],

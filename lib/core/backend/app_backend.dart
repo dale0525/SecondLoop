@@ -1636,12 +1636,22 @@ abstract class AppBackend {
   }
 }
 
-abstract interface class MessageCitationWriteBackend {
-  Future<Message> insertMessageWithCitations(
+abstract interface class AssistantCitationWriteBackend {
+  Future<Message> insertAssistantMessageWithCitations(
     Uint8List key,
     String conversationId, {
-    required String role,
     required String content,
+    String? citationsJson,
+  });
+}
+
+abstract interface class DetachedAskCompletionRecoveryBackend {
+  Future<bool> applyDetachedAskCompletionOnce(
+    Uint8List key, {
+    required String requestId,
+    required String conversationId,
+    required String question,
+    required String answer,
     String? citationsJson,
   });
 }

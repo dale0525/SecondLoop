@@ -357,7 +357,7 @@ final class DetachedAskRecoveryService {
         citationsJson: citationsJson,
       );
     } catch (_) {
-      return _applyCompletionViaLegacyEventMarker(
+      return _applyCompletionViaBackendRecovery(
         backend: backend,
         sessionKey: sessionKey,
         requestId: rid,
@@ -365,12 +365,11 @@ final class DetachedAskRecoveryService {
         question: q,
         answer: a,
         citationsJson: citationsJson,
-        gatewayBaseUrl: gatewayBaseUrl,
       );
     }
   }
 
-  static Future<bool> _applyCompletionViaLegacyEventMarker({
+  static Future<bool> _applyCompletionViaBackendRecovery({
     required AppBackend backend,
     required Uint8List sessionKey,
     required String requestId,
@@ -378,48 +377,19 @@ final class DetachedAskRecoveryService {
     required String question,
     required String answer,
     String? citationsJson,
-    String? gatewayBaseUrl,
   }) async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final marker = await backend.upsertEvent(
-      sessionKey,
-      id: 'detached_ask_completion:$requestId',
-      title:
-          'detached_ask_completion_marker_v1:${gatewayBaseUrl?.trim() ?? ''}',
-      startAtMs: nowMs,
-      endAtMs: nowMs + 1,
-      tz: 'UTC',
-      sourceEntryId: conversationId,
-    );
-
-    final firstClaim = marker.createdAtMs == marker.updatedAtMs;
-    if (!firstClaim) return false;
-
-    await backend.insertMessage(
-      sessionKey,
-      conversationId,
-      role: 'user',
-      content: question,
-    );
-    if (backend is MessageCitationWriteBackend) {
-      final citationBackend = backend as MessageCitationWriteBackend;
-      await citationBackend.insertMessageWithCitations(
-        sessionKey,
-        conversationId,
-        role: 'assistant',
-        content: answer,
-        citationsJson: citationsJson,
-      );
-    } else {
-      await backend.insertMessage(
-        sessionKey,
-        conversationId,
-        role: 'assistant',
-        content: answer,
-      );
+    if (backend is! DetachedAskCompletionRecoveryBackend) {
+      return false;
     }
-
-    return true;
+    final recoveryBackend = backend as DetachedAskCompletionRecoveryBackend;
+    return recoveryBackend.applyDetachedAskCompletionOnce(
+      sessionKey,
+      requestId: requestId,
+      conversationId: conversationId,
+      question: question,
+      answer: answer,
+      citationsJson: citationsJson,
+    );
   }
 
   static Future<void> trackMetric({
