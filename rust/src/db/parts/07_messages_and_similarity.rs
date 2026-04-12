@@ -245,7 +245,9 @@ pub fn get_message_by_id_optional(
     key: &[u8; 32],
     id: &str,
 ) -> Result<Option<Message>> {
-    let row: Option<(String, String, Vec<u8>, i64, i64, Option<String>)> = conn
+    type MessageLookupRow = (String, String, Vec<u8>, i64, i64, Option<String>);
+
+    let row: Option<MessageLookupRow> = conn
         .query_row(
             r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1), citations_json
                FROM messages

@@ -49,23 +49,23 @@ fn decode_knowledge_memory_status(
     .transpose()
 }
 
+type KnowledgeMemoryFeedbackRow = (
+    Option<String>,
+    i64,
+    i64,
+    i64,
+    Option<String>,
+    Option<String>,
+    i64,
+    i64,
+    String,
+    i64,
+);
+
 fn load_existing_knowledge_memory_feedback_row(
     conn: &Connection,
     document_id: &str,
-) -> Result<
-    Option<(
-        Option<String>,
-        i64,
-        i64,
-        i64,
-        Option<String>,
-        Option<String>,
-        i64,
-        i64,
-        String,
-        i64,
-    )>,
-> {
+) -> Result<Option<KnowledgeMemoryFeedbackRow>> {
     conn.query_row(
         r#"SELECT status,
                   use_for_ask_ai,

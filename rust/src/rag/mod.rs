@@ -401,6 +401,7 @@ fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -
     Ok(out)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn ask_ai_stream_and_persist(
     conn: &Connection,
     key: &[u8; 32],

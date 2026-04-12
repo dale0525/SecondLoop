@@ -71,7 +71,7 @@ List<MemoryCenterSectionData> buildMemoryCenterSections(
               rawText: document.rawText,
               correctedSummary: document.memoryFeedback.correctedSummary,
             ),
-            updatedAtMs: document.updatedAtMs,
+            updatedAtMs: document.updatedAtMs.toInt(),
             sourceCount: display?.sourceCount.toInt() ?? 1,
             section: section,
             status: _deriveStatus(document),
@@ -151,7 +151,7 @@ MemoryCardStatus _deriveStatus(ContentKnowledgeDocument document) {
       break;
   }
   final nowMs = DateTime.now().millisecondsSinceEpoch;
-  final ageMs = nowMs - document.updatedAtMs;
+  final ageMs = nowMs - document.updatedAtMs.toInt();
   if (document.documentId.startsWith('generated:event:') &&
       ageMs > const Duration(days: 30).inMilliseconds) {
     return MemoryCardStatus.maybeOutdated;

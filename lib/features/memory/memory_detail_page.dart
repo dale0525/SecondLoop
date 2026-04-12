@@ -89,7 +89,8 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
           offset: offset,
         );
         allUnits.addAll(page.units);
-        if (page.units.length < pageSize || allUnits.length >= page.total) {
+        if (page.units.length < pageSize ||
+            allUnits.length >= page.total.toInt()) {
           break;
         }
         offset += page.units.length;
@@ -535,7 +536,8 @@ MemoryCardStatus effectiveMemoryStatus(ContentKnowledgeDocument document) {
   }
   final section = memoryCenterSectionForData(document);
   if (section == MemoryCenterSection.recentEvents) {
-    final ageMs = DateTime.now().millisecondsSinceEpoch - document.updatedAtMs;
+    final ageMs =
+        DateTime.now().millisecondsSinceEpoch - document.updatedAtMs.toInt();
     if (ageMs > const Duration(days: 30).inMilliseconds) {
       return MemoryCardStatus.maybeOutdated;
     }

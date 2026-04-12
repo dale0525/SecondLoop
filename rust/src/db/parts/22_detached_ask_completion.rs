@@ -115,11 +115,11 @@ pub fn apply_detached_ask_completion_once(
     conn.execute_batch("BEGIN IMMEDIATE;")?;
 
     let result: Result<bool> = (|| {
-        if !claim_detached_ask_completion_request_id(conn, request_id, conversation_id)? {
-            if get_detached_ask_completion_message_ids(conn, request_id, conversation_id)?.is_some()
-            {
-                return Ok(false);
-            }
+        if !claim_detached_ask_completion_request_id(conn, request_id, conversation_id)?
+            && get_detached_ask_completion_message_ids(conn, request_id, conversation_id)?
+                .is_some()
+        {
+            return Ok(false);
         }
 
         let user_message = insert_message_non_memory(conn, key, conversation_id, "user", question)?;
