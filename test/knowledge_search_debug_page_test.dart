@@ -63,18 +63,20 @@ void main() {
     final backend = _SemanticSearchPrepBackend(
       initialMessages: const <Message>[
         Message(
-          id: 'msg-1',
+          id: 'msg-2',
           conversationId: 'loop_home',
-          role: 'user',
-          content: '## Budget freeze note\n\nFollow up next week.',
-          createdAtMs: 1,
-          isMemory: true,
+          role: 'assistant',
+          content: 'Budget freeze is confirmed.',
+          createdAtMs: 2,
+          isMemory: false,
+          citationsJson:
+              '{"direct_sources":[{"id":"message:history-1","href":"secondloop://message/history-1","source_type":"message","label":"History","snippet":"Budget freeze source"}],"memory_cards":[]}',
         ),
       ],
       results: <KnowledgeSearchResult>[
         const KnowledgeSearchResult(
-          documentId: 'message:msg-1',
-          unitId: 'message:msg-1:chunk:0',
+          documentId: 'message:msg-2',
+          unitId: 'message:msg-2:chunk:0',
           unitKind: KnowledgeUnitKind.chunk,
           layer: KnowledgeRetrievalLayer.chunk,
           sourceKind: KnowledgeSourceKind.rawText,
@@ -86,11 +88,11 @@ void main() {
           semanticScore: 0.9,
           lexicalScore: 0.95,
           anchors: KnowledgeAnchorSet(
-            messageId: 'msg-1',
+            messageId: 'msg-2',
             conversationId: 'loop_home',
           ),
-          createdAtMs: 1,
-          updatedAtMs: 1,
+          createdAtMs: 2,
+          updatedAtMs: 2,
         ),
       ],
     );
@@ -116,10 +118,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(
-        const ValueKey('knowledge_search_result_message:msg-1:chunk:0')));
+        const ValueKey('knowledge_search_result_message:msg-2:chunk:0')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('message_viewer_page')), findsOneWidget);
+    expect(find.text('Open evidence'), findsOneWidget);
   });
 }
 

@@ -138,32 +138,47 @@ class ChatAnswerEvidenceMemoryCard {
   final bool markedInaccurate;
 
   ChatAnswerEvidenceMemoryCard copyWith({
-    String? title,
-    String? summary,
-    String? body,
-    String? status,
-    int? sourceCount,
-    String? whyUsed,
-    int? updatedAtMs,
-    bool? useForAskAi,
-    bool? isDeleted,
-    bool? markedInaccurate,
+    Object? title = _copyWithUnset,
+    Object? summary = _copyWithUnset,
+    Object? body = _copyWithUnset,
+    Object? status = _copyWithUnset,
+    Object? sourceCount = _copyWithUnset,
+    Object? whyUsed = _copyWithUnset,
+    Object? updatedAtMs = _copyWithUnset,
+    Object? useForAskAi = _copyWithUnset,
+    Object? isDeleted = _copyWithUnset,
+    Object? markedInaccurate = _copyWithUnset,
   }) {
     return ChatAnswerEvidenceMemoryCard(
       documentId: documentId,
-      title: title ?? this.title,
-      summary: summary ?? this.summary,
-      body: body ?? this.body,
+      title: identical(title, _copyWithUnset) ? this.title : title as String?,
+      summary: identical(summary, _copyWithUnset)
+          ? this.summary
+          : summary as String?,
+      body: identical(body, _copyWithUnset) ? this.body : body as String?,
       sourceKind: sourceKind,
       role: role,
       createdAtMs: createdAtMs,
-      updatedAtMs: updatedAtMs ?? this.updatedAtMs,
-      status: status ?? this.status,
-      sourceCount: sourceCount ?? this.sourceCount,
-      whyUsed: whyUsed ?? this.whyUsed,
-      useForAskAi: useForAskAi ?? this.useForAskAi,
-      isDeleted: isDeleted ?? this.isDeleted,
-      markedInaccurate: markedInaccurate ?? this.markedInaccurate,
+      updatedAtMs: identical(updatedAtMs, _copyWithUnset)
+          ? this.updatedAtMs
+          : updatedAtMs as int,
+      status:
+          identical(status, _copyWithUnset) ? this.status : status as String,
+      sourceCount: identical(sourceCount, _copyWithUnset)
+          ? this.sourceCount
+          : sourceCount as int,
+      whyUsed: identical(whyUsed, _copyWithUnset)
+          ? this.whyUsed
+          : whyUsed as String?,
+      useForAskAi: identical(useForAskAi, _copyWithUnset)
+          ? this.useForAskAi
+          : useForAskAi as bool,
+      isDeleted: identical(isDeleted, _copyWithUnset)
+          ? this.isDeleted
+          : isDeleted as bool,
+      markedInaccurate: identical(markedInaccurate, _copyWithUnset)
+          ? this.markedInaccurate
+          : markedInaccurate as bool,
     );
   }
 
@@ -183,6 +198,8 @@ class ChatAnswerEvidenceMemoryCard {
     return documentId;
   }
 }
+
+const Object _copyWithUnset = Object();
 
 String sourceTypeDisplayLabel(String rawType) {
   final normalized = rawType.trim().toLowerCase();

@@ -171,6 +171,7 @@ class _WebChatPageState extends State<WebChatPage> {
                             builder: (_) => MessageViewerPage(
                               content: message.content,
                               messageId: message.id,
+                              citationsJson: message.citationsJson,
                             ),
                           ),
                         );

@@ -473,7 +473,7 @@ class _MemoryDetailData {
 }
 
 MemoryCardStatus effectiveMemoryStatus(ContentKnowledgeDocument document) {
-  switch (document.memoryFeedback.status) {
+  switch (document.memoryDisplay?.status ?? document.memoryFeedback.status) {
     case KnowledgeMemoryStatus.confirmed:
       return MemoryCardStatus.confirmed;
     case KnowledgeMemoryStatus.maybeOutdated:
@@ -522,6 +522,7 @@ bool _unitHasOpenableSource(KnowledgeUnit unit) {
     'readable_text' => 'readable_text_full',
     'ocr_text' => 'ocr_text_full',
     'transcript' => 'transcript_full',
+    'summary' => 'summary',
     'metadata' => 'metadata',
     _ => null,
   };

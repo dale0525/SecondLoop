@@ -67,6 +67,7 @@ List<String> candidateAttachmentKnowledgeDocumentIds(
       'readable_text' || 'readable_text_full' => 'readable_text',
       'ocr_text' || 'ocr_text_full' => 'ocr_text',
       'transcript' || 'transcript_full' => 'transcript',
+      'summary' => 'summary',
       'metadata' => 'metadata',
       _ => null,
     };

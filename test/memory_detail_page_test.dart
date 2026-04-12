@@ -10,6 +10,7 @@ import 'package:secondloop/core/backend/knowledge_viewer_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
 import 'package:secondloop/features/knowledge_viewer/knowledge_document_viewer_page.dart';
+import 'package:secondloop/features/memory/memory_center_models.dart';
 import 'package:secondloop/features/memory/memory_detail_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 import 'package:secondloop/src/rust/knowledge/models.dart';
@@ -117,6 +118,71 @@ void main() {
     );
     expect(page.initialContentKind, 'transcript_full');
     expect(page.initialChunkIndex, 4);
+  });
+
+  testWidgets('MemoryDetailPage preserves summary attachment citation targets',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final backend = _MemoryDetailBackend(
+      unitsPageBuilder: ({required int limit, required int offset}) =>
+          <KnowledgeUnit>[
+        KnowledgeUnit(
+          unitId: 'attachment:sha-attachment:summary:chunk:0',
+          documentId: 'attachment:sha-attachment:summary',
+          parentUnitId: null,
+          unitKind: KnowledgeUnitKind.chunk,
+          sourceKind: KnowledgeSourceKind.summary,
+          role: KnowledgeRole.evidence,
+          ordinal: 0,
+          tokenCount: 8,
+          rawText: 'Summary chunk zero.',
+          normalizedText: 'summary chunk zero.',
+          anchors: const KnowledgeAnchorSet(
+            attachmentSha256: 'sha-attachment',
+          ),
+          prevUnitId: null,
+          nextUnitId: null,
+          createdAtMs: now,
+          updatedAtMs: now,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const MemoryDetailPage(
+                documentId: 'generated:preference:response-language',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final openSourceButton = find.widgetWithText(TextButton, 'View original');
+    await tester.scrollUntilVisible(
+      openSourceButton,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(openSourceButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final page = tester.widget<AttachmentViewerPage>(
+      find.byType(AttachmentViewerPage),
+    );
+    expect(page.initialContentKind, 'summary');
+    expect(page.initialChunkIndex, 0);
   });
 
   testWidgets(
@@ -397,6 +463,44 @@ void main() {
     expect(find.text('Most recent evidence only.'), findsOneWidget);
     expect(backend.recentListRequestCount, 1);
     expect(backend.viewerListOffsets, isEmpty);
+  });
+
+  test('effectiveMemoryStatus uses memory display status when present', () {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final document = ContentKnowledgeDocument(
+      documentId: 'generated:event:decision',
+      originType: KnowledgeOriginType.generated,
+      sourceKind: KnowledgeSourceKind.summary,
+      role: KnowledgeRole.summary,
+      language: 'en',
+      qualityScore: 1,
+      createdAtMs: now - 1000,
+      updatedAtMs: now - const Duration(days: 60).inMilliseconds,
+      versions: const KnowledgeVersionSet(
+        schemaVersion: 1,
+        normalizationVersion: 1,
+        segmentationVersion: 1,
+        embeddingPolicyVersion: 1,
+        retrievalPolicyVersion: 1,
+      ),
+      anchors: const KnowledgeAnchorSet(),
+      title: 'Decision memory',
+      summary: 'A stale event memory',
+      rawText: 'A stale event memory',
+      normalizedText: 'a stale event memory',
+      memoryDisplay: const KnowledgeMemoryDisplay(
+        section: KnowledgeMemorySection.recentEvent,
+        sourceCount: 1,
+        status: KnowledgeMemoryStatus.confirmed,
+      ),
+      memoryFeedback: const KnowledgeMemoryFeedback(
+        useForAskAi: true,
+        isDeleted: false,
+        markedInaccurate: false,
+      ),
+    );
+
+    expect(effectiveMemoryStatus(document), MemoryCardStatus.confirmed);
   });
 
   testWidgets(

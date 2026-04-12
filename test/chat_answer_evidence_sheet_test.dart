@@ -8,6 +8,34 @@ import 'package:secondloop/i18n/strings.g.dart';
 import 'test_i18n.dart';
 
 void main() {
+  test('ChatAnswerEvidenceMemoryCard.copyWith can clear nullable fields', () {
+    const original = ChatAnswerEvidenceMemoryCard(
+      documentId: 'generated:preference:response-language',
+      title: 'Response language',
+      summary: 'Use Chinese',
+      body: 'Use Chinese for replies.',
+      sourceKind: 'summary',
+      role: 'summary',
+      createdAtMs: 1,
+      updatedAtMs: 2,
+      status: 'confirmed',
+      sourceCount: 1,
+      whyUsed: 'latest query',
+    );
+
+    final updated = original.copyWith(
+      title: null,
+      summary: null,
+      body: null,
+      whyUsed: null,
+    );
+
+    expect(updated.title, isNull);
+    expect(updated.summary, isNull);
+    expect(updated.body, isNull);
+    expect(updated.whyUsed, isNull);
+  });
+
   testWidgets('ChatAnswerEvidencePanel renders both tabs and actions',
       (tester) async {
     var openedDirectSource = '';

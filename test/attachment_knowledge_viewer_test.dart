@@ -15,6 +15,24 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
+  test('candidateAttachmentKnowledgeDocumentIds prefers summary targets', () {
+    final ids = candidateAttachmentKnowledgeDocumentIds(
+      const Attachment(
+        sha256: 'sha-doc',
+        mimeType: 'text/plain',
+        path: 'attachments/sha-doc.txt',
+        byteLen: 32,
+        createdAtMs: 1,
+      ),
+      const <String, Object?>{
+        'summary': 'A short summary',
+      },
+      'summary',
+    );
+
+    expect(ids.first, 'attachment:sha-doc:summary');
+  });
+
   testWidgets(
       'AttachmentKnowledgeContentPane forwards initial chunk targeting to knowledge viewer',
       (tester) async {
