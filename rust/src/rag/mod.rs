@@ -128,9 +128,6 @@ fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
         || q.contains("today's")
         || question.contains("今天")
         || question.contains("今日");
-    if is_today {
-        return Some(now_ms.saturating_add(36 * 60 * 60 * 1000));
-    }
 
     let is_this_week = q.contains("this week")
         || q.contains("week agenda")
@@ -139,9 +136,6 @@ fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
         || question.contains("本周")
         || question.contains("这周")
         || question.contains("這週");
-    if is_this_week {
-        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
-    }
 
     let is_agenda = q.contains("agenda")
         || q.contains("schedule")
@@ -191,6 +185,12 @@ fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
         || question.contains("計劃");
     if !(has_explicit_agenda_intent || (has_generic_task_words && has_timeframe)) {
         return None;
+    }
+    if is_today {
+        return Some(now_ms.saturating_add(36 * 60 * 60 * 1000));
+    }
+    if is_this_week {
+        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
     }
     if is_agenda {
         return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
