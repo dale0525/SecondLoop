@@ -146,7 +146,7 @@ fn knowledge_ask_ai_contexts_include_message_deeplinks() {
 }
 
 #[test]
-fn knowledge_ask_ai_contexts_include_generated_preferences_for_planning_queries() {
+fn knowledge_ask_ai_contexts_include_compiled_pages_for_planning_queries() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = crate::db::open(dir.path()).expect("open");
     let key = [92u8; 32];
@@ -176,7 +176,7 @@ fn knowledge_ask_ai_contexts_include_generated_preferences_for_planning_queries(
     .expect("contexts");
 
     assert!(contexts.iter().any(|ctx| {
-        ctx.contains("source=summary") && ctx.to_lowercase().contains("prefers responses")
+        ctx.contains("source=wiki_page") && ctx.to_lowercase().contains("prefers responses")
     }));
 }
 

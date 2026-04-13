@@ -119,10 +119,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(openedDirectSource, 'secondloop://message/history-1');
 
-    await tester.tap(find.textContaining('Memory cards'));
+    await tester.tap(find.textContaining('Knowledge pages'));
     await tester.pumpAndSettle();
     expect(find.text('Response language'), findsOneWidget);
-    await tester.tap(find.text('Inspect memory'));
+    await tester.tap(find.text('Inspect page'));
     await tester.pumpAndSettle();
     expect(openedMemoryDocument, 'generated:preference:response-language');
     await tester.tap(find.text('Correct'));
@@ -151,10 +151,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Confirmed'), findsOneWidget);
-    await tester.tap(find.text('Don\'t use'));
+    await tester.tap(find.text('Stop using in answers'));
     await tester.pumpAndSettle();
     expect(disabledMemoryDocument, 'generated:preference:response-language');
-    await tester.tap(find.text('Delete'));
+    await tester.tap(find.text('Archive'));
     await tester.pumpAndSettle();
     expect(deletedMemoryDocument, 'generated:preference:response-language');
   });
@@ -217,7 +217,7 @@ void main() {
     expect(find.text('当前线程'), findsOneWidget);
     expect(find.text('高相关性'), findsOneWidget);
 
-    await tester.tap(find.textContaining('记忆卡'));
+    await tester.tap(find.textContaining('知识页'));
     await tester.pumpAndSettle();
 
     expect(find.text('因与这个问题相关而被使用：用中文总结一下最近变化'), findsOneWidget);
@@ -704,14 +704,14 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('Used by Ask AI'), findsOneWidget);
+      expect(find.text('Used in answers'), findsOneWidget);
 
-      await tester.tap(find.text('Don\'t use'));
+      await tester.tap(find.text('Stop using in answers'));
       await tester.pump();
 
       expect(find.textContaining('disable failed'), findsOneWidget);
-      expect(find.text('Used by Ask AI'), findsOneWidget);
-      expect(find.text('Not used by Ask AI'), findsNothing);
+      expect(find.text('Used in answers'), findsOneWidget);
+      expect(find.text('Not used in answers'), findsNothing);
     },
   );
 
@@ -748,10 +748,10 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('Inspect memory'), findsNothing);
+      expect(find.text('Inspect page'), findsNothing);
       expect(find.text('Correct'), findsNothing);
-      expect(find.text('Don\'t use'), findsNothing);
-      expect(find.text('Delete'), findsNothing);
+      expect(find.text('Stop using in answers'), findsNothing);
+      expect(find.text('Archive'), findsNothing);
     },
   );
 }

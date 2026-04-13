@@ -5,54 +5,136 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/knowledge_backend.dart';
-import 'package:secondloop/core/backend/knowledge_viewer_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/knowledge_center/knowledge_center_models.dart';
 import 'package:secondloop/features/memory/memory_center_page.dart';
-import 'package:secondloop/features/memory/memory_center_models.dart';
-import 'package:secondloop/i18n/strings.g.dart';
-import 'package:secondloop/src/rust/knowledge/models.dart';
+import 'package:secondloop/src/rust/knowledge/history.dart';
+import 'package:secondloop/src/rust/knowledge/lint.dart';
+import 'package:secondloop/src/rust/knowledge/pages.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('MemoryCenterPage groups generated memory cards', (tester) async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final backend = _MemoryBackend(
-      documents: [
-        _document(
-          documentId: 'generated:preference:response-language',
-          title: 'Response language',
-          summary: 'User prefers Chinese.\nUse concise bullets.',
-          updatedAtMs: nowMs,
-          memoryDisplay: const KnowledgeMemoryDisplay(
-            section: KnowledgeMemorySection.preference,
-            sourceCount: 2,
-            status: KnowledgeMemoryStatus.inferred,
+  test('buildKnowledgeCenterHomeData creates final portal sections', () {
+    final page = _pageSummary(
+      pageId: 'page:preferences',
+      title: 'Preferences',
+      pageType: KnowledgePageType.preferences,
+      state: KnowledgePageState.active,
+      updatedAtMs: 20,
+      lastUsedAtMs: 25,
+    );
+    final reviewPage = _pageSummary(
+      pageId: 'page:recent-events',
+      title: 'Recent Events',
+      pageType: KnowledgePageType.recentEvents,
+      state: KnowledgePageState.needsReview,
+      updatedAtMs: 40,
+    );
+    final home = buildKnowledgeCenterHomeData(
+      summaries: [page, reviewPage],
+      detailsByPageId: {
+        page.pageId: KnowledgePageDetail(
+          page: _page(
+            pageId: page.pageId,
+            title: page.title,
+            pageType: page.pageType,
+            state: page.state,
+            updatedAtMs: page.updatedAtMs,
           ),
+          sourceDocumentIds: const ['doc:1'],
+          claimIds: const ['claim:1'],
+          history: const [
+            KnowledgePageChangeRecord(
+              changeId: 'change:1',
+              pageId: 'page:preferences',
+              changeType: KnowledgePageChangeType.updated,
+              actor: 'system',
+              reason: 'Updated from fresh evidence.',
+              answerImpacted: true,
+              createdAtMs: 30,
+            ),
+          ],
+          versionSnapshots: const [],
+          evidenceEntries: const [],
+          lintRecords: const [],
         ),
-        _document(
-          documentId: 'generated:event:trip-plan',
-          title: 'Trip plan',
-          summary: 'Upcoming trip to Shanghai.',
+        reviewPage.pageId: KnowledgePageDetail(
+          page: _page(
+            pageId: reviewPage.pageId,
+            title: reviewPage.title,
+            pageType: reviewPage.pageType,
+            state: reviewPage.state,
+            updatedAtMs: reviewPage.updatedAtMs,
+          ),
+          sourceDocumentIds: const ['doc:2'],
+          claimIds: const ['claim:2'],
+          history: const [],
+          versionSnapshots: const [],
+          evidenceEntries: const [],
+          lintRecords: const [
+            KnowledgeLintRecord(
+              lintId: 'lint:1',
+              pageId: 'page:recent-events',
+              kind: KnowledgeLintKind.conflict,
+              summary: 'Conflicting evidence detected.',
+              createdAtMs: 41,
+            ),
+          ],
+        ),
+      },
+      recentChangeRecords: const [
+        KnowledgePageChangeRecord(
+          changeId: 'change:1',
+          pageId: 'page:preferences',
+          changeType: KnowledgePageChangeType.updated,
+          actor: 'system',
+          reason: 'Updated from fresh evidence.',
+          answerImpacted: true,
+          createdAtMs: 30,
+        ),
+      ],
+    );
+
+    expect(home.currentMe.map((item) => item.title), ['Preferences']);
+    expect(home.needsAttention.map((item) => item.title), ['Recent Events']);
+    expect(
+        home.recentChanges.first.record.reason, 'Updated from fresh evidence.');
+    expect(home.directory.map((item) => item.pageType), [
+      KnowledgePageType.preferences,
+      KnowledgePageType.recentEvents,
+    ]);
+  });
+
+  testWidgets('MemoryCenterPage renders grouped knowledge pages',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _KnowledgePagesBackendStub(
+      pages: [
+        _pageSummary(
+          pageId: 'page:preferences:language',
+          title: 'Response language',
+          summary: 'Reply in Chinese unless another language is requested.',
+          state: KnowledgePageState.active,
+          sourceCount: 2,
+          updatedAtMs: nowMs,
+        ),
+        _pageSummary(
+          pageId: 'page:projects:launch',
+          title: 'Launch plan',
+          summary: 'Rollout timing needs confirmation.',
+          state: KnowledgePageState.needsReview,
+          sourceCount: 3,
+          updatedAtMs: nowMs - const Duration(days: 1).inMilliseconds,
+        ),
+        _pageSummary(
+          pageId: 'page:topics:parking-lot',
+          title: 'Parking lot',
+          summary: 'Ideas that should not be used in answers.',
+          state: KnowledgePageState.answerMuted,
+          sourceCount: 1,
           updatedAtMs: nowMs - const Duration(days: 2).inMilliseconds,
-          memoryDisplay: const KnowledgeMemoryDisplay(
-            section: KnowledgeMemorySection.recentEvent,
-            sourceCount: 1,
-            status: KnowledgeMemoryStatus.inferred,
-          ),
-        ),
-        _document(
-          documentId: 'generated:profile:launch-work',
-          title: 'Launch work',
-          summary:
-              'Working on project launch checklist.\nPreparing rollout notes.',
-          updatedAtMs: nowMs,
-          memoryDisplay: const KnowledgeMemoryDisplay(
-            section: KnowledgeMemorySection.project,
-            sourceCount: 2,
-            status: KnowledgeMemoryStatus.inferred,
-          ),
         ),
       ],
     );
@@ -74,219 +156,29 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Preferences'), findsOneWidget);
-    expect(find.text('Projects'), findsOneWidget);
-    expect(find.text('Recent events'), findsOneWidget);
+    expect(find.text('Current Me'), findsOneWidget);
+    expect(find.text('Needs Your Attention'), findsOneWidget);
+    expect(find.text('Recent Changes'), findsOneWidget);
     expect(find.text('Response language'), findsOneWidget);
-    expect(find.text('Trip plan'), findsOneWidget);
-    expect(find.text('Launch work'), findsOneWidget);
-    expect(find.textContaining('2 sources'), findsWidgets);
-    expect(find.textContaining('Updated today'), findsWidgets);
-  });
-
-  test(
-      'buildMemoryCenterSections localizes generated memory titles and summaries',
-      () {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final sections = buildMemoryCenterSections(
-      [
-        _document(
-          documentId: 'generated:pattern:active-task-focus',
-          title: 'Active task pattern',
-          summary: 'User is actively working across these task threads:',
-          rawText:
-              'User is actively working across these task threads:\n- 做视频 [in_progress]\n- 复盘选题 [open]',
-          updatedAtMs: nowMs,
-          memoryDisplay: const KnowledgeMemoryDisplay(
-            section: KnowledgeMemorySection.project,
-            sourceCount: 2,
-            status: KnowledgeMemoryStatus.inferred,
-          ),
-        ),
-      ],
-      AppLocale.zhCn.build(),
+    expect(find.text('Launch plan'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('My Wiki'),
+      300,
+      scrollable: find.byType(Scrollable).first,
     );
-
-    expect(sections.single.cards.single.title, '当前任务模式');
-    expect(sections.single.cards.single.summary, '用户当前主要在推进这些任务：');
-  });
-
-  testWidgets(
-    'MemoryCenterPage paginates until generated memories are found beyond the first page',
-    (tester) async {
-      final nowMs = DateTime.now().millisecondsSinceEpoch;
-      final backend = _MemoryBackend(
-        documents: [
-          for (var index = 0; index < 205; index += 1)
-            _document(
-              documentId: 'message:seed-$index',
-              title: 'Source $index',
-              summary: 'Non-memory source document.',
-              updatedAtMs: nowMs - index,
-              originType: KnowledgeOriginType.message,
-            ),
-          _document(
-            documentId: 'generated:preference:response-language',
-            title: 'Response language',
-            summary: 'User prefers Chinese.',
-            updatedAtMs: nowMs - 10000,
-            memoryDisplay: const KnowledgeMemoryDisplay(
-              section: KnowledgeMemorySection.preference,
-              sourceCount: 2,
-              status: KnowledgeMemoryStatus.inferred,
-            ),
-          ),
-        ],
-      );
-
-      await tester.pumpWidget(
-        wrapWithI18n(
-          MaterialApp(
-            home: AppBackendScope(
-              backend: backend,
-              child: SessionScope(
-                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                lock: () {},
-                child: const MemoryCenterPage(),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.pumpAndSettle();
-
-      expect(find.text('Response language'), findsOneWidget);
-      expect(backend.listOffsets, containsAllInOrder(<int>[0, 200]));
-    },
-  );
-
-  testWidgets(
-      'MemoryCenterPage uses generated-memory backend filtering when available',
-      (
-    tester,
-  ) async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final backend = _GeneratedMemoryBackend(
-      documents: [
-        for (var index = 0; index < 205; index += 1)
-          _document(
-            documentId: 'message:seed-$index',
-            title: 'Source $index',
-            summary: 'Non-memory source document.',
-            updatedAtMs: nowMs - index,
-            originType: KnowledgeOriginType.message,
-          ),
-        _document(
-          documentId: 'generated:preference:response-language',
-          title: 'Response language',
-          summary: 'User prefers Chinese.',
-          updatedAtMs: nowMs - 10000,
-          memoryDisplay: const KnowledgeMemoryDisplay(
-            section: KnowledgeMemorySection.preference,
-            sourceCount: 2,
-            status: KnowledgeMemoryStatus.inferred,
-          ),
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AppBackendScope(
-            backend: backend,
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: const MemoryCenterPage(),
-            ),
-          ),
-        ),
-      ),
-    );
-
     await tester.pumpAndSettle();
-
-    expect(find.text('Response language'), findsOneWidget);
-    expect(backend.generatedListOffsets, <int>[0]);
-    expect(backend.listOffsets, isEmpty);
+    expect(find.text('My Wiki'), findsOneWidget);
+    expect(find.textContaining('pages'), findsWidgets);
   });
 
-  testWidgets('MemoryCenterPage uses backend-native section metadata', (
-    tester,
-  ) async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final backend = _MemoryBackend(
-      documents: [
-        _document(
-          documentId: 'generated:profile:release-companion',
-          title: 'Release companion',
-          summary: 'Shared launch coordination memory.',
-          updatedAtMs: nowMs,
-          memoryDisplay: const KnowledgeMemoryDisplay(
-            section: KnowledgeMemorySection.project,
-            sourceCount: 4,
-            status: KnowledgeMemoryStatus.confirmed,
-          ),
-        ),
-        _document(
-          documentId: 'generated:pattern:weekly-focus',
-          title: 'Weekly focus',
-          summary: 'Recurring planning topic.',
-          updatedAtMs: nowMs - const Duration(days: 3).inMilliseconds,
-          memoryDisplay: const KnowledgeMemoryDisplay(
-            section: KnowledgeMemorySection.topic,
-            sourceCount: 3,
-            status: KnowledgeMemoryStatus.maybeOutdated,
-          ),
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AppBackendScope(
-            backend: backend,
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: const MemoryCenterPage(),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('Projects'), findsOneWidget);
-    expect(find.text('Topics'), findsOneWidget);
-    expect(find.text('Release companion'), findsOneWidget);
-    expect(find.text('Weekly focus'), findsOneWidget);
-    expect(find.textContaining('4 sources'), findsOneWidget);
-    expect(find.textContaining('Confirmed'), findsOneWidget);
-    expect(find.textContaining('Maybe outdated'), findsOneWidget);
-  });
-
-  testWidgets('MemoryCenterPage does not reload on an unrelated parent rebuild',
-      (
-    tester,
-  ) async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final backend = _MemoryBackend(
-      documents: [
-        _document(
-          documentId: 'generated:preference:response-language',
+  testWidgets('MemoryCenterPage does not reload on unrelated parent rebuild',
+      (tester) async {
+    final backend = _KnowledgePagesBackendStub(
+      pages: [
+        _pageSummary(
+          pageId: 'page:preferences:language',
           title: 'Response language',
-          summary: 'User prefers Chinese.',
-          updatedAtMs: nowMs,
-          memoryDisplay: const KnowledgeMemoryDisplay(
-            section: KnowledgeMemorySection.preference,
-            sourceCount: 1,
-            status: KnowledgeMemoryStatus.inferred,
-          ),
+          state: KnowledgePageState.active,
         ),
       ],
     );
@@ -307,126 +199,149 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    expect(backend.listOffsets, <int>[0]);
+    expect(backend.requestedSessionLeads, <int>[1]);
 
     await tester
         .tap(find.byKey(const ValueKey('memory_center_harness_rebuild')));
-    await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(
-      backend.listOffsets,
-      <int>[0],
-      reason: 'parent rebuilds should reuse the cached load future',
-    );
+    expect(backend.requestedSessionLeads, <int>[1]);
   });
 
-  testWidgets('MemoryCenterPage reloads when the session changes', (
-    tester,
-  ) async {
-    final backend = _MemoryBackend(
-      documentBuilderForKey: (key) => <ContentKnowledgeDocument>[
-        _document(
-          documentId: 'generated:preference:response-language',
-          title: key.first == 1 ? 'Session one memory' : 'Session two memory',
-          summary: 'User prefers Chinese.',
-          updatedAtMs: DateTime.now().millisecondsSinceEpoch,
-          memoryDisplay: const KnowledgeMemoryDisplay(
-            section: KnowledgeMemorySection.preference,
-            sourceCount: 1,
-            status: KnowledgeMemoryStatus.inferred,
-          ),
+  testWidgets('MemoryCenterPage reloads when the session changes',
+      (tester) async {
+    final backend = _KnowledgePagesBackendStub(
+      pagesForKey: (key) => <KnowledgePageSummary>[
+        _pageSummary(
+          pageId: 'page:session:${key.first}',
+          title: key.first == 1 ? 'Session one page' : 'Session two page',
+          state: KnowledgePageState.active,
+          updatedAtMs: key.first,
         ),
       ],
-      documents: const <ContentKnowledgeDocument>[],
     );
 
-    Widget buildApp(Uint8List sessionKey) => wrapWithI18n(
-          MaterialApp(
-            home: AppBackendScope(
-              backend: backend,
-              child: SessionScope(
-                sessionKey: sessionKey,
-                lock: () {},
-                child: const MemoryCenterPage(),
-              ),
-            ),
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: const _SwitchingSessionHarness(),
           ),
-        );
-
-    await tester
-        .pumpWidget(buildApp(Uint8List.fromList(List<int>.filled(32, 1))));
-
-    await tester.pumpAndSettle();
-    expect(find.text('Session one memory'), findsOneWidget);
-
-    await tester
-        .pumpWidget(buildApp(Uint8List.fromList(List<int>.filled(32, 2))));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Session two memory'), findsOneWidget);
-    expect(
-      backend.requestedSessionLeads,
-      <int>[1, 2],
+        ),
+      ),
     );
+
+    await tester.pumpAndSettle();
+    expect(find.text('Session one page'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('switch_session_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Session one page'), findsNothing);
+    expect(find.text('Session two page'), findsOneWidget);
+    expect(backend.requestedSessionLeads, <int>[1, 2]);
   });
+}
 
-  testWidgets(
-    'MemoryCenterPage refreshes localized generated labels on locale changes',
-    (
-      tester,
-    ) async {
-      LocaleSettings.setLocale(AppLocale.en);
-      addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
+final class _KnowledgePagesBackendStub extends TestAppBackend
+    implements KnowledgePagesBackend {
+  _KnowledgePagesBackendStub({
+    List<KnowledgePageSummary>? pages,
+    this.pagesForKey,
+  }) : _pages = pages ?? const <KnowledgePageSummary>[];
 
-      final backend = _MemoryBackend(
-        documents: [
-          _document(
-            documentId: 'generated:preference:response-language',
-            title: 'Response language',
-            summary: 'User prefers responses in Chinese.',
-            rawText: 'User prefers responses in Chinese.',
-            updatedAtMs: DateTime.now().millisecondsSinceEpoch,
-            memoryDisplay: const KnowledgeMemoryDisplay(
-              section: KnowledgeMemorySection.preference,
-              sourceCount: 1,
-              status: KnowledgeMemoryStatus.inferred,
-            ),
-          ),
-        ],
+  final List<KnowledgePageSummary> _pages;
+  final List<KnowledgePageSummary> Function(Uint8List key)? pagesForKey;
+  final List<int> requestedSessionLeads = <int>[];
+
+  @override
+  Future<List<KnowledgePageSummary>> listKnowledgePageSummaries(
+    Uint8List key,
+  ) async {
+    requestedSessionLeads.add(key.first);
+    return List<KnowledgePageSummary>.from(pagesForKey?.call(key) ?? _pages);
+  }
+
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      KnowledgePageDetail(
+        page: _page(
+          pageId: pageId,
+          title: 'Detail $pageId',
+          pageType: KnowledgePageType.preferences,
+          state: KnowledgePageState.active,
+        ),
+        sourceDocumentIds: const <String>[],
+        claimIds: const <String>[],
+        history: const <KnowledgePageChangeRecord>[],
+        versionSnapshots: const <KnowledgePageVersionSnapshot>[],
+        evidenceEntries: const <KnowledgePageEvidenceEntry>[],
+        lintRecords: const <KnowledgeLintRecord>[],
       );
 
-      Widget buildApp() => wrapWithI18n(
-            MaterialApp(
-              home: AppBackendScope(
-                backend: backend,
-                child: SessionScope(
-                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                  lock: () {},
-                  child: const MemoryCenterPage(),
-                ),
-              ),
-            ),
-          );
+  @override
+  Future<List<KnowledgePageChangeRecord>> listRecentKnowledgePageChanges(
+    Uint8List key, {
+    int limit = 8,
+  }) async =>
+      const <KnowledgePageChangeRecord>[];
 
-      await tester.pumpWidget(buildApp());
+  @override
+  Future<KnowledgePageDetail> correctKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? title,
+    String? summary,
+    String? body,
+  }) async =>
+      throw UnimplementedError();
 
-      await tester.pumpAndSettle();
-      expect(find.text('Response language'), findsOneWidget);
+  @override
+  Future<KnowledgePageDetail> markKnowledgePageWrong(
+    Uint8List key, {
+    required String pageId,
+    required KnowledgeWrongReason reason,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
 
-      LocaleSettings.setLocale(AppLocale.zhCn);
-      await tester.pumpWidget(buildApp());
-      await tester.pumpAndSettle();
+  @override
+  Future<KnowledgePageDetail> setKnowledgePageAnswerAllowed(
+    Uint8List key, {
+    required String pageId,
+    required bool allowed,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
 
-      expect(find.text('回复语言'), findsOneWidget);
-      expect(find.text('Response language'), findsNothing);
-      expect(
-        backend.listOffsets,
-        <int>[0],
-        reason: 'locale-only refreshes should reuse the loaded documents',
-      );
-    },
-  );
+  @override
+  Future<KnowledgePageDetail> archiveKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> removeKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> mergeKnowledgePageInto(
+    Uint8List key, {
+    required String pageId,
+    required String targetPageId,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
 }
 
 class _MemoryCenterHarness extends StatefulWidget {
@@ -454,178 +369,103 @@ class _MemoryCenterHarnessState extends State<_MemoryCenterHarness> {
   }
 }
 
-final class _MemoryBackend extends TestAppBackend
-    implements KnowledgeBackend, KnowledgeViewerBackend {
-  _MemoryBackend({
-    required this.documents,
-    this.documentBuilderForKey,
-  });
-
-  final List<ContentKnowledgeDocument> documents;
-  final List<ContentKnowledgeDocument> Function(Uint8List key)?
-      documentBuilderForKey;
-  final List<int> listOffsets = <int>[];
-  final List<int> requestedSessionLeads = <int>[];
+class _SwitchingSessionHarness extends StatefulWidget {
+  const _SwitchingSessionHarness();
 
   @override
-  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
-    Uint8List key, {
-    required String documentId,
-    KnowledgeMemoryStatus? status,
-    required bool useForAskAi,
-    required bool isDeleted,
-    required bool markedInaccurate,
-    String? correctedTitle,
-    String? correctedSummary,
-  }) async =>
-      throw UnimplementedError();
+  State<_SwitchingSessionHarness> createState() =>
+      _SwitchingSessionHarnessState();
+}
+
+class _SwitchingSessionHarnessState extends State<_SwitchingSessionHarness> {
+  late Uint8List _sessionKey;
 
   @override
-  Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
-
-  @override
-  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async =>
-      throw UnimplementedError();
-
-  @override
-  Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) async =>
-      throw UnimplementedError();
-
-  @override
-  Future<KnowledgeViewerDocument> getKnowledgeViewerDocument(
-    Uint8List key, {
-    required String documentId,
-  }) async =>
-      throw UnimplementedError();
-
-  @override
-  Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
-    Uint8List key, {
-    int limit = 100,
-    int offset = 0,
-  }) async {
-    requestedSessionLeads.add(key.first);
-    listOffsets.add(offset);
-    final currentDocuments = documentBuilderForKey?.call(key) ?? documents;
-    return currentDocuments.skip(offset).take(limit).toList(growable: false);
+  void initState() {
+    super.initState();
+    _sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
   }
 
   @override
-  Future<List<KnowledgeUnit>> listKnowledgeUnits(
-    Uint8List key, {
-    required String documentId,
-    KnowledgeUnitKind? unitKind,
-    int limit = 100,
-    int offset = 0,
-  }) async =>
-      const <KnowledgeUnit>[];
-
-  @override
-  Future<List<KnowledgeUnit>> listKnowledgeUnitsAroundAnchor(
-    Uint8List key, {
-    required String documentId,
-    required KnowledgeAnchorSet anchor,
-    int before = 2,
-    int after = 3,
-  }) async =>
-      const <KnowledgeUnit>[];
-
-  @override
-  Future<KnowledgeViewerPage> listKnowledgeViewerUnits(
-    Uint8List key, {
-    required String documentId,
-    KnowledgeUnitKind? unitKind,
-    int limit = 100,
-    int offset = 0,
-  }) async =>
-      throw UnimplementedError();
-
-  @override
-  Future<int> processPendingKnowledgeIndexJobs(
-    Uint8List key, {
-    int limit = 8,
-  }) async =>
-      0;
-
-  @override
-  Future<void> requestKnowledgeRebuild(Uint8List key) async {}
-
-  @override
-  Future<List<KnowledgeSearchResult>> searchKnowledge(
-    Uint8List key, {
-    required String query,
-    String? conversationId,
-    String? documentId,
-    int limit = 20,
-  }) async =>
-      const <KnowledgeSearchResult>[];
-
-  @override
-  Future<List<KnowledgeSearchResult>> searchKnowledgeDocumentUnits(
-    Uint8List key, {
-    required String documentId,
-    required String query,
-    int limit = 20,
-  }) async =>
-      const <KnowledgeSearchResult>[];
-}
-
-final class _GeneratedMemoryBackend extends _MemoryBackend
-    implements GeneratedMemoryKnowledgeBackend {
-  _GeneratedMemoryBackend({required super.documents});
-
-  final List<int> generatedListOffsets = <int>[];
-
-  @override
-  Future<List<ContentKnowledgeDocument>> listGeneratedMemoryDocuments(
-    Uint8List key, {
-    int limit = 100,
-    int offset = 0,
-  }) async {
-    generatedListOffsets.add(offset);
-    return documents
-        .where((document) => isMemoryCenterDocument(document))
-        .skip(offset)
-        .take(limit)
-        .toList(growable: false);
+  Widget build(BuildContext context) {
+    return SessionScope(
+      sessionKey: _sessionKey,
+      lock: () {},
+      child: Column(
+        children: [
+          TextButton(
+            key: const ValueKey('switch_session_button'),
+            onPressed: () {
+              setState(() {
+                _sessionKey = Uint8List.fromList(List<int>.filled(32, 2));
+              });
+            },
+            child: const Text('Switch'),
+          ),
+          const Expanded(child: MemoryCenterPage()),
+        ],
+      ),
+    );
   }
 }
 
-ContentKnowledgeDocument _document({
-  required String documentId,
+KnowledgePageSummary _pageSummary({
+  required String pageId,
   required String title,
-  required String summary,
-  required int updatedAtMs,
-  String? rawText,
-  KnowledgeOriginType originType = KnowledgeOriginType.generated,
-  KnowledgeMemoryDisplay? memoryDisplay,
+  KnowledgePageType pageType = KnowledgePageType.preferences,
+  String summary = 'Summary',
+  KnowledgePageState state = KnowledgePageState.active,
+  int updatedAtMs = 1,
+  int? lastUsedAtMs,
+  int sourceCount = 1,
 }) {
-  return ContentKnowledgeDocument(
-    documentId: documentId,
-    originType: originType,
-    sourceKind: KnowledgeSourceKind.summary,
-    role: KnowledgeRole.summary,
-    language: 'en',
-    qualityScore: 1,
+  return KnowledgePageSummary(
+    pageId: pageId,
+    pageType: pageType,
+    title: title,
+    currentSummary: summary,
+    state: state,
+    answerPolicy: const KnowledgeAnswerPolicy(
+      defaultAllowed: true,
+      requiresTemporalFraming: false,
+    ),
+    updatedAtMs: updatedAtMs,
+    lastUsedAtMs: lastUsedAtMs,
+    sourceCount: sourceCount,
+    conflictCount: 0,
+    humanCorrected: false,
+    tags: const <String>[],
+    primaryEvidenceIds: const <String>[],
+  );
+}
+
+KnowledgePage _page({
+  required String pageId,
+  required String title,
+  required KnowledgePageType pageType,
+  required KnowledgePageState state,
+  int updatedAtMs = 1,
+}) {
+  return KnowledgePage(
+    pageId: pageId,
+    pageType: pageType,
+    title: title,
+    currentSummary: 'Summary',
+    currentBody: 'Body',
+    state: state,
+    answerPolicy: const KnowledgeAnswerPolicy(
+      defaultAllowed: true,
+      requiresTemporalFraming: false,
+    ),
+    confidenceLevel: 0.9,
     createdAtMs: 1,
     updatedAtMs: updatedAtMs,
-    versions: const KnowledgeVersionSet(
-      schemaVersion: 1,
-      normalizationVersion: 1,
-      segmentationVersion: 1,
-      embeddingPolicyVersion: 1,
-      retrievalPolicyVersion: 1,
-    ),
-    anchors: const KnowledgeAnchorSet(),
-    title: title,
-    summary: summary,
-    rawText: rawText ?? summary,
-    normalizedText: rawText ?? summary,
-    memoryDisplay: memoryDisplay,
-    memoryFeedback: const KnowledgeMemoryFeedback(
-      useForAskAi: true,
-      isDeleted: false,
-      markedInaccurate: false,
-    ),
+    lastUsedAtMs: null,
+    sourceCount: 1,
+    conflictCount: 0,
+    humanCorrected: false,
+    tags: const <String>[],
+    primaryEvidenceIds: const <String>[],
+    relatedPageIds: const <String>[],
   );
 }

@@ -1036,7 +1036,17 @@ PRAGMA user_version = 29;
         user_version = 43;
     }
 
-    debug_assert!(user_version >= 43);
+    if user_version < 44 {
+        migrate_from_v43_to_v44(conn)?;
+        user_version = 44;
+    }
+
+    if user_version < 45 {
+        migrate_from_v44_to_v45(conn)?;
+        user_version = 45;
+    }
+
+    debug_assert!(user_version >= 45);
 
     Ok(())
 }

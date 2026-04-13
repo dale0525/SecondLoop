@@ -76,7 +76,7 @@ fn ask_ai_citations_json_fixture() -> serde_json::Value {
 }
 
 #[test]
-fn ask_ai_citations_json_includes_generated_memory_entries() {
+fn ask_ai_citations_json_includes_page_backed_memory_entries() {
     let value = ask_ai_citations_json_fixture();
 
     let direct_sources = value["direct_sources"]
@@ -91,10 +91,11 @@ fn ask_ai_citations_json_includes_generated_memory_entries() {
     assert_eq!(
         memory_cards[0]["document_id"]
             .as_str()
-            .map(|value| value.starts_with("generated:")),
+            .map(|value| value.starts_with("page:")),
         Some(true)
     );
     assert_eq!(memory_cards[0]["status"].as_str(), Some("inferred"));
+    assert_eq!(memory_cards[0]["use_for_ask_ai"].as_bool(), Some(true));
     assert!(direct_sources[0]["source_type_label"]
         .as_str()
         .is_some_and(|value| !value.trim().is_empty()));

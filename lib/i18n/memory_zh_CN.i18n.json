@@ -1,12 +1,34 @@
 {
-  "title": "记忆",
-  "emptyState": "还没有记忆卡。",
+  "title": "知识中心",
+  "emptyState": "还没有知识页。",
+  "groups": {
+    "active": "当前页面",
+    "review": "需要处理",
+    "archived": "已静音或归档"
+  },
+  "homepage": {
+    "currentMe": "Current Me",
+    "needsAttention": "Needs Your Attention",
+    "recentChanges": "Recent Changes",
+    "myWiki": "My Wiki",
+    "systemActivity": "System Activity",
+    "reviewCta": "查看",
+    "reviewReason": "这页在用于回答前还需要你再看一下。",
+    "outdatedReason": "这页可能已经过时，回答时应该带上时间语境。",
+    "directoryCount": "$count 页",
+    "pagesUsedInAnswersRecently": "最近用于回答的知识页",
+    "systemActivitySummary": "当前 wiki 共有 $totalPages 页，其中 $needsReview 页需要你处理。"
+  },
   "sections": {
-    "preferences": "偏好",
-    "people": "人物",
-    "projects": "项目",
-    "topics": "主题",
-    "recentEvents": "最近事件"
+    "aboutMe": "About Me",
+    "preferences": "Preferences",
+    "currentFocus": "Current Focus",
+    "activeThreads": "Active Threads",
+    "recentEvents": "Recent Events",
+    "people": "People",
+    "topics": "Topics",
+    "openQuestions": "Open Questions",
+    "projects": "当前重点"
   },
   "meta": {
     "sourceCount": "$count 个来源",
@@ -19,14 +41,44 @@
     "inferred": "推断",
     "maybeOutdated": "可能过时"
   },
+  "pageStates": {
+    "active": "当前有效",
+    "needsReview": "需要复核",
+    "outdated": "可能过时",
+    "answerMuted": "不用于回答",
+    "archived": "已归档",
+    "removed": "已移除"
+  },
   "detail": {
-    "currentConclusion": "当前结论",
-    "evidenceTimeline": "证据时间线",
-    "usedByAskAi": "会用于 Ask AI",
-    "notUsedByAskAi": "不会用于 Ask AI",
-    "markedInaccurate": "已标记不准确",
-    "deleted": "记忆已删除",
-    "actions": "操作",
+    "currentConclusion": "Current conclusion",
+    "evidenceBasis": "Evidence Basis",
+    "evidenceSummary": "证据摘要",
+    "evidenceSummaryBody": "当前有 $sourceCount 个来源文档支撑这页。检测到的冲突数：$conflictCount。",
+    "evidenceTimeline": "Evidence timeline",
+    "versionHistory": "Version history",
+    "supportingEvidence": "支持性证据",
+    "latestSupportingEvidence": "Latest support",
+    "conflictingEvidencePresent": "This page currently has conflicting evidence.",
+    "conflictingEvidenceAbsent": "No conflicting evidence is currently recorded.",
+    "sourceMix": "Source mix: $types",
+    "noEvidenceEntries": "No evidence entries yet.",
+    "noVersionSnapshots": "No prior versions yet.",
+    "usedByAskAi": "会用于回答",
+    "notUsedByAskAi": "不会用于回答",
+    "markedInaccurate": "需要复核",
+    "deleted": "页面已删除",
+    "actions": "页面操作",
+    "systemStatus": "System Judgment",
+    "systemStatusBody": "页面类型：$pageType。置信度：$confidence%。来源数：$sourceCount。冲突数：$conflictCount。",
+    "youMayWantToDo": "You May Want to Do",
+    "guidanceNeedsReview": "这页当前默认不会用于回答，建议先复核。",
+    "guidanceMutedFromAnswers": "这页已从回答中静音，准备好后可恢复。",
+    "guidanceUsedRecently": "这页最近被用于回答，值得你核对一下。",
+    "guidanceEverythingStable": "这页目前看起来比较稳定。",
+    "history": "最近变化",
+    "lint": "系统提醒",
+    "relatedPages": "Related Pages",
+    "sourceDocuments": "来源文档",
     "sourceTypes": {
       "message": "聊天消息",
       "attachment": "附件",
@@ -43,17 +95,58 @@
     }
   },
   "actions": {
-    "editMemory": "编辑记忆",
-    "markInaccurate": "标记不准确",
-    "clearInaccurate": "清除不准确标记",
-    "stopUsingForAskAi": "停止用于 Ask AI",
-    "useForAskAiAgain": "重新用于 Ask AI",
-    "deleteMemory": "删除记忆",
-    "restoreMemory": "恢复记忆",
+    "editMemory": "更正当前结论",
+    "markInaccurate": "这页不对",
+    "clearInaccurate": "恢复为当前有效",
+    "stopUsingForAskAi": "不再用于回答",
+    "useForAskAiAgain": "重新用于回答",
+    "deleteMemory": "归档页面",
+    "restoreMemory": "恢复页面",
+    "viewEvidence": "View Evidence",
+    "viewHistory": "View History",
+    "reviewSignals": "Review Signals",
+    "archivePage": "Archive Page",
+    "mergePages": "Merge Pages",
+    "permanentlyRemove": "Permanently Remove",
     "fields": {
       "title": "标题",
-      "summary": "摘要"
+      "summary": "结论"
     }
+  },
+  "history": {
+    "created": "已创建",
+    "updated": "已更新",
+    "corrected": "已更正",
+    "downgraded": "需要复核",
+    "muted": "已停止用于回答",
+    "archived": "已归档",
+    "removed": "已移除",
+    "merged": "已合并",
+    "noReason": "没有记录原因。"
+  },
+  "lintKinds": {
+    "conflict": "冲突",
+    "staleness": "过时风险",
+    "fragmentation": "碎片化",
+    "unusedKnowledge": "未使用知识",
+    "evidenceWeakness": "证据薄弱",
+    "regenerationRisk": "再生成风险"
+  },
+  "evidenceKinds": {
+    "support": "Support",
+    "conflict": "Conflict",
+    "supplement": "Supplement"
+  },
+  "views": {
+    "history": "History",
+    "evidence": "Evidence",
+    "review": "Review and lint"
+  },
+  "wrongReasons": {
+    "statementWrong": "说法错误",
+    "outdated": "已经过时",
+    "incomplete": "这页信息不完整",
+    "shouldNotRemember": "不该记住这个"
   },
   "generatedTitles": {
     "activeTaskPattern": "当前任务模式",

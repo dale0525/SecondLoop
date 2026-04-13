@@ -25,6 +25,8 @@ import '../../src/rust/api/detached_ask.dart' as rust_detached_ask;
 import '../../src/rust/api/todo_followup_generation.dart'
     as rust_todo_followup_generation;
 import '../../src/rust/knowledge/models.dart' as rust_knowledge_models;
+import '../../src/rust/knowledge/history.dart' as rust_knowledge_history;
+import '../../src/rust/knowledge/pages.dart' as rust_knowledge_pages;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;

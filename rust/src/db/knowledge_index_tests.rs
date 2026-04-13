@@ -33,6 +33,11 @@ fn knowledge_schema_migration_creates_versioned_tables_and_indexes() {
         "knowledge_embeddings",
         "knowledge_index_jobs",
         "knowledge_rebuild_state",
+        "knowledge_claims",
+        "knowledge_pages",
+        "knowledge_page_history",
+        "knowledge_page_versions",
+        "knowledge_page_lints",
     ] {
         assert!(
             sqlite_table_exists(&conn, table_name),
@@ -46,6 +51,11 @@ fn knowledge_schema_migration_creates_versioned_tables_and_indexes() {
         "idx_knowledge_units_anchor_lookup",
         "idx_knowledge_embeddings_target",
         "idx_knowledge_index_jobs_status_due",
+        "idx_knowledge_claims_subject_status",
+        "idx_knowledge_pages_state_updated",
+        "idx_knowledge_page_history_page_created",
+        "idx_knowledge_page_versions_page_created",
+        "idx_knowledge_page_lints_page_created",
     ] {
         assert!(
             sqlite_index_exists(&conn, index_name),

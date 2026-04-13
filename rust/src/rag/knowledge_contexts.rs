@@ -14,36 +14,113 @@ pub(super) struct KnowledgeRenderedContextEntry {
     pub(super) rendered_text: String,
 }
 
-fn collect_generated_preferred_contexts(
+fn lexical_page_match_score(question: &str, haystack: &str) -> usize {
+    let question = question.to_lowercase();
+    let haystack = haystack.to_lowercase();
+    question
+        .split(|ch: char| !ch.is_alphanumeric() && !('\u{4E00}'..='\u{9FFF}').contains(&ch))
+        .map(str::trim)
+        .filter(|token| token.chars().count() >= 2)
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .filter(|token| haystack.contains(*token))
+        .count()
+}
+
+fn collect_compiled_page_contexts(
     conn: &Connection,
     key: &[u8; 32],
-    conversation_scope: Option<&str>,
+    question: &str,
     top_k: usize,
 ) -> Result<Vec<knowledge::KnowledgeContextBlock>> {
+    let _ = knowledge::compiler::refresh_knowledge_pages(conn, key)?;
     let mut out = Vec::<knowledge::KnowledgeContextBlock>::new();
-    let page_size = 128usize;
-    let mut offset = 0usize;
-    loop {
+    let is_planning_query = knowledge::session_digest::is_planning_or_summary_query(question);
+    let page_summaries = crate::db::list_knowledge_page_summaries(conn, key)?;
+    let muted_page_ids = page_summaries
+        .iter()
+        .filter(|page| !page.answer_policy.default_allowed)
+        .map(|page| page.page_id.clone())
+        .collect::<std::collections::HashSet<_>>();
+    let mut candidates = page_summaries
+        .into_iter()
+        .filter(|page| {
+            page.answer_policy.default_allowed || page.answer_policy.requires_temporal_framing
+        })
+        .filter_map(|summary| {
+            let detail = crate::db::get_knowledge_page_detail(conn, key, &summary.page_id)
+                .ok()
+                .flatten()?;
+            let haystack = format!(
+                "{}\n{}\n{}",
+                detail.page.title, detail.page.current_summary, detail.page.current_body
+            );
+            let lexical_score = lexical_page_match_score(question, &haystack);
+            if !is_planning_query && lexical_score == 0 {
+                return None;
+            }
+            let mut rendered = format!(
+                "page_id={}\npage_state={}\n[knowledge layer=wiki_page source=wiki_page role=summary]\n{}\n{}",
+                detail.page.page_id,
+                detail.page.user_state_label(),
+                detail.page.current_summary,
+                detail.page.current_body,
+            );
+            if detail.page.answer_policy.requires_temporal_framing {
+                rendered = format!(
+                    "temporal_framing=required\n{}\n{}",
+                    rendered,
+                    "This page may be outdated and should be framed with time context."
+                );
+            }
+            Some((
+                lexical_score,
+                knowledge::KnowledgeContextBlock {
+                    document_id: detail.page.page_id,
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::Summary,
+                    role: knowledge::KnowledgeRole::Summary,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: FORCED_GENERATED_CONTEXT_SCORE,
+                    rendered_text: rendered,
+                },
+            ))
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| right.0.cmp(&left.0));
+    for (_, block) in candidates.into_iter().take(top_k.max(1)) {
+        out.push(block);
+    }
+
+    if !out.is_empty() {
+        let used_page_ids = out
+            .iter()
+            .map(|block| block.document_id.clone())
+            .collect::<Vec<_>>();
+        let _ = crate::db::touch_knowledge_pages_usage(
+            conn,
+            &used_page_ids,
+            knowledge::usage::now_ms(),
+        );
+    }
+
+    if out.is_empty() && is_planning_query {
         let documents = knowledge::list_knowledge_documents_by_origin(
             conn,
             key,
             knowledge::KnowledgeOriginType::Generated,
-            page_size,
-            offset,
+            top_k.max(1),
+            0,
         )?;
-        if documents.is_empty() {
-            break;
-        }
         for document in documents {
-            if !document.memory_feedback.use_for_ask_ai {
+            if !document.memory_feedback.use_for_ask_ai || document.memory_feedback.is_deleted {
                 continue;
             }
-            if let Some(expected) = conversation_scope {
-                if let Some(actual) = document.anchors.conversation_id.as_deref() {
-                    if actual != expected {
-                        continue;
-                    }
-                }
+            if page_id_for_generated_document_id(&document.document_id)
+                .is_some_and(|page_id| muted_page_ids.contains(page_id))
+            {
+                continue;
             }
             let body = if document.raw_text.trim().is_empty() {
                 document.normalized_text.trim()
@@ -62,20 +139,11 @@ fn collect_generated_preferred_contexts(
                 anchors: document.anchors.clone(),
                 score: FORCED_GENERATED_CONTEXT_SCORE,
                 rendered_text: format!(
-                    "{}\n[knowledge layer=document source=summary role=summary]\n{}",
-                    if let Some(conversation_id) = document.anchors.conversation_id.as_deref() {
-                        format!("conversation_id={conversation_id}")
-                    } else {
-                        "generated_memory=global".to_string()
-                    },
+                    "generated_memory=global\n[knowledge layer=document source=summary role=summary]\n{}",
                     body
                 ),
             });
-            if out.len() >= top_k.max(1) {
-                return Ok(out);
-            }
         }
-        offset += page_size;
     }
     Ok(out)
 }
@@ -113,8 +181,25 @@ fn rebalance_planning_contexts(
     blocks.insert(replace_index, evidence);
 }
 
+fn page_id_for_generated_document_id(document_id: &str) -> Option<&'static str> {
+    if document_id.starts_with("generated:preference:") {
+        Some("page:preferences")
+    } else if document_id.starts_with("generated:profile:") {
+        Some("page:about-me")
+    } else if document_id.starts_with("generated:event:") {
+        Some("page:recent-events")
+    } else if document_id.starts_with("generated:pattern:active-task-focus") {
+        Some("page:current-focus")
+    } else if document_id.starts_with("generated:pattern:") {
+        Some("page:topics")
+    } else {
+        None
+    }
+}
+
 fn filter_disabled_generated_memory_blocks(
     conn: &Connection,
+    key: &[u8; 32],
     blocks: Vec<knowledge::KnowledgeContextBlock>,
 ) -> Result<Vec<knowledge::KnowledgeContextBlock>> {
     let generated_document_ids = blocks
@@ -124,10 +209,20 @@ fn filter_disabled_generated_memory_blocks(
         .collect::<std::collections::BTreeSet<_>>();
     let feedback_by_document_id =
         crate::db::load_knowledge_memory_feedback_map(conn, &generated_document_ids)?;
+    let muted_page_ids = crate::db::list_knowledge_page_summaries(conn, key)?
+        .into_iter()
+        .filter(|page| !page.answer_policy.default_allowed)
+        .map(|page| page.page_id)
+        .collect::<std::collections::HashSet<_>>();
     let mut out = Vec::with_capacity(blocks.len());
     for block in blocks {
         if !block.document_id.starts_with("generated:") {
             out.push(block);
+            continue;
+        }
+        if page_id_for_generated_document_id(&block.document_id)
+            .is_some_and(|page_id| muted_page_ids.contains(page_id))
+        {
             continue;
         }
         let feedback = feedback_by_document_id
@@ -196,13 +291,10 @@ pub(super) fn try_build_knowledge_context_entries(
     }
 
     let is_planning_query = knowledge::session_digest::is_planning_or_summary_query(question);
-    let mut blocks = if is_planning_query {
-        collect_generated_preferred_contexts(conn, key, conversation_scope.as_deref(), top_k)?
-    } else {
-        Vec::new()
-    };
+    let mut blocks = collect_compiled_page_contexts(conn, key, question, top_k)?;
     let mut retrieved = filter_disabled_generated_memory_blocks(
         conn,
+        key,
         knowledge::retrieve_context_blocks(conn, key, &request)?,
     )?;
     blocks.append(&mut retrieved);
@@ -310,7 +402,7 @@ pub(super) fn merge_knowledge_and_legacy_contexts(
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_generated_preferred_contexts, filter_disabled_generated_memory_blocks,
+        collect_compiled_page_contexts, filter_disabled_generated_memory_blocks,
         merge_knowledge_and_legacy_contexts, rebalance_planning_contexts,
         try_build_knowledge_contexts,
     };
@@ -419,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn collect_generated_preferred_contexts_pages_past_first_64_documents() {
+    fn collect_compiled_page_contexts_reads_preferences_page() {
         let dir = tempfile::tempdir().expect("tempdir");
         let conn = db::open(dir.path()).expect("open");
         let key = [61u8; 32];
@@ -446,16 +538,19 @@ mod tests {
             "User prefers responses in Chinese.",
         );
 
-        let blocks = collect_generated_preferred_contexts(&conn, &key, Some(&conv.id), 4)
-            .expect("generated preferred contexts");
+        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 4)
+            .expect("compiled page contexts");
 
         assert!(blocks
             .iter()
-            .any(|block| { block.document_id == "generated:preference:response-language" }));
+            .any(|block| { block.document_id == "page:preferences" }));
+        assert!(blocks
+            .iter()
+            .any(|block| block.rendered_text.contains("source=wiki_page")));
     }
 
     #[test]
-    fn collect_generated_preferred_contexts_skips_deleted_memory_cards() {
+    fn collect_compiled_page_contexts_skips_deleted_generated_documents() {
         let dir = tempfile::tempdir().expect("tempdir");
         let conn = db::open(dir.path()).expect("open");
         let key = [64u8; 32];
@@ -483,13 +578,13 @@ mod tests {
         )
         .expect("mark deleted");
 
-        let blocks = collect_generated_preferred_contexts(&conn, &key, Some(&conv.id), 4)
-            .expect("generated preferred contexts");
+        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 4)
+            .expect("compiled page contexts");
 
         assert!(
             blocks
                 .iter()
-                .all(|block| block.document_id != "generated:preference:response-language"),
+                .all(|block| block.document_id != "page:preferences"),
             "blocks: {blocks:?}"
         );
     }
@@ -527,6 +622,7 @@ mod tests {
 
         let filtered = filter_disabled_generated_memory_blocks(
             &conn,
+            &key,
             vec![
                 knowledge::KnowledgeContextBlock {
                     document_id: "generated:preference:visible".to_string(),
@@ -580,6 +676,45 @@ mod tests {
             document_ids,
             vec!["generated:preference:visible", "message:evidence-1"]
         );
+    }
+
+    #[test]
+    fn filter_disabled_generated_memory_blocks_excludes_documents_backed_by_muted_pages() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [66u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+        insert_document(
+            &conn,
+            &key,
+            "generated:preference:response-language",
+            "generated",
+            1,
+            Some(&conv.id),
+            "User prefers responses in Chinese.",
+        );
+        crate::knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh pages");
+        crate::db::set_knowledge_page_answer_allowed(&conn, &key, "page:preferences", false, None)
+            .expect("mute page");
+
+        let filtered = filter_disabled_generated_memory_blocks(
+            &conn,
+            &key,
+            vec![knowledge::KnowledgeContextBlock {
+                document_id: "generated:preference:response-language".to_string(),
+                unit_id: None,
+                unit_kind: None,
+                source_kind: knowledge::KnowledgeSourceKind::Summary,
+                role: knowledge::KnowledgeRole::Summary,
+                anchors: knowledge::KnowledgeAnchorSet::default(),
+                score: 0.5,
+                rendered_text: "preference".to_string(),
+            }],
+        )
+        .expect("filter blocks");
+
+        assert!(filtered.is_empty(), "filtered: {filtered:?}");
     }
 
     #[test]

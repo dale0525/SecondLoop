@@ -350,7 +350,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Edit memory'));
+    await tester.tap(find.text('Correct current conclusion'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -371,14 +371,14 @@ void main() {
     );
     expect(find.text('Confirmed'), findsOneWidget);
 
-    await tester.tap(find.text('Stop using for Ask AI'));
+    await tester.tap(find.text('Stop using in answers'));
     await tester.pumpAndSettle();
-    expect(find.text('Not used by Ask AI'), findsOneWidget);
+    expect(find.text('Not used in answers'), findsOneWidget);
 
-    await tester.tap(find.text('Delete memory'));
+    await tester.tap(find.text('Archive page'));
     await tester.pumpAndSettle();
-    expect(find.text('Memory deleted'), findsOneWidget);
-    expect(find.text('Restore memory'), findsOneWidget);
+    expect(find.text('Page deleted'), findsOneWidget);
+    expect(find.text('Restore page'), findsOneWidget);
   });
 
   testWidgets(
@@ -408,7 +408,7 @@ void main() {
       expect(backend.correctedTitle, isNull);
       expect(backend.correctedSummary, isNull);
 
-      await tester.tap(find.text('Stop using for Ask AI'));
+      await tester.tap(find.text('Stop using in answers'));
       await tester.pumpAndSettle();
 
       expect(backend.correctedTitle, isNull);
@@ -488,13 +488,13 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Stop using for Ask AI'));
+    await tester.tap(find.text('Stop using in answers'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 3));
 
     expect(find.textContaining('save_failed'), findsOneWidget);
-    expect(find.text('Used by Ask AI'), findsOneWidget);
-    expect(find.text('Not used by Ask AI'), findsNothing);
+    expect(find.text('Used in answers'), findsOneWidget);
+    expect(find.text('Not used in answers'), findsNothing);
   });
 
   test('effectiveMemoryStatus uses memory display status when present', () {

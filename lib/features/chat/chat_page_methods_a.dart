@@ -510,11 +510,21 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   }
 
   Future<void> _disableMemoryFromEvidence(String documentId) async {
+    final pagesBackend =
+        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.of(context).sessionKey;
+    if (documentId.startsWith('page:') && pagesBackend != null) {
+      await pagesBackend.setKnowledgePageAnswerAllowed(
+        sessionKey,
+        pageId: documentId,
+        allowed: false,
+      );
+      return;
+    }
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
     if (backend == null || viewerBackend == null) return;
-    final sessionKey = SessionScope.of(context).sessionKey;
     final document = await viewerBackend.getKnowledgeViewerDocument(
       sessionKey,
       documentId: documentId,
@@ -541,11 +551,20 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   }
 
   Future<void> _deleteMemoryFromEvidence(String documentId) async {
+    final pagesBackend =
+        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.of(context).sessionKey;
+    if (documentId.startsWith('page:') && pagesBackend != null) {
+      await pagesBackend.archiveKnowledgePage(
+        sessionKey,
+        pageId: documentId,
+      );
+      return;
+    }
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
     if (backend == null || viewerBackend == null) return;
-    final sessionKey = SessionScope.of(context).sessionKey;
     final document = await viewerBackend.getKnowledgeViewerDocument(
       sessionKey,
       documentId: documentId,
@@ -568,11 +587,23 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     required String title,
     required String summary,
   }) async {
+    final pagesBackend =
+        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.of(context).sessionKey;
+    if (card.documentId.startsWith('page:') && pagesBackend != null) {
+      final detail = await pagesBackend.correctKnowledgePage(
+        sessionKey,
+        pageId: card.documentId,
+        title: title,
+        summary: summary,
+        body: summary,
+      );
+      return _memoryCardFromPageDetail(card, detail);
+    }
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
     if (backend == null || viewerBackend == null) return null;
-    final sessionKey = SessionScope.of(context).sessionKey;
     final document = await viewerBackend.getKnowledgeViewerDocument(
       sessionKey,
       documentId: card.documentId,
@@ -598,10 +629,19 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   Future<ChatAnswerEvidenceMemoryCard?> _refreshMemoryFromEvidence(
     ChatAnswerEvidenceMemoryCard card,
   ) async {
+    final pagesBackend =
+        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.of(context).sessionKey;
+    if (card.documentId.startsWith('page:') && pagesBackend != null) {
+      final detail = await pagesBackend.getKnowledgePageDetail(
+        sessionKey,
+        pageId: card.documentId,
+      );
+      return _memoryCardFromPageDetail(card, detail);
+    }
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
     if (viewerBackend == null) return card;
-    final sessionKey = SessionScope.of(context).sessionKey;
     final refreshed = await viewerBackend.getKnowledgeViewerDocument(
       sessionKey,
       documentId: card.documentId,
@@ -627,6 +667,29 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       useForAskAi: document.memoryFeedback.useForAskAi,
       isDeleted: document.memoryFeedback.isDeleted,
       markedInaccurate: document.memoryFeedback.markedInaccurate,
+    );
+  }
+
+  ChatAnswerEvidenceMemoryCard _memoryCardFromPageDetail(
+    ChatAnswerEvidenceMemoryCard card,
+    dynamic detail,
+  ) {
+    final page = detail.page;
+    final status = page.humanCorrected
+        ? KnowledgeMemoryStatus.confirmed.name
+        : (page.state.name == 'outdated'
+            ? KnowledgeMemoryStatus.maybeOutdated.name
+            : KnowledgeMemoryStatus.inferred.name);
+    return card.copyWith(
+      title: page.title,
+      summary: page.currentSummary,
+      body: page.currentBody,
+      status: status,
+      sourceCount: page.sourceCount.toInt(),
+      updatedAtMs: page.updatedAtMs.toInt(),
+      useForAskAi: page.answerPolicy.defaultAllowed,
+      isDeleted: page.state.name == 'removed',
+      markedInaccurate: page.state.name == 'needsReview',
     );
   }
 

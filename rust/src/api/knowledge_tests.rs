@@ -279,7 +279,7 @@ fn touch_knowledge_documents_usage_succeeds_inside_active_transaction() {
 }
 
 #[test]
-fn knowledge_memory_feedback_overrides_detail_and_can_stop_ask_ai_usage() {
+fn knowledge_memory_feedback_overrides_detail_and_page_policy_controls_ask_ai_usage() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
     let app_dir_string = app_dir.to_string_lossy().into_owned();
@@ -365,18 +365,14 @@ fn knowledge_memory_feedback_overrides_detail_and_can_stop_ask_ai_usage() {
         "contexts: {contexts:?}"
     );
 
-    crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+    crate::api::knowledge::db_set_knowledge_page_answer_allowed(
         app_dir_string.clone(),
         key.to_vec(),
-        document_id.clone(),
-        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        "page:preferences".to_string(),
         false,
-        false,
-        true,
-        Some("Preferred reply language".to_string()),
-        Some("Always reply in Chinese unless I ask for another language.".to_string()),
+        Some("Do not use this page in answers right now.".to_string()),
     )
-    .expect("disable ask ai usage");
+    .expect("disable page answer usage");
 
     let contexts = crate::rag::try_build_knowledge_contexts_for_tests(
         &conn,
@@ -782,4 +778,403 @@ fn knowledge_memory_feedback_survives_rebuild_reset() {
     );
     assert!(!rebuilt.document.memory_feedback.use_for_ask_ai);
     assert!(rebuilt.document.memory_feedback.marked_inaccurate);
+}
+
+#[test]
+fn knowledge_pages_api_lists_page_summaries_and_reads_detail() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [33u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("seed preference");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let summaries = crate::api::knowledge::db_list_knowledge_page_summaries(
+        app_dir_string.clone(),
+        key.to_vec(),
+    )
+    .expect("list page summaries");
+    let preferences = summaries
+        .iter()
+        .find(|page| page.page_id == "page:preferences")
+        .expect("preferences summary");
+    assert_eq!(
+        preferences.page_type,
+        crate::knowledge::KnowledgePageType::Preferences
+    );
+    assert_eq!(preferences.title, "Preferences");
+    assert!(preferences.answer_policy.default_allowed);
+
+    let detail = crate::api::knowledge::db_get_knowledge_page_detail(
+        app_dir_string,
+        key.to_vec(),
+        "page:preferences".to_string(),
+    )
+    .expect("page detail");
+    assert_eq!(detail.page.page_id, "page:preferences");
+    assert!(!detail.history.is_empty());
+    assert!(detail.page.current_body.contains("Chinese"));
+    assert!(detail
+        .source_document_ids
+        .iter()
+        .any(|document_id| document_id == "generated:preference:response-language"));
+    assert!(!detail.version_snapshots.is_empty());
+    assert!(detail
+        .version_snapshots
+        .iter()
+        .any(|snapshot| snapshot.title == "Preferences"));
+    assert!(detail
+        .evidence_entries
+        .iter()
+        .any(|entry| entry.kind == crate::knowledge::KnowledgePageEvidenceKind::Support));
+}
+
+#[test]
+fn knowledge_page_actions_update_state_history_and_answer_policy() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [34u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("seed preference");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let corrected = crate::api::knowledge::db_correct_knowledge_page(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+        Some("Reply Preferences".to_string()),
+        Some("Always answer in Chinese first.".to_string()),
+        Some("Always answer in Chinese first. Keep the tone concise.".to_string()),
+    )
+    .expect("correct page");
+    assert_eq!(corrected.page.title, "Reply Preferences");
+    assert!(corrected.page.human_corrected);
+    assert_eq!(
+        corrected.history.first().map(|item| item.change_type),
+        Some(crate::knowledge::history::KnowledgePageChangeType::Corrected)
+    );
+
+    let outdated = crate::api::knowledge::db_mark_knowledge_page_wrong(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+        crate::knowledge::KnowledgeWrongReason::Outdated,
+        Some("Language preference changed recently.".to_string()),
+    )
+    .expect("mark page wrong");
+    assert_eq!(
+        outdated.page.state,
+        crate::knowledge::KnowledgePageState::Outdated
+    );
+    assert!(outdated.page.answer_policy.default_allowed);
+    assert!(outdated.page.answer_policy.requires_temporal_framing);
+    assert_eq!(
+        outdated.history.first().map(|item| item.reason.as_deref()),
+        Some(Some("Language preference changed recently."))
+    );
+
+    let muted = crate::api::knowledge::db_set_knowledge_page_answer_allowed(
+        app_dir_string,
+        key.to_vec(),
+        "page:preferences".to_string(),
+        false,
+        Some("Do not use until reviewed.".to_string()),
+    )
+    .expect("mute page answers");
+    assert_eq!(
+        muted.page.state,
+        crate::knowledge::KnowledgePageState::AnswerMuted
+    );
+    assert!(!muted.page.answer_policy.default_allowed);
+    assert_eq!(
+        muted.history.first().map(|item| item.change_type),
+        Some(crate::knowledge::history::KnowledgePageChangeType::Muted)
+    );
+    assert!(muted.version_snapshots.len() >= 3);
+    assert!(muted
+        .version_snapshots
+        .iter()
+        .any(|snapshot| snapshot.title == "Reply Preferences"));
+    assert!(muted
+        .version_snapshots
+        .iter()
+        .any(|snapshot| snapshot.title == "Preferences"));
+}
+
+#[test]
+fn knowledge_page_detail_exposes_classified_evidence_entries() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [36u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut page = crate::knowledge::KnowledgePage::new(
+        "page:preferences",
+        crate::knowledge::KnowledgePageType::Preferences,
+        "Preferences",
+        now,
+    );
+    page.current_summary = "Reply in Chinese by default.".to_string();
+    page.current_body = "Reply in Chinese by default.".to_string();
+    page.primary_evidence_ids = vec!["generated:preference:response-language".to_string()];
+    page.source_count = 3;
+
+    db::replace_knowledge_claims(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::KnowledgeClaim {
+                claim_id: "claim:support".to_string(),
+                subject_id: "user:self".to_string(),
+                claim_type: crate::knowledge::KnowledgeClaimType::Preference,
+                facet_key: "response_language".to_string(),
+                statement: "User prefers replies in Chinese.".to_string(),
+                normalized_value: Some("Chinese".to_string()),
+                time_scope: crate::knowledge::KnowledgeClaimTimeScope::Stable,
+                valid_from_ms: None,
+                valid_until_ms: None,
+                confidence: 0.9,
+                source_ref_ids: vec!["generated:preference:response-language".to_string()],
+                source_count: 1,
+                conflict_with_claim_ids: vec![],
+                status: crate::knowledge::KnowledgeClaimStatus::Active,
+                human_confirmed: false,
+                human_corrected: false,
+                answer_allowed: true,
+                created_at_ms: now,
+                updated_at_ms: now,
+            },
+            crate::knowledge::KnowledgeClaim {
+                claim_id: "claim:conflict".to_string(),
+                subject_id: "user:self".to_string(),
+                claim_type: crate::knowledge::KnowledgeClaimType::Preference,
+                facet_key: "response_language".to_string(),
+                statement: "User prefers replies in English.".to_string(),
+                normalized_value: Some("English".to_string()),
+                time_scope: crate::knowledge::KnowledgeClaimTimeScope::Stable,
+                valid_from_ms: None,
+                valid_until_ms: None,
+                confidence: 0.4,
+                source_ref_ids: vec!["generated:preference:response-style".to_string()],
+                source_count: 1,
+                conflict_with_claim_ids: vec!["claim:support".to_string()],
+                status: crate::knowledge::KnowledgeClaimStatus::Disputed,
+                human_confirmed: false,
+                human_corrected: false,
+                answer_allowed: false,
+                created_at_ms: now + 1,
+                updated_at_ms: now + 1,
+            },
+            crate::knowledge::KnowledgeClaim {
+                claim_id: "claim:supplement".to_string(),
+                subject_id: "user:self".to_string(),
+                claim_type: crate::knowledge::KnowledgeClaimType::Preference,
+                facet_key: "response_format".to_string(),
+                statement: "The user once preferred bullet formatting.".to_string(),
+                normalized_value: None,
+                time_scope: crate::knowledge::KnowledgeClaimTimeScope::Historical,
+                valid_from_ms: None,
+                valid_until_ms: None,
+                confidence: 0.3,
+                source_ref_ids: vec!["generated:preference:response-format".to_string()],
+                source_count: 1,
+                conflict_with_claim_ids: vec![],
+                status: crate::knowledge::KnowledgeClaimStatus::Dismissed,
+                human_confirmed: false,
+                human_corrected: false,
+                answer_allowed: false,
+                created_at_ms: now + 2,
+                updated_at_ms: now + 2,
+            },
+        ],
+    )
+    .expect("seed claims");
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page,
+            source_document_ids: vec![
+                "generated:preference:response-language".to_string(),
+                "generated:preference:response-style".to_string(),
+                "generated:preference:response-format".to_string(),
+            ],
+            claim_ids: vec![
+                "claim:support".to_string(),
+                "claim:conflict".to_string(),
+                "claim:supplement".to_string(),
+            ],
+        }],
+    )
+    .expect("seed page");
+
+    let detail = db::get_knowledge_page_detail(&conn, &key, "page:preferences")
+        .expect("load page detail")
+        .expect("page detail");
+
+    assert!(detail
+        .evidence_entries
+        .iter()
+        .any(|entry| entry.kind == crate::knowledge::KnowledgePageEvidenceKind::Support));
+    assert!(detail
+        .evidence_entries
+        .iter()
+        .any(|entry| entry.kind == crate::knowledge::KnowledgePageEvidenceKind::Conflict));
+    assert!(detail
+        .evidence_entries
+        .iter()
+        .any(|entry| entry.kind == crate::knowledge::KnowledgePageEvidenceKind::Supplement));
+}
+
+#[test]
+fn merge_knowledge_page_into_combines_target_content_and_archives_source() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [35u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut target_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:target",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Target Topic",
+        now,
+    );
+    target_page.current_summary = "Target summary".to_string();
+    target_page.current_body = "Target detail".to_string();
+    target_page.primary_evidence_ids = vec!["doc:target".to_string()];
+    target_page.related_page_ids = vec!["page:topics:neighbor".to_string()];
+    target_page.source_count = 1;
+    target_page.confidence_level = 0.62;
+
+    let mut source_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:source",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Source Topic",
+        now + 1,
+    );
+    source_page.current_summary = "Source summary".to_string();
+    source_page.current_body = "Source detail".to_string();
+    source_page.primary_evidence_ids = vec!["doc:source".to_string()];
+    source_page.source_count = 1;
+    source_page.confidence_level = 0.87;
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: target_page,
+                source_document_ids: vec!["doc:target".to_string()],
+                claim_ids: vec!["claim:target".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: source_page,
+                source_document_ids: vec!["doc:source".to_string()],
+                claim_ids: vec!["claim:source".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    let merged = crate::api::knowledge::db_merge_knowledge_page_into(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:topics:source".to_string(),
+        "page:topics:target".to_string(),
+        None,
+    )
+    .expect("merge knowledge page");
+
+    assert_eq!(
+        merged.page.state,
+        crate::knowledge::KnowledgePageState::Archived
+    );
+    assert_eq!(
+        merged.history.first().map(|item| item.change_type),
+        Some(crate::knowledge::history::KnowledgePageChangeType::Merged)
+    );
+
+    let target_detail = db::get_knowledge_page_detail(&conn, &key, "page:topics:target")
+        .expect("load target detail")
+        .expect("target detail after merge");
+
+    assert!(target_detail
+        .page
+        .current_summary
+        .contains("Target summary"));
+    assert!(target_detail
+        .page
+        .current_summary
+        .contains("Source summary"));
+    assert!(target_detail.page.current_body.contains("Target detail"));
+    assert!(target_detail.page.current_body.contains("Source detail"));
+    assert_eq!(
+        target_detail.page.state,
+        crate::knowledge::KnowledgePageState::Active
+    );
+    assert_eq!(target_detail.page.source_count, 2);
+    assert_eq!(target_detail.page.confidence_level, 0.87);
+    assert!(target_detail
+        .source_document_ids
+        .iter()
+        .any(|document_id| document_id == "doc:target"));
+    assert!(target_detail
+        .source_document_ids
+        .iter()
+        .any(|document_id| document_id == "doc:source"));
+    assert!(target_detail
+        .claim_ids
+        .iter()
+        .any(|claim_id| claim_id == "claim:target"));
+    assert!(target_detail
+        .claim_ids
+        .iter()
+        .any(|claim_id| claim_id == "claim:source"));
+    assert!(target_detail
+        .page
+        .primary_evidence_ids
+        .iter()
+        .any(|document_id| document_id == "doc:target"));
+    assert!(target_detail
+        .page
+        .primary_evidence_ids
+        .iter()
+        .any(|document_id| document_id == "doc:source"));
+    assert_eq!(
+        target_detail
+            .history
+            .first()
+            .and_then(|item| item.reason.as_deref()),
+        Some("Merged content and provenance from page:topics:source.")
+    );
 }

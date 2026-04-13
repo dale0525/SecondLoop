@@ -4,7 +4,10 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import '../knowledge/history.dart';
+import '../knowledge/lint.dart';
 import '../knowledge/models.dart';
+import '../knowledge/pages.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `key_from_bytes`, `read_knowledge_debug_stats`
@@ -49,6 +52,85 @@ Future<List<ContentKnowledgeDocument>> dbListGeneratedMemoryDocuments(
         required int offset}) =>
     RustLib.instance.api.crateApiKnowledgeDbListGeneratedMemoryDocuments(
         appDir: appDir, key: key, limit: limit, offset: offset);
+
+Future<List<KnowledgePageSummary>> dbListKnowledgePageSummaries(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api.crateApiKnowledgeDbListKnowledgePageSummaries(
+        appDir: appDir, key: key);
+
+Future<List<KnowledgePageChangeRecord>> dbListRecentKnowledgePageChanges(
+        {required String appDir, required List<int> key, required int limit}) =>
+    RustLib.instance.api.crateApiKnowledgeDbListRecentKnowledgePageChanges(
+        appDir: appDir, key: key, limit: limit);
+
+Future<KnowledgePageDetail> dbGetKnowledgePageDetail(
+        {required String appDir,
+        required List<int> key,
+        required String pageId}) =>
+    RustLib.instance.api.crateApiKnowledgeDbGetKnowledgePageDetail(
+        appDir: appDir, key: key, pageId: pageId);
+
+Future<KnowledgePageDetail> dbCorrectKnowledgePage(
+        {required String appDir,
+        required List<int> key,
+        required String pageId,
+        String? title,
+        String? summary,
+        String? body}) =>
+    RustLib.instance.api.crateApiKnowledgeDbCorrectKnowledgePage(
+        appDir: appDir,
+        key: key,
+        pageId: pageId,
+        title: title,
+        summary: summary,
+        body: body);
+
+Future<KnowledgePageDetail> dbMarkKnowledgePageWrong(
+        {required String appDir,
+        required List<int> key,
+        required String pageId,
+        required KnowledgeWrongReason reason,
+        String? note}) =>
+    RustLib.instance.api.crateApiKnowledgeDbMarkKnowledgePageWrong(
+        appDir: appDir, key: key, pageId: pageId, reason: reason, note: note);
+
+Future<KnowledgePageDetail> dbSetKnowledgePageAnswerAllowed(
+        {required String appDir,
+        required List<int> key,
+        required String pageId,
+        required bool allowed,
+        String? note}) =>
+    RustLib.instance.api.crateApiKnowledgeDbSetKnowledgePageAnswerAllowed(
+        appDir: appDir, key: key, pageId: pageId, allowed: allowed, note: note);
+
+Future<KnowledgePageDetail> dbArchiveKnowledgePage(
+        {required String appDir,
+        required List<int> key,
+        required String pageId,
+        String? note}) =>
+    RustLib.instance.api.crateApiKnowledgeDbArchiveKnowledgePage(
+        appDir: appDir, key: key, pageId: pageId, note: note);
+
+Future<KnowledgePageDetail> dbRemoveKnowledgePage(
+        {required String appDir,
+        required List<int> key,
+        required String pageId,
+        String? note}) =>
+    RustLib.instance.api.crateApiKnowledgeDbRemoveKnowledgePage(
+        appDir: appDir, key: key, pageId: pageId, note: note);
+
+Future<KnowledgePageDetail> dbMergeKnowledgePageInto(
+        {required String appDir,
+        required List<int> key,
+        required String pageId,
+        required String targetPageId,
+        String? note}) =>
+    RustLib.instance.api.crateApiKnowledgeDbMergeKnowledgePageInto(
+        appDir: appDir,
+        key: key,
+        pageId: pageId,
+        targetPageId: targetPageId,
+        note: note);
 
 Future<KnowledgeMemoryFeedback> dbUpsertKnowledgeMemoryFeedback(
         {required String appDir,

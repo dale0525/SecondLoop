@@ -497,6 +497,122 @@ PRAGMA user_version = 43;
     }
 }
 
+fn migrate_from_v43_to_v44(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS knowledge_claims (
+  claim_id TEXT PRIMARY KEY,
+  subject_id TEXT NOT NULL,
+  claim_type TEXT NOT NULL,
+  facet_key TEXT NOT NULL,
+  statement BLOB NOT NULL,
+  normalized_value BLOB,
+  time_scope TEXT NOT NULL,
+  valid_from_ms INTEGER,
+  valid_until_ms INTEGER,
+  confidence REAL NOT NULL,
+  source_ref_ids_json TEXT NOT NULL,
+  source_count INTEGER NOT NULL DEFAULT 0,
+  conflict_with_claim_ids_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  human_confirmed INTEGER NOT NULL DEFAULT 0,
+  human_corrected INTEGER NOT NULL DEFAULT 0,
+  answer_allowed INTEGER NOT NULL DEFAULT 1,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_claims_subject_status
+  ON knowledge_claims(subject_id, status, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS knowledge_pages (
+  page_id TEXT PRIMARY KEY,
+  page_type TEXT NOT NULL,
+  state TEXT NOT NULL,
+  answer_default_allowed INTEGER NOT NULL DEFAULT 1,
+  answer_requires_temporal_framing INTEGER NOT NULL DEFAULT 0,
+  confidence_level REAL NOT NULL DEFAULT 0,
+  source_count INTEGER NOT NULL DEFAULT 0,
+  conflict_count INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  last_used_at_ms INTEGER,
+  human_corrected INTEGER NOT NULL DEFAULT 0,
+  tags_json TEXT NOT NULL,
+  primary_evidence_json TEXT NOT NULL,
+  related_page_ids_json TEXT NOT NULL,
+  source_document_ids_json TEXT NOT NULL,
+  claim_ids_json TEXT NOT NULL,
+  compiled_title BLOB NOT NULL,
+  compiled_summary BLOB NOT NULL,
+  compiled_body BLOB NOT NULL,
+  manual_title BLOB,
+  manual_summary BLOB,
+  manual_body BLOB
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_pages_state_updated
+  ON knowledge_pages(state, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS knowledge_page_history (
+  change_id TEXT PRIMARY KEY,
+  page_id TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  reason TEXT,
+  answer_impacted INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(page_id) REFERENCES knowledge_pages(page_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_page_history_page_created
+  ON knowledge_page_history(page_id, created_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS knowledge_page_lints (
+  lint_id TEXT PRIMARY KEY,
+  page_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(page_id) REFERENCES knowledge_pages(page_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_page_lints_page_created
+  ON knowledge_page_lints(page_id, created_at_ms DESC);
+
+PRAGMA user_version = 44;
+"#,
+    )?;
+    Ok(())
+}
+
+fn migrate_from_v44_to_v45(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS knowledge_page_versions (
+  version_id TEXT PRIMARY KEY,
+  page_id TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  reason TEXT,
+  state TEXT NOT NULL,
+  answer_default_allowed INTEGER NOT NULL DEFAULT 1,
+  answer_requires_temporal_framing INTEGER NOT NULL DEFAULT 0,
+  confidence_level REAL NOT NULL DEFAULT 0,
+  source_count INTEGER NOT NULL DEFAULT 0,
+  conflict_count INTEGER NOT NULL DEFAULT 0,
+  human_corrected INTEGER NOT NULL DEFAULT 0,
+  title BLOB NOT NULL,
+  summary BLOB NOT NULL,
+  body BLOB NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(page_id) REFERENCES knowledge_pages(page_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_page_versions_page_created
+  ON knowledge_page_versions(page_id, created_at_ms DESC);
+
+PRAGMA user_version = 45;
+"#,
+    )?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -680,6 +796,11 @@ DELETE FROM detached_ask_completion_claims;
 DELETE FROM embedding_artifact_manifests;
 DELETE FROM knowledge_document_usage;
 DELETE FROM knowledge_document_feedback;
+DELETE FROM knowledge_page_lints;
+DELETE FROM knowledge_page_history;
+DELETE FROM knowledge_page_versions;
+DELETE FROM knowledge_pages;
+DELETE FROM knowledge_claims;
 DELETE FROM knowledge_embeddings;
 DELETE FROM knowledge_index_jobs;
 DELETE FROM knowledge_units;

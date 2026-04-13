@@ -11,6 +11,7 @@ import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/knowledge/models.dart';
+import '../../src/rust/knowledge/pages.dart' as rust_knowledge_pages;
 import '../../ui/sl_markdown_style.dart';
 import '../actions/assistant_message_actions.dart';
 import '../attachments/attachment_deeplink.dart';
@@ -141,10 +142,22 @@ class MessageViewerPage extends StatelessWidget {
     BuildContext context,
     String documentId,
   ) async {
+    final pagesBackend =
+        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (documentId.startsWith('page:') &&
+        pagesBackend != null &&
+        sessionKey != null) {
+      await pagesBackend.setKnowledgePageAnswerAllowed(
+        sessionKey,
+        pageId: documentId,
+        allowed: false,
+      );
+      return;
+    }
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
     if (backend == null || viewerBackend == null || sessionKey == null) return;
     final document = await viewerBackend.getKnowledgeViewerDocument(
       sessionKey,
@@ -167,10 +180,21 @@ class MessageViewerPage extends StatelessWidget {
     BuildContext context,
     String documentId,
   ) async {
+    final pagesBackend =
+        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (documentId.startsWith('page:') &&
+        pagesBackend != null &&
+        sessionKey != null) {
+      await pagesBackend.archiveKnowledgePage(
+        sessionKey,
+        pageId: documentId,
+      );
+      return;
+    }
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
     if (backend == null || viewerBackend == null || sessionKey == null) return;
     final document = await viewerBackend.getKnowledgeViewerDocument(
       sessionKey,
@@ -195,10 +219,24 @@ class MessageViewerPage extends StatelessWidget {
     required String title,
     required String summary,
   }) async {
+    final pagesBackend =
+        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (card.documentId.startsWith('page:') &&
+        pagesBackend != null &&
+        sessionKey != null) {
+      final detail = await pagesBackend.correctKnowledgePage(
+        sessionKey,
+        pageId: card.documentId,
+        title: title,
+        summary: summary,
+        body: summary,
+      );
+      return _memoryCardFromPageDetail(card, detail);
+    }
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
     if (backend == null || viewerBackend == null || sessionKey == null) {
       return null;
     }
@@ -228,9 +266,20 @@ class MessageViewerPage extends StatelessWidget {
     BuildContext context,
     ChatAnswerEvidenceMemoryCard card,
   ) async {
+    final pagesBackend =
+        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (card.documentId.startsWith('page:') &&
+        pagesBackend != null &&
+        sessionKey != null) {
+      final detail = await pagesBackend.getKnowledgePageDetail(
+        sessionKey,
+        pageId: card.documentId,
+      );
+      return _memoryCardFromPageDetail(card, detail);
+    }
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
     if (viewerBackend == null || sessionKey == null) {
       return card;
     }
@@ -259,6 +308,30 @@ class MessageViewerPage extends StatelessWidget {
       useForAskAi: document.memoryFeedback.useForAskAi,
       isDeleted: document.memoryFeedback.isDeleted,
       markedInaccurate: document.memoryFeedback.markedInaccurate,
+    );
+  }
+
+  ChatAnswerEvidenceMemoryCard _memoryCardFromPageDetail(
+    ChatAnswerEvidenceMemoryCard card,
+    rust_knowledge_pages.KnowledgePageDetail detail,
+  ) {
+    final page = detail.page;
+    final status = page.humanCorrected
+        ? KnowledgeMemoryStatus.confirmed.name
+        : (page.state == rust_knowledge_pages.KnowledgePageState.outdated
+            ? KnowledgeMemoryStatus.maybeOutdated.name
+            : KnowledgeMemoryStatus.inferred.name);
+    return card.copyWith(
+      title: page.title,
+      summary: page.currentSummary,
+      body: page.currentBody,
+      status: status,
+      sourceCount: page.sourceCount.toInt(),
+      updatedAtMs: page.updatedAtMs.toInt(),
+      useForAskAi: page.answerPolicy.defaultAllowed,
+      isDeleted: page.state == rust_knowledge_pages.KnowledgePageState.removed,
+      markedInaccurate:
+          page.state == rust_knowledge_pages.KnowledgePageState.needsReview,
     );
   }
 

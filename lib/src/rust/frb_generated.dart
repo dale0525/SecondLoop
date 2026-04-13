@@ -28,7 +28,10 @@ import 'db.dart';
 import 'desktop_media/ocr.dart';
 import 'frb_generated.dart';
 import 'frb_generated.io.dart' if (dart.library.html) 'frb_generated.web.dart';
+import 'knowledge/history.dart';
+import 'knowledge/lint.dart';
 import 'knowledge/models.dart';
+import 'knowledge/pages.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'semantic_parse.dart';
 
@@ -79,7 +82,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => 1326763031;
+  int get rustContentHash => -515394244;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1474,8 +1477,22 @@ abstract class RustLibApi extends BaseApi {
       crateApiExternalImportExternalImportScanSource(
           {required String appDir, required String sourcePath});
 
+  Future<KnowledgePageDetail> crateApiKnowledgeDbArchiveKnowledgePage(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      String? note});
+
   Future<void> crateApiKnowledgeDbCancelKnowledgeRebuild(
       {required String appDir, required List<int> key});
+
+  Future<KnowledgePageDetail> crateApiKnowledgeDbCorrectKnowledgePage(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      String? title,
+      String? summary,
+      String? body});
 
   Future<KnowledgeDebugStats> crateApiKnowledgeDbGetKnowledgeDebugStats(
       {required String appDir, required List<int> key});
@@ -1487,6 +1504,9 @@ abstract class RustLibApi extends BaseApi {
 
   Future<KnowledgeIndexStatus> crateApiKnowledgeDbGetKnowledgeIndexStatus(
       {required String appDir, required List<int> key});
+
+  Future<KnowledgePageDetail> crateApiKnowledgeDbGetKnowledgePageDetail(
+      {required String appDir, required List<int> key, required String pageId});
 
   Future<List<ContentKnowledgeDocument>>
       crateApiKnowledgeDbListGeneratedMemoryDocuments(
@@ -1501,6 +1521,10 @@ abstract class RustLibApi extends BaseApi {
           required List<int> key,
           required int limit,
           required int offset});
+
+  Future<List<KnowledgePageSummary>>
+      crateApiKnowledgeDbListKnowledgePageSummaries(
+          {required String appDir, required List<int> key});
 
   Future<List<KnowledgeUnit>> crateApiKnowledgeDbListKnowledgeUnits(
       {required String appDir,
@@ -1526,6 +1550,10 @@ abstract class RustLibApi extends BaseApi {
       required int limit,
       required int offset});
 
+  Future<List<KnowledgePageChangeRecord>>
+      crateApiKnowledgeDbListRecentKnowledgePageChanges(
+          {required String appDir, required List<int> key, required int limit});
+
   Future<List<KnowledgeUnit>> crateApiKnowledgeDbListRecentKnowledgeViewerUnits(
       {required String appDir,
       required List<int> key,
@@ -1533,8 +1561,28 @@ abstract class RustLibApi extends BaseApi {
       KnowledgeUnitKind? unitKind,
       required int limit});
 
+  Future<KnowledgePageDetail> crateApiKnowledgeDbMarkKnowledgePageWrong(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      required KnowledgeWrongReason reason,
+      String? note});
+
+  Future<KnowledgePageDetail> crateApiKnowledgeDbMergeKnowledgePageInto(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      required String targetPageId,
+      String? note});
+
   Future<int> crateApiKnowledgeDbProcessPendingKnowledgeIndexJobs(
       {required String appDir, required List<int> key, required int limit});
+
+  Future<KnowledgePageDetail> crateApiKnowledgeDbRemoveKnowledgePage(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      String? note});
 
   Future<void> crateApiKnowledgeDbRequestKnowledgeRebuild(
       {required String appDir, required List<int> key});
@@ -1554,6 +1602,13 @@ abstract class RustLibApi extends BaseApi {
           required String documentId,
           required String query,
           required int limit});
+
+  Future<KnowledgePageDetail> crateApiKnowledgeDbSetKnowledgePageAnswerAllowed(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      required bool allowed,
+      String? note});
 
   Future<KnowledgeMemoryFeedback>
       crateApiKnowledgeDbUpsertKnowledgeMemoryFeedback(
@@ -10056,6 +10111,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<KnowledgePageDetail> crateApiKnowledgeDbArchiveKnowledgePage(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      String? note}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(pageId, serializer);
+        sse_encode_opt_String(note, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 207, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_knowledge_page_detail,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbArchiveKnowledgePageConstMeta,
+      argValues: [appDir, key, pageId, note],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbArchiveKnowledgePageConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_archive_knowledge_page",
+        argNames: ["appDir", "key", "pageId", "note"],
+      );
+
+  @override
   Future<void> crateApiKnowledgeDbCancelKnowledgeRebuild(
       {required String appDir, required List<int> key}) {
     return handler.executeNormal(NormalTask(
@@ -10064,7 +10151,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 207, port: port_);
+            funcId: 208, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10083,6 +10170,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<KnowledgePageDetail> crateApiKnowledgeDbCorrectKnowledgePage(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      String? title,
+      String? summary,
+      String? body}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(pageId, serializer);
+        sse_encode_opt_String(title, serializer);
+        sse_encode_opt_String(summary, serializer);
+        sse_encode_opt_String(body, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 209, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_knowledge_page_detail,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbCorrectKnowledgePageConstMeta,
+      argValues: [appDir, key, pageId, title, summary, body],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbCorrectKnowledgePageConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_correct_knowledge_page",
+        argNames: ["appDir", "key", "pageId", "title", "summary", "body"],
+      );
+
+  @override
   Future<KnowledgeDebugStats> crateApiKnowledgeDbGetKnowledgeDebugStats(
       {required String appDir, required List<int> key}) {
     return handler.executeNormal(NormalTask(
@@ -10091,7 +10214,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 208, port: port_);
+            funcId: 210, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_knowledge_debug_stats,
@@ -10121,7 +10244,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(documentId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 209, port: port_);
+            funcId: 211, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_knowledge_viewer_document,
@@ -10148,7 +10271,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 210, port: port_);
+            funcId: 212, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_knowledge_index_status,
@@ -10167,6 +10290,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<KnowledgePageDetail> crateApiKnowledgeDbGetKnowledgePageDetail(
+      {required String appDir,
+      required List<int> key,
+      required String pageId}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(pageId, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 213, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_knowledge_page_detail,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbGetKnowledgePageDetailConstMeta,
+      argValues: [appDir, key, pageId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbGetKnowledgePageDetailConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_get_knowledge_page_detail",
+        argNames: ["appDir", "key", "pageId"],
+      );
+
+  @override
   Future<List<ContentKnowledgeDocument>>
       crateApiKnowledgeDbListGeneratedMemoryDocuments(
           {required String appDir,
@@ -10181,7 +10334,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(limit, serializer);
         sse_encode_u_32(offset, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 211, port: port_);
+            funcId: 214, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_content_knowledge_document,
@@ -10214,7 +10367,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(limit, serializer);
         sse_encode_u_32(offset, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 212, port: port_);
+            funcId: 215, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_content_knowledge_document,
@@ -10230,6 +10383,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "db_list_knowledge_documents",
         argNames: ["appDir", "key", "limit", "offset"],
+      );
+
+  @override
+  Future<List<KnowledgePageSummary>>
+      crateApiKnowledgeDbListKnowledgePageSummaries(
+          {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 216, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_knowledge_page_summary,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbListKnowledgePageSummariesConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbListKnowledgePageSummariesConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_list_knowledge_page_summaries",
+        argNames: ["appDir", "key"],
       );
 
   @override
@@ -10250,7 +10431,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(limit, serializer);
         sse_encode_u_32(offset, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 213, port: port_);
+            funcId: 217, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_knowledge_unit,
@@ -10293,7 +10474,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(before, serializer);
         sse_encode_u_32(after, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 214, port: port_);
+            funcId: 218, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_knowledge_unit,
@@ -10337,7 +10518,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(limit, serializer);
         sse_encode_u_32(offset, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 215, port: port_);
+            funcId: 219, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_knowledge_viewer_page,
@@ -10363,6 +10544,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<KnowledgePageChangeRecord>>
+      crateApiKnowledgeDbListRecentKnowledgePageChanges(
+          {required String appDir,
+          required List<int> key,
+          required int limit}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_u_32(limit, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 220, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_knowledge_page_change_record,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbListRecentKnowledgePageChangesConstMeta,
+      argValues: [appDir, key, limit],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiKnowledgeDbListRecentKnowledgePageChangesConstMeta =>
+          const TaskConstMeta(
+            debugName: "db_list_recent_knowledge_page_changes",
+            argNames: ["appDir", "key", "limit"],
+          );
+
+  @override
   Future<List<KnowledgeUnit>> crateApiKnowledgeDbListRecentKnowledgeViewerUnits(
       {required String appDir,
       required List<int> key,
@@ -10378,7 +10591,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_knowledge_unit_kind(unitKind, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 216, port: port_);
+            funcId: 221, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_knowledge_unit,
@@ -10398,6 +10611,74 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  Future<KnowledgePageDetail> crateApiKnowledgeDbMarkKnowledgePageWrong(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      required KnowledgeWrongReason reason,
+      String? note}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(pageId, serializer);
+        sse_encode_knowledge_wrong_reason(reason, serializer);
+        sse_encode_opt_String(note, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 222, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_knowledge_page_detail,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbMarkKnowledgePageWrongConstMeta,
+      argValues: [appDir, key, pageId, reason, note],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbMarkKnowledgePageWrongConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_mark_knowledge_page_wrong",
+        argNames: ["appDir", "key", "pageId", "reason", "note"],
+      );
+
+  @override
+  Future<KnowledgePageDetail> crateApiKnowledgeDbMergeKnowledgePageInto(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      required String targetPageId,
+      String? note}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(pageId, serializer);
+        sse_encode_String(targetPageId, serializer);
+        sse_encode_opt_String(note, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 223, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_knowledge_page_detail,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbMergeKnowledgePageIntoConstMeta,
+      argValues: [appDir, key, pageId, targetPageId, note],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbMergeKnowledgePageIntoConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_merge_knowledge_page_into",
+        argNames: ["appDir", "key", "pageId", "targetPageId", "note"],
+      );
+
+  @override
   Future<int> crateApiKnowledgeDbProcessPendingKnowledgeIndexJobs(
       {required String appDir, required List<int> key, required int limit}) {
     return handler.executeNormal(NormalTask(
@@ -10407,7 +10688,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 217, port: port_);
+            funcId: 224, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -10427,6 +10708,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  Future<KnowledgePageDetail> crateApiKnowledgeDbRemoveKnowledgePage(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      String? note}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(pageId, serializer);
+        sse_encode_opt_String(note, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 225, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_knowledge_page_detail,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbRemoveKnowledgePageConstMeta,
+      argValues: [appDir, key, pageId, note],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbRemoveKnowledgePageConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_remove_knowledge_page",
+        argNames: ["appDir", "key", "pageId", "note"],
+      );
+
+  @override
   Future<void> crateApiKnowledgeDbRequestKnowledgeRebuild(
       {required String appDir, required List<int> key}) {
     return handler.executeNormal(NormalTask(
@@ -10435,7 +10748,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 218, port: port_);
+            funcId: 226, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10471,7 +10784,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(documentId, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 219, port: port_);
+            funcId: 227, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_knowledge_search_result,
@@ -10513,7 +10826,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(query, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 220, port: port_);
+            funcId: 228, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_knowledge_search_result,
@@ -10530,6 +10843,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "db_search_knowledge_document_units",
         argNames: ["appDir", "key", "documentId", "query", "limit"],
       );
+
+  @override
+  Future<KnowledgePageDetail> crateApiKnowledgeDbSetKnowledgePageAnswerAllowed(
+      {required String appDir,
+      required List<int> key,
+      required String pageId,
+      required bool allowed,
+      String? note}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(pageId, serializer);
+        sse_encode_bool(allowed, serializer);
+        sse_encode_opt_String(note, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 229, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_knowledge_page_detail,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbSetKnowledgePageAnswerAllowedConstMeta,
+      argValues: [appDir, key, pageId, allowed, note],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiKnowledgeDbSetKnowledgePageAnswerAllowedConstMeta =>
+          const TaskConstMeta(
+            debugName: "db_set_knowledge_page_answer_allowed",
+            argNames: ["appDir", "key", "pageId", "allowed", "note"],
+          );
 
   @override
   Future<KnowledgeMemoryFeedback>
@@ -10556,7 +10904,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_String(correctedTitle, serializer);
         sse_encode_opt_String(correctedSummary, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 221, port: port_);
+            funcId: 230, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_knowledge_memory_feedback,
@@ -10605,7 +10953,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 222, port: port_);
+            funcId: 231, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_media_annotation_config,
@@ -10636,7 +10984,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_box_autoadd_media_annotation_config(config, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 223, port: port_);
+            funcId: 232, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10675,7 +11023,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(mimeType, serializer);
         sse_encode_list_prim_u_8_loose(imageBytes, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 224, port: port_);
+            funcId: 233, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -10728,7 +11076,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(readableTextExcerpt, serializer);
         sse_encode_String(readableTextFull, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 225, port: port_);
+            funcId: 234, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -10798,7 +11146,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(readableTextExcerpt, serializer);
         sse_encode_String(readableTextFull, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 226, port: port_);
+            funcId: 235, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -10856,7 +11204,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(outputPath, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 227, port: port_);
+            funcId: 236, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_migration_archive_manifest,
@@ -10884,7 +11232,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 228, port: port_);
+            funcId: 237, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_migration_archive_export_estimate,
@@ -10918,7 +11266,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(outputPath, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 229, port: port_);
+            funcId: 238, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10952,7 +11300,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(archivePath, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 230, port: port_);
+            funcId: 239, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_migration_archive_manifest,
@@ -10984,7 +11332,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(archivePath, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 231, port: port_);
+            funcId: 240, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11015,7 +11363,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_String(archivePath, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 232, port: port_);
+            funcId: 241, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_migration_archive_manifest,
@@ -11041,7 +11389,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(itemId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 233, port: port_);
+            funcId: 242, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11070,7 +11418,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(manifestJson, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 234, port: port_);
+            funcId: 243, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_migration_archive_manifest,
@@ -11099,7 +11447,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(itemId, serializer);
         sse_encode_String(title, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 235, port: port_);
+            funcId: 244, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11133,7 +11481,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_oplog_maintenance_backend(backend, serializer);
         sse_encode_String(scopeId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 236, port: port_);
+            funcId: 245, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_oplog_maintenance_stats,
@@ -11157,7 +11505,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 237)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 246)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11180,7 +11528,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 238, port: port_);
+            funcId: 247, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11211,7 +11559,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_opt_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 239, port: port_);
+            funcId: 248, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11249,7 +11597,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 240, port: port_);
+            funcId: 249, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11293,7 +11641,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 241, port: port_);
+            funcId: 250, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11339,7 +11687,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 242, port: port_);
+            funcId: 251, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11387,7 +11735,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 243, port: port_);
+            funcId: 252, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11438,7 +11786,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 244, port: port_);
+            funcId: 253, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11497,7 +11845,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 245, port: port_);
+            funcId: 254, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11549,7 +11897,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 246, port: port_);
+            funcId: 255, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11577,7 +11925,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(tagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 247, port: port_);
+            funcId: 256, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11604,7 +11952,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 248, port: port_);
+            funcId: 257, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -11634,7 +11982,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 249, port: port_);
+            funcId: 258, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -11666,7 +12014,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(conversationId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 250, port: port_);
+            funcId: 259, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -11696,7 +12044,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 251, port: port_);
+            funcId: 260, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -11726,7 +12074,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 252, port: port_);
+            funcId: 261, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -11754,7 +12102,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 253, port: port_);
+            funcId: 262, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -11781,7 +12129,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 254, port: port_);
+            funcId: 263, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -11812,7 +12160,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 255, port: port_);
+            funcId: 264, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -11847,7 +12195,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(reason, serializer);
         sse_encode_String(action, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 256, port: port_);
+            funcId: 265, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11886,7 +12234,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 257, port: port_);
+            funcId: 266, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -11914,7 +12262,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(name, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 258, port: port_);
+            funcId: 267, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_tag,
@@ -11946,7 +12294,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_i_64(nowMs, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 259, port: port_);
+            funcId: 268, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_todo_followup_generation_job,
@@ -12402,6 +12750,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeAnswerPolicy dco_decode_knowledge_answer_policy(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return KnowledgeAnswerPolicy(
+      defaultAllowed: dco_decode_bool(arr[0]),
+      requiresTemporalFraming: dco_decode_bool(arr[1]),
+    );
+  }
+
+  @protected
   KnowledgeDebugStats dco_decode_knowledge_debug_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -12451,6 +12811,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeLintKind dco_decode_knowledge_lint_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgeLintKind.values[raw as int];
+  }
+
+  @protected
+  KnowledgeLintRecord dco_decode_knowledge_lint_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return KnowledgeLintRecord(
+      lintId: dco_decode_String(arr[0]),
+      pageId: dco_decode_String(arr[1]),
+      kind: dco_decode_knowledge_lint_kind(arr[2]),
+      summary: dco_decode_String(arr[3]),
+      createdAtMs: dco_decode_i_64(arr[4]),
+    );
+  }
+
+  @protected
   KnowledgeMemoryDisplay dco_decode_knowledge_memory_display(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -12496,6 +12877,158 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   KnowledgeOriginType dco_decode_knowledge_origin_type(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return KnowledgeOriginType.values[raw as int];
+  }
+
+  @protected
+  KnowledgePage dco_decode_knowledge_page(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 17)
+      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
+    return KnowledgePage(
+      pageId: dco_decode_String(arr[0]),
+      pageType: dco_decode_knowledge_page_type(arr[1]),
+      title: dco_decode_String(arr[2]),
+      currentSummary: dco_decode_String(arr[3]),
+      currentBody: dco_decode_String(arr[4]),
+      state: dco_decode_knowledge_page_state(arr[5]),
+      answerPolicy: dco_decode_knowledge_answer_policy(arr[6]),
+      confidenceLevel: dco_decode_f_64(arr[7]),
+      createdAtMs: dco_decode_i_64(arr[8]),
+      updatedAtMs: dco_decode_i_64(arr[9]),
+      lastUsedAtMs: dco_decode_opt_box_autoadd_i_64(arr[10]),
+      sourceCount: dco_decode_i_64(arr[11]),
+      conflictCount: dco_decode_i_64(arr[12]),
+      humanCorrected: dco_decode_bool(arr[13]),
+      tags: dco_decode_list_String(arr[14]),
+      primaryEvidenceIds: dco_decode_list_String(arr[15]),
+      relatedPageIds: dco_decode_list_String(arr[16]),
+    );
+  }
+
+  @protected
+  KnowledgePageChangeRecord dco_decode_knowledge_page_change_record(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return KnowledgePageChangeRecord(
+      changeId: dco_decode_String(arr[0]),
+      pageId: dco_decode_String(arr[1]),
+      changeType: dco_decode_knowledge_page_change_type(arr[2]),
+      actor: dco_decode_String(arr[3]),
+      reason: dco_decode_opt_String(arr[4]),
+      answerImpacted: dco_decode_bool(arr[5]),
+      createdAtMs: dco_decode_i_64(arr[6]),
+    );
+  }
+
+  @protected
+  KnowledgePageChangeType dco_decode_knowledge_page_change_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgePageChangeType.values[raw as int];
+  }
+
+  @protected
+  KnowledgePageDetail dco_decode_knowledge_page_detail(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return KnowledgePageDetail(
+      page: dco_decode_knowledge_page(arr[0]),
+      sourceDocumentIds: dco_decode_list_String(arr[1]),
+      claimIds: dco_decode_list_String(arr[2]),
+      history: dco_decode_list_knowledge_page_change_record(arr[3]),
+      versionSnapshots: dco_decode_list_knowledge_page_version_snapshot(arr[4]),
+      evidenceEntries: dco_decode_list_knowledge_page_evidence_entry(arr[5]),
+      lintRecords: dco_decode_list_knowledge_lint_record(arr[6]),
+    );
+  }
+
+  @protected
+  KnowledgePageEvidenceEntry dco_decode_knowledge_page_evidence_entry(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return KnowledgePageEvidenceEntry(
+      evidenceId: dco_decode_String(arr[0]),
+      kind: dco_decode_knowledge_page_evidence_kind(arr[1]),
+      summary: dco_decode_String(arr[2]),
+      sourceRefIds: dco_decode_list_String(arr[3]),
+      createdAtMs: dco_decode_i_64(arr[4]),
+    );
+  }
+
+  @protected
+  KnowledgePageEvidenceKind dco_decode_knowledge_page_evidence_kind(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgePageEvidenceKind.values[raw as int];
+  }
+
+  @protected
+  KnowledgePageState dco_decode_knowledge_page_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgePageState.values[raw as int];
+  }
+
+  @protected
+  KnowledgePageSummary dco_decode_knowledge_page_summary(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    return KnowledgePageSummary(
+      pageId: dco_decode_String(arr[0]),
+      pageType: dco_decode_knowledge_page_type(arr[1]),
+      title: dco_decode_String(arr[2]),
+      currentSummary: dco_decode_String(arr[3]),
+      state: dco_decode_knowledge_page_state(arr[4]),
+      answerPolicy: dco_decode_knowledge_answer_policy(arr[5]),
+      updatedAtMs: dco_decode_i_64(arr[6]),
+      lastUsedAtMs: dco_decode_opt_box_autoadd_i_64(arr[7]),
+      sourceCount: dco_decode_i_64(arr[8]),
+      conflictCount: dco_decode_i_64(arr[9]),
+      humanCorrected: dco_decode_bool(arr[10]),
+      tags: dco_decode_list_String(arr[11]),
+      primaryEvidenceIds: dco_decode_list_String(arr[12]),
+    );
+  }
+
+  @protected
+  KnowledgePageType dco_decode_knowledge_page_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgePageType.values[raw as int];
+  }
+
+  @protected
+  KnowledgePageVersionSnapshot dco_decode_knowledge_page_version_snapshot(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    return KnowledgePageVersionSnapshot(
+      versionId: dco_decode_String(arr[0]),
+      pageId: dco_decode_String(arr[1]),
+      title: dco_decode_String(arr[2]),
+      summary: dco_decode_String(arr[3]),
+      body: dco_decode_String(arr[4]),
+      state: dco_decode_knowledge_page_state(arr[5]),
+      answerPolicy: dco_decode_knowledge_answer_policy(arr[6]),
+      confidenceLevel: dco_decode_f_64(arr[7]),
+      sourceCount: dco_decode_i_64(arr[8]),
+      conflictCount: dco_decode_i_64(arr[9]),
+      humanCorrected: dco_decode_bool(arr[10]),
+      actor: dco_decode_String(arr[11]),
+      changeType: dco_decode_knowledge_page_change_type(arr[12]),
+      reason: dco_decode_opt_String(arr[13]),
+      createdAtMs: dco_decode_i_64(arr[14]),
+    );
   }
 
   @protected
@@ -12618,6 +13151,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeWrongReason dco_decode_knowledge_wrong_reason(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgeWrongReason.values[raw as int];
+  }
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
@@ -12683,6 +13222,50 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
         .map(dco_decode_external_import_batch_summary)
+        .toList();
+  }
+
+  @protected
+  List<KnowledgeLintRecord> dco_decode_list_knowledge_lint_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_knowledge_lint_record)
+        .toList();
+  }
+
+  @protected
+  List<KnowledgePageChangeRecord> dco_decode_list_knowledge_page_change_record(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_knowledge_page_change_record)
+        .toList();
+  }
+
+  @protected
+  List<KnowledgePageEvidenceEntry>
+      dco_decode_list_knowledge_page_evidence_entry(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_knowledge_page_evidence_entry)
+        .toList();
+  }
+
+  @protected
+  List<KnowledgePageSummary> dco_decode_list_knowledge_page_summary(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_knowledge_page_summary)
+        .toList();
+  }
+
+  @protected
+  List<KnowledgePageVersionSnapshot>
+      dco_decode_list_knowledge_page_version_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_knowledge_page_version_snapshot)
         .toList();
   }
 
@@ -13939,6 +14522,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeAnswerPolicy sse_decode_knowledge_answer_policy(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_defaultAllowed = sse_decode_bool(deserializer);
+    var var_requiresTemporalFraming = sse_decode_bool(deserializer);
+    return KnowledgeAnswerPolicy(
+        defaultAllowed: var_defaultAllowed,
+        requiresTemporalFraming: var_requiresTemporalFraming);
+  }
+
+  @protected
   KnowledgeDebugStats sse_decode_knowledge_debug_stats(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -14013,6 +14607,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeLintKind sse_decode_knowledge_lint_kind(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgeLintKind.values[inner];
+  }
+
+  @protected
+  KnowledgeLintRecord sse_decode_knowledge_lint_record(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_lintId = sse_decode_String(deserializer);
+    var var_pageId = sse_decode_String(deserializer);
+    var var_kind = sse_decode_knowledge_lint_kind(deserializer);
+    var var_summary = sse_decode_String(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    return KnowledgeLintRecord(
+        lintId: var_lintId,
+        pageId: var_pageId,
+        kind: var_kind,
+        summary: var_summary,
+        createdAtMs: var_createdAtMs);
+  }
+
+  @protected
   KnowledgeMemoryDisplay sse_decode_knowledge_memory_display(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -14067,6 +14686,210 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return KnowledgeOriginType.values[inner];
+  }
+
+  @protected
+  KnowledgePage sse_decode_knowledge_page(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_pageId = sse_decode_String(deserializer);
+    var var_pageType = sse_decode_knowledge_page_type(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_currentSummary = sse_decode_String(deserializer);
+    var var_currentBody = sse_decode_String(deserializer);
+    var var_state = sse_decode_knowledge_page_state(deserializer);
+    var var_answerPolicy = sse_decode_knowledge_answer_policy(deserializer);
+    var var_confidenceLevel = sse_decode_f_64(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    var var_updatedAtMs = sse_decode_i_64(deserializer);
+    var var_lastUsedAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_sourceCount = sse_decode_i_64(deserializer);
+    var var_conflictCount = sse_decode_i_64(deserializer);
+    var var_humanCorrected = sse_decode_bool(deserializer);
+    var var_tags = sse_decode_list_String(deserializer);
+    var var_primaryEvidenceIds = sse_decode_list_String(deserializer);
+    var var_relatedPageIds = sse_decode_list_String(deserializer);
+    return KnowledgePage(
+        pageId: var_pageId,
+        pageType: var_pageType,
+        title: var_title,
+        currentSummary: var_currentSummary,
+        currentBody: var_currentBody,
+        state: var_state,
+        answerPolicy: var_answerPolicy,
+        confidenceLevel: var_confidenceLevel,
+        createdAtMs: var_createdAtMs,
+        updatedAtMs: var_updatedAtMs,
+        lastUsedAtMs: var_lastUsedAtMs,
+        sourceCount: var_sourceCount,
+        conflictCount: var_conflictCount,
+        humanCorrected: var_humanCorrected,
+        tags: var_tags,
+        primaryEvidenceIds: var_primaryEvidenceIds,
+        relatedPageIds: var_relatedPageIds);
+  }
+
+  @protected
+  KnowledgePageChangeRecord sse_decode_knowledge_page_change_record(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_changeId = sse_decode_String(deserializer);
+    var var_pageId = sse_decode_String(deserializer);
+    var var_changeType = sse_decode_knowledge_page_change_type(deserializer);
+    var var_actor = sse_decode_String(deserializer);
+    var var_reason = sse_decode_opt_String(deserializer);
+    var var_answerImpacted = sse_decode_bool(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    return KnowledgePageChangeRecord(
+        changeId: var_changeId,
+        pageId: var_pageId,
+        changeType: var_changeType,
+        actor: var_actor,
+        reason: var_reason,
+        answerImpacted: var_answerImpacted,
+        createdAtMs: var_createdAtMs);
+  }
+
+  @protected
+  KnowledgePageChangeType sse_decode_knowledge_page_change_type(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgePageChangeType.values[inner];
+  }
+
+  @protected
+  KnowledgePageDetail sse_decode_knowledge_page_detail(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_page = sse_decode_knowledge_page(deserializer);
+    var var_sourceDocumentIds = sse_decode_list_String(deserializer);
+    var var_claimIds = sse_decode_list_String(deserializer);
+    var var_history =
+        sse_decode_list_knowledge_page_change_record(deserializer);
+    var var_versionSnapshots =
+        sse_decode_list_knowledge_page_version_snapshot(deserializer);
+    var var_evidenceEntries =
+        sse_decode_list_knowledge_page_evidence_entry(deserializer);
+    var var_lintRecords = sse_decode_list_knowledge_lint_record(deserializer);
+    return KnowledgePageDetail(
+        page: var_page,
+        sourceDocumentIds: var_sourceDocumentIds,
+        claimIds: var_claimIds,
+        history: var_history,
+        versionSnapshots: var_versionSnapshots,
+        evidenceEntries: var_evidenceEntries,
+        lintRecords: var_lintRecords);
+  }
+
+  @protected
+  KnowledgePageEvidenceEntry sse_decode_knowledge_page_evidence_entry(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_evidenceId = sse_decode_String(deserializer);
+    var var_kind = sse_decode_knowledge_page_evidence_kind(deserializer);
+    var var_summary = sse_decode_String(deserializer);
+    var var_sourceRefIds = sse_decode_list_String(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    return KnowledgePageEvidenceEntry(
+        evidenceId: var_evidenceId,
+        kind: var_kind,
+        summary: var_summary,
+        sourceRefIds: var_sourceRefIds,
+        createdAtMs: var_createdAtMs);
+  }
+
+  @protected
+  KnowledgePageEvidenceKind sse_decode_knowledge_page_evidence_kind(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgePageEvidenceKind.values[inner];
+  }
+
+  @protected
+  KnowledgePageState sse_decode_knowledge_page_state(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgePageState.values[inner];
+  }
+
+  @protected
+  KnowledgePageSummary sse_decode_knowledge_page_summary(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_pageId = sse_decode_String(deserializer);
+    var var_pageType = sse_decode_knowledge_page_type(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_currentSummary = sse_decode_String(deserializer);
+    var var_state = sse_decode_knowledge_page_state(deserializer);
+    var var_answerPolicy = sse_decode_knowledge_answer_policy(deserializer);
+    var var_updatedAtMs = sse_decode_i_64(deserializer);
+    var var_lastUsedAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_sourceCount = sse_decode_i_64(deserializer);
+    var var_conflictCount = sse_decode_i_64(deserializer);
+    var var_humanCorrected = sse_decode_bool(deserializer);
+    var var_tags = sse_decode_list_String(deserializer);
+    var var_primaryEvidenceIds = sse_decode_list_String(deserializer);
+    return KnowledgePageSummary(
+        pageId: var_pageId,
+        pageType: var_pageType,
+        title: var_title,
+        currentSummary: var_currentSummary,
+        state: var_state,
+        answerPolicy: var_answerPolicy,
+        updatedAtMs: var_updatedAtMs,
+        lastUsedAtMs: var_lastUsedAtMs,
+        sourceCount: var_sourceCount,
+        conflictCount: var_conflictCount,
+        humanCorrected: var_humanCorrected,
+        tags: var_tags,
+        primaryEvidenceIds: var_primaryEvidenceIds);
+  }
+
+  @protected
+  KnowledgePageType sse_decode_knowledge_page_type(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgePageType.values[inner];
+  }
+
+  @protected
+  KnowledgePageVersionSnapshot sse_decode_knowledge_page_version_snapshot(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_versionId = sse_decode_String(deserializer);
+    var var_pageId = sse_decode_String(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_summary = sse_decode_String(deserializer);
+    var var_body = sse_decode_String(deserializer);
+    var var_state = sse_decode_knowledge_page_state(deserializer);
+    var var_answerPolicy = sse_decode_knowledge_answer_policy(deserializer);
+    var var_confidenceLevel = sse_decode_f_64(deserializer);
+    var var_sourceCount = sse_decode_i_64(deserializer);
+    var var_conflictCount = sse_decode_i_64(deserializer);
+    var var_humanCorrected = sse_decode_bool(deserializer);
+    var var_actor = sse_decode_String(deserializer);
+    var var_changeType = sse_decode_knowledge_page_change_type(deserializer);
+    var var_reason = sse_decode_opt_String(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    return KnowledgePageVersionSnapshot(
+        versionId: var_versionId,
+        pageId: var_pageId,
+        title: var_title,
+        summary: var_summary,
+        body: var_body,
+        state: var_state,
+        answerPolicy: var_answerPolicy,
+        confidenceLevel: var_confidenceLevel,
+        sourceCount: var_sourceCount,
+        conflictCount: var_conflictCount,
+        humanCorrected: var_humanCorrected,
+        actor: var_actor,
+        changeType: var_changeType,
+        reason: var_reason,
+        createdAtMs: var_createdAtMs);
   }
 
   @protected
@@ -14227,6 +15050,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeWrongReason sse_decode_knowledge_wrong_reason(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgeWrongReason.values[inner];
+  }
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -14350,6 +15181,73 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <ExternalImportBatchSummary>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_external_import_batch_summary(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<KnowledgeLintRecord> sse_decode_list_knowledge_lint_record(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <KnowledgeLintRecord>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_knowledge_lint_record(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<KnowledgePageChangeRecord> sse_decode_list_knowledge_page_change_record(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <KnowledgePageChangeRecord>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_knowledge_page_change_record(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<KnowledgePageEvidenceEntry>
+      sse_decode_list_knowledge_page_evidence_entry(
+          SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <KnowledgePageEvidenceEntry>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_knowledge_page_evidence_entry(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<KnowledgePageSummary> sse_decode_list_knowledge_page_summary(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <KnowledgePageSummary>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_knowledge_page_summary(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<KnowledgePageVersionSnapshot>
+      sse_decode_list_knowledge_page_version_snapshot(
+          SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <KnowledgePageVersionSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_knowledge_page_version_snapshot(deserializer));
     }
     return ans_;
   }
@@ -15737,6 +16635,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_knowledge_answer_policy(
+      KnowledgeAnswerPolicy self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.defaultAllowed, serializer);
+    sse_encode_bool(self.requiresTemporalFraming, serializer);
+  }
+
+  @protected
   void sse_encode_knowledge_debug_stats(
       KnowledgeDebugStats self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -15775,6 +16681,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.lastIndexedModelName, serializer);
     sse_encode_opt_box_autoadd_i_64(self.lastIndexedDim, serializer);
     sse_encode_knowledge_version_set(self.versions, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_lint_kind(
+      KnowledgeLintKind self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_lint_record(
+      KnowledgeLintRecord self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.lintId, serializer);
+    sse_encode_String(self.pageId, serializer);
+    sse_encode_knowledge_lint_kind(self.kind, serializer);
+    sse_encode_String(self.summary, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
   }
 
   @protected
@@ -15818,6 +16742,135 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       KnowledgeOriginType self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page(KnowledgePage self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.pageId, serializer);
+    sse_encode_knowledge_page_type(self.pageType, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.currentSummary, serializer);
+    sse_encode_String(self.currentBody, serializer);
+    sse_encode_knowledge_page_state(self.state, serializer);
+    sse_encode_knowledge_answer_policy(self.answerPolicy, serializer);
+    sse_encode_f_64(self.confidenceLevel, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
+    sse_encode_i_64(self.updatedAtMs, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.lastUsedAtMs, serializer);
+    sse_encode_i_64(self.sourceCount, serializer);
+    sse_encode_i_64(self.conflictCount, serializer);
+    sse_encode_bool(self.humanCorrected, serializer);
+    sse_encode_list_String(self.tags, serializer);
+    sse_encode_list_String(self.primaryEvidenceIds, serializer);
+    sse_encode_list_String(self.relatedPageIds, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page_change_record(
+      KnowledgePageChangeRecord self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.changeId, serializer);
+    sse_encode_String(self.pageId, serializer);
+    sse_encode_knowledge_page_change_type(self.changeType, serializer);
+    sse_encode_String(self.actor, serializer);
+    sse_encode_opt_String(self.reason, serializer);
+    sse_encode_bool(self.answerImpacted, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page_change_type(
+      KnowledgePageChangeType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page_detail(
+      KnowledgePageDetail self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_knowledge_page(self.page, serializer);
+    sse_encode_list_String(self.sourceDocumentIds, serializer);
+    sse_encode_list_String(self.claimIds, serializer);
+    sse_encode_list_knowledge_page_change_record(self.history, serializer);
+    sse_encode_list_knowledge_page_version_snapshot(
+        self.versionSnapshots, serializer);
+    sse_encode_list_knowledge_page_evidence_entry(
+        self.evidenceEntries, serializer);
+    sse_encode_list_knowledge_lint_record(self.lintRecords, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page_evidence_entry(
+      KnowledgePageEvidenceEntry self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.evidenceId, serializer);
+    sse_encode_knowledge_page_evidence_kind(self.kind, serializer);
+    sse_encode_String(self.summary, serializer);
+    sse_encode_list_String(self.sourceRefIds, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page_evidence_kind(
+      KnowledgePageEvidenceKind self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page_state(
+      KnowledgePageState self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page_summary(
+      KnowledgePageSummary self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.pageId, serializer);
+    sse_encode_knowledge_page_type(self.pageType, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.currentSummary, serializer);
+    sse_encode_knowledge_page_state(self.state, serializer);
+    sse_encode_knowledge_answer_policy(self.answerPolicy, serializer);
+    sse_encode_i_64(self.updatedAtMs, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.lastUsedAtMs, serializer);
+    sse_encode_i_64(self.sourceCount, serializer);
+    sse_encode_i_64(self.conflictCount, serializer);
+    sse_encode_bool(self.humanCorrected, serializer);
+    sse_encode_list_String(self.tags, serializer);
+    sse_encode_list_String(self.primaryEvidenceIds, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page_type(
+      KnowledgePageType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_page_version_snapshot(
+      KnowledgePageVersionSnapshot self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.versionId, serializer);
+    sse_encode_String(self.pageId, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.summary, serializer);
+    sse_encode_String(self.body, serializer);
+    sse_encode_knowledge_page_state(self.state, serializer);
+    sse_encode_knowledge_answer_policy(self.answerPolicy, serializer);
+    sse_encode_f_64(self.confidenceLevel, serializer);
+    sse_encode_i_64(self.sourceCount, serializer);
+    sse_encode_i_64(self.conflictCount, serializer);
+    sse_encode_bool(self.humanCorrected, serializer);
+    sse_encode_String(self.actor, serializer);
+    sse_encode_knowledge_page_change_type(self.changeType, serializer);
+    sse_encode_opt_String(self.reason, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
   }
 
   @protected
@@ -15922,6 +16975,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_knowledge_wrong_reason(
+      KnowledgeWrongReason self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
@@ -16016,6 +17076,56 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_external_import_batch_summary(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_knowledge_lint_record(
+      List<KnowledgeLintRecord> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_knowledge_lint_record(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_knowledge_page_change_record(
+      List<KnowledgePageChangeRecord> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_knowledge_page_change_record(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_knowledge_page_evidence_entry(
+      List<KnowledgePageEvidenceEntry> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_knowledge_page_evidence_entry(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_knowledge_page_summary(
+      List<KnowledgePageSummary> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_knowledge_page_summary(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_knowledge_page_version_snapshot(
+      List<KnowledgePageVersionSnapshot> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_knowledge_page_version_snapshot(item, serializer);
     }
   }
 
