@@ -650,6 +650,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                 ? const <TaskPriorityEntry>[]
                 : <TaskPriorityEntry>[snapshot.primaryFocus!];
             final visibleOpen = snapshot.openEntries;
+            final snapshotNowLocal = snapshot.computedAtLocal ?? DateTime.now();
             final doneSectionVisibleCount = _doneSectionVisibleCount(snapshot);
             final visibleDone = doneSectionVisibleCount == 0
                 ? const <TaskPriorityEntry>[]
@@ -725,6 +726,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                             activeInlineAnimation.token,
                                           ),
                               restoredTodoId: _restoredTodoId,
+                              nowLocal: snapshotNowLocal,
                               onOpenTodo: _openTodoDetail,
                               onQuickAction: _applyQuickAction,
                               onFeedback: _recordFeedback,
@@ -792,6 +794,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                         ),
                             restoredTodoId: _restoredTodoId,
                             sectionKind: TaskHubPageSectionKind.open,
+                            nowLocal: snapshotNowLocal,
                             priorityPendingTodoId: pendingPriorityTodoId,
                             priorityLocalFallbackTodoId:
                                 localFallbackPriorityTodoId,
@@ -822,6 +825,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                         ),
                             restoredTodoId: _restoredTodoId,
                             sectionKind: TaskHubPageSectionKind.done,
+                            nowLocal: snapshotNowLocal,
                             collapsed: _doneSectionCollapsed,
                             onToggleCollapsed: snapshot.done.isEmpty
                                 ? null

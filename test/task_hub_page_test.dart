@@ -500,6 +500,35 @@ void main() {
     expect(find.text('Manually moved up'), findsOneWidget);
   });
 
+  testWidgets(
+      'legacy importance-only signals do not render manual move wording',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'legacy-importance',
+          title: 'Legacy importance signal',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualImportanceNudgeScore: 1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(find.text('Manually moved up'), findsNothing);
+    expect(find.text('Manually moved down'), findsNothing);
+  });
+
   testWidgets('adjust affordance stays visible alongside current move tag',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -529,6 +558,64 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Manually moved up'), findsOneWidget);
+  });
+
+  testWidgets('relative time stays pinned to the snapshot timestamp',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final now = DateTime.now();
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Focus task',
+          dueAtMs:
+              now.add(const Duration(days: 2)).toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 20,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        const Todo(
+          id: 'done',
+          title: 'Done task',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    final initialRelativeTime = tester
+        .widget<Text>(
+            find.byKey(const ValueKey('task_hub_relative_time_focus')))
+        .data;
+    expect(initialRelativeTime, isNotNull);
+
+    await tester.pump(const Duration(days: 8));
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_section_done_toggle')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('task_hub_relative_time_focus')),
+          )
+          .data,
+      initialRelativeTime,
+    );
   });
 
   testWidgets('undo highlights the restored card without extra snackbar',

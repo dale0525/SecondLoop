@@ -26,6 +26,7 @@ class TaskHubEntryCard extends StatelessWidget {
     this.anchorRegistry,
     this.inlineAnimation,
     this.onInlineAnimationCompleted,
+    this.nowLocal,
     super.key,
   });
 
@@ -42,6 +43,7 @@ class TaskHubEntryCard extends StatelessWidget {
   final TaskHubCardAnchorRegistry? anchorRegistry;
   final TaskHubPriorityInlineAnimationState? inlineAnimation;
   final VoidCallback? onInlineAnimationCompleted;
+  final DateTime? nowLocal;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +60,7 @@ class TaskHubEntryCard extends StatelessWidget {
     final defaultBackground = emphasize ? tokens.surface2 : null;
     final relativeTimeText = formatTaskHubRelativeTime(
       dueAtMs: entry.todo.dueAtMs,
-      nowLocal: DateTime.now(),
+      nowLocal: nowLocal ?? DateTime.now(),
       labels: TaskHubRelativeTimeLabels(
         noDeadline: context.t.actions.taskHub.relativeTime.noDeadline,
         today: context.t.actions.taskHub.relativeTime.today,

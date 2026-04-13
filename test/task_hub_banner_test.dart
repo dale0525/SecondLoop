@@ -408,7 +408,7 @@ void main() {
     expect(tappedAction, TaskHubQuickAction.start);
   });
 
-  testWidgets('banner subtitle counts primary focus in next-up total',
+  testWidgets('banner subtitle counts remaining open tasks after focus',
       (tester) async {
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[todo(id: 'focus', title: 'Write launch plan', updatedAtMs: 10)],
@@ -423,7 +423,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Next up 1 • Backlog 0 • 0 done'), findsOneWidget);
+    expect(find.text('Next up 0 • Backlog 0 • 0 done'), findsOneWidget);
   });
 
   testWidgets('banner shows AI upgrade hint when enhancement is unavailable',

@@ -59,6 +59,33 @@ void main() {
     expect(plan.toSection, TaskHubPriorityAnimationSection.done);
   });
 
+  test('planner treats next-up to backlog reshuffle as same open-list reorder',
+      () {
+    const previous = TaskHubPriorityAnimationSnapshot(
+      focusTodoId: 'focus',
+      nextUpTodoIds: <String>['a'],
+      backlogTodoIds: <String>['b'],
+      doneTodoIds: <String>[],
+    );
+    const next = TaskHubPriorityAnimationSnapshot(
+      focusTodoId: 'focus',
+      nextUpTodoIds: <String>[],
+      backlogTodoIds: <String>['b', 'a'],
+      doneTodoIds: <String>[],
+    );
+
+    final plan = buildTaskHubPriorityAnimationPlan(
+      previous: previous,
+      next: next,
+      actedTodoId: 'a',
+      reducedMotion: false,
+    );
+
+    expect(plan.kind, TaskHubPriorityAnimationKind.sameSectionReorder);
+    expect(plan.fromIndex, 0);
+    expect(plan.toIndex, 1);
+  });
+
   test('planner returns visibleRemoval when target is no longer visible', () {
     const previous = TaskHubPriorityAnimationSnapshot(
       focusTodoId: 'focus',
@@ -189,5 +216,25 @@ void main() {
 
     expect(rect, isNotNull);
     expect(rect!.top, lessThan(220));
+  });
+
+  test('fallback rect treats backlog anchor as the same open-list direction',
+      () {
+    final rect = resolveTaskHubPriorityFallbackRect(
+      plan: const TaskHubPriorityAnimationPlan(
+        kind: TaskHubPriorityAnimationKind.sameSectionReorder,
+        todoId: 'a',
+        fromSection: TaskHubPriorityAnimationSection.nextUp,
+        toSection: TaskHubPriorityAnimationSection.backlog,
+        fromIndex: 0,
+        toIndex: 1,
+      ),
+      sourceRect: const Rect.fromLTWH(10, 20, 120, 48),
+      sourceSection: TaskHubPriorityAnimationSection.nextUp,
+      sourceIndex: 0,
+    );
+
+    expect(rect, isNotNull);
+    expect(rect!.top, greaterThan(20));
   });
 }

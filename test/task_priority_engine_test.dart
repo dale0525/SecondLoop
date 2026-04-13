@@ -275,6 +275,36 @@ void main() {
     );
   });
 
+  test('legacy importance-only signal does not gain extra one-slot move bias',
+      () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'scheduled-top',
+          title: 'Scheduled top',
+          updatedAtMs: 30,
+          dueAtMs: nowLocal
+              .add(const Duration(days: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'legacy-important',
+          title: 'Legacy importance-only task',
+          updatedAtMs: 20,
+          manualImportanceNudgeScore: 1,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['scheduled-top', 'legacy-important'],
+    );
+  });
+
   test('negative urgency score sinks task below neutral peer', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -406,8 +436,7 @@ void main() {
     expect(snapshot.source, TaskPrioritySnapshotSource.hybrid);
   });
 
-  test(
-      'manual urgency down yields to user-raised next-up work despite overdue date pressure',
+  test('legacy mixed signals keep score semantics without extra move-down bias',
       () {
     final nowLocal = DateTime(2026, 4, 8, 12, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -495,8 +524,8 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'suit');
     expect(snapshot.nextUpEntries.map((entry) => entry.todo.id).take(3), [
       'research',
-      'script',
       'upload',
+      'script',
     ]);
   });
 

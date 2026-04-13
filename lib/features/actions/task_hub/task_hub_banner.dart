@@ -174,13 +174,8 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                     runSpacing: 6,
                     children: [
                       _BannerStatChip(
-                        label: context.t.actions.taskHub.scheduledSection,
-                        value: widget.snapshot.upcomingDisplayCount,
-                        tone: _BannerStatTone.nextUp,
-                      ),
-                      _BannerStatChip(
-                        label: context.t.actions.taskHub.unscheduledSection,
-                        value: widget.snapshot.backlogDisplayCount,
+                        label: context.t.actions.taskHub.openSection,
+                        value: widget.snapshot.openDisplayCount,
                         tone: _BannerStatTone.backlog,
                       ),
                       _BannerStatChip(
@@ -358,8 +353,8 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
     final snapshot = widget.snapshot;
     if (!snapshot.isEmpty) {
       return context.t.actions.taskHub.wrapUpSubtitle(
-        upcoming: snapshot.upcomingDisplayCount,
-        backlog: snapshot.backlogDisplayCount,
+        upcoming: snapshot.openDisplayCount,
+        backlog: 0,
         done: snapshot.done.length,
       );
     }

@@ -26,6 +26,7 @@ class TaskHubFocusSection extends StatelessWidget {
     this.priorityPendingTodoId,
     this.priorityLocalFallbackTodoId,
     this.onInlineAnimationCompleted,
+    this.nowLocal,
     super.key,
   });
 
@@ -45,6 +46,7 @@ class TaskHubFocusSection extends StatelessWidget {
   final String? priorityPendingTodoId;
   final String? priorityLocalFallbackTodoId;
   final VoidCallback? onInlineAnimationCompleted;
+  final DateTime? nowLocal;
 
   @override
   Widget build(BuildContext context) {
@@ -83,6 +85,7 @@ class TaskHubFocusSection extends StatelessWidget {
                 showPriorityLocalFallbackBadge:
                     entries[i].todo.id == priorityLocalFallbackTodoId,
                 onInlineAnimationCompleted: onInlineAnimationCompleted,
+                nowLocal: nowLocal,
               ),
               if (i != entries.length - 1)
                 Divider(

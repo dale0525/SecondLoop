@@ -145,9 +145,13 @@ class TaskPriorityEntry {
       _directionFromScore(manualUrgencyNudgeScore);
 
   TaskPriorityUserMoveDirection get userMoveDirection {
-    final netManualMove = manualUrgencyNudgeScore + manualImportanceNudgeScore;
-    if (netManualMove > 0) return TaskPriorityUserMoveDirection.up;
-    if (netManualMove < 0) return TaskPriorityUserMoveDirection.down;
+    if (manualImportanceNudgeScore != 0) {
+      return TaskPriorityUserMoveDirection.none;
+    }
+    if (manualUrgencyNudgeScore == 1) return TaskPriorityUserMoveDirection.up;
+    if (manualUrgencyNudgeScore == -1) {
+      return TaskPriorityUserMoveDirection.down;
+    }
     return TaskPriorityUserMoveDirection.none;
   }
 
