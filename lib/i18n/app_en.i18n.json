@@ -47,6 +47,23 @@
         "continueInApp": "Continue in App"
       }
     },
+    "entryIntent": {
+      "open": {
+        "title": "Open the web app",
+        "signedOutBody": "Sign in to continue into SecondLoop Web. Managed Pro is required for web access.",
+        "signedInBody": "Your account is ready. Continue below to check access and enter SecondLoop Web."
+      },
+      "subscribe": {
+        "title": "Subscribe for web access",
+        "signedOutBody": "Sign in first, then start Managed Pro to unlock web access.",
+        "signedInBody": "You're signed in. Continue below to start Managed Pro and unlock web access."
+      },
+      "manage": {
+        "title": "Manage your subscription",
+        "signedOutBody": "Sign in first, then use the billing controls to manage your subscription.",
+        "signedInBody": "You're signed in. Continue below to manage billing or confirm your current access."
+      }
+    },
     "mediaProcessing": {
       "title": "Continue processing in the app",
       "description": "Existing cloud results stay available here. If a file still needs OCR, decoding, or transcoding, open it in the app to continue processing."

@@ -11,6 +11,28 @@ void main() {
     LocaleSettings.setLocale(AppLocale.en);
   });
 
+  test('parseWebEntryIntent normalizes known and unknown query values', () {
+    expect(
+      parseWebEntryIntent(Uri.parse('https://secondloop.app/app?intent=open')),
+      WebEntryIntent.open,
+    );
+    expect(
+      parseWebEntryIntent(
+        Uri.parse('https://secondloop.app/app?intent=subscribe'),
+      ),
+      WebEntryIntent.subscribe,
+    );
+    expect(
+      parseWebEntryIntent(
+          Uri.parse('https://secondloop.app/app?intent=manage')),
+      WebEntryIntent.manage,
+    );
+    expect(
+      parseWebEntryIntent(Uri.parse('https://secondloop.app/app?intent=else')),
+      WebEntryIntent.open,
+    );
+  });
+
   testWidgets('web app localizes bootstrap failure in zh-CN', (tester) async {
     LocaleSettings.setLocale(AppLocale.zhCn);
 

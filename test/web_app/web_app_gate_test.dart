@@ -15,6 +15,7 @@ import 'package:secondloop/features/settings/cloud_account_panel.dart';
 import 'package:secondloop/features/settings/cloud_usage_card.dart';
 import 'package:secondloop/features/settings/vault_usage_card.dart';
 import 'package:secondloop/i18n/strings.g.dart';
+import 'package:secondloop/web_app/web_entry_intent.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 
 import '../test_i18n.dart';
@@ -369,6 +370,7 @@ Widget _buildApp({
   required WebAppService service,
   CloudWebBackend? chatBackend,
   Locale? locale,
+  WebEntryIntent entryIntent = WebEntryIntent.open,
 }) {
   return wrapWithI18n(
     MaterialApp(
@@ -377,6 +379,7 @@ Widget _buildApp({
         authController: controller,
         service: service,
         chatBackend: chatBackend,
+        entryIntent: entryIntent,
       ),
     ),
   );
@@ -394,6 +397,24 @@ void main() {
     expect(find.byType(CloudAccountPanel), findsOneWidget);
     expect(find.byKey(const ValueKey('cloud_sign_in')), findsOneWidget);
     expect(find.byKey(const ValueKey('cloud_sign_up')), findsOneWidget);
+  });
+
+  testWidgets('subscribe intent explains sign-in before web access',
+      (tester) async {
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(),
+        service: _FakeWebAppService(subscription: WebSubscriptionState.unknown),
+        entryIntent: WebEntryIntent.subscribe,
+      ),
+    );
+
+    expect(find.text('Subscribe for web access'), findsOneWidget);
+    expect(
+      find.textContaining('Sign in first'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('cloud_sign_in')), findsOneWidget);
   });
 
   testWidgets('shows upgrade gate when signed in without entitlement',
@@ -630,6 +651,31 @@ void main() {
     expect(find.text('Chat'), findsOneWidget);
     expect(_navigationLabel('Files'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
+  });
+
+  testWidgets('manage intent opens the entitled web app on Settings first',
+      (tester) async {
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        service:
+            _FakeWebAppService(subscription: WebSubscriptionState.entitled),
+        entryIntent: WebEntryIntent.manage,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final navigationBar =
+        tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(navigationBar.selectedIndex, 2);
+    expect(
+      find.byKey(const ValueKey('cloud_manage_subscription')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('web shell localizes navigation and recent files in zh-CN',

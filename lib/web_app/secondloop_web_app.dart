@@ -5,7 +5,10 @@ import '../core/backend/cloud_web_backend.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/cloud/firebase_identity_toolkit.dart';
 import '../i18n/strings.g.dart';
+import 'web_entry_intent.dart';
 import 'web_app_gate.dart';
+
+export 'web_entry_intent.dart' show WebEntryIntent, parseWebEntryIntent;
 
 class SecondLoopWebApp extends StatefulWidget {
   const SecondLoopWebApp({
@@ -14,6 +17,7 @@ class SecondLoopWebApp extends StatefulWidget {
     this.configLoader,
     this.serviceFactory,
     this.authControllerFactory,
+    this.entryIntent,
   });
 
   final Future<WebAppBootstrapData> Function()? bootstrapLoader;
@@ -21,6 +25,7 @@ class SecondLoopWebApp extends StatefulWidget {
   final WebAppService Function()? serviceFactory;
   final ObservableCloudAuthController Function(WebAppConfig config)?
       authControllerFactory;
+  final WebEntryIntent? entryIntent;
 
   @override
   State<SecondLoopWebApp> createState() => _SecondLoopWebAppState();
@@ -102,6 +107,8 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
 
   @override
   Widget build(BuildContext context) {
+    final entryIntent = widget.entryIntent ?? parseWebEntryIntent(Uri.base);
+
     return TranslationProvider(
       child: Builder(
         builder: (context) {
@@ -139,6 +146,7 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
                   authController: snapshot.data!.authController,
                   service: snapshot.data!.service,
                   chatBackend: snapshot.data!.chatBackend,
+                  entryIntent: entryIntent,
                 );
               },
             ),

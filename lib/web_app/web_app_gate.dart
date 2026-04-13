@@ -11,11 +11,12 @@ import '../core/cloud/cloud_auth_scope.dart';
 import '../core/cloud/cloud_usage_client.dart';
 import '../core/cloud/vault_attachments_client.dart';
 import '../core/cloud/vault_usage_client.dart';
-import '../src/rust/db.dart';
 import '../core/session/session_scope.dart';
 import '../core/sync/sync_config_store.dart';
-import '../features/attachments/attachment_viewer_page.dart';
 import '../features/attachments/web_media_processing_notice.dart';
+import 'web_app_gate_helpers.dart';
+import 'web_entry_intent.dart';
+import 'web_public_entry_scaffold.dart';
 import 'web_app_service.dart';
 import 'web_chat_page.dart';
 import '../features/settings/cloud_account_panel.dart';
@@ -49,12 +50,14 @@ class WebAppGate extends StatefulWidget {
     required this.authController,
     required this.service,
     this.chatBackend,
+    this.entryIntent = WebEntryIntent.open,
     super.key,
   });
 
   final ObservableCloudAuthController authController;
   final WebAppService service;
   final CloudWebBackend? chatBackend;
+  final WebEntryIntent entryIntent;
 
   @override
   State<WebAppGate> createState() => _WebAppGateState();
@@ -227,7 +230,9 @@ class _WebAppGateState extends State<WebAppGate> {
     final uid = widget.authController.uid;
     late final Widget child;
     if (uid == null || uid.trim().isEmpty) {
-      child = _WebPublicEntryScaffold(
+      child = WebPublicEntryScaffold(
+        entryIntent: widget.entryIntent,
+        signedIn: false,
         child: CloudAccountPanel(
           billingClient: _billingClient,
           cloudUsageClient: _cloudUsageClient,
@@ -238,7 +243,9 @@ class _WebAppGateState extends State<WebAppGate> {
         ),
       );
     } else if (!_canAccessMainShell || _mainShellUid != uid.trim()) {
-      child = _WebPublicEntryScaffold(
+      child = WebPublicEntryScaffold(
+        entryIntent: widget.entryIntent,
+        signedIn: true,
         child: CloudAccountPanel(
           billingClient: _billingClient,
           cloudUsageClient: _cloudUsageClient,
@@ -259,6 +266,7 @@ class _WebAppGateState extends State<WebAppGate> {
         vaultUsageClient: _vaultUsageClient,
         vaultAttachmentsClient: _vaultAttachmentsClient,
         vaultConfigStore: _vaultConfigStore,
+        entryIntent: widget.entryIntent,
       );
     }
 
@@ -283,28 +291,6 @@ class _WebAppGateState extends State<WebAppGate> {
   }
 }
 
-class _WebPublicEntryScaffold extends StatelessWidget {
-  const _WebPublicEntryScaffold({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(context.t.app.web.title)),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [child],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _WebMainShell extends StatefulWidget {
   const _WebMainShell({
     required this.authController,
@@ -315,6 +301,7 @@ class _WebMainShell extends StatefulWidget {
     required this.vaultUsageClient,
     required this.vaultAttachmentsClient,
     required this.vaultConfigStore,
+    required this.entryIntent,
     super.key,
   });
 
@@ -326,13 +313,32 @@ class _WebMainShell extends StatefulWidget {
   final VaultUsageClient vaultUsageClient;
   final VaultAttachmentsClient vaultAttachmentsClient;
   final SyncConfigStore vaultConfigStore;
+  final WebEntryIntent entryIntent;
 
   @override
   State<_WebMainShell> createState() => _WebMainShellState();
 }
 
 class _WebMainShellState extends State<_WebMainShell> {
-  int _index = 0;
+  late int _index;
+
+  int _defaultIndexForIntent() {
+    return widget.entryIntent == WebEntryIntent.manage ? 2 : 0;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _index = _defaultIndexForIntent();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WebMainShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entryIntent != widget.entryIntent) {
+      _index = _defaultIndexForIntent();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -386,107 +392,6 @@ class _WebMainShellState extends State<_WebMainShell> {
   }
 }
 
-String? _webVaultIdForController(CloudAuthController controller) {
-  final uid = controller.uid?.trim();
-  if (uid == null || uid.isEmpty) return null;
-  return uid;
-}
-
-Attachment _webAttachmentFromVaultItem(WebVaultAttachmentItem item) {
-  return Attachment(
-    sha256: item.primarySha256,
-    mimeType: item.mimeType,
-    path: 'vault/${item.primarySha256}.bin',
-    byteLen: PlatformInt64Util.from(item.byteLen),
-    createdAtMs: PlatformInt64Util.from(item.createdAtMs ?? 0),
-  );
-}
-
-String _formatWebCloudError(BuildContext context, Object error) {
-  final status = parseHttpStatusFromError(error);
-  final code = parseCloudErrorCodeFromError(error);
-  if (status == 402 || code == 'payment_required') {
-    return context.t.sync.cloudManagedVault.paymentRequired;
-  }
-  if (status == 403 && code == 'email_not_verified') {
-    return context.t.chat.cloudGateway.emailNotVerified;
-  }
-  if (status == 403 && code == 'storage_quota_exceeded') {
-    return context.t.sync.cloudManagedVault.storageQuotaExceeded;
-  }
-  if (status == 429) {
-    return context.t.chat.cloudGateway.errors.rateLimited;
-  }
-  if (status != null && status >= 500) {
-    return context.t.sync.cloudManagedVault.serverUnavailable;
-  }
-  if ('$error'.contains('attachment_too_large_for_web')) {
-    return context.t.app.web.files.messages.attachmentTooLarge;
-  }
-  return '$error';
-}
-
-Future<Uint8List?> _readPlatformFileBytes(PlatformFile file) async {
-  final directBytes = file.bytes;
-  if (directBytes != null) {
-    return Uint8List.fromList(directBytes);
-  }
-
-  final readStream = file.readStream;
-  if (readStream == null) return null;
-
-  final builder = BytesBuilder(copy: false);
-  await for (final chunk in readStream) {
-    if (chunk.isNotEmpty) {
-      builder.add(chunk);
-    }
-  }
-  return builder.takeBytes();
-}
-
-Future<void> _openWebVaultAttachmentViewer({
-  required BuildContext context,
-  required WebAppService service,
-  required CloudAuthController authController,
-  required CloudWebBackend chatBackend,
-  required Uint8List sessionKey,
-  required WebVaultAttachmentItem item,
-}) async {
-  final idToken = await authController.getIdToken();
-  final vaultId = _webVaultIdForController(authController);
-  if (idToken == null || idToken.isEmpty || vaultId == null) return;
-  if (!context.mounted) return;
-
-  final bytes = await service.fetchVaultAttachmentBytes(
-    idToken: idToken,
-    vaultId: vaultId,
-    sha256: item.primarySha256,
-  );
-  final attachment = _webAttachmentFromVaultItem(item);
-  final attachmentBytes =
-      bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
-  chatBackend.rememberAttachment(
-    attachment,
-    bytes: attachmentBytes,
-  );
-  if (!context.mounted) return;
-  await Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (context) => SessionScope(
-        sessionKey: sessionKey,
-        lock: () {},
-        child: AppBackendScope(
-          backend: chatBackend,
-          child: AttachmentViewerPage(
-            attachment: attachment,
-            isWebOverride: true,
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
 class _WebFilesPage extends StatefulWidget {
   const _WebFilesPage({
     required this.service,
@@ -513,7 +418,7 @@ class _WebFilesPageState extends State<_WebFilesPage> {
     if ('$error'.contains('attachment_too_large_for_web')) {
       return context.t.app.web.files.messages.attachmentTooLarge;
     }
-    return _formatWebCloudError(context, error);
+    return formatWebCloudError(context, error);
   }
 
   final Uint8List _sessionKey = Uint8List(0);
@@ -622,7 +527,7 @@ class _WebFilesPageState extends State<_WebFilesPage> {
       var authFailed = false;
       var needsAppProcessing = false;
       for (final file in picked.files) {
-        final bytes = await _readPlatformFileBytes(file);
+        final bytes = await readPlatformFileBytes(file);
         if (bytes == null || bytes.isEmpty) {
           continue;
         }
@@ -692,7 +597,7 @@ class _WebFilesPageState extends State<_WebFilesPage> {
     if (_busy || _uploading) return;
     setState(() => _busy = true);
     try {
-      await _openWebVaultAttachmentViewer(
+      await openWebVaultAttachmentViewer(
         context: context,
         service: widget.service,
         authController: widget.authController,
@@ -902,7 +807,7 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
     });
     try {
       final idToken = await widget.authController.getIdToken();
-      final vaultId = _webVaultIdForController(widget.authController);
+      final vaultId = webVaultIdForController(widget.authController);
       if (idToken == null || idToken.isEmpty || vaultId == null) return;
       if (!mounted) return;
 
@@ -921,7 +826,7 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
       setState(() => _recentItems = items.take(5).toList(growable: false));
     } catch (error) {
       if (!mounted) return;
-      setState(() => _recentError = _formatWebCloudError(context, error));
+      setState(() => _recentError = formatWebCloudError(context, error));
     } finally {
       if (mounted) setState(() => _loadingRecent = false);
     }
@@ -931,7 +836,7 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
     if (_openingAttachmentSha != null) return;
     setState(() => _openingAttachmentSha = item.sha256);
     try {
-      await _openWebVaultAttachmentViewer(
+      await openWebVaultAttachmentViewer(
         context: context,
         service: widget.service,
         authController: widget.authController,
@@ -941,7 +846,7 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
       );
     } catch (error) {
       if (!mounted) return;
-      setState(() => _recentError = _formatWebCloudError(context, error));
+      setState(() => _recentError = formatWebCloudError(context, error));
     } finally {
       if (mounted) setState(() => _openingAttachmentSha = null);
     }
