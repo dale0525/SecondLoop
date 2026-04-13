@@ -53,7 +53,6 @@ class KnowledgeSystemActivityData {
 
 KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
   required List<KnowledgePageSummary> summaries,
-  required Map<String, KnowledgePageDetail> detailsByPageId,
   required List<KnowledgePageChangeRecord> recentChangeRecords,
 }) {
   final currentMeTypes = <KnowledgePageType>{
@@ -73,7 +72,8 @@ KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
       .where((page) =>
           page.state == KnowledgePageState.needsReview ||
           page.state == KnowledgePageState.outdated ||
-          (detailsByPageId[page.pageId]?.lintRecords.isNotEmpty ?? false))
+          page.conflictCount > 0 ||
+          page.sourceCount <= 1)
       .toList(growable: false)
     ..sort(_sortByLastUsedThenUpdated);
 
@@ -185,13 +185,15 @@ String knowledgeRecentChangeSummary(
 String knowledgeAttentionReason(
   Translations t,
   KnowledgePageSummary page,
-  KnowledgePageDetail? detail,
 ) {
-  if (detail != null && detail.lintRecords.isNotEmpty) {
-    return detail.lintRecords.first.summary;
-  }
   if (page.state == KnowledgePageState.outdated) {
     return t.memory.homepage.outdatedReason;
+  }
+  if (page.conflictCount > 0) {
+    return t.memory.detail.conflictingEvidencePresent;
+  }
+  if (page.sourceCount <= 1) {
+    return t.memory.homepage.reviewReason;
   }
   return t.memory.homepage.reviewReason;
 }

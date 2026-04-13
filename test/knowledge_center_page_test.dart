@@ -137,6 +137,12 @@ void main() {
 
     expect(find.text('Current Me'), findsOneWidget);
     expect(find.text('Needs Your Attention'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Recent Changes'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Recent Changes'), findsOneWidget);
     expect(find.text('Preferences refreshed from recent evidence.'),
         findsOneWidget);

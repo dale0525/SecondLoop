@@ -4,9 +4,8 @@ use anyhow::Result;
 use rusqlite::Connection;
 
 use crate::knowledge::{
-    state_default_answer_policy, ContentKnowledgeDocument, KnowledgeClaim, KnowledgeClaimStatus,
-    KnowledgeClaimTimeScope, KnowledgeClaimType, KnowledgeOriginType, KnowledgePage,
-    KnowledgePageState, KnowledgePageType,
+    ContentKnowledgeDocument, KnowledgeClaim, KnowledgeClaimStatus, KnowledgeClaimTimeScope,
+    KnowledgeClaimType, KnowledgeOriginType, KnowledgePage, KnowledgePageType,
 };
 
 #[derive(Clone, Debug)]
@@ -350,10 +349,4 @@ fn dedup(values: Vec<String>) -> Vec<String> {
         }
     }
     out
-}
-
-pub(crate) fn answer_policy_for_state(
-    state: KnowledgePageState,
-) -> crate::knowledge::KnowledgeAnswerPolicy {
-    state_default_answer_policy(state)
 }

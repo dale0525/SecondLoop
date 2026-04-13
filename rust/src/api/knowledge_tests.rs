@@ -900,7 +900,7 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
     );
 
     let muted = crate::api::knowledge::db_set_knowledge_page_answer_allowed(
-        app_dir_string,
+        app_dir_string.clone(),
         key.to_vec(),
         "page:preferences".to_string(),
         false,
@@ -909,13 +909,29 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
     .expect("mute page answers");
     assert_eq!(
         muted.page.state,
-        crate::knowledge::KnowledgePageState::AnswerMuted
+        crate::knowledge::KnowledgePageState::Outdated
     );
     assert!(!muted.page.answer_policy.default_allowed);
+    assert!(!muted.page.answer_policy.requires_temporal_framing);
     assert_eq!(
         muted.history.first().map(|item| item.change_type),
         Some(crate::knowledge::history::KnowledgePageChangeType::Muted)
     );
+
+    let unmuted = crate::api::knowledge::db_set_knowledge_page_answer_allowed(
+        app_dir_string,
+        key.to_vec(),
+        "page:preferences".to_string(),
+        true,
+        Some("Reviewed and allowed again.".to_string()),
+    )
+    .expect("unmute page answers");
+    assert_eq!(
+        unmuted.page.state,
+        crate::knowledge::KnowledgePageState::Outdated
+    );
+    assert!(unmuted.page.answer_policy.default_allowed);
+    assert!(unmuted.page.answer_policy.requires_temporal_framing);
     assert!(muted.version_snapshots.len() >= 3);
     assert!(muted
         .version_snapshots
@@ -1177,4 +1193,45 @@ fn merge_knowledge_page_into_combines_target_content_and_archives_source() {
             .and_then(|item| item.reason.as_deref()),
         Some("Merged content and provenance from page:topics:source.")
     );
+}
+
+#[test]
+fn related_pages_do_not_create_fragmentation_lints_by_default() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [37u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut page = crate::knowledge::KnowledgePage::new(
+        "page:preferences",
+        crate::knowledge::KnowledgePageType::Preferences,
+        "Preferences",
+        now,
+    );
+    page.current_summary = "Reply in Chinese.".to_string();
+    page.current_body = "Reply in Chinese.".to_string();
+    page.primary_evidence_ids = vec!["doc:language".to_string()];
+    page.related_page_ids = vec!["page:about-me".to_string()];
+    page.source_count = 2;
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page,
+            source_document_ids: vec!["doc:language".to_string(), "doc:style".to_string()],
+            claim_ids: vec!["claim:language".to_string()],
+        }],
+    )
+    .expect("upsert page");
+
+    let detail = db::get_knowledge_page_detail(&conn, &key, "page:preferences")
+        .expect("load detail")
+        .expect("page detail");
+
+    assert!(!detail
+        .lint_records
+        .iter()
+        .any(|lint| lint.kind == crate::knowledge::KnowledgeLintKind::Fragmentation));
 }

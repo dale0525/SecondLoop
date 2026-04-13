@@ -44,19 +44,10 @@ class _KnowledgeCenterPageState extends State<KnowledgeCenterPage> {
       sessionKey,
       limit: 8,
     );
-    final detailsByPageId = <String, KnowledgePageDetail>{};
-    for (final summary in summaries) {
-      detailsByPageId[summary.pageId] = await backend.getKnowledgePageDetail(
-        sessionKey,
-        pageId: summary.pageId,
-      );
-    }
     return _KnowledgeCenterViewData(
       summaries: summaries,
-      detailsByPageId: detailsByPageId,
       homeData: buildKnowledgeCenterHomeData(
         summaries: summaries,
-        detailsByPageId: detailsByPageId,
         recentChangeRecords: recentChangeRecords,
       ),
     );
@@ -139,7 +130,6 @@ class _KnowledgeCenterPageState extends State<KnowledgeCenterPage> {
                               reason: knowledgeAttentionReason(
                                 context.t,
                                 page,
-                                viewData.detailsByPageId[page.pageId],
                               ),
                               onOpen: _openPage,
                             ),
@@ -209,12 +199,10 @@ class _KnowledgeCenterPageState extends State<KnowledgeCenterPage> {
 class _KnowledgeCenterViewData {
   const _KnowledgeCenterViewData({
     required this.summaries,
-    required this.detailsByPageId,
     required this.homeData,
   });
 
   final List<KnowledgePageSummary> summaries;
-  final Map<String, KnowledgePageDetail> detailsByPageId;
   final KnowledgeCenterHomeData homeData;
 }
 

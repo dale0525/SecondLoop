@@ -1311,15 +1311,6 @@ fn build_knowledge_page_lints(
             created_at_ms: now,
         });
     }
-    if !page.related_page_ids.is_empty() {
-        out.push(crate::knowledge::KnowledgeLintRecord {
-            lint_id: format!("lint:{}:fragmentation", page.page_id),
-            page_id: page.page_id.clone(),
-            kind: crate::knowledge::KnowledgeLintKind::Fragmentation,
-            summary: "This page overlaps with related pages and may need merging.".to_string(),
-            created_at_ms: now,
-        });
-    }
     if page.human_corrected {
         out.push(crate::knowledge::KnowledgeLintRecord {
             lint_id: format!("lint:{}:manual", page.page_id),
@@ -1343,11 +1334,7 @@ fn build_knowledge_page_lints(
             created_at_ms: now,
         });
     }
-    if matches!(
-        page.state,
-        crate::knowledge::KnowledgePageState::AnswerMuted
-            | crate::knowledge::KnowledgePageState::Archived
-    ) {
+    if !page.answer_policy.default_allowed {
         out.push(crate::knowledge::KnowledgeLintRecord {
             lint_id: format!("lint:{}:muted", page.page_id),
             page_id: page.page_id.clone(),
@@ -1357,6 +1344,17 @@ fn build_knowledge_page_lints(
         });
     }
     out
+}
+
+fn answer_policy_for_state_with_override(
+    state: crate::knowledge::KnowledgePageState,
+    allowed: bool,
+) -> crate::knowledge::KnowledgeAnswerPolicy {
+    let mut policy = crate::knowledge::state_default_answer_policy(state);
+    policy.default_allowed = allowed;
+    policy.requires_temporal_framing =
+        allowed && state == crate::knowledge::KnowledgePageState::Outdated;
+    policy
 }
 
 pub fn replace_knowledge_claims(
@@ -1455,7 +1453,16 @@ pub(crate) fn upsert_compiled_knowledge_pages(
                 Some(crate::knowledge::KnowledgePageState::Removed) | None => item.page.state,
                 Some(state) => state,
             };
-            let answer_policy = crate::knowledge::compiler::answer_policy_for_state(preserved_state);
+            let existing_allowed = existing
+                .as_ref()
+                .map(|row| row.default_allowed)
+                .unwrap_or(item.page.answer_policy.default_allowed);
+            let allowed = match preserved_state {
+                crate::knowledge::KnowledgePageState::Archived
+                | crate::knowledge::KnowledgePageState::Removed => false,
+                _ => existing_allowed,
+            };
+            let answer_policy = answer_policy_for_state_with_override(preserved_state, allowed);
             let created_at_ms = existing
                 .as_ref()
                 .map(|row| row.created_at_ms)
@@ -1870,16 +1877,25 @@ pub fn set_knowledge_page_answer_allowed(
     let Some(detail) = get_knowledge_page_detail(conn, key, page_id)? else {
         return Err(anyhow!("knowledge page not found: {page_id}"));
     };
-    let next_state = if allowed {
-        if detail.page.state == crate::knowledge::KnowledgePageState::AnswerMuted {
-            crate::knowledge::KnowledgePageState::Active
-        } else {
-            detail.page.state
-        }
+    let next_state = if allowed
+        && detail.page.state == crate::knowledge::KnowledgePageState::AnswerMuted
+    {
+        crate::knowledge::KnowledgePageState::Active
     } else {
-        crate::knowledge::KnowledgePageState::AnswerMuted
+        detail.page.state
     };
-    let next_policy = crate::knowledge::state_default_answer_policy(next_state);
+    if allowed
+        && matches!(
+            next_state,
+            crate::knowledge::KnowledgePageState::Archived
+                | crate::knowledge::KnowledgePageState::Removed
+        )
+    {
+        return Err(anyhow!(
+            "knowledge page cannot be re-enabled for answers in state: {next_state:?}"
+        ));
+    }
+    let next_policy = answer_policy_for_state_with_override(next_state, allowed);
     conn.execute(
         r#"UPDATE knowledge_pages
            SET state = ?2,

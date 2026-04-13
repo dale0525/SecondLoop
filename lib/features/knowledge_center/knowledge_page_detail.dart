@@ -89,7 +89,8 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
     final draft = await showMemoryCorrectionDialog(
       context,
       initialTitle: detail.page.title,
-      initialSummary: detail.page.currentBody,
+      initialSummary: detail.page.currentSummary,
+      initialBody: detail.page.currentBody,
     );
     if (draft == null) return;
     await _runMutation(
@@ -98,7 +99,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
         pageId: widget.pageId,
         title: draft.title,
         summary: draft.summary,
-        body: draft.summary,
+        body: draft.body ?? detail.page.currentBody,
       ),
     );
   }
@@ -121,6 +122,32 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
         SessionScope.of(context).sessionKey,
         pageId: widget.pageId,
         allowed: !detail.page.answerPolicy.defaultAllowed,
+      ),
+    );
+  }
+
+  Future<KnowledgePageSummary?> _chooseMergeTarget(
+    List<KnowledgePageSummary> relatedPages,
+  ) {
+    return showModalBottomSheet<KnowledgePageSummary>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final page in relatedPages)
+              ListTile(
+                title: Text(page.title),
+                subtitle: Text(
+                  page.currentSummary,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => Navigator.of(context).pop(page),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -158,7 +185,8 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
         );
       case KnowledgePageOverflowAction.merge:
         if (data.relatedPages.isEmpty) return;
-        final targetPage = data.relatedPages.first;
+        final targetPage = await _chooseMergeTarget(data.relatedPages);
+        if (targetPage == null || !mounted) return;
         await _runMutation(
           () => _pagesBackend().mergeKnowledgePageInto(
             SessionScope.of(context).sessionKey,
@@ -228,6 +256,9 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
         final detail = data.detail;
         final page = detail.page;
         final answerAllowed = page.answerPolicy.defaultAllowed;
+        final canToggleAnswerPolicy =
+            page.state != KnowledgePageState.archived &&
+                page.state != KnowledgePageState.removed;
         return Scaffold(
           appBar: AppBar(
             title: Text(page.title),
@@ -324,7 +355,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
                           child: Text(context.t.memory.actions.markInaccurate),
                         ),
                         OutlinedButton(
-                          onPressed: _submitting
+                          onPressed: _submitting || !canToggleAnswerPolicy
                               ? null
                               : () => unawaited(_toggleAnswerPolicy(detail)),
                           child: Text(

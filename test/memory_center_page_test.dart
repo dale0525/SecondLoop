@@ -22,6 +22,7 @@ void main() {
       title: 'Preferences',
       pageType: KnowledgePageType.preferences,
       state: KnowledgePageState.active,
+      sourceCount: 2,
       updatedAtMs: 20,
       lastUsedAtMs: 25,
     );
@@ -34,56 +35,6 @@ void main() {
     );
     final home = buildKnowledgeCenterHomeData(
       summaries: [page, reviewPage],
-      detailsByPageId: {
-        page.pageId: KnowledgePageDetail(
-          page: _page(
-            pageId: page.pageId,
-            title: page.title,
-            pageType: page.pageType,
-            state: page.state,
-            updatedAtMs: page.updatedAtMs,
-          ),
-          sourceDocumentIds: const ['doc:1'],
-          claimIds: const ['claim:1'],
-          history: const [
-            KnowledgePageChangeRecord(
-              changeId: 'change:1',
-              pageId: 'page:preferences',
-              changeType: KnowledgePageChangeType.updated,
-              actor: 'system',
-              reason: 'Updated from fresh evidence.',
-              answerImpacted: true,
-              createdAtMs: 30,
-            ),
-          ],
-          versionSnapshots: const [],
-          evidenceEntries: const [],
-          lintRecords: const [],
-        ),
-        reviewPage.pageId: KnowledgePageDetail(
-          page: _page(
-            pageId: reviewPage.pageId,
-            title: reviewPage.title,
-            pageType: reviewPage.pageType,
-            state: reviewPage.state,
-            updatedAtMs: reviewPage.updatedAtMs,
-          ),
-          sourceDocumentIds: const ['doc:2'],
-          claimIds: const ['claim:2'],
-          history: const [],
-          versionSnapshots: const [],
-          evidenceEntries: const [],
-          lintRecords: const [
-            KnowledgeLintRecord(
-              lintId: 'lint:1',
-              pageId: 'page:recent-events',
-              kind: KnowledgeLintKind.conflict,
-              summary: 'Conflicting evidence detected.',
-              createdAtMs: 41,
-            ),
-          ],
-        ),
-      },
       recentChangeRecords: const [
         KnowledgePageChangeRecord(
           changeId: 'change:1',
@@ -233,13 +184,13 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    expect(find.text('Session one page'), findsOneWidget);
+    expect(find.text('Session one page'), findsWidgets);
 
     await tester.tap(find.byKey(const ValueKey('switch_session_button')));
     await tester.pumpAndSettle();
 
     expect(find.text('Session one page'), findsNothing);
-    expect(find.text('Session two page'), findsOneWidget);
+    expect(find.text('Session two page'), findsWidgets);
     expect(backend.requestedSessionLeads, <int>[1, 2]);
   });
 }
