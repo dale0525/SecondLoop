@@ -573,7 +573,9 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
       findsNothing,
     );
-    expect(find.text('AI recommends this now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
+        findsOneWidget);
+    expect(find.byTooltip('AI recommends this now'), findsOneWidget);
     expect(find.text('Shared AI result.'), findsWidgets);
   });
 
@@ -685,7 +687,9 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
       findsNothing,
     );
-    expect(find.text('AI recommends this now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
+        findsOneWidget);
+    expect(find.byTooltip('AI recommends this now'), findsOneWidget);
     expect(find.text('Cached AI result.'), findsWidgets);
   });
 
@@ -790,7 +794,9 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
       findsNothing,
     );
-    expect(find.text('AI recommends this now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
+        findsOneWidget);
+    expect(find.byTooltip('AI recommends this now'), findsOneWidget);
     expect(find.text('Bootstrap cached AI result.'), findsWidgets);
   });
 
@@ -857,7 +863,9 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
       findsNothing,
     );
-    expect(find.text('AI recommends this now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
+        findsOneWidget);
+    expect(find.byTooltip('AI recommends this now'), findsOneWidget);
     expect(find.text('Live AI result.'), findsWidgets);
   });
 
@@ -913,7 +921,8 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner_primary_action')),
       findsOneWidget,
     );
-    expect(find.text('Start'), findsOneWidget);
+    expect(find.text('Start'), findsNothing);
+    expect(find.byTooltip('Start'), findsOneWidget);
   });
 }
 

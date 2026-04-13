@@ -109,7 +109,7 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('compact banner shows focus actions without preview expansion',
+  testWidgets('compact desktop banner moves focus actions into header icons',
       (tester) async {
     final now = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -139,6 +139,7 @@ void main() {
       ],
       nowLocal: now,
     );
+    TaskHubQuickAction? tappedAction;
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -156,7 +157,9 @@ void main() {
                       snapshot: snapshot,
                       compact: true,
                       onViewAll: () {},
-                      onQuickAction: (_, __) async {},
+                      onQuickAction: (_, action) async {
+                        tappedAction = action;
+                      },
                     ),
                     const Expanded(child: SizedBox.shrink()),
                   ],
@@ -169,7 +172,13 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const ValueKey('task_hub_banner_quick_pair')),
+    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_quick_pair')), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_banner_primary_action')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_secondary_action')),
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
@@ -177,14 +186,19 @@ void main() {
         find.byKey(const ValueKey('task_hub_banner_open_focus')), findsNothing);
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
     expect(find.text('Prepare weekly review summary'), findsNothing);
+    expect(find.text('Current focus'), findsNothing);
+    expect(find.text('Start'), findsNothing);
+    expect(find.text('Tomorrow'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_banner_secondary_action')));
+    await tester.pump();
 
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+    expect(tappedAction, TaskHubQuickAction.tomorrow);
   });
 
-  testWidgets('compact banner stays compact at narrow desktop widths',
+  testWidgets('compact mobile banner keeps text actions at the bottom',
       (tester) async {
     final now = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -225,7 +239,14 @@ void main() {
 
     expect(
         find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
-    expect(bannerHeight, lessThan(150));
+    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_quick_pair')),
+        findsOneWidget);
+    expect(find.text('Current focus'), findsNothing);
+    expect(find.text('Start'), findsOneWidget);
+    expect(find.text('Tomorrow'), findsOneWidget);
+    expect(bannerHeight, lessThan(180));
   });
 
   testWidgets('banner shows status and time quick actions for active focus',
