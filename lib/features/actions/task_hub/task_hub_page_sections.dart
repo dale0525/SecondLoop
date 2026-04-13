@@ -12,6 +12,7 @@ import 'task_priority_models.dart';
 
 enum TaskHubPageSectionKind {
   focus,
+  open,
   scheduled,
   decide,
   done,
@@ -250,6 +251,11 @@ _TaskHubSectionTone _taskHubSectionTone(
         foreground: scheme.primary,
         background: scheme.primaryContainer.withOpacity(0.7),
         border: scheme.primary.withOpacity(0.18),
+      ),
+    TaskHubPageSectionKind.open => _TaskHubSectionTone(
+        foreground: scheme.secondary,
+        background: scheme.secondaryContainer.withOpacity(0.68),
+        border: scheme.secondary.withOpacity(0.18),
       ),
     TaskHubPageSectionKind.scheduled => _TaskHubSectionTone(
         foreground: scheme.secondary,

@@ -109,7 +109,7 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('compact banner expanded view keeps focus actions only',
+  testWidgets('compact banner shows focus actions without preview expansion',
       (tester) async {
     final now = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -168,14 +168,6 @@ void main() {
       ),
     );
 
-    expect(
-      find.byKey(const ValueKey('task_hub_banner_primary_action')),
-      findsNothing,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
-
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('task_hub_banner_quick_pair')),
         findsOneWidget);
@@ -185,6 +177,11 @@ void main() {
         find.byKey(const ValueKey('task_hub_banner_open_focus')), findsNothing);
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
     expect(find.text('Prepare weekly review summary'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
   });
 
   testWidgets('banner shows status and time quick actions for active focus',

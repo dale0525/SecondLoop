@@ -58,6 +58,37 @@ Future<void> pumpUntilTaskHubReady(WidgetTester tester) {
   );
 }
 
+Future<void> openTaskHubAdjustMenu(
+  WidgetTester tester, {
+  required String todoId,
+}) async {
+  await tester.tap(find.byKey(ValueKey('task_hub_page_adjust_$todoId')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> selectTaskHubAdjustAction(
+  WidgetTester tester, {
+  required String todoId,
+  required String action,
+}) async {
+  await openTaskHubAdjustMenu(tester, todoId: todoId);
+  await tester.tap(
+    find.byKey(ValueKey('task_hub_page_adjust_${todoId}_$action')),
+  );
+  await tester.pump();
+}
+
+Future<void> selectTaskHubQuickOverflowAction(
+  WidgetTester tester, {
+  required String todoId,
+  required String label,
+}) async {
+  await tester.tap(find.byKey(ValueKey('task_hub_page_quick_${todoId}_more')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pump();
+}
+
 VoidCallback useLargeViewport(WidgetTester tester) {
   final originalSize = tester.view.physicalSize;
   final originalDevicePixelRatio = tester.view.devicePixelRatio;

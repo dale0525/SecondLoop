@@ -143,6 +143,7 @@
     "title": "任务中心",
     "focusSection": "当前重点",
     "focusHint": "始终把当前最值得处理的一项放在最前面。",
+    "openSection": "全部未完成任务",
     "scheduledSection": "下一步",
     "reviewSection": "待确认",
     "unscheduledSection": "积压",
@@ -170,9 +171,19 @@
     "aiInsightLive": "实时 AI 洞察",
     "aiInsightShared": "共享 AI 洞察",
     "aiInsightCached": "缓存 AI 洞察",
-    "priorityPending": "重新评估中",
-    "priorityLocalFallback": "暂时先按本地优先级显示。",
+    "priorityPending": "AI 正在校准",
+    "priorityLocalFallback": "暂时先按你这次本地调整显示。",
     "aiUpgradeHint": "连接 Cloud 或配置 BYOK 后，可获得更智能的优先级建议。",
+    "relativeTime": {
+      "noDeadline": "无期限",
+      "today": "今天",
+      "inHours": "$count 小时后",
+      "inDays": "$count 天后",
+      "inWeeks": "$count 周后",
+      "overdueHours": "已逾期 $count 小时",
+      "overdueDays": "已逾期 $count 天",
+      "overdueWeeks": "已逾期 $count 周"
+    },
     "snackActionApplied": "$action「$title」",
     "actions": {
       "doNow": "立即处理",
@@ -188,6 +199,10 @@
       "later": "稍后",
       "start": "开始",
       "moveToInbox": "移回收件箱",
+      "adjust": "调整",
+      "moveUpABit": "往前挪一点",
+      "moveDownABit": "往后挪一点",
+      "restoreAiOrder": "恢复 AI 排序",
       "increaseUrgency": "更紧急",
       "decreaseUrgency": "没那么急",
       "increaseImportance": "更重要",
@@ -198,10 +213,20 @@
       "more": "更多"
     },
     "nudges": {
+      "movedUpABit": "已往前挪一点",
+      "movedDownABit": "已往后挪一点",
+      "restoredAiOrder": "已恢复 AI 排序",
       "urgencyRaised": "已提高紧急度",
       "urgencyLowered": "已降低紧急度",
       "importanceRaised": "已提高重要性",
       "importanceLowered": "已降低重要性"
+    },
+    "reasons": {
+      "aiPromoted": "AI 提前了它",
+      "manuallyMovedUp": "已手动上移",
+      "manuallyMovedDown": "已手动下移",
+      "inProgress": "进行中",
+      "reviewDue": "待确认"
     }
   },
   "calendar": {

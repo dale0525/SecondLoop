@@ -69,7 +69,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
     final innerPadding = widget.compact ? 8.0 : 12.0;
     final headerSpacing = widget.compact ? 3.0 : 6.0;
     final actionsSpacingTop = widget.compact ? 6.0 : 12.0;
-    final compactCollapsed = widget.compact && !_expanded;
+    const compactCollapsed = false;
     final showAiSourceLabel =
         aiSourceLabel != null && (!widget.compact || _expanded);
     final showSummaryChips = !widget.compact;
@@ -104,7 +104,9 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
           borderRadius: BorderRadius.circular(tokens.radiusLg),
           onTap: () {
             FocusManager.instance.primaryFocus?.unfocus();
-            setState(() => _expanded = !_expanded);
+            if (!widget.compact) {
+              setState(() => _expanded = !_expanded);
+            }
           },
           child: Padding(
             padding: EdgeInsets.all(innerPadding),
@@ -127,11 +129,12 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                             ),
                       ),
                     ),
-                    Icon(
-                      _expanded
-                          ? Icons.expand_less_rounded
-                          : Icons.expand_more_rounded,
-                    ),
+                    if (!widget.compact)
+                      Icon(
+                        _expanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                      ),
                   ],
                 ),
                 if (showAiSourceLabel) ...[
@@ -158,7 +161,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                 SizedBox(height: headerSpacing),
                 Text(
                   primary?.reasonText ?? _fallbackSubtitle(context),
-                  maxLines: compactCollapsed ? 1 : (widget.compact ? 2 : 3),
+                  maxLines: widget.compact ? 2 : 3,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,

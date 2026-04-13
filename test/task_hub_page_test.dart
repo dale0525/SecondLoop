@@ -319,8 +319,7 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('unfinished tasks show score-driven priority controls',
-      (tester) async {
+  testWidgets('unfinished tasks show adjust affordance', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
       todos: const <Todo>[
@@ -343,18 +342,13 @@ void main() {
     await _pumpUntilTaskHubReady(tester);
 
     expect(
-      find.byKey(const ValueKey(
-          'task_hub_page_priority_urgent-important_urgency_neutral')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey(
-          'task_hub_page_priority_urgent-important_importance_neutral')),
+      find.byKey(const ValueKey('task_hub_page_adjust_urgent-important')),
       findsOneWidget,
     );
   });
 
-  testWidgets('due-today urgency does not appear as an explicit urgency boost',
+  testWidgets(
+      'due-today tasks keep adjust affordance without explicit move tag',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final now = DateTime.now();
@@ -380,10 +374,70 @@ void main() {
     await _pumpUntilTaskHubReady(tester);
 
     expect(
-      find.byKey(
-          const ValueKey('task_hub_page_priority_due-today_urgency_neutral')),
+      find.byKey(const ValueKey('task_hub_page_adjust_due-today')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('task_hub_page_nudge_due-today')),
+        findsNothing);
+  });
+
+  testWidgets('open rows keep actions compact and show reason as a chip',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final now = DateTime.now();
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Focus task',
+          dueAtMs:
+              now.add(const Duration(hours: 1)).toUtc().millisecondsSinceEpoch,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 20,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        const Todo(
+          id: 'ai-task',
+          title: 'AI-ranked task',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      taskPriorityAiResponseJson:
+          '{"entries":[{"todo_id":"ai-task","semantic_adjustment":24,"reason":"This sounds strategically important.","confidence":"high","is_important":true}]}',
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(
+      find.byKey(const ValueKey('task_hub_page_quick_ai-task_start')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_page_quick_ai-task_tomorrow')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_page_quick_ai-task_more')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_page_adjust_ai-task')),
+      findsOneWidget,
+    );
+    expect(find.text('AI promoted'), findsOneWidget);
+    expect(find.text('This sounds strategically important.'), findsNothing);
   });
 
   testWidgets('manual nudge snackbar uses state wording', (tester) async {
@@ -408,17 +462,19 @@ void main() {
     await tester.pumpWidget(_wrap(backend));
     await _pumpUntilTaskHubReady(tester);
 
+    await openTaskHubAdjustMenu(
+      tester,
+      todoId: 'snack-nudge',
+    );
     await tester.tap(
-      find.byKey(
-        const ValueKey('task_hub_page_priority_snack-nudge_urgency_increase'),
-      ),
+      find.byKey(const ValueKey('task_hub_page_adjust_snack-nudge_move_up')),
     );
     await tester.pump();
 
-    expect(find.text('Urgency raised "Nudged from snackbar"'), findsOneWidget);
+    expect(find.text('Moved up a bit "Nudged from snackbar"'), findsOneWidget);
   });
 
-  testWidgets('manual nudge pills use state wording', (tester) async {
+  testWidgets('manual move tags use state wording', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
       todos: const <Todo>[
@@ -434,7 +490,6 @@ void main() {
           nextReviewAtMs: null,
           lastReviewAtMs: null,
           manualUrgencyNudgeScore: 1,
-          manualImportanceNudgeScore: -1,
         ),
       ],
     );
@@ -442,27 +497,10 @@ void main() {
     await tester.pumpWidget(_wrap(backend));
     await _pumpUntilTaskHubReady(tester);
 
-    expect(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('task_hub_page_nudge_nudged_urgency_up'),
-        ),
-        matching: find.text('Urgency raised'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('task_hub_page_nudge_nudged_importance_down'),
-        ),
-        matching: find.text('Importance lowered'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Manually moved up'), findsOneWidget);
   });
 
-  testWidgets('priority controls show state wording inside the control',
+  testWidgets('adjust affordance stays visible alongside current move tag',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
@@ -479,7 +517,6 @@ void main() {
           nextReviewAtMs: null,
           lastReviewAtMs: null,
           manualUrgencyNudgeScore: 1,
-          manualImportanceNudgeScore: -1,
         ),
       ],
     );
@@ -488,24 +525,10 @@ void main() {
     await _pumpUntilTaskHubReady(tester);
 
     expect(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('task_hub_page_priority_nudged-control_urgency_up'),
-        ),
-        matching: find.text('Urgency raised'),
-      ),
+      find.byKey(const ValueKey('task_hub_page_adjust_nudged-control')),
       findsOneWidget,
     );
-    expect(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey(
-              'task_hub_page_priority_nudged-control_importance_down'),
-        ),
-        matching: find.text('Importance lowered'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Manually moved up'), findsOneWidget);
   });
 
   testWidgets('undo highlights the restored card without extra snackbar',
@@ -551,8 +574,10 @@ void main() {
     await _pumpUntilTaskHubReady(tester);
 
     await tester.tap(
-      find.byKey(const ValueKey('task_hub_page_quick_undo-highlight_tomorrow')),
+      find.byKey(const ValueKey('task_hub_page_quick_undo-highlight_more')),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tomorrow').last);
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
 
@@ -632,7 +657,7 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('all tasks keep positive priority buttons enabled',
+  testWidgets('all tasks expose move-up and move-down adjust actions',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
@@ -655,37 +680,19 @@ void main() {
     await tester.pumpWidget(_wrap(backend));
     await _pumpUntilTaskHubReady(tester);
 
-    final urgencyIncrease = tester.widget<InkWell>(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('task_hub_page_priority_guarded_urgency_increase'),
-        ),
-        matching: find.byType(InkWell),
-      ),
-    );
-    final importanceIncrease = tester.widget<InkWell>(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('task_hub_page_priority_guarded_importance_increase'),
-        ),
-        matching: find.byType(InkWell),
-      ),
-    );
-    final urgencyDecrease = tester.widget<InkWell>(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('task_hub_page_priority_guarded_urgency_decrease'),
-        ),
-        matching: find.byType(InkWell),
-      ),
-    );
+    await openTaskHubAdjustMenu(tester, todoId: 'guarded');
 
-    expect(urgencyIncrease.onTap, isNotNull);
-    expect(importanceIncrease.onTap, isNotNull);
-    expect(urgencyDecrease.onTap, isNotNull);
+    expect(
+      find.byKey(const ValueKey('task_hub_page_adjust_guarded_move_up')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_page_adjust_guarded_move_down')),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('backlog tasks keep positive priority buttons enabled',
+  testWidgets('backlog tasks expose restore ai order in adjust actions',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
@@ -708,26 +715,12 @@ void main() {
     await tester.pumpWidget(_wrap(backend));
     await _pumpUntilTaskHubReady(tester);
 
-    final urgencyIncrease = tester.widget<InkWell>(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey('task_hub_page_priority_open-task_urgency_increase'),
-        ),
-        matching: find.byType(InkWell),
-      ),
-    );
-    final importanceIncrease = tester.widget<InkWell>(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey(
-              'task_hub_page_priority_open-task_importance_increase'),
-        ),
-        matching: find.byType(InkWell),
-      ),
-    );
+    await openTaskHubAdjustMenu(tester, todoId: 'open-task');
 
-    expect(urgencyIncrease.onTap, isNotNull);
-    expect(importanceIncrease.onTap, isNotNull);
+    expect(
+      find.byKey(const ValueKey('task_hub_page_adjust_open-task_restore_ai')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

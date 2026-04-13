@@ -142,6 +142,8 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
   }
   entries = _applyFeedback(entries, feedback);
   final finalLists = _splitTaskPriorityEntries(entries);
+  final boundedOrderedActive =
+      _applyBoundedUserMoveOrdering(finalLists.orderedActive);
 
   return TaskPrioritySnapshot(
     source: aiResult == null
@@ -155,15 +157,15 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
     scheduled: finalLists.scheduled,
     decide: finalLists.decide,
     done: finalLists.done,
-    orderedActive: finalLists.orderedActive,
+    orderedActive: boundedOrderedActive,
     baseFocus: baseLists.focus,
     baseScheduled: baseLists.scheduled,
     baseDecide: baseLists.decide,
     baseDone: baseLists.done,
     baseOrderedActive: baseLists.orderedActive,
-    selectedFocusTodoId: finalLists.orderedActive.isEmpty
+    selectedFocusTodoId: boundedOrderedActive.isEmpty
         ? null
-        : finalLists.orderedActive.first.todo.id,
+        : boundedOrderedActive.first.todo.id,
   );
 }
 
@@ -340,6 +342,97 @@ int _compareOverallPriority(TaskPriorityEntry a, TaskPriorityEntry b) {
   }
 
   return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
+}
+
+List<TaskPriorityEntry> _applyBoundedUserMoveOrdering(
+  List<TaskPriorityEntry> orderedActive,
+) {
+  if (orderedActive.length < 2) {
+    return orderedActive;
+  }
+
+  final originalById = <String, TaskPriorityEntry>{
+    for (final entry in orderedActive) entry.todo.id: entry,
+  };
+  final neutralEntries = orderedActive
+      .map(_neutralizePureUserMoveEntry)
+      .toList(growable: false)
+    ..sort(_compareOverallPriority);
+  final orderedIds =
+      neutralEntries.map((entry) => entry.todo.id).toList(growable: true);
+
+  for (final entry in neutralEntries) {
+    final original = originalById[entry.todo.id]!;
+    if (original.userMoveDirection != TaskPriorityUserMoveDirection.up) {
+      continue;
+    }
+    final currentIndex = orderedIds.indexOf(original.todo.id);
+    if (currentIndex <= 0) {
+      continue;
+    }
+    final previous = originalById[orderedIds[currentIndex - 1]]!;
+    if (!_canApplyBoundedUserMoveUp(original, previous)) {
+      continue;
+    }
+    orderedIds[currentIndex - 1] = original.todo.id;
+    orderedIds[currentIndex] = previous.todo.id;
+  }
+
+  for (var i = neutralEntries.length - 1; i >= 0; i -= 1) {
+    final original = originalById[neutralEntries[i].todo.id]!;
+    if (original.userMoveDirection != TaskPriorityUserMoveDirection.down) {
+      continue;
+    }
+    final currentIndex = orderedIds.indexOf(original.todo.id);
+    if (currentIndex == -1 || currentIndex >= orderedIds.length - 1) {
+      continue;
+    }
+    final next = originalById[orderedIds[currentIndex + 1]]!;
+    if (!_canApplyBoundedUserMoveDown(original, next)) {
+      continue;
+    }
+    orderedIds[currentIndex] = next.todo.id;
+    orderedIds[currentIndex + 1] = original.todo.id;
+  }
+
+  return orderedIds
+      .map((todoId) => originalById[todoId]!)
+      .toList(growable: false);
+}
+
+TaskPriorityEntry _neutralizePureUserMoveEntry(TaskPriorityEntry entry) {
+  if (!_isPureUserMoveEntry(entry)) {
+    return entry;
+  }
+  return entry.copyWith(
+    manualUrgencyNudgeScore: 0,
+    manualImportanceNudgeScore: 0,
+  );
+}
+
+bool _isPureUserMoveEntry(TaskPriorityEntry entry) {
+  return entry.manualImportanceNudgeScore == 0 &&
+      entry.manualUrgencyNudgeScore != 0;
+}
+
+bool _canApplyBoundedUserMoveUp(
+  TaskPriorityEntry current,
+  TaskPriorityEntry previous,
+) {
+  if (!current.hasHardFocusGuard && previous.hasHardFocusGuard) {
+    return false;
+  }
+  return true;
+}
+
+bool _canApplyBoundedUserMoveDown(
+  TaskPriorityEntry current,
+  TaskPriorityEntry next,
+) {
+  if (current.hasHardFocusGuard && !next.hasHardFocusGuard) {
+    return false;
+  }
+  return true;
 }
 
 int _compareBoolDesc(bool left, bool right) {

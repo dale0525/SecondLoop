@@ -8,6 +8,12 @@ enum TaskPriorityNudgeDirection {
   down,
 }
 
+enum TaskPriorityUserMoveDirection {
+  none,
+  up,
+  down,
+}
+
 enum TaskPriorityBand {
   focus,
   scheduled,
@@ -137,6 +143,13 @@ class TaskPriorityEntry {
 
   TaskPriorityNudgeDirection get manualUrgencyNudgeDirection =>
       _directionFromScore(manualUrgencyNudgeScore);
+
+  TaskPriorityUserMoveDirection get userMoveDirection {
+    final netManualMove = manualUrgencyNudgeScore + manualImportanceNudgeScore;
+    if (netManualMove > 0) return TaskPriorityUserMoveDirection.up;
+    if (netManualMove < 0) return TaskPriorityUserMoveDirection.down;
+    return TaskPriorityUserMoveDirection.none;
+  }
 
   bool get isExplicitlyImportant =>
       manualImportanceNudgeDirection == TaskPriorityNudgeDirection.up;
@@ -322,6 +335,8 @@ class TaskPrioritySnapshot {
 
   List<TaskPriorityEntry> get activeEntries => orderedActive;
 
+  List<TaskPriorityEntry> get openEntries => remainingActiveEntries;
+
   List<TaskPriorityEntry> get remainingActiveEntries {
     final primaryTodoId = primaryFocus?.todo.id;
     if (primaryTodoId == null) return orderedActive;
@@ -351,6 +366,8 @@ class TaskPrioritySnapshot {
   int get upcomingDisplayCount => upcomingDisplayEntries.length;
 
   int get backlogDisplayCount => backlogEntries.length;
+
+  int get openDisplayCount => openEntries.length;
 
   List<TaskPriorityEntry> get allEntries => <TaskPriorityEntry>[
         ...orderedActive,

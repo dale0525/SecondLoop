@@ -6,14 +6,20 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
         TaskHubQuickAction.tomorrow =>
           context.t.actions.taskHub.actions.tomorrow,
         TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
+        TaskHubQuickAction.moveUpABit =>
+          context.t.actions.taskHub.actions.moveUpABit,
+        TaskHubQuickAction.moveDownABit =>
+          context.t.actions.taskHub.actions.moveDownABit,
+        TaskHubQuickAction.restoreAiOrder =>
+          context.t.actions.taskHub.actions.restoreAiOrder,
         TaskHubQuickAction.increaseUrgency =>
-          context.t.actions.taskHub.actions.increaseUrgency,
+          context.t.actions.taskHub.actions.moveUpABit,
         TaskHubQuickAction.decreaseUrgency =>
-          context.t.actions.taskHub.actions.decreaseUrgency,
+          context.t.actions.taskHub.actions.moveDownABit,
         TaskHubQuickAction.increaseImportance =>
-          context.t.actions.taskHub.actions.increaseImportance,
+          context.t.actions.taskHub.actions.moveUpABit,
         TaskHubQuickAction.decreaseImportance =>
-          context.t.actions.taskHub.actions.decreaseImportance,
+          context.t.actions.taskHub.actions.moveDownABit,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
         TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
         TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,

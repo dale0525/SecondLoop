@@ -218,6 +218,81 @@ void main() {
     expect(find.text('reopen|redo|dismiss'), findsOneWidget);
   });
 
+  test('move up a bit only increments manual urgency score', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial =
+        todo(id: 't-move-up', title: 'Task move up', updatedAtMs: 10);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.moveUpABit,
+    );
+
+    expect(ticket, isNotNull);
+    if (ticket == null) fail('expected undo ticket');
+    expect(backend.current('t-move-up').manualUrgencyNudgeScore, 1);
+    expect(backend.current('t-move-up').manualImportanceNudgeScore, 0);
+
+    await controller.undo(ticket);
+    expect(backend.current('t-move-up').manualUrgencyNudgeScore, 0);
+  });
+
+  test('move down a bit sets a negative urgency nudge', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial =
+        todo(id: 't-move-down', title: 'Task move down', updatedAtMs: 10);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.moveDownABit,
+    );
+
+    expect(ticket, isNotNull);
+    expect(backend.current('t-move-down').manualUrgencyNudgeScore, -1);
+  });
+
+  test('restore ai order clears existing manual nudges', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-restore',
+      title: 'Task restore',
+      updatedAtMs: 10,
+      manualImportanceNudgeScore: 1,
+      manualUrgencyNudgeScore: -1,
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.restoreAiOrder,
+    );
+
+    expect(ticket, isNotNull);
+    expect(backend.current('t-restore').manualImportanceNudgeScore, 0);
+    expect(backend.current('t-restore').manualUrgencyNudgeScore, 0);
+
+    await controller.undo(ticket!);
+    expect(backend.current('t-restore').manualImportanceNudgeScore, 1);
+    expect(backend.current('t-restore').manualUrgencyNudgeScore, -1);
+  });
+
   test('increase urgency only increments manual urgency score', () async {
     SharedPreferences.setMockInitialValues({});
 

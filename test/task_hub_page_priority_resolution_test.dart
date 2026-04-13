@@ -36,7 +36,7 @@ void main() {
     );
   }
 
-  testWidgets('priority nudge shows local feedback before delayed ai resolves',
+  testWidgets('adjust move up shows local feedback before delayed ai resolves',
       (tester) async {
     useLargeViewport(tester);
     final tomorrowMorning = DateTime.now()
@@ -75,15 +75,17 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
-    await tester.tap(
-      find.byKey(const ValueKey('task_hub_page_priority_a_urgency_increase')),
+    await selectTaskHubAdjustAction(
+      tester,
+      todoId: 'a',
+      action: 'move_up',
     );
-    await tester.pump();
     await pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
     );
 
+    expect(find.text('AI calibrating'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
       findsOneWidget,
@@ -92,6 +94,39 @@ void main() {
       find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
       findsOneWidget,
     );
+    expect(
+      tester.getTopLeft(find.text('Call vendor')).dy,
+      lessThan(tester.getTopLeft(find.text('Draft note')).dy),
+    );
+  });
+
+  testWidgets('adjust menu exposes move up down and restore ai actions',
+      (tester) async {
+    useLargeViewport(tester);
+    final backend = TaskHubTestBackend(
+      todos: <Todo>[
+        todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          updatedAtMs: 20,
+          status: 'in_progress',
+        ),
+        todo(
+          id: 'a',
+          title: 'Call vendor',
+          updatedAtMs: 10,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(wrapTaskHubTestApp(backend));
+    await pumpUntilTaskHubReady(tester);
+
+    await openTaskHubAdjustMenu(tester, todoId: 'a');
+
+    expect(find.text('Move Up a Bit'), findsOneWidget);
+    expect(find.text('Move Down a Bit'), findsOneWidget);
+    expect(find.text('Restore AI Order'), findsOneWidget);
   });
 
   testWidgets('pending badge clears after ai settles without changing position',
@@ -119,11 +154,11 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
-    await tester.tap(
-      find.byKey(
-          const ValueKey('task_hub_page_priority_a_importance_increase')),
+    await selectTaskHubAdjustAction(
+      tester,
+      todoId: 'a',
+      action: 'move_up',
     );
-    await tester.pump();
     await pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
@@ -193,10 +228,11 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
-    await tester.tap(
-      find.byKey(const ValueKey('task_hub_page_quick_a_tomorrow')),
+    await selectTaskHubQuickOverflowAction(
+      tester,
+      todoId: 'a',
+      label: 'Tomorrow',
     );
-    await tester.pump();
     await pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
@@ -237,11 +273,11 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
-    await tester.tap(
-      find.byKey(
-          const ValueKey('task_hub_page_priority_a_importance_increase')),
+    await selectTaskHubAdjustAction(
+      tester,
+      todoId: 'a',
+      action: 'move_up',
     );
-    await tester.pump();
     await pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
@@ -258,7 +294,7 @@ void main() {
       find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
       findsNothing,
     );
-    expect(find.text('Using local priority for now.'), findsOneWidget);
+    expect(find.text('Using your local move for now.'), findsOneWidget);
   });
 
   testWidgets(
@@ -306,12 +342,11 @@ void main() {
     );
     await pumpUntilTaskHubReady(tester);
 
-    await tester.tap(
-      find.byKey(
-        const ValueKey('task_hub_page_priority_a_importance_increase'),
-      ),
+    await selectTaskHubAdjustAction(
+      tester,
+      todoId: 'a',
+      action: 'move_up',
     );
-    await tester.pump();
     await pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_priority_local_fallback_badge_a')),
@@ -381,12 +416,11 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
-    await tester.tap(
-      find.byKey(
-        const ValueKey('task_hub_page_priority_a_importance_increase'),
-      ),
+    await selectTaskHubAdjustAction(
+      tester,
+      todoId: 'a',
+      action: 'move_up',
     );
-    await tester.pump();
     await pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),

@@ -9,6 +9,9 @@ enum TaskHubQuickAction {
   today,
   tomorrow,
   start,
+  moveUpABit,
+  moveDownABit,
+  restoreAiOrder,
   increaseUrgency,
   decreaseUrgency,
   increaseImportance,
@@ -107,6 +110,12 @@ class TaskHubQuickActionsController {
         );
       case TaskHubQuickAction.start:
         return _applyStart(todo);
+      case TaskHubQuickAction.moveUpABit:
+        return _applyDirectionalMove(todo, action: action, direction: 1);
+      case TaskHubQuickAction.moveDownABit:
+        return _applyDirectionalMove(todo, action: action, direction: -1);
+      case TaskHubQuickAction.restoreAiOrder:
+        return _applyRestoreAiOrder(todo, action: action);
       case TaskHubQuickAction.increaseUrgency:
         return _applySignalChange(
           todo,
@@ -189,6 +198,61 @@ class TaskHubQuickActionsController {
             (todo.manualUrgencyNudgeScore ?? 0)) {
       return null;
     }
+    return TaskHubUndoTicket(
+      todo: todo,
+      updatedTodo: updated,
+      action: action,
+      previousManualSignal: previousManualSignal,
+    );
+  }
+
+  Future<TaskHubUndoTicket?> _applyDirectionalMove(
+    Todo todo, {
+    required TaskHubQuickAction action,
+    required int direction,
+  }) async {
+    assert(direction == 1 || direction == -1);
+    final currentUrgency = todo.manualUrgencyNudgeScore ?? 0;
+    final currentImportance = todo.manualImportanceNudgeScore ?? 0;
+    if (currentUrgency == direction && currentImportance == 0) {
+      return null;
+    }
+    final previousManualSignal = _manualSignalFromTodo(todo);
+    final updated = await backend.transitionTodo(
+      sessionKey,
+      todoId: todo.id,
+      manualUrgencyNudgeScore: direction,
+      manualImportanceNudgeScore: currentImportance == 0 ? null : 0,
+      clearManualImportanceNudgeScore: false,
+    );
+    if ((updated.manualImportanceNudgeScore ?? 0) == currentImportance &&
+        (updated.manualUrgencyNudgeScore ?? 0) == currentUrgency) {
+      return null;
+    }
+    return TaskHubUndoTicket(
+      todo: todo,
+      updatedTodo: updated,
+      action: action,
+      previousManualSignal: previousManualSignal,
+    );
+  }
+
+  Future<TaskHubUndoTicket?> _applyRestoreAiOrder(
+    Todo todo, {
+    required TaskHubQuickAction action,
+  }) async {
+    final currentUrgency = todo.manualUrgencyNudgeScore ?? 0;
+    final currentImportance = todo.manualImportanceNudgeScore ?? 0;
+    if (currentUrgency == 0 && currentImportance == 0) {
+      return null;
+    }
+    final previousManualSignal = _manualSignalFromTodo(todo);
+    final updated = await backend.transitionTodo(
+      sessionKey,
+      todoId: todo.id,
+      clearManualImportanceNudgeScore: true,
+      clearManualUrgencyNudgeScore: true,
+    );
     return TaskHubUndoTicket(
       todo: todo,
       updatedTodo: updated,

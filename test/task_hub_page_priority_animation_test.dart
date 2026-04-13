@@ -117,7 +117,7 @@ void main() {
     );
   });
 
-  testWidgets('same-section urgency increase animates inline without overlay',
+  testWidgets('same-section move up animates inline without overlay',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     useLargeViewport(tester);
@@ -172,10 +172,11 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
-    await tester.tap(
-      find.byKey(const ValueKey('task_hub_page_priority_a_urgency_increase')),
+    await selectTaskHubAdjustAction(
+      tester,
+      todoId: 'a',
+      action: 'move_up',
     );
-    await tester.pump();
     await pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
@@ -192,7 +193,7 @@ void main() {
   });
 
   testWidgets(
-      're-applying an existing urgency up nudge does not show local feedback',
+      're-applying an existing move up intent does not show local feedback',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     useLargeViewport(tester);
@@ -230,10 +231,11 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
-    await tester.tap(
-      find.byKey(const ValueKey('task_hub_page_priority_a_urgency_increase')),
+    await selectTaskHubAdjustAction(
+      tester,
+      todoId: 'a',
+      action: 'move_up',
     );
-    await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(
@@ -246,7 +248,7 @@ void main() {
     );
   });
 
-  testWidgets('decreasing focus urgency animates into the next-up list',
+  testWidgets('moving focus down keeps immediate feedback and reorders focus',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     useLargeViewport(tester);
@@ -303,28 +305,34 @@ void main() {
         tester.getRect(find.byKey(const ValueKey('task_hub_page_item_upload')));
 
     await tester.tap(
-      find.byKey(
-        const ValueKey('task_hub_page_priority_upload_urgency_decrease'),
-      ),
+      find.byKey(const ValueKey('task_hub_page_adjust_upload')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_adjust_upload_move_down')),
     );
     await tester.pump();
     await pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_upload')),
     );
 
     expect(
-      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_upload')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('task_hub_priority_animation_target')),
+      find.text('Wear suit today'),
       findsOneWidget,
     );
-    final targetRect = tester.getRect(
-      find.byKey(const ValueKey('task_hub_priority_animation_target')),
+    final focusRect = tester.getRect(
+      find.byKey(const ValueKey('task_hub_page_item_suit')),
     );
-    expect((targetRect.top - sourceRect.top).abs(), greaterThan(24));
+    final uploadRect = tester.getRect(
+      find.byKey(const ValueKey('task_hub_page_item_upload')),
+    );
+    expect(focusRect.top, lessThan(uploadRect.top));
+    expect((uploadRect.top - sourceRect.top).abs(), greaterThan(8));
   });
 
   testWidgets('matching ai result clears pending without a second move',
@@ -385,10 +393,11 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
-    await tester.tap(
-      find.byKey(const ValueKey('task_hub_page_priority_a_urgency_increase')),
+    await selectTaskHubAdjustAction(
+      tester,
+      todoId: 'a',
+      action: 'move_up',
     );
-    await tester.pump();
     await pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),

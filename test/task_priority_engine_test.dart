@@ -214,6 +214,67 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'due-today');
   });
 
+  test('pure move-up intent only advances one slot after ai rerank', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'top', title: 'Top task', updatedAtMs: 30),
+        todo(id: 'middle', title: 'Middle task', updatedAtMs: 20),
+        todo(
+          id: 'raised',
+          title: 'Raised task',
+          updatedAtMs: 10,
+          manualUrgencyNudgeScore: 1,
+        ),
+      ],
+      nowLocal: nowLocal,
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'top',
+            semanticAdjustment: 40,
+            reason: 'AI keeps this first.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['top', 'raised', 'middle'],
+    );
+  });
+
+  test('pure move-up intent cannot jump past a hard guard', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'guarded',
+          title: 'Due today',
+          updatedAtMs: 30,
+          dueAtMs: nowLocal
+              .add(const Duration(hours: 2))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'raised',
+          title: 'Raised task',
+          updatedAtMs: 10,
+          manualUrgencyNudgeScore: 1,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['guarded', 'raised'],
+    );
+  });
+
   test('negative urgency score sinks task below neutral peer', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -434,8 +495,8 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'suit');
     expect(snapshot.nextUpEntries.map((entry) => entry.todo.id).take(3), [
       'research',
-      'upload',
       'script',
+      'upload',
     ]);
   });
 
