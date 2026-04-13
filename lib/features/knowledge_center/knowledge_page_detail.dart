@@ -67,17 +67,9 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
     final relatedPages = allSummaries
         .where((page) => detail.page.relatedPageIds.contains(page.pageId))
         .toList(growable: false);
-    final mergeCandidates = allSummaries
-        .where((page) =>
-            page.pageId != detail.page.pageId &&
-            page.pageType == detail.page.pageType &&
-            page.state != KnowledgePageState.archived &&
-            page.state != KnowledgePageState.removed)
-        .toList(growable: false);
     return _KnowledgePageDetailViewData(
       detail: detail,
       relatedPages: relatedPages,
-      mergeCandidates: mergeCandidates,
     );
   }
 
@@ -134,32 +126,6 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
     );
   }
 
-  Future<KnowledgePageSummary?> _chooseMergeTarget(
-    List<KnowledgePageSummary> relatedPages,
-  ) {
-    return showModalBottomSheet<KnowledgePageSummary>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            for (final page in relatedPages)
-              ListTile(
-                title: Text(page.title),
-                subtitle: Text(
-                  page.currentSummary,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () => Navigator.of(context).pop(page),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _handleOverflowAction(
     KnowledgePageOverflowAction action,
     _KnowledgePageDetailViewData data,
@@ -189,17 +155,6 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
           () => _pagesBackend().archiveKnowledgePage(
             SessionScope.of(context).sessionKey,
             pageId: widget.pageId,
-          ),
-        );
-      case KnowledgePageOverflowAction.merge:
-        if (data.mergeCandidates.isEmpty) return;
-        final targetPage = await _chooseMergeTarget(data.mergeCandidates);
-        if (targetPage == null || !mounted) return;
-        await _runMutation(
-          () => _pagesBackend().mergeKnowledgePageInto(
-            SessionScope.of(context).sessionKey,
-            pageId: widget.pageId,
-            targetPageId: targetPage.pageId,
           ),
         );
       case KnowledgePageOverflowAction.remove:
@@ -278,7 +233,6 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
                     : () async {
                         final action = await showKnowledgePageActionsSheet(
                           context,
-                          canMerge: data.mergeCandidates.isNotEmpty,
                         );
                         if (action == null || !mounted) return;
                         await _handleOverflowAction(action, data);
@@ -676,12 +630,10 @@ class _KnowledgePageDetailViewData {
   const _KnowledgePageDetailViewData({
     required this.detail,
     required this.relatedPages,
-    required this.mergeCandidates,
   });
 
   final KnowledgePageDetail detail;
   final List<KnowledgePageSummary> relatedPages;
-  final List<KnowledgePageSummary> mergeCandidates;
 }
 
 class _DetailSection extends StatelessWidget {

@@ -1563,12 +1563,45 @@ pub(crate) fn upsert_compiled_knowledge_pages(
                 item.claim_ids.clone()
             };
             let page_id = item.page.page_id.clone();
+            let visible_title = if existing
+                .as_ref()
+                .is_some_and(|row| row.manual_title_blob.is_some())
+            {
+                existing_page
+                    .as_ref()
+                    .map(|page| page.title.clone())
+                    .unwrap_or_else(|| item.page.title.clone())
+            } else {
+                item.page.title.clone()
+            };
+            let visible_summary = if existing
+                .as_ref()
+                .is_some_and(|row| row.manual_summary_blob.is_some())
+            {
+                existing_page
+                    .as_ref()
+                    .map(|page| page.current_summary.clone())
+                    .unwrap_or_else(|| item.page.current_summary.clone())
+            } else {
+                item.page.current_summary.clone()
+            };
+            let visible_body = if existing
+                .as_ref()
+                .is_some_and(|row| row.manual_body_blob.is_some())
+            {
+                existing_page
+                    .as_ref()
+                    .map(|page| page.current_body.clone())
+                    .unwrap_or_else(|| item.page.current_body.clone())
+            } else {
+                item.page.current_body.clone()
+            };
             let effective_page = crate::knowledge::KnowledgePage {
                 page_id: item.page.page_id.clone(),
                 page_type: item.page.page_type,
-                title: item.page.title.clone(),
-                current_summary: item.page.current_summary.clone(),
-                current_body: item.page.current_body.clone(),
+                title: visible_title,
+                current_summary: visible_summary,
+                current_body: visible_body,
                 state: preserved_state,
                 answer_policy: answer_policy.clone(),
                 confidence_level: if preserve_merged_provenance {
@@ -1986,12 +2019,20 @@ pub fn set_knowledge_page_answer_allowed(
     let Some(detail) = get_knowledge_page_detail(conn, key, page_id)? else {
         return Err(anyhow!("knowledge page not found: {page_id}"));
     };
-    let next_state = if allowed
-        && detail.page.state == crate::knowledge::KnowledgePageState::AnswerMuted
-    {
-        crate::knowledge::KnowledgePageState::Active
-    } else {
+    let next_state = if allowed {
+        if detail.page.state == crate::knowledge::KnowledgePageState::AnswerMuted {
+            crate::knowledge::KnowledgePageState::Active
+        } else {
+            detail.page.state
+        }
+    } else if matches!(
+        detail.page.state,
+        crate::knowledge::KnowledgePageState::Archived
+            | crate::knowledge::KnowledgePageState::Removed
+    ) {
         detail.page.state
+    } else {
+        crate::knowledge::KnowledgePageState::AnswerMuted
     };
     if allowed
         && matches!(

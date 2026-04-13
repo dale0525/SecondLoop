@@ -110,7 +110,8 @@
     "permanentlyRemove": "Permanently Remove",
     "fields": {
       "title": "标题",
-      "summary": "结论"
+      "summary": "结论",
+      "body": "正文"
     }
   },
   "history": {

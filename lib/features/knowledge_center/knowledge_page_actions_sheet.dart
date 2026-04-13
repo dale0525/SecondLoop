@@ -7,14 +7,12 @@ enum KnowledgePageOverflowAction {
   viewHistory,
   viewReview,
   archive,
-  merge,
   remove,
 }
 
 Future<KnowledgePageOverflowAction?> showKnowledgePageActionsSheet(
-  BuildContext context, {
-  required bool canMerge,
-}) {
+  BuildContext context,
+) {
   return showModalBottomSheet<KnowledgePageOverflowAction>(
     context: context,
     showDragHandle: true,
@@ -42,14 +40,6 @@ Future<KnowledgePageOverflowAction?> showKnowledgePageActionsSheet(
               title: Text(context.t.memory.actions.archivePage),
               onTap: () => Navigator.of(context)
                   .pop(KnowledgePageOverflowAction.archive),
-            ),
-            ListTile(
-              enabled: canMerge,
-              title: Text(context.t.memory.actions.mergePages),
-              onTap: canMerge
-                  ? () => Navigator.of(context)
-                      .pop(KnowledgePageOverflowAction.merge)
-                  : null,
             ),
             ListTile(
               title: Text(context.t.memory.actions.permanentlyRemove),

@@ -7,6 +7,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/knowledge_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/knowledge_center/knowledge_page_detail.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/knowledge/history.dart';
 import 'package:secondloop/src/rust/knowledge/lint.dart';
 import 'package:secondloop/src/rust/knowledge/pages.dart';
@@ -60,9 +61,8 @@ void main() {
     expect(backend.correctedBody, 'Detailed corrected body.');
   });
 
-  testWidgets('KnowledgePageDetailPage asks user to choose merge target',
-      (tester) async {
-    final backend = _MutableKnowledgePageDetailBackendStub();
+  testWidgets('KnowledgePageDetailPage hides the merge action', (tester) async {
+    final backend = _KnowledgePageDetailBackendStub();
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -83,14 +83,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.more_horiz_rounded));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Merge Pages'));
-    await tester.pumpAndSettle();
-    expect(find.text('Recent Events'), findsNothing);
-    expect(find.text('About Me'), findsNothing);
-    await tester.tap(find.text('Preferences (Archive)'));
-    await tester.pumpAndSettle();
-
-    expect(backend.mergedTargetPageId, 'page:preferences:archive');
+    expect(find.text('Merge Pages'), findsNothing);
   });
 
   testWidgets('KnowledgePageDetailPage shows final governance sections',
@@ -141,6 +134,37 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Related Pages'), findsOneWidget);
+  });
+
+  testWidgets('KnowledgePageDetailPage localizes the body field label',
+      (tester) async {
+    LocaleSettings.setLocale(AppLocale.zhCn);
+    addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
+
+    final backend = _MutableKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:preferences'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('更正当前结论'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('正文'), findsOneWidget);
+    expect(find.text('Body'), findsNothing);
   });
 }
 
@@ -327,7 +351,6 @@ final class _MutableKnowledgePageDetailBackendStub extends TestAppBackend
     implements KnowledgePagesBackend {
   String? correctedSummary;
   String? correctedBody;
-  String? mergedTargetPageId;
 
   @override
   Future<KnowledgePageDetail> getKnowledgePageDetail(
@@ -427,10 +450,8 @@ final class _MutableKnowledgePageDetailBackendStub extends TestAppBackend
     required String pageId,
     required String targetPageId,
     String? note,
-  }) async {
-    mergedTargetPageId = targetPageId;
-    return _buildDetail(pageId: pageId);
-  }
+  }) async =>
+      _buildDetail(pageId: pageId);
 
   @override
   Future<KnowledgePageDetail> correctKnowledgePage(

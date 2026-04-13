@@ -909,7 +909,7 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
     .expect("mute page answers");
     assert_eq!(
         muted.page.state,
-        crate::knowledge::KnowledgePageState::Outdated
+        crate::knowledge::KnowledgePageState::AnswerMuted
     );
     assert!(!muted.page.answer_policy.default_allowed);
     assert!(!muted.page.answer_policy.requires_temporal_framing);
@@ -928,10 +928,10 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
     .expect("unmute page answers");
     assert_eq!(
         unmuted.page.state,
-        crate::knowledge::KnowledgePageState::Outdated
+        crate::knowledge::KnowledgePageState::Active
     );
     assert!(unmuted.page.answer_policy.default_allowed);
-    assert!(unmuted.page.answer_policy.requires_temporal_framing);
+    assert!(!unmuted.page.answer_policy.requires_temporal_framing);
     assert!(muted.version_snapshots.len() >= 3);
     assert!(muted
         .version_snapshots
@@ -952,6 +952,59 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
     )
     .expect("clear body");
     assert_eq!(cleared_body.page.current_body, "");
+}
+
+#[test]
+fn repeated_page_reads_do_not_append_recompile_history_after_manual_correction() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [39u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("seed preference");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let corrected = crate::api::knowledge::db_correct_knowledge_page(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+        Some("Reply Preferences".to_string()),
+        Some("Always answer in Chinese first.".to_string()),
+        Some("Always answer in Chinese first. Keep the tone concise.".to_string()),
+    )
+    .expect("correct page");
+    let corrected_history_len = corrected.history.len();
+    let corrected_version_len = corrected.version_snapshots.len();
+
+    let reread = crate::api::knowledge::db_get_knowledge_page_detail(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+    )
+    .expect("read corrected page once");
+    assert_eq!(reread.history.len(), corrected_history_len);
+    assert_eq!(reread.version_snapshots.len(), corrected_version_len);
+
+    let reread_again = crate::api::knowledge::db_get_knowledge_page_detail(
+        app_dir_string,
+        key.to_vec(),
+        "page:preferences".to_string(),
+    )
+    .expect("read corrected page twice");
+    assert_eq!(reread_again.history.len(), corrected_history_len);
+    assert_eq!(reread_again.version_snapshots.len(), corrected_version_len);
 }
 
 #[test]

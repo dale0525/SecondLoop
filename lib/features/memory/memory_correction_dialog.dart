@@ -57,8 +57,8 @@ Future<MemoryCorrectionDraft?> showMemoryCorrectionDialog(
                 controller: bodyController,
                 minLines: 4,
                 maxLines: 8,
-                decoration: const InputDecoration(
-                  labelText: 'Body',
+                decoration: InputDecoration(
+                  labelText: context.t.memory.actions.fields.body,
                 ),
               ),
             ],

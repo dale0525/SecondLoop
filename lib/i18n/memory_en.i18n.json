@@ -110,7 +110,8 @@
     "permanentlyRemove": "Permanently Remove",
     "fields": {
       "title": "Title",
-      "summary": "Conclusion"
+      "summary": "Conclusion",
+      "body": "Body"
     }
   },
   "history": {
