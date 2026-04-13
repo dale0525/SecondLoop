@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../i18n/strings.g.dart';
+import '../ui/sl_surface.dart';
+import 'web_app_shell.dart';
 import 'web_entry_intent.dart';
 
 class WebPublicEntryScaffold extends StatelessWidget {
@@ -47,32 +49,27 @@ class WebPublicEntryScaffold extends StatelessWidget {
     final copy = _copy(context);
     return Scaffold(
       appBar: AppBar(title: Text(context.t.app.web.title)),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              Card(
-                margin: const EdgeInsets.only(bottom: 24),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        copy.title,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(copy.body),
-                    ],
+      body: WebAppPanelFrame(
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            SlSurface(
+              margin: const EdgeInsets.only(bottom: 24),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    copy.title,
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Text(copy.body),
+                ],
               ),
-              child,
-            ],
-          ),
+            ),
+            child,
+          ],
         ),
       ),
     );

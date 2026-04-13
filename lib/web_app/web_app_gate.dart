@@ -19,6 +19,7 @@ import 'web_entry_intent.dart';
 import 'web_public_entry_scaffold.dart';
 import 'web_app_service.dart';
 import 'web_chat_page.dart';
+import 'web_app_shell.dart';
 import '../features/settings/cloud_account_panel.dart';
 import '../i18n/strings.g.dart';
 import '../features/settings/vault_usage_card.dart';
@@ -364,29 +365,30 @@ class _WebMainShellState extends State<_WebMainShell> {
         vaultConfigStore: widget.vaultConfigStore,
       ),
     ];
-    return Scaffold(
-      appBar: AppBar(title: Text(context.t.app.web.title)),
-      body: IndexedStack(
+    return WebAppShell(
+      title: context.t.app.web.title,
+      selectedIndex: _index,
+      destinations: <WebAppShellDestination>[
+        WebAppShellDestination(
+          label: context.t.app.web.navigation.chat,
+          icon: Icons.chat_bubble_outline,
+          selectedIcon: Icons.chat_bubble,
+        ),
+        WebAppShellDestination(
+          label: context.t.app.web.navigation.files,
+          icon: Icons.folder_outlined,
+          selectedIcon: Icons.folder,
+        ),
+        WebAppShellDestination(
+          label: context.t.app.web.navigation.settings,
+          icon: Icons.settings_outlined,
+          selectedIcon: Icons.settings,
+        ),
+      ],
+      onDestinationSelected: (value) => setState(() => _index = value),
+      child: IndexedStack(
         index: _index,
         children: pages,
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: context.t.app.web.navigation.chat,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.folder_outlined),
-            label: context.t.app.web.navigation.files,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            label: context.t.app.web.navigation.settings,
-          ),
-        ],
       ),
     );
   }
@@ -685,6 +687,7 @@ class _WebFilesPageState extends State<_WebFilesPage> {
     );
 
     return ListView(
+      key: const ValueKey('web_files_list'),
       padding: const EdgeInsets.all(16),
       children: [
         Text(
@@ -855,6 +858,7 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return ListView(
+      key: const ValueKey('web_settings_list'),
       padding: const EdgeInsets.all(16),
       children: [
         CloudAccountPanel(

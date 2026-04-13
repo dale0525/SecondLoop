@@ -359,11 +359,40 @@ final class _DeferredWebFilePicker extends FilePicker {
 }
 
 Finder _navigationLabel(String label) {
-  return find.descendant(
-    of: find.byType(NavigationBar),
-    matching: find.text(label),
-  );
+  final navigationBar = find.byType(NavigationBar);
+  if (navigationBar.evaluate().isNotEmpty) {
+    return find.descendant(
+      of: navigationBar,
+      matching: find.text(label),
+    );
+  }
+
+  final navigationRail = find.byType(NavigationRail);
+  if (navigationRail.evaluate().isNotEmpty) {
+    return find.descendant(
+      of: navigationRail,
+      matching: find.text(label),
+    );
+  }
+
+  return find.text(label);
 }
+
+int _selectedNavigationIndex(WidgetTester tester) {
+  final navigationBar = find.byType(NavigationBar);
+  if (navigationBar.evaluate().isNotEmpty) {
+    return tester.widget<NavigationBar>(navigationBar).selectedIndex;
+  }
+
+  final navigationRail = find.byType(NavigationRail);
+  if (navigationRail.evaluate().isNotEmpty) {
+    return tester.widget<NavigationRail>(navigationRail).selectedIndex ?? 0;
+  }
+
+  throw StateError('No web app navigation widget found');
+}
+
+Finder _settingsList() => find.byKey(const ValueKey('web_settings_list'));
 
 Widget _buildApp({
   required ObservableCloudAuthController controller,
@@ -494,11 +523,11 @@ void main() {
         'cloud-gateway request failed: HTTP 503';
     service.failNextSubscriptionFetch = true;
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('cloud_subscription_refresh')),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
     await tester.tap(
@@ -653,6 +682,29 @@ void main() {
     expect(find.text('Settings'), findsOneWidget);
   });
 
+  testWidgets('wide-screen entitled shell uses a navigation rail',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        service:
+            _FakeWebAppService(subscription: WebSubscriptionState.entitled),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(_navigationLabel('Files'), findsOneWidget);
+  });
+
   testWidgets('manage intent opens the entitled web app on Settings first',
       (tester) async {
     await tester.pumpWidget(
@@ -669,9 +721,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final navigationBar =
-        tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(navigationBar.selectedIndex, 2);
+    expect(_selectedNavigationIndex(tester), 2);
     expect(
       find.byKey(const ValueKey('cloud_manage_subscription')),
       findsOneWidget,
@@ -711,11 +761,11 @@ void main() {
       expect(find.text('文件'), findsOneWidget);
       expect(find.text('设置'), findsOneWidget);
 
-      await tester.tap(find.text('设置'));
+      await tester.tap(_navigationLabel('设置'));
       await tester.pumpAndSettle();
       await tester.dragUntilVisible(
         find.text('最近文件'),
-        find.byType(ListView),
+        _settingsList(),
         const Offset(0, -240),
       );
 
@@ -1058,7 +1108,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
 
     expect(find.byType(CloudUsageCard), findsOneWidget);
@@ -1067,14 +1117,14 @@ void main() {
 
     await tester.dragUntilVisible(
       find.byType(VaultUsageCard),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
     expect(find.byType(VaultUsageCard), findsOneWidget);
 
     await tester.dragUntilVisible(
       find.text('text/plain • 12 bytes'),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
 
@@ -1117,11 +1167,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('cloud_manage_subscription')),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
 
@@ -1154,7 +1204,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('payment_required'), findsNothing);
@@ -1191,11 +1241,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.byType(VaultUsageCard),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
 
@@ -1393,11 +1443,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('cloud_manage_subscription')),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
     await tester.tap(find.byKey(const ValueKey('cloud_manage_subscription')));
@@ -1449,11 +1499,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('vault_usage_attachment_delete_sha-delete')),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
     final deleteButton =
@@ -1506,18 +1556,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.text('Recent files'),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
 
     expect(find.textContaining('payment_required'), findsNothing);
     expect(
-      find.text(
-          'Cloud sync is paused. Renew your subscription to continue syncing.'),
+      find.textContaining(
+        'Cloud sync is paused. Renew your subscription to continue syncing.',
+      ),
       findsWidgets,
     );
   });
@@ -1556,11 +1607,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.text('text/plain • 12 bytes'),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
     final recentItem = find.byType(ListTile).last;
@@ -1610,11 +1661,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.text('application/pdf • 12 bytes'),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
     final recentItem = find.byType(ListTile).last;
@@ -1657,7 +1708,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     final subscriptionRefresh =
         find.byKey(const ValueKey('cloud_subscription_refresh'));
@@ -1706,11 +1757,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(_navigationLabel('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('cloud_resend_verification')),
-      find.byType(ListView),
+      _settingsList(),
       const Offset(0, -240),
     );
     await tester.tap(
