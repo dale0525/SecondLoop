@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/web_app/secondloop_web_app.dart';
 
 void main() {
@@ -15,11 +16,16 @@ void main() {
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
     final theme = materialApp.theme!;
+    final baseTheme = AppTheme.light(locale: const Locale('en'));
 
     expect(theme.colorScheme.primary, const Color(0xFF101418));
     expect(theme.colorScheme.background, const Color(0xFFFCFBF8));
-    expect(theme.textTheme.bodyLarge?.fontFamily, 'Inter');
+    expect(
+      theme.textTheme.bodyLarge?.fontFamily,
+      baseTheme.textTheme.bodyLarge?.fontFamily,
+    );
     expect(theme.textTheme.titleLarge?.fontFamily, 'Sora');
+    expect(theme.textTheme.titleLarge?.letterSpacing, -0.2);
     expect(theme.inputDecorationTheme.fillColor, const Color(0xFFF7F3EE));
   });
 

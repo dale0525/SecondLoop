@@ -249,31 +249,30 @@ TextTheme _buildTextTheme(TextTheme base, ColorScheme colorScheme) {
     return style?.copyWith(
       fontFamily: 'Sora',
       color: colorScheme.onSurface,
-      letterSpacing: letterSpacing ?? -0.4,
-      height: 1.1,
+      letterSpacing: letterSpacing ?? -0.2,
+      height: 1.12,
     );
   }
 
   TextStyle? body(TextStyle? style) {
     return style?.copyWith(
-      fontFamily: 'Inter',
       color: colorScheme.onSurface,
-      height: 1.45,
+      height: 1.5,
     );
   }
 
   return base.copyWith(
-    displayLarge: heading(base.displayLarge, letterSpacing: -1.4),
-    displayMedium: heading(base.displayMedium, letterSpacing: -1.2),
-    displaySmall: heading(base.displaySmall, letterSpacing: -1),
-    headlineLarge: heading(base.headlineLarge, letterSpacing: -0.9),
-    headlineMedium: heading(base.headlineMedium, letterSpacing: -0.8),
-    headlineSmall: heading(base.headlineSmall, letterSpacing: -0.7),
-    titleLarge: heading(base.titleLarge, letterSpacing: -0.5),
-    titleMedium: heading(base.titleMedium, letterSpacing: -0.3)?.copyWith(
+    displayLarge: heading(base.displayLarge, letterSpacing: -1.0),
+    displayMedium: heading(base.displayMedium, letterSpacing: -0.8),
+    displaySmall: heading(base.displaySmall, letterSpacing: -0.6),
+    headlineLarge: heading(base.headlineLarge, letterSpacing: -0.45),
+    headlineMedium: heading(base.headlineMedium, letterSpacing: -0.35),
+    headlineSmall: heading(base.headlineSmall, letterSpacing: -0.25),
+    titleLarge: heading(base.titleLarge, letterSpacing: -0.2),
+    titleMedium: body(base.titleMedium)?.copyWith(
       fontWeight: FontWeight.w600,
     ),
-    titleSmall: heading(base.titleSmall, letterSpacing: -0.2)?.copyWith(
+    titleSmall: body(base.titleSmall)?.copyWith(
       fontWeight: FontWeight.w600,
     ),
     bodyLarge: body(base.bodyLarge),
