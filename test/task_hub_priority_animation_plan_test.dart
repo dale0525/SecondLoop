@@ -3,6 +3,9 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_hub_priority_animation_plan.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
+import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   test('planner returns sameSectionReorder for visible reorder', () {
@@ -162,6 +165,85 @@ void main() {
     );
 
     expect(plan.kind, TaskHubPriorityAnimationKind.noEmphasis);
+  });
+
+  test('visible entry lookup follows unified open-task order from snapshot',
+      () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Current focus',
+          dueAtMs: nowLocal
+              .subtract(const Duration(hours: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 30,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'scheduled',
+          title: 'Scheduled task',
+          dueAtMs: nowLocal
+              .add(const Duration(days: 2))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        const Todo(
+          id: 'backlog',
+          title: 'AI promoted backlog',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 20,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: nowLocal,
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'backlog',
+            semanticAdjustment: 120,
+            reason: 'Promoted for this session.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+
+    expect(
+      snapshot.openEntries.map((entry) => entry.todo.id).toList(),
+      <String>['backlog', 'scheduled'],
+    );
+
+    final visibleSnapshot =
+        TaskHubPriorityAnimationSnapshot.fromTaskPrioritySnapshot(snapshot);
+    final backlogPosition =
+        locateTaskHubPriorityVisibleEntry(visibleSnapshot, 'backlog');
+    final scheduledPosition =
+        locateTaskHubPriorityVisibleEntry(visibleSnapshot, 'scheduled');
+
+    expect(backlogPosition?.section, TaskHubPriorityAnimationSection.nextUp);
+    expect(backlogPosition?.index, 0);
+    expect(scheduledPosition?.section, TaskHubPriorityAnimationSection.nextUp);
+    expect(scheduledPosition?.index, 1);
   });
 
   test('fallback rect moves downward when same-section target index increases',

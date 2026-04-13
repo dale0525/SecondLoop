@@ -751,7 +751,6 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                   Text(
                                     context.t.actions.taskHub.wrapUpSubtitle(
                                       upcoming: visibleOpen.length,
-                                      backlog: 0,
                                       done: snapshot.done.length,
                                     ),
                                   ),

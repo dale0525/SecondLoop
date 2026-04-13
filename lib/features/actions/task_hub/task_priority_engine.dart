@@ -412,7 +412,8 @@ TaskPriorityEntry _neutralizePureUserMoveEntry(TaskPriorityEntry entry) {
 
 bool _isPureUserMoveEntry(TaskPriorityEntry entry) {
   return entry.manualImportanceNudgeScore == 0 &&
-      entry.manualUrgencyNudgeScore != 0;
+      (entry.manualUrgencyNudgeScore == 1 ||
+          entry.manualUrgencyNudgeScore == -1);
 }
 
 bool _canApplyBoundedUserMoveUp(

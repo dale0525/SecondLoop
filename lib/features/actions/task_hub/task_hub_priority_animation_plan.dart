@@ -35,12 +35,10 @@ class TaskHubPriorityAnimationSnapshot {
         : snapshot.done.take(doneVisibleCount);
     return TaskHubPriorityAnimationSnapshot(
       focusTodoId: snapshot.primaryFocus?.todo.id,
-      nextUpTodoIds: snapshot.nextUpEntries
+      nextUpTodoIds: snapshot.openEntries
           .map((entry) => entry.todo.id)
           .toList(growable: false),
-      backlogTodoIds: snapshot.backlogEntries
-          .map((entry) => entry.todo.id)
-          .toList(growable: false),
+      backlogTodoIds: const <String>[],
       doneTodoIds:
           visibleDone.map((entry) => entry.todo.id).toList(growable: false),
     );

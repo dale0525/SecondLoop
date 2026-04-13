@@ -305,6 +305,28 @@ void main() {
     );
   });
 
+  test('legacy large urgency signal keeps score semantics', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'neutral-top', title: 'Neutral top', updatedAtMs: 30),
+        todo(
+          id: 'legacy-up',
+          title: 'Legacy urgency +2',
+          updatedAtMs: 20,
+          manualUrgencyNudgeScore: 2,
+        ),
+        todo(id: 'neutral-bottom', title: 'Neutral bottom', updatedAtMs: 10),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['legacy-up', 'neutral-top', 'neutral-bottom'],
+    );
+  });
+
   test('negative urgency score sinks task below neutral peer', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(

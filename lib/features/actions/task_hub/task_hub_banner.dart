@@ -10,6 +10,7 @@ import '../../../ui/sl_tokens.dart';
 import 'task_hub_entry_card.dart';
 import 'task_hub_quick_action_layout.dart';
 import 'task_hub_quick_actions.dart';
+import 'task_hub_relative_time.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
 
@@ -81,22 +82,51 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
             context,
             entry: primary,
           );
-    final secondaryAction = primary == null
+    final secondaryAction = widget.compact
         ? null
-        : secondaryTaskHubQuickActionItemForEntry(
-            context,
-            entry: primary,
-          );
-    final showQuickPair = !compactCollapsed &&
-        primary != null &&
+        : primary == null
+            ? null
+            : secondaryTaskHubQuickActionItemForEntry(
+                context,
+                entry: primary,
+              );
+    final showCompactPrimaryAction = primary != null &&
         primaryAction != null &&
         widget.onQuickAction != null;
+    final showCompactViewAllAction =
+        primary != null && widget.onViewAll != null;
+    final showQuickPair = !compactCollapsed &&
+        (widget.compact
+            ? (showCompactPrimaryAction || showCompactViewAllAction)
+            : showCompactPrimaryAction);
     final showOpenFocusAction = !widget.compact && widget.onOpenTodo != null;
     final showNavigationActions = !widget.compact &&
         !compactCollapsed &&
         primary != null &&
         (showOpenFocusAction || widget.onViewAll != null);
     final showOpenHubAction = !compactCollapsed && primary == null;
+    final compactRelativeTimeText = !widget.compact || primary == null
+        ? null
+        : formatTaskHubRelativeTime(
+            dueAtMs: primary.todo.dueAtMs,
+            nowLocal: widget.snapshot.computedAtLocal ?? DateTime.now(),
+            labels: TaskHubRelativeTimeLabels(
+              noDeadline: context.t.actions.taskHub.relativeTime.noDeadline,
+              today: context.t.actions.taskHub.relativeTime.today,
+              inHours: (count) =>
+                  context.t.actions.taskHub.relativeTime.inHours(count: count),
+              inDays: (count) =>
+                  context.t.actions.taskHub.relativeTime.inDays(count: count),
+              inWeeks: (count) =>
+                  context.t.actions.taskHub.relativeTime.inWeeks(count: count),
+              overdueHours: (count) => context.t.actions.taskHub.relativeTime
+                  .overdueHours(count: count),
+              overdueDays: (count) => context.t.actions.taskHub.relativeTime
+                  .overdueDays(count: count),
+              overdueWeeks: (count) => context.t.actions.taskHub.relativeTime
+                  .overdueWeeks(count: count),
+            ),
+          );
     return Padding(
       padding: outerPadding,
       child: SlSurface(
@@ -137,32 +167,28 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                           ),
                         ),
                         if (useCompactHeaderQuickActions) ...[
-                          _CompactHeaderActionButton(
-                            buttonKey: const ValueKey(
-                                'task_hub_banner_primary_action'),
-                            icon: primaryAction.icon,
-                            tooltip: primaryAction.label,
-                            isPrimary: true,
-                            onPressed: () => unawaited(
-                              widget.onQuickAction!(
-                                primary,
-                                primaryAction.action,
+                          if (showCompactPrimaryAction)
+                            _CompactHeaderActionButton(
+                              buttonKey: const ValueKey(
+                                  'task_hub_banner_primary_action'),
+                              icon: primaryAction.icon,
+                              tooltip: primaryAction.label,
+                              isPrimary: true,
+                              onPressed: () => unawaited(
+                                widget.onQuickAction!(
+                                  primary,
+                                  primaryAction.action,
+                                ),
                               ),
                             ),
-                          ),
-                          if (secondaryAction != null) ...[
+                          if (showCompactViewAllAction) ...[
                             const SizedBox(width: 6),
                             _CompactHeaderActionButton(
                               buttonKey: const ValueKey(
                                   'task_hub_banner_secondary_action'),
-                              icon: secondaryAction.icon,
-                              tooltip: secondaryAction.label,
-                              onPressed: () => unawaited(
-                                widget.onQuickAction!(
-                                  primary,
-                                  secondaryAction.action,
-                                ),
-                              ),
+                              icon: Icons.checklist_rtl_rounded,
+                              tooltip: context.t.actions.taskHub.openTaskHub,
+                              onPressed: widget.onViewAll!,
                             ),
                           ],
                           const SizedBox(width: 4),
@@ -187,15 +213,54 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                       ),
                     ],
                     SizedBox(height: headerSpacing),
-                    Text(
-                      primary?.todo.title ??
-                          context.t.actions.taskHub.wrapUpHeadline,
-                      maxLines: widget.compact ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
+                    if (widget.compact)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              primary?.todo.title ??
+                                  context.t.actions.taskHub.wrapUpHeadline,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
                           ),
-                    ),
+                          if (compactRelativeTimeText != null) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              compactRelativeTimeText,
+                              key: const ValueKey(
+                                  'task_hub_banner_relative_time'),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelMedium
+                                  ?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ],
+                        ],
+                      )
+                    else
+                      Text(
+                        primary?.todo.title ??
+                            context.t.actions.taskHub.wrapUpHeadline,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                      ),
                     SizedBox(height: headerSpacing),
                     Text(
                       primary?.reasonText ?? _fallbackSubtitle(context),
@@ -257,35 +322,67 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                             padding: const EdgeInsets.all(4),
                             child: Row(
                               children: [
-                                Expanded(
-                                  child: SlButton(
-                                    key: const ValueKey(
-                                        'task_hub_banner_primary_action'),
-                                    onPressed: () => unawaited(
-                                      widget.onQuickAction!(
-                                        primary,
-                                        primaryAction.action,
+                                if (widget.compact) ...[
+                                  if (showCompactPrimaryAction)
+                                    Expanded(
+                                      child: SlButton(
+                                        key: const ValueKey(
+                                            'task_hub_banner_primary_action'),
+                                        onPressed: () => unawaited(
+                                          widget.onQuickAction!(
+                                            primary,
+                                            primaryAction.action,
+                                          ),
+                                        ),
+                                        child: Text(primaryAction.label),
                                       ),
                                     ),
-                                    child: Text(primaryAction.label),
-                                  ),
-                                ),
-                                if (secondaryAction != null) ...[
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: SlButton(
-                                      buttonKey: const ValueKey(
-                                          'task_hub_banner_secondary_action'),
-                                      variant: SlButtonVariant.outline,
-                                      onPressed: () => unawaited(
-                                        widget.onQuickAction!(
-                                          primary,
-                                          secondaryAction.action,
+                                  if (showCompactViewAllAction) ...[
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: SlButton(
+                                        buttonKey: const ValueKey(
+                                            'task_hub_banner_secondary_action'),
+                                        variant: SlButtonVariant.outline,
+                                        onPressed: widget.onViewAll,
+                                        child: Text(
+                                          context.t.actions.taskHub.openTaskHub,
                                         ),
                                       ),
-                                      child: Text(secondaryAction.label),
                                     ),
-                                  ),
+                                  ],
+                                ] else ...[
+                                  if (primaryAction case final regularPrimary?)
+                                    Expanded(
+                                      child: SlButton(
+                                        key: const ValueKey(
+                                            'task_hub_banner_primary_action'),
+                                        onPressed: () => unawaited(
+                                          widget.onQuickAction!(
+                                            primary,
+                                            regularPrimary.action,
+                                          ),
+                                        ),
+                                        child: Text(regularPrimary.label),
+                                      ),
+                                    ),
+                                  if (secondaryAction != null) ...[
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: SlButton(
+                                        buttonKey: const ValueKey(
+                                            'task_hub_banner_secondary_action'),
+                                        variant: SlButtonVariant.outline,
+                                        onPressed: () => unawaited(
+                                          widget.onQuickAction!(
+                                            primary,
+                                            secondaryAction.action,
+                                          ),
+                                        ),
+                                        child: Text(secondaryAction.label),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ],
                             ),
@@ -445,7 +542,6 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
     if (!snapshot.isEmpty) {
       return context.t.actions.taskHub.wrapUpSubtitle(
         upcoming: snapshot.openDisplayCount,
-        backlog: 0,
         done: snapshot.done.length,
       );
     }

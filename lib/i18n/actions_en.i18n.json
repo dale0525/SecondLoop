@@ -155,7 +155,7 @@
     "openFocus": "Open focus task",
     "wrapUpTitle": "Wrap up",
     "wrapUpHeadline": "No urgent task right now",
-    "wrapUpSubtitle": "Next up $upcoming • Backlog $backlog • $done done",
+    "wrapUpSubtitle": "Open $upcoming • $done done",
     "noTasksSubtitle": "You are clear for now. Keep the hub nearby for planning.",
     "overdueLabel": "Overdue",
     "dueTodayLabel": "Due today",

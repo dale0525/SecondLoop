@@ -155,7 +155,7 @@
     "openFocus": "打开重点任务",
     "wrapUpTitle": "收尾",
     "wrapUpHeadline": "现在没有紧急任务",
-    "wrapUpSubtitle": "下一步 $upcoming 项 · 积压 $backlog 项 · 已完成 $done 项",
+    "wrapUpSubtitle": "未完成 $upcoming 项 · 已完成 $done 项",
     "noTasksSubtitle": "当前节奏不错，任务中心仍会帮你继续整理下一步。",
     "overdueLabel": "已逾期",
     "dueTodayLabel": "今天到期",
