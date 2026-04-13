@@ -140,7 +140,8 @@ void main() {
         find.byKey(const ValueKey('todo_undetermined_banner')), findsNothing);
   });
 
-  testWidgets('Task hub banner expands and view all opens task hub page',
+  testWidgets(
+      'Task hub banner keeps chat banner compact and app bar opens task hub page',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -190,20 +191,13 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner_view_all')),
-    );
-
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
     expect(find.byKey(const ValueKey('task_hub_banner_primary_action')),
         findsOneWidget);
     expect(
-        find.byKey(const ValueKey('task_hub_banner_view_all')), findsOneWidget);
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner_view_all')));
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
     await tester.pumpAndSettle();
 
     expect(find.byType(TaskHubPage), findsOneWidget);
@@ -254,13 +248,6 @@ void main() {
     await _pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_banner')),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner_view_all')),
     );
 
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
@@ -487,7 +474,7 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('Chat task hub banner shows shared ai source label',
+  testWidgets('Chat task hub banner keeps shared ai source label hidden',
       (tester) async {
     final nowLocal = DateTime.now();
     final requestSignature = jsonEncode(<String, Object?>{
@@ -582,18 +569,15 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
+    expect(
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
+      findsNothing,
     );
-
-    expect(find.text('Shared AI insight'), findsOneWidget);
+    expect(find.text('AI recommends this now'), findsOneWidget);
     expect(find.text('Shared AI result.'), findsWidgets);
   });
 
-  testWidgets('Chat task hub banner shows cached local ai source label',
+  testWidgets('Chat task hub banner keeps cached ai source label hidden',
       (tester) async {
     final nowLocal = DateTime.now();
     final cacheScopeKey = buildTaskPriorityAiCacheScopeKey(
@@ -697,19 +681,15 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
+    expect(
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
+      findsNothing,
     );
-
-    expect(find.text('Cached AI insight'), findsOneWidget);
+    expect(find.text('AI recommends this now'), findsOneWidget);
     expect(find.text('Cached AI result.'), findsWidgets);
   });
 
-  testWidgets(
-      'Chat task hub banner reuses cached ai result before scope resolves',
+  testWidgets('Chat task hub banner reuses cached ai result in compact mode',
       (tester) async {
     final nowLocal = DateTime.now();
     final cacheScopeKey = buildTaskPriorityAiCacheScopeKey(
@@ -806,18 +786,15 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
+    expect(
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
+      findsNothing,
     );
-
-    expect(find.text('Cached AI insight'), findsOneWidget);
+    expect(find.text('AI recommends this now'), findsOneWidget);
     expect(find.text('Bootstrap cached AI result.'), findsWidgets);
   });
 
-  testWidgets('Chat task hub banner shows live ai source label',
+  testWidgets('Chat task hub banner keeps live ai source label hidden',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -876,14 +853,11 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
+    expect(
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
+      findsNothing,
     );
-
-    expect(find.text('Live AI insight'), findsOneWidget);
+    expect(find.text('AI recommends this now'), findsOneWidget);
     expect(find.text('Live AI result.'), findsWidgets);
   });
 
@@ -937,9 +911,9 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('task_hub_banner_primary_action')),
-      findsNothing,
+      findsOneWidget,
     );
-    expect(find.text('Start'), findsNothing);
+    expect(find.text('Start'), findsOneWidget);
   });
 }
 

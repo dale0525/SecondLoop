@@ -94,14 +94,7 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner_view_all')),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner_view_all')));
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
     await tester.pump();
     await _pumpUntilFound(tester, find.byType(TaskHubPage));
     await _pumpUntilFound(
@@ -158,14 +151,7 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner_view_all')),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner_view_all')));
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
     await tester.pump();
     await _pumpUntilFound(tester, find.byType(TaskHubPage));
     await _pumpUntilFound(

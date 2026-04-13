@@ -92,7 +92,8 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
         primaryAction != null &&
         widget.onQuickAction != null;
     final showOpenFocusAction = !widget.compact && widget.onOpenTodo != null;
-    final showNavigationActions = !compactCollapsed &&
+    final showNavigationActions = !widget.compact &&
+        !compactCollapsed &&
         primary != null &&
         (showOpenFocusAction || widget.onViewAll != null);
     final showOpenHubAction = !compactCollapsed && primary == null;
@@ -161,7 +162,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                 SizedBox(height: headerSpacing),
                 Text(
                   primary?.reasonText ?? _fallbackSubtitle(context),
-                  maxLines: widget.compact ? 2 : 3,
+                  maxLines: widget.compact ? 1 : 3,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,

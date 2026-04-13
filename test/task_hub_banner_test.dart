@@ -172,7 +172,7 @@ void main() {
     expect(find.byKey(const ValueKey('task_hub_banner_quick_pair')),
         findsOneWidget);
     expect(
-        find.byKey(const ValueKey('task_hub_banner_view_all')), findsOneWidget);
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
     expect(
         find.byKey(const ValueKey('task_hub_banner_open_focus')), findsNothing);
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
@@ -182,6 +182,50 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+  });
+
+  testWidgets('compact banner stays compact at narrow desktop widths',
+      (tester) async {
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'focus',
+          title: 'Fix billing bug before customer follow-up',
+          updatedAtMs: 10,
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+        ),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 420,
+                child: TaskHubBanner(
+                  snapshot: snapshot,
+                  compact: true,
+                  onViewAll: () {},
+                  onQuickAction: (_, __) async {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final bannerHeight =
+        tester.getSize(find.byKey(const ValueKey('task_hub_banner'))).height;
+
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
+    expect(bannerHeight, lessThan(150));
   });
 
   testWidgets('banner shows status and time quick actions for active focus',
