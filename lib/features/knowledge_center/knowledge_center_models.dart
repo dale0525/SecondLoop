@@ -104,7 +104,8 @@ KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
       .toList(growable: false);
 
   final pagesUsedInAnswersRecently = summaries
-      .where((page) => page.answerPolicy.defaultAllowed)
+      .where((page) =>
+          page.answerPolicy.defaultAllowed && page.lastUsedAtMs != null)
       .toList(growable: false)
     ..sort(_sortByLastUsedThenUpdated);
 

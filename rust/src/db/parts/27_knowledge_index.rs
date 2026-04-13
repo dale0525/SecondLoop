@@ -2035,8 +2035,7 @@ pub fn merge_knowledge_page_into(
     let merged_summary = merge_page_text(&target.current_summary, &source.current_summary);
     let merged_body = merge_page_text(&target.current_body, &source.current_body);
     let merged_confidence = target.confidence_level.max(source.confidence_level);
-    let merged_source_count =
-        i64::try_from(merged_source_document_ids.len()).unwrap_or(i64::MAX);
+    let merged_source_count = target.source_count.saturating_add(source.source_count);
     let merged_conflict_count = target.conflict_count.max(source.conflict_count);
     let merged_human_corrected = target.human_corrected || source.human_corrected;
     let merged_target_state = match target.state {
@@ -2044,7 +2043,13 @@ pub fn merge_knowledge_page_into(
         | crate::knowledge::KnowledgePageState::Removed => crate::knowledge::KnowledgePageState::Active,
         state => state,
     };
-    let merged_target_policy = crate::knowledge::state_default_answer_policy(merged_target_state);
+    let merged_target_allowed = match merged_target_state {
+        crate::knowledge::KnowledgePageState::Archived
+        | crate::knowledge::KnowledgePageState::Removed => false,
+        _ => target.answer_policy.default_allowed,
+    };
+    let merged_target_policy =
+        answer_policy_for_state_with_override(merged_target_state, merged_target_allowed);
 
     conn.execute(
         r#"UPDATE knowledge_pages

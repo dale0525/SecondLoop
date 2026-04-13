@@ -11,7 +11,6 @@ import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/knowledge/models.dart';
-import '../../src/rust/knowledge/pages.dart' as rust_knowledge_pages;
 import '../../ui/sl_markdown_style.dart';
 import '../actions/assistant_message_actions.dart';
 import '../attachments/attachment_deeplink.dart';
@@ -24,6 +23,7 @@ import 'chat_answer_evidence_models.dart';
 import 'chat_answer_evidence_parser.dart';
 import 'chat_answer_evidence_sheet.dart';
 import 'chat_markdown_link_handler.dart';
+import 'knowledge_page_memory_card_helpers.dart';
 import 'knowledge_document_deeplink.dart';
 import 'message_deeplink.dart';
 import 'chat_markdown_rich_rendering.dart';
@@ -225,14 +225,21 @@ class MessageViewerPage extends StatelessWidget {
     if (card.documentId.startsWith('page:') &&
         pagesBackend != null &&
         sessionKey != null) {
+      final currentDetail = await pagesBackend.getKnowledgePageDetail(
+        sessionKey,
+        pageId: card.documentId,
+      );
       final detail = await pagesBackend.correctKnowledgePage(
         sessionKey,
         pageId: card.documentId,
         title: title,
         summary: summary,
-        body: summary,
+        body: resolveKnowledgePageCorrectionBody(
+          existingBody: currentDetail.page.currentBody,
+          summary: summary,
+        ),
       );
-      return _memoryCardFromPageDetail(card, detail);
+      return knowledgePageMemoryCardFromDetail(card, detail);
     }
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     final viewerBackend =
@@ -276,7 +283,7 @@ class MessageViewerPage extends StatelessWidget {
         sessionKey,
         pageId: card.documentId,
       );
-      return _memoryCardFromPageDetail(card, detail);
+      return knowledgePageMemoryCardFromDetail(card, detail);
     }
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
@@ -308,30 +315,6 @@ class MessageViewerPage extends StatelessWidget {
       useForAskAi: document.memoryFeedback.useForAskAi,
       isDeleted: document.memoryFeedback.isDeleted,
       markedInaccurate: document.memoryFeedback.markedInaccurate,
-    );
-  }
-
-  ChatAnswerEvidenceMemoryCard _memoryCardFromPageDetail(
-    ChatAnswerEvidenceMemoryCard card,
-    rust_knowledge_pages.KnowledgePageDetail detail,
-  ) {
-    final page = detail.page;
-    final status = page.humanCorrected
-        ? KnowledgeMemoryStatus.confirmed.name
-        : (page.state == rust_knowledge_pages.KnowledgePageState.outdated
-            ? KnowledgeMemoryStatus.maybeOutdated.name
-            : KnowledgeMemoryStatus.inferred.name);
-    return card.copyWith(
-      title: page.title,
-      summary: page.currentSummary,
-      body: page.currentBody,
-      status: status,
-      sourceCount: page.sourceCount.toInt(),
-      updatedAtMs: page.updatedAtMs.toInt(),
-      useForAskAi: page.answerPolicy.defaultAllowed,
-      isDeleted: page.state == rust_knowledge_pages.KnowledgePageState.removed,
-      markedInaccurate:
-          page.state == rust_knowledge_pages.KnowledgePageState.needsReview,
     );
   }
 

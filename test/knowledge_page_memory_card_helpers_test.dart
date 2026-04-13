@@ -1,0 +1,79 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:secondloop/features/chat/chat_answer_evidence_models.dart';
+import 'package:secondloop/features/chat/knowledge_page_memory_card_helpers.dart';
+import 'package:secondloop/src/rust/knowledge/pages.dart';
+
+void main() {
+  test('resolveKnowledgePageCorrectionBody preserves the existing body', () {
+    final resolved = resolveKnowledgePageCorrectionBody(
+      existingBody: 'Keep the long-form details.',
+      summary: 'Short updated summary.',
+    );
+
+    expect(resolved, 'Keep the long-form details.');
+  });
+
+  test('resolveKnowledgePageCorrectionBody falls back to summary when empty',
+      () {
+    final resolved = resolveKnowledgePageCorrectionBody(
+      existingBody: '   ',
+      summary: 'Short updated summary.',
+    );
+
+    expect(resolved, 'Short updated summary.');
+  });
+
+  test('memory card conversion keeps body and muted state from knowledge page',
+      () {
+    const card = ChatAnswerEvidenceMemoryCard(
+      documentId: 'page:preferences',
+      title: 'Old title',
+      summary: 'Old summary',
+      body: 'Old body',
+      sourceKind: 'summary',
+      role: 'summary',
+      createdAtMs: 1,
+      updatedAtMs: 2,
+      status: 'inferred',
+      sourceCount: 1,
+      whyUsed: 'Because it matched',
+    );
+    const detail = KnowledgePageDetail(
+      page: KnowledgePage(
+        pageId: 'page:preferences',
+        pageType: KnowledgePageType.preferences,
+        title: 'Preferences',
+        currentSummary: 'Reply in Chinese.',
+        currentBody: 'Reply in Chinese.\nKeep it concise.',
+        state: KnowledgePageState.needsReview,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: false,
+          requiresTemporalFraming: false,
+        ),
+        confidenceLevel: 0.9,
+        createdAtMs: 1,
+        updatedAtMs: 5,
+        lastUsedAtMs: 4,
+        sourceCount: 3,
+        conflictCount: 1,
+        humanCorrected: false,
+        tags: [],
+        primaryEvidenceIds: [],
+        relatedPageIds: [],
+      ),
+      sourceDocumentIds: [],
+      claimIds: [],
+      history: [],
+      versionSnapshots: [],
+      evidenceEntries: [],
+      lintRecords: [],
+    );
+
+    final updated = knowledgePageMemoryCardFromDetail(card, detail);
+
+    expect(updated.body, 'Reply in Chinese.\nKeep it concise.');
+    expect(updated.useForAskAi, isFalse);
+    expect(updated.markedInaccurate, isTrue);
+  });
+}

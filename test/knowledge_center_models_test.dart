@@ -60,4 +60,57 @@ void main() {
           'page:about-me',
         ]));
   });
+
+  test(
+      'buildKnowledgeCenterHomeData only lists pages used in answers recently when they were actually used',
+      () {
+    final summaries = <KnowledgePageSummary>[
+      const KnowledgePageSummary(
+        pageId: 'page:preferences',
+        pageType: KnowledgePageType.preferences,
+        title: 'Preferences',
+        currentSummary: 'Reply in Chinese.',
+        state: KnowledgePageState.active,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: true,
+          requiresTemporalFraming: false,
+        ),
+        updatedAtMs: 10,
+        lastUsedAtMs: 10,
+        sourceCount: 2,
+        conflictCount: 0,
+        humanCorrected: false,
+        tags: [],
+        primaryEvidenceIds: [],
+      ),
+      const KnowledgePageSummary(
+        pageId: 'page:topics',
+        pageType: KnowledgePageType.topics,
+        title: 'Topics',
+        currentSummary: 'Potentially useful later.',
+        state: KnowledgePageState.active,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: true,
+          requiresTemporalFraming: false,
+        ),
+        updatedAtMs: 9,
+        lastUsedAtMs: null,
+        sourceCount: 2,
+        conflictCount: 0,
+        humanCorrected: false,
+        tags: [],
+        primaryEvidenceIds: [],
+      ),
+    ];
+
+    final data = buildKnowledgeCenterHomeData(
+      summaries: summaries,
+      recentChangeRecords: const <KnowledgePageChangeRecord>[],
+    );
+
+    expect(
+      data.systemActivity.pagesUsedInAnswersRecently.map((page) => page.pageId),
+      <String>['page:preferences'],
+    );
+  });
 }

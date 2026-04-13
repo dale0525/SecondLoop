@@ -128,6 +128,7 @@ import 'semantic_parse_job_status_row.dart';
 import 'attachment_annotation_job_status_row.dart';
 import 'audio_recording_recovery_snapshot.dart';
 import 'audio_recording_recovery_store.dart';
+import 'knowledge_page_memory_card_helpers.dart';
 
 part 'chat_page_methods_a.dart';
 part 'chat_page_methods_b.dart';
@@ -150,6 +151,7 @@ part 'chat_page_methods_m_ask_scope_empty_card.dart';
 part 'chat_page_methods_n_detached_snapshot.dart';
 part 'chat_page_methods_p_ask_ai_meta.dart';
 part 'chat_page_methods_o_focus_routing.dart';
+part 'chat_page_methods_q_knowledge_page_evidence.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_message_item_footer.dart';
