@@ -2,6 +2,31 @@ import '../../src/rust/knowledge/models.dart';
 import '../../src/rust/knowledge/pages.dart';
 import 'chat_answer_evidence_models.dart';
 
+bool isKnowledgePageDocumentId(String documentId) {
+  return documentId.trim().startsWith('page:');
+}
+
+bool canOpenEvidenceMemoryCard(
+  String documentId, {
+  required bool hasPagesBackend,
+  required bool hasViewerBackend,
+}) {
+  return isKnowledgePageDocumentId(documentId)
+      ? hasPagesBackend
+      : hasViewerBackend;
+}
+
+bool canMutateEvidenceMemoryCard(
+  String documentId, {
+  required bool hasPagesBackend,
+  required bool hasKnowledgeBackend,
+  required bool hasViewerBackend,
+}) {
+  return isKnowledgePageDocumentId(documentId)
+      ? hasPagesBackend
+      : (hasKnowledgeBackend && hasViewerBackend);
+}
+
 String resolveKnowledgePageCorrectionBody({
   required String? existingBody,
   required String summary,

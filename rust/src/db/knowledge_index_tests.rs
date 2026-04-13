@@ -387,3 +387,105 @@ fn merge_knowledge_page_into_preserves_combined_source_count() {
         .expect("target detail after merge");
     assert_eq!(target_detail.page.source_count, 7);
 }
+
+#[test]
+fn merge_knowledge_page_into_preserves_manual_content_and_provenance_on_recompile() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [76u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut target_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:target",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Target Topic",
+        now,
+    );
+    target_page.current_summary = "Target summary".to_string();
+    target_page.current_body = "Target detail".to_string();
+    target_page.primary_evidence_ids = vec!["doc:target".to_string()];
+    target_page.source_count = 4;
+
+    let mut source_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:source",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Source Topic",
+        now + 1,
+    );
+    source_page.current_summary = "Source summary".to_string();
+    source_page.current_body = "Source detail".to_string();
+    source_page.primary_evidence_ids = vec!["doc:source".to_string()];
+    source_page.source_count = 3;
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: target_page,
+                source_document_ids: vec!["doc:target".to_string()],
+                claim_ids: vec!["claim:target".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: source_page,
+                source_document_ids: vec!["doc:source".to_string()],
+                claim_ids: vec!["claim:source".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    merge_knowledge_page_into(
+        &conn,
+        &key,
+        "page:topics:source",
+        "page:topics:target",
+        None,
+    )
+    .expect("merge knowledge page");
+
+    let mut recompiled_target_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:target",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Target Topic",
+        now + 100,
+    );
+    recompiled_target_page.current_summary = "Fresh compiled target summary".to_string();
+    recompiled_target_page.current_body = "Fresh compiled target detail".to_string();
+    recompiled_target_page.primary_evidence_ids = vec!["doc:target:new".to_string()];
+    recompiled_target_page.source_count = 2;
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page: recompiled_target_page,
+            source_document_ids: vec!["doc:target:new".to_string()],
+            claim_ids: vec!["claim:target:new".to_string()],
+        }],
+    )
+    .expect("recompile target");
+
+    let target_detail = get_knowledge_page_detail(&conn, &key, "page:topics:target")
+        .expect("load target detail")
+        .expect("target detail after recompile");
+    assert!(target_detail
+        .page
+        .current_summary
+        .contains("Target summary"));
+    assert!(target_detail
+        .page
+        .current_summary
+        .contains("Source summary"));
+    assert!(target_detail.page.current_body.contains("Target detail"));
+    assert!(target_detail.page.current_body.contains("Source detail"));
+    assert_eq!(target_detail.page.source_count, 7);
+    assert!(target_detail
+        .source_document_ids
+        .iter()
+        .any(|document_id| document_id == "doc:source"));
+    assert!(target_detail
+        .claim_ids
+        .iter()
+        .any(|claim_id| claim_id == "claim:source"));
+}

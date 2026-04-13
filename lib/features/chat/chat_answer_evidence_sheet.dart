@@ -18,17 +18,21 @@ Future<void> showChatAnswerEvidenceSheet(
   String? highlightedHref,
   required Future<void> Function(String href) onOpenDirectSource,
   Future<void> Function(String documentId)? onOpenMemoryCard,
+  bool Function(String documentId)? canOpenMemoryCard,
   bool Function(String href)? canOpenDirectSource,
   Future<ChatAnswerEvidenceMemoryCard?> Function(
     ChatAnswerEvidenceMemoryCard card,
     String title,
     String summary,
   )? onCorrectMemoryCard,
+  bool Function(String documentId)? canCorrectMemoryCard,
   Future<ChatAnswerEvidenceMemoryCard?> Function(
     ChatAnswerEvidenceMemoryCard card,
   )? onRefreshMemoryCard,
   Future<void> Function(String documentId)? onDisableMemoryCard,
+  bool Function(String documentId)? canDisableMemoryCard,
   Future<void> Function(String documentId)? onDeleteMemoryCard,
+  bool Function(String documentId)? canDeleteMemoryCard,
 }) {
   final isWide = MediaQuery.sizeOf(context).width >= 960;
   final child = ChatAnswerEvidencePanel(
@@ -37,11 +41,15 @@ Future<void> showChatAnswerEvidenceSheet(
     highlightedHref: highlightedHref,
     onOpenDirectSource: onOpenDirectSource,
     onOpenMemoryCard: onOpenMemoryCard,
+    canOpenMemoryCard: canOpenMemoryCard,
     canOpenDirectSource: canOpenDirectSource,
     onCorrectMemoryCard: onCorrectMemoryCard,
+    canCorrectMemoryCard: canCorrectMemoryCard,
     onRefreshMemoryCard: onRefreshMemoryCard,
     onDisableMemoryCard: onDisableMemoryCard,
+    canDisableMemoryCard: canDisableMemoryCard,
     onDeleteMemoryCard: onDeleteMemoryCard,
+    canDeleteMemoryCard: canDeleteMemoryCard,
   );
 
   if (!isWide) {
@@ -93,11 +101,15 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
     required this.initialTab,
     required this.onOpenDirectSource,
     this.onOpenMemoryCard,
+    this.canOpenMemoryCard,
     this.canOpenDirectSource,
     this.onCorrectMemoryCard,
+    this.canCorrectMemoryCard,
     this.onRefreshMemoryCard,
     this.onDisableMemoryCard,
+    this.canDisableMemoryCard,
     this.onDeleteMemoryCard,
+    this.canDeleteMemoryCard,
     this.highlightedHref,
     super.key,
   });
@@ -107,17 +119,21 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
   final String? highlightedHref;
   final Future<void> Function(String href) onOpenDirectSource;
   final Future<void> Function(String documentId)? onOpenMemoryCard;
+  final bool Function(String documentId)? canOpenMemoryCard;
   final bool Function(String href)? canOpenDirectSource;
   final Future<ChatAnswerEvidenceMemoryCard?> Function(
     ChatAnswerEvidenceMemoryCard card,
     String title,
     String summary,
   )? onCorrectMemoryCard;
+  final bool Function(String documentId)? canCorrectMemoryCard;
   final Future<ChatAnswerEvidenceMemoryCard?> Function(
     ChatAnswerEvidenceMemoryCard card,
   )? onRefreshMemoryCard;
   final Future<void> Function(String documentId)? onDisableMemoryCard;
+  final bool Function(String documentId)? canDisableMemoryCard;
   final Future<void> Function(String documentId)? onDeleteMemoryCard;
+  final bool Function(String documentId)? canDeleteMemoryCard;
 
   @override
   State<ChatAnswerEvidencePanel> createState() =>
@@ -242,6 +258,22 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                       final whyUsed = item.whyUsed?.trim() ?? '';
                       final isDisabled = !item.useForAskAi;
                       final isDeleted = item.isDeleted;
+                      final canOpenMemoryCard = widget.onOpenMemoryCard !=
+                              null &&
+                          (widget.canOpenMemoryCard?.call(item.documentId) ??
+                              true);
+                      final canCorrectMemoryCard = widget.onCorrectMemoryCard !=
+                              null &&
+                          (widget.canCorrectMemoryCard?.call(item.documentId) ??
+                              true);
+                      final canDisableMemoryCard = widget.onDisableMemoryCard !=
+                              null &&
+                          (widget.canDisableMemoryCard?.call(item.documentId) ??
+                              true);
+                      final canDeleteMemoryCard = widget.onDeleteMemoryCard !=
+                              null &&
+                          (widget.canDeleteMemoryCard?.call(item.documentId) ??
+                              true);
                       return SlSurface(
                         padding: const EdgeInsets.all(12),
                         child: Column(
@@ -311,7 +343,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                if (widget.onOpenMemoryCard != null)
+                                if (canOpenMemoryCard)
                                   TextButton(
                                     onPressed: () => widget.onOpenMemoryCard!(
                                       item.documentId,
@@ -321,8 +353,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                           .inspectMemory,
                                     ),
                                   ),
-                                if (widget.onOpenMemoryCard != null &&
-                                    widget.onCorrectMemoryCard != null)
+                                if (canOpenMemoryCard && canCorrectMemoryCard)
                                   TextButton(
                                     onPressed: () async {
                                       final draft =
@@ -358,8 +389,8 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                           .correct,
                                     ),
                                   ),
-                                if (widget.onOpenMemoryCard != null &&
-                                    widget.onDisableMemoryCard != null &&
+                                if (canOpenMemoryCard &&
+                                    canDisableMemoryCard &&
                                     !isDeleted)
                                   TextButton(
                                     onPressed: isDisabled
@@ -388,8 +419,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                           .dontUse,
                                     ),
                                   ),
-                                if (widget.onOpenMemoryCard != null &&
-                                    widget.onDeleteMemoryCard != null)
+                                if (canOpenMemoryCard && canDeleteMemoryCard)
                                   TextButton(
                                     onPressed: isDeleted
                                         ? null

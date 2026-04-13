@@ -67,9 +67,17 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
     final relatedPages = allSummaries
         .where((page) => detail.page.relatedPageIds.contains(page.pageId))
         .toList(growable: false);
+    final mergeCandidates = allSummaries
+        .where((page) =>
+            page.pageId != detail.page.pageId &&
+            page.pageType == detail.page.pageType &&
+            page.state != KnowledgePageState.archived &&
+            page.state != KnowledgePageState.removed)
+        .toList(growable: false);
     return _KnowledgePageDetailViewData(
       detail: detail,
       relatedPages: relatedPages,
+      mergeCandidates: mergeCandidates,
     );
   }
 
@@ -184,8 +192,8 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
           ),
         );
       case KnowledgePageOverflowAction.merge:
-        if (data.relatedPages.isEmpty) return;
-        final targetPage = await _chooseMergeTarget(data.relatedPages);
+        if (data.mergeCandidates.isEmpty) return;
+        final targetPage = await _chooseMergeTarget(data.mergeCandidates);
         if (targetPage == null || !mounted) return;
         await _runMutation(
           () => _pagesBackend().mergeKnowledgePageInto(
@@ -270,7 +278,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
                     : () async {
                         final action = await showKnowledgePageActionsSheet(
                           context,
-                          canMerge: data.relatedPages.isNotEmpty,
+                          canMerge: data.mergeCandidates.isNotEmpty,
                         );
                         if (action == null || !mounted) return;
                         await _handleOverflowAction(action, data);
@@ -668,10 +676,12 @@ class _KnowledgePageDetailViewData {
   const _KnowledgePageDetailViewData({
     required this.detail,
     required this.relatedPages,
+    required this.mergeCandidates,
   });
 
   final KnowledgePageDetail detail;
   final List<KnowledgePageSummary> relatedPages;
+  final List<KnowledgePageSummary> mergeCandidates;
 }
 
 class _DetailSection extends StatelessWidget {

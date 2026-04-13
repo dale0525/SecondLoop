@@ -429,33 +429,60 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final backend = AppBackendScope.of(context);
     final viewerBackend = maybeKnowledgeViewerBackendFor(backend);
     final knowledgeBackend = maybeKnowledgeBackendFor(backend);
-    final openMemoryCard = viewerBackend == null
-        ? null
-        : (String documentId) => MemoryDetailPage.openDocumentId(
-              context,
-              documentId: documentId,
-            );
-    final correctMemoryCard = knowledgeBackend == null || viewerBackend == null
-        ? null
-        : (
-            ChatAnswerEvidenceMemoryCard card,
-            String title,
-            String summary,
-          ) =>
-            _correctMemoryFromEvidence(
-              card,
-              title: title,
-              summary: summary,
-            );
-    final refreshMemoryCard = knowledgeBackend == null || viewerBackend == null
-        ? null
-        : _refreshMemoryFromEvidence;
-    final disableMemoryCard = knowledgeBackend == null || viewerBackend == null
-        ? null
-        : (String documentId) => _disableMemoryFromEvidence(documentId);
-    final deleteMemoryCard = knowledgeBackend == null || viewerBackend == null
-        ? null
-        : (String documentId) => _deleteMemoryFromEvidence(documentId);
+    final pagesBackend = maybeKnowledgePagesBackendFor(backend);
+    final hasPagesBackend = pagesBackend != null;
+    final hasViewerBackend = viewerBackend != null;
+    final hasKnowledgeBackend = knowledgeBackend != null;
+    Future<void> openMemoryCard(String documentId) {
+      return MemoryDetailPage.openDocumentId(
+        context,
+        documentId: documentId,
+      );
+    }
+
+    bool canOpenMemoryCard(String documentId) {
+      return canOpenEvidenceMemoryCard(
+        documentId,
+        hasPagesBackend: hasPagesBackend,
+        hasViewerBackend: hasViewerBackend,
+      );
+    }
+
+    Future<ChatAnswerEvidenceMemoryCard?> correctMemoryCard(
+      ChatAnswerEvidenceMemoryCard card,
+      String title,
+      String summary,
+    ) {
+      return _correctMemoryFromEvidence(
+        card,
+        title: title,
+        summary: summary,
+      );
+    }
+
+    bool canMutateMemoryCard(String documentId) {
+      return canMutateEvidenceMemoryCard(
+        documentId,
+        hasPagesBackend: hasPagesBackend,
+        hasKnowledgeBackend: hasKnowledgeBackend,
+        hasViewerBackend: hasViewerBackend,
+      );
+    }
+
+    Future<ChatAnswerEvidenceMemoryCard?> refreshMemoryCard(
+      ChatAnswerEvidenceMemoryCard card,
+    ) {
+      return _refreshMemoryFromEvidence(card);
+    }
+
+    Future<void> disableMemoryCard(String documentId) {
+      return _disableMemoryFromEvidence(documentId);
+    }
+
+    Future<void> deleteMemoryCard(String documentId) {
+      return _deleteMemoryFromEvidence(documentId);
+    }
+
     final citationController = ChatAnswerCitationController(
       parseChatAnswerEvidence(citationsJson),
     );
@@ -472,10 +499,14 @@ extension _ChatPageStateMethodsA on _ChatPageState {
             await _handleMarkdownInAppLink(target);
           },
           onOpenMemoryCard: openMemoryCard,
+          canOpenMemoryCard: canOpenMemoryCard,
           onCorrectMemoryCard: correctMemoryCard,
+          canCorrectMemoryCard: canMutateMemoryCard,
           onRefreshMemoryCard: refreshMemoryCard,
           onDisableMemoryCard: disableMemoryCard,
+          canDisableMemoryCard: canMutateMemoryCard,
           onDeleteMemoryCard: deleteMemoryCard,
+          canDeleteMemoryCard: canMutateMemoryCard,
         );
         if (handledCitation) {
           return;

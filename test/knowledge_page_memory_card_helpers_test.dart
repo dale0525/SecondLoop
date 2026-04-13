@@ -76,4 +76,44 @@ void main() {
     expect(updated.useForAskAi, isFalse);
     expect(updated.markedInaccurate, isTrue);
   });
+
+  test('page memory cards can open without a viewer backend', () {
+    expect(
+      canOpenEvidenceMemoryCard(
+        'page:preferences',
+        hasPagesBackend: true,
+        hasViewerBackend: false,
+      ),
+      isTrue,
+    );
+    expect(
+      canOpenEvidenceMemoryCard(
+        'generated:preference:response-language',
+        hasPagesBackend: true,
+        hasViewerBackend: false,
+      ),
+      isFalse,
+    );
+  });
+
+  test('page memory cards can mutate without knowledge or viewer backends', () {
+    expect(
+      canMutateEvidenceMemoryCard(
+        'page:preferences',
+        hasPagesBackend: true,
+        hasKnowledgeBackend: false,
+        hasViewerBackend: false,
+      ),
+      isTrue,
+    );
+    expect(
+      canMutateEvidenceMemoryCard(
+        'generated:preference:response-language',
+        hasPagesBackend: true,
+        hasKnowledgeBackend: false,
+        hasViewerBackend: false,
+      ),
+      isFalse,
+    );
+  });
 }

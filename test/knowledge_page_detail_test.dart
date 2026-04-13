@@ -85,10 +85,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Merge Pages'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Recent Events'));
+    expect(find.text('Recent Events'), findsNothing);
+    expect(find.text('About Me'), findsNothing);
+    await tester.tap(find.text('Preferences (Archive)'));
     await tester.pumpAndSettle();
 
-    expect(backend.mergedTargetPageId, 'page:recent-events');
+    expect(backend.mergedTargetPageId, 'page:preferences:archive');
   });
 
   testWidgets('KnowledgePageDetailPage shows final governance sections',
@@ -340,6 +342,24 @@ final class _MutableKnowledgePageDetailBackendStub extends TestAppBackend
     Uint8List key,
   ) async =>
       const [
+        KnowledgePageSummary(
+          pageId: 'page:preferences:archive',
+          pageType: KnowledgePageType.preferences,
+          title: 'Preferences (Archive)',
+          currentSummary: 'Historic preferences.',
+          state: KnowledgePageState.active,
+          answerPolicy: KnowledgeAnswerPolicy(
+            defaultAllowed: true,
+            requiresTemporalFraming: false,
+          ),
+          updatedAtMs: 1,
+          lastUsedAtMs: 1,
+          sourceCount: 1,
+          conflictCount: 0,
+          humanCorrected: false,
+          tags: [],
+          primaryEvidenceIds: [],
+        ),
         KnowledgePageSummary(
           pageId: 'page:about-me',
           pageType: KnowledgePageType.aboutMe,

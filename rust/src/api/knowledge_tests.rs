@@ -941,6 +941,17 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
         .version_snapshots
         .iter()
         .any(|snapshot| snapshot.title == "Preferences"));
+
+    let cleared_body = crate::api::knowledge::db_correct_knowledge_page(
+        app_dir.to_string_lossy().into_owned(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+        None,
+        Some("Always answer in Chinese first.".to_string()),
+        Some(String::new()),
+    )
+    .expect("clear body");
+    assert_eq!(cleared_body.page.current_body, "");
 }
 
 #[test]
@@ -1193,6 +1204,68 @@ fn merge_knowledge_page_into_combines_target_content_and_archives_source() {
             .and_then(|item| item.reason.as_deref()),
         Some("Merged content and provenance from page:topics:source.")
     );
+}
+
+#[test]
+fn merge_knowledge_page_into_rejects_different_page_types() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [38u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut target_page = crate::knowledge::KnowledgePage::new(
+        "page:about-me",
+        crate::knowledge::KnowledgePageType::AboutMe,
+        "About Me",
+        now,
+    );
+    target_page.current_summary = "Identity summary".to_string();
+    target_page.current_body = "Identity detail".to_string();
+    target_page.primary_evidence_ids = vec!["doc:about".to_string()];
+    target_page.source_count = 1;
+
+    let mut source_page = crate::knowledge::KnowledgePage::new(
+        "page:preferences",
+        crate::knowledge::KnowledgePageType::Preferences,
+        "Preferences",
+        now + 1,
+    );
+    source_page.current_summary = "Preference summary".to_string();
+    source_page.current_body = "Preference detail".to_string();
+    source_page.primary_evidence_ids = vec!["doc:preferences".to_string()];
+    source_page.source_count = 1;
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: target_page,
+                source_document_ids: vec!["doc:about".to_string()],
+                claim_ids: vec!["claim:about".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: source_page,
+                source_document_ids: vec!["doc:preferences".to_string()],
+                claim_ids: vec!["claim:preferences".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    let error = crate::api::knowledge::db_merge_knowledge_page_into(
+        app_dir_string,
+        key.to_vec(),
+        "page:preferences".to_string(),
+        "page:about-me".to_string(),
+        None,
+    )
+    .expect_err("merge should reject different page types");
+    assert!(error
+        .to_string()
+        .contains("knowledge pages can only be merged within the same page type"));
 }
 
 #[test]
