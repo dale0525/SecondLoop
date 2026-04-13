@@ -54,6 +54,7 @@ class KnowledgeSystemActivityData {
 KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
   required List<KnowledgePageSummary> summaries,
   required List<KnowledgePageChangeRecord> recentChangeRecords,
+  Map<String, KnowledgePageSummary> recentChangePagesById = const {},
 }) {
   final currentMeTypes = <KnowledgePageType>{
     KnowledgePageType.aboutMe,
@@ -82,7 +83,8 @@ KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
   };
   final recentChanges = recentChangeRecords
       .map((record) {
-        final page = summariesByPageId[record.pageId];
+        final page = summariesByPageId[record.pageId] ??
+            recentChangePagesById[record.pageId];
         if (page == null) return null;
         return KnowledgeRecentChangeItem(page: page, record: record);
       })

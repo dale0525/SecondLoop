@@ -31,6 +31,7 @@ fn default_knowledge_memory_feedback() -> crate::knowledge::KnowledgeMemoryFeedb
 }
 
 const MERGED_PROVENANCE_TAG: &str = "system:merged-provenance";
+const MANUAL_REMOVED_TAG: &str = "user:manual-removed";
 
 fn normalize_optional_trimmed(value: Option<String>) -> Option<String> {
     value.and_then(|raw| {
@@ -1460,7 +1461,13 @@ pub(crate) fn upsert_compiled_knowledge_pages(
                 .as_ref()
                 .map(|row| stored_row_to_page(key, row))
                 .transpose()?;
+            let preserve_manual_removed = existing
+                .as_ref()
+                .is_some_and(|row| row.tags.iter().any(|tag| tag == MANUAL_REMOVED_TAG));
             let preserved_state = match existing.as_ref().map(|row| row.state) {
+                Some(crate::knowledge::KnowledgePageState::Removed) if preserve_manual_removed => {
+                    crate::knowledge::KnowledgePageState::Removed
+                }
                 Some(crate::knowledge::KnowledgePageState::Removed) | None => item.page.state,
                 Some(state) => state,
             };
@@ -1492,7 +1499,7 @@ pub(crate) fn upsert_compiled_knowledge_pages(
             let preserve_merged_provenance = existing
                 .as_ref()
                 .is_some_and(|row| row.tags.iter().any(|tag| tag == MERGED_PROVENANCE_TAG));
-            let tags = if preserve_merged_provenance {
+            let tags = if preserve_merged_provenance || preserve_manual_removed {
                 normalize_knowledge_string_set(
                     &existing
                         .as_ref()
@@ -2323,16 +2330,31 @@ fn set_knowledge_page_state(
     note: Option<String>,
 ) -> Result<crate::knowledge::KnowledgePageDetail> {
     let now = now_ms();
-    let Some(_detail) = get_knowledge_page_detail(conn, key, page_id)? else {
+    let Some(detail) = get_knowledge_page_detail(conn, key, page_id)? else {
         return Err(anyhow!("knowledge page not found: {page_id}"));
     };
     let next_policy = crate::knowledge::state_default_answer_policy(next_state);
+    let mut next_tags = detail
+        .page
+        .tags
+        .iter()
+        .filter(|tag| tag.as_str() != MANUAL_REMOVED_TAG)
+        .cloned()
+        .collect::<Vec<_>>();
+    if next_state == crate::knowledge::KnowledgePageState::Removed {
+        next_tags.push(MANUAL_REMOVED_TAG.to_string());
+    }
+    let next_tags = normalize_knowledge_string_set(
+        &next_tags,
+        32,
+    );
     conn.execute(
         r#"UPDATE knowledge_pages
            SET state = ?2,
                answer_default_allowed = ?3,
                answer_requires_temporal_framing = ?4,
-               updated_at_ms = ?5
+               updated_at_ms = ?5,
+               tags_json = ?6
            WHERE page_id = ?1"#,
         params![
             page_id,
@@ -2340,6 +2362,7 @@ fn set_knowledge_page_state(
             if next_policy.default_allowed { 1 } else { 0 },
             if next_policy.requires_temporal_framing { 1 } else { 0 },
             now,
+            encode_string_list(&next_tags)?,
         ],
     )?;
     record_knowledge_page_change(

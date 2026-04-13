@@ -44,11 +44,26 @@ class _KnowledgeCenterPageState extends State<KnowledgeCenterPage> {
       sessionKey,
       limit: 8,
     );
+    final summariesByPageId = {
+      for (final page in summaries) page.pageId: page,
+    };
+    final recentChangePagesById = <String, KnowledgePageSummary>{};
+    for (final record in recentChangeRecords) {
+      if (summariesByPageId.containsKey(record.pageId)) {
+        continue;
+      }
+      final detail = await backend.getKnowledgePageDetail(
+        sessionKey,
+        pageId: record.pageId,
+      );
+      recentChangePagesById[record.pageId] = _summaryFromDetail(detail);
+    }
     return _KnowledgeCenterViewData(
       summaries: summaries,
       homeData: buildKnowledgeCenterHomeData(
         summaries: summaries,
         recentChangeRecords: recentChangeRecords,
+        recentChangePagesById: recentChangePagesById,
       ),
     );
   }
@@ -206,6 +221,25 @@ class _KnowledgeCenterViewData {
   final KnowledgeCenterHomeData homeData;
 }
 
+KnowledgePageSummary _summaryFromDetail(KnowledgePageDetail detail) {
+  final page = detail.page;
+  return KnowledgePageSummary(
+    pageId: page.pageId,
+    pageType: page.pageType,
+    title: page.title,
+    currentSummary: page.currentSummary,
+    state: page.state,
+    answerPolicy: page.answerPolicy,
+    updatedAtMs: page.updatedAtMs,
+    lastUsedAtMs: page.lastUsedAtMs,
+    sourceCount: page.sourceCount,
+    conflictCount: page.conflictCount,
+    humanCorrected: page.humanCorrected,
+    tags: page.tags,
+    primaryEvidenceIds: page.primaryEvidenceIds,
+  );
+}
+
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title});
 
@@ -337,13 +371,47 @@ class _DirectoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final leadPage = entry.pages.first;
     return SlSurface(
       child: ListTile(
         title: Text(knowledgePageTypeLabel(context.t, entry.pageType)),
         subtitle: Text(knowledgeDirectorySubtitle(context.t, entry)),
         trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: () => onOpen(leadPage),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => _KnowledgeDirectoryListPage(
+              entry: entry,
+              onOpen: onOpen,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KnowledgeDirectoryListPage extends StatelessWidget {
+  const _KnowledgeDirectoryListPage({
+    required this.entry,
+    required this.onOpen,
+  });
+
+  final KnowledgeDirectoryEntry entry;
+  final Future<void> Function(KnowledgePageSummary page) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(knowledgePageTypeLabel(context.t, entry.pageType)),
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemBuilder: (context, index) => _PageTile(
+          page: entry.pages[index],
+          onOpen: onOpen,
+        ),
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemCount: entry.pages.length,
       ),
     );
   }

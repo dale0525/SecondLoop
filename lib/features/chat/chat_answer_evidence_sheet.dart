@@ -258,6 +258,8 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                       final whyUsed = item.whyUsed?.trim() ?? '';
                       final isDisabled = !item.useForAskAi;
                       final isDeleted = item.isDeleted;
+                      final isKnowledgePage =
+                          item.documentId.startsWith('page:');
                       final canOpenMemoryCard = widget.onOpenMemoryCard !=
                               null &&
                           (widget.canOpenMemoryCard?.call(item.documentId) ??
@@ -443,8 +445,11 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                             });
                                           },
                                     child: Text(
-                                      context.t.chat.answerEvidence.actions
-                                          .deleteMemory,
+                                      isKnowledgePage
+                                          ? context.t.memory.actions
+                                              .permanentlyRemove
+                                          : context.t.chat.answerEvidence
+                                              .actions.deleteMemory,
                                     ),
                                   ),
                               ],

@@ -39,7 +39,7 @@ extension _ChatPageStateKnowledgePageEvidence on _ChatPageState {
         maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
     final sessionKey = SessionScope.of(context).sessionKey;
     if (documentId.startsWith('page:') && pagesBackend != null) {
-      await pagesBackend.archiveKnowledgePage(
+      await pagesBackend.removeKnowledgePage(
         sessionKey,
         pageId: documentId,
       );

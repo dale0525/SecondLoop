@@ -186,7 +186,7 @@ class MessageViewerPage extends StatelessWidget {
     if (documentId.startsWith('page:') &&
         pagesBackend != null &&
         sessionKey != null) {
-      await pagesBackend.archiveKnowledgePage(
+      await pagesBackend.removeKnowledgePage(
         sessionKey,
         pageId: documentId,
       );

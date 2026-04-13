@@ -67,6 +67,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(backend.lastMutedPageId, 'page:preferences');
 
+    await tester.tap(find.text('Permanently Remove'));
+    await tester.pumpAndSettle();
+    expect(backend.lastRemovedPageId, 'page:preferences');
+
     await tester.tap(find.text('Inspect page'));
     await tester.pumpAndSettle();
     expect(find.text('Current conclusion'), findsOneWidget);
@@ -76,6 +80,7 @@ void main() {
 final class _PageOnlyEvidenceBackend extends TestAppBackend
     implements KnowledgePagesBackend {
   String? lastMutedPageId;
+  String? lastRemovedPageId;
 
   @override
   Future<List<KnowledgePageSummary>> listKnowledgePageSummaries(
@@ -163,8 +168,10 @@ final class _PageOnlyEvidenceBackend extends TestAppBackend
     Uint8List key, {
     required String pageId,
     String? note,
-  }) async =>
-      _detail();
+  }) async {
+    lastRemovedPageId = pageId;
+    return _detail();
+  }
 
   @override
   Future<KnowledgePageDetail> mergeKnowledgePageInto(

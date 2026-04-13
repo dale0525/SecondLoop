@@ -1008,6 +1008,63 @@ fn repeated_page_reads_do_not_append_recompile_history_after_manual_correction()
 }
 
 #[test]
+fn removed_page_stays_removed_across_refresh_reads() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [43u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("seed preference");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let removed = crate::api::knowledge::db_remove_knowledge_page(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+        Some("User explicitly removed this page.".to_string()),
+    )
+    .expect("remove page");
+    assert_eq!(
+        removed.page.state,
+        crate::knowledge::KnowledgePageState::Removed
+    );
+
+    let reread = crate::api::knowledge::db_get_knowledge_page_detail(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+    )
+    .expect("reread removed page");
+    assert_eq!(
+        reread.page.state,
+        crate::knowledge::KnowledgePageState::Removed
+    );
+    assert!(!reread.page.answer_policy.default_allowed);
+
+    let summaries =
+        crate::api::knowledge::db_list_knowledge_page_summaries(app_dir_string, key.to_vec())
+            .expect("list summaries");
+    assert!(
+        summaries
+            .iter()
+            .all(|page| page.page_id != "page:preferences"),
+        "removed page should stay hidden from summaries"
+    );
+}
+
+#[test]
 fn knowledge_page_detail_exposes_classified_evidence_entries() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

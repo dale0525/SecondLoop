@@ -167,6 +167,150 @@ void main() {
     expect(
         find.textContaining('Pages used in answers recently'), findsOneWidget);
   });
+
+  testWidgets(
+      'KnowledgeCenterPage keeps removed pages visible in recent changes',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _KnowledgeCenterBackendStub(
+      summaries: [
+        _summary(
+          pageId: 'page:about-me',
+          title: 'About Me',
+          pageType: KnowledgePageType.aboutMe,
+          state: KnowledgePageState.active,
+          updatedAtMs: nowMs,
+          lastUsedAtMs: nowMs,
+        ),
+      ],
+      details: {
+        'page:about-me': _detail(
+          pageId: 'page:about-me',
+          title: 'About Me',
+          pageType: KnowledgePageType.aboutMe,
+          state: KnowledgePageState.active,
+          summary: 'Stable identity details.',
+          updatedAtMs: nowMs,
+        ),
+        'page:preferences': _detail(
+          pageId: 'page:preferences',
+          title: 'Preferences',
+          pageType: KnowledgePageType.preferences,
+          state: KnowledgePageState.removed,
+          summary: 'Removed preference page.',
+          updatedAtMs: nowMs - 1000,
+        ),
+      },
+      recentChanges: [
+        KnowledgePageChangeRecord(
+          changeId: 'change:removed',
+          pageId: 'page:preferences',
+          changeType: KnowledgePageChangeType.removed,
+          actor: 'user',
+          reason: 'Removed because it should not be used.',
+          answerImpacted: true,
+          createdAtMs: nowMs,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 2)),
+              lock: () {},
+              child: const KnowledgeCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Recent Changes'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Preferences'), findsOneWidget);
+    expect(find.text('Removed because it should not be used.'), findsOneWidget);
+  });
+
+  testWidgets('KnowledgeCenterPage opens a directory list for page types',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _KnowledgeCenterBackendStub(
+      summaries: [
+        _summary(
+          pageId: 'page:topics:alpha',
+          title: 'Topic Alpha',
+          pageType: KnowledgePageType.topics,
+          state: KnowledgePageState.active,
+          updatedAtMs: nowMs,
+        ),
+        _summary(
+          pageId: 'page:topics:beta',
+          title: 'Topic Beta',
+          pageType: KnowledgePageType.topics,
+          state: KnowledgePageState.active,
+          updatedAtMs: nowMs - 1000,
+        ),
+      ],
+      details: {
+        'page:topics:alpha': _detail(
+          pageId: 'page:topics:alpha',
+          title: 'Topic Alpha',
+          pageType: KnowledgePageType.topics,
+          state: KnowledgePageState.active,
+          summary: 'Alpha summary.',
+          updatedAtMs: nowMs,
+        ),
+        'page:topics:beta': _detail(
+          pageId: 'page:topics:beta',
+          title: 'Topic Beta',
+          pageType: KnowledgePageType.topics,
+          state: KnowledgePageState.active,
+          summary: 'Beta summary.',
+          updatedAtMs: nowMs - 1000,
+        ),
+      },
+      recentChanges: const [],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 3)),
+              lock: () {},
+              child: const KnowledgeCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('My Wiki'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Topics'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Topic Alpha'), findsOneWidget);
+    expect(find.text('Topic Beta'), findsOneWidget);
+  });
 }
 
 final class _KnowledgeCenterBackendStub extends TestAppBackend

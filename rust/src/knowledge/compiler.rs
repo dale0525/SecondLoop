@@ -16,13 +16,7 @@ pub(crate) struct CompiledKnowledgePageRecord {
 }
 
 pub fn refresh_knowledge_pages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<KnowledgePage>> {
-    let generated_documents = crate::knowledge::list_knowledge_documents_by_origin(
-        conn,
-        key,
-        KnowledgeOriginType::Generated,
-        512,
-        0,
-    )?;
+    let generated_documents = load_all_generated_documents(conn, key)?;
     let claims = build_claims_from_documents(&generated_documents);
     let compiled_pages = compile_pages_from_claims(&generated_documents, &claims);
     crate::db::replace_knowledge_claims(conn, key, &claims)?;
@@ -33,6 +27,31 @@ pub fn refresh_knowledge_pages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<
         .collect::<Vec<_>>();
     crate::db::mark_missing_knowledge_pages_removed(conn, key, &page_ids)?;
     Ok(compiled_pages.into_iter().map(|item| item.page).collect())
+}
+
+fn load_all_generated_documents(
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<Vec<ContentKnowledgeDocument>> {
+    const PAGE_SIZE: usize = 256;
+    let mut documents = Vec::<ContentKnowledgeDocument>::new();
+    let mut offset = 0usize;
+    loop {
+        let page = crate::knowledge::list_knowledge_documents_by_origin(
+            conn,
+            key,
+            KnowledgeOriginType::Generated,
+            PAGE_SIZE,
+            offset,
+        )?;
+        let fetched = page.len();
+        documents.extend(page);
+        if fetched < PAGE_SIZE {
+            break;
+        }
+        offset += fetched;
+    }
+    Ok(documents)
 }
 
 fn build_claims_from_documents(documents: &[ContentKnowledgeDocument]) -> Vec<KnowledgeClaim> {
