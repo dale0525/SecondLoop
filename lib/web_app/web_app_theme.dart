@@ -246,34 +246,41 @@ class SecondLoopWebAppFrame extends StatelessWidget {
 
 TextTheme _buildTextTheme(TextTheme base, ColorScheme colorScheme) {
   TextStyle? heading(TextStyle? style, {double? letterSpacing}) {
+    final weight = style?.fontWeight ?? FontWeight.w600;
     return style?.copyWith(
       fontFamily: 'Sora',
+      fontVariations: _wght(weight),
       color: colorScheme.onSurface,
-      letterSpacing: letterSpacing ?? -0.2,
-      height: 1.12,
+      letterSpacing: letterSpacing ?? -0.4,
+      height: 1.1,
     );
   }
 
   TextStyle? body(TextStyle? style) {
+    final weight = style?.fontWeight ?? FontWeight.w400;
     return style?.copyWith(
+      fontFamily: 'Inter',
+      fontVariations: _wght(weight),
       color: colorScheme.onSurface,
-      height: 1.5,
+      height: 1.45,
     );
   }
 
   return base.copyWith(
-    displayLarge: heading(base.displayLarge, letterSpacing: -1.0),
-    displayMedium: heading(base.displayMedium, letterSpacing: -0.8),
-    displaySmall: heading(base.displaySmall, letterSpacing: -0.6),
-    headlineLarge: heading(base.headlineLarge, letterSpacing: -0.45),
-    headlineMedium: heading(base.headlineMedium, letterSpacing: -0.35),
-    headlineSmall: heading(base.headlineSmall, letterSpacing: -0.25),
-    titleLarge: heading(base.titleLarge, letterSpacing: -0.2),
-    titleMedium: body(base.titleMedium)?.copyWith(
+    displayLarge: heading(base.displayLarge, letterSpacing: -1.4),
+    displayMedium: heading(base.displayMedium, letterSpacing: -1.2),
+    displaySmall: heading(base.displaySmall, letterSpacing: -1),
+    headlineLarge: heading(base.headlineLarge, letterSpacing: -0.9),
+    headlineMedium: heading(base.headlineMedium, letterSpacing: -0.8),
+    headlineSmall: heading(base.headlineSmall, letterSpacing: -0.7),
+    titleLarge: heading(base.titleLarge, letterSpacing: -0.5),
+    titleMedium: heading(base.titleMedium, letterSpacing: -0.3)?.copyWith(
       fontWeight: FontWeight.w600,
+      fontVariations: _wght(FontWeight.w600),
     ),
-    titleSmall: body(base.titleSmall)?.copyWith(
+    titleSmall: heading(base.titleSmall, letterSpacing: -0.2)?.copyWith(
       fontWeight: FontWeight.w600,
+      fontVariations: _wght(FontWeight.w600),
     ),
     bodyLarge: body(base.bodyLarge),
     bodyMedium: body(base.bodyMedium),
@@ -285,6 +292,12 @@ TextTheme _buildTextTheme(TextTheme base, ColorScheme colorScheme) {
       fontWeight: FontWeight.w500,
     ),
   );
+}
+
+List<FontVariation> _wght(FontWeight weight) {
+  return <FontVariation>[
+    FontVariation('wght', weight.value.toDouble()),
+  ];
 }
 
 dynamic _cardTheme(SlTokens tokens) {
