@@ -166,6 +166,37 @@ void main() {
     expect(find.text('正文'), findsOneWidget);
     expect(find.text('Body'), findsNothing);
   });
+
+  testWidgets('KnowledgePageDetailPage keeps removed pages audit-only',
+      (tester) async {
+    final backend = _RemovedKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:preferences'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Correct current conclusion'), findsNothing);
+    expect(find.text('Mark inaccurate'), findsNothing);
+    expect(find.text('Stop using in answers'), findsNothing);
+    expect(find.text('Use in answers again'), findsNothing);
+    expect(find.text('Archive Page'), findsNothing);
+    expect(find.text('Permanently Remove'), findsNothing);
+    expect(find.text('View Evidence'), findsWidgets);
+    expect(find.text('View History'), findsWidgets);
+  });
 }
 
 final class _KnowledgePageDetailBackendStub extends TestAppBackend
@@ -485,17 +516,36 @@ final class _MutableKnowledgePageDetailBackendStub extends TestAppBackend
       _buildDetail(pageId: pageId);
 }
 
-KnowledgePageDetail _buildDetail({required String pageId}) {
-  return const KnowledgePageDetail(
+final class _RemovedKnowledgePageDetailBackendStub
+    extends _KnowledgePageDetailBackendStub {
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    return _buildDetail(
+      pageId: pageId,
+      state: KnowledgePageState.removed,
+      answerAllowed: false,
+    );
+  }
+}
+
+KnowledgePageDetail _buildDetail({
+  required String pageId,
+  KnowledgePageState state = KnowledgePageState.active,
+  bool answerAllowed = true,
+}) {
+  return KnowledgePageDetail(
     page: KnowledgePage(
       pageId: 'page:preferences',
       pageType: KnowledgePageType.preferences,
       title: 'Preferences',
       currentSummary: 'Reply in Chinese by default.',
       currentBody: 'Reply in Chinese by default.\nKeep answers concise.',
-      state: KnowledgePageState.active,
+      state: state,
       answerPolicy: KnowledgeAnswerPolicy(
-        defaultAllowed: true,
+        defaultAllowed: answerAllowed,
         requiresTemporalFraming: false,
       ),
       confidenceLevel: 0.92,
@@ -505,13 +555,13 @@ KnowledgePageDetail _buildDetail({required String pageId}) {
       sourceCount: 2,
       conflictCount: 1,
       humanCorrected: true,
-      tags: ['preferences'],
-      primaryEvidenceIds: ['doc:language', 'doc:style'],
-      relatedPageIds: ['page:about-me', 'page:recent-events'],
+      tags: const ['preferences'],
+      primaryEvidenceIds: const ['doc:language', 'doc:style'],
+      relatedPageIds: const ['page:about-me', 'page:recent-events'],
     ),
-    sourceDocumentIds: ['doc:language', 'doc:style'],
-    claimIds: ['claim:language', 'claim:style'],
-    history: [
+    sourceDocumentIds: const ['doc:language', 'doc:style'],
+    claimIds: const ['claim:language', 'claim:style'],
+    history: const [
       KnowledgePageChangeRecord(
         changeId: 'change:1',
         pageId: 'page:preferences',
@@ -529,9 +579,9 @@ KnowledgePageDetail _buildDetail({required String pageId}) {
         title: 'Reply Preferences',
         summary: 'Reply in Chinese by default.',
         body: 'Reply in Chinese by default.\nKeep answers concise.',
-        state: KnowledgePageState.active,
+        state: state,
         answerPolicy: KnowledgeAnswerPolicy(
-          defaultAllowed: true,
+          defaultAllowed: answerAllowed,
           requiresTemporalFraming: false,
         ),
         confidenceLevel: 0.92,
@@ -544,7 +594,7 @@ KnowledgePageDetail _buildDetail({required String pageId}) {
         createdAtMs: 2,
       ),
     ],
-    evidenceEntries: [
+    evidenceEntries: const [
       KnowledgePageEvidenceEntry(
         evidenceId: 'evidence:1',
         kind: KnowledgePageEvidenceKind.support,
@@ -560,7 +610,7 @@ KnowledgePageDetail _buildDetail({required String pageId}) {
         createdAtMs: 3,
       ),
     ],
-    lintRecords: [
+    lintRecords: const [
       KnowledgeLintRecord(
         lintId: 'lint:1',
         pageId: 'page:preferences',

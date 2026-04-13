@@ -219,6 +219,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
         final detail = data.detail;
         final page = detail.page;
         final answerAllowed = page.answerPolicy.defaultAllowed;
+        final isRemoved = page.state == KnowledgePageState.removed;
         final canToggleAnswerPolicy =
             page.state != KnowledgePageState.archived &&
                 page.state != KnowledgePageState.removed;
@@ -233,6 +234,8 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
                     : () async {
                         final action = await showKnowledgePageActionsSheet(
                           context,
+                          includeArchive: !isRemoved,
+                          includeRemove: !isRemoved,
                         );
                         if (action == null || !mounted) return;
                         await _handleOverflowAction(action, data);
@@ -304,28 +307,33 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
                       spacing: 10,
                       runSpacing: 10,
                       children: [
-                        FilledButton(
-                          onPressed: _submitting
-                              ? null
-                              : () => unawaited(_openCorrectionDialog(detail)),
-                          child: Text(context.t.memory.actions.editMemory),
-                        ),
-                        OutlinedButton(
-                          onPressed: _submitting
-                              ? null
-                              : () => unawaited(_showWrongReasonSheet()),
-                          child: Text(context.t.memory.actions.markInaccurate),
-                        ),
-                        OutlinedButton(
-                          onPressed: _submitting || !canToggleAnswerPolicy
-                              ? null
-                              : () => unawaited(_toggleAnswerPolicy(detail)),
-                          child: Text(
-                            answerAllowed
-                                ? context.t.memory.actions.stopUsingForAskAi
-                                : context.t.memory.actions.useForAskAiAgain,
+                        if (!isRemoved)
+                          FilledButton(
+                            onPressed: _submitting
+                                ? null
+                                : () =>
+                                    unawaited(_openCorrectionDialog(detail)),
+                            child: Text(context.t.memory.actions.editMemory),
                           ),
-                        ),
+                        if (!isRemoved)
+                          OutlinedButton(
+                            onPressed: _submitting
+                                ? null
+                                : () => unawaited(_showWrongReasonSheet()),
+                            child:
+                                Text(context.t.memory.actions.markInaccurate),
+                          ),
+                        if (!isRemoved)
+                          OutlinedButton(
+                            onPressed: _submitting || !canToggleAnswerPolicy
+                                ? null
+                                : () => unawaited(_toggleAnswerPolicy(detail)),
+                            child: Text(
+                              answerAllowed
+                                  ? context.t.memory.actions.stopUsingForAskAi
+                                  : context.t.memory.actions.useForAskAiAgain,
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -350,21 +358,24 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
                           ),
                           child: Text(context.t.memory.actions.viewHistory),
                         ),
-                        TextButton(
-                          onPressed: () => unawaited(_handleOverflowAction(
-                            KnowledgePageOverflowAction.archive,
-                            data,
-                          )),
-                          child: Text(context.t.memory.actions.archivePage),
-                        ),
-                        TextButton(
-                          onPressed: () => unawaited(_handleOverflowAction(
-                            KnowledgePageOverflowAction.remove,
-                            data,
-                          )),
-                          child:
-                              Text(context.t.memory.actions.permanentlyRemove),
-                        ),
+                        if (!isRemoved)
+                          TextButton(
+                            onPressed: () => unawaited(_handleOverflowAction(
+                              KnowledgePageOverflowAction.archive,
+                              data,
+                            )),
+                            child: Text(context.t.memory.actions.archivePage),
+                          ),
+                        if (!isRemoved)
+                          TextButton(
+                            onPressed: () => unawaited(_handleOverflowAction(
+                              KnowledgePageOverflowAction.remove,
+                              data,
+                            )),
+                            child: Text(
+                              context.t.memory.actions.permanentlyRemove,
+                            ),
+                          ),
                       ],
                     ),
                   ],

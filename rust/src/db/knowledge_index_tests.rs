@@ -489,3 +489,61 @@ fn merge_knowledge_page_into_preserves_manual_content_and_provenance_on_recompil
         .iter()
         .any(|claim_id| claim_id == "claim:source"));
 }
+
+#[test]
+fn list_knowledge_page_summaries_excludes_archived_pages_from_normal_surfaces() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [77u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut active_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:active",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Active Topic",
+        now,
+    );
+    active_page.current_summary = "Active summary".to_string();
+
+    let mut archived_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:archived",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Archived Topic",
+        now + 1,
+    );
+    archived_page.current_summary = "Archived summary".to_string();
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: active_page,
+                source_document_ids: vec!["doc:active".to_string()],
+                claim_ids: vec!["claim:active".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: archived_page,
+                source_document_ids: vec!["doc:archived".to_string()],
+                claim_ids: vec!["claim:archived".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    archive_knowledge_page(
+        &conn,
+        &key,
+        "page:topics:archived",
+        Some("Archive from current surfaces".to_string()),
+    )
+    .expect("archive page");
+
+    let summaries = list_knowledge_page_summaries(&conn, &key).expect("list summaries");
+    let page_ids = summaries
+        .into_iter()
+        .map(|page| page.page_id)
+        .collect::<Vec<_>>();
+
+    assert_eq!(page_ids, vec!["page:topics:active".to_string()]);
+}

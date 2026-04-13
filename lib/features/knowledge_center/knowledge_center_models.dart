@@ -96,6 +96,7 @@ KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
         final pages = summaries
             .where((page) =>
                 page.pageType == type &&
+                page.state != KnowledgePageState.archived &&
                 page.state != KnowledgePageState.removed)
             .toList(growable: false)
           ..sort(_sortByLastUsedThenUpdated);

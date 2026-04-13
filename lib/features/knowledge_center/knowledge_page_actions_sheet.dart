@@ -11,8 +11,10 @@ enum KnowledgePageOverflowAction {
 }
 
 Future<KnowledgePageOverflowAction?> showKnowledgePageActionsSheet(
-  BuildContext context,
-) {
+  BuildContext context, {
+  bool includeArchive = true,
+  bool includeRemove = true,
+}) {
   return showModalBottomSheet<KnowledgePageOverflowAction>(
     context: context,
     showDragHandle: true,
@@ -36,16 +38,18 @@ Future<KnowledgePageOverflowAction?> showKnowledgePageActionsSheet(
               onTap: () => Navigator.of(context)
                   .pop(KnowledgePageOverflowAction.viewReview),
             ),
-            ListTile(
-              title: Text(context.t.memory.actions.archivePage),
-              onTap: () => Navigator.of(context)
-                  .pop(KnowledgePageOverflowAction.archive),
-            ),
-            ListTile(
-              title: Text(context.t.memory.actions.permanentlyRemove),
-              onTap: () =>
-                  Navigator.of(context).pop(KnowledgePageOverflowAction.remove),
-            ),
+            if (includeArchive)
+              ListTile(
+                title: Text(context.t.memory.actions.archivePage),
+                onTap: () => Navigator.of(context)
+                    .pop(KnowledgePageOverflowAction.archive),
+              ),
+            if (includeRemove)
+              ListTile(
+                title: Text(context.t.memory.actions.permanentlyRemove),
+                onTap: () => Navigator.of(context)
+                    .pop(KnowledgePageOverflowAction.remove),
+              ),
           ],
         ),
       ),

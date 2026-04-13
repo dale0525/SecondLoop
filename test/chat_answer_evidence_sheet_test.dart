@@ -386,6 +386,52 @@ void main() {
   );
 
   testWidgets(
+    'ChatAnswerEvidencePanel prefills page-backed correction from summary instead of body',
+    (tester) async {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          const MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'page:preferences',
+                    title: 'Preferences',
+                    summary: 'Reply in Chinese by default.',
+                    body: 'Reply in Chinese by default.\nKeep answers concise.',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 4,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: null,
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+              onOpenMemoryCard: _noopOpenMemoryCard,
+              onCorrectMemoryCard: _returnUpdatedCard,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Correct'));
+      await tester.pumpAndSettle();
+
+      final summaryField = tester.widget<TextField>(
+        find.byKey(const ValueKey('memory_correction_summary_field')),
+      );
+      expect(summaryField.controller?.text, 'Reply in Chinese by default.');
+    },
+  );
+
+  testWidgets(
     'ChatAnswerEvidencePanel refreshes memory card state on load',
     (tester) async {
       await tester.pumpWidget(

@@ -362,8 +362,9 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                           await showMemoryCorrectionDialog(
                                         context,
                                         initialTitle: item.title ?? '',
-                                        initialSummary:
-                                            item.body ?? item.summary ?? '',
+                                        initialSummary: isKnowledgePage
+                                            ? (item.summary ?? item.body ?? '')
+                                            : (item.body ?? item.summary ?? ''),
                                       );
                                       if (draft == null) return;
                                       ChatAnswerEvidenceMemoryCard? updated;

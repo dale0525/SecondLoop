@@ -1849,7 +1849,7 @@ pub fn list_knowledge_page_summaries(
     let mut stmt = conn.prepare(
         r#"SELECT page_id
            FROM knowledge_pages
-           WHERE state != 'removed'
+           WHERE state NOT IN ('archived', 'removed')
            ORDER BY COALESCE(last_used_at_ms, 0) DESC, updated_at_ms DESC, page_id ASC"#,
     )?;
     let page_ids = stmt
