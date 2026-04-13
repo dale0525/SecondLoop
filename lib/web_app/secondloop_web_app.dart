@@ -7,6 +7,7 @@ import '../core/cloud/firebase_identity_toolkit.dart';
 import '../i18n/strings.g.dart';
 import 'web_entry_intent.dart';
 import 'web_app_gate.dart';
+import 'web_app_theme.dart';
 
 export 'web_entry_intent.dart' show WebEntryIntent, parseWebEntryIntent;
 
@@ -112,16 +113,18 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
     return TranslationProvider(
       child: Builder(
         builder: (context) {
+          final locale = TranslationProvider.of(context).flutterLocale;
           return MaterialApp(
-            locale: TranslationProvider.of(context).flutterLocale,
+            locale: locale,
             supportedLocales: AppLocaleUtils.supportedLocales,
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             title: context.t.app.web.title,
-            theme: ThemeData(
-              colorScheme:
-                  ColorScheme.fromSeed(seedColor: const Color(0xFF5B6CFF)),
-              useMaterial3: true,
-            ),
+            theme: buildSecondLoopWebTheme(locale: locale),
+            builder: (context, child) {
+              return SecondLoopWebAppFrame(
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             home: FutureBuilder<WebAppBootstrapData>(
               future: _bootstrapFuture,
               builder: (context, snapshot) {
