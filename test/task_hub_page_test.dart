@@ -438,6 +438,8 @@ void main() {
     );
     expect(find.text('AI promoted'), findsOneWidget);
     expect(find.text('This sounds strategically important.'), findsNothing);
+    expect(
+        find.byKey(const ValueKey('task_hub_feedback_ai-task')), findsNothing);
   });
 
   testWidgets('manual nudge snackbar uses state wording', (tester) async {
@@ -616,6 +618,55 @@ void main() {
           .data,
       initialRelativeTime,
     );
+  });
+
+  testWidgets('done section does not render active relative-time labels',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final now = DateTime.now();
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Focus task',
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 20,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'done',
+          title: 'Finished task',
+          dueAtMs: now
+              .subtract(const Duration(days: 2))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_section_done_toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Finished task'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_relative_time_done')),
+        findsNothing);
   });
 
   testWidgets('undo highlights the restored card without extra snackbar',

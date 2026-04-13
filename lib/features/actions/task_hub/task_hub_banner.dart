@@ -366,6 +366,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                               onQuickAction: widget.onQuickAction,
                               onFeedback: widget.onFeedback,
                               compact: widget.compact,
+                              nowLocal: widget.snapshot.computedAtLocal,
                             ),
                           ),
                         ),
@@ -565,6 +566,7 @@ class _BannerPreviewList extends StatelessWidget {
     required this.onQuickAction,
     required this.onFeedback,
     required this.compact,
+    this.nowLocal,
   });
 
   final TaskPrioritySnapshot snapshot;
@@ -577,6 +579,7 @@ class _BannerPreviewList extends StatelessWidget {
     TaskPriorityFeedbackKind feedback,
   )? onFeedback;
   final bool compact;
+  final DateTime? nowLocal;
 
   @override
   Widget build(BuildContext context) {
@@ -615,6 +618,7 @@ class _BannerPreviewList extends StatelessWidget {
                   ? null
                   : (feedback) => unawaited(onFeedback!(entry, feedback)),
               showPriorityControls: false,
+              nowLocal: nowLocal,
             ),
           ),
       ],

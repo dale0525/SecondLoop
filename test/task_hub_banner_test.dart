@@ -766,4 +766,61 @@ void main() {
 
     expect(find.text('Today'), findsOneWidget);
   });
+
+  testWidgets('banner preview relative time stays pinned to snapshot timestamp',
+      (tester) async {
+    final now = DateTime.now();
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'focus',
+          title: 'Fix billing bug',
+          updatedAtMs: 20,
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'scheduled',
+          title: 'Prepare demo',
+          updatedAtMs: 10,
+          dueAtMs:
+              now.add(const Duration(days: 2)).toUtc().millisecondsSinceEpoch,
+        ),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    final initialRelativeTime = tester
+        .widget<Text>(
+          find.byKey(const ValueKey('task_hub_relative_time_scheduled')),
+        )
+        .data;
+    expect(initialRelativeTime, isNotNull);
+
+    await tester.pump(const Duration(days: 8));
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('task_hub_relative_time_scheduled')),
+          )
+          .data,
+      initialRelativeTime,
+    );
+  });
 }

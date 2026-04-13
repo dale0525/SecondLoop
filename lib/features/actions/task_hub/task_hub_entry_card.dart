@@ -58,26 +58,28 @@ class TaskHubEntryCard extends StatelessWidget {
         theme.colorScheme.primaryContainer.withOpacity(emphasize ? 0.64 : 0.58);
     final restoredBorder = theme.colorScheme.primary.withOpacity(0.28);
     final defaultBackground = emphasize ? tokens.surface2 : null;
-    final relativeTimeText = formatTaskHubRelativeTime(
-      dueAtMs: entry.todo.dueAtMs,
-      nowLocal: nowLocal ?? DateTime.now(),
-      labels: TaskHubRelativeTimeLabels(
-        noDeadline: context.t.actions.taskHub.relativeTime.noDeadline,
-        today: context.t.actions.taskHub.relativeTime.today,
-        inHours: (count) =>
-            context.t.actions.taskHub.relativeTime.inHours(count: count),
-        inDays: (count) =>
-            context.t.actions.taskHub.relativeTime.inDays(count: count),
-        inWeeks: (count) =>
-            context.t.actions.taskHub.relativeTime.inWeeks(count: count),
-        overdueHours: (count) =>
-            context.t.actions.taskHub.relativeTime.overdueHours(count: count),
-        overdueDays: (count) =>
-            context.t.actions.taskHub.relativeTime.overdueDays(count: count),
-        overdueWeeks: (count) =>
-            context.t.actions.taskHub.relativeTime.overdueWeeks(count: count),
-      ),
-    );
+    final relativeTimeText = entry.todo.status == 'done'
+        ? null
+        : formatTaskHubRelativeTime(
+            dueAtMs: entry.todo.dueAtMs,
+            nowLocal: nowLocal ?? DateTime.now(),
+            labels: TaskHubRelativeTimeLabels(
+              noDeadline: context.t.actions.taskHub.relativeTime.noDeadline,
+              today: context.t.actions.taskHub.relativeTime.today,
+              inHours: (count) =>
+                  context.t.actions.taskHub.relativeTime.inHours(count: count),
+              inDays: (count) =>
+                  context.t.actions.taskHub.relativeTime.inDays(count: count),
+              inWeeks: (count) =>
+                  context.t.actions.taskHub.relativeTime.inWeeks(count: count),
+              overdueHours: (count) => context.t.actions.taskHub.relativeTime
+                  .overdueHours(count: count),
+              overdueDays: (count) => context.t.actions.taskHub.relativeTime
+                  .overdueDays(count: count),
+              overdueWeeks: (count) => context.t.actions.taskHub.relativeTime
+                  .overdueWeeks(count: count),
+            ),
+          );
     final metaChips = <Widget>[
       _TaskHubMetaChip(label: _subtitle(context, entry), emphasize: true),
       if (_rankingReasonLabel(context, entry) case final rankingReasonLabel?)
@@ -156,18 +158,20 @@ class TaskHubEntryCard extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                relativeTimeText,
-                                key: ValueKey(
-                                  'task_hub_relative_time_${entry.todo.id}',
+                              if (relativeTimeText != null) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  relativeTimeText,
+                                  key: ValueKey(
+                                    'task_hub_relative_time_${entry.todo.id}',
+                                  ),
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  textAlign: TextAlign.right,
                                 ),
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: theme.colorScheme.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                textAlign: TextAlign.right,
-                              ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 6),
@@ -194,8 +198,7 @@ class TaskHubEntryCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (onFeedback != null &&
-                        (entry.reasonText ?? '').isNotEmpty)
+                    if (onFeedback != null && supportingText != null)
                       TaskHubFeedbackMenu(
                         todoId: entry.todo.id,
                         onSelected: onFeedback!,
