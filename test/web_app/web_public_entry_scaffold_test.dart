@@ -16,9 +16,8 @@ void main() {
 
     await tester.pumpWidget(
       wrapWithI18n(
-        MaterialApp(
-          theme: buildSecondLoopWebTheme(locale: const Locale('en')),
-          home: const WebPublicEntryScaffold(
+        const MaterialApp(
+          home: WebPublicEntryScaffold(
             entryIntent: WebEntryIntent.subscribe,
             signedIn: false,
             child: SizedBox(height: 240, child: Placeholder()),
@@ -28,6 +27,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byType(SecondLoopWebAppFrame), findsOneWidget);
     expect(find.byType(SlPageSurface), findsOneWidget);
     expect(find.text('Subscribe for web access'), findsOneWidget);
   });

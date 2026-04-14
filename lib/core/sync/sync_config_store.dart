@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'sync_config_store_platform_stub.dart'
+    if (dart.library.io) 'sync_config_store_platform_io.dart';
 import '../storage/secure_blob_store.dart';
 import 'sync_config_migrator.dart';
 import 'sync_diagnostics.dart';
@@ -587,13 +588,11 @@ final class SyncConfigStore {
   }
 
   Future<Map<String, String>> _tryMigrateFromSecureStore() async {
-    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+    if (syncConfigStoreIsFlutterTestEnvironment()) {
       return <String, String>{};
     }
 
-    final isMac =
-        Platform.isMacOS || defaultTargetPlatform == TargetPlatform.macOS;
-    if (isMac) {
+    if (syncConfigStoreIsMacPlatform()) {
       return <String, String>{};
     }
 

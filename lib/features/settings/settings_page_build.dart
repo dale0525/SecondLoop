@@ -2,18 +2,19 @@ part of 'settings_page.dart';
 
 extension _SettingsPageBuild on _SettingsPageState {
   Widget _buildSettingsPage(BuildContext context) {
+    final capabilities = AppPlatformCapabilityScope.of(context);
     final enabled = _appLockEnabled;
     final biometricEnabled = _biometricUnlockEnabled;
-    final isMobile = !kIsWeb &&
+    final isMobile = capabilities.supportsBiometricUnlock &&
         (defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.android);
-    final supportsDesktopHotkey = !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.linux);
-    const supportsMigrationArchive = !kIsWeb;
-    final isDesktop =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    final supportsDesktopHotkey = capabilities.supportsDesktopHotkey;
+    final supportsExternalImport = capabilities.supportsExternalImport;
+    final supportsMigrationArchive = capabilities.supportsMigrationArchive;
+    final supportsDesktopBootSettings =
+        capabilities.supportsDesktopBootSettings;
+    final supportsBiometricUnlock = capabilities.supportsBiometricUnlock;
+    final isDesktop = supportsBiometricUnlock && !isMobile;
     final isZh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
@@ -122,7 +123,9 @@ extension _SettingsPageBuild on _SettingsPageState {
             value: enabled ?? false,
             onChanged: (_busy || enabled == null) ? null : _setAppLock,
           ),
-          if ((enabled ?? false) && (isMobile || isDesktop))
+          if ((enabled ?? false) &&
+              supportsBiometricUnlock &&
+              (isMobile || isDesktop))
             SwitchListTile(
               title: Text(
                 isMobile
@@ -195,7 +198,7 @@ extension _SettingsPageBuild on _SettingsPageState {
                     );
                   },
           ),
-          if (supportsDesktopHotkey)
+          if (supportsExternalImport)
             ListTile(
               key: const ValueKey('settings_external_import'),
               title: Text(context.t.settings.externalImport.title),
@@ -225,7 +228,7 @@ extension _SettingsPageBuild on _SettingsPageState {
                       );
                     },
             ),
-          if (supportsDesktopHotkey)
+          if (supportsDesktopBootSettings)
             SwitchListTile(
               key: const ValueKey('settings_start_with_system_switch'),
               title: Text(context.t.settings.desktopBoot.startWithSystem.title),
@@ -234,7 +237,7 @@ extension _SettingsPageBuild on _SettingsPageState {
               value: _desktopBootConfig.startWithSystem,
               onChanged: _busy ? null : _setDesktopStartWithSystem,
             ),
-          if (supportsDesktopHotkey)
+          if (supportsDesktopBootSettings)
             SwitchListTile(
               key: const ValueKey('settings_silent_startup_switch'),
               title: Text(context.t.settings.desktopBoot.silentStartup.title),
@@ -243,7 +246,7 @@ extension _SettingsPageBuild on _SettingsPageState {
               value: _desktopBootConfig.silentStartup,
               onChanged: _busy ? null : _setDesktopSilentStartup,
             ),
-          if (supportsDesktopHotkey)
+          if (supportsDesktopBootSettings)
             SwitchListTile(
               key: const ValueKey('settings_keep_running_in_background_switch'),
               title: Text(

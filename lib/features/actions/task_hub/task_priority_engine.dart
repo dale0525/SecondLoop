@@ -1,9 +1,8 @@
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 import 'task_priority_ai_models.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
-
-const int _kMaxSafeWebInt = 0x001FFFFFFFFFFFFF;
 
 bool _isSameLocalDate(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
@@ -44,8 +43,10 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
 
     final dueLocal = todo.dueAtMs == null
         ? null
-        : DateTime.fromMillisecondsSinceEpoch(todo.dueAtMs!, isUtc: true)
-            .toLocal();
+        : DateTime.fromMillisecondsSinceEpoch(
+            platformIntToInt(todo.dueAtMs!),
+            isUtc: true,
+          ).toLocal();
     final isOverdue = dueLocal != null && dueLocal.isBefore(nowLocal);
     final isDueToday =
         dueLocal != null && !isOverdue && _isSameLocalDate(dueLocal, nowLocal);
@@ -54,10 +55,10 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
     final isInProgress = todo.status == 'in_progress';
     final isReviewDue = todo.reviewStage != null &&
         todo.nextReviewAtMs != null &&
-        todo.nextReviewAtMs! <= nowUtcMs;
+        platformIntToInt(todo.nextReviewAtMs!) <= nowUtcMs;
     final isSnoozed = todo.reviewStage != null &&
         todo.nextReviewAtMs != null &&
-        todo.nextReviewAtMs! > nowUtcMs;
+        platformIntToInt(todo.nextReviewAtMs!) > nowUtcMs;
 
     late final TaskPriorityBand band;
     late final double ruleScore;
@@ -123,8 +124,10 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
         isFutureScheduled: isFutureScheduled,
         importanceScore: 0,
         urgencyScore: 0,
-        manualImportanceNudgeScore: todo.manualImportanceNudgeScore ?? 0,
-        manualUrgencyNudgeScore: todo.manualUrgencyNudgeScore ?? 0,
+        manualImportanceNudgeScore:
+            platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0,
+        manualUrgencyNudgeScore:
+            platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0,
         dueDerivedUrgencyScore: _dueDerivedUrgencyScoreFor(
           todo,
           nowLocal: nowLocal,
@@ -194,7 +197,8 @@ _TaskPriorityBuckets _splitTaskPriorityEntries(
   focus.sort(_compareFocusEntries);
   scheduled.sort(_compareScheduledEntries);
   decide.sort(_compareDecideEntries);
-  done.sort((a, b) => b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs));
+  done.sort(
+      (a, b) => comparePlatformInt(b.todo.updatedAtMs, a.todo.updatedAtMs));
 
   final orderedActive = <TaskPriorityEntry>[
     ...focus,
@@ -334,12 +338,10 @@ int _compareOverallPriority(TaskPriorityEntry a, TaskPriorityEntry b) {
   if (scoreCompare != 0) return scoreCompare;
 
   if (a.todo.dueAtMs != b.todo.dueAtMs) {
-    final aDue = a.todo.dueAtMs ?? _kMaxSafeWebInt;
-    final bDue = b.todo.dueAtMs ?? _kMaxSafeWebInt;
-    return aDue.compareTo(bDue);
+    return compareNullablePlatformIntAsc(a.todo.dueAtMs, b.todo.dueAtMs);
   }
 
-  return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
+  return comparePlatformInt(b.todo.updatedAtMs, a.todo.updatedAtMs);
 }
 
 int _compareBoolDesc(bool left, bool right) {
@@ -350,14 +352,14 @@ int _compareBoolDesc(bool left, bool right) {
 int _compareFocusEntries(TaskPriorityEntry a, TaskPriorityEntry b) {
   final scoreCompare = b.totalScore.compareTo(a.totalScore);
   if (scoreCompare != 0) return scoreCompare;
-  return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
+  return comparePlatformInt(b.todo.updatedAtMs, a.todo.updatedAtMs);
 }
 
 int _compareScheduledEntries(TaskPriorityEntry a, TaskPriorityEntry b) {
-  final aDue = a.todo.dueAtMs ?? _kMaxSafeWebInt;
-  final bDue = b.todo.dueAtMs ?? _kMaxSafeWebInt;
-  if (aDue != bDue) return aDue.compareTo(bDue);
-  return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
+  final dueCompare =
+      compareNullablePlatformIntAsc(a.todo.dueAtMs, b.todo.dueAtMs);
+  if (dueCompare != 0) return dueCompare;
+  return comparePlatformInt(b.todo.updatedAtMs, a.todo.updatedAtMs);
 }
 
 int _compareDecideEntries(TaskPriorityEntry a, TaskPriorityEntry b) {
@@ -366,5 +368,5 @@ int _compareDecideEntries(TaskPriorityEntry a, TaskPriorityEntry b) {
   }
   final scoreCompare = b.totalScore.compareTo(a.totalScore);
   if (scoreCompare != 0) return scoreCompare;
-  return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
+  return comparePlatformInt(b.todo.updatedAtMs, a.todo.updatedAtMs);
 }

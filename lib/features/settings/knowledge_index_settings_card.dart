@@ -127,9 +127,11 @@ class _KnowledgeIndexSettingsCardState
 
   String? _lastBuildLine(BuildContext context) {
     final completedAtMs = _status?.lastRebuildCompletedAtMs;
-    if (completedAtMs == null || completedAtMs <= 0) return null;
-    final dt = DateTime.fromMillisecondsSinceEpoch(completedAtMs, isUtc: false)
-        .toLocal();
+    final completedAtMsInt = completedAtMs?.toInt();
+    if (completedAtMsInt == null || completedAtMsInt <= 0) return null;
+    final dt =
+        DateTime.fromMillisecondsSinceEpoch(completedAtMsInt, isUtc: false)
+            .toLocal();
     return context.t.settings.knowledgeIndex.lastBuild(value: dt.toString());
   }
 

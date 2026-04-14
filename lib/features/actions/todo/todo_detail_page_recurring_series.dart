@@ -72,11 +72,10 @@ Future<Todo?> _findNextActiveRecurringOccurrenceForDetail(
     final bucketB = _recurringCandidateBucket(b, pivotDueAtMs);
     if (bucketA != bucketB) return bucketA.compareTo(bucketB);
 
-    final dueA = a.dueAtMs ?? 9223372036854775807;
-    final dueB = b.dueAtMs ?? 9223372036854775807;
-    if (dueA != dueB) return dueA.compareTo(dueB);
+    final dueCompare = compareNullablePlatformIntAsc(a.dueAtMs, b.dueAtMs);
+    if (dueCompare != 0) return dueCompare;
 
-    return b.updatedAtMs.compareTo(a.updatedAtMs);
+    return comparePlatformInt(b.updatedAtMs, a.updatedAtMs);
   });
 
   return active.first;
@@ -131,9 +130,9 @@ bool _isRecurringSiblingCandidate(Todo todo, Todo current) {
   return todo.sourceEntryId == null;
 }
 
-int _recurringCandidateBucket(Todo todo, int? pivotDueAtMs) {
+int _recurringCandidateBucket(Todo todo, Object? pivotDueAtMs) {
   final dueAtMs = todo.dueAtMs;
   if (dueAtMs == null) return 2;
   if (pivotDueAtMs == null) return 1;
-  return dueAtMs >= pivotDueAtMs ? 0 : 1;
+  return coercePlatformInt(dueAtMs) >= coercePlatformInt(pivotDueAtMs) ? 0 : 1;
 }

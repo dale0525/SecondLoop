@@ -116,10 +116,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     final annotationJobsFuture = Future<List<AttachmentAnnotationJob>>.sync(() {
       if (nativeBackend == null) return const <AttachmentAnnotationJob>[];
 
-      const maxI64 = 9223372036854775807;
       return nativeBackend.listDueAttachmentAnnotations(
         sessionKey,
-        nowMs: maxI64,
+        nowMs: kPlatformSafeJsInt,
         limit: 500,
       );
     }).catchError((_) => const <AttachmentAnnotationJob>[]);
@@ -189,8 +188,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       conversationId: widget.conversation.id,
       role: 'user',
       content: question,
-      createdAtMs:
-          _askFailureCreatedAtMs ?? DateTime.now().millisecondsSinceEpoch,
+      createdAtMs: platformIntFromInt(
+        _askFailureCreatedAtMs ?? DateTime.now().millisecondsSinceEpoch,
+      ),
       isMemory: false,
     );
     final list = List<Message>.from(source);
@@ -289,7 +289,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       final page = await backend.listMessagesPage(
         sessionKey,
         widget.conversation.id,
-        beforeCreatedAtMs: oldest.createdAtMs,
+        beforeCreatedAtMs: platformIntToInt(oldest.createdAtMs),
         beforeId: oldest.id,
         limit: _kMessagePageSize,
       );
@@ -760,7 +760,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         _messageAutoActionsQueue!.enqueue(
           message: committedMessage,
           rawText: text,
-          createdAtMs: committedMessage.createdAtMs,
+          createdAtMs: platformIntToInt(committedMessage.createdAtMs),
         );
       }
     } catch (e) {

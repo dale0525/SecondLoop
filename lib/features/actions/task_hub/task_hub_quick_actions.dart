@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../../../core/ai/todo_followup_task_classifier.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 import '../settings/actions_settings_store.dart';
 
 enum TaskHubQuickAction {
@@ -57,8 +58,12 @@ class TaskHubQuickActionsController {
 
   Future<bool> hasIncompleteChecklist(Todo todo) async {
     final progress = checklistProgressByTodoId[todo.id];
-    if (progress != null && progress.totalCount > 0) {
-      if (progress.doneCount < progress.totalCount) {
+    final totalCount =
+        progress == null ? 0 : platformIntToInt(progress.totalCount);
+    final doneCount =
+        progress == null ? 0 : platformIntToInt(progress.doneCount);
+    if (progress != null && totalCount > 0) {
+      if (doneCount < totalCount) {
         return true;
       }
       return false;
@@ -170,12 +175,12 @@ class TaskHubQuickActionsController {
     final nextImportance = switch (importanceDelta) {
       > 0 => 1,
       < 0 => -1,
-      _ => todo.manualImportanceNudgeScore ?? 0,
+      _ => platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0,
     };
     final nextUrgency = switch (urgencyDelta) {
       > 0 => 1,
       < 0 => -1,
-      _ => todo.manualUrgencyNudgeScore ?? 0,
+      _ => platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0,
     };
     final updated = await backend.transitionTodo(
       sessionKey,
@@ -183,10 +188,10 @@ class TaskHubQuickActionsController {
       manualImportanceNudgeScore: importanceDelta != 0 ? nextImportance : null,
       manualUrgencyNudgeScore: urgencyDelta != 0 ? nextUrgency : null,
     );
-    if ((updated.manualImportanceNudgeScore ?? 0) ==
-            (todo.manualImportanceNudgeScore ?? 0) &&
-        (updated.manualUrgencyNudgeScore ?? 0) ==
-            (todo.manualUrgencyNudgeScore ?? 0)) {
+    if ((platformIntToNullableInt(updated.manualImportanceNudgeScore) ?? 0) ==
+            (platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0) &&
+        (platformIntToNullableInt(updated.manualUrgencyNudgeScore) ?? 0) ==
+            (platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0)) {
       return null;
     }
     return TaskHubUndoTicket(
@@ -204,9 +209,13 @@ class TaskHubQuickActionsController {
       sessionKey,
       todoId: todo.id,
       newStatus: 'in_progress',
-      reviewStage: shouldClearReviewScheduling ? null : todo.reviewStage,
+      reviewStage: shouldClearReviewScheduling
+          ? null
+          : coerceNullablePlatformInt(todo.reviewStage),
       clearReviewStage: shouldClearReviewScheduling || todo.reviewStage == null,
-      nextReviewAtMs: shouldClearReviewScheduling ? null : todo.nextReviewAtMs,
+      nextReviewAtMs: shouldClearReviewScheduling
+          ? null
+          : coerceNullablePlatformInt(todo.nextReviewAtMs),
       clearNextReviewAtMs:
           shouldClearReviewScheduling || todo.nextReviewAtMs == null,
       clearManualImportanceNudgeScore: true,
@@ -431,20 +440,25 @@ class TaskHubQuickActionsController {
         sessionKey,
         todoId: original.id,
         newStatus: original.status != updated.status ? original.status : null,
-        dueAtMs: original.dueAtMs,
+        dueAtMs: coerceNullablePlatformInt(original.dueAtMs),
         clearDueAtMs: original.dueAtMs == null,
-        reviewStage: original.reviewStage,
+        reviewStage: coerceNullablePlatformInt(original.reviewStage),
         clearReviewStage: original.reviewStage == null,
-        nextReviewAtMs: original.nextReviewAtMs,
+        nextReviewAtMs: coerceNullablePlatformInt(original.nextReviewAtMs),
         clearNextReviewAtMs: original.nextReviewAtMs == null,
-        lastReviewAtMs: original.lastReviewAtMs,
+        lastReviewAtMs: coerceNullablePlatformInt(original.lastReviewAtMs),
         clearLastReviewAtMs: original.lastReviewAtMs == null,
-        manualImportanceNudgeScore: original.manualImportanceNudgeScore,
+        manualImportanceNudgeScore:
+            coerceNullablePlatformInt(original.manualImportanceNudgeScore),
         clearManualImportanceNudgeScore:
-            (original.manualImportanceNudgeScore ?? 0) == 0,
-        manualUrgencyNudgeScore: original.manualUrgencyNudgeScore,
+            (platformIntToNullableInt(original.manualImportanceNudgeScore) ??
+                    0) ==
+                0,
+        manualUrgencyNudgeScore:
+            coerceNullablePlatformInt(original.manualUrgencyNudgeScore),
         clearManualUrgencyNudgeScore:
-            (original.manualUrgencyNudgeScore ?? 0) == 0,
+            (platformIntToNullableInt(original.manualUrgencyNudgeScore) ?? 0) ==
+                0,
       );
       return;
     }
@@ -453,20 +467,23 @@ class TaskHubQuickActionsController {
       sessionKey,
       id: original.id,
       title: original.title,
-      dueAtMs: original.dueAtMs,
+      dueAtMs: coerceNullablePlatformInt(original.dueAtMs),
       status: original.status,
       sourceEntryId: original.sourceEntryId,
-      reviewStage: original.reviewStage,
-      nextReviewAtMs: original.nextReviewAtMs,
-      lastReviewAtMs: original.lastReviewAtMs,
-      manualImportanceNudgeScore: original.manualImportanceNudgeScore,
-      manualUrgencyNudgeScore: original.manualUrgencyNudgeScore,
+      reviewStage: coerceNullablePlatformInt(original.reviewStage),
+      nextReviewAtMs: coerceNullablePlatformInt(original.nextReviewAtMs),
+      lastReviewAtMs: coerceNullablePlatformInt(original.lastReviewAtMs),
+      manualImportanceNudgeScore:
+          coerceNullablePlatformInt(original.manualImportanceNudgeScore),
+      manualUrgencyNudgeScore:
+          coerceNullablePlatformInt(original.manualUrgencyNudgeScore),
     );
   }
 
   TaskHubUndoManualNudgeSnapshot? _manualSignalFromTodo(Todo todo) {
-    final importance = todo.manualImportanceNudgeScore ?? 0;
-    final urgency = todo.manualUrgencyNudgeScore ?? 0;
+    final importance =
+        platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0;
+    final urgency = platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0;
     if (importance == 0 && urgency == 0) {
       return null;
     }
@@ -477,16 +494,17 @@ class TaskHubQuickActionsController {
   }
 
   bool _isScheduleNoOp(
-    int? existingDueAtMs,
+    Object? existingDueAtMs,
     DateTime targetLocal, {
     required DateTime nowLocal,
   }) {
     if (existingDueAtMs == null) {
       return false;
     }
-    final existingLocal =
-        DateTime.fromMillisecondsSinceEpoch(existingDueAtMs, isUtc: true)
-            .toLocal();
+    final existingLocal = DateTime.fromMillisecondsSinceEpoch(
+      coercePlatformInt(existingDueAtMs),
+      isUtc: true,
+    ).toLocal();
     final isSameLocalDate = existingLocal.year == targetLocal.year &&
         existingLocal.month == targetLocal.month &&
         existingLocal.day == targetLocal.day;

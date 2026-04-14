@@ -580,7 +580,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
           _messageAutoActionsQueue!.enqueue(
             message: committedMessage,
             rawText: submission.markdown,
-            createdAtMs: committedMessage.createdAtMs,
+            createdAtMs: platformIntToInt(committedMessage.createdAtMs),
           );
         }
       } catch (e) {
@@ -771,20 +771,25 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       if (active.isNotEmpty) {
         final sorted = active.toList(growable: false)
           ..sort((a, b) {
-            final dueA = a.dueAtMs ?? 9223372036854775807;
-            final dueB = b.dueAtMs ?? 9223372036854775807;
-            if (dueA != dueB) return dueA.compareTo(dueB);
-            return b.updatedAtMs.compareTo(a.updatedAtMs);
+            final dueCompare = compareNullablePlatformIntAsc(
+              a.dueAtMs,
+              b.dueAtMs,
+            );
+            if (dueCompare != 0) return dueCompare;
+            return comparePlatformInt(b.updatedAtMs, a.updatedAtMs);
           });
         return (todo: sorted.first, isSourceEntry: true);
       }
 
       final sorted = sourceTodos.toList(growable: false)
         ..sort((a, b) {
-          final dueA = a.dueAtMs ?? -9223372036854775808;
-          final dueB = b.dueAtMs ?? -9223372036854775808;
-          if (dueA != dueB) return dueB.compareTo(dueA);
-          return b.updatedAtMs.compareTo(a.updatedAtMs);
+          final dueCompare = compareNullablePlatformIntDesc(
+            a.dueAtMs,
+            b.dueAtMs,
+            nullsLast: false,
+          );
+          if (dueCompare != 0) return dueCompare;
+          return comparePlatformInt(b.updatedAtMs, a.updatedAtMs);
         });
       return (todo: sorted.first, isSourceEntry: true);
     }
@@ -1010,7 +1015,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
           sourceEntryId: null,
           reviewStage: null,
           nextReviewAtMs: null,
-          lastReviewAtMs: sourceTodo.lastReviewAtMs,
+          lastReviewAtMs: coerceNullablePlatformInt(sourceTodo.lastReviewAtMs),
         );
       } catch (_) {
         return;

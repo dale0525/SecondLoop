@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
@@ -20,7 +21,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CloudAccountPanel), findsOneWidget);
-    expect(find.text('Chat'), findsNothing);
+    expect(find.byType(AppShell), findsNothing);
 
     await tester.pumpWidget(
       _buildApp(
@@ -33,7 +34,7 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text('Chat'), findsOneWidget);
+    expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(CloudAccountPanel), findsNothing);
   });
 }

@@ -14,6 +14,7 @@ import '../../../core/sync/sync_engine.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
 import 'task_hub_card_anchor.dart';
@@ -310,9 +311,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
         todo.dueAtMs == pendingMutation.dueAtMs &&
         todo.reviewStage == pendingMutation.reviewStage &&
         todo.nextReviewAtMs == pendingMutation.nextReviewAtMs &&
-        (todo.manualImportanceNudgeScore ?? 0) ==
+        (platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0) ==
             pendingMutation.manualImportanceNudgeScore &&
-        (todo.manualUrgencyNudgeScore ?? 0) ==
+        (platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0) ==
             pendingMutation.manualUrgencyNudgeScore;
   }
 
@@ -521,13 +522,13 @@ class _TaskHubPageState extends State<TaskHubPage> {
     final todo = entry.todo;
     return switch (action) {
       TaskHubQuickAction.increaseUrgency =>
-        (todo.manualUrgencyNudgeScore ?? 0) >= 1,
+        (platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0) >= 1,
       TaskHubQuickAction.decreaseUrgency =>
-        (todo.manualUrgencyNudgeScore ?? 0) <= -1,
+        (platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0) <= -1,
       TaskHubQuickAction.increaseImportance =>
-        (todo.manualImportanceNudgeScore ?? 0) >= 1,
+        (platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0) >= 1,
       TaskHubQuickAction.decreaseImportance =>
-        (todo.manualImportanceNudgeScore ?? 0) <= -1,
+        (platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0) <= -1,
       _ => false,
     };
   }

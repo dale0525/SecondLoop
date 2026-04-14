@@ -34,7 +34,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                   conversationId: widget.conversation.id,
                   role: 'assistant',
                   content: '',
-                  createdAtMs: 0,
+                  createdAtMs: platformIntFromInt(0),
                   isMemory: false,
                 );
               }
@@ -46,7 +46,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                 conversationId: widget.conversation.id,
                 role: 'user',
                 content: pendingQuestion,
-                createdAtMs: 0,
+                createdAtMs: platformIntFromInt(0),
                 isMemory: false,
               );
             }
@@ -71,7 +71,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
               conversationId: widget.conversation.id,
               role: 'user',
               content: pendingQuestion,
-              createdAtMs: 0,
+              createdAtMs: platformIntFromInt(0),
               isMemory: false,
             );
           }
@@ -83,7 +83,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
             conversationId: widget.conversation.id,
             role: 'assistant',
             content: '',
-            createdAtMs: 0,
+            createdAtMs: platformIntFromInt(0),
             isMemory: false,
           );
         }
@@ -102,7 +102,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                 conversationId: widget.conversation.id,
                 role: 'assistant',
                 content: '',
-                createdAtMs: 0,
+                createdAtMs: platformIntFromInt(0),
                 isMemory: false,
               );
               textOverride = pendingAssistantText;
@@ -115,7 +115,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
               conversationId: widget.conversation.id,
               role: 'user',
               content: pendingQuestion,
-              createdAtMs: 0,
+              createdAtMs: platformIntFromInt(0),
               isMemory: false,
             );
           }
@@ -134,7 +134,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                 conversationId: widget.conversation.id,
                 role: 'user',
                 content: pendingQuestion,
-                createdAtMs: 0,
+                createdAtMs: platformIntFromInt(0),
                 isMemory: false,
               );
             }
@@ -146,7 +146,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
               conversationId: widget.conversation.id,
               role: 'assistant',
               content: '',
-              createdAtMs: 0,
+              createdAtMs: platformIntFromInt(0),
               isMemory: false,
             );
             textOverride = pendingAssistantText;

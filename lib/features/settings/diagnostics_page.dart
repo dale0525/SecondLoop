@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -330,13 +329,16 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     setState(() => _busy = true);
     try {
       final json = await _getJson();
-      final dir = await getTemporaryDirectory();
       final safeTs =
           DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
-      final file = File('${dir.path}/secondloop_diagnostics_$safeTs.json');
-      await file.writeAsString(json);
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [
+          XFile.fromData(
+            Uint8List.fromList(utf8.encode(json)),
+            mimeType: 'application/json',
+            name: 'secondloop_diagnostics_$safeTs.json',
+          ),
+        ],
         text: '${t.app.title} ${t.settings.diagnostics.title}',
       );
     } catch (e) {

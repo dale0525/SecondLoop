@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 import '../../../ui/sl_tokens.dart';
 import 'task_hub_card_anchor.dart';
 import 'task_hub_priority_animation_controller.dart';
@@ -47,10 +48,16 @@ class TaskHubEntryCard extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
     final checklistProgress = checklistProgressByTodoId[entry.todo.id];
+    final checklistTotalCount = checklistProgress == null
+        ? null
+        : platformIntToInt(checklistProgress.totalCount);
+    final checklistDoneCount = checklistProgress == null
+        ? null
+        : platformIntToInt(checklistProgress.doneCount);
     final checklistProgressText =
-        checklistProgress == null || checklistProgress.totalCount <= 0
+        checklistProgress == null || (checklistTotalCount ?? 0) <= 0
             ? null
-            : '${checklistProgress.doneCount}/${checklistProgress.totalCount}';
+            : '$checklistDoneCount/$checklistTotalCount';
     final restoredBackground =
         theme.colorScheme.primaryContainer.withOpacity(emphasize ? 0.64 : 0.58);
     final restoredBorder = theme.colorScheme.primary.withOpacity(0.28);

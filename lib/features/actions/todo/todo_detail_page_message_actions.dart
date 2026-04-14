@@ -502,8 +502,10 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
           status: todo.status,
           dueLocal: dueMs == null
               ? null
-              : DateTime.fromMillisecondsSinceEpoch(dueMs, isUtc: true)
-                  .toLocal(),
+              : DateTime.fromMillisecondsSinceEpoch(
+                  platformIntToInt(dueMs),
+                  isUtc: true,
+                ).toLocal(),
         ),
       );
     }

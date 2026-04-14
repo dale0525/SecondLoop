@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../core/backend/app_backend.dart';
+import 'app_shell_default_pages_stub.dart'
+    if (dart.library.io) 'app_shell_default_pages_io.dart'
+    if (dart.library.html) 'app_shell_default_pages_web.dart'
+    as app_shell_defaults;
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
-import '../core/session/session_scope.dart';
 import '../core/update/update_badge_prefs.dart';
-import '../features/chat/chat_page.dart';
-import '../features/settings/settings_page.dart';
 import '../i18n/strings.g.dart';
-import '../src/rust/db.dart';
 import '../ui/sl_glass.dart';
 import '../ui/sl_surface.dart';
 import '../ui/sl_tokens.dart';
@@ -31,14 +30,24 @@ enum AppTab {
 }
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({
+    super.key,
+    this.initialTab = AppTab.chat,
+    this.chatTabBuilder,
+    this.settingsTabBuilder,
+  });
+
+  final AppTab initialTab;
+  final Widget Function(BuildContext context, bool isActive)? chatTabBuilder;
+  final Widget Function(BuildContext context, bool isActive)?
+      settingsTabBuilder;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
-  int _selectedIndex = 0;
+  late int _selectedIndex = widget.initialTab.index;
   QuickCaptureController? _quickCaptureController;
 
   @override
@@ -74,6 +83,32 @@ class _AppShellState extends State<AppShell> {
   }
 
   @override
+  void didUpdateWidget(covariant AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      _selectedIndex = widget.initialTab.index;
+    }
+  }
+
+  Widget _buildChatTab(BuildContext context, {required bool isActive}) {
+    final builder = widget.chatTabBuilder;
+    if (builder != null) return builder(context, isActive);
+    return app_shell_defaults.buildDefaultChatTab(
+      context,
+      isActive: isActive,
+    );
+  }
+
+  Widget _buildSettingsTab(BuildContext context, {required bool isActive}) {
+    final builder = widget.settingsTabBuilder;
+    if (builder != null) return builder(context, isActive);
+    return app_shell_defaults.buildDefaultSettingsTab(
+      context,
+      isActive: isActive,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
     final mediaQuery = MediaQuery.of(context);
@@ -85,11 +120,11 @@ class _AppShellState extends State<AppShell> {
             ? IndexedStack(
                 index: _selectedIndex,
                 children: <Widget>[
-                  _ChatTab(isActive: _selectedIndex == 0),
-                  const _SettingsTab(),
+                  _buildChatTab(context, isActive: _selectedIndex == 0),
+                  _buildSettingsTab(context, isActive: _selectedIndex == 1),
                 ],
               )
-            : const _ChatTab(isActive: true);
+            : _buildChatTab(context, isActive: true);
 
         return Scaffold(
           resizeToAvoidBottomInset: false,
@@ -217,73 +252,6 @@ final class _AppUpdateBadgeIcon extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-final class _ChatTab extends StatefulWidget {
-  const _ChatTab({required this.isActive});
-
-  final bool isActive;
-
-  @override
-  State<_ChatTab> createState() => _ChatTabState();
-}
-
-final class _ChatTabState extends State<_ChatTab> {
-  Future<Conversation>? _conversationFuture;
-
-  Future<Conversation> _load() async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    return backend.getOrCreateLoopHomeConversation(sessionKey);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _conversationFuture ??= _load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Conversation>(
-      future: _conversationFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
-        }
-        if (snapshot.hasError) {
-          return Scaffold(
-              body: Center(
-                  child: Text(
-            context.t.errors.loadFailed(error: '${snapshot.error}'),
-          )));
-        }
-
-        final conversation = snapshot.data;
-        if (conversation == null) {
-          return Scaffold(
-            body: Center(
-                child: Text(context.t.errors.missingLoopHomeConversation)),
-          );
-        }
-        return ChatPage(
-            conversation: conversation, isTabActive: widget.isActive);
-      },
-    );
-  }
-}
-
-final class _SettingsTab extends StatelessWidget {
-  const _SettingsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(context.t.settings.title)),
-      body: const SettingsPage(),
     );
   }
 }

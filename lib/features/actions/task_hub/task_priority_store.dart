@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../core/sync/sync_engine.dart';
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 import '../review/review_backoff.dart';
 import '../settings/actions_settings_store.dart';
 import 'task_priority_ai.dart';
@@ -938,10 +939,12 @@ class TaskPriorityStore extends ChangeNotifier {
         continue;
       }
 
-      final scheduledLocal =
-          DateTime.fromMillisecondsSinceEpoch(nextMs, isUtc: true).toLocal();
+      final scheduledLocal = DateTime.fromMillisecondsSinceEpoch(
+        platformIntToInt(nextMs),
+        isUtc: true,
+      ).toLocal();
       final rolled = ReviewBackoff.rollForwardUntilDueOrFuture(
-        stage: stage,
+        stage: platformIntToInt(stage),
         scheduledAtLocal: scheduledLocal,
         nowLocal: nowLocal,
         settings: settings,
@@ -956,13 +959,13 @@ class TaskPriorityStore extends ChangeNotifier {
           sessionKey,
           id: todo.id,
           title: todo.title,
-          dueAtMs: todo.dueAtMs,
+          dueAtMs: coerceNullablePlatformInt(todo.dueAtMs),
           status: todo.status,
           sourceEntryId: todo.sourceEntryId,
           reviewStage: rolled.stage,
           nextReviewAtMs:
               rolled.nextReviewAtLocal.toUtc().millisecondsSinceEpoch,
-          lastReviewAtMs: todo.lastReviewAtMs,
+          lastReviewAtMs: coerceNullablePlatformInt(todo.lastReviewAtMs),
         );
         normalizedTodos.add(updated);
         didMutate = true;

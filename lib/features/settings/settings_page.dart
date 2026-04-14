@@ -16,6 +16,7 @@ import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/notifications/review_reminder_in_app_fallback_prefs.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
@@ -170,15 +171,14 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   bool _defaultSystemUnlockEnabled() {
-    if (kIsWeb) return false;
+    if (!AppPlatformCapabilityScope.of(context).supportsBiometricUnlock) {
+      return false;
+    }
     return defaultTargetPlatform == TargetPlatform.windows;
   }
 
   bool _isDesktopPlatform() {
-    if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux;
+    return AppPlatformCapabilityScope.of(context).supportsDesktopBootSettings;
   }
 
   String _joinRemotePath(String root, String child) {
@@ -767,10 +767,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _load();
     unawaited(_maybeDisableCloudEmbeddingsIfNotAllowed());
 
-    if (!kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.linux)) {
+    if (AppPlatformCapabilityScope.of(context).supportsDesktopHotkey) {
       unawaited(DesktopQuickCaptureHotkeyPrefs.load());
     }
   }

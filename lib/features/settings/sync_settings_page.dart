@@ -26,8 +26,15 @@ import '../media_backup/cloud_media_backup_runner.dart';
 part 'sync_settings_page_media_actions.dart';
 part 'sync_settings_page_sync_actions.dart';
 
-String _formatTimestamp(int ms) {
-  final dt = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+int _coerceTimestampMs(Object value) {
+  if (value is BigInt) return value.toInt();
+  if (value is num) return value.toInt();
+  throw ArgumentError.value(value, 'value', 'Unsupported timestamp value');
+}
+
+String _formatTimestamp(Object ms) {
+  final dt =
+      DateTime.fromMillisecondsSinceEpoch(_coerceTimestampMs(ms)).toLocal();
   final y = dt.year.toString().padLeft(4, '0');
   final m = dt.month.toString().padLeft(2, '0');
   final d = dt.day.toString().padLeft(2, '0');
