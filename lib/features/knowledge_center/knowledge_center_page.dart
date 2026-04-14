@@ -49,20 +49,27 @@ class _KnowledgeCenterPageState extends State<KnowledgeCenterPage> {
     };
     final recentChangePagesById = <String, KnowledgePageSummary>{};
     final loadedMissingPageIds = <String>{};
-    for (final record in recentChangeRecords) {
-      if (summariesByPageId.containsKey(record.pageId) ||
-          !loadedMissingPageIds.add(record.pageId)) {
-        continue;
-      }
-      try {
-        final detail = await backend.getKnowledgePageDetail(
-          sessionKey,
-          pageId: record.pageId,
-        );
-        recentChangePagesById[record.pageId] = _summaryFromDetail(detail);
-      } catch (_) {
-        continue;
-      }
+    final missingRecentChangePageIds = recentChangeRecords
+        .map((record) => record.pageId)
+        .where((pageId) =>
+            !summariesByPageId.containsKey(pageId) &&
+            loadedMissingPageIds.add(pageId))
+        .toList(growable: false);
+    final missingRecentChangePages = await Future.wait(
+      missingRecentChangePageIds.map((pageId) async {
+        try {
+          final detail = await backend.getKnowledgePageDetail(
+            sessionKey,
+            pageId: pageId,
+          );
+          return MapEntry(pageId, _summaryFromDetail(detail));
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+    for (final entry in missingRecentChangePages.nonNulls) {
+      recentChangePagesById[entry.key] = entry.value;
     }
     return _KnowledgeCenterViewData(
       summaries: summaries,

@@ -179,7 +179,7 @@ fn collect_compiled_page_contexts_matches_keywords_found_only_in_page_body() {
 }
 
 #[test]
-fn collect_matching_page_context_blocks_stops_after_first_batch_when_matches_exist() {
+fn collect_matching_page_context_blocks_keeps_late_candidates_available_for_reranking() {
     let mut inspected = Vec::<String>::new();
     let candidate_summaries = vec![
         (_summary("page:match", "Alpha", "Generic summary"), 1),
@@ -210,8 +210,8 @@ fn collect_matching_page_context_blocks_stops_after_first_batch_when_matches_exi
             .collect::<Vec<_>>(),
         vec!["page:match"]
     );
-    assert_eq!(inspected.len(), 8);
-    assert!(!inspected.iter().any(|page_id| page_id == "page:late"));
+    assert_eq!(inspected.len(), 9);
+    assert!(inspected.iter().any(|page_id| page_id == "page:late"));
 }
 
 #[test]
@@ -238,6 +238,48 @@ fn collect_matching_page_context_blocks_falls_back_to_late_body_match_when_neede
             inspected.push(page_id.to_string());
             Some(if page_id == "page:late" {
                 _page(page_id, "Generic summary", "Reply in Mandarin when asked.")
+            } else {
+                _page(page_id, "Generic summary", "Generic body")
+            })
+        },
+    );
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["page:late"]
+    );
+    assert_eq!(inspected.len(), 9);
+}
+
+#[test]
+fn collect_matching_page_context_blocks_keeps_searching_when_early_match_is_weaker() {
+    let mut inspected = Vec::<String>::new();
+    let candidate_summaries = vec![
+        (_summary("page:weak", "Weak Page", "Mandarin"), 1),
+        (_summary("page:2", "Page 2", "Generic summary"), 0),
+        (_summary("page:3", "Page 3", "Generic summary"), 0),
+        (_summary("page:4", "Page 4", "Generic summary"), 0),
+        (_summary("page:5", "Page 5", "Generic summary"), 0),
+        (_summary("page:6", "Page 6", "Generic summary"), 0),
+        (_summary("page:7", "Page 7", "Generic summary"), 0),
+        (_summary("page:8", "Page 8", "Generic summary"), 0),
+        (_summary("page:late", "Late Page", "Generic summary"), 0),
+    ];
+
+    let blocks = collect_matching_page_context_blocks(
+        "Mandarin Chinese",
+        1,
+        false,
+        candidate_summaries,
+        |page_id| {
+            inspected.push(page_id.to_string());
+            Some(if page_id == "page:weak" {
+                _page(page_id, "Mandarin", "Generic body")
+            } else if page_id == "page:late" {
+                _page(page_id, "Generic summary", "Reply in Mandarin Chinese.")
             } else {
                 _page(page_id, "Generic summary", "Generic body")
             })

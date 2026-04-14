@@ -91,6 +91,41 @@ fn refresh_knowledge_pages_compiles_preferences_page_from_generated_documents() 
 }
 
 #[test]
+fn refresh_knowledge_pages_excludes_muted_generated_documents_from_compiled_pages() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [95u8; 32];
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:preference:response-language",
+        "User prefers responses in Chinese.",
+        1_000,
+    );
+    db::upsert_knowledge_memory_feedback(
+        &conn,
+        &key,
+        "generated:preference:response-language",
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        false,
+        None,
+        None,
+    )
+    .expect("mute generated memory");
+
+    let pages =
+        knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh knowledge pages");
+
+    assert!(
+        pages.iter().all(|page| page.page_id != "page:preferences"),
+        "pages: {pages:?}"
+    );
+}
+
+#[test]
 fn refresh_knowledge_pages_paginates_generated_documents_past_first_512() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = db::open(dir.path()).expect("open");

@@ -109,6 +109,11 @@ KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
           page.answerPolicy.defaultAllowed && page.lastUsedAtMs != null)
       .toList(growable: false)
     ..sort(_sortByLastUsedThenUpdated);
+  final activeWikiPageCount = summaries
+      .where((page) =>
+          page.state != KnowledgePageState.archived &&
+          page.state != KnowledgePageState.removed)
+      .length;
 
   return KnowledgeCenterHomeData(
     currentMe: currentMe.take(5).toList(growable: false),
@@ -116,7 +121,7 @@ KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
     recentChanges: recentChanges.take(8).toList(growable: false),
     directory: directory,
     systemActivity: KnowledgeSystemActivityData(
-      totalPages: summaries.length,
+      totalPages: activeWikiPageCount,
       pagesNeedingReview: needsAttention.length,
       pagesUsedInAnswersRecently:
           pagesUsedInAnswersRecently.take(3).toList(growable: false),

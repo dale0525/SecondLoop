@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -406,6 +407,81 @@ void main() {
     expect(find.textContaining('loadFailed'), findsNothing);
   });
 
+  testWidgets(
+      'KnowledgeCenterPage loads missing recent change details concurrently',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _ConcurrentKnowledgeCenterBackendStub(
+      details: {
+        'page:preferences': _detail(
+          pageId: 'page:preferences',
+          title: 'Preferences',
+          pageType: KnowledgePageType.preferences,
+          state: KnowledgePageState.removed,
+          summary: 'Removed preference page.',
+          updatedAtMs: nowMs,
+        ),
+        'page:recent-events': _detail(
+          pageId: 'page:recent-events',
+          title: 'Recent Events',
+          pageType: KnowledgePageType.recentEvents,
+          state: KnowledgePageState.removed,
+          summary: 'Removed events page.',
+          updatedAtMs: nowMs - 1000,
+        ),
+      },
+      recentChanges: [
+        KnowledgePageChangeRecord(
+          changeId: 'change:preferences',
+          pageId: 'page:preferences',
+          changeType: KnowledgePageChangeType.removed,
+          actor: 'user',
+          reason: 'Removed preference page.',
+          answerImpacted: true,
+          createdAtMs: nowMs,
+        ),
+        KnowledgePageChangeRecord(
+          changeId: 'change:recent-events',
+          pageId: 'page:recent-events',
+          changeType: KnowledgePageChangeType.removed,
+          actor: 'user',
+          reason: 'Removed recent events page.',
+          answerImpacted: true,
+          createdAtMs: nowMs - 1000,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: const KnowledgeCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(backend.requestedPageIds, [
+      'page:preferences',
+      'page:recent-events',
+    ]);
+
+    backend.completeAll();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recent Changes'), findsOneWidget);
+    expect(find.text('Preferences'), findsOneWidget);
+    expect(find.text('Recent Events'), findsOneWidget);
+  });
+
   testWidgets('KnowledgeCenterPage opens a directory list for page types',
       (tester) async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -556,6 +632,109 @@ final class _KnowledgeCenterBackendStub extends TestAppBackend
     required String pageId,
   }) async =>
       details[pageId] ?? (throw StateError('missing detail for $pageId'));
+
+  @override
+  Future<List<KnowledgePageChangeRecord>> listRecentKnowledgePageChanges(
+    Uint8List key, {
+    int limit = 8,
+  }) async =>
+      recentChanges.take(limit).toList(growable: false);
+
+  @override
+  Future<KnowledgePageDetail> archiveKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> removeKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> mergeKnowledgePageInto(
+    Uint8List key, {
+    required String pageId,
+    required String targetPageId,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> correctKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? title,
+    String? summary,
+    String? body,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> markKnowledgePageWrong(
+    Uint8List key, {
+    required String pageId,
+    required KnowledgeWrongReason reason,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> setKnowledgePageAnswerAllowed(
+    Uint8List key, {
+    required String pageId,
+    required bool allowed,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+}
+
+final class _ConcurrentKnowledgeCenterBackendStub extends TestAppBackend
+    implements KnowledgePagesBackend {
+  _ConcurrentKnowledgeCenterBackendStub({
+    required this.details,
+    required this.recentChanges,
+  });
+
+  final Map<String, KnowledgePageDetail> details;
+  final List<KnowledgePageChangeRecord> recentChanges;
+  final List<String> requestedPageIds = <String>[];
+  final Map<String, Completer<KnowledgePageDetail>> _completers =
+      <String, Completer<KnowledgePageDetail>>{};
+
+  @override
+  Future<List<KnowledgePageSummary>> listKnowledgePageSummaries(
+    Uint8List key,
+  ) async =>
+      const <KnowledgePageSummary>[];
+
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) {
+    requestedPageIds.add(pageId);
+    return _completers
+        .putIfAbsent(pageId, Completer<KnowledgePageDetail>.new)
+        .future;
+  }
+
+  void completeAll() {
+    for (final entry in details.entries) {
+      final completer = _completers.putIfAbsent(
+        entry.key,
+        Completer<KnowledgePageDetail>.new,
+      );
+      if (!completer.isCompleted) {
+        completer.complete(entry.value);
+      }
+    }
+  }
 
   @override
   Future<List<KnowledgePageChangeRecord>> listRecentKnowledgePageChanges(

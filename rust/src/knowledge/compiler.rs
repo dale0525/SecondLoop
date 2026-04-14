@@ -206,12 +206,19 @@ fn compile_pages_from_claims(
                 if page_claims.is_empty() {
                     continue;
                 }
-                let contributes_to_current = page_claims.iter().any(|claim| {
-                    matches!(
-                        claim.status,
-                        KnowledgeClaimStatus::Active | KnowledgeClaimStatus::Supporting
-                    )
-                });
+                let current_page_claims = page_claims
+                    .into_iter()
+                    .filter(|claim| {
+                        claim.answer_allowed
+                            && matches!(
+                                claim.status,
+                                KnowledgeClaimStatus::Active | KnowledgeClaimStatus::Supporting
+                            )
+                    })
+                    .collect::<Vec<_>>();
+                if current_page_claims.is_empty() {
+                    continue;
+                }
                 let document_title = document
                     .title
                     .as_deref()
@@ -221,28 +228,30 @@ fn compile_pages_from_claims(
                     .as_deref()
                     .unwrap_or(document.raw_text.as_str())
                     .trim();
-                if contributes_to_current {
-                    if seed.page_type == KnowledgePageType::ActiveThreads
-                        && document.document_id == "generated:pattern:active-task-focus"
-                    {
-                        body_lines.push(document.raw_text.trim().to_string());
-                    } else {
-                        body_lines.push(format!("- {document_title}: {document_summary}"));
-                    }
-                    summary_lines.push(document_summary.to_string());
-                    primary_evidence_ids.push(document.document_id.clone());
-                    latest_updated_at = latest_updated_at.max(document.updated_at_ms);
-                    source_count += document
-                        .memory_display
-                        .as_ref()
-                        .map(|value| value.source_count)
-                        .unwrap_or(1)
-                        .max(1);
-                    contributing_document_count += 1;
-                    confidence_total += document.quality_score;
+                if seed.page_type == KnowledgePageType::ActiveThreads
+                    && document.document_id == "generated:pattern:active-task-focus"
+                {
+                    body_lines.push(document.raw_text.trim().to_string());
+                } else {
+                    body_lines.push(format!("- {document_title}: {document_summary}"));
                 }
+                summary_lines.push(document_summary.to_string());
+                primary_evidence_ids.push(document.document_id.clone());
+                latest_updated_at = latest_updated_at.max(document.updated_at_ms);
+                source_count += document
+                    .memory_display
+                    .as_ref()
+                    .map(|value| value.source_count)
+                    .unwrap_or(1)
+                    .max(1);
+                contributing_document_count += 1;
+                confidence_total += document.quality_score;
                 source_document_ids.push(document.document_id.clone());
-                claim_ids.extend(page_claims.into_iter().map(|claim| claim.claim_id.clone()));
+                claim_ids.extend(
+                    current_page_claims
+                        .into_iter()
+                        .map(|claim| claim.claim_id.clone()),
+                );
             }
             if summary_lines.is_empty() && body_lines.is_empty() {
                 return None;
@@ -299,7 +308,7 @@ fn count_conflicts_for_page(claims: &[KnowledgeClaim], claim_indexes: Option<&Ve
         return 0;
     };
     for claim in claim_indexes.iter().map(|index| &claims[*index]) {
-        if claim.status == KnowledgeClaimStatus::Dismissed {
+        if claim.status == KnowledgeClaimStatus::Dismissed || !claim.answer_allowed {
             continue;
         }
         by_facet

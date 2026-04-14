@@ -197,4 +197,72 @@ void main() {
     expect(data.needsAttention, isEmpty);
     expect(data.systemActivity.pagesNeedingReview, 0);
   });
+
+  test(
+      'buildKnowledgeCenterHomeData excludes audit-only pages from active wiki totals',
+      () {
+    final summaries = <KnowledgePageSummary>[
+      const KnowledgePageSummary(
+        pageId: 'page:preferences',
+        pageType: KnowledgePageType.preferences,
+        title: 'Preferences',
+        currentSummary: 'Active preference page.',
+        state: KnowledgePageState.active,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: true,
+          requiresTemporalFraming: false,
+        ),
+        updatedAtMs: 10,
+        lastUsedAtMs: 10,
+        sourceCount: 2,
+        conflictCount: 0,
+        humanCorrected: false,
+        tags: [],
+        primaryEvidenceIds: [],
+      ),
+      const KnowledgePageSummary(
+        pageId: 'page:topics:removed',
+        pageType: KnowledgePageType.topics,
+        title: 'Removed Topic',
+        currentSummary: 'Removed topic page.',
+        state: KnowledgePageState.removed,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: false,
+          requiresTemporalFraming: false,
+        ),
+        updatedAtMs: 11,
+        lastUsedAtMs: null,
+        sourceCount: 2,
+        conflictCount: 0,
+        humanCorrected: false,
+        tags: [],
+        primaryEvidenceIds: [],
+      ),
+      const KnowledgePageSummary(
+        pageId: 'page:about-me:archived',
+        pageType: KnowledgePageType.aboutMe,
+        title: 'Archived About Me',
+        currentSummary: 'Archived profile page.',
+        state: KnowledgePageState.archived,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: false,
+          requiresTemporalFraming: false,
+        ),
+        updatedAtMs: 12,
+        lastUsedAtMs: null,
+        sourceCount: 1,
+        conflictCount: 0,
+        humanCorrected: false,
+        tags: [],
+        primaryEvidenceIds: [],
+      ),
+    ];
+
+    final data = buildKnowledgeCenterHomeData(
+      summaries: summaries,
+      recentChangeRecords: const <KnowledgePageChangeRecord>[],
+    );
+
+    expect(data.systemActivity.totalPages, 1);
+  });
 }

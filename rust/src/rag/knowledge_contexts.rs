@@ -186,7 +186,7 @@ where
         &mut load_page,
         &mut candidates,
     );
-    if !is_planning_query && candidates.is_empty() {
+    if !is_planning_query {
         append_matching_page_context_blocks(
             question,
             is_planning_query,
