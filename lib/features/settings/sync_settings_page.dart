@@ -822,69 +822,69 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
             const SizedBox(height: 16),
           ],
-          if (!usesCloudSessionModel) ...[
-            sectionTitle(context.t.sync.sections.securityActions),
-            sectionCard(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (backendType == SyncBackendType.managedVault &&
-                      (cloudUid == null || cloudUid.isEmpty))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        context.t.sync.cloudManagedVault.signInRequired,
-                        style: Theme.of(context).textTheme.bodySmall,
+          sectionTitle(context.t.sync.sections.securityActions),
+          sectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (backendType == SyncBackendType.managedVault &&
+                    (cloudUid == null || cloudUid.isEmpty))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      context.t.sync.cloudManagedVault.signInRequired,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                if (engine == null)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _busy ? null : _push,
+                          child: Text(context.t.common.actions.push),
+                        ),
                       ),
-                    ),
-                  if (engine == null)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _busy ? null : _push,
-                            child: Text(context.t.common.actions.push),
-                          ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _busy ? null : _pull,
+                          child: Text(context.t.common.actions.pull),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _busy ? null : _pull,
-                            child: Text(context.t.common.actions.pull),
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    ValueListenableBuilder(
-                      valueListenable: engine.writeGate,
-                      builder: (context, gate, _) {
-                        final disablePush = _busy ||
-                            (backendType == SyncBackendType.managedVault &&
-                                gate.kind != SyncWriteGateKind.open);
-                        final disablePull = _busy ||
-                            (backendType == SyncBackendType.managedVault &&
-                                gate.kind == SyncWriteGateKind.paymentRequired);
+                      ),
+                    ],
+                  )
+                else
+                  ValueListenableBuilder(
+                    valueListenable: engine.writeGate,
+                    builder: (context, gate, _) {
+                      final disablePush = _busy ||
+                          (backendType == SyncBackendType.managedVault &&
+                              gate.kind != SyncWriteGateKind.open);
+                      final disablePull = _busy ||
+                          (backendType == SyncBackendType.managedVault &&
+                              gate.kind == SyncWriteGateKind.paymentRequired);
 
-                        return Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: disablePush ? null : _push,
-                                child: Text(context.t.common.actions.push),
-                              ),
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: disablePush ? null : _push,
+                              child: Text(context.t.common.actions.push),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: disablePull ? null : _pull,
-                                child: Text(context.t.common.actions.pull),
-                              ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: disablePull ? null : _pull,
+                              child: Text(context.t.common.actions.pull),
                             ),
-                          ],
-                        );
-                      },
-                    ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                if (!usesCloudSessionModel) ...[
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: _busy || !canClearLocalCache
@@ -899,9 +899,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
-              ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );

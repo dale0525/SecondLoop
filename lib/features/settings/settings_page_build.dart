@@ -274,39 +274,40 @@ extension _SettingsPageBuild on _SettingsPageState {
         ),
         const SizedBox(height: 8),
         sectionCard([
-          ListTile(
-            key: const ValueKey('settings_about'),
-            title: Text(context.t.settings.about.title),
-            subtitle: Text(context.t.settings.about.subtitle),
-            trailing: ValueListenableBuilder<String?>(
-              valueListenable: UpdateBadgePrefs.value,
-              builder: (context, latestTag, child) {
-                final hasUpdate =
-                    latestTag != null && latestTag.trim().isNotEmpty;
-                if (!hasUpdate) {
-                  return const SizedBox.shrink();
-                }
-                return Container(
-                  key: const ValueKey('settings_about_update_badge'),
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.error,
-                    shape: BoxShape.circle,
-                  ),
-                );
-              },
+          if (!capabilities.usesCloudSessionModel)
+            ListTile(
+              key: const ValueKey('settings_about'),
+              title: Text(context.t.settings.about.title),
+              subtitle: Text(context.t.settings.about.subtitle),
+              trailing: ValueListenableBuilder<String?>(
+                valueListenable: UpdateBadgePrefs.value,
+                builder: (context, latestTag, child) {
+                  final hasUpdate =
+                      latestTag != null && latestTag.trim().isNotEmpty;
+                  if (!hasUpdate) {
+                    return const SizedBox.shrink();
+                  }
+                  return Container(
+                    key: const ValueKey('settings_about_update_badge'),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.error,
+                      shape: BoxShape.circle,
+                    ),
+                  );
+                },
+              ),
+              onTap: _busy
+                  ? null
+                  : () {
+                      pushPageWithInheritedScopes(
+                        Navigator.of(context),
+                        context,
+                        const AboutPage(),
+                      );
+                    },
             ),
-            onTap: _busy
-                ? null
-                : () {
-                    pushPageWithInheritedScopes(
-                      Navigator.of(context),
-                      context,
-                      const AboutPage(),
-                    );
-                  },
-          ),
           ListTile(
             key: const ValueKey('settings_reopen_welcome_guide'),
             title: Text(context.t.welcomeGuide.reopen.title),

@@ -55,6 +55,16 @@ void main() {
     expect(backend.managedVaultPullCalls, 0);
     expect(backend.managedVaultPushCalls, 0);
     expect(find.textContaining('unsupported operation'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('Upload'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(OutlinedButton, 'Upload'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Download'), findsOneWidget);
   });
 
   testWidgets(
