@@ -173,8 +173,9 @@ pub fn db_list_recent_knowledge_page_changes(
     key: Vec<u8>,
     limit: u32,
 ) -> Result<Vec<knowledge::KnowledgePageChangeRecord>> {
-    let _validated_key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
     db::list_recent_knowledge_page_changes(&conn, limit as usize)
 }
 

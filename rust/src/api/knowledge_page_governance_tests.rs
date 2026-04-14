@@ -1,5 +1,58 @@
 use crate::api::knowledge;
 use crate::db;
+use rusqlite::params;
+
+fn insert_generated_document(
+    conn: &rusqlite::Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    summary: &str,
+    updated_at_ms: i64,
+) {
+    let anchor_json = serde_json::to_string(&crate::knowledge::KnowledgeAnchorSet::default())
+        .expect("anchor json");
+    let raw =
+        db::encode_knowledge_document_text(key, document_id, "raw", summary).expect("encode raw");
+    let normalized = db::encode_knowledge_document_text(key, document_id, "normalized", summary)
+        .expect("encode normalized");
+    conn.execute(
+        r#"INSERT INTO knowledge_documents(
+               document_id,
+               origin_type,
+               source_kind,
+               role,
+               language,
+               quality_score,
+               title,
+               summary,
+               anchor_json,
+               raw_text,
+               normalized_text,
+               created_at_ms,
+               updated_at_ms,
+               schema_version,
+               normalization_version,
+               segmentation_version,
+               embedding_policy_version,
+               retrieval_policy_version,
+               last_indexed_at_ms
+           ) VALUES (?1, 'generated', 'summary', 'summary', NULL, 1.0, NULL, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8, ?9, ?10, ?11, NULL)"#,
+        params![
+            document_id,
+            summary,
+            anchor_json,
+            raw,
+            normalized,
+            updated_at_ms,
+            crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+            crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+            crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+            crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+            crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+        ],
+    )
+    .expect("insert generated document");
+}
 
 #[test]
 fn correcting_muted_page_preserves_answer_muted_governance() {
@@ -190,4 +243,47 @@ END;
     assert!(summaries
         .iter()
         .any(|page| page.page_id == "page:preferences"));
+}
+
+#[test]
+fn listing_recent_knowledge_page_changes_refreshes_pages_when_required() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir_string = dir.path().to_string_lossy().into_owned();
+    let conn = db::open(dir.path()).expect("open");
+    let key = [85u8; 32];
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:preference:response-language",
+        "User prefers responses in Chinese.",
+        100,
+    );
+    crate::knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh pages");
+    crate::db::mark_knowledge_pages_refreshed(&conn, 100).expect("mark pages refreshed");
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:preference:response-style",
+        "User prefers short and practical responses.",
+        200,
+    );
+    crate::db::mark_knowledge_pages_refresh_required(&conn).expect("mark pages stale");
+
+    let recent_changes =
+        knowledge::db_list_recent_knowledge_page_changes(app_dir_string, key.to_vec(), 8)
+            .expect("list recent changes");
+
+    assert!(
+        recent_changes.iter().any(|record| {
+            record.page_id == "page:preferences"
+                && record.change_type == crate::knowledge::KnowledgePageChangeType::Updated
+        }),
+        "recent changes: {recent_changes:?}"
+    );
+    assert!(
+        !crate::db::knowledge_pages_refresh_required(&conn).expect("load refresh flag"),
+        "recent changes API should consume pending page refreshes"
+    );
 }

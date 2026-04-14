@@ -140,6 +140,25 @@ type StoredKnowledgePageSqlRow = (
     Option<Vec<u8>>,
 );
 
+type KnowledgePageSummarySqlRow = (
+    String,
+    String,
+    String,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    Option<i64>,
+    i64,
+    String,
+    String,
+    Vec<u8>,
+    Vec<u8>,
+    Option<Vec<u8>>,
+    Option<Vec<u8>>,
+);
+
 fn read_stored_knowledge_page_sql_row(
     row: &rusqlite::Row<'_>,
 ) -> rusqlite::Result<StoredKnowledgePageSqlRow> {
@@ -167,6 +186,29 @@ fn read_stored_knowledge_page_sql_row(
         row.get::<_, Option<Vec<u8>>>(20)?,
         row.get::<_, Option<Vec<u8>>>(21)?,
         row.get::<_, Option<Vec<u8>>>(22)?,
+    ))
+}
+
+fn read_knowledge_page_summary_sql_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<KnowledgePageSummarySqlRow> {
+    Ok((
+        row.get::<_, String>(0)?,
+        row.get::<_, String>(1)?,
+        row.get::<_, String>(2)?,
+        row.get::<_, i64>(3)?,
+        row.get::<_, i64>(4)?,
+        row.get::<_, i64>(5)?,
+        row.get::<_, i64>(6)?,
+        row.get::<_, i64>(7)?,
+        row.get::<_, Option<i64>>(8)?,
+        row.get::<_, i64>(9)?,
+        row.get::<_, String>(10)?,
+        row.get::<_, String>(11)?,
+        row.get::<_, Vec<u8>>(12)?,
+        row.get::<_, Vec<u8>>(13)?,
+        row.get::<_, Option<Vec<u8>>>(14)?,
+        row.get::<_, Option<Vec<u8>>>(15)?,
     ))
 }
 
@@ -287,6 +329,48 @@ fn stored_row_to_page(
         tags: row.tags.clone(),
         primary_evidence_ids: row.primary_evidence_ids.clone(),
         related_page_ids: row.related_page_ids.clone(),
+    })
+}
+
+fn decode_knowledge_page_summary(
+    key: &[u8; 32],
+    row: KnowledgePageSummarySqlRow,
+) -> Result<crate::knowledge::KnowledgePageSummary> {
+    let page_id = row.0;
+    let compiled_title =
+        decode_knowledge_page_text(key, &page_id, "compiled_title", &row.12)?;
+    let compiled_summary =
+        decode_knowledge_page_text(key, &page_id, "compiled_summary", &row.13)?;
+    let title = row
+        .14
+        .as_ref()
+        .map(|blob| decode_knowledge_page_text(key, &page_id, "manual_title", blob))
+        .transpose()?
+        .unwrap_or(compiled_title);
+    let current_summary = row
+        .15
+        .as_ref()
+        .map(|blob| decode_knowledge_page_text(key, &page_id, "manual_summary", blob))
+        .transpose()?
+        .unwrap_or(compiled_summary);
+
+    Ok(crate::knowledge::KnowledgePageSummary {
+        page_id,
+        page_type: decode_page_type(row.1)?,
+        title,
+        current_summary,
+        state: decode_page_state(row.2)?,
+        answer_policy: crate::knowledge::KnowledgeAnswerPolicy {
+            default_allowed: row.3 != 0,
+            requires_temporal_framing: row.4 != 0,
+        },
+        updated_at_ms: row.7,
+        last_used_at_ms: row.8,
+        source_count: row.5,
+        conflict_count: row.6,
+        human_corrected: row.9 != 0,
+        tags: decode_string_list(row.10)?,
+        primary_evidence_ids: decode_string_list(row.11)?,
     })
 }
 

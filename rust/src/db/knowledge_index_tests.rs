@@ -54,6 +54,7 @@ fn knowledge_schema_migration_creates_versioned_tables_and_indexes() {
         "idx_knowledge_claims_subject_status",
         "idx_knowledge_pages_state_updated",
         "idx_knowledge_page_history_page_created",
+        "idx_knowledge_page_history_created",
         "idx_knowledge_page_versions_page_created",
         "idx_knowledge_page_lints_page_created",
     ] {
@@ -794,6 +795,48 @@ fn list_knowledge_page_summaries_keeps_removed_pages_for_audit_surfaces() {
             "page:topics:active".to_string(),
         ]
     );
+}
+
+#[test]
+fn list_knowledge_page_summaries_does_not_decode_page_body() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [90u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut page = crate::knowledge::KnowledgePage::new(
+        "page:topics:summary-only",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Summary Only Topic",
+        now,
+    );
+    page.current_summary = "Summary remains readable.".to_string();
+    page.current_body = "Body should not be loaded by summaries.".to_string();
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page,
+            source_document_ids: vec!["doc:summary-only".to_string()],
+            claim_ids: vec!["claim:summary-only".to_string()],
+        }],
+    )
+    .expect("seed page");
+
+    conn.execute(
+        "UPDATE knowledge_pages SET compiled_body = X'00' WHERE page_id = ?1",
+        params!["page:topics:summary-only"],
+    )
+    .expect("corrupt compiled body");
+
+    let summaries = list_knowledge_page_summaries(&conn, &key).expect("list summaries");
+    let summary = summaries
+        .into_iter()
+        .find(|page| page.page_id == "page:topics:summary-only")
+        .expect("summary-only page");
+    assert_eq!(summary.title, "Summary Only Topic");
+    assert_eq!(summary.current_summary, "Summary remains readable.");
 }
 
 #[test]

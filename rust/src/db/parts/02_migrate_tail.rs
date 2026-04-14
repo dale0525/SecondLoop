@@ -627,6 +627,18 @@ PRAGMA user_version = 46;
     Ok(())
 }
 
+fn migrate_from_v46_to_v47(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE INDEX IF NOT EXISTS idx_knowledge_page_history_created
+  ON knowledge_page_history(created_at_ms DESC, change_id DESC);
+
+PRAGMA user_version = 47;
+"#,
+    )?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
