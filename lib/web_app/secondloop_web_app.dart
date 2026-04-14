@@ -29,7 +29,7 @@ class SecondLoopWebApp extends StatefulWidget {
 
   final Future<WebAppBootstrapData> Function()? bootstrapLoader;
   final Future<WebAppConfig> Function()? configLoader;
-  final WebAppService Function()? serviceFactory;
+  final WebAppService Function(WebAppConfig config)? serviceFactory;
   final ObservableCloudAuthController Function(WebAppConfig config)?
       authControllerFactory;
   final WebEntryIntent? entryIntent;
@@ -69,7 +69,10 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
   Future<WebAppBootstrapData> _bootstrap() async {
     final config =
         await (widget.configLoader ?? WebAppServiceHttp.loadConfig)();
-    final service = (widget.serviceFactory ?? () => WebAppServiceHttp())();
+    final service = (widget.serviceFactory ??
+        (config) => WebAppServiceHttp(
+              managedVaultConfigured: config.hasManagedVaultBaseUrl,
+            ))(config);
     final authController = (widget.authControllerFactory ??
         (config) => CloudAuthControllerImpl(
               identityToolkit: FirebaseIdentityToolkitHttp(

@@ -153,9 +153,13 @@ abstract class WebAppService {
 }
 
 class WebAppConfig {
-  const WebAppConfig({required this.firebaseWebApiKey});
+  const WebAppConfig({
+    required this.firebaseWebApiKey,
+    this.hasManagedVaultBaseUrl = false,
+  });
 
   final String firebaseWebApiKey;
+  final bool hasManagedVaultBaseUrl;
 }
 
 class WebAppHttpException implements Exception {
@@ -183,13 +187,16 @@ class WebAppServiceHttp extends WebAppService {
   WebAppServiceHttp({
     http.Client? client,
     Future<bool> Function(Uri url)? urlOpener,
+    bool managedVaultConfigured = true,
   })  : _client = client ?? http.Client(),
         _ownsClient = client == null,
-        _urlOpener = urlOpener ?? _defaultUrlOpener;
+        _urlOpener = urlOpener ?? _defaultUrlOpener,
+        _managedVaultConfigured = managedVaultConfigured;
 
   final http.Client _client;
   final bool _ownsClient;
   final Future<bool> Function(Uri url) _urlOpener;
+  final bool _managedVaultConfigured;
 
   static Future<bool> _defaultUrlOpener(Uri url) {
     return launchUrl(url, mode: LaunchMode.platformDefault);
@@ -208,7 +215,11 @@ class WebAppServiceHttp extends WebAppService {
       }
       final firebaseWebApiKey =
           '${decoded['firebase_web_api_key'] ?? ''}'.trim();
-      return WebAppConfig(firebaseWebApiKey: firebaseWebApiKey);
+      return WebAppConfig(
+        firebaseWebApiKey: firebaseWebApiKey,
+        hasManagedVaultBaseUrl:
+            _parseBool(decoded['has_managed_vault_base_url']) ?? false,
+      );
     } finally {
       if (client == null) {
         httpClient.close();
@@ -397,6 +408,7 @@ class WebAppServiceHttp extends WebAppService {
     required String idToken,
     required String vaultId,
   }) async {
+    if (!_managedVaultConfigured) return null;
     final json = await _getJson(
       _kApiVaultUsagePath,
       idToken,
@@ -413,6 +425,9 @@ class WebAppServiceHttp extends WebAppService {
     required String idToken,
     required String vaultId,
   }) async {
+    if (!_managedVaultConfigured) {
+      return const <WebVaultAttachmentItem>[];
+    }
     final json = await _getJson(
       _kApiVaultAttachmentsPath,
       idToken,
@@ -448,6 +463,9 @@ class WebAppServiceHttp extends WebAppService {
     required String mimeType,
     required List<int> bytes,
   }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
     if (bytes.length > _kMaxWebAttachmentBytes) {
       throw StateError('attachment_too_large_for_web');
     }
@@ -475,6 +493,9 @@ class WebAppServiceHttp extends WebAppService {
     required String vaultId,
     required String sha256,
   }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
     final request = http.Request(
       'GET',
       Uri(path: _kApiVaultAttachmentPath, queryParameters: {'sha256': sha256}),
@@ -509,6 +530,9 @@ class WebAppServiceHttp extends WebAppService {
     required String vaultId,
     required String sha256,
   }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
     final request = http.Request(
       'DELETE',
       Uri(path: _kApiVaultAttachmentPath, queryParameters: {'sha256': sha256}),
@@ -522,6 +546,16 @@ class WebAppServiceHttp extends WebAppService {
     final response = await http.Response.fromStream(streamed);
     _decodeJsonResponse(response);
   }
+}
+
+bool? _parseBool(Object? value) {
+  if (value is bool) return value;
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'true') return true;
+    if (normalized == 'false') return false;
+  }
+  return null;
 }
 
 Future<String> _sha256Hex(List<int> bytes) async {

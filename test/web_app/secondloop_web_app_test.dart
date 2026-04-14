@@ -74,7 +74,7 @@ void main() {
       SecondLoopWebApp(
         configLoader: () async =>
             const WebAppConfig(firebaseWebApiKey: 'firebase-key'),
-        serviceFactory: () => _FakeWebAppService(),
+        serviceFactory: (config) => _FakeWebAppService(),
         authControllerFactory: (config) => _FakeCloudAuthController(
           refreshError: StateError('lookup_failed'),
         ),
@@ -94,7 +94,7 @@ void main() {
       SecondLoopWebApp(
         configLoader: () async =>
             const WebAppConfig(firebaseWebApiKey: 'firebase-key'),
-        serviceFactory: () => service,
+        serviceFactory: (config) => service,
         authControllerFactory: (config) => _FakeCloudAuthController(),
       ),
     );

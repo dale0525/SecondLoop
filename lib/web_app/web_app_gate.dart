@@ -21,6 +21,7 @@ import 'web_public_entry_scaffold.dart';
 import 'web_app_service.dart';
 import '../features/settings/cloud_account_panel.dart';
 import 'web_formal_settings_adapters.dart';
+import 'web_formal_settings_scope.dart';
 import '../core/subscription/cloud_subscription_controller.dart';
 import '../core/subscription/subscription_scope.dart';
 
@@ -209,6 +210,20 @@ class _WebAppGateState extends State<WebAppGate> {
   @override
   Widget build(BuildContext context) {
     final uid = widget.authController.uid;
+    final webFormalSettings = WebFormalSettingsDependencies(
+      billingClient: _billingClient,
+      cloudUsageClient: _cloudUsageClient,
+      vaultUsageClient: _vaultUsageClient,
+      vaultAttachmentsClient: _vaultAttachmentsClient,
+      vaultConfigStore: _vaultConfigStore,
+      cloudAuthController: widget.authController,
+      cloudGatewayConfig: const CloudGatewayConfig(
+        baseUrl: kWebFormalSettingsBaseUrl,
+        modelName: 'cloud',
+      ),
+      subscriptionController: _subscriptionController,
+      isWebOverride: true,
+    );
     late final Widget child;
     if (uid == null || uid.trim().isEmpty) {
       child = WebPublicEntryScaffold(
@@ -260,7 +275,10 @@ class _WebAppGateState extends State<WebAppGate> {
             child: SessionScope(
               sessionKey: Uint8List(0),
               lock: () {},
-              child: child,
+              child: WebFormalSettingsScope(
+                dependencies: webFormalSettings,
+                child: child,
+              ),
             ),
           ),
         ),

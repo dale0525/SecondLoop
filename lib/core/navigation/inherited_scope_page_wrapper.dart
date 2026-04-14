@@ -9,6 +9,7 @@ import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
+import '../../web_app/web_formal_settings_scope.dart';
 
 final class InheritedScopeCapture {
   const InheritedScopeCapture({
@@ -19,6 +20,7 @@ final class InheritedScopeCapture {
     this.cloudAuthController,
     this.cloudGatewayConfig,
     this.syncEngine,
+    this.webFormalSettingsDependencies,
   });
 
   final AppBackend? backend;
@@ -28,6 +30,7 @@ final class InheritedScopeCapture {
   final CloudAuthController? cloudAuthController;
   final CloudGatewayConfig? cloudGatewayConfig;
   final SyncEngine? syncEngine;
+  final WebFormalSettingsDependencies? webFormalSettingsDependencies;
 
   bool get isEmpty =>
       backend == null &&
@@ -36,7 +39,8 @@ final class InheritedScopeCapture {
       subscriptionController == null &&
       cloudAuthController == null &&
       cloudGatewayConfig == null &&
-      syncEngine == null;
+      syncEngine == null &&
+      webFormalSettingsDependencies == null;
 }
 
 InheritedScopeCapture captureInheritedScopes(BuildContext context) {
@@ -52,6 +56,8 @@ InheritedScopeCapture captureInheritedScopes(BuildContext context) {
     cloudAuthController: cloudAuthScope?.controller,
     cloudGatewayConfig: cloudAuthScope?.gatewayConfig,
     syncEngine: SyncEngineScope.maybeOf(context),
+    webFormalSettingsDependencies:
+        WebFormalSettingsScope.maybeOf(context)?.dependencies,
   );
 }
 
@@ -92,6 +98,15 @@ Widget wrapPushedPageWithInheritedScopeCapture(
   if (subscriptionController != null) {
     wrapped = SubscriptionScope(
       controller: subscriptionController,
+      child: wrapped,
+    );
+  }
+
+  final webFormalSettingsDependencies =
+      capturedScopes.webFormalSettingsDependencies;
+  if (webFormalSettingsDependencies != null) {
+    wrapped = WebFormalSettingsScope(
+      dependencies: webFormalSettingsDependencies,
       child: wrapped,
     );
   }
