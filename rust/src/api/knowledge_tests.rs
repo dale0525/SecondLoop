@@ -928,10 +928,10 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
     .expect("unmute page answers");
     assert_eq!(
         unmuted.page.state,
-        crate::knowledge::KnowledgePageState::Active
+        crate::knowledge::KnowledgePageState::Outdated
     );
     assert!(unmuted.page.answer_policy.default_allowed);
-    assert!(!unmuted.page.answer_policy.requires_temporal_framing);
+    assert!(unmuted.page.answer_policy.requires_temporal_framing);
     assert!(muted.version_snapshots.len() >= 3);
     assert!(muted
         .version_snapshots
@@ -952,6 +952,22 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
     )
     .expect("clear body");
     assert_eq!(cleared_body.page.current_body, "");
+
+    let reset_overrides = crate::api::knowledge::db_correct_knowledge_page(
+        app_dir.to_string_lossy().into_owned(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+        Some(String::new()),
+        Some(String::new()),
+        None,
+    )
+    .expect("reset title and summary overrides");
+    assert_eq!(reset_overrides.page.title, "Preferences");
+    assert_ne!(
+        reset_overrides.page.current_summary,
+        "Always answer in Chinese first."
+    );
+    assert!(reset_overrides.page.current_summary.contains("Chinese"));
 }
 
 #[test]

@@ -245,3 +245,46 @@ fn refresh_knowledge_pages_compiles_disputed_claims_into_open_questions_pages() 
         "compiled pages should not keep disputed content in the main preferences page: {pages:?}"
     );
 }
+
+#[test]
+fn refresh_knowledge_pages_ignores_dismissed_claims_when_counting_conflicts() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [46u8; 32];
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:preference:response-language",
+        "User prefers responses in Chinese.",
+        34_568,
+    );
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:preference:alternate:response-language",
+        "User prefers responses in English.",
+        34_569,
+    );
+    db::upsert_knowledge_memory_feedback(
+        &conn,
+        &key,
+        "generated:preference:alternate:response-language",
+        Some(knowledge::KnowledgeMemoryStatus::Confirmed),
+        true,
+        true,
+        false,
+        None,
+        None,
+    )
+    .expect("dismiss alternate preference");
+
+    let pages =
+        knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh knowledge pages");
+    let preferences = pages
+        .iter()
+        .find(|page| page.page_id == "page:preferences")
+        .expect("preferences page");
+
+    assert_eq!(preferences.conflict_count, 0);
+}

@@ -35,6 +35,30 @@ pub fn apply_knowledge_page_correction(
     let Some(existing) = load_stored_knowledge_page_row(conn, page_id)? else {
         return Err(anyhow!("knowledge page not found: {page_id}"));
     };
+    let next_manual_title = resolve_manual_page_text_update(
+        key,
+        page_id,
+        "manual_title",
+        title,
+        existing.manual_title_blob.clone(),
+        true,
+    )?;
+    let next_manual_summary = resolve_manual_page_text_update(
+        key,
+        page_id,
+        "manual_summary",
+        summary,
+        existing.manual_summary_blob.clone(),
+        true,
+    )?;
+    let next_manual_body = resolve_manual_page_text_update(
+        key,
+        page_id,
+        "manual_body",
+        body,
+        existing.manual_body_blob.clone(),
+        false,
+    )?;
     conn.execute(
         r#"UPDATE knowledge_pages
            SET state = ?2,
@@ -42,44 +66,25 @@ pub fn apply_knowledge_page_correction(
                answer_requires_temporal_framing = 0,
                updated_at_ms = ?3,
                human_corrected = 1,
-               manual_title = COALESCE(?4, manual_title),
-               manual_summary = COALESCE(?5, manual_summary),
-               manual_body = COALESCE(?6, manual_body)
+               manual_title = ?4,
+               manual_summary = ?5,
+               manual_body = ?6
            WHERE page_id = ?1"#,
         params![
             page_id,
             encode_page_state(crate::knowledge::KnowledgePageState::Active)?,
             now,
-            encode_optional_page_text(
-                key,
-                page_id,
-                "manual_title",
-                normalize_optional_trimmed(title),
-            )?,
-            encode_optional_page_text(
-                key,
-                page_id,
-                "manual_summary",
-                normalize_optional_trimmed(summary),
-            )?,
-            encode_optional_page_text(key, page_id, "manual_body", body)?,
+            next_manual_title,
+            next_manual_summary,
+            next_manual_body,
         ],
     )?;
-    let page = stored_row_to_page(
-        key,
-        &StoredKnowledgePageRow {
-            state: crate::knowledge::KnowledgePageState::Active,
-            default_allowed: true,
-            requires_temporal_framing: false,
-            updated_at_ms: now,
-            human_corrected: true,
-            ..existing
-        },
-    )?;
+    let updated = get_knowledge_page_detail(conn, key, page_id)?
+        .ok_or_else(|| anyhow!("knowledge page disappeared after correction"))?;
     replace_knowledge_page_lints(
         conn,
         page_id,
-        &build_knowledge_page_lints(&page, &page.primary_evidence_ids),
+        &build_knowledge_page_lints(&updated.page, &updated.source_document_ids),
     )?;
     record_knowledge_page_change(
         conn,
@@ -162,7 +167,7 @@ pub fn set_knowledge_page_answer_allowed(
     };
     let next_state = if allowed {
         if detail.page.state == crate::knowledge::KnowledgePageState::AnswerMuted {
-            crate::knowledge::KnowledgePageState::Active
+            restore_state_before_answer_muted(conn, key, page_id)?
         } else {
             detail.page.state
         }
@@ -225,6 +230,38 @@ pub fn set_knowledge_page_answer_allowed(
     )?;
     get_knowledge_page_detail(conn, key, page_id)?
         .ok_or_else(|| anyhow!("knowledge page missing after lint refresh"))
+}
+
+fn resolve_manual_page_text_update(
+    key: &[u8; 32],
+    page_id: &str,
+    field: &str,
+    value: Option<String>,
+    existing: Option<Vec<u8>>,
+    empty_clears_override: bool,
+) -> Result<Option<Vec<u8>>> {
+    let Some(value) = value else {
+        return Ok(existing);
+    };
+    if empty_clears_override && value.trim().is_empty() {
+        return Ok(None);
+    }
+    encode_optional_page_text(key, page_id, field, Some(value))
+}
+
+fn restore_state_before_answer_muted(
+    conn: &Connection,
+    key: &[u8; 32],
+    page_id: &str,
+) -> Result<crate::knowledge::KnowledgePageState> {
+    let snapshots = list_knowledge_page_version_snapshots_internal(conn, key, page_id, 8)?;
+    Ok(snapshots
+        .into_iter()
+        .find_map(|snapshot| {
+            (snapshot.state != crate::knowledge::KnowledgePageState::AnswerMuted)
+                .then_some(snapshot.state)
+        })
+        .unwrap_or(crate::knowledge::KnowledgePageState::Active))
 }
 
 pub fn archive_knowledge_page(

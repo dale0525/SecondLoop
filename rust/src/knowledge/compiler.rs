@@ -271,6 +271,9 @@ fn count_conflicts_for_page(page_id: &str, claims: &[KnowledgeClaim]) -> i64 {
     };
     let mut by_facet = BTreeMap::<String, BTreeSet<String>>::new();
     for claim in claims {
+        if claim.status == KnowledgeClaimStatus::Dismissed {
+            continue;
+        }
         let Some(claim_page_type) = page_type_for_claim(claim) else {
             continue;
         };

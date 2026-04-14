@@ -547,3 +547,52 @@ fn list_knowledge_page_summaries_excludes_archived_pages_from_normal_surfaces() 
 
     assert_eq!(page_ids, vec!["page:topics:active".to_string()]);
 }
+
+#[test]
+fn manual_correction_lints_use_all_source_documents_not_primary_evidence_only() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [78u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut page = crate::knowledge::KnowledgePage::new(
+        "page:topics:multi-source",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Multi Source Topic",
+        now,
+    );
+    page.current_summary = "Compiled summary".to_string();
+    page.current_body = "Compiled body".to_string();
+    page.primary_evidence_ids = vec!["doc:primary".to_string()];
+    page.source_count = 2;
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page,
+            source_document_ids: vec!["doc:primary".to_string(), "doc:secondary".to_string()],
+            claim_ids: vec!["claim:primary".to_string(), "claim:secondary".to_string()],
+        }],
+    )
+    .expect("seed page");
+
+    let corrected = apply_knowledge_page_correction(
+        &conn,
+        &key,
+        "page:topics:multi-source",
+        None,
+        Some("Manual summary".to_string()),
+        None,
+    )
+    .expect("correct page");
+
+    assert!(
+        corrected
+            .lint_records
+            .iter()
+            .all(|lint| lint.kind != crate::knowledge::KnowledgeLintKind::EvidenceWeakness),
+        "lint records: {:?}",
+        corrected.lint_records
+    );
+}
