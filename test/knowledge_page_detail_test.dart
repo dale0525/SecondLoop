@@ -125,6 +125,39 @@ void main() {
     expect(backend.mergedTargetPageId, 'page:topics:beta');
   });
 
+  testWidgets(
+      'KnowledgePageDetailPage navigates to the merge target after merging',
+      (tester) async {
+    final backend = _MergeableKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:topics:alpha'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('Topic Alpha'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merge Pages'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Topic Beta'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Topic Beta'), findsWidgets);
+  });
+
   testWidgets('KnowledgePageDetailPage shows final governance sections',
       (tester) async {
     final backend = _KnowledgePageDetailBackendStub();
@@ -608,6 +641,17 @@ final class _MergeableKnowledgePageDetailBackendStub
     Uint8List key, {
     required String pageId,
   }) async {
+    if (pageId == 'page:topics:beta') {
+      return _buildDetail(
+        pageId: pageId,
+        pageType: KnowledgePageType.topics,
+        title: 'Topic Beta',
+        summary: 'Merged topic summary.',
+        body: 'Merged topic summary.\nTopic beta details.',
+        relatedPageIds: const ['page:about-me'],
+        tags: const ['topics'],
+      );
+    }
     return _buildDetail(
       pageId: pageId,
       pageType: KnowledgePageType.topics,
@@ -671,7 +715,17 @@ final class _MergeableKnowledgePageDetailBackendStub
   }) async {
     mergedPageId = pageId;
     mergedTargetPageId = targetPageId;
-    return _buildDetail(pageId: pageId);
+    return _buildDetail(
+      pageId: pageId,
+      pageType: KnowledgePageType.topics,
+      title: 'Topic Alpha',
+      summary: 'Current topic summary.',
+      body: 'Current topic summary.\nTopic alpha details.',
+      relatedPageIds: const ['page:about-me'],
+      tags: const ['topics'],
+      state: KnowledgePageState.archived,
+      answerAllowed: false,
+    );
   }
 }
 

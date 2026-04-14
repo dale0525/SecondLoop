@@ -281,6 +281,43 @@ fn restore_state_before_answer_muted(
         .unwrap_or(crate::knowledge::KnowledgePageState::Active))
 }
 
+fn count_conflicts_for_claim_ids(
+    conn: &Connection,
+    key: &[u8; 32],
+    claim_ids: &[String],
+) -> Result<i64> {
+    let mut by_facet = std::collections::BTreeMap::<
+        String,
+        std::collections::BTreeSet<String>,
+    >::new();
+    for claim_id in claim_ids {
+        let row = conn
+            .query_row(
+                r#"SELECT facet_key, statement, status
+                   FROM knowledge_claims
+                   WHERE claim_id = ?1"#,
+                params![claim_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Vec<u8>>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((facet_key, statement_blob, status_raw)) = row else {
+            continue;
+        };
+        if decode_claim_status(status_raw)? == crate::knowledge::KnowledgeClaimStatus::Dismissed {
+            continue;
+        }
+        let statement = decode_knowledge_claim_text(key, claim_id, "statement", &statement_blob)?;
+        by_facet.entry(facet_key).or_default().insert(statement);
+    }
+    Ok(by_facet.values().filter(|values| values.len() > 1).count() as i64)
+}
+
 pub fn archive_knowledge_page(
     conn: &Connection,
     key: &[u8; 32],
@@ -390,7 +427,8 @@ pub fn merge_knowledge_page_into(
         let merged_body = merge_page_text(&target.current_body, &source.current_body);
         let merged_confidence = target.confidence_level.max(source.confidence_level);
         let merged_source_count = target.source_count.saturating_add(source.source_count);
-        let merged_conflict_count = target.conflict_count.max(source.conflict_count);
+        let merged_conflict_count =
+            count_conflicts_for_claim_ids(conn, key, &merged_claim_ids)?;
         let merged_target_state = match target.state {
             crate::knowledge::KnowledgePageState::Archived
             | crate::knowledge::KnowledgePageState::Removed => {

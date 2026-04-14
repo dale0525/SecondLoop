@@ -1,5 +1,6 @@
 use anyhow::Result;
 use rusqlite::Connection;
+use std::cmp::Ordering;
 
 const FORCED_GENERATED_CONTEXT_SCORE: f64 = 0.0;
 
@@ -25,6 +26,48 @@ fn lexical_page_match_score(question: &str, haystack: &str) -> usize {
         .into_iter()
         .filter(|token| haystack.contains(*token))
         .count()
+}
+
+fn planning_context_group(block: &knowledge::KnowledgeContextBlock) -> u8 {
+    if block.document_id.starts_with("generated:session-digest:") {
+        0
+    } else if !block.document_id.starts_with("page:") {
+        1
+    } else {
+        2
+    }
+}
+
+fn planning_page_priority(document_id: &str) -> u8 {
+    match document_id {
+        "page:current-focus" => 0,
+        "page:active-threads" => 1,
+        "page:recent-events" => 2,
+        "page:preferences" => 3,
+        "page:about-me" => 4,
+        _ => 5,
+    }
+}
+
+fn compare_block_scores(left: f64, right: f64) -> Ordering {
+    right.partial_cmp(&left).unwrap_or(Ordering::Equal)
+}
+
+fn sort_planning_contexts(blocks: &mut [knowledge::KnowledgeContextBlock]) {
+    blocks.sort_by(|left, right| {
+        planning_context_group(left)
+            .cmp(&planning_context_group(right))
+            .then_with(|| compare_block_scores(left.score, right.score))
+            .then_with(|| {
+                if left.document_id.starts_with("page:") || right.document_id.starts_with("page:") {
+                    planning_page_priority(&left.document_id)
+                        .cmp(&planning_page_priority(&right.document_id))
+                } else {
+                    Ordering::Equal
+                }
+            })
+            .then_with(|| left.document_id.cmp(&right.document_id))
+    });
 }
 
 pub(super) fn should_exclude_generated_document_for_page_policies(
@@ -102,7 +145,7 @@ pub(super) fn collect_compiled_page_contexts(
                     source_kind: knowledge::KnowledgeSourceKind::Summary,
                     role: knowledge::KnowledgeRole::Summary,
                     anchors: knowledge::KnowledgeAnchorSet::default(),
-                    score: FORCED_GENERATED_CONTEXT_SCORE,
+                    score: lexical_score as f64,
                     rendered_text: rendered,
                 },
             ))
@@ -345,6 +388,7 @@ pub(super) fn try_build_knowledge_context_entries(
         ) {
             blocks.insert(0, digest);
         }
+        sort_planning_contexts(&mut blocks);
     }
     if is_planning_query {
         rebalance_planning_contexts(&mut blocks, top_k.max(1));

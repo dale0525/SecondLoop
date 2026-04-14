@@ -4,7 +4,8 @@ use crate::message_citations::append_message_citation_if_missing;
 use crate::rag::knowledge_contexts::{
     collect_compiled_page_contexts, filter_disabled_generated_memory_blocks,
     merge_knowledge_and_legacy_contexts, rebalance_planning_contexts,
-    should_exclude_generated_document_for_page_policies, try_build_knowledge_contexts,
+    should_exclude_generated_document_for_page_policies, try_build_knowledge_context_entries,
+    try_build_knowledge_contexts,
 };
 use crate::rag::Focus;
 use rusqlite::params;
@@ -785,6 +786,66 @@ fn try_build_knowledge_contexts_keeps_global_profile_visible_across_threads() {
         contexts.iter().any(|ctx| ctx.contains("I am a developer.")),
         "contexts: {contexts:?}"
     );
+}
+
+#[test]
+fn planning_contexts_keep_retrieved_matches_visible_when_zero_score_pages_exist() {
+    let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
+
+    insert_document(
+        &fixture.conn,
+        &fixture.key,
+        "generated:preference:response-language",
+        "generated",
+        1,
+        Some(&fixture.conversation_id),
+        "User prefers responses in Chinese.",
+    );
+    insert_document(
+        &fixture.conn,
+        &fixture.key,
+        "generated:profile:occupation",
+        "generated",
+        2,
+        None,
+        "I am a developer.",
+    );
+    insert_document(
+        &fixture.conn,
+        &fixture.key,
+        "generated:pattern:active-task-focus",
+        "generated",
+        3,
+        Some(&fixture.conversation_id),
+        "Current focus is migration cleanup.",
+    );
+    crate::knowledge::compiler::refresh_knowledge_pages(&fixture.conn, &fixture.key)
+        .expect("refresh pages");
+
+    let entries = try_build_knowledge_context_entries(
+        &fixture.conn,
+        &fixture.key,
+        "Plan my next steps around the quarterly budget freeze.",
+        3,
+        Focus::ThisThread,
+        &fixture.conversation_id,
+        None,
+    )
+    .expect("knowledge context entries");
+
+    let visible_non_page_ids = entries
+        .iter()
+        .filter(|entry| {
+            !entry
+                .block
+                .document_id
+                .starts_with("generated:session-digest:")
+                && !entry.block.document_id.starts_with("page:")
+        })
+        .map(|entry| entry.block.document_id.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(visible_non_page_ids.len() >= 2, "entries: {entries:?}");
 }
 
 #[test]

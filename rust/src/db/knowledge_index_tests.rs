@@ -389,6 +389,118 @@ fn merge_knowledge_page_into_preserves_combined_source_count() {
 }
 
 #[test]
+fn merge_knowledge_page_into_recomputes_conflict_count_from_merged_claims() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [78u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut target_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:target",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Target Topic",
+        now,
+    );
+    target_page.current_summary = "Target summary".to_string();
+    target_page.current_body = "Target detail".to_string();
+    target_page.source_count = 1;
+    target_page.conflict_count = 0;
+
+    let mut source_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:source",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Source Topic",
+        now + 1,
+    );
+    source_page.current_summary = "Source summary".to_string();
+    source_page.current_body = "Source detail".to_string();
+    source_page.source_count = 1;
+    source_page.conflict_count = 0;
+
+    replace_knowledge_claims(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::KnowledgeClaim {
+                claim_id: "claim:target".to_string(),
+                subject_id: "user:self".to_string(),
+                claim_type: crate::knowledge::KnowledgeClaimType::Topic,
+                facet_key: "launch-plan".to_string(),
+                statement: "Freeze work this week.".to_string(),
+                normalized_value: None,
+                time_scope: crate::knowledge::KnowledgeClaimTimeScope::Current,
+                valid_from_ms: None,
+                valid_until_ms: None,
+                confidence: 0.8,
+                source_ref_ids: vec!["doc:target".to_string()],
+                source_count: 1,
+                conflict_with_claim_ids: vec![],
+                status: crate::knowledge::KnowledgeClaimStatus::Active,
+                human_confirmed: false,
+                human_corrected: false,
+                answer_allowed: true,
+                created_at_ms: now,
+                updated_at_ms: now,
+            },
+            crate::knowledge::KnowledgeClaim {
+                claim_id: "claim:source".to_string(),
+                subject_id: "user:self".to_string(),
+                claim_type: crate::knowledge::KnowledgeClaimType::Topic,
+                facet_key: "launch-plan".to_string(),
+                statement: "Keep launch prep moving this week.".to_string(),
+                normalized_value: None,
+                time_scope: crate::knowledge::KnowledgeClaimTimeScope::Current,
+                valid_from_ms: None,
+                valid_until_ms: None,
+                confidence: 0.7,
+                source_ref_ids: vec!["doc:source".to_string()],
+                source_count: 1,
+                conflict_with_claim_ids: vec![],
+                status: crate::knowledge::KnowledgeClaimStatus::Active,
+                human_confirmed: false,
+                human_corrected: false,
+                answer_allowed: true,
+                created_at_ms: now + 1,
+                updated_at_ms: now + 1,
+            },
+        ],
+    )
+    .expect("seed claims");
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: target_page,
+                source_document_ids: vec!["doc:target".to_string()],
+                claim_ids: vec!["claim:target".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: source_page,
+                source_document_ids: vec!["doc:source".to_string()],
+                claim_ids: vec!["claim:source".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    merge_knowledge_page_into(
+        &conn,
+        &key,
+        "page:topics:source",
+        "page:topics:target",
+        None,
+    )
+    .expect("merge knowledge page");
+
+    let target_detail = get_knowledge_page_detail(&conn, &key, "page:topics:target")
+        .expect("load target detail")
+        .expect("target detail after merge");
+    assert_eq!(target_detail.page.conflict_count, 1);
+}
+
+#[test]
 fn merge_knowledge_page_into_preserves_manual_content_and_provenance_on_recompile() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");

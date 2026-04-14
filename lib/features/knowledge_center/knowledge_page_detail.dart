@@ -162,11 +162,21 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
       case KnowledgePageOverflowAction.merge:
         final targetPageId = await _selectMergeTarget(data);
         if (targetPageId == null) return;
-        await _runMutation(
+        final merged = await _runMutationWithResult(
           () => _pagesBackend().mergeKnowledgePageInto(
             SessionScope.of(context).sessionKey,
             pageId: widget.pageId,
             targetPageId: targetPageId,
+          ),
+          reload: false,
+        );
+        if (merged == null || !mounted) return;
+        await Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => wrapPushedPageWithInheritedScopes(
+              context,
+              KnowledgePageDetailPage(pageId: targetPageId),
+            ),
           ),
         );
       case KnowledgePageOverflowAction.archive:
@@ -216,16 +226,26 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
   Future<void> _runMutation(
     Future<KnowledgePageDetail> Function() action,
   ) async {
-    if (_submitting) return;
+    await _runMutationWithResult(action);
+  }
+
+  Future<T?> _runMutationWithResult<T>(
+    Future<T> Function() action, {
+    bool reload = true,
+  }) async {
+    if (_submitting) return null;
     setState(() {
       _submitting = true;
     });
     try {
-      await action();
-      if (!mounted) return;
-      _reload();
+      final result = await action();
+      if (!mounted) return null;
+      if (reload) {
+        _reload();
+      }
+      return result;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return null;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text(context.t.errors.saveFailed(error: '$error')),
@@ -239,6 +259,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
         });
       }
     }
+    return null;
   }
 
   @override

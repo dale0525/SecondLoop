@@ -48,15 +48,21 @@ class _KnowledgeCenterPageState extends State<KnowledgeCenterPage> {
       for (final page in summaries) page.pageId: page,
     };
     final recentChangePagesById = <String, KnowledgePageSummary>{};
+    final loadedMissingPageIds = <String>{};
     for (final record in recentChangeRecords) {
-      if (summariesByPageId.containsKey(record.pageId)) {
+      if (summariesByPageId.containsKey(record.pageId) ||
+          !loadedMissingPageIds.add(record.pageId)) {
         continue;
       }
-      final detail = await backend.getKnowledgePageDetail(
-        sessionKey,
-        pageId: record.pageId,
-      );
-      recentChangePagesById[record.pageId] = _summaryFromDetail(detail);
+      try {
+        final detail = await backend.getKnowledgePageDetail(
+          sessionKey,
+          pageId: record.pageId,
+        );
+        recentChangePagesById[record.pageId] = _summaryFromDetail(detail);
+      } catch (_) {
+        continue;
+      }
     }
     return _KnowledgeCenterViewData(
       summaries: summaries,

@@ -294,6 +294,66 @@ void main() {
     expect(find.text('No pages yet.'), findsNothing);
   });
 
+  testWidgets(
+      'KnowledgeCenterPage skips unreadable recent change details instead of failing the page',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _KnowledgeCenterBackendStub(
+      summaries: [
+        _summary(
+          pageId: 'page:about-me',
+          title: 'About Me',
+          pageType: KnowledgePageType.aboutMe,
+          state: KnowledgePageState.active,
+          updatedAtMs: nowMs,
+          lastUsedAtMs: nowMs,
+        ),
+      ],
+      details: {
+        'page:about-me': _detail(
+          pageId: 'page:about-me',
+          title: 'About Me',
+          pageType: KnowledgePageType.aboutMe,
+          state: KnowledgePageState.active,
+          summary: 'Stable identity details.',
+          updatedAtMs: nowMs,
+        ),
+      },
+      recentChanges: [
+        KnowledgePageChangeRecord(
+          changeId: 'change:missing',
+          pageId: 'page:preferences',
+          changeType: KnowledgePageChangeType.removed,
+          actor: 'user',
+          reason: 'Removed because it should not be used.',
+          answerImpacted: true,
+          createdAtMs: nowMs,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 3)),
+              lock: () {},
+              child: const KnowledgeCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Current Me'), findsOneWidget);
+    expect(find.text('About Me'), findsWidgets);
+    expect(find.textContaining('loadFailed'), findsNothing);
+  });
+
   testWidgets('KnowledgeCenterPage opens a directory list for page types',
       (tester) async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -443,7 +503,7 @@ final class _KnowledgeCenterBackendStub extends TestAppBackend
     Uint8List key, {
     required String pageId,
   }) async =>
-      details[pageId]!;
+      details[pageId] ?? (throw StateError('missing detail for $pageId'));
 
   @override
   Future<List<KnowledgePageChangeRecord>> listRecentKnowledgePageChanges(
