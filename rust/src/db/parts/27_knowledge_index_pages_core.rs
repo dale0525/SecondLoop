@@ -256,7 +256,7 @@ fn stored_row_to_page(
     })
 }
 
-fn load_current_knowledge_page(
+pub(crate) fn load_current_knowledge_page(
     conn: &Connection,
     key: &[u8; 32],
     page_id: &str,

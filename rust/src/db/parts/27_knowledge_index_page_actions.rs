@@ -31,73 +31,75 @@ pub fn apply_knowledge_page_correction(
     summary: Option<String>,
     body: Option<String>,
 ) -> Result<crate::knowledge::KnowledgePageDetail> {
-    let now = now_ms();
-    let Some(existing) = load_stored_knowledge_page_row(conn, page_id)? else {
-        return Err(anyhow!("knowledge page not found: {page_id}"));
-    };
-    let next_manual_title = resolve_manual_page_text_update(
-        key,
-        page_id,
-        "manual_title",
-        title,
-        existing.manual_title_blob.clone(),
-        true,
-    )?;
-    let next_manual_summary = resolve_manual_page_text_update(
-        key,
-        page_id,
-        "manual_summary",
-        summary,
-        existing.manual_summary_blob.clone(),
-        true,
-    )?;
-    let next_manual_body = resolve_manual_page_text_update(
-        key,
-        page_id,
-        "manual_body",
-        body,
-        existing.manual_body_blob.clone(),
-        false,
-    )?;
-    conn.execute(
-        r#"UPDATE knowledge_pages
-           SET state = ?2,
-               answer_default_allowed = 1,
-               answer_requires_temporal_framing = 0,
-               updated_at_ms = ?3,
-               human_corrected = 1,
-               manual_title = ?4,
-               manual_summary = ?5,
-               manual_body = ?6
-           WHERE page_id = ?1"#,
-        params![
+    run_knowledge_page_mutation(conn, || {
+        let now = now_ms();
+        let Some(existing) = load_stored_knowledge_page_row(conn, page_id)? else {
+            return Err(anyhow!("knowledge page not found: {page_id}"));
+        };
+        let next_manual_title = resolve_manual_page_text_update(
+            key,
             page_id,
-            encode_page_state(crate::knowledge::KnowledgePageState::Active)?,
+            "manual_title",
+            title,
+            existing.manual_title_blob.clone(),
+            true,
+        )?;
+        let next_manual_summary = resolve_manual_page_text_update(
+            key,
+            page_id,
+            "manual_summary",
+            summary,
+            existing.manual_summary_blob.clone(),
+            true,
+        )?;
+        let next_manual_body = resolve_manual_page_text_update(
+            key,
+            page_id,
+            "manual_body",
+            body,
+            existing.manual_body_blob.clone(),
+            false,
+        )?;
+        conn.execute(
+            r#"UPDATE knowledge_pages
+               SET state = ?2,
+                   answer_default_allowed = 1,
+                   answer_requires_temporal_framing = 0,
+                   updated_at_ms = ?3,
+                   human_corrected = 1,
+                   manual_title = ?4,
+                   manual_summary = ?5,
+                   manual_body = ?6
+               WHERE page_id = ?1"#,
+            params![
+                page_id,
+                encode_page_state(crate::knowledge::KnowledgePageState::Active)?,
+                now,
+                next_manual_title,
+                next_manual_summary,
+                next_manual_body,
+            ],
+        )?;
+        let updated = get_knowledge_page_detail(conn, key, page_id)?
+            .ok_or_else(|| anyhow!("knowledge page disappeared after correction"))?;
+        replace_knowledge_page_lints(
+            conn,
+            page_id,
+            &build_knowledge_page_lints(&updated.page, &updated.source_document_ids),
+        )?;
+        record_knowledge_page_change(
+            conn,
+            key,
+            page_id,
+            crate::knowledge::KnowledgePageChangeType::Corrected,
+            "user",
+            Some("Manual correction applied."),
+            true,
             now,
-            next_manual_title,
-            next_manual_summary,
-            next_manual_body,
-        ],
-    )?;
-    let updated = get_knowledge_page_detail(conn, key, page_id)?
-        .ok_or_else(|| anyhow!("knowledge page disappeared after correction"))?;
-    replace_knowledge_page_lints(
-        conn,
-        page_id,
-        &build_knowledge_page_lints(&updated.page, &updated.source_document_ids),
-    )?;
-    record_knowledge_page_change(
-        conn,
-        key,
-        page_id,
-        crate::knowledge::KnowledgePageChangeType::Corrected,
-        "user",
-        Some("Manual correction applied."),
-        true,
-        now,
-    )?;
-    get_knowledge_page_detail(conn, key, page_id)?
-        .ok_or_else(|| anyhow!("knowledge page disappeared after correction"))
+        )?;
+        get_knowledge_page_detail(conn, key, page_id)?
+            .ok_or_else(|| anyhow!("knowledge page disappeared after correction"))
+    })
 }
 
 pub fn mark_knowledge_page_wrong(
@@ -107,51 +109,53 @@ pub fn mark_knowledge_page_wrong(
     reason: crate::knowledge::KnowledgeWrongReason,
     note: Option<String>,
 ) -> Result<crate::knowledge::KnowledgePageDetail> {
-    let now = now_ms();
-    let Some(detail) = get_knowledge_page_detail(conn, key, page_id)? else {
-        return Err(anyhow!("knowledge page not found: {page_id}"));
-    };
-    let next_state = crate::knowledge::apply_wrong_reason(detail.page.state, reason);
-    let next_policy = crate::knowledge::state_default_answer_policy(next_state);
-    conn.execute(
-        r#"UPDATE knowledge_pages
-           SET state = ?2,
-               answer_default_allowed = ?3,
-               answer_requires_temporal_framing = ?4,
-               updated_at_ms = ?5
-           WHERE page_id = ?1"#,
-        params![
+    run_knowledge_page_mutation(conn, || {
+        let now = now_ms();
+        let Some(detail) = get_knowledge_page_detail(conn, key, page_id)? else {
+            return Err(anyhow!("knowledge page not found: {page_id}"));
+        };
+        let next_state = crate::knowledge::apply_wrong_reason(detail.page.state, reason);
+        let next_policy = crate::knowledge::state_default_answer_policy(next_state);
+        conn.execute(
+            r#"UPDATE knowledge_pages
+               SET state = ?2,
+                   answer_default_allowed = ?3,
+                   answer_requires_temporal_framing = ?4,
+                   updated_at_ms = ?5
+               WHERE page_id = ?1"#,
+            params![
+                page_id,
+                encode_page_state(next_state)?,
+                if next_policy.default_allowed { 1 } else { 0 },
+                if next_policy.requires_temporal_framing { 1 } else { 0 },
+                now,
+            ],
+        )?;
+        record_knowledge_page_change(
+            conn,
+            key,
             page_id,
-            encode_page_state(next_state)?,
-            if next_policy.default_allowed { 1 } else { 0 },
-            if next_policy.requires_temporal_framing { 1 } else { 0 },
+            match next_state {
+                crate::knowledge::KnowledgePageState::Archived => {
+                    crate::knowledge::KnowledgePageChangeType::Archived
+                }
+                _ => crate::knowledge::KnowledgePageChangeType::Downgraded,
+            },
+            "user",
+            note.as_deref(),
+            true,
             now,
-        ],
-    )?;
-    record_knowledge_page_change(
-        conn,
-        key,
-        page_id,
-        match next_state {
-            crate::knowledge::KnowledgePageState::Archived => {
-                crate::knowledge::KnowledgePageChangeType::Archived
-            }
-            _ => crate::knowledge::KnowledgePageChangeType::Downgraded,
-        },
-        "user",
-        note.as_deref(),
-        true,
-        now,
-    )?;
-    let updated = get_knowledge_page_detail(conn, key, page_id)?
-        .ok_or_else(|| anyhow!("knowledge page missing after wrong flow"))?;
-    replace_knowledge_page_lints(
-        conn,
-        page_id,
-        &build_knowledge_page_lints(&updated.page, &updated.source_document_ids),
-    )?;
-    get_knowledge_page_detail(conn, key, page_id)?
-        .ok_or_else(|| anyhow!("knowledge page missing after lint refresh"))
+        )?;
+        let updated = get_knowledge_page_detail(conn, key, page_id)?
+            .ok_or_else(|| anyhow!("knowledge page missing after wrong flow"))?;
+        replace_knowledge_page_lints(
+            conn,
+            page_id,
+            &build_knowledge_page_lints(&updated.page, &updated.source_document_ids),
+        )?;
+        get_knowledge_page_detail(conn, key, page_id)?
+            .ok_or_else(|| anyhow!("knowledge page missing after lint refresh"))
+    })
 }
 
 pub fn set_knowledge_page_answer_allowed(
@@ -161,75 +165,77 @@ pub fn set_knowledge_page_answer_allowed(
     allowed: bool,
     note: Option<String>,
 ) -> Result<crate::knowledge::KnowledgePageDetail> {
-    let now = now_ms();
-    let Some(detail) = get_knowledge_page_detail(conn, key, page_id)? else {
-        return Err(anyhow!("knowledge page not found: {page_id}"));
-    };
-    let next_state = if allowed {
-        if detail.page.state == crate::knowledge::KnowledgePageState::AnswerMuted {
-            restore_state_before_answer_muted(conn, key, page_id)?
-        } else {
-            detail.page.state
-        }
-    } else if matches!(
-        detail.page.state,
-        crate::knowledge::KnowledgePageState::Archived
-            | crate::knowledge::KnowledgePageState::Removed
-    ) {
-        detail.page.state
-    } else {
-        crate::knowledge::KnowledgePageState::AnswerMuted
-    };
-    if allowed
-        && matches!(
-            next_state,
+    run_knowledge_page_mutation(conn, || {
+        let now = now_ms();
+        let Some(detail) = get_knowledge_page_detail(conn, key, page_id)? else {
+            return Err(anyhow!("knowledge page not found: {page_id}"));
+        };
+        let next_state = if allowed {
+            if detail.page.state == crate::knowledge::KnowledgePageState::AnswerMuted {
+                restore_state_before_answer_muted(conn, key, page_id)?
+            } else {
+                detail.page.state
+            }
+        } else if matches!(
+            detail.page.state,
             crate::knowledge::KnowledgePageState::Archived
                 | crate::knowledge::KnowledgePageState::Removed
-        )
-    {
-        return Err(anyhow!(
-            "knowledge page cannot be re-enabled for answers in state: {next_state:?}"
-        ));
-    }
-    let next_policy = answer_policy_for_state_with_override(next_state, allowed);
-    conn.execute(
-        r#"UPDATE knowledge_pages
-           SET state = ?2,
-               answer_default_allowed = ?3,
-               answer_requires_temporal_framing = ?4,
-               updated_at_ms = ?5
-           WHERE page_id = ?1"#,
-        params![
-            page_id,
-            encode_page_state(next_state)?,
-            if next_policy.default_allowed { 1 } else { 0 },
-            if next_policy.requires_temporal_framing { 1 } else { 0 },
-            now,
-        ],
-    )?;
-    record_knowledge_page_change(
-        conn,
-        key,
-        page_id,
-        if allowed {
-            crate::knowledge::KnowledgePageChangeType::Updated
+        ) {
+            detail.page.state
         } else {
-            crate::knowledge::KnowledgePageChangeType::Muted
-        },
-        "user",
-        note.as_deref(),
-        true,
-        now,
-    )?;
-    let updated = get_knowledge_page_detail(conn, key, page_id)?
-        .ok_or_else(|| anyhow!("knowledge page missing after answer policy update"))?;
-    replace_knowledge_page_lints(
-        conn,
-        page_id,
-        &build_knowledge_page_lints(&updated.page, &updated.source_document_ids),
-    )?;
-    get_knowledge_page_detail(conn, key, page_id)?
-        .ok_or_else(|| anyhow!("knowledge page missing after lint refresh"))
+            crate::knowledge::KnowledgePageState::AnswerMuted
+        };
+        if allowed
+            && matches!(
+                next_state,
+                crate::knowledge::KnowledgePageState::Archived
+                    | crate::knowledge::KnowledgePageState::Removed
+            )
+        {
+            return Err(anyhow!(
+                "knowledge page cannot be re-enabled for answers in state: {next_state:?}"
+            ));
+        }
+        let next_policy = answer_policy_for_state_with_override(next_state, allowed);
+        conn.execute(
+            r#"UPDATE knowledge_pages
+               SET state = ?2,
+                   answer_default_allowed = ?3,
+                   answer_requires_temporal_framing = ?4,
+                   updated_at_ms = ?5
+               WHERE page_id = ?1"#,
+            params![
+                page_id,
+                encode_page_state(next_state)?,
+                if next_policy.default_allowed { 1 } else { 0 },
+                if next_policy.requires_temporal_framing { 1 } else { 0 },
+                now,
+            ],
+        )?;
+        record_knowledge_page_change(
+            conn,
+            key,
+            page_id,
+            if allowed {
+                crate::knowledge::KnowledgePageChangeType::Updated
+            } else {
+                crate::knowledge::KnowledgePageChangeType::Muted
+            },
+            "user",
+            note.as_deref(),
+            true,
+            now,
+        )?;
+        let updated = get_knowledge_page_detail(conn, key, page_id)?
+            .ok_or_else(|| anyhow!("knowledge page missing after answer policy update"))?;
+        replace_knowledge_page_lints(
+            conn,
+            page_id,
+            &build_knowledge_page_lints(&updated.page, &updated.source_document_ids),
+        )?;
+        get_knowledge_page_detail(conn, key, page_id)?
+            .ok_or_else(|| anyhow!("knowledge page missing after lint refresh"))
+    })
 }
 
 fn resolve_manual_page_text_update(
@@ -500,59 +506,77 @@ fn set_knowledge_page_state(
     change_type: crate::knowledge::KnowledgePageChangeType,
     note: Option<String>,
 ) -> Result<crate::knowledge::KnowledgePageDetail> {
-    let now = now_ms();
-    let Some(detail) = get_knowledge_page_detail(conn, key, page_id)? else {
-        return Err(anyhow!("knowledge page not found: {page_id}"));
-    };
-    let next_policy = crate::knowledge::state_default_answer_policy(next_state);
-    let mut next_tags = detail
-        .page
-        .tags
-        .iter()
-        .filter(|tag| tag.as_str() != MANUAL_REMOVED_TAG)
-        .cloned()
-        .collect::<Vec<_>>();
-    if next_state == crate::knowledge::KnowledgePageState::Removed {
-        next_tags.push(MANUAL_REMOVED_TAG.to_string());
-    }
-    let next_tags = normalize_knowledge_string_set(
-        &next_tags,
-        32,
-    );
-    conn.execute(
-        r#"UPDATE knowledge_pages
-           SET state = ?2,
-               answer_default_allowed = ?3,
-               answer_requires_temporal_framing = ?4,
-               updated_at_ms = ?5,
-               tags_json = ?6
-           WHERE page_id = ?1"#,
-        params![
+    run_knowledge_page_mutation(conn, || {
+        let now = now_ms();
+        let Some(detail) = get_knowledge_page_detail(conn, key, page_id)? else {
+            return Err(anyhow!("knowledge page not found: {page_id}"));
+        };
+        let next_policy = crate::knowledge::state_default_answer_policy(next_state);
+        let mut next_tags = detail
+            .page
+            .tags
+            .iter()
+            .filter(|tag| tag.as_str() != MANUAL_REMOVED_TAG)
+            .cloned()
+            .collect::<Vec<_>>();
+        if next_state == crate::knowledge::KnowledgePageState::Removed {
+            next_tags.push(MANUAL_REMOVED_TAG.to_string());
+        }
+        let next_tags = normalize_knowledge_string_set(&next_tags, 32);
+        conn.execute(
+            r#"UPDATE knowledge_pages
+               SET state = ?2,
+                   answer_default_allowed = ?3,
+                   answer_requires_temporal_framing = ?4,
+                   updated_at_ms = ?5,
+                   tags_json = ?6
+               WHERE page_id = ?1"#,
+            params![
+                page_id,
+                encode_page_state(next_state)?,
+                if next_policy.default_allowed { 1 } else { 0 },
+                if next_policy.requires_temporal_framing { 1 } else { 0 },
+                now,
+                encode_string_list(&next_tags)?,
+            ],
+        )?;
+        record_knowledge_page_change(
+            conn,
+            key,
             page_id,
-            encode_page_state(next_state)?,
-            if next_policy.default_allowed { 1 } else { 0 },
-            if next_policy.requires_temporal_framing { 1 } else { 0 },
+            change_type,
+            "user",
+            note.as_deref(),
+            true,
             now,
-            encode_string_list(&next_tags)?,
-        ],
-    )?;
-    record_knowledge_page_change(
-        conn,
-        key,
-        page_id,
-        change_type,
-        "user",
-        note.as_deref(),
-        true,
-        now,
-    )?;
-    let updated = get_knowledge_page_detail(conn, key, page_id)?
-        .ok_or_else(|| anyhow!("knowledge page missing after state update"))?;
-    replace_knowledge_page_lints(
-        conn,
-        page_id,
-        &build_knowledge_page_lints(&updated.page, &updated.source_document_ids),
-    )?;
-    get_knowledge_page_detail(conn, key, page_id)?
-        .ok_or_else(|| anyhow!("knowledge page missing after lint refresh"))
+        )?;
+        let updated = get_knowledge_page_detail(conn, key, page_id)?
+            .ok_or_else(|| anyhow!("knowledge page missing after state update"))?;
+        replace_knowledge_page_lints(
+            conn,
+            page_id,
+            &build_knowledge_page_lints(&updated.page, &updated.source_document_ids),
+        )?;
+        get_knowledge_page_detail(conn, key, page_id)?
+            .ok_or_else(|| anyhow!("knowledge page missing after lint refresh"))
+    })
+}
+
+fn run_knowledge_page_mutation<T, F>(conn: &Connection, action: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T>,
+{
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result = action();
+
+    match result {
+        Ok(value) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(value)
+        }
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(error)
+        }
+    }
 }

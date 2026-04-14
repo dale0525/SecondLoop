@@ -44,6 +44,7 @@ fn collect_compiled_page_contexts(
     key: &[u8; 32],
     question: &str,
     top_k: usize,
+    conversation_scope: Option<&str>,
 ) -> Result<Vec<knowledge::KnowledgeContextBlock>> {
     let _ = knowledge::compiler::refresh_knowledge_pages(conn, key)?;
     let mut out = Vec::<knowledge::KnowledgeContextBlock>::new();
@@ -67,12 +68,12 @@ fn collect_compiled_page_contexts(
             page.answer_policy.default_allowed || page.answer_policy.requires_temporal_framing
         })
         .filter_map(|summary| {
-            let detail = crate::db::get_knowledge_page_detail(conn, key, &summary.page_id)
+            let page = crate::db::load_current_knowledge_page(conn, key, &summary.page_id)
                 .ok()
                 .flatten()?;
             let haystack = format!(
                 "{}\n{}\n{}",
-                detail.page.title, detail.page.current_summary, detail.page.current_body
+                page.title, page.current_summary, page.current_body
             );
             let lexical_score = lexical_page_match_score(question, &haystack);
             if !is_planning_query && lexical_score == 0 {
@@ -80,12 +81,12 @@ fn collect_compiled_page_contexts(
             }
             let mut rendered = format!(
                 "page_id={}\npage_state={}\n[knowledge layer=wiki_page source=wiki_page role=summary]\n{}\n{}",
-                detail.page.page_id,
-                detail.page.user_state_label(),
-                detail.page.current_summary,
-                detail.page.current_body,
+                page.page_id,
+                page.user_state_label(),
+                page.current_summary,
+                page.current_body,
             );
-            if detail.page.answer_policy.requires_temporal_framing {
+            if page.answer_policy.requires_temporal_framing {
                 rendered = format!(
                     "temporal_framing=required\n{}\n{}",
                     rendered,
@@ -95,7 +96,7 @@ fn collect_compiled_page_contexts(
             Some((
                 lexical_score,
                 knowledge::KnowledgeContextBlock {
-                    document_id: detail.page.page_id,
+                    document_id: page.page_id,
                     unit_id: None,
                     unit_kind: None,
                     source_kind: knowledge::KnowledgeSourceKind::Summary,
@@ -146,6 +147,15 @@ fn collect_compiled_page_contexts(
                 {
                     continue;
                 }
+                if let Some(expected_conversation_id) = conversation_scope {
+                    if let Some(actual_conversation_id) =
+                        document.anchors.conversation_id.as_deref()
+                    {
+                        if actual_conversation_id != expected_conversation_id {
+                            continue;
+                        }
+                    }
+                }
                 if should_exclude_generated_document_for_page_policies(
                     &document.document_id,
                     &excluded_page_ids,
@@ -169,8 +179,13 @@ fn collect_compiled_page_contexts(
                     anchors: document.anchors.clone(),
                     score: FORCED_GENERATED_CONTEXT_SCORE,
                     rendered_text: format!(
-                        "generated_memory=global\n[knowledge layer=document source=summary role=summary]\n{}",
-                        body
+                        "{}\n[knowledge layer=document source=summary role=summary]\n{}",
+                        if let Some(conversation_id) = document.anchors.conversation_id.as_deref() {
+                            format!("conversation_id={conversation_id}")
+                        } else {
+                            "generated_memory=global".to_string()
+                        },
+                        body,
                     ),
                 });
                 if out.len() >= top_k.max(1) {
@@ -312,7 +327,8 @@ pub(super) fn try_build_knowledge_context_entries(
     }
 
     let is_planning_query = knowledge::session_digest::is_planning_or_summary_query(question);
-    let mut blocks = collect_compiled_page_contexts(conn, key, question, top_k)?;
+    let mut blocks =
+        collect_compiled_page_contexts(conn, key, question, top_k, conversation_scope.as_deref())?;
     let mut retrieved = filter_disabled_generated_memory_blocks(
         conn,
         key,
@@ -559,7 +575,7 @@ mod tests {
             "User prefers responses in Chinese.",
         );
 
-        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 4)
+        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 4, Some(&conv.id))
             .expect("compiled page contexts");
 
         assert!(blocks
@@ -599,7 +615,7 @@ mod tests {
         )
         .expect("mark deleted");
 
-        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 4)
+        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 4, Some(&conv.id))
             .expect("compiled page contexts");
 
         assert!(
@@ -648,7 +664,7 @@ mod tests {
         )
         .expect("mute first generated memory");
 
-        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 1)
+        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 1, Some(&conv.id))
             .expect("compiled page contexts");
 
         assert_eq!(blocks.len(), 1);
@@ -693,11 +709,62 @@ mod tests {
         )
         .expect("mark generated memory inaccurate");
 
-        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 1)
+        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 1, Some(&conv.id))
             .expect("compiled page contexts");
 
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].document_id, "generated:misc:allowed-second");
+    }
+
+    #[test]
+    fn collect_compiled_page_contexts_planning_fallback_respects_thread_scope() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [72u8; 32];
+        let planning_conv =
+            db::create_conversation(&conn, &key, "Planning").expect("planning conversation");
+        let other_conv = db::create_conversation(&conn, &key, "Other").expect("other conversation");
+
+        insert_document(
+            &conn,
+            &key,
+            "generated:misc:other-thread-plan",
+            "generated",
+            20,
+            Some(&other_conv.id),
+            "Other thread planning signal.",
+        );
+        insert_document(
+            &conn,
+            &key,
+            "generated:misc:this-thread-plan",
+            "generated",
+            10,
+            Some(&planning_conv.id),
+            "Current thread planning signal.",
+        );
+
+        let blocks =
+            collect_compiled_page_contexts(&conn, &key, "plan my week", 1, Some(&planning_conv.id))
+                .expect("compiled page contexts");
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].document_id, "generated:misc:this-thread-plan");
+        assert!(blocks[0]
+            .rendered_text
+            .contains("Current thread planning signal."));
+        assert!(
+            !blocks[0]
+                .rendered_text
+                .contains("Other thread planning signal."),
+            "blocks: {blocks:?}"
+        );
+        assert!(
+            blocks[0]
+                .rendered_text
+                .contains(&format!("conversation_id={}", planning_conv.id)),
+            "blocks: {blocks:?}"
+        );
     }
 
     #[test]

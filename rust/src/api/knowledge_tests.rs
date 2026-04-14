@@ -971,6 +971,68 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
 }
 
 #[test]
+fn open_question_page_detail_keeps_only_document_ids_in_source_document_ids() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [79u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(&conn, &key, &conv.id, "user", "Please answer in Chinese.")
+        .expect("seed preference");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "generated:preference:response-language".to_string(),
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        true,
+        None,
+        None,
+    )
+    .expect("mark generated memory inaccurate");
+
+    let detail = crate::api::knowledge::db_get_knowledge_page_detail(
+        app_dir_string,
+        key.to_vec(),
+        "page:open-questions:preference:response_language".to_string(),
+    )
+    .expect("open question detail");
+
+    assert!(
+        detail
+            .source_document_ids
+            .iter()
+            .all(|document_id| !document_id.starts_with("message:")),
+        "source_document_ids: {:?}",
+        detail.source_document_ids
+    );
+    assert!(
+        detail
+            .source_document_ids
+            .iter()
+            .all(|document_id| !document_id.starts_with("attachment:")),
+        "source_document_ids: {:?}",
+        detail.source_document_ids
+    );
+    assert!(
+        detail
+            .source_document_ids
+            .iter()
+            .any(|document_id| document_id == "generated:preference:response-language"),
+        "source_document_ids: {:?}",
+        detail.source_document_ids
+    );
+}
+
+#[test]
 fn repeated_page_reads_do_not_append_recompile_history_after_manual_correction() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
@@ -1078,6 +1140,132 @@ fn removed_page_stays_removed_across_refresh_reads() {
             .all(|page| page.page_id != "page:preferences"),
         "removed page should stay hidden from summaries"
     );
+}
+
+#[test]
+fn correct_knowledge_page_rolls_back_when_history_table_is_unavailable() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [80u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut page = crate::knowledge::KnowledgePage::new(
+        "page:preferences",
+        crate::knowledge::KnowledgePageType::Preferences,
+        "Preferences",
+        now,
+    );
+    page.current_summary = "Reply in Chinese.".to_string();
+    page.current_body = "Reply in Chinese.".to_string();
+    page.primary_evidence_ids = vec!["doc:primary".to_string()];
+    page.source_count = 1;
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page,
+            source_document_ids: vec!["doc:primary".to_string()],
+            claim_ids: vec!["claim:primary".to_string()],
+        }],
+    )
+    .expect("seed page");
+
+    conn.execute_batch(
+        r#"
+CREATE TRIGGER fail_knowledge_page_history_insert
+BEFORE INSERT ON knowledge_page_history
+BEGIN
+    SELECT RAISE(FAIL, 'forced history insert failure');
+END;
+"#,
+    )
+    .expect("create failing trigger");
+
+    let error = db::apply_knowledge_page_correction(
+        &conn,
+        &key,
+        "page:preferences",
+        Some("Corrected Preferences".to_string()),
+        Some("Manual summary".to_string()),
+        None,
+    )
+    .expect_err("correction should fail when history insert fails");
+    assert!(error.to_string().contains("forced history insert failure"));
+
+    let row = conn
+        .query_row(
+            "SELECT manual_title, manual_summary, human_corrected FROM knowledge_pages WHERE page_id = ?1",
+            ["page:preferences"],
+            |row| {
+                Ok((
+                    row.get::<_, Option<Vec<u8>>>(0)?,
+                    row.get::<_, Option<Vec<u8>>>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            },
+        )
+        .expect("load stored page row");
+
+    assert!(row.0.is_none(), "manual title should roll back");
+    assert!(row.1.is_none(), "manual summary should roll back");
+    assert_eq!(row.2, 0, "human_corrected should roll back");
+}
+
+#[test]
+fn set_answer_allowed_rolls_back_when_history_table_is_unavailable() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [81u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut page = crate::knowledge::KnowledgePage::new(
+        "page:preferences",
+        crate::knowledge::KnowledgePageType::Preferences,
+        "Preferences",
+        now,
+    );
+    page.current_summary = "Reply in Chinese.".to_string();
+    page.current_body = "Reply in Chinese.".to_string();
+    page.primary_evidence_ids = vec!["doc:primary".to_string()];
+    page.source_count = 1;
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page,
+            source_document_ids: vec!["doc:primary".to_string()],
+            claim_ids: vec!["claim:primary".to_string()],
+        }],
+    )
+    .expect("seed page");
+
+    conn.execute_batch(
+        r#"
+CREATE TRIGGER fail_knowledge_page_history_insert
+BEFORE INSERT ON knowledge_page_history
+BEGIN
+    SELECT RAISE(FAIL, 'forced history insert failure');
+END;
+"#,
+    )
+    .expect("create failing trigger");
+
+    let error = db::set_knowledge_page_answer_allowed(&conn, &key, "page:preferences", false, None)
+        .expect_err("answer policy mutation should fail when history insert fails");
+    assert!(error.to_string().contains("forced history insert failure"));
+
+    let row = conn
+        .query_row(
+            "SELECT state, answer_default_allowed FROM knowledge_pages WHERE page_id = ?1",
+            ["page:preferences"],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .expect("load stored page row");
+
+    assert_eq!(row.0, "active", "state should roll back");
+    assert_eq!(row.1, 1, "answer_default_allowed should roll back");
 }
 
 #[test]

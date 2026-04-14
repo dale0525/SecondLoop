@@ -486,8 +486,8 @@ pub fn list_knowledge_page_summaries(
         .collect::<std::result::Result<Vec<_>, _>>()?;
     let mut out = Vec::new();
     for page_id in page_ids {
-        if let Some(detail) = get_knowledge_page_detail(conn, key, &page_id)? {
-            out.push(crate::knowledge::KnowledgePageSummary::from(&detail.page));
+        if let Some(page) = load_current_knowledge_page(conn, key, &page_id)? {
+            out.push(crate::knowledge::KnowledgePageSummary::from(&page));
         }
     }
     Ok(out)
@@ -507,4 +507,3 @@ pub fn list_answer_excluded_knowledge_page_ids(conn: &Connection) -> Result<Vec<
         .map_err(anyhow::Error::from)?;
     Ok(page_ids)
 }
-

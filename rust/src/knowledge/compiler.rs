@@ -136,6 +136,16 @@ fn source_refs_for_document(document: &ContentKnowledgeDocument) -> Vec<String> 
     refs.into_iter().collect()
 }
 
+fn document_source_refs(source_ref_ids: &[String]) -> Vec<String> {
+    source_ref_ids
+        .iter()
+        .filter(|source_ref| {
+            !source_ref.starts_with("message:") && !source_ref.starts_with("attachment:")
+        })
+        .cloned()
+        .collect()
+}
+
 fn compile_pages_from_claims(
     documents: &[ContentKnowledgeDocument],
     claims: &[KnowledgeClaim],
@@ -566,11 +576,11 @@ fn compile_open_question_pages(claims: &[KnowledgeClaim]) -> Vec<CompiledKnowled
                 .collect::<Vec<_>>();
             let source_document_ids = grouped_claims
                 .iter()
-                .flat_map(|claim| claim.source_ref_ids.iter().cloned())
+                .flat_map(|claim| document_source_refs(&claim.source_ref_ids))
                 .collect::<Vec<_>>();
             let primary_evidence_ids = grouped_claims
                 .iter()
-                .flat_map(|claim| claim.source_ref_ids.iter().cloned())
+                .flat_map(|claim| document_source_refs(&claim.source_ref_ids))
                 .collect::<Vec<_>>();
             let confidence_level = grouped_claims
                 .iter()
