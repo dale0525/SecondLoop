@@ -136,6 +136,73 @@ fn render_page_context_block(
     }
 }
 
+fn append_matching_page_context_blocks<'a, I, F>(
+    question: &str,
+    is_planning_query: bool,
+    summaries: I,
+    load_page: &mut F,
+    candidates: &mut Vec<(usize, knowledge::KnowledgeContextBlock)>,
+) where
+    I: IntoIterator<Item = &'a (knowledge::KnowledgePageSummary, usize)>,
+    F: FnMut(&str) -> Option<knowledge::KnowledgePage>,
+{
+    for (summary, prefilter_score) in summaries {
+        let Some(page) = load_page(&summary.page_id) else {
+            continue;
+        };
+        let lexical_score = lexical_page_match_score(
+            question,
+            &format!(
+                "{}\n{}\n{}",
+                page.title, page.current_summary, page.current_body
+            ),
+        );
+        if !is_planning_query && lexical_score == 0 {
+            continue;
+        }
+        candidates.push((
+            lexical_score.max(*prefilter_score),
+            render_page_context_block(&page, lexical_score.max(*prefilter_score) as f64),
+        ));
+    }
+}
+
+pub(super) fn collect_matching_page_context_blocks<F>(
+    question: &str,
+    top_k: usize,
+    is_planning_query: bool,
+    candidate_summaries: Vec<(knowledge::KnowledgePageSummary, usize)>,
+    mut load_page: F,
+) -> Vec<knowledge::KnowledgeContextBlock>
+where
+    F: FnMut(&str) -> Option<knowledge::KnowledgePage>,
+{
+    let initial_candidate_limit = top_k.max(1).saturating_mul(4).max(8);
+    let mut candidates = Vec::<(usize, knowledge::KnowledgeContextBlock)>::new();
+    append_matching_page_context_blocks(
+        question,
+        is_planning_query,
+        candidate_summaries.iter().take(initial_candidate_limit),
+        &mut load_page,
+        &mut candidates,
+    );
+    if !is_planning_query && candidates.is_empty() {
+        append_matching_page_context_blocks(
+            question,
+            is_planning_query,
+            candidate_summaries.iter().skip(initial_candidate_limit),
+            &mut load_page,
+            &mut candidates,
+        );
+    }
+    candidates.sort_by(|left, right| right.0.cmp(&left.0));
+    candidates
+        .into_iter()
+        .take(top_k.max(1))
+        .map(|(_, block)| block)
+        .collect()
+}
+
 fn load_promoted_page_contexts_for_blocks(
     conn: &Connection,
     key: &[u8; 32],
@@ -225,11 +292,6 @@ pub(super) fn collect_compiled_page_contexts(
         .union(&answer_excluded_page_ids)
         .cloned()
         .collect::<std::collections::HashSet<_>>();
-    let candidate_limit = if is_planning_query {
-        top_k.max(1).saturating_mul(4).max(8)
-    } else {
-        page_summaries.len().max(top_k.max(1))
-    };
     let mut candidate_summaries = page_summaries
         .into_iter()
         .filter(|page| {
@@ -254,31 +316,17 @@ pub(super) fn collect_compiled_page_contexts(
             .then_with(|| right.0.updated_at_ms.cmp(&left.0.updated_at_ms))
             .then_with(|| left.0.page_id.cmp(&right.0.page_id))
     });
-    let mut candidates = Vec::<(usize, knowledge::KnowledgeContextBlock)>::new();
-    for (summary, prefilter_score) in candidate_summaries.into_iter().take(candidate_limit) {
-        let Some(page) = crate::db::load_current_knowledge_page(conn, key, &summary.page_id)
-            .ok()
-            .flatten()
-        else {
-            continue;
-        };
-        let lexical_score = lexical_page_match_score(
-            question,
-            &format!(
-                "{}\n{}\n{}",
-                page.title, page.current_summary, page.current_body
-            ),
-        );
-        if !is_planning_query && lexical_score == 0 {
-            continue;
-        }
-        candidates.push((
-            lexical_score.max(prefilter_score),
-            render_page_context_block(&page, lexical_score.max(prefilter_score) as f64),
-        ));
-    }
-    candidates.sort_by(|left, right| right.0.cmp(&left.0));
-    for (_, block) in candidates.into_iter().take(top_k.max(1)) {
+    for block in collect_matching_page_context_blocks(
+        question,
+        top_k,
+        is_planning_query,
+        candidate_summaries,
+        |page_id| {
+            crate::db::load_current_knowledge_page(conn, key, page_id)
+                .ok()
+                .flatten()
+        },
+    ) {
         out.push(block);
     }
 

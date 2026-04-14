@@ -61,6 +61,84 @@ void main() {
     expect(backend.correctedBody, 'Detailed corrected body.');
   });
 
+  testWidgets('KnowledgePageDetailPage only sends changed correction fields',
+      (tester) async {
+    final backend = _MutableKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:preferences'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Correct current conclusion'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('memory_correction_summary_field')),
+      'Short corrected summary.',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(backend.correctedTitle, isNull);
+    expect(backend.correctedSummary, 'Short corrected summary.');
+    expect(backend.correctedBody, isNull);
+  });
+
+  testWidgets('KnowledgePageDetailPage reloads when the session key changes',
+      (tester) async {
+    final backend = _ReloadAwareKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:preferences'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(backend.loadCount, 1);
+    expect(backend.lastLoadedKey, List<int>.filled(32, 1));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 2)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:preferences'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(backend.loadCount, 2);
+    expect(backend.lastLoadedKey, List<int>.filled(32, 2));
+  });
+
   testWidgets(
       'KnowledgePageDetailPage hides merge action for singleton page types',
       (tester) async {
@@ -483,6 +561,7 @@ final class _KnowledgePageDetailBackendStub extends TestAppBackend
 
 final class _MutableKnowledgePageDetailBackendStub extends TestAppBackend
     implements KnowledgePagesBackend {
+  String? correctedTitle;
   String? correctedSummary;
   String? correctedBody;
 
@@ -577,6 +656,7 @@ final class _MutableKnowledgePageDetailBackendStub extends TestAppBackend
     String? summary,
     String? body,
   }) async {
+    correctedTitle = title;
     correctedSummary = summary;
     correctedBody = body;
     return _buildDetail(pageId: pageId);
@@ -599,6 +679,22 @@ final class _MutableKnowledgePageDetailBackendStub extends TestAppBackend
     String? note,
   }) async =>
       _buildDetail(pageId: pageId);
+}
+
+final class _ReloadAwareKnowledgePageDetailBackendStub
+    extends _KnowledgePageDetailBackendStub {
+  int loadCount = 0;
+  List<int>? lastLoadedKey;
+
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    loadCount += 1;
+    lastLoadedKey = List<int>.from(key);
+    return super.getKnowledgePageDetail(key, pageId: pageId);
+  }
 }
 
 final class _RemovedKnowledgePageDetailBackendStub

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
@@ -47,6 +48,9 @@ class KnowledgePageDetailPage extends StatefulWidget {
 class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
   Future<_KnowledgePageDetailViewData>? _future;
   bool _submitting = false;
+  Uint8List? _loadedSessionKey;
+  AppBackend? _loadedBackend;
+  String? _loadedPageId;
 
   KnowledgePagesBackend _pagesBackend() {
     final backend = maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
@@ -85,7 +89,27 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= _load();
+    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
+    final backend = AppBackendScope.of(context);
+    final shouldReload = _future == null ||
+        !listEquals(_loadedSessionKey, sessionKey) ||
+        !identical(_loadedBackend, backend) ||
+        _loadedPageId != widget.pageId;
+    if (shouldReload) {
+      _loadedSessionKey = sessionKey;
+      _loadedBackend = backend;
+      _loadedPageId = widget.pageId;
+      _future = _load();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant KnowledgePageDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pageId != widget.pageId) {
+      _loadedPageId = widget.pageId;
+      _future = _load();
+    }
   }
 
   void _reload() {
@@ -106,9 +130,14 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
       () => _pagesBackend().correctKnowledgePage(
         SessionScope.of(context).sessionKey,
         pageId: widget.pageId,
-        title: draft.title,
-        summary: draft.summary,
-        body: draft.body ?? detail.page.currentBody,
+        title: _changedCorrectionField(draft.title, detail.page.title),
+        summary: _changedCorrectionField(
+          draft.summary,
+          detail.page.currentSummary,
+        ),
+        body: draft.body == null
+            ? null
+            : _changedCorrectionField(draft.body!, detail.page.currentBody),
       ),
     );
   }
@@ -764,4 +793,8 @@ class _PagePill extends StatelessWidget {
       child: Text(label, style: theme.textTheme.labelSmall),
     );
   }
+}
+
+String? _changedCorrectionField(String nextValue, String currentValue) {
+  return nextValue == currentValue ? null : nextValue;
 }

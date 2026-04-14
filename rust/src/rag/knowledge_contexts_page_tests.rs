@@ -1,5 +1,7 @@
 use crate::db;
-use crate::rag::knowledge_contexts::collect_compiled_page_contexts;
+use crate::rag::knowledge_contexts::{
+    collect_compiled_page_contexts, collect_matching_page_context_blocks,
+};
 use rusqlite::params;
 
 fn insert_document(
@@ -174,4 +176,134 @@ fn collect_compiled_page_contexts_matches_keywords_found_only_in_page_body() {
             .any(|block| block.document_id == "page:preferences"),
         "blocks: {blocks:?}"
     );
+}
+
+#[test]
+fn collect_matching_page_context_blocks_stops_after_first_batch_when_matches_exist() {
+    let mut inspected = Vec::<String>::new();
+    let candidate_summaries = vec![
+        (_summary("page:match", "Alpha", "Generic summary"), 1),
+        (_summary("page:2", "Page 2", "Generic summary"), 0),
+        (_summary("page:3", "Page 3", "Generic summary"), 0),
+        (_summary("page:4", "Page 4", "Generic summary"), 0),
+        (_summary("page:5", "Page 5", "Generic summary"), 0),
+        (_summary("page:6", "Page 6", "Generic summary"), 0),
+        (_summary("page:7", "Page 7", "Generic summary"), 0),
+        (_summary("page:8", "Page 8", "Generic summary"), 0),
+        (_summary("page:late", "Late Page", "Generic summary"), 0),
+    ];
+
+    let blocks =
+        collect_matching_page_context_blocks("Alpha", 1, false, candidate_summaries, |page_id| {
+            inspected.push(page_id.to_string());
+            Some(if page_id == "page:match" {
+                _page(page_id, "Alpha summary", "Generic body")
+            } else {
+                _page(page_id, "Generic summary", "Generic body")
+            })
+        });
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["page:match"]
+    );
+    assert_eq!(inspected.len(), 8);
+    assert!(!inspected.iter().any(|page_id| page_id == "page:late"));
+}
+
+#[test]
+fn collect_matching_page_context_blocks_falls_back_to_late_body_match_when_needed() {
+    let mut inspected = Vec::<String>::new();
+    let candidate_summaries = vec![
+        (_summary("page:1", "Page 1", "Generic summary"), 0),
+        (_summary("page:2", "Page 2", "Generic summary"), 0),
+        (_summary("page:3", "Page 3", "Generic summary"), 0),
+        (_summary("page:4", "Page 4", "Generic summary"), 0),
+        (_summary("page:5", "Page 5", "Generic summary"), 0),
+        (_summary("page:6", "Page 6", "Generic summary"), 0),
+        (_summary("page:7", "Page 7", "Generic summary"), 0),
+        (_summary("page:8", "Page 8", "Generic summary"), 0),
+        (_summary("page:late", "Late Page", "Generic summary"), 0),
+    ];
+
+    let blocks = collect_matching_page_context_blocks(
+        "Mandarin",
+        1,
+        false,
+        candidate_summaries,
+        |page_id| {
+            inspected.push(page_id.to_string());
+            Some(if page_id == "page:late" {
+                _page(page_id, "Generic summary", "Reply in Mandarin when asked.")
+            } else {
+                _page(page_id, "Generic summary", "Generic body")
+            })
+        },
+    );
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["page:late"]
+    );
+    assert_eq!(inspected.len(), 9);
+}
+
+fn _summary(
+    page_id: &str,
+    title: &str,
+    current_summary: &str,
+) -> crate::knowledge::KnowledgePageSummary {
+    crate::knowledge::KnowledgePageSummary {
+        page_id: page_id.to_string(),
+        page_type: crate::knowledge::KnowledgePageType::Topics,
+        title: title.to_string(),
+        current_summary: current_summary.to_string(),
+        state: crate::knowledge::KnowledgePageState::Active,
+        answer_policy: crate::knowledge::KnowledgeAnswerPolicy {
+            default_allowed: true,
+            requires_temporal_framing: false,
+        },
+        updated_at_ms: 1,
+        last_used_at_ms: Some(1),
+        source_count: 1,
+        conflict_count: 0,
+        human_corrected: false,
+        tags: Vec::new(),
+        primary_evidence_ids: Vec::new(),
+    }
+}
+
+fn _page(
+    page_id: &str,
+    current_summary: &str,
+    current_body: &str,
+) -> crate::knowledge::KnowledgePage {
+    crate::knowledge::KnowledgePage {
+        page_id: page_id.to_string(),
+        page_type: crate::knowledge::KnowledgePageType::Topics,
+        title: format!("Title for {page_id}"),
+        current_summary: current_summary.to_string(),
+        current_body: current_body.to_string(),
+        state: crate::knowledge::KnowledgePageState::Active,
+        answer_policy: crate::knowledge::KnowledgeAnswerPolicy {
+            default_allowed: true,
+            requires_temporal_framing: false,
+        },
+        confidence_level: 1.0,
+        created_at_ms: 1,
+        updated_at_ms: 1,
+        last_used_at_ms: Some(1),
+        source_count: 1,
+        conflict_count: 0,
+        human_corrected: false,
+        tags: Vec::new(),
+        primary_evidence_ids: Vec::new(),
+        related_page_ids: Vec::new(),
+    }
 }
