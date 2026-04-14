@@ -240,4 +240,8 @@ fn refresh_knowledge_pages_compiles_disputed_claims_into_open_questions_pages() 
     assert!(open_question.current_summary.contains("Chinese"));
     assert!(open_question.current_body.contains("Chinese"));
     assert!(!open_question.answer_policy.default_allowed);
+    assert!(
+        pages.iter().all(|page| page.page_id != "page:preferences"),
+        "compiled pages should not keep disputed content in the main preferences page: {pages:?}"
+    );
 }

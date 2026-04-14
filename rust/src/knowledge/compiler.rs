@@ -165,6 +165,27 @@ fn compile_pages_from_claims(
 
             for index in indexes {
                 let document = &documents[index];
+                let page_claims = claims
+                    .iter()
+                    .filter(|claim| {
+                        claim_belongs_to_page(claim, seed.page_type, Some(seed.page_id.as_str()))
+                    })
+                    .filter(|claim| {
+                        claim
+                            .source_ref_ids
+                            .iter()
+                            .any(|source_ref| source_ref == &document.document_id)
+                    })
+                    .collect::<Vec<_>>();
+                if page_claims.is_empty() {
+                    continue;
+                }
+                let contributes_to_current = page_claims.iter().any(|claim| {
+                    matches!(
+                        claim.status,
+                        KnowledgeClaimStatus::Active | KnowledgeClaimStatus::Supporting
+                    )
+                });
                 let document_title = document
                     .title
                     .as_deref()
@@ -174,42 +195,30 @@ fn compile_pages_from_claims(
                     .as_deref()
                     .unwrap_or(document.raw_text.as_str())
                     .trim();
-                if seed.page_type == KnowledgePageType::ActiveThreads
-                    && document.document_id == "generated:pattern:active-task-focus"
-                {
-                    body_lines.push(document.raw_text.trim().to_string());
-                } else {
-                    body_lines.push(format!("- {document_title}: {document_summary}"));
+                if contributes_to_current {
+                    if seed.page_type == KnowledgePageType::ActiveThreads
+                        && document.document_id == "generated:pattern:active-task-focus"
+                    {
+                        body_lines.push(document.raw_text.trim().to_string());
+                    } else {
+                        body_lines.push(format!("- {document_title}: {document_summary}"));
+                    }
+                    summary_lines.push(document_summary.to_string());
+                    primary_evidence_ids.push(document.document_id.clone());
+                    latest_updated_at = latest_updated_at.max(document.updated_at_ms);
+                    source_count += document
+                        .memory_display
+                        .as_ref()
+                        .map(|value| value.source_count)
+                        .unwrap_or(1)
+                        .max(1);
+                    confidence_total += document.quality_score;
                 }
-                summary_lines.push(document_summary.to_string());
-                primary_evidence_ids.push(document.document_id.clone());
                 source_document_ids.push(document.document_id.clone());
-                latest_updated_at = latest_updated_at.max(document.updated_at_ms);
-                source_count += document
-                    .memory_display
-                    .as_ref()
-                    .map(|value| value.source_count)
-                    .unwrap_or(1)
-                    .max(1);
-                confidence_total += document.quality_score;
-                claim_ids.extend(
-                    claims
-                        .iter()
-                        .filter(|claim| {
-                            claim_belongs_to_page(
-                                claim,
-                                seed.page_type,
-                                Some(seed.page_id.as_str()),
-                            )
-                        })
-                        .filter(|claim| {
-                            claim
-                                .source_ref_ids
-                                .iter()
-                                .any(|source_ref| source_ref == &document.document_id)
-                        })
-                        .map(|claim| claim.claim_id.clone()),
-                );
+                claim_ids.extend(page_claims.into_iter().map(|claim| claim.claim_id.clone()));
+            }
+            if summary_lines.is_empty() && body_lines.is_empty() {
+                return None;
             }
 
             let mut page = KnowledgePage::new(
@@ -234,12 +243,13 @@ fn compile_pages_from_claims(
             if page.current_body.is_empty() {
                 page.current_body = page.current_summary.clone();
             }
-            CompiledKnowledgePageRecord {
+            Some(CompiledKnowledgePageRecord {
                 page,
                 source_document_ids: dedup(source_document_ids),
                 claim_ids: dedup(claim_ids),
-            }
+            })
         })
+        .flatten()
         .collect::<Vec<_>>();
     compiled.extend(compile_open_question_pages(claims));
     compiled

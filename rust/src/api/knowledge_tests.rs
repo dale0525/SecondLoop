@@ -359,10 +359,10 @@ fn knowledge_memory_feedback_overrides_detail_and_page_policy_controls_ask_ai_us
     )
     .expect("knowledge contexts");
     assert!(
-        contexts.iter().any(|ctx| {
-            ctx.contains("Always reply in Chinese unless I ask for another language.")
+        contexts.iter().all(|ctx| {
+            !ctx.contains("Always reply in Chinese unless I ask for another language.")
         }),
-        "contexts: {contexts:?}"
+        "marked inaccurate memories should not remain answer-eligible: {contexts:?}"
     );
 
     crate::api::knowledge::db_set_knowledge_page_answer_allowed(

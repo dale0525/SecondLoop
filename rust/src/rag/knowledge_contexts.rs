@@ -36,7 +36,7 @@ fn should_exclude_generated_document_for_page_policies(
     !related_page_ids.is_empty()
         && related_page_ids
             .iter()
-            .all(|page_id| excluded_page_ids.contains(page_id))
+            .any(|page_id| excluded_page_ids.contains(page_id))
 }
 
 fn collect_compiled_page_contexts(
@@ -140,7 +140,10 @@ fn collect_compiled_page_contexts(
                 break;
             }
             for document in documents {
-                if !document.memory_feedback.use_for_ask_ai || document.memory_feedback.is_deleted {
+                if !document.memory_feedback.use_for_ask_ai
+                    || document.memory_feedback.is_deleted
+                    || document.memory_feedback.marked_inaccurate
+                {
                     continue;
                 }
                 if should_exclude_generated_document_for_page_policies(
@@ -247,7 +250,7 @@ fn filter_disabled_generated_memory_blocks(
             .get(&block.document_id)
             .cloned()
             .unwrap_or_default();
-        if feedback.use_for_ask_ai && !feedback.is_deleted {
+        if feedback.use_for_ask_ai && !feedback.is_deleted && !feedback.marked_inaccurate {
             out.push(block);
         }
     }
@@ -653,6 +656,51 @@ mod tests {
     }
 
     #[test]
+    fn collect_compiled_page_contexts_planning_fallback_skips_marked_inaccurate_memory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [69u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+        insert_document(
+            &conn,
+            &key,
+            "generated:misc:incorrect-first",
+            "generated",
+            30,
+            Some(&conv.id),
+            "Incorrect planning signal.",
+        );
+        insert_document(
+            &conn,
+            &key,
+            "generated:misc:allowed-second",
+            "generated",
+            20,
+            Some(&conv.id),
+            "Allowed planning signal.",
+        );
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            &key,
+            "generated:misc:incorrect-first",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            true,
+            false,
+            true,
+            None,
+            None,
+        )
+        .expect("mark generated memory inaccurate");
+
+        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 1)
+            .expect("compiled page contexts");
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].document_id, "generated:misc:allowed-second");
+    }
+
+    #[test]
     fn filter_disabled_generated_memory_blocks_uses_bulk_feedback_and_keeps_real_documents() {
         let dir = tempfile::tempdir().expect("tempdir");
         let conn = db::open(dir.path()).expect("open");
@@ -739,6 +787,44 @@ mod tests {
             document_ids,
             vec!["generated:preference:visible", "message:evidence-1"]
         );
+    }
+
+    #[test]
+    fn filter_disabled_generated_memory_blocks_excludes_marked_inaccurate_generated_memory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [70u8; 32];
+
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            &key,
+            "generated:preference:incorrect",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            true,
+            false,
+            true,
+            None,
+            None,
+        )
+        .expect("mark generated memory inaccurate");
+
+        let filtered = filter_disabled_generated_memory_blocks(
+            &conn,
+            &key,
+            vec![knowledge::KnowledgeContextBlock {
+                document_id: "generated:preference:incorrect".to_string(),
+                unit_id: None,
+                unit_kind: None,
+                source_kind: knowledge::KnowledgeSourceKind::Summary,
+                role: knowledge::KnowledgeRole::Summary,
+                anchors: knowledge::KnowledgeAnchorSet::default(),
+                score: 0.5,
+                rendered_text: "incorrect".to_string(),
+            }],
+        )
+        .expect("filter blocks");
+
+        assert!(filtered.is_empty(), "filtered: {filtered:?}");
     }
 
     #[test]
@@ -844,10 +930,10 @@ mod tests {
     }
 
     #[test]
-    fn shared_generated_document_requires_all_related_pages_to_be_excluded() {
+    fn shared_generated_document_is_excluded_when_any_related_page_is_blocked() {
         let excluded = std::collections::HashSet::from([String::from("page:current-focus")]);
 
-        assert!(!should_exclude_generated_document_for_page_policies(
+        assert!(should_exclude_generated_document_for_page_policies(
             "generated:pattern:active-task-focus",
             &excluded,
         ));
@@ -874,6 +960,51 @@ mod tests {
             "generated:misc:allowed-second",
             &excluded,
         ));
+    }
+
+    #[test]
+    fn filter_disabled_generated_memory_blocks_excludes_shared_document_when_any_related_page_is_blocked(
+    ) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [71u8; 32];
+
+        insert_document(
+            &conn,
+            &key,
+            "generated:pattern:active-task-focus",
+            "generated",
+            1,
+            None,
+            "User is actively working across these task threads: Draft roadmap [in_progress].",
+        );
+        crate::knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh pages");
+        crate::db::set_knowledge_page_answer_allowed(
+            &conn,
+            &key,
+            "page:active-threads",
+            false,
+            None,
+        )
+        .expect("mute active threads page");
+
+        let filtered = filter_disabled_generated_memory_blocks(
+            &conn,
+            &key,
+            vec![knowledge::KnowledgeContextBlock {
+                document_id: "generated:pattern:active-task-focus".to_string(),
+                unit_id: None,
+                unit_kind: None,
+                source_kind: knowledge::KnowledgeSourceKind::Summary,
+                role: knowledge::KnowledgeRole::Summary,
+                anchors: knowledge::KnowledgeAnchorSet::default(),
+                score: 0.5,
+                rendered_text: "shared".to_string(),
+            }],
+        )
+        .expect("filter blocks");
+
+        assert!(filtered.is_empty(), "filtered: {filtered:?}");
     }
 
     #[test]
