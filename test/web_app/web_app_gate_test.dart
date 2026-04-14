@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
+import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 import 'package:secondloop/web_app/web_entry_intent.dart';
+import 'package:secondloop/web_app/web_formal_settings_adapters.dart';
 
 import '../test_i18n.dart';
 
@@ -114,6 +117,7 @@ Widget _buildApp({
   CloudWebBackend? chatBackend,
   Locale? locale,
   WebEntryIntent entryIntent = WebEntryIntent.open,
+  String managedVaultBaseUrl = '',
 }) {
   return wrapWithI18n(
     MaterialApp(
@@ -123,6 +127,7 @@ Widget _buildApp({
         service: service,
         chatBackend: chatBackend,
         entryIntent: entryIntent,
+        managedVaultBaseUrl: managedVaultBaseUrl,
       ),
     ),
   );
@@ -130,6 +135,7 @@ Widget _buildApp({
 
 void main() {
   testWidgets('shows auth form when signed out', (tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       _buildApp(
         controller: _FakeCloudAuthController(),
@@ -144,6 +150,7 @@ void main() {
 
   testWidgets('subscribe intent explains sign-in before web access',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       _buildApp(
         controller: _FakeCloudAuthController(),
@@ -158,6 +165,7 @@ void main() {
 
   testWidgets('shows upgrade gate when signed in without entitlement',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       _buildApp(
         controller: _FakeCloudAuthController(
@@ -177,6 +185,7 @@ void main() {
 
   testWidgets('subscription refresh unlocks shared shell after entitlement',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final service = _FakeWebAppService(
       subscription: WebSubscriptionState.notEntitled,
     );
@@ -206,6 +215,7 @@ void main() {
 
   testWidgets('upgrade gate localizes checkout payment-required error inline',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       _buildApp(
         controller: _FakeCloudAuthController(
@@ -308,5 +318,30 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
     expect(find.byType(ChatPage), findsOneWidget);
     expect(find.text('Files'), findsNothing);
+  });
+
+  testWidgets(
+      'web gate clears invalid managed vault sync override and falls back to runtime base URL',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.secondloop.example',
+    );
+    await store.writeManagedVaultBaseUrl(kWebFormalSettingsBaseUrl);
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(),
+        service: _FakeWebAppService(subscription: WebSubscriptionState.unknown),
+        managedVaultBaseUrl: 'https://vault.secondloop.example',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(await store.readManagedVaultBaseUrl(), isNull);
+    expect(
+      await store.resolveManagedVaultBaseUrl(),
+      'https://vault.secondloop.example',
+    );
   });
 }

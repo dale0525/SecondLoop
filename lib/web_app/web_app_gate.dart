@@ -34,6 +34,7 @@ class WebAppGate extends StatefulWidget {
     required this.service,
     this.chatBackend,
     this.entryIntent = WebEntryIntent.open,
+    this.managedVaultBaseUrl = '',
     super.key,
   });
 
@@ -41,6 +42,7 @@ class WebAppGate extends StatefulWidget {
   final WebAppService service;
   final CloudWebBackend? chatBackend;
   final WebEntryIntent entryIntent;
+  final String managedVaultBaseUrl;
 
   @override
   State<WebAppGate> createState() => _WebAppGateState();
@@ -96,15 +98,17 @@ class _WebAppGateState extends State<WebAppGate> {
       authController: widget.authController,
     );
     _vaultConfigStore = SyncConfigStore(
-      managedVaultDefaultBaseUrl: kWebFormalSettingsBaseUrl,
+      managedVaultDefaultBaseUrl: widget.managedVaultBaseUrl.trim(),
     );
     unawaited(_primeWebFormalSyncDefaults());
   }
 
   Future<void> _primeWebFormalSyncDefaults() async {
-    await _vaultConfigStore.writeManagedVaultBaseUrl(
-      kWebFormalSettingsBaseUrl,
-    );
+    final storedBaseUrl =
+        (await _vaultConfigStore.readManagedVaultBaseUrl())?.trim() ?? '';
+    if (storedBaseUrl == kWebFormalSettingsBaseUrl) {
+      await _vaultConfigStore.writeManagedVaultBaseUrl('');
+    }
     await _vaultConfigStore.writeBackendType(SyncBackendType.managedVault);
   }
 

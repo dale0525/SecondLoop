@@ -156,10 +156,12 @@ class WebAppConfig {
   const WebAppConfig({
     required this.firebaseWebApiKey,
     this.hasManagedVaultBaseUrl = false,
+    this.managedVaultBaseUrl = '',
   });
 
   final String firebaseWebApiKey;
   final bool hasManagedVaultBaseUrl;
+  final String managedVaultBaseUrl;
 }
 
 class WebAppHttpException implements Exception {
@@ -215,10 +217,14 @@ class WebAppServiceHttp extends WebAppService {
       }
       final firebaseWebApiKey =
           '${decoded['firebase_web_api_key'] ?? ''}'.trim();
+      final managedVaultBaseUrl =
+          '${decoded['managed_vault_base_url'] ?? ''}'.trim();
       return WebAppConfig(
         firebaseWebApiKey: firebaseWebApiKey,
         hasManagedVaultBaseUrl:
-            _parseBool(decoded['has_managed_vault_base_url']) ?? false,
+            _parseBool(decoded['has_managed_vault_base_url']) ??
+                managedVaultBaseUrl.isNotEmpty,
+        managedVaultBaseUrl: managedVaultBaseUrl,
       );
     } finally {
       if (client == null) {

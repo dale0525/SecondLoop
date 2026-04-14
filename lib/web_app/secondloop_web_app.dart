@@ -114,6 +114,7 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
           payload: payload,
         ),
       ),
+      managedVaultBaseUrl: config.managedVaultBaseUrl,
     );
   }
 
@@ -181,6 +182,7 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
                       service: snapshot.data!.service,
                       chatBackend: snapshot.data!.chatBackend,
                       entryIntent: entryIntent,
+                      managedVaultBaseUrl: snapshot.data!.managedVaultBaseUrl,
                     );
                   },
                 ),
@@ -198,11 +200,13 @@ class WebAppBootstrapData {
     required this.authController,
     required this.service,
     required this.chatBackend,
+    required this.managedVaultBaseUrl,
   });
 
   final ObservableCloudAuthController authController;
   final WebAppService service;
   final CloudWebBackend chatBackend;
+  final String managedVaultBaseUrl;
 }
 
 final class _WebAppCloudWebChatClient implements CloudWebChatClient {
