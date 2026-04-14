@@ -111,9 +111,15 @@ class _KnowledgeCenterPageState extends State<KnowledgeCenterPage> {
 
         final viewData = snapshot.data!;
         final home = viewData.homeData;
+        final hasVisibleContent = home.currentMe.isNotEmpty ||
+            home.needsAttention.isNotEmpty ||
+            home.recentChanges.isNotEmpty ||
+            home.directory.isNotEmpty ||
+            home.systemActivity.totalPages > 0 ||
+            home.systemActivity.pagesUsedInAnswersRecently.isNotEmpty;
         return Scaffold(
           appBar: AppBar(title: Text(context.t.memory.title)),
-          body: viewData.summaries.isEmpty
+          body: !hasVisibleContent
               ? Center(child: Text(context.t.memory.emptyState))
               : ListView(
                   padding: const EdgeInsets.all(16),

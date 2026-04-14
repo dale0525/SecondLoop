@@ -118,3 +118,35 @@ fn refresh_knowledge_pages_paginates_generated_documents_past_first_512() {
     assert!(topics.current_body.contains("Topic signal 000"));
     assert!(topics.current_body.contains("Topic signal 512"));
 }
+
+#[test]
+fn refresh_knowledge_pages_compiles_active_threads_page_from_active_task_pattern() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [43u8; 32];
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:pattern:active-task-focus",
+        "User is actively working across these task threads: Draft roadmap [in_progress]. Review launch notes [open].",
+        12_345,
+    );
+
+    let pages =
+        knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh knowledge pages");
+
+    let current_focus = pages
+        .iter()
+        .find(|page| page.page_type == knowledge::KnowledgePageType::CurrentFocus)
+        .expect("current focus page");
+    let active_threads = pages
+        .iter()
+        .find(|page| page.page_type == knowledge::KnowledgePageType::ActiveThreads)
+        .expect("active threads page");
+
+    assert_eq!(current_focus.page_id, "page:current-focus");
+    assert_eq!(active_threads.page_id, "page:active-threads");
+    assert!(active_threads.current_body.contains("Draft roadmap"));
+    assert!(active_threads.current_body.contains("Review launch notes"));
+}

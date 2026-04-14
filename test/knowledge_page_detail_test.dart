@@ -61,8 +61,10 @@ void main() {
     expect(backend.correctedBody, 'Detailed corrected body.');
   });
 
-  testWidgets('KnowledgePageDetailPage hides the merge action', (tester) async {
-    final backend = _KnowledgePageDetailBackendStub();
+  testWidgets(
+      'KnowledgePageDetailPage shows merge action and merges into target',
+      (tester) async {
+    final backend = _MergeableKnowledgePageDetailBackendStub();
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -83,7 +85,17 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.more_horiz_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('Merge Pages'), findsNothing);
+    expect(find.text('Merge Pages'), findsOneWidget);
+
+    await tester.tap(find.text('Merge Pages'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Preferences (Archive)'), findsOneWidget);
+    await tester.tap(find.text('Preferences (Archive)'));
+    await tester.pumpAndSettle();
+
+    expect(backend.mergedPageId, 'page:preferences');
+    expect(backend.mergedTargetPageId, 'page:preferences:archive');
   });
 
   testWidgets('KnowledgePageDetailPage shows final governance sections',
@@ -528,6 +540,24 @@ final class _RemovedKnowledgePageDetailBackendStub
       state: KnowledgePageState.removed,
       answerAllowed: false,
     );
+  }
+}
+
+final class _MergeableKnowledgePageDetailBackendStub
+    extends _MutableKnowledgePageDetailBackendStub {
+  String? mergedPageId;
+  String? mergedTargetPageId;
+
+  @override
+  Future<KnowledgePageDetail> mergeKnowledgePageInto(
+    Uint8List key, {
+    required String pageId,
+    required String targetPageId,
+    String? note,
+  }) async {
+    mergedPageId = pageId;
+    mergedTargetPageId = targetPageId;
+    return _buildDetail(pageId: pageId);
   }
 }
 

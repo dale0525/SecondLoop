@@ -130,7 +130,7 @@ fn compile_pages_from_claims(
 ) -> Vec<CompiledKnowledgePageRecord> {
     let mut by_page_type = BTreeMap::<KnowledgePageType, Vec<usize>>::new();
     for (index, document) in documents.iter().enumerate() {
-        if let Some(page_type) = page_type_for_document_id(&document.document_id) {
+        for page_type in page_types_for_document_id(&document.document_id) {
             by_page_type.entry(page_type).or_default().push(index);
         }
     }
@@ -160,7 +160,13 @@ fn compile_pages_from_claims(
                     .as_deref()
                     .unwrap_or(document.raw_text.as_str())
                     .trim();
-                body_lines.push(format!("- {document_title}: {document_summary}"));
+                if page_type == KnowledgePageType::ActiveThreads
+                    && document.document_id == "generated:pattern:active-task-focus"
+                {
+                    body_lines.push(document.raw_text.trim().to_string());
+                } else {
+                    body_lines.push(format!("- {document_title}: {document_summary}"));
+                }
                 summary_lines.push(document_summary.to_string());
                 primary_evidence_ids.push(document.document_id.clone());
                 source_document_ids.push(document.document_id.clone());
@@ -235,9 +241,8 @@ fn page_type_for_claim(claim: &KnowledgeClaim) -> Option<KnowledgePageType> {
     match claim.claim_type {
         KnowledgeClaimType::Preference => Some(KnowledgePageType::Preferences),
         KnowledgeClaimType::Identity => Some(KnowledgePageType::AboutMe),
-        KnowledgeClaimType::Focus | KnowledgeClaimType::Thread => {
-            Some(KnowledgePageType::CurrentFocus)
-        }
+        KnowledgeClaimType::Focus => Some(KnowledgePageType::CurrentFocus),
+        KnowledgeClaimType::Thread => Some(KnowledgePageType::ActiveThreads),
         KnowledgeClaimType::Event => Some(KnowledgePageType::RecentEvents),
         KnowledgeClaimType::Relationship => Some(KnowledgePageType::People),
         KnowledgeClaimType::Topic => Some(KnowledgePageType::Topics),
@@ -270,19 +275,22 @@ fn facet_key_for_document_id(document_id: &str) -> String {
         .replace('-', "_")
 }
 
-fn page_type_for_document_id(document_id: &str) -> Option<KnowledgePageType> {
+fn page_types_for_document_id(document_id: &str) -> Vec<KnowledgePageType> {
     if document_id.starts_with("generated:preference:") {
-        Some(KnowledgePageType::Preferences)
+        vec![KnowledgePageType::Preferences]
     } else if document_id.starts_with("generated:profile:") {
-        Some(KnowledgePageType::AboutMe)
+        vec![KnowledgePageType::AboutMe]
     } else if document_id.starts_with("generated:event:") {
-        Some(KnowledgePageType::RecentEvents)
+        vec![KnowledgePageType::RecentEvents]
     } else if document_id.starts_with("generated:pattern:active-task-focus") {
-        Some(KnowledgePageType::CurrentFocus)
+        vec![
+            KnowledgePageType::CurrentFocus,
+            KnowledgePageType::ActiveThreads,
+        ]
     } else if document_id.starts_with("generated:pattern:") {
-        Some(KnowledgePageType::Topics)
+        vec![KnowledgePageType::Topics]
     } else {
-        None
+        Vec::new()
     }
 }
 

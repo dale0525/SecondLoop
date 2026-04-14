@@ -37,6 +37,9 @@ fn collect_compiled_page_contexts(
     let mut out = Vec::<knowledge::KnowledgeContextBlock>::new();
     let is_planning_query = knowledge::session_digest::is_planning_or_summary_query(question);
     let page_summaries = crate::db::list_knowledge_page_summaries(conn, key)?;
+    let answer_excluded_page_ids = crate::db::list_answer_excluded_knowledge_page_ids(conn)?
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
     let muted_page_ids = page_summaries
         .iter()
         .filter(|page| !page.answer_policy.default_allowed)
@@ -117,8 +120,11 @@ fn collect_compiled_page_contexts(
             if !document.memory_feedback.use_for_ask_ai || document.memory_feedback.is_deleted {
                 continue;
             }
-            if page_id_for_generated_document_id(&document.document_id)
-                .is_some_and(|page_id| muted_page_ids.contains(page_id))
+            if generated_document_page_ids(&document.document_id)
+                .iter()
+                .any(|page_id| {
+                    muted_page_ids.contains(*page_id) || answer_excluded_page_ids.contains(*page_id)
+                })
             {
                 continue;
             }
@@ -181,25 +187,25 @@ fn rebalance_planning_contexts(
     blocks.insert(replace_index, evidence);
 }
 
-fn page_id_for_generated_document_id(document_id: &str) -> Option<&'static str> {
+fn generated_document_page_ids(document_id: &str) -> &'static [&'static str] {
     if document_id.starts_with("generated:preference:") {
-        Some("page:preferences")
+        &["page:preferences"]
     } else if document_id.starts_with("generated:profile:") {
-        Some("page:about-me")
+        &["page:about-me"]
     } else if document_id.starts_with("generated:event:") {
-        Some("page:recent-events")
+        &["page:recent-events"]
     } else if document_id.starts_with("generated:pattern:active-task-focus") {
-        Some("page:current-focus")
+        &["page:current-focus", "page:active-threads"]
     } else if document_id.starts_with("generated:pattern:") {
-        Some("page:topics")
+        &["page:topics"]
     } else {
-        None
+        &[]
     }
 }
 
 fn filter_disabled_generated_memory_blocks(
     conn: &Connection,
-    key: &[u8; 32],
+    _key: &[u8; 32],
     blocks: Vec<knowledge::KnowledgeContextBlock>,
 ) -> Result<Vec<knowledge::KnowledgeContextBlock>> {
     let generated_document_ids = blocks
@@ -209,10 +215,8 @@ fn filter_disabled_generated_memory_blocks(
         .collect::<std::collections::BTreeSet<_>>();
     let feedback_by_document_id =
         crate::db::load_knowledge_memory_feedback_map(conn, &generated_document_ids)?;
-    let muted_page_ids = crate::db::list_knowledge_page_summaries(conn, key)?
+    let answer_excluded_page_ids = crate::db::list_answer_excluded_knowledge_page_ids(conn)?
         .into_iter()
-        .filter(|page| !page.answer_policy.default_allowed)
-        .map(|page| page.page_id)
         .collect::<std::collections::HashSet<_>>();
     let mut out = Vec::with_capacity(blocks.len());
     for block in blocks {
@@ -220,8 +224,9 @@ fn filter_disabled_generated_memory_blocks(
             out.push(block);
             continue;
         }
-        if page_id_for_generated_document_id(&block.document_id)
-            .is_some_and(|page_id| muted_page_ids.contains(page_id))
+        if generated_document_page_ids(&block.document_id)
+            .iter()
+            .any(|page_id| answer_excluded_page_ids.contains(*page_id))
         {
             continue;
         }
@@ -711,6 +716,69 @@ mod tests {
                 score: 0.5,
                 rendered_text: "preference".to_string(),
             }],
+        )
+        .expect("filter blocks");
+
+        assert!(filtered.is_empty(), "filtered: {filtered:?}");
+    }
+
+    #[test]
+    fn filter_disabled_generated_memory_blocks_excludes_documents_backed_by_archived_or_removed_pages(
+    ) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [67u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+        insert_document(
+            &conn,
+            &key,
+            "generated:preference:response-language",
+            "generated",
+            1,
+            Some(&conv.id),
+            "User prefers responses in Chinese.",
+        );
+        insert_document(
+            &conn,
+            &key,
+            "generated:event:project-launch",
+            "generated",
+            2,
+            Some(&conv.id),
+            "The launch moved to next month.",
+        );
+        crate::knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh pages");
+        crate::db::archive_knowledge_page(&conn, &key, "page:preferences", None)
+            .expect("archive page");
+        crate::db::remove_knowledge_page(&conn, &key, "page:recent-events", None)
+            .expect("remove page");
+
+        let filtered = filter_disabled_generated_memory_blocks(
+            &conn,
+            &key,
+            vec![
+                knowledge::KnowledgeContextBlock {
+                    document_id: "generated:preference:response-language".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::Summary,
+                    role: knowledge::KnowledgeRole::Summary,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.5,
+                    rendered_text: "preference".to_string(),
+                },
+                knowledge::KnowledgeContextBlock {
+                    document_id: "generated:event:project-launch".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: knowledge::KnowledgeSourceKind::Summary,
+                    role: knowledge::KnowledgeRole::Summary,
+                    anchors: knowledge::KnowledgeAnchorSet::default(),
+                    score: 0.4,
+                    rendered_text: "event".to_string(),
+                },
+            ],
         )
         .expect("filter blocks");
 

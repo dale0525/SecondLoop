@@ -241,6 +241,58 @@ void main() {
     expect(find.text('Removed because it should not be used.'), findsOneWidget);
   });
 
+  testWidgets(
+      'KnowledgeCenterPage still renders recent changes when active summaries are empty',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _KnowledgeCenterBackendStub(
+      summaries: const [],
+      details: {
+        'page:preferences': _detail(
+          pageId: 'page:preferences',
+          title: 'Preferences',
+          pageType: KnowledgePageType.preferences,
+          state: KnowledgePageState.removed,
+          summary: 'Removed preference page.',
+          updatedAtMs: nowMs - 1000,
+        ),
+      },
+      recentChanges: [
+        KnowledgePageChangeRecord(
+          changeId: 'change:removed-only',
+          pageId: 'page:preferences',
+          changeType: KnowledgePageChangeType.removed,
+          actor: 'user',
+          reason: 'Removed because it should not be used.',
+          answerImpacted: true,
+          createdAtMs: nowMs,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 4)),
+              lock: () {},
+              child: const KnowledgeCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recent Changes'), findsOneWidget);
+    expect(find.text('Preferences'), findsOneWidget);
+    expect(find.text('Removed because it should not be used.'), findsOneWidget);
+    expect(find.text('No pages yet.'), findsNothing);
+  });
+
   testWidgets('KnowledgeCenterPage opens a directory list for page types',
       (tester) async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;

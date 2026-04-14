@@ -67,9 +67,17 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
     final relatedPages = allSummaries
         .where((page) => detail.page.relatedPageIds.contains(page.pageId))
         .toList(growable: false);
+    final mergeTargets = allSummaries
+        .where((page) =>
+            page.pageId != detail.page.pageId &&
+            page.pageType == detail.page.pageType &&
+            page.state != KnowledgePageState.archived &&
+            page.state != KnowledgePageState.removed)
+        .toList(growable: false);
     return _KnowledgePageDetailViewData(
       detail: detail,
       relatedPages: relatedPages,
+      mergeTargets: mergeTargets,
     );
   }
 
@@ -150,6 +158,16 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
           pageTitle: data.detail.page.title,
           records: data.detail.lintRecords,
         );
+      case KnowledgePageOverflowAction.merge:
+        final targetPageId = await _selectMergeTarget(data);
+        if (targetPageId == null) return;
+        await _runMutation(
+          () => _pagesBackend().mergeKnowledgePageInto(
+            SessionScope.of(context).sessionKey,
+            pageId: widget.pageId,
+            targetPageId: targetPageId,
+          ),
+        );
       case KnowledgePageOverflowAction.archive:
         await _runMutation(
           () => _pagesBackend().archiveKnowledgePage(
@@ -165,6 +183,33 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
           ),
         );
     }
+  }
+
+  Future<String?> _selectMergeTarget(_KnowledgePageDetailViewData data) async {
+    final candidates = data.mergeTargets;
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(context.t.memory.emptyState)),
+      );
+      return null;
+    }
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final page in candidates)
+              ListTile(
+                title: Text(page.title),
+                subtitle: Text(page.currentSummary),
+                onTap: () => Navigator.of(context).pop(page.pageId),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _runMutation(
@@ -220,6 +265,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
         final page = detail.page;
         final answerAllowed = page.answerPolicy.defaultAllowed;
         final isRemoved = page.state == KnowledgePageState.removed;
+        final canMerge = data.mergeTargets.isNotEmpty && !isRemoved;
         final canToggleAnswerPolicy =
             page.state != KnowledgePageState.archived &&
                 page.state != KnowledgePageState.removed;
@@ -235,6 +281,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
                         final action = await showKnowledgePageActionsSheet(
                           context,
                           includeArchive: !isRemoved,
+                          includeMerge: canMerge,
                           includeRemove: !isRemoved,
                         );
                         if (action == null || !mounted) return;
@@ -641,10 +688,12 @@ class _KnowledgePageDetailViewData {
   const _KnowledgePageDetailViewData({
     required this.detail,
     required this.relatedPages,
+    required this.mergeTargets,
   });
 
   final KnowledgePageDetail detail;
   final List<KnowledgePageSummary> relatedPages;
+  final List<KnowledgePageSummary> mergeTargets;
 }
 
 class _DetailSection extends StatelessWidget {

@@ -1864,6 +1864,21 @@ pub fn list_knowledge_page_summaries(
     Ok(out)
 }
 
+pub fn list_answer_excluded_knowledge_page_ids(conn: &Connection) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT page_id
+           FROM knowledge_pages
+           WHERE answer_default_allowed = 0
+              OR state IN ('archived', 'removed')
+           ORDER BY page_id ASC"#,
+    )?;
+    let page_ids = stmt
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(anyhow::Error::from)?;
+    Ok(page_ids)
+}
+
 pub fn get_knowledge_page_detail(
     conn: &Connection,
     key: &[u8; 32],

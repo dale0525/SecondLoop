@@ -6,6 +6,7 @@ enum KnowledgePageOverflowAction {
   viewEvidence,
   viewHistory,
   viewReview,
+  merge,
   archive,
   remove,
 }
@@ -13,6 +14,7 @@ enum KnowledgePageOverflowAction {
 Future<KnowledgePageOverflowAction?> showKnowledgePageActionsSheet(
   BuildContext context, {
   bool includeArchive = true,
+  bool includeMerge = false,
   bool includeRemove = true,
 }) {
   return showModalBottomSheet<KnowledgePageOverflowAction>(
@@ -38,6 +40,12 @@ Future<KnowledgePageOverflowAction?> showKnowledgePageActionsSheet(
               onTap: () => Navigator.of(context)
                   .pop(KnowledgePageOverflowAction.viewReview),
             ),
+            if (includeMerge)
+              ListTile(
+                title: Text(context.t.memory.actions.mergePages),
+                onTap: () => Navigator.of(context)
+                    .pop(KnowledgePageOverflowAction.merge),
+              ),
             if (includeArchive)
               ListTile(
                 title: Text(context.t.memory.actions.archivePage),
