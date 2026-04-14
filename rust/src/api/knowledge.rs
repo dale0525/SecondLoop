@@ -163,7 +163,7 @@ pub fn db_list_knowledge_page_summaries(
 ) -> Result<Vec<knowledge::KnowledgePageSummary>> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let _ = knowledge::compiler::refresh_knowledge_pages(&conn, &key)?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
     db::list_knowledge_page_summaries(&conn, &key)
 }
 
@@ -186,7 +186,7 @@ pub fn db_get_knowledge_page_detail(
 ) -> Result<knowledge::KnowledgePageDetail> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let _ = knowledge::compiler::refresh_knowledge_pages(&conn, &key)?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
     db::get_knowledge_page_detail(&conn, &key, &page_id)?
         .ok_or_else(|| anyhow!("knowledge page not found: {page_id}"))
 }
@@ -202,7 +202,7 @@ pub fn db_correct_knowledge_page(
 ) -> Result<knowledge::KnowledgePageDetail> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let _ = knowledge::compiler::refresh_knowledge_pages(&conn, &key)?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
     db::apply_knowledge_page_correction(&conn, &key, &page_id, title, summary, body)
 }
 
@@ -216,7 +216,7 @@ pub fn db_mark_knowledge_page_wrong(
 ) -> Result<knowledge::KnowledgePageDetail> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let _ = knowledge::compiler::refresh_knowledge_pages(&conn, &key)?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
     db::mark_knowledge_page_wrong(&conn, &key, &page_id, reason, note)
 }
 
@@ -230,7 +230,7 @@ pub fn db_set_knowledge_page_answer_allowed(
 ) -> Result<knowledge::KnowledgePageDetail> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let _ = knowledge::compiler::refresh_knowledge_pages(&conn, &key)?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
     db::set_knowledge_page_answer_allowed(&conn, &key, &page_id, allowed, note)
 }
 
@@ -243,7 +243,7 @@ pub fn db_archive_knowledge_page(
 ) -> Result<knowledge::KnowledgePageDetail> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let _ = knowledge::compiler::refresh_knowledge_pages(&conn, &key)?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
     db::archive_knowledge_page(&conn, &key, &page_id, note)
 }
 
@@ -256,7 +256,7 @@ pub fn db_remove_knowledge_page(
 ) -> Result<knowledge::KnowledgePageDetail> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let _ = knowledge::compiler::refresh_knowledge_pages(&conn, &key)?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
     db::remove_knowledge_page(&conn, &key, &page_id, note)
 }
 
@@ -270,7 +270,7 @@ pub fn db_merge_knowledge_page_into(
 ) -> Result<knowledge::KnowledgePageDetail> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let _ = knowledge::compiler::refresh_knowledge_pages(&conn, &key)?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
     db::merge_knowledge_page_into(&conn, &key, &page_id, &target_page_id, note)
 }
 

@@ -248,7 +248,7 @@ pub(super) fn build_memory_card_from_document(
     why_used: &str,
 ) -> Option<AnswerEvidenceMemoryCard> {
     if document_id.starts_with("page:") {
-        let _ = knowledge::compiler::refresh_knowledge_pages(conn, key).ok()?;
+        let _ = knowledge::compiler::refresh_knowledge_pages_if_required(conn, key).ok()?;
         let detail = crate::db::get_knowledge_page_detail(conn, key, document_id)
             .ok()
             .flatten()?;

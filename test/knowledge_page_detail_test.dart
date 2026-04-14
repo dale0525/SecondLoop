@@ -236,6 +236,37 @@ void main() {
     expect(find.text('View Evidence'), findsWidgets);
     expect(find.text('View History'), findsWidgets);
   });
+
+  testWidgets('KnowledgePageDetailPage keeps archived pages audit-only',
+      (tester) async {
+    final backend = _ArchivedKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:preferences'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Correct current conclusion'), findsNothing);
+    expect(find.text('Mark inaccurate'), findsNothing);
+    expect(find.text('Stop using in answers'), findsNothing);
+    expect(find.text('Use in answers again'), findsNothing);
+    expect(find.text('Archive Page'), findsNothing);
+    expect(find.text('Permanently Remove'), findsNothing);
+    expect(find.text('View Evidence'), findsWidgets);
+    expect(find.text('View History'), findsWidgets);
+  });
 }
 
 final class _KnowledgePageDetailBackendStub extends TestAppBackend
@@ -547,6 +578,21 @@ final class _RemovedKnowledgePageDetailBackendStub
     return _buildDetail(
       pageId: pageId,
       state: KnowledgePageState.removed,
+      answerAllowed: false,
+    );
+  }
+}
+
+final class _ArchivedKnowledgePageDetailBackendStub
+    extends _KnowledgePageDetailBackendStub {
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    return _buildDetail(
+      pageId: pageId,
+      state: KnowledgePageState.archived,
       answerAllowed: false,
     );
   }

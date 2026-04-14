@@ -38,6 +38,15 @@ pub fn refresh_knowledge_pages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<
     Ok(compiled_pages.into_iter().map(|item| item.page).collect())
 }
 
+pub fn refresh_knowledge_pages_if_required(conn: &Connection, key: &[u8; 32]) -> Result<bool> {
+    if !crate::db::knowledge_pages_refresh_required(conn)? {
+        return Ok(false);
+    }
+    let _ = refresh_knowledge_pages(conn, key)?;
+    crate::db::mark_knowledge_pages_refreshed(conn, crate::knowledge::usage::now_ms())?;
+    Ok(true)
+}
+
 fn load_all_generated_documents(
     conn: &Connection,
     key: &[u8; 32],

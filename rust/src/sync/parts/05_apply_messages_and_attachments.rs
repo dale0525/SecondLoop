@@ -214,6 +214,7 @@ fn apply_knowledge_memory_feedback_upsert(
             seq,
         ],
     )?;
+    crate::db::mark_knowledge_pages_refresh_required(conn)?;
 
     Ok(())
 }

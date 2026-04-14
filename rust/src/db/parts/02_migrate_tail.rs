@@ -613,6 +613,20 @@ PRAGMA user_version = 45;
     Ok(())
 }
 
+fn migrate_from_v45_to_v46(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+ALTER TABLE knowledge_rebuild_state
+  ADD COLUMN pages_refresh_required INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE knowledge_rebuild_state
+  ADD COLUMN last_pages_refresh_completed_at_ms INTEGER;
+
+PRAGMA user_version = 46;
+"#,
+    )?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -819,6 +833,8 @@ SET status = 'empty',
     embeddings_indexed = 0,
     total_documents = 0,
     cancel_requested = 0,
+    pages_refresh_required = 1,
+    last_pages_refresh_completed_at_ms = NULL,
     last_indexed_model_name = NULL,
     last_indexed_dim = NULL;
 DELETE FROM oplog;

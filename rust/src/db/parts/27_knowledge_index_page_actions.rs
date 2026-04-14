@@ -36,6 +36,11 @@ pub fn apply_knowledge_page_correction(
         let Some(existing) = load_stored_knowledge_page_row(conn, page_id)? else {
             return Err(anyhow!("knowledge page not found: {page_id}"));
         };
+        let preserved_state = existing.state;
+        let preserved_policy = crate::knowledge::KnowledgeAnswerPolicy {
+            default_allowed: existing.default_allowed,
+            requires_temporal_framing: existing.requires_temporal_framing,
+        };
         let next_manual_title = resolve_manual_page_text_update(
             key,
             page_id,
@@ -63,17 +68,23 @@ pub fn apply_knowledge_page_correction(
         conn.execute(
             r#"UPDATE knowledge_pages
                SET state = ?2,
-                   answer_default_allowed = 1,
-                   answer_requires_temporal_framing = 0,
-                   updated_at_ms = ?3,
+                   answer_default_allowed = ?3,
+                   answer_requires_temporal_framing = ?4,
+                   updated_at_ms = ?5,
                    human_corrected = 1,
-                   manual_title = ?4,
-                   manual_summary = ?5,
-                   manual_body = ?6
+                   manual_title = ?6,
+                   manual_summary = ?7,
+                   manual_body = ?8
                WHERE page_id = ?1"#,
             params![
                 page_id,
-                encode_page_state(crate::knowledge::KnowledgePageState::Active)?,
+                encode_page_state(preserved_state)?,
+                if preserved_policy.default_allowed { 1 } else { 0 },
+                if preserved_policy.requires_temporal_framing {
+                    1
+                } else {
+                    0
+                },
                 now,
                 next_manual_title,
                 next_manual_summary,

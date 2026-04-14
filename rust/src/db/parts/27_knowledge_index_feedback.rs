@@ -371,6 +371,7 @@ pub fn upsert_knowledge_memory_feedback(
     let encoded_status = encode_knowledge_memory_status(status)?;
     let corrected_title = normalize_optional_trimmed(corrected_title);
     let corrected_summary = normalize_optional_trimmed(corrected_summary);
+    mark_knowledge_pages_refresh_required(conn)?;
     let existing = load_existing_knowledge_memory_feedback_row(conn, document_id)?;
     let created_at_ms = existing
         .as_ref()
@@ -570,8 +571,10 @@ pub fn ensure_knowledge_rebuild_state_defaults(conn: &Connection) -> Result<()> 
                units_indexed,
                embeddings_indexed,
                total_documents,
-               cancel_requested
-           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, NULL, 'empty', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0)"#,
+               cancel_requested,
+               pages_refresh_required,
+               last_pages_refresh_completed_at_ms
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, NULL, 'empty', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 1, NULL)"#,
         params![
             1i64,
             crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
@@ -582,6 +585,39 @@ pub fn ensure_knowledge_rebuild_state_defaults(conn: &Connection) -> Result<()> 
         ],
     )?;
     Ok(())
+}
+
+pub fn mark_knowledge_pages_refresh_required(conn: &Connection) -> Result<()> {
+    ensure_knowledge_rebuild_state_defaults(conn)?;
+    conn.execute(
+        r#"UPDATE knowledge_rebuild_state
+           SET pages_refresh_required = 1
+           WHERE state_key = 1"#,
+        [],
+    )?;
+    Ok(())
+}
+
+pub fn mark_knowledge_pages_refreshed(conn: &Connection, now_ms: i64) -> Result<()> {
+    ensure_knowledge_rebuild_state_defaults(conn)?;
+    conn.execute(
+        r#"UPDATE knowledge_rebuild_state
+           SET pages_refresh_required = 0,
+               last_pages_refresh_completed_at_ms = ?1
+           WHERE state_key = 1"#,
+        params![now_ms],
+    )?;
+    Ok(())
+}
+
+pub fn knowledge_pages_refresh_required(conn: &Connection) -> Result<bool> {
+    ensure_knowledge_rebuild_state_defaults(conn)?;
+    let required: i64 = conn.query_row(
+        "SELECT pages_refresh_required FROM knowledge_rebuild_state WHERE state_key = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(required != 0)
 }
 
 fn load_existing_knowledge_document_ids(
@@ -682,4 +718,3 @@ pub fn touch_knowledge_documents_usage(
     }
     Ok(existing.len())
 }
-
