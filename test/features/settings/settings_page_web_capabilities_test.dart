@@ -37,6 +37,10 @@ void main() {
           findsNothing);
       expect(find.byKey(const ValueKey('settings_quick_capture_hotkey')),
           findsNothing);
+      expect(find.text('Theme'), findsNothing);
+      expect(
+          find.byKey(const ValueKey('settings_theme_palette')), findsNothing);
+      expect(find.text('Language'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = originalPlatform;
     }

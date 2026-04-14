@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app/theme.dart';
 import '../app/theme_mode_prefs.dart';
@@ -9,6 +10,7 @@ import '../app/theme_palette_prefs.dart';
 import '../core/backend/cloud_web_backend.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/cloud/firebase_identity_toolkit.dart';
+import '../i18n/locale_prefs.dart';
 import '../i18n/strings.g.dart';
 import 'web_entry_intent.dart';
 import 'web_app_gate.dart';
@@ -44,9 +46,24 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
   @override
   void initState() {
     super.initState();
-    unawaited(AppThemeModePrefs.ensureInitialized());
-    unawaited(AppThemePalettePrefs.ensureInitialized());
+    unawaited(_initializeUiPrefs());
     _bootstrapFuture = (widget.bootstrapLoader ?? _bootstrap)();
+  }
+
+  Future<void> _initializeUiPrefs() async {
+    if (LocaleSettings.currentLocale == AppLocale.en) {
+      await AppLocaleBootstrap.ensureInitialized();
+    }
+    await AppThemeModePrefs.ensureInitialized();
+    await AppThemePalettePrefs.ensureInitialized();
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.containsKey(AppThemeModePrefs.prefsKey)) {
+      AppThemeModePrefs.value.value = ThemeMode.light;
+    }
+    if (!prefs.containsKey(AppThemePalettePrefs.prefsKey)) {
+      AppThemePalettePrefs.value.value = AppThemePalette.monochrome;
+    }
   }
 
   Future<WebAppBootstrapData> _bootstrap() async {

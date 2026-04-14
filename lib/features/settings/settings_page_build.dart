@@ -14,6 +14,7 @@ extension _SettingsPageBuild on _SettingsPageState {
     final supportsDesktopBootSettings =
         capabilities.supportsDesktopBootSettings;
     final supportsBiometricUnlock = capabilities.supportsBiometricUnlock;
+    final showsAppearancePreferences = !capabilities.usesCloudSessionModel;
     final isDesktop = supportsBiometricUnlock && !isMobile;
     final isZh = Localizations.localeOf(context)
         .languageCode
@@ -56,43 +57,45 @@ extension _SettingsPageBuild on _SettingsPageState {
         ),
         const SizedBox(height: 8),
         sectionCard([
-          ListTile(
-            title: Text(context.t.settings.theme.title),
-            subtitle: Text(context.t.settings.theme.subtitle),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ValueListenableBuilder(
-                  valueListenable: AppThemeModePrefs.value,
-                  builder: (context, mode, child) {
-                    return Text(_themeModeLabel(context, mode));
-                  },
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.chevron_right),
-              ],
+          if (showsAppearancePreferences)
+            ListTile(
+              title: Text(context.t.settings.theme.title),
+              subtitle: Text(context.t.settings.theme.subtitle),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ValueListenableBuilder(
+                    valueListenable: AppThemeModePrefs.value,
+                    builder: (context, mode, child) {
+                      return Text(_themeModeLabel(context, mode));
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: _busy ? null : _selectThemeMode,
             ),
-            onTap: _busy ? null : _selectThemeMode,
-          ),
-          ListTile(
-            key: const ValueKey('settings_theme_palette'),
-            title: Text(_themePaletteTitle(context)),
-            subtitle: Text(_themePaletteSubtitle(context)),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ValueListenableBuilder(
-                  valueListenable: AppThemePalettePrefs.value,
-                  builder: (context, palette, child) {
-                    return Text(_themePaletteLabel(context, palette));
-                  },
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.chevron_right),
-              ],
+          if (showsAppearancePreferences)
+            ListTile(
+              key: const ValueKey('settings_theme_palette'),
+              title: Text(_themePaletteTitle(context)),
+              subtitle: Text(_themePaletteSubtitle(context)),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ValueListenableBuilder(
+                    valueListenable: AppThemePalettePrefs.value,
+                    builder: (context, palette, child) {
+                      return Text(_themePaletteLabel(context, palette));
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: _busy ? null : _selectThemePalette,
             ),
-            onTap: _busy ? null : _selectThemePalette,
-          ),
           ListTile(
             title: Text(context.t.settings.language.title),
             subtitle: Text(context.t.settings.language.subtitle),

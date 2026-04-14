@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/i18n/locale_prefs.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/web_app/secondloop_web_app.dart';
 import 'package:secondloop/web_app/web_app_service.dart';
@@ -8,6 +10,8 @@ import 'package:secondloop/features/settings/cloud_account_panel.dart';
 
 void main() {
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    AppLocaleBootstrap.resetForTests();
     LocaleSettings.setLocale(AppLocale.en);
   });
 
@@ -35,6 +39,22 @@ void main() {
 
   testWidgets('web app localizes bootstrap failure in zh-CN', (tester) async {
     LocaleSettings.setLocale(AppLocale.zhCn);
+
+    await tester.pumpWidget(
+      SecondLoopWebApp(
+        bootstrapLoader: () async => throw StateError('config_http_500'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Web 应用启动失败：'), findsOneWidget);
+    expect(find.textContaining('config_http_500'), findsOneWidget);
+  });
+
+  testWidgets('web app follows device locale on first launch', (tester) async {
+    tester.binding.platformDispatcher.localeTestValue =
+        const Locale('zh', 'CN');
+    addTearDown(tester.binding.platformDispatcher.clearLocaleTestValue);
 
     await tester.pumpWidget(
       SecondLoopWebApp(

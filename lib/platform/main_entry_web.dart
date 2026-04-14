@@ -4,10 +4,14 @@ import '../core/backend/app_backend.dart';
 import '../core/desktop/desktop_launch_args.dart';
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/update/app_update_service.dart';
+import '../i18n/locale_prefs.dart';
 import '../web_app/secondloop_web_app.dart';
 
 Future<void> runPlatformApp(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await runStartupBootstrap(
+    initializeLocalePrefs: AppLocaleBootstrap.ensureInitialized,
+  );
   runApp(const SecondLoopWebApp());
 }
 
