@@ -319,3 +319,96 @@ fn refresh_knowledge_pages_ignores_dismissed_claims_when_counting_conflicts() {
 
     assert_eq!(preferences.conflict_count, 0);
 }
+
+#[test]
+fn refresh_knowledge_pages_confidence_only_uses_sources_in_current_page_content() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [49u8; 32];
+    let anchor_json = serde_json::to_string(&crate::knowledge::KnowledgeAnchorSet::default())
+        .expect("anchor json");
+
+    for (document_id, summary, quality_score, updated_at_ms) in [
+        (
+            "generated:preference:response-language",
+            "User prefers responses in Chinese.",
+            0.8_f64,
+            11_i64,
+        ),
+        (
+            "generated:preference:response-style",
+            "User prefers responses in English.",
+            0.2_f64,
+            12_i64,
+        ),
+    ] {
+        let raw = db::encode_knowledge_document_text(&key, document_id, "raw", summary)
+            .expect("encode raw");
+        let normalized =
+            db::encode_knowledge_document_text(&key, document_id, "normalized", summary)
+                .expect("encode normalized");
+        conn.execute(
+            r#"INSERT INTO knowledge_documents(
+                   document_id,
+                   origin_type,
+                   source_kind,
+                   role,
+                   language,
+                   quality_score,
+                   title,
+                   summary,
+                   anchor_json,
+                   raw_text,
+                   normalized_text,
+                   created_at_ms,
+                   updated_at_ms,
+                   schema_version,
+                   normalization_version,
+                   segmentation_version,
+                   embedding_policy_version,
+                   retrieval_policy_version,
+                   last_indexed_at_ms
+               ) VALUES (?1, 'generated', 'summary', 'summary', NULL, ?2, NULL, ?3, ?4, ?5, ?6, 1, ?7, ?8, ?9, ?10, ?11, ?12, NULL)"#,
+            params![
+                document_id,
+                quality_score,
+                summary,
+                anchor_json,
+                raw,
+                normalized,
+                updated_at_ms,
+                crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+                crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+                crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+                crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+                crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+            ],
+        )
+        .expect("insert generated document");
+    }
+    db::upsert_knowledge_memory_feedback(
+        &conn,
+        &key,
+        "generated:preference:response-style",
+        Some(knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        true,
+        None,
+        None,
+    )
+    .expect("mark disputed");
+
+    let pages =
+        knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh knowledge pages");
+    let preferences = pages
+        .iter()
+        .find(|page| page.page_id == "page:preferences")
+        .expect("preferences page");
+
+    assert_eq!(
+        preferences.current_summary,
+        "User prefers responses in Chinese."
+    );
+    assert!((preferences.confidence_level - 0.8).abs() < f64::EPSILON);
+}

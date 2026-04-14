@@ -93,6 +93,9 @@ pub(crate) fn upsert_compiled_knowledge_pages(
             let preserve_manual_removed = existing
                 .as_ref()
                 .is_some_and(|row| row.tags.iter().any(|tag| tag == MANUAL_REMOVED_TAG));
+            let preserve_merged_archived = existing
+                .as_ref()
+                .is_some_and(|row| row.tags.iter().any(|tag| tag == MERGED_ARCHIVED_TAG));
             let preserved_state = match existing.as_ref().map(|row| row.state) {
                 Some(crate::knowledge::KnowledgePageState::Removed) if preserve_manual_removed => {
                     crate::knowledge::KnowledgePageState::Removed
@@ -128,7 +131,10 @@ pub(crate) fn upsert_compiled_knowledge_pages(
             let preserve_merged_provenance = existing
                 .as_ref()
                 .is_some_and(|row| row.tags.iter().any(|tag| tag == MERGED_PROVENANCE_TAG));
-            let tags = if preserve_merged_provenance || preserve_manual_removed {
+            let tags = if preserve_merged_provenance
+                || preserve_manual_removed
+                || preserve_merged_archived
+            {
                 normalize_knowledge_string_set(
                     &existing
                         .as_ref()
@@ -417,10 +423,10 @@ pub fn mark_missing_knowledge_pages_removed(
             .join(", ")
     };
     let sql = if active_page_ids.is_empty() {
-        "SELECT page_id, state FROM knowledge_pages".to_string()
+        "SELECT page_id, state, tags_json FROM knowledge_pages".to_string()
     } else {
         format!(
-            "SELECT page_id, state FROM knowledge_pages WHERE page_id NOT IN ({placeholders})"
+            "SELECT page_id, state, tags_json FROM knowledge_pages WHERE page_id NOT IN ({placeholders})"
         )
     };
     let mut stmt = conn.prepare(&sql)?;
@@ -430,7 +436,10 @@ pub fn mark_missing_knowledge_pages_removed(
     while let Some(row) = rows.next()? {
         let page_id: String = row.get(0)?;
         let state = decode_page_state(row.get(1)?)?;
-        if state == crate::knowledge::KnowledgePageState::Removed {
+        let tags = decode_string_list(row.get(2)?)?;
+        if state == crate::knowledge::KnowledgePageState::Removed
+            || tags.iter().any(|tag| tag == MERGED_ARCHIVED_TAG)
+        {
             continue;
         }
         conn.execute(

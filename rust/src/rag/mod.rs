@@ -22,6 +22,8 @@ mod knowledge_contexts;
 #[cfg(test)]
 mod knowledge_contexts_refresh_tests;
 #[cfg(test)]
+mod knowledge_contexts_scope_tests;
+#[cfg(test)]
 mod knowledge_contexts_tests;
 #[cfg(test)]
 mod tests;

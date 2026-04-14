@@ -31,6 +31,7 @@ fn default_knowledge_memory_feedback() -> crate::knowledge::KnowledgeMemoryFeedb
 }
 
 const MERGED_PROVENANCE_TAG: &str = "system:merged-provenance";
+const MERGED_ARCHIVED_TAG: &str = "system:merged-archived";
 const MANUAL_REMOVED_TAG: &str = "user:manual-removed";
 
 fn normalize_optional_trimmed(value: Option<String>) -> Option<String> {

@@ -429,6 +429,15 @@ pub fn merge_knowledge_page_into(
         let merged_source_count = target.source_count.saturating_add(source.source_count);
         let merged_conflict_count =
             count_conflicts_for_claim_ids(conn, key, &merged_claim_ids)?;
+        let merged_source_tags = normalize_knowledge_string_set(
+            &source
+                .tags
+                .iter()
+                .chain(std::iter::once(&MERGED_ARCHIVED_TAG.to_string()))
+                .cloned()
+                .collect::<Vec<_>>(),
+            32,
+        );
         let merged_target_state = match target.state {
             crate::knowledge::KnowledgePageState::Archived
             | crate::knowledge::KnowledgePageState::Removed => {
@@ -489,12 +498,14 @@ pub fn merge_knowledge_page_into(
                SET state = ?2,
                    answer_default_allowed = 0,
                    answer_requires_temporal_framing = 0,
-                   updated_at_ms = ?3
+                   updated_at_ms = ?3,
+                   tags_json = ?4
                WHERE page_id = ?1"#,
             params![
                 page_id,
                 encode_page_state(crate::knowledge::KnowledgePageState::Archived)?,
                 now,
+                encode_string_list(&merged_source_tags)?,
             ],
         )?;
         record_knowledge_page_change(

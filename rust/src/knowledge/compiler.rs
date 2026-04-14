@@ -184,6 +184,7 @@ fn compile_pages_from_claims(
             let mut summary_lines = Vec::<String>::new();
             let mut primary_evidence_ids = Vec::<String>::new();
             let mut source_document_ids = Vec::<String>::new();
+            let mut contributing_document_count = 0_usize;
             let mut latest_updated_at = 0_i64;
             let mut source_count = 0_i64;
             let mut confidence_total = 0.0_f64;
@@ -237,6 +238,7 @@ fn compile_pages_from_claims(
                         .map(|value| value.source_count)
                         .unwrap_or(1)
                         .max(1);
+                    contributing_document_count += 1;
                     confidence_total += document.quality_score;
                 }
                 source_document_ids.push(document.document_id.clone());
@@ -258,10 +260,10 @@ fn compile_pages_from_claims(
             page.source_count = source_count.max(1);
             page.conflict_count =
                 count_conflicts_for_page(claims, claim_index.by_page_id.get(&seed.page_id));
-            page.confidence_level = if source_document_ids.is_empty() {
+            page.confidence_level = if contributing_document_count == 0 {
                 0.0
             } else {
-                confidence_total / source_document_ids.len() as f64
+                confidence_total / contributing_document_count as f64
             };
             page.tags = seed.tags.clone();
             page.primary_evidence_ids = dedup(primary_evidence_ids);

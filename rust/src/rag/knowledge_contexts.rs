@@ -86,6 +86,27 @@ fn page_context_allowed(page: &knowledge::KnowledgePage) -> bool {
     page.answer_policy.default_allowed || page.answer_policy.requires_temporal_framing
 }
 
+fn page_type_allowed_for_conversation_scope(
+    page_type: knowledge::KnowledgePageType,
+    conversation_scope: Option<&str>,
+) -> bool {
+    if conversation_scope.is_none() {
+        return true;
+    }
+    matches!(
+        page_type,
+        knowledge::KnowledgePageType::AboutMe | knowledge::KnowledgePageType::Preferences
+    )
+}
+
+fn page_context_allowed_in_scope(
+    page: &knowledge::KnowledgePage,
+    conversation_scope: Option<&str>,
+) -> bool {
+    page_context_allowed(page)
+        && page_type_allowed_for_conversation_scope(page.page_type, conversation_scope)
+}
+
 fn render_page_context_block(
     page: &knowledge::KnowledgePage,
     score: f64,
@@ -118,6 +139,7 @@ fn render_page_context_block(
 fn load_promoted_page_contexts_for_blocks(
     conn: &Connection,
     key: &[u8; 32],
+    conversation_scope: Option<&str>,
     existing_blocks: &[knowledge::KnowledgeContextBlock],
     retrieved_blocks: &[knowledge::KnowledgeContextBlock],
 ) -> Result<(
@@ -151,7 +173,7 @@ fn load_promoted_page_contexts_for_blocks(
             let Some(page) = crate::db::load_current_knowledge_page(conn, key, &page_id)? else {
                 continue;
             };
-            if !page_context_allowed(&page) {
+            if !page_context_allowed_in_scope(&page, conversation_scope) {
                 continue;
             }
             has_allowed_related_page = true;
@@ -172,7 +194,7 @@ fn load_promoted_page_contexts_for_blocks(
             crate::db::load_current_knowledge_page(conn, key, &page_id)
                 .ok()
                 .flatten()
-                .filter(page_context_allowed)
+                .filter(|page| page_context_allowed_in_scope(page, conversation_scope))
                 .map(|page| render_page_context_block(&page, score))
         })
         .collect::<Vec<_>>();
@@ -203,29 +225,57 @@ pub(super) fn collect_compiled_page_contexts(
         .union(&answer_excluded_page_ids)
         .cloned()
         .collect::<std::collections::HashSet<_>>();
-    let mut candidates = page_summaries
+    let candidate_limit = top_k.max(1).saturating_mul(4).max(8);
+    let mut candidate_summaries = page_summaries
         .into_iter()
         .filter(|page| {
             page.answer_policy.default_allowed || page.answer_policy.requires_temporal_framing
         })
+        .filter(|page| page_type_allowed_for_conversation_scope(page.page_type, conversation_scope))
         .filter_map(|summary| {
-            let page = crate::db::load_current_knowledge_page(conn, key, &summary.page_id)
-                .ok()
-                .flatten()?;
-            let haystack = format!(
-                "{}\n{}\n{}",
-                page.title, page.current_summary, page.current_body
+            let lexical_score = lexical_page_match_score(
+                question,
+                &format!("{}\n{}", summary.title, summary.current_summary),
             );
-            let lexical_score = lexical_page_match_score(question, &haystack);
             if !is_planning_query && lexical_score == 0 {
                 return None;
             }
-            Some((
-                lexical_score,
-                render_page_context_block(&page, lexical_score as f64),
-            ))
+            Some((summary, lexical_score))
         })
         .collect::<Vec<_>>();
+    candidate_summaries.sort_by(|left, right| {
+        right
+            .1
+            .cmp(&left.1)
+            .then_with(|| {
+                (right.0.last_used_at_ms.unwrap_or(0)).cmp(&(left.0.last_used_at_ms.unwrap_or(0)))
+            })
+            .then_with(|| right.0.updated_at_ms.cmp(&left.0.updated_at_ms))
+            .then_with(|| left.0.page_id.cmp(&right.0.page_id))
+    });
+    let mut candidates = Vec::<(usize, knowledge::KnowledgeContextBlock)>::new();
+    for (summary, prefilter_score) in candidate_summaries.into_iter().take(candidate_limit) {
+        let Some(page) = crate::db::load_current_knowledge_page(conn, key, &summary.page_id)
+            .ok()
+            .flatten()
+        else {
+            continue;
+        };
+        let lexical_score = lexical_page_match_score(
+            question,
+            &format!(
+                "{}\n{}\n{}",
+                page.title, page.current_summary, page.current_body
+            ),
+        );
+        if !is_planning_query && lexical_score == 0 {
+            continue;
+        }
+        candidates.push((
+            lexical_score.max(prefilter_score),
+            render_page_context_block(&page, lexical_score.max(prefilter_score) as f64),
+        ));
+    }
     candidates.sort_by(|left, right| right.0.cmp(&left.0));
     for (_, block) in candidates.into_iter().take(top_k.max(1)) {
         out.push(block);
@@ -441,7 +491,13 @@ pub(super) fn try_build_knowledge_context_entries(
         knowledge::retrieve_context_blocks(conn, key, &request)?,
     )?;
     let (mut promoted_pages, promoted_generated_document_ids) =
-        load_promoted_page_contexts_for_blocks(conn, key, &blocks, &retrieved)?;
+        load_promoted_page_contexts_for_blocks(
+            conn,
+            key,
+            conversation_scope.as_deref(),
+            &blocks,
+            &retrieved,
+        )?;
     retrieved.retain(|block| !promoted_generated_document_ids.contains(&block.document_id));
     blocks.append(&mut promoted_pages);
     blocks.append(&mut retrieved);

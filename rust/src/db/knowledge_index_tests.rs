@@ -603,6 +603,78 @@ fn merge_knowledge_page_into_preserves_manual_content_and_provenance_on_recompil
 }
 
 #[test]
+fn merge_knowledge_page_into_keeps_merged_source_archived_during_refresh_cleanup() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [80u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut target_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:target",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Target Topic",
+        now,
+    );
+    target_page.current_summary = "Target summary".to_string();
+    target_page.current_body = "Target detail".to_string();
+
+    let mut source_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:source",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Source Topic",
+        now + 1,
+    );
+    source_page.current_summary = "Source summary".to_string();
+    source_page.current_body = "Source detail".to_string();
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: target_page,
+                source_document_ids: vec!["doc:target".to_string()],
+                claim_ids: vec!["claim:target".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: source_page,
+                source_document_ids: vec!["doc:source".to_string()],
+                claim_ids: vec!["claim:source".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    merge_knowledge_page_into(
+        &conn,
+        &key,
+        "page:topics:source",
+        "page:topics:target",
+        None,
+    )
+    .expect("merge knowledge page");
+
+    mark_missing_knowledge_pages_removed(&conn, &key, &[String::from("page:topics:target")])
+        .expect("mark missing pages");
+
+    let source_detail = get_knowledge_page_detail(&conn, &key, "page:topics:source")
+        .expect("load source detail")
+        .expect("source detail after cleanup");
+    assert_eq!(
+        source_detail.page.state,
+        crate::knowledge::KnowledgePageState::Archived
+    );
+
+    let summaries = list_knowledge_page_summaries(&conn, &key).expect("list summaries");
+    assert!(
+        summaries
+            .iter()
+            .all(|page| page.page_id != "page:topics:source"),
+        "summaries: {summaries:?}"
+    );
+}
+
+#[test]
 fn list_knowledge_page_summaries_excludes_archived_pages_from_normal_surfaces() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");
