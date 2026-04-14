@@ -75,7 +75,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       if (!mounted) return;
 
       CloudMediaBackupRunner? runner;
-      switch (_backendType) {
+      switch (_effectiveBackendType) {
         case SyncBackendType.webdav:
           final baseUrl = _requiredTrimmed(_baseUrlController);
           if (baseUrl.isEmpty) {
@@ -104,6 +104,10 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
           );
           break;
         case SyncBackendType.managedVault:
+          if (_usesCloudSessionModel) {
+            _showSnack(t.sync.mediaBackup.notEnabled);
+            return;
+          }
           final cloudAuth = CloudAuthScope.of(context).controller;
           final idToken = await readCloudAuthIdToken(
             cloudAuth,

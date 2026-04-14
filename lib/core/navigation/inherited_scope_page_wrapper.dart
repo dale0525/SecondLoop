@@ -5,17 +5,22 @@ import 'package:flutter/material.dart';
 import '../backend/app_backend.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
+import '../platform/app_platform_capabilities.dart';
+import '../platform/app_platform_capability_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
 import '../../web_app/web_formal_settings_scope.dart';
 
+const double _kWebFormalSettingsRouteMaxWidth = 1120;
+
 final class InheritedScopeCapture {
   const InheritedScopeCapture({
     this.backend,
     this.sessionKey,
     this.lock,
+    this.platformCapabilities,
     this.subscriptionController,
     this.cloudAuthController,
     this.cloudGatewayConfig,
@@ -26,6 +31,7 @@ final class InheritedScopeCapture {
   final AppBackend? backend;
   final Uint8List? sessionKey;
   final VoidCallback? lock;
+  final AppPlatformCapabilities? platformCapabilities;
   final SubscriptionStatusController? subscriptionController;
   final CloudAuthController? cloudAuthController;
   final CloudGatewayConfig? cloudGatewayConfig;
@@ -36,6 +42,7 @@ final class InheritedScopeCapture {
       backend == null &&
       sessionKey == null &&
       lock == null &&
+      platformCapabilities == null &&
       subscriptionController == null &&
       cloudAuthController == null &&
       cloudGatewayConfig == null &&
@@ -52,6 +59,7 @@ InheritedScopeCapture captureInheritedScopes(BuildContext context) {
         ? null
         : Uint8List.fromList(sessionScope.sessionKey),
     lock: sessionScope?.lock,
+    platformCapabilities: AppPlatformCapabilityScope.maybeOf(context),
     subscriptionController: SubscriptionScope.maybeOf(context),
     cloudAuthController: cloudAuthScope?.controller,
     cloudGatewayConfig: cloudAuthScope?.gatewayConfig,
@@ -124,6 +132,25 @@ Widget wrapPushedPageWithInheritedScopeCapture(
   final backend = capturedScopes.backend;
   if (backend != null) {
     wrapped = AppBackendScope(backend: backend, child: wrapped);
+  }
+
+  final platformCapabilities = capturedScopes.platformCapabilities;
+  if (platformCapabilities != null) {
+    wrapped = AppPlatformCapabilityScope(
+      capabilities: platformCapabilities,
+      child: wrapped,
+    );
+    if (platformCapabilities.usesCloudSessionModel) {
+      wrapped = Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: _kWebFormalSettingsRouteMaxWidth,
+          ),
+          child: wrapped,
+        ),
+      );
+    }
   }
 
   return wrapped;

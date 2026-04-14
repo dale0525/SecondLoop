@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/sync/cloud_sync_switch_prefs.dart';
 import '../../core/sync/stage_progress_smoother.dart';
 import '../../core/session/session_scope.dart';
@@ -112,6 +113,16 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   bool _cloudMediaBackupWifiOnly = true;
   Future<CloudMediaBackupSummary>? _cloudMediaBackupSummary;
 
+  bool get _usesCloudSessionModel =>
+      context
+          .getInheritedWidgetOfExactType<AppPlatformCapabilityScope>()
+          ?.capabilities
+          .usesCloudSessionModel ??
+      false;
+
+  SyncBackendType get _effectiveBackendType =>
+      _usesCloudSessionModel ? SyncBackendType.managedVault : _backendType;
+
   @override
   void initState() {
     super.initState();
@@ -152,11 +163,14 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   Future<void> _load() async {
     final all = await _store.readAll();
-    final backendType = switch (all[SyncConfigStore.kBackendType]) {
+    final storedBackendType = switch (all[SyncConfigStore.kBackendType]) {
       'localdir' => SyncBackendType.localDir,
       'managedvault' => SyncBackendType.managedVault,
       _ => SyncBackendType.webdav,
     };
+    final backendType = _usesCloudSessionModel
+        ? SyncBackendType.managedVault
+        : storedBackendType;
     final autoValue = all[SyncConfigStore.kAutoEnabled];
     final autoEnabled = autoValue == null ? true : autoValue == '1';
     final autoWifiOnly = (all[SyncConfigStore.kAutoWifiOnly] ?? '0') == '1';
@@ -205,6 +219,11 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
         _passphraseIsPlaceholder = true;
       }
     });
+
+    if (_usesCloudSessionModel &&
+        storedBackendType != SyncBackendType.managedVault) {
+      await _store.writeBackendType(SyncBackendType.managedVault);
+    }
   }
 
   void _handleRecoveryHintAction() {
@@ -250,6 +269,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final usesCloudSessionModel = _usesCloudSessionModel;
+    final backendType = _effectiveBackendType;
     final t = context.t;
     final recoveryPassphraseLabel = t.sync.fields.passphrase.label;
     final recoveryPassphraseHelper = t.sync.fields.passphrase.helper;
@@ -259,14 +280,14 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
     final engine = SyncEngineScope.maybeOf(context);
     final cloudUid = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
-    if (_backendType == SyncBackendType.managedVault &&
+    if (backendType == SyncBackendType.managedVault &&
         cloudUid != null &&
         cloudUid.isNotEmpty &&
         _remoteRootController.text != cloudUid) {
       _remoteRootController.text = cloudUid;
     }
 
-    final canClearLocalCache = switch (_backendType) {
+    final canClearLocalCache = switch (backendType) {
       SyncBackendType.webdav =>
         _requiredTrimmed(_baseUrlController).isNotEmpty &&
             _requiredTrimmed(_remoteRootController).isNotEmpty,
@@ -339,7 +360,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
           const SizedBox(height: 16),
           GestureDetector(
             onLongPress:
-                (_backendType == SyncBackendType.managedVault && kDebugMode)
+                (backendType == SyncBackendType.managedVault && kDebugMode)
                     ? () {
                         setState(() {
                           _showManagedVaultEndpointOverride =
@@ -347,7 +368,11 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                         });
                       }
                     : null,
-            child: sectionTitle(context.t.sync.sections.backend),
+            child: sectionTitle(
+              usesCloudSessionModel
+                  ? context.t.sync.backendManagedVault
+                  : context.t.sync.sections.backend,
+            ),
           ),
           sectionCard(
             Column(
@@ -357,7 +382,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                   ValueListenableBuilder(
                     valueListenable: engine.writeGate,
                     builder: (context, gate, _) {
-                      if (_backendType != SyncBackendType.managedVault) {
+                      if (backendType != SyncBackendType.managedVault) {
                         return const SizedBox.shrink();
                       }
                       if (gate.kind == SyncWriteGateKind.open) {
@@ -433,40 +458,46 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                       return const SizedBox.shrink();
                     },
                   ),
-                DropdownButtonFormField<SyncBackendType>(
-                  value: _backendType,
-                  decoration: InputDecoration(
-                    labelText: context.t.sync.backendLabel,
+                if (usesCloudSessionModel)
+                  Text(
+                    context.t.sync.backendManagedVault,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  )
+                else
+                  DropdownButtonFormField<SyncBackendType>(
+                    value: backendType,
+                    decoration: InputDecoration(
+                      labelText: context.t.sync.backendLabel,
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: SyncBackendType.webdav,
+                        child: Text(context.t.sync.backendWebdav),
+                      ),
+                      DropdownMenuItem(
+                        value: SyncBackendType.localDir,
+                        child: Text(context.t.sync.backendLocalDir),
+                      ),
+                      DropdownMenuItem(
+                        value: SyncBackendType.managedVault,
+                        child: Text(context.t.sync.backendManagedVault),
+                      ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _backendType = value;
+                              _cloudMediaBackupSummary =
+                                  value == SyncBackendType.managedVault
+                                      ? _maybeLoadCloudMediaBackupSummary()
+                                      : null;
+                            });
+                          },
                   ),
-                  items: [
-                    DropdownMenuItem(
-                      value: SyncBackendType.webdav,
-                      child: Text(context.t.sync.backendWebdav),
-                    ),
-                    DropdownMenuItem(
-                      value: SyncBackendType.localDir,
-                      child: Text(context.t.sync.backendLocalDir),
-                    ),
-                    DropdownMenuItem(
-                      value: SyncBackendType.managedVault,
-                      child: Text(context.t.sync.backendManagedVault),
-                    ),
-                  ],
-                  onChanged: _busy
-                      ? null
-                      : (value) {
-                          if (value == null) return;
-                          setState(() {
-                            _backendType = value;
-                            _cloudMediaBackupSummary =
-                                value == SyncBackendType.managedVault
-                                    ? _maybeLoadCloudMediaBackupSummary()
-                                    : null;
-                          });
-                        },
-                ),
-                const SizedBox(height: 12),
-                if (_backendType == SyncBackendType.webdav) ...[
+                if (!usesCloudSessionModel) const SizedBox(height: 12),
+                if (backendType == SyncBackendType.webdav) ...[
                   TextField(
                     controller: _baseUrlController,
                     decoration: InputDecoration(
@@ -496,7 +527,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                if (_backendType == SyncBackendType.localDir) ...[
+                if (backendType == SyncBackendType.localDir) ...[
                   TextField(
                     controller: _localDirController,
                     decoration: InputDecoration(
@@ -508,7 +539,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                if (_backendType == SyncBackendType.managedVault &&
+                if (backendType == SyncBackendType.managedVault &&
                     kDebugMode &&
                     _showManagedVaultEndpointOverride) ...[
                   TextField(
@@ -526,18 +557,18 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                 TextField(
                   controller: _remoteRootController,
                   decoration: InputDecoration(
-                    labelText: _backendType == SyncBackendType.managedVault
+                    labelText: backendType == SyncBackendType.managedVault
                         ? context.t.sync.fields.vaultId.label
                         : context.t.sync.fields.remoteRoot.label,
-                    hintText: _backendType == SyncBackendType.managedVault
+                    hintText: backendType == SyncBackendType.managedVault
                         ? context.t.sync.fields.vaultId.hint
                         : context.t.sync.fields.remoteRoot.hint,
                   ),
-                  enabled: _backendType == SyncBackendType.managedVault
+                  enabled: backendType == SyncBackendType.managedVault
                       ? false
                       : !_busy,
                 ),
-                if (_backendType == SyncBackendType.managedVault) ...[
+                if (backendType == SyncBackendType.managedVault) ...[
                   const SizedBox(height: 12),
                   FilledButton(
                     key: const ValueKey('sync_save_button'),
@@ -549,7 +580,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
-          if (_backendType != SyncBackendType.managedVault) ...[
+          if (backendType != SyncBackendType.managedVault) ...[
             sectionTitle(context.t.settings.sections.security),
             sectionCard(
               Column(
@@ -650,8 +681,8 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
-          if (_backendType == SyncBackendType.managedVault ||
-              _backendType == SyncBackendType.webdav) ...[
+          if (backendType == SyncBackendType.managedVault ||
+              backendType == SyncBackendType.webdav) ...[
             sectionTitle(context.t.sync.sections.mediaBackup),
             sectionCard(
               Column(
@@ -762,112 +793,115 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _busy || !_cloudMediaBackupEnabled
-                              ? null
-                              : _backfillCloudMediaBackupFiles,
-                          child:
-                              Text(context.t.sync.mediaBackup.backfillButton),
+                  if (!usesCloudSessionModel)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _busy || !_cloudMediaBackupEnabled
+                                ? null
+                                : _backfillCloudMediaBackupFiles,
+                            child:
+                                Text(context.t.sync.mediaBackup.backfillButton),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: _busy || !_cloudMediaBackupEnabled
-                              ? null
-                              : _uploadCloudMediaBackupNow,
-                          child:
-                              Text(context.t.sync.mediaBackup.uploadNowButton),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _busy || !_cloudMediaBackupEnabled
+                                ? null
+                                : _uploadCloudMediaBackupNow,
+                            child: Text(
+                                context.t.sync.mediaBackup.uploadNowButton),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
           ],
-          sectionTitle(context.t.sync.sections.securityActions),
-          sectionCard(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (_backendType == SyncBackendType.managedVault &&
-                    (cloudUid == null || cloudUid.isEmpty))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      context.t.sync.cloudManagedVault.signInRequired,
-                      style: Theme.of(context).textTheme.bodySmall,
+          if (!usesCloudSessionModel) ...[
+            sectionTitle(context.t.sync.sections.securityActions),
+            sectionCard(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (backendType == SyncBackendType.managedVault &&
+                      (cloudUid == null || cloudUid.isEmpty))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        context.t.sync.cloudManagedVault.signInRequired,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
-                  ),
-                if (engine == null)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _busy ? null : _push,
-                          child: Text(context.t.common.actions.push),
+                  if (engine == null)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _busy ? null : _push,
+                            child: Text(context.t.common.actions.push),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _busy ? null : _pull,
-                          child: Text(context.t.common.actions.pull),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _busy ? null : _pull,
+                            child: Text(context.t.common.actions.pull),
+                          ),
                         ),
-                      ),
-                    ],
-                  )
-                else
-                  ValueListenableBuilder(
-                    valueListenable: engine.writeGate,
-                    builder: (context, gate, _) {
-                      final disablePush = _busy ||
-                          (_backendType == SyncBackendType.managedVault &&
-                              gate.kind != SyncWriteGateKind.open);
-                      final disablePull = _busy ||
-                          (_backendType == SyncBackendType.managedVault &&
-                              gate.kind == SyncWriteGateKind.paymentRequired);
+                      ],
+                    )
+                  else
+                    ValueListenableBuilder(
+                      valueListenable: engine.writeGate,
+                      builder: (context, gate, _) {
+                        final disablePush = _busy ||
+                            (backendType == SyncBackendType.managedVault &&
+                                gate.kind != SyncWriteGateKind.open);
+                        final disablePull = _busy ||
+                            (backendType == SyncBackendType.managedVault &&
+                                gate.kind == SyncWriteGateKind.paymentRequired);
 
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: disablePush ? null : _push,
-                              child: Text(context.t.common.actions.push),
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: disablePush ? null : _push,
+                                child: Text(context.t.common.actions.push),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: disablePull ? null : _pull,
-                              child: Text(context.t.common.actions.pull),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: disablePull ? null : _pull,
+                                child: Text(context.t.common.actions.pull),
+                              ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy || !canClearLocalCache
+                        ? null
+                        : _clearLocalAttachmentCache,
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    label: Text(context.t.sync.localCache.button),
                   ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _busy || !canClearLocalCache
-                      ? null
-                      : _clearLocalAttachmentCache,
-                  icon: const Icon(Icons.delete_sweep_outlined),
-                  label: Text(context.t.sync.localCache.button),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  context.t.sync.localCache.subtitle,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Text(
+                    context.t.sync.localCache.subtitle,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

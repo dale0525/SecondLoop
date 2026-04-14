@@ -16,6 +16,7 @@ extension _SettingsPageBuild on _SettingsPageState {
     final supportsBiometricUnlock = capabilities.supportsBiometricUnlock;
     final showsAppearancePreferences =
         debugShowsAppearancePreferences(capabilities);
+    final showsSecurityPreferences = !capabilities.usesCloudSessionModel;
     final isDesktop = supportsBiometricUnlock && !isMobile;
     final isZh = Localizations.localeOf(context)
         .languageCode
@@ -112,47 +113,49 @@ extension _SettingsPageBuild on _SettingsPageState {
           ),
         ]),
         const SizedBox(height: 16),
-        Text(
-          context.t.settings.sections.security,
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        sectionCard([
-          SwitchListTile(
-            title: Text(context.t.settings.autoLock.title),
-            subtitle: Text(context.t.settings.autoLock.subtitle),
-            value: enabled ?? false,
-            onChanged: (_busy || enabled == null) ? null : _setAppLock,
+        if (showsSecurityPreferences) ...[
+          Text(
+            context.t.settings.sections.security,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          if ((enabled ?? false) &&
-              supportsBiometricUnlock &&
-              (isMobile || isDesktop))
+          const SizedBox(height: 8),
+          sectionCard([
             SwitchListTile(
-              title: Text(
-                isMobile
-                    ? context.t.settings.systemUnlock.titleMobile
-                    : context.t.settings.systemUnlock.titleDesktop,
-              ),
-              subtitle: Text(
-                isMobile
-                    ? systemUnlockSubtitleMobile
-                    : systemUnlockSubtitleDesktop,
-              ),
-              value: biometricEnabled ?? false,
-              onChanged: (_busy || biometricEnabled == null)
-                  ? null
-                  : _setBiometricUnlock,
+              title: Text(context.t.settings.autoLock.title),
+              subtitle: Text(context.t.settings.autoLock.subtitle),
+              value: enabled ?? false,
+              onChanged: (_busy || enabled == null) ? null : _setAppLock,
             ),
-          ListTile(
-            title: Text(context.t.settings.lockNow.title),
-            subtitle: Text(context.t.settings.lockNow.subtitle),
-            onTap: _busy ? null : _lockNow,
-          ),
-        ]),
-        const SizedBox(height: 16),
+            if ((enabled ?? false) &&
+                supportsBiometricUnlock &&
+                (isMobile || isDesktop))
+              SwitchListTile(
+                title: Text(
+                  isMobile
+                      ? context.t.settings.systemUnlock.titleMobile
+                      : context.t.settings.systemUnlock.titleDesktop,
+                ),
+                subtitle: Text(
+                  isMobile
+                      ? systemUnlockSubtitleMobile
+                      : systemUnlockSubtitleDesktop,
+                ),
+                value: biometricEnabled ?? false,
+                onChanged: (_busy || biometricEnabled == null)
+                    ? null
+                    : _setBiometricUnlock,
+              ),
+            ListTile(
+              title: Text(context.t.settings.lockNow.title),
+              subtitle: Text(context.t.settings.lockNow.subtitle),
+              onTap: _busy ? null : _lockNow,
+            ),
+          ]),
+          const SizedBox(height: 16),
+        ],
         Text(
           featureSettingsTitle,
           style: Theme.of(context)

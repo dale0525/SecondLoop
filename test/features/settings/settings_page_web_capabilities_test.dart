@@ -40,6 +40,8 @@ void main() {
       expect(find.text('Theme'), findsNothing);
       expect(
           find.byKey(const ValueKey('settings_theme_palette')), findsNothing);
+      expect(find.text('Auto lock'), findsNothing);
+      expect(find.text('Lock now'), findsNothing);
       expect(find.text('Language'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = originalPlatform;
