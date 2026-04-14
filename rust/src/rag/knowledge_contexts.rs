@@ -156,18 +156,6 @@ pub(super) fn collect_compiled_page_contexts(
         out.push(block);
     }
 
-    if !out.is_empty() {
-        let used_page_ids = out
-            .iter()
-            .map(|block| block.document_id.clone())
-            .collect::<Vec<_>>();
-        let _ = crate::db::touch_knowledge_pages_usage(
-            conn,
-            &used_page_ids,
-            knowledge::usage::now_ms(),
-        );
-    }
-
     if out.is_empty() && is_planning_query {
         const PAGE_SIZE: usize = 64;
         let mut offset = 0usize;
@@ -398,6 +386,19 @@ pub(super) fn try_build_knowledge_context_entries(
     blocks.retain(|block| seen_document_ids.insert(block.document_id.clone()));
     if blocks.len() > top_k.max(1) {
         blocks.truncate(top_k.max(1));
+    }
+
+    let used_page_ids = blocks
+        .iter()
+        .filter(|block| block.document_id.starts_with("page:"))
+        .map(|block| block.document_id.clone())
+        .collect::<Vec<_>>();
+    if !used_page_ids.is_empty() {
+        let _ = crate::db::touch_knowledge_pages_usage(
+            conn,
+            &used_page_ids,
+            knowledge::usage::now_ms(),
+        );
     }
 
     let used_document_ids = blocks

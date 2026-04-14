@@ -328,6 +328,8 @@ fn page_type_for_claim(claim: &KnowledgeClaim) -> Option<KnowledgePageType> {
 fn claim_types_for_document_id(document_id: &str) -> Vec<KnowledgeClaimType> {
     if document_id.starts_with("generated:preference:") {
         vec![KnowledgeClaimType::Preference]
+    } else if document_id.starts_with("generated:profile:person-") {
+        vec![KnowledgeClaimType::Relationship]
     } else if document_id.starts_with("generated:profile:") {
         vec![KnowledgeClaimType::Identity]
     } else if document_id.starts_with("generated:event:") {
@@ -359,9 +361,20 @@ fn claim_type_label(claim_type: KnowledgeClaimType) -> &'static str {
 }
 
 pub(crate) fn facet_key_for_document_id(document_id: &str) -> String {
+    if document_id.starts_with("generated:profile:person-") {
+        return people_facet_key_for_document_id(document_id);
+    }
     document_id
         .split(':')
         .next_back()
+        .unwrap_or(document_id)
+        .trim()
+        .replace('-', "_")
+}
+
+fn people_facet_key_for_document_id(document_id: &str) -> String {
+    document_id
+        .strip_prefix("generated:profile:person-")
         .unwrap_or(document_id)
         .trim()
         .replace('-', "_")
@@ -384,6 +397,11 @@ fn page_id_for_type(page_type: KnowledgePageType) -> String {
 pub(crate) fn primary_page_ids_for_generated_document(document_id: &str) -> Vec<String> {
     if document_id.starts_with("generated:preference:") {
         vec![page_id_for_type(KnowledgePageType::Preferences)]
+    } else if document_id.starts_with("generated:profile:person-") {
+        vec![page_id_for_type_with_facet(
+            KnowledgePageType::People,
+            &people_facet_key_for_document_id(document_id),
+        )]
     } else if document_id.starts_with("generated:profile:") {
         vec![page_id_for_type(KnowledgePageType::AboutMe)]
     } else if document_id.starts_with("generated:event:") {
@@ -451,6 +469,21 @@ fn fallback_title_for_document(document: &ContentKnowledgeDocument) -> &str {
 fn page_seeds_for_document(document: &ContentKnowledgeDocument) -> Vec<PageSeed> {
     if document.document_id.starts_with("generated:preference:") {
         vec![singleton_page_seed(KnowledgePageType::Preferences)]
+    } else if document
+        .document_id
+        .starts_with("generated:profile:person-")
+    {
+        let facet_key = people_facet_key_for_document_id(&document.document_id);
+        vec![faceted_page_seed(
+            KnowledgePageType::People,
+            &facet_key,
+            page_title_for_facet(
+                document.title.as_deref(),
+                fallback_title_for_document(document),
+                "Person",
+                &facet_key,
+            ),
+        )]
     } else if document.document_id.starts_with("generated:profile:") {
         vec![singleton_page_seed(KnowledgePageType::AboutMe)]
     } else if document.document_id.starts_with("generated:event:") {

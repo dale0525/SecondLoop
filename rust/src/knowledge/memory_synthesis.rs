@@ -77,6 +77,7 @@ pub fn collect_generated_memory_documents(
     let raw_messages = collect_raw_user_messages(conn, key)?;
     let mut drafts = Vec::<GeneratedMemoryDraft>::new();
     collect_preference_memories(&raw_messages, &mut drafts);
+    collect_relationship_memories(&raw_messages, &mut drafts);
     collect_profile_memories(&raw_messages, &mut drafts);
     collect_event_memories(&raw_messages, &mut drafts);
     collect_pattern_memories(conn, key, &mut drafts)?;
@@ -352,6 +353,135 @@ fn collect_profile_memories(messages: &[RawUserMessage], out: &mut Vec<Generated
             source_keys: BTreeSet::from([message.message_id.clone()]),
         });
     }
+}
+
+fn collect_relationship_memories(messages: &[RawUserMessage], out: &mut Vec<GeneratedMemoryDraft>) {
+    for message in messages {
+        let trimmed = message.content.trim();
+        let Some(name) = extract_relationship_person_name(trimmed) else {
+            continue;
+        };
+        let facet_key = format!("person_{}", sanitize_relationship_facet(&name));
+        out.push(GeneratedMemoryDraft {
+            kind: GeneratedMemoryKind::Profile,
+            facet_key,
+            title: name,
+            raw_text: trimmed.to_string(),
+            created_at_ms: message.created_at_ms,
+            updated_at_ms: message.updated_at_ms,
+            anchors: KnowledgeAnchorSet {
+                message_id: Some(message.message_id.clone()),
+                conversation_id: None,
+                section_label: Some("generated_relationship".to_string()),
+                ..KnowledgeAnchorSet::default()
+            },
+            source_id: Some(message.message_id.clone()),
+            source_keys: BTreeSet::from([message.message_id.clone()]),
+        });
+    }
+}
+
+fn extract_relationship_person_name(trimmed: &str) -> Option<String> {
+    const EN_RELATIONS: [&str; 17] = [
+        "manager",
+        "boss",
+        "coworker",
+        "colleague",
+        "teammate",
+        "mentor",
+        "teacher",
+        "doctor",
+        "lawyer",
+        "friend",
+        "partner",
+        "wife",
+        "husband",
+        "mother",
+        "father",
+        "mom",
+        "dad",
+    ];
+
+    let lower = trimmed.to_lowercase();
+    for relation in EN_RELATIONS {
+        let marker = format!(" is my {relation}");
+        if let Some(index) = lower.find(&marker) {
+            let candidate = trimmed[..index]
+                .trim()
+                .trim_matches(|ch: char| matches!(ch, ',' | '.' | '!' | '?'));
+            if looks_like_person_name(candidate) {
+                return Some(candidate.to_string());
+            }
+        }
+    }
+
+    const ZH_RELATIONS: [&str; 11] = [
+        "经理", "老板", "同事", "朋友", "老师", "医生", "律师", "伴侣", "妻子", "丈夫", "家人",
+    ];
+    for relation in ZH_RELATIONS {
+        let marker = format!("是我的{relation}");
+        if let Some(index) = trimmed.find(&marker) {
+            let candidate = trimmed[..index].trim();
+            if looks_like_person_name(candidate) {
+                return Some(candidate.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+fn looks_like_person_name(candidate: &str) -> bool {
+    let candidate = candidate.trim();
+    if candidate.is_empty() {
+        return false;
+    }
+    if candidate
+        .chars()
+        .all(|ch| !ch.is_alphabetic() && !is_cjk_unified_ideograph(ch))
+    {
+        return false;
+    }
+    let ascii_words = candidate
+        .split_whitespace()
+        .filter(|part| !part.trim().is_empty())
+        .collect::<Vec<_>>();
+    if !ascii_words.is_empty() && ascii_words.len() <= 4 {
+        return ascii_words.iter().all(|part| {
+            part.chars()
+                .next()
+                .is_some_and(|first| first.is_uppercase())
+        });
+    }
+    candidate.chars().count() <= 8
+}
+
+fn sanitize_relationship_facet(value: &str) -> String {
+    let mut out = String::new();
+    let mut last_underscore = false;
+    for ch in value.chars() {
+        let normalized = if ch.is_ascii_alphanumeric() {
+            ch.to_ascii_lowercase()
+        } else if is_cjk_unified_ideograph(ch) {
+            ch
+        } else {
+            '_'
+        };
+        if normalized == '_' {
+            if !last_underscore {
+                out.push(normalized);
+            }
+            last_underscore = true;
+        } else {
+            out.push(normalized);
+            last_underscore = false;
+        }
+    }
+    out.trim_matches('_').to_string()
+}
+
+fn is_cjk_unified_ideograph(ch: char) -> bool {
+    ('\u{4E00}'..='\u{9FFF}').contains(&ch)
 }
 
 fn looks_like_decision_statement(content: &str, lower: &str) -> bool {

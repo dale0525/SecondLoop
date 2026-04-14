@@ -242,6 +242,58 @@ void main() {
     expect(find.text('Removed because it should not be used.'), findsOneWidget);
   });
 
+  testWidgets('KnowledgeCenterPage keeps audit-only pages visible in My Wiki',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _KnowledgeCenterBackendStub(
+      summaries: [
+        _summary(
+          pageId: 'page:preferences',
+          title: 'Preferences',
+          pageType: KnowledgePageType.preferences,
+          state: KnowledgePageState.removed,
+          updatedAtMs: nowMs,
+        ),
+      ],
+      details: {
+        'page:preferences': _detail(
+          pageId: 'page:preferences',
+          title: 'Preferences',
+          pageType: KnowledgePageType.preferences,
+          state: KnowledgePageState.removed,
+          summary: 'Removed preference page.',
+          updatedAtMs: nowMs,
+        ),
+      },
+      recentChanges: const [],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 6)),
+              lock: () {},
+              child: const KnowledgeCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('My Wiki'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(ListTile, 'Preferences'), findsWidgets);
+  });
+
   testWidgets(
       'KnowledgeCenterPage still renders recent changes when active summaries are empty',
       (tester) async {

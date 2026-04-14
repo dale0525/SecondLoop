@@ -843,6 +843,48 @@ fn knowledge_pages_api_lists_page_summaries_and_reads_detail() {
 }
 
 #[test]
+fn knowledge_pages_api_keeps_audit_only_pages_in_summary_listing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [91u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("seed preference");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+    crate::api::knowledge::db_remove_knowledge_page(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+        None,
+    )
+    .expect("remove page");
+
+    let summaries =
+        crate::api::knowledge::db_list_knowledge_page_summaries(app_dir_string, key.to_vec())
+            .expect("list page summaries");
+    let preferences = summaries
+        .iter()
+        .find(|page| page.page_id == "page:preferences")
+        .expect("removed preferences summary");
+    assert_eq!(
+        preferences.state,
+        crate::knowledge::KnowledgePageState::Removed
+    );
+}
+
+#[test]
 fn knowledge_page_actions_update_state_history_and_answer_policy() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

@@ -666,6 +666,54 @@ fn try_build_knowledge_contexts_tracks_real_documents_without_digest_ids() {
 }
 
 #[test]
+fn try_build_knowledge_contexts_only_tracks_page_usage_for_visible_page_blocks() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [92u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Planning").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("seed preference");
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+    crate::knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh pages");
+
+    let entries = try_build_knowledge_context_entries(
+        &conn,
+        &key,
+        "Plan my week around the budget freeze in my usual style.",
+        1,
+        Focus::ThisThread,
+        &conv.id,
+        None,
+    )
+    .expect("knowledge context entries");
+
+    assert!(
+        entries
+            .iter()
+            .all(|entry| !entry.block.document_id.starts_with("page:")),
+        "entries: {entries:?}"
+    );
+
+    let last_used_at_ms: Option<i64> = conn
+        .query_row(
+            "SELECT last_used_at_ms FROM knowledge_pages WHERE page_id = 'page:preferences'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("preferences page usage");
+    assert_eq!(last_used_at_ms, None);
+}
+
+#[test]
 fn try_build_knowledge_contexts_rebuilds_digest_with_generated_preferences() {
     let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
     insert_document(
