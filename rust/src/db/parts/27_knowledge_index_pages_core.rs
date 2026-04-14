@@ -114,6 +114,90 @@ struct StoredKnowledgePageRow {
     manual_body_blob: Option<Vec<u8>>,
 }
 
+type StoredKnowledgePageSqlRow = (
+    String,
+    String,
+    String,
+    i64,
+    i64,
+    f64,
+    i64,
+    i64,
+    i64,
+    i64,
+    Option<i64>,
+    i64,
+    String,
+    String,
+    String,
+    String,
+    String,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+    Option<Vec<u8>>,
+    Option<Vec<u8>>,
+    Option<Vec<u8>>,
+);
+
+fn read_stored_knowledge_page_sql_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<StoredKnowledgePageSqlRow> {
+    Ok((
+        row.get::<_, String>(0)?,
+        row.get::<_, String>(1)?,
+        row.get::<_, String>(2)?,
+        row.get::<_, i64>(3)?,
+        row.get::<_, i64>(4)?,
+        row.get::<_, f64>(5)?,
+        row.get::<_, i64>(6)?,
+        row.get::<_, i64>(7)?,
+        row.get::<_, i64>(8)?,
+        row.get::<_, i64>(9)?,
+        row.get::<_, Option<i64>>(10)?,
+        row.get::<_, i64>(11)?,
+        row.get::<_, String>(12)?,
+        row.get::<_, String>(13)?,
+        row.get::<_, String>(14)?,
+        row.get::<_, String>(15)?,
+        row.get::<_, String>(16)?,
+        row.get::<_, Vec<u8>>(17)?,
+        row.get::<_, Vec<u8>>(18)?,
+        row.get::<_, Vec<u8>>(19)?,
+        row.get::<_, Option<Vec<u8>>>(20)?,
+        row.get::<_, Option<Vec<u8>>>(21)?,
+        row.get::<_, Option<Vec<u8>>>(22)?,
+    ))
+}
+
+fn decode_stored_knowledge_page_sql_row(row: StoredKnowledgePageSqlRow) -> Result<StoredKnowledgePageRow> {
+    Ok(StoredKnowledgePageRow {
+        page_id: row.0,
+        page_type: decode_page_type(row.1)?,
+        state: decode_page_state(row.2)?,
+        default_allowed: row.3 != 0,
+        requires_temporal_framing: row.4 != 0,
+        confidence_level: row.5,
+        source_count: row.6,
+        conflict_count: row.7,
+        created_at_ms: row.8,
+        updated_at_ms: row.9,
+        last_used_at_ms: row.10,
+        human_corrected: row.11 != 0,
+        tags: decode_string_list(row.12)?,
+        primary_evidence_ids: decode_string_list(row.13)?,
+        related_page_ids: decode_string_list(row.14)?,
+        source_document_ids: decode_string_list(row.15)?,
+        claim_ids: decode_string_list(row.16)?,
+        compiled_title_blob: row.17,
+        compiled_summary_blob: row.18,
+        compiled_body_blob: row.19,
+        manual_title_blob: row.20,
+        manual_summary_blob: row.21,
+        manual_body_blob: row.22,
+    })
+}
+
 fn load_stored_knowledge_page_row(
     conn: &Connection,
     page_id: &str,
@@ -146,33 +230,7 @@ fn load_stored_knowledge_page_row(
            FROM knowledge_pages
            WHERE page_id = ?1"#,
         params![page_id],
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, i64>(4)?,
-                row.get::<_, f64>(5)?,
-                row.get::<_, i64>(6)?,
-                row.get::<_, i64>(7)?,
-                row.get::<_, i64>(8)?,
-                row.get::<_, i64>(9)?,
-                row.get::<_, Option<i64>>(10)?,
-                row.get::<_, i64>(11)?,
-                row.get::<_, String>(12)?,
-                row.get::<_, String>(13)?,
-                row.get::<_, String>(14)?,
-                row.get::<_, String>(15)?,
-                row.get::<_, String>(16)?,
-                row.get::<_, Vec<u8>>(17)?,
-                row.get::<_, Vec<u8>>(18)?,
-                row.get::<_, Vec<u8>>(19)?,
-                row.get::<_, Option<Vec<u8>>>(20)?,
-                row.get::<_, Option<Vec<u8>>>(21)?,
-                row.get::<_, Option<Vec<u8>>>(22)?,
-            ))
-        },
+        read_stored_knowledge_page_sql_row,
     )
     .optional()
     .map_err(anyhow::Error::from)?;
@@ -181,31 +239,7 @@ fn load_stored_knowledge_page_row(
         return Ok(None);
     };
 
-    Ok(Some(StoredKnowledgePageRow {
-        page_id: row.0,
-        page_type: decode_page_type(row.1)?,
-        state: decode_page_state(row.2)?,
-        default_allowed: row.3 != 0,
-        requires_temporal_framing: row.4 != 0,
-        confidence_level: row.5,
-        source_count: row.6,
-        conflict_count: row.7,
-        created_at_ms: row.8,
-        updated_at_ms: row.9,
-        last_used_at_ms: row.10,
-        human_corrected: row.11 != 0,
-        tags: decode_string_list(row.12)?,
-        primary_evidence_ids: decode_string_list(row.13)?,
-        related_page_ids: decode_string_list(row.14)?,
-        source_document_ids: decode_string_list(row.15)?,
-        claim_ids: decode_string_list(row.16)?,
-        compiled_title_blob: row.17,
-        compiled_summary_blob: row.18,
-        compiled_body_blob: row.19,
-        manual_title_blob: row.20,
-        manual_summary_blob: row.21,
-        manual_body_blob: row.22,
-    }))
+    Ok(Some(decode_stored_knowledge_page_sql_row(row)?))
 }
 
 fn stored_row_to_page(

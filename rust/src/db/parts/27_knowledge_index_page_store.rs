@@ -476,18 +476,41 @@ pub fn list_knowledge_page_summaries(
     key: &[u8; 32],
 ) -> Result<Vec<crate::knowledge::KnowledgePageSummary>> {
     let mut stmt = conn.prepare(
-        r#"SELECT page_id
+        r#"SELECT page_id,
+                  page_type,
+                  state,
+                  answer_default_allowed,
+                  answer_requires_temporal_framing,
+                  confidence_level,
+                  source_count,
+                  conflict_count,
+                  created_at_ms,
+                  updated_at_ms,
+                  last_used_at_ms,
+                  human_corrected,
+                  tags_json,
+                  primary_evidence_json,
+                  related_page_ids_json,
+                  source_document_ids_json,
+                  claim_ids_json,
+                  compiled_title,
+                  compiled_summary,
+                  compiled_body,
+                  manual_title,
+                  manual_summary,
+                  manual_body
            FROM knowledge_pages
+           WHERE state != 'archived'
            ORDER BY COALESCE(last_used_at_ms, 0) DESC, updated_at_ms DESC, page_id ASC"#,
     )?;
-    let page_ids = stmt
-        .query_map([], |row| row.get::<_, String>(0))?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
+    let rows = stmt
+        .query_map([], read_stored_knowledge_page_sql_row)?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(anyhow::Error::from)?;
     let mut out = Vec::new();
-    for page_id in page_ids {
-        if let Some(page) = load_current_knowledge_page(conn, key, &page_id)? {
-            out.push(crate::knowledge::KnowledgePageSummary::from(&page));
-        }
+    for row in rows {
+        let page = stored_row_to_page(key, &decode_stored_knowledge_page_sql_row(row)?)?;
+        out.push(crate::knowledge::KnowledgePageSummary::from(&page));
     }
     Ok(out)
 }

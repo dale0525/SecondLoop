@@ -661,6 +661,70 @@ fn list_knowledge_page_summaries_excludes_archived_pages_from_normal_surfaces() 
 }
 
 #[test]
+fn list_knowledge_page_summaries_keeps_removed_pages_for_audit_surfaces() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [79u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut active_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:active",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Active Topic",
+        now,
+    );
+    active_page.current_summary = "Active summary".to_string();
+
+    let mut removed_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:removed",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Removed Topic",
+        now + 1,
+    );
+    removed_page.current_summary = "Removed summary".to_string();
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: active_page,
+                source_document_ids: vec!["doc:active".to_string()],
+                claim_ids: vec!["claim:active".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: removed_page,
+                source_document_ids: vec!["doc:removed".to_string()],
+                claim_ids: vec!["claim:removed".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    remove_knowledge_page(
+        &conn,
+        &key,
+        "page:topics:removed",
+        Some("Keep removed page in audit surfaces".to_string()),
+    )
+    .expect("remove page");
+
+    let summaries = list_knowledge_page_summaries(&conn, &key).expect("list summaries");
+    let page_ids = summaries
+        .into_iter()
+        .map(|page| page.page_id)
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        page_ids,
+        vec![
+            "page:topics:removed".to_string(),
+            "page:topics:active".to_string(),
+        ]
+    );
+}
+
+#[test]
 fn manual_correction_lints_use_all_source_documents_not_primary_evidence_only() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");

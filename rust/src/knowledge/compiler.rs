@@ -24,6 +24,12 @@ struct PageSeed {
     tags: Vec<String>,
 }
 
+#[derive(Default)]
+struct ClaimCompilationIndex {
+    by_page_id: BTreeMap<String, Vec<usize>>,
+    by_page_and_document_id: BTreeMap<String, BTreeMap<String, Vec<usize>>>,
+}
+
 pub fn refresh_knowledge_pages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<KnowledgePage>> {
     let generated_documents = load_all_generated_documents(conn, key)?;
     let claims = build_claims_from_documents(&generated_documents);
@@ -159,6 +165,7 @@ fn compile_pages_from_claims(
     documents: &[ContentKnowledgeDocument],
     claims: &[KnowledgeClaim],
 ) -> Vec<CompiledKnowledgePageRecord> {
+    let claim_index = build_claim_compilation_index(claims);
     let mut by_page_id = BTreeMap::<String, (PageSeed, Vec<usize>)>::new();
     for (index, document) in documents.iter().enumerate() {
         for seed in page_seeds_for_document(document) {
@@ -184,18 +191,17 @@ fn compile_pages_from_claims(
 
             for index in indexes {
                 let document = &documents[index];
-                let page_claims = claims
-                    .iter()
-                    .filter(|claim| {
-                        claim_belongs_to_page(claim, seed.page_type, Some(seed.page_id.as_str()))
-                    })
-                    .filter(|claim| {
-                        claim
-                            .source_ref_ids
+                let page_claims = claim_index
+                    .by_page_and_document_id
+                    .get(&seed.page_id)
+                    .and_then(|by_document| by_document.get(&document.document_id))
+                    .map(|claim_indexes| {
+                        claim_indexes
                             .iter()
-                            .any(|source_ref| source_ref == &document.document_id)
+                            .map(|index| &claims[*index])
+                            .collect::<Vec<_>>()
                     })
-                    .collect::<Vec<_>>();
+                    .unwrap_or_default();
                 if page_claims.is_empty() {
                     continue;
                 }
@@ -250,7 +256,8 @@ fn compile_pages_from_claims(
             page.current_body = body_lines.join("\n");
             page.updated_at_ms = latest_updated_at;
             page.source_count = source_count.max(1);
-            page.conflict_count = count_conflicts_for_page(&seed.page_id, claims);
+            page.conflict_count =
+                count_conflicts_for_page(claims, claim_index.by_page_id.get(&seed.page_id));
             page.confidence_level = if source_document_ids.is_empty() {
                 0.0
             } else {
@@ -284,25 +291,14 @@ fn summarize_lines(lines: &[String]) -> String {
     trimmed.join(" ")
 }
 
-fn count_conflicts_for_page(page_id: &str, claims: &[KnowledgeClaim]) -> i64 {
-    let Some((page_type, facet_key)) = page_scope_for_page_id(page_id) else {
+fn count_conflicts_for_page(claims: &[KnowledgeClaim], claim_indexes: Option<&Vec<usize>>) -> i64 {
+    let mut by_facet = BTreeMap::<String, BTreeSet<String>>::new();
+    let Some(claim_indexes) = claim_indexes else {
         return 0;
     };
-    let mut by_facet = BTreeMap::<String, BTreeSet<String>>::new();
-    for claim in claims {
+    for claim in claim_indexes.iter().map(|index| &claims[*index]) {
         if claim.status == KnowledgeClaimStatus::Dismissed {
             continue;
-        }
-        let Some(claim_page_type) = page_type_for_claim(claim) else {
-            continue;
-        };
-        if claim_page_type != page_type {
-            continue;
-        }
-        if let Some(expected_facet_key) = facet_key {
-            if claim.facet_key != expected_facet_key {
-                continue;
-            }
         }
         by_facet
             .entry(claim.facet_key.clone())
@@ -537,55 +533,39 @@ fn page_id_for_type_with_facet(page_type: KnowledgePageType, facet_key: &str) ->
     format!("{}:{facet_key}", page_id_for_type(page_type))
 }
 
-fn page_scope_for_page_id(page_id: &str) -> Option<(KnowledgePageType, Option<&str>)> {
-    match page_id {
-        "page:about-me" => Some((KnowledgePageType::AboutMe, None)),
-        "page:preferences" => Some((KnowledgePageType::Preferences, None)),
-        "page:current-focus" => Some((KnowledgePageType::CurrentFocus, None)),
-        "page:active-threads" => Some((KnowledgePageType::ActiveThreads, None)),
-        "page:recent-events" => Some((KnowledgePageType::RecentEvents, None)),
-        "page:people" => Some((KnowledgePageType::People, None)),
-        "page:topics" => Some((KnowledgePageType::Topics, None)),
-        "page:open-questions" => Some((KnowledgePageType::OpenQuestions, None)),
-        _ => {
-            if let Some(facet_key) = page_id.strip_prefix("page:topics:") {
-                Some((KnowledgePageType::Topics, Some(facet_key)))
-            } else if let Some(facet_key) = page_id.strip_prefix("page:people:") {
-                Some((KnowledgePageType::People, Some(facet_key)))
-            } else if let Some(facet_key) = page_id.strip_prefix("page:open-questions:") {
-                Some((KnowledgePageType::OpenQuestions, Some(facet_key)))
-            } else {
-                None
-            }
+fn build_claim_compilation_index(claims: &[KnowledgeClaim]) -> ClaimCompilationIndex {
+    let mut index = ClaimCompilationIndex::default();
+    for (claim_index, claim) in claims.iter().enumerate() {
+        let Some(page_id) = compiled_page_id_for_claim(claim) else {
+            continue;
+        };
+        index
+            .by_page_id
+            .entry(page_id.clone())
+            .or_default()
+            .push(claim_index);
+        for document_id in dedup(document_source_refs(&claim.source_ref_ids)) {
+            index
+                .by_page_and_document_id
+                .entry(page_id.clone())
+                .or_default()
+                .entry(document_id)
+                .or_default()
+                .push(claim_index);
         }
     }
+    index
 }
 
-fn claim_belongs_to_page(
-    claim: &KnowledgeClaim,
-    page_type: KnowledgePageType,
-    page_id: Option<&str>,
-) -> bool {
-    if page_type == KnowledgePageType::OpenQuestions {
-        return claim.status == KnowledgeClaimStatus::Disputed
-            && page_id
-                .map(|expected| expected == open_question_page_id_for_claim(claim))
-                .unwrap_or(true);
-    }
-    let Some(claim_page_type) = page_type_for_claim(claim) else {
-        return false;
-    };
-    if claim_page_type != page_type {
-        return false;
-    }
-    let Some(expected_page_id) = page_id else {
-        return true;
-    };
-    match page_scope_for_page_id(expected_page_id) {
-        Some((_, Some(facet_key))) => claim.facet_key == facet_key,
-        Some((_, None)) => true,
-        None => false,
-    }
+fn compiled_page_id_for_claim(claim: &KnowledgeClaim) -> Option<String> {
+    let page_type = page_type_for_claim(claim)?;
+    Some(match page_type {
+        KnowledgePageType::People | KnowledgePageType::Topics => {
+            page_id_for_type_with_facet(page_type, &claim.facet_key)
+        }
+        KnowledgePageType::OpenQuestions => open_question_page_id_for_claim(claim),
+        _ => page_id_for_type(page_type),
+    })
 }
 
 fn compile_open_question_pages(claims: &[KnowledgeClaim]) -> Vec<CompiledKnowledgePageRecord> {
