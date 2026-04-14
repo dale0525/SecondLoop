@@ -27,6 +27,18 @@ fn lexical_page_match_score(question: &str, haystack: &str) -> usize {
         .count()
 }
 
+fn should_exclude_generated_document_for_page_policies(
+    document_id: &str,
+    excluded_page_ids: &std::collections::HashSet<String>,
+) -> bool {
+    let related_page_ids =
+        knowledge::compiler::primary_page_ids_for_generated_document(document_id);
+    !related_page_ids.is_empty()
+        && related_page_ids
+            .iter()
+            .all(|page_id| excluded_page_ids.contains(page_id))
+}
+
 fn collect_compiled_page_contexts(
     conn: &Connection,
     key: &[u8; 32],
@@ -44,6 +56,10 @@ fn collect_compiled_page_contexts(
         .iter()
         .filter(|page| !page.answer_policy.default_allowed)
         .map(|page| page.page_id.clone())
+        .collect::<std::collections::HashSet<_>>();
+    let excluded_page_ids = muted_page_ids
+        .union(&answer_excluded_page_ids)
+        .cloned()
         .collect::<std::collections::HashSet<_>>();
     let mut candidates = page_summaries
         .into_iter()
@@ -127,13 +143,10 @@ fn collect_compiled_page_contexts(
                 if !document.memory_feedback.use_for_ask_ai || document.memory_feedback.is_deleted {
                     continue;
                 }
-                if knowledge::compiler::primary_page_ids_for_generated_document(
+                if should_exclude_generated_document_for_page_policies(
                     &document.document_id,
-                )
-                .iter()
-                .any(|page_id| {
-                    muted_page_ids.contains(page_id) || answer_excluded_page_ids.contains(page_id)
-                }) {
+                    &excluded_page_ids,
+                ) {
                     continue;
                 }
                 let body = if document.raw_text.trim().is_empty() {
@@ -224,10 +237,10 @@ fn filter_disabled_generated_memory_blocks(
             out.push(block);
             continue;
         }
-        if knowledge::compiler::primary_page_ids_for_generated_document(&block.document_id)
-            .iter()
-            .any(|page_id| answer_excluded_page_ids.contains(page_id))
-        {
+        if should_exclude_generated_document_for_page_policies(
+            &block.document_id,
+            &answer_excluded_page_ids,
+        ) {
             continue;
         }
         let feedback = feedback_by_document_id
@@ -409,7 +422,7 @@ mod tests {
     use super::{
         collect_compiled_page_contexts, filter_disabled_generated_memory_blocks,
         merge_knowledge_and_legacy_contexts, rebalance_planning_contexts,
-        try_build_knowledge_contexts,
+        should_exclude_generated_document_for_page_policies, try_build_knowledge_contexts,
     };
     use crate::db;
     use crate::knowledge;
@@ -828,6 +841,39 @@ mod tests {
         .expect("filter blocks");
 
         assert!(filtered.is_empty(), "filtered: {filtered:?}");
+    }
+
+    #[test]
+    fn shared_generated_document_requires_all_related_pages_to_be_excluded() {
+        let excluded = std::collections::HashSet::from([String::from("page:current-focus")]);
+
+        assert!(!should_exclude_generated_document_for_page_policies(
+            "generated:pattern:active-task-focus",
+            &excluded,
+        ));
+    }
+
+    #[test]
+    fn generated_document_is_excluded_when_all_related_pages_are_blocked() {
+        let excluded = std::collections::HashSet::from([
+            String::from("page:current-focus"),
+            String::from("page:active-threads"),
+        ]);
+
+        assert!(should_exclude_generated_document_for_page_policies(
+            "generated:pattern:active-task-focus",
+            &excluded,
+        ));
+    }
+
+    #[test]
+    fn generated_document_without_page_mapping_is_not_excluded_by_page_policies() {
+        let excluded = std::collections::HashSet::from([String::from("page:preferences")]);
+
+        assert!(!should_exclude_generated_document_for_page_policies(
+            "generated:misc:allowed-second",
+            &excluded,
+        ));
     }
 
     #[test]
