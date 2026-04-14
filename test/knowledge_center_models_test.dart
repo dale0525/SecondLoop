@@ -113,4 +113,37 @@ void main() {
       <String>['page:preferences'],
     );
   });
+
+  test(
+      'buildKnowledgeCenterHomeData does not treat single-source active pages as needing review',
+      () {
+    final summaries = <KnowledgePageSummary>[
+      const KnowledgePageSummary(
+        pageId: 'page:topics:solo',
+        pageType: KnowledgePageType.topics,
+        title: 'Solo Topic',
+        currentSummary: 'Only one supporting memory.',
+        state: KnowledgePageState.active,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: true,
+          requiresTemporalFraming: false,
+        ),
+        updatedAtMs: 10,
+        lastUsedAtMs: 10,
+        sourceCount: 1,
+        conflictCount: 0,
+        humanCorrected: false,
+        tags: [],
+        primaryEvidenceIds: [],
+      ),
+    ];
+
+    final data = buildKnowledgeCenterHomeData(
+      summaries: summaries,
+      recentChangeRecords: const <KnowledgePageChangeRecord>[],
+    );
+
+    expect(data.needsAttention, isEmpty);
+    expect(data.systemActivity.pagesNeedingReview, 0);
+  });
 }

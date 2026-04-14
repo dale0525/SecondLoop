@@ -556,10 +556,10 @@ fn filter_disabled_generated_memory_blocks_excludes_documents_backed_by_archived
 }
 
 #[test]
-fn shared_generated_document_is_excluded_when_any_related_page_is_blocked() {
+fn shared_generated_document_is_not_excluded_when_only_one_related_page_is_blocked() {
     let excluded = std::collections::HashSet::from([String::from("page:current-focus")]);
 
-    assert!(should_exclude_generated_document_for_page_policies(
+    assert!(!should_exclude_generated_document_for_page_policies(
         "generated:pattern:active-task-focus",
         &excluded,
     ));
@@ -589,7 +589,7 @@ fn generated_document_without_page_mapping_is_not_excluded_by_page_policies() {
 }
 
 #[test]
-fn filter_disabled_generated_memory_blocks_excludes_shared_document_when_any_related_page_is_blocked(
+fn filter_disabled_generated_memory_blocks_keeps_shared_document_when_another_related_page_is_allowed(
 ) {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = db::open(dir.path()).expect("open");
@@ -624,7 +624,63 @@ fn filter_disabled_generated_memory_blocks_excludes_shared_document_when_any_rel
     )
     .expect("filter blocks");
 
-    assert!(filtered.is_empty(), "filtered: {filtered:?}");
+    assert_eq!(filtered.len(), 1, "filtered: {filtered:?}");
+    assert_eq!(
+        filtered[0].document_id,
+        "generated:pattern:active-task-focus"
+    );
+}
+
+#[test]
+fn try_build_knowledge_context_entries_promotes_related_page_over_generated_document() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [73u8; 32];
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    insert_document(
+        &conn,
+        &key,
+        "generated:preference:response-language",
+        "generated",
+        10,
+        Some(&conv.id),
+        "User prefers responses in Chinese.",
+    );
+    crate::knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh pages");
+    crate::db::apply_knowledge_page_correction(
+        &conn,
+        &key,
+        "page:preferences",
+        None,
+        Some("Reply in Mandarin by default.".to_string()),
+        Some("Reply in Mandarin by default.".to_string()),
+    )
+    .expect("correct page");
+
+    let entries = try_build_knowledge_context_entries(
+        &conn,
+        &key,
+        "Chinese",
+        4,
+        Focus::AllMemories,
+        &conv.id,
+        None,
+    )
+    .expect("knowledge context entries");
+
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.block.document_id == "page:preferences"),
+        "entries: {entries:?}"
+    );
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.block.document_id != "generated:preference:response-language"),
+        "entries: {entries:?}"
+    );
 }
 
 #[test]

@@ -73,8 +73,7 @@ KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
       .where((page) =>
           page.state == KnowledgePageState.needsReview ||
           page.state == KnowledgePageState.outdated ||
-          page.conflictCount > 0 ||
-          page.sourceCount <= 1)
+          page.conflictCount > 0)
       .toList(growable: false)
     ..sort(_sortByLastUsedThenUpdated);
 
@@ -192,9 +191,6 @@ String knowledgeAttentionReason(
   }
   if (page.conflictCount > 0) {
     return t.memory.detail.conflictingEvidencePresent;
-  }
-  if (page.sourceCount <= 1) {
-    return t.memory.homepage.reviewReason;
   }
   return t.memory.homepage.reviewReason;
 }

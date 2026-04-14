@@ -79,7 +79,105 @@ pub(super) fn should_exclude_generated_document_for_page_policies(
     !related_page_ids.is_empty()
         && related_page_ids
             .iter()
-            .any(|page_id| excluded_page_ids.contains(page_id))
+            .all(|page_id| excluded_page_ids.contains(page_id))
+}
+
+fn page_context_allowed(page: &knowledge::KnowledgePage) -> bool {
+    page.answer_policy.default_allowed || page.answer_policy.requires_temporal_framing
+}
+
+fn render_page_context_block(
+    page: &knowledge::KnowledgePage,
+    score: f64,
+) -> knowledge::KnowledgeContextBlock {
+    let mut rendered = format!(
+        "page_id={}\npage_state={}\n[knowledge layer=wiki_page source=wiki_page role=summary]\n{}\n{}",
+        page.page_id,
+        page.user_state_label(),
+        page.current_summary,
+        page.current_body,
+    );
+    if page.answer_policy.requires_temporal_framing {
+        rendered = format!(
+            "temporal_framing=required\n{}\n{}",
+            rendered, "This page may be outdated and should be framed with time context."
+        );
+    }
+    knowledge::KnowledgeContextBlock {
+        document_id: page.page_id.clone(),
+        unit_id: None,
+        unit_kind: None,
+        source_kind: knowledge::KnowledgeSourceKind::Summary,
+        role: knowledge::KnowledgeRole::Summary,
+        anchors: knowledge::KnowledgeAnchorSet::default(),
+        score,
+        rendered_text: rendered,
+    }
+}
+
+fn load_promoted_page_contexts_for_blocks(
+    conn: &Connection,
+    key: &[u8; 32],
+    existing_blocks: &[knowledge::KnowledgeContextBlock],
+    retrieved_blocks: &[knowledge::KnowledgeContextBlock],
+) -> Result<(
+    Vec<knowledge::KnowledgeContextBlock>,
+    std::collections::HashSet<String>,
+)> {
+    let existing_page_ids = existing_blocks
+        .iter()
+        .filter(|block| block.document_id.starts_with("page:"))
+        .map(|block| block.document_id.clone())
+        .collect::<std::collections::HashSet<_>>();
+    let mut page_scores = std::collections::BTreeMap::<String, f64>::new();
+    let mut promoted_generated_document_ids = std::collections::HashSet::<String>::new();
+
+    for block in retrieved_blocks {
+        if !block.document_id.starts_with("generated:") {
+            continue;
+        }
+        let related_page_ids =
+            knowledge::compiler::primary_page_ids_for_generated_document(&block.document_id);
+        if related_page_ids.is_empty() {
+            continue;
+        }
+
+        let mut has_allowed_related_page = false;
+        for page_id in related_page_ids {
+            if existing_page_ids.contains(&page_id) {
+                has_allowed_related_page = true;
+                continue;
+            }
+            let Some(page) = crate::db::load_current_knowledge_page(conn, key, &page_id)? else {
+                continue;
+            };
+            if !page_context_allowed(&page) {
+                continue;
+            }
+            has_allowed_related_page = true;
+            page_scores
+                .entry(page_id)
+                .and_modify(|score| *score = score.max(block.score))
+                .or_insert(block.score);
+        }
+
+        if has_allowed_related_page {
+            promoted_generated_document_ids.insert(block.document_id.clone());
+        }
+    }
+
+    let promoted_blocks = page_scores
+        .into_iter()
+        .filter_map(|(page_id, score)| {
+            crate::db::load_current_knowledge_page(conn, key, &page_id)
+                .ok()
+                .flatten()
+                .filter(page_context_allowed)
+                .map(|page| render_page_context_block(&page, score))
+        })
+        .collect::<Vec<_>>();
+
+    Ok((promoted_blocks, promoted_generated_document_ids))
 }
 
 pub(super) fn collect_compiled_page_contexts(
@@ -122,32 +220,9 @@ pub(super) fn collect_compiled_page_contexts(
             if !is_planning_query && lexical_score == 0 {
                 return None;
             }
-            let mut rendered = format!(
-                "page_id={}\npage_state={}\n[knowledge layer=wiki_page source=wiki_page role=summary]\n{}\n{}",
-                page.page_id,
-                page.user_state_label(),
-                page.current_summary,
-                page.current_body,
-            );
-            if page.answer_policy.requires_temporal_framing {
-                rendered = format!(
-                    "temporal_framing=required\n{}\n{}",
-                    rendered,
-                    "This page may be outdated and should be framed with time context."
-                );
-            }
             Some((
                 lexical_score,
-                knowledge::KnowledgeContextBlock {
-                    document_id: page.page_id,
-                    unit_id: None,
-                    unit_kind: None,
-                    source_kind: knowledge::KnowledgeSourceKind::Summary,
-                    role: knowledge::KnowledgeRole::Summary,
-                    anchors: knowledge::KnowledgeAnchorSet::default(),
-                    score: lexical_score as f64,
-                    rendered_text: rendered,
-                },
+                render_page_context_block(&page, lexical_score as f64),
             ))
         })
         .collect::<Vec<_>>();
@@ -365,6 +440,10 @@ pub(super) fn try_build_knowledge_context_entries(
         key,
         knowledge::retrieve_context_blocks(conn, key, &request)?,
     )?;
+    let (mut promoted_pages, promoted_generated_document_ids) =
+        load_promoted_page_contexts_for_blocks(conn, key, &blocks, &retrieved)?;
+    retrieved.retain(|block| !promoted_generated_document_ids.contains(&block.document_id));
+    blocks.append(&mut promoted_pages);
     blocks.append(&mut retrieved);
 
     if is_planning_query {
