@@ -474,7 +474,7 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('Chat task hub banner keeps shared ai source label hidden',
+  testWidgets('Chat task hub banner shows shared ai source label',
       (tester) async {
     final nowLocal = DateTime.now();
     final requestSignature = jsonEncode(<String, Object?>{
@@ -571,15 +571,16 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
-      findsNothing,
+      findsOneWidget,
     );
+    expect(find.text('Shared AI insight'), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
         findsOneWidget);
     expect(find.byTooltip('AI recommends this now'), findsOneWidget);
     expect(find.text('Shared AI result.'), findsWidgets);
   });
 
-  testWidgets('Chat task hub banner keeps cached ai source label hidden',
+  testWidgets('Chat task hub banner shows cached ai source label',
       (tester) async {
     final nowLocal = DateTime.now();
     final cacheScopeKey = buildTaskPriorityAiCacheScopeKey(
@@ -685,8 +686,9 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
-      findsNothing,
+      findsOneWidget,
     );
+    expect(find.text('Cached AI insight'), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
         findsOneWidget);
     expect(find.byTooltip('AI recommends this now'), findsOneWidget);
@@ -792,15 +794,16 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
-      findsNothing,
+      findsOneWidget,
     );
+    expect(find.text('Cached AI insight'), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
         findsOneWidget);
     expect(find.byTooltip('AI recommends this now'), findsOneWidget);
     expect(find.text('Bootstrap cached AI result.'), findsWidgets);
   });
 
-  testWidgets('Chat task hub banner keeps live ai source label hidden',
+  testWidgets('Chat task hub banner shows live ai source label',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -861,8 +864,9 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
-      findsNothing,
+      findsOneWidget,
     );
+    expect(find.text('Live AI insight'), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
         findsOneWidget);
     expect(find.byTooltip('AI recommends this now'), findsOneWidget);
