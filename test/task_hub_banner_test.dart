@@ -710,6 +710,49 @@ void main() {
     expect(find.text('Live AI insight'), findsOneWidget);
   });
 
+  testWidgets('compact banner still shows AI source label', (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 't1', title: 'Clarify launch checklist', updatedAtMs: 10)
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            semanticAdjustment: 24,
+            reason: 'Live AI result.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    ).copyWith(
+      enhancementSource: TaskPriorityEnhancementSource.aiLive,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 420,
+              child: TaskHubBanner(
+                snapshot: snapshot,
+                compact: true,
+                onViewAll: () {},
+                onQuickAction: (_, __) async {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('task_hub_banner_ai_source')),
+        findsOneWidget);
+    expect(find.text('Live AI insight'), findsOneWidget);
+  });
+
   testWidgets('banner preview quick action invokes callback', (tester) async {
     TaskHubQuickAction? tappedAction;
     final now = DateTime(2026, 3, 13, 10, 0);

@@ -438,8 +438,8 @@ void main() {
     );
     expect(find.text('AI promoted'), findsOneWidget);
     expect(find.text('This sounds strategically important.'), findsNothing);
-    expect(
-        find.byKey(const ValueKey('task_hub_feedback_ai-task')), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_feedback_ai-task')),
+        findsOneWidget);
   });
 
   testWidgets('manual nudge snackbar uses state wording', (tester) async {

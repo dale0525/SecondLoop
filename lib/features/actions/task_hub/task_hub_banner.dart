@@ -71,8 +71,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
     final headerSpacing = widget.compact ? 3.0 : 6.0;
     final actionsSpacingTop = widget.compact ? 6.0 : 12.0;
     const compactCollapsed = false;
-    final showAiSourceLabel =
-        aiSourceLabel != null && (!widget.compact || _expanded);
+    final showAiSourceLabel = aiSourceLabel != null;
     final showSummaryChips = !widget.compact;
     final showAiHint =
         widget.showAiUpgradeHint && !hasAiReason && !widget.compact;

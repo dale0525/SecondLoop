@@ -26,12 +26,12 @@ bool _isSameLocalDate(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
-String formatTaskHubRelativeTime({
+String? formatTaskHubRelativeTime({
   required int? dueAtMs,
   required DateTime nowLocal,
   required TaskHubRelativeTimeLabels labels,
 }) {
-  if (dueAtMs == null) return labels.noDeadline;
+  if (dueAtMs == null) return null;
 
   final dueLocal =
       DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();

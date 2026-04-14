@@ -14,7 +14,7 @@ void main() {
     overdueWeeks: _overdueWeeks,
   );
 
-  test('formats no-deadline tasks', () {
+  test('returns null for no-deadline tasks', () {
     final now = DateTime(2026, 4, 13, 10);
 
     final result = formatTaskHubRelativeTime(
@@ -23,7 +23,7 @@ void main() {
       labels: labels,
     );
 
-    expect(result, 'No deadline');
+    expect(result, isNull);
   });
 
   test('formats same-day deadlines as today', () {

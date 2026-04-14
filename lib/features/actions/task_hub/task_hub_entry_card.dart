@@ -113,9 +113,8 @@ class TaskHubEntryCard extends StatelessWidget {
           ),
         ),
     ];
-    final supportingText = emphasize && (entry.reasonText ?? '').isNotEmpty
-        ? entry.reasonText!
-        : null;
+    final hasAiReason = (entry.reasonText ?? '').isNotEmpty;
+    final supportingText = emphasize && hasAiReason ? entry.reasonText! : null;
     Widget card = AnimatedContainer(
       key: ValueKey(
         'task_hub_page_item_state_${entry.todo.id}_${recentlyRestored ? 'restored' : 'default'}',
@@ -198,7 +197,7 @@ class TaskHubEntryCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (onFeedback != null && supportingText != null)
+                    if (onFeedback != null && hasAiReason)
                       TaskHubFeedbackMenu(
                         todoId: entry.todo.id,
                         onSelected: onFeedback!,
