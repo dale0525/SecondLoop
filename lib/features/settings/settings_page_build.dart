@@ -14,7 +14,8 @@ extension _SettingsPageBuild on _SettingsPageState {
     final supportsDesktopBootSettings =
         capabilities.supportsDesktopBootSettings;
     final supportsBiometricUnlock = capabilities.supportsBiometricUnlock;
-    final showsAppearancePreferences = !capabilities.usesCloudSessionModel;
+    final showsAppearancePreferences =
+        debugShowsAppearancePreferences(capabilities);
     final isDesktop = supportsBiometricUnlock && !isMobile;
     final isZh = Localizations.localeOf(context)
         .languageCode

@@ -137,5 +137,7 @@ void main() {
 
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.text('Theme'), findsNothing);
+    expect(find.byKey(const ValueKey('settings_theme_palette')), findsNothing);
   });
 }

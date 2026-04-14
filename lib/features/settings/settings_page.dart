@@ -16,6 +16,7 @@ import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/notifications/review_reminder_in_app_fallback_prefs.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/platform/app_platform_capabilities.dart';
 import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/session/session_scope.dart';
@@ -54,6 +55,14 @@ class SettingsPage extends StatefulWidget {
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
+}
+
+@visibleForTesting
+bool debugShowsAppearancePreferences(
+  AppPlatformCapabilities capabilities, {
+  bool isWeb = kIsWeb,
+}) {
+  return !(isWeb || capabilities.usesCloudSessionModel);
 }
 
 class _SettingsPageState extends State<SettingsPage> {

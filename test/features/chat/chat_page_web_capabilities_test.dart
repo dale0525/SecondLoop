@@ -46,6 +46,38 @@ void main() {
       debugDefaultTargetPlatformOverride = originalPlatform;
     }
   });
+
+  testWidgets('ChatPage opens settings without web appearance controls',
+      (tester) async {
+    final originalPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final backend =
+        CloudWebBackend(chatClient: const UnsupportedCloudWebChatClient());
+    try {
+      final conversation = await backend.getOrCreateLoopHomeConversation(
+        Uint8List.fromList(List<int>.filled(32, 1)),
+      );
+
+      await tester.pumpWidget(
+        _buildApp(
+          backend: backend,
+          capabilities: AppPlatformCapabilities.webCloud(),
+          conversation: conversation,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('chat_open_settings')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Theme'), findsNothing);
+      expect(
+          find.byKey(const ValueKey('settings_theme_palette')), findsNothing);
+      expect(find.text('Language'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = originalPlatform;
+    }
+  });
 }
 
 Widget _buildApp({
