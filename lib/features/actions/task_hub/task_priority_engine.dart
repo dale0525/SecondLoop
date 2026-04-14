@@ -354,19 +354,20 @@ List<TaskPriorityEntry> _applyBoundedUserMoveOrdering(
   final originalById = <String, TaskPriorityEntry>{
     for (final entry in orderedActive) entry.todo.id: entry,
   };
-  final neutralEntries = orderedActive
-      .map(_neutralizePureUserMoveEntry)
-      .toList(growable: false)
-    ..sort(_compareOverallPriority);
+  final neutralEntries =
+      orderedActive.map(_neutralizePureUserMoveEntry).toList(growable: false);
   final orderedIds =
       neutralEntries.map((entry) => entry.todo.id).toList(growable: true);
+  final positions = <String, int>{
+    for (var i = 0; i < orderedIds.length; i += 1) orderedIds[i]: i,
+  };
 
-  for (final entry in neutralEntries) {
+  for (final entry in orderedActive) {
     final original = originalById[entry.todo.id]!;
     if (original.userMoveDirection != TaskPriorityUserMoveDirection.up) {
       continue;
     }
-    final currentIndex = orderedIds.indexOf(original.todo.id);
+    final currentIndex = positions[original.todo.id] ?? -1;
     if (currentIndex <= 0) {
       continue;
     }
@@ -376,14 +377,16 @@ List<TaskPriorityEntry> _applyBoundedUserMoveOrdering(
     }
     orderedIds[currentIndex - 1] = original.todo.id;
     orderedIds[currentIndex] = previous.todo.id;
+    positions[original.todo.id] = currentIndex - 1;
+    positions[previous.todo.id] = currentIndex;
   }
 
-  for (var i = neutralEntries.length - 1; i >= 0; i -= 1) {
-    final original = originalById[neutralEntries[i].todo.id]!;
+  for (var i = orderedActive.length - 1; i >= 0; i -= 1) {
+    final original = originalById[orderedActive[i].todo.id]!;
     if (original.userMoveDirection != TaskPriorityUserMoveDirection.down) {
       continue;
     }
-    final currentIndex = orderedIds.indexOf(original.todo.id);
+    final currentIndex = positions[original.todo.id] ?? -1;
     if (currentIndex == -1 || currentIndex >= orderedIds.length - 1) {
       continue;
     }
@@ -393,6 +396,8 @@ List<TaskPriorityEntry> _applyBoundedUserMoveOrdering(
     }
     orderedIds[currentIndex] = next.todo.id;
     orderedIds[currentIndex + 1] = original.todo.id;
+    positions[next.todo.id] = currentIndex;
+    positions[original.todo.id] = currentIndex + 1;
   }
 
   return orderedIds
@@ -411,9 +416,7 @@ TaskPriorityEntry _neutralizePureUserMoveEntry(TaskPriorityEntry entry) {
 }
 
 bool _isPureUserMoveEntry(TaskPriorityEntry entry) {
-  return entry.manualImportanceNudgeScore == 0 &&
-      (entry.manualUrgencyNudgeScore == 1 ||
-          entry.manualUrgencyNudgeScore == -1);
+  return entry.userMoveDirection != TaskPriorityUserMoveDirection.none;
 }
 
 bool _canApplyBoundedUserMoveUp(

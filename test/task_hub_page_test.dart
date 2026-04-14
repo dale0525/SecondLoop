@@ -491,7 +491,8 @@ void main() {
           reviewStage: null,
           nextReviewAtMs: null,
           lastReviewAtMs: null,
-          manualUrgencyNudgeScore: 1,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
         ),
       ],
     );
@@ -500,6 +501,34 @@ void main() {
     await _pumpUntilTaskHubReady(tester);
 
     expect(find.text('Manually moved up'), findsOneWidget);
+  });
+
+  testWidgets('legacy urgency-only signals do not render manual move wording',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'legacy-urgency',
+          title: 'Legacy urgency signal',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualUrgencyNudgeScore: 1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(find.text('Manually moved up'), findsNothing);
+    expect(find.text('Manually moved down'), findsNothing);
   });
 
   testWidgets(
@@ -547,7 +576,8 @@ void main() {
           reviewStage: null,
           nextReviewAtMs: null,
           lastReviewAtMs: null,
-          manualUrgencyNudgeScore: 1,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
         ),
       ],
     );

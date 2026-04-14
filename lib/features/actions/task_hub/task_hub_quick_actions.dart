@@ -4,6 +4,7 @@ import '../../../core/ai/todo_followup_task_classifier.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../src/rust/db.dart';
 import '../settings/actions_settings_store.dart';
+import 'task_priority_models.dart';
 
 enum TaskHubQuickAction {
   today,
@@ -214,16 +215,16 @@ class TaskHubQuickActionsController {
     assert(direction == 1 || direction == -1);
     final currentUrgency = todo.manualUrgencyNudgeScore ?? 0;
     final currentImportance = todo.manualImportanceNudgeScore ?? 0;
-    if (currentUrgency == direction && currentImportance == 0) {
+    final desiredMarker = direction * taskPriorityUserMoveEncodedMarker;
+    if (currentUrgency == desiredMarker && currentImportance == desiredMarker) {
       return null;
     }
     final previousManualSignal = _manualSignalFromTodo(todo);
     final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
-      manualUrgencyNudgeScore: direction,
-      manualImportanceNudgeScore: currentImportance == 0 ? null : 0,
-      clearManualImportanceNudgeScore: false,
+      manualUrgencyNudgeScore: desiredMarker,
+      manualImportanceNudgeScore: desiredMarker,
     );
     if ((updated.manualImportanceNudgeScore ?? 0) == currentImportance &&
         (updated.manualUrgencyNudgeScore ?? 0) == currentUrgency) {

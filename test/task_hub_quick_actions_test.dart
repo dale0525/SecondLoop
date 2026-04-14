@@ -218,7 +218,7 @@ void main() {
     expect(find.text('reopen|redo|dismiss'), findsOneWidget);
   });
 
-  test('move up a bit only increments manual urgency score', () async {
+  test('move up a bit stores encoded move intent markers', () async {
     SharedPreferences.setMockInitialValues({});
 
     final initial =
@@ -236,14 +236,14 @@ void main() {
 
     expect(ticket, isNotNull);
     if (ticket == null) fail('expected undo ticket');
-    expect(backend.current('t-move-up').manualUrgencyNudgeScore, 1);
-    expect(backend.current('t-move-up').manualImportanceNudgeScore, 0);
+    expect(backend.current('t-move-up').manualUrgencyNudgeScore, 2);
+    expect(backend.current('t-move-up').manualImportanceNudgeScore, 2);
 
     await controller.undo(ticket);
     expect(backend.current('t-move-up').manualUrgencyNudgeScore, 0);
   });
 
-  test('move down a bit sets a negative urgency nudge', () async {
+  test('move down a bit stores encoded move intent markers', () async {
     SharedPreferences.setMockInitialValues({});
 
     final initial =
@@ -260,7 +260,8 @@ void main() {
     );
 
     expect(ticket, isNotNull);
-    expect(backend.current('t-move-down').manualUrgencyNudgeScore, -1);
+    expect(backend.current('t-move-down').manualUrgencyNudgeScore, -2);
+    expect(backend.current('t-move-down').manualImportanceNudgeScore, -2);
   });
 
   test('restore ai order clears existing manual nudges', () async {

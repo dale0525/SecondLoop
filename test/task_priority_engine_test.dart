@@ -224,7 +224,8 @@ void main() {
           id: 'raised',
           title: 'Raised task',
           updatedAtMs: 10,
-          manualUrgencyNudgeScore: 1,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
         ),
       ],
       nowLocal: nowLocal,
@@ -263,7 +264,8 @@ void main() {
           id: 'raised',
           title: 'Raised task',
           updatedAtMs: 10,
-          manualUrgencyNudgeScore: 1,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
         ),
       ],
       nowLocal: nowLocal,
@@ -324,6 +326,29 @@ void main() {
     expect(
       snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
       <String>['legacy-up', 'neutral-top', 'neutral-bottom'],
+    );
+  });
+
+  test('legacy urgency +1 keeps score semantics instead of one-slot move', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'neutral-top', title: 'Neutral top', updatedAtMs: 40),
+        todo(id: 'neutral-mid', title: 'Neutral mid', updatedAtMs: 30),
+        todo(id: 'neutral-low', title: 'Neutral low', updatedAtMs: 20),
+        todo(
+          id: 'legacy-up',
+          title: 'Legacy urgency +1',
+          updatedAtMs: 10,
+          manualUrgencyNudgeScore: 1,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['legacy-up', 'neutral-top', 'neutral-mid', 'neutral-low'],
     );
   });
 

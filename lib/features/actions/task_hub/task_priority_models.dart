@@ -2,6 +2,8 @@ import '../../../src/rust/db.dart';
 
 import 'task_priority_guards.dart';
 
+const int taskPriorityUserMoveEncodedMarker = 2;
+
 enum TaskPriorityNudgeDirection {
   none,
   up,
@@ -73,6 +75,56 @@ enum TaskPriorityDisplayBucket {
   backlog,
 }
 
+TaskPriorityUserMoveDirection taskPriorityUserMoveDirectionFromScores(
+  int manualImportanceNudgeScore,
+  int manualUrgencyNudgeScore,
+) {
+  if (manualImportanceNudgeScore == taskPriorityUserMoveEncodedMarker &&
+      manualUrgencyNudgeScore == taskPriorityUserMoveEncodedMarker) {
+    return TaskPriorityUserMoveDirection.up;
+  }
+  if (manualImportanceNudgeScore == -taskPriorityUserMoveEncodedMarker &&
+      manualUrgencyNudgeScore == -taskPriorityUserMoveEncodedMarker) {
+    return TaskPriorityUserMoveDirection.down;
+  }
+  return TaskPriorityUserMoveDirection.none;
+}
+
+bool hasTaskPriorityUserMoveEncoding(
+  int manualImportanceNudgeScore,
+  int manualUrgencyNudgeScore,
+) {
+  return taskPriorityUserMoveDirectionFromScores(
+        manualImportanceNudgeScore,
+        manualUrgencyNudgeScore,
+      ) !=
+      TaskPriorityUserMoveDirection.none;
+}
+
+int normalizeTaskPriorityManualImportanceScore(
+  int manualImportanceNudgeScore,
+  int manualUrgencyNudgeScore,
+) {
+  return hasTaskPriorityUserMoveEncoding(
+    manualImportanceNudgeScore,
+    manualUrgencyNudgeScore,
+  )
+      ? 0
+      : manualImportanceNudgeScore;
+}
+
+int normalizeTaskPriorityManualUrgencyScore(
+  int manualImportanceNudgeScore,
+  int manualUrgencyNudgeScore,
+) {
+  return hasTaskPriorityUserMoveEncoding(
+    manualImportanceNudgeScore,
+    manualUrgencyNudgeScore,
+  )
+      ? 0
+      : manualUrgencyNudgeScore;
+}
+
 class TaskPriorityEntry {
   const TaskPriorityEntry({
     required this.todo,
@@ -120,6 +172,18 @@ class TaskPriorityEntry {
   final int manualUrgencyNudgeScore;
   final int dueDerivedUrgencyScore;
 
+  int get normalizedManualImportanceNudgeScore =>
+      normalizeTaskPriorityManualImportanceScore(
+        manualImportanceNudgeScore,
+        manualUrgencyNudgeScore,
+      );
+
+  int get normalizedManualUrgencyNudgeScore =>
+      normalizeTaskPriorityManualUrgencyScore(
+        manualImportanceNudgeScore,
+        manualUrgencyNudgeScore,
+      );
+
   bool get suppressesAutomaticUrgencyBoost =>
       manualUrgencyNudgeDirection == TaskPriorityNudgeDirection.down;
 
@@ -127,33 +191,30 @@ class TaskPriorityEntry {
 
   int get effectiveUrgency =>
       urgencyScore +
-      manualUrgencyNudgeScore +
+      normalizedManualUrgencyNudgeScore +
       (suppressesAutomaticUrgencyBoost ? 0 : dueDerivedUrgencyScore);
 
-  int get effectiveImportance => importanceScore + manualImportanceNudgeScore;
+  int get effectiveImportance =>
+      importanceScore + normalizedManualImportanceNudgeScore;
 
-  bool get hasManualImportanceNudge => manualImportanceNudgeScore != 0;
+  bool get hasManualImportanceNudge =>
+      normalizedManualImportanceNudgeScore != 0;
 
-  bool get hasManualUrgencyNudge => manualUrgencyNudgeScore != 0;
+  bool get hasManualUrgencyNudge => normalizedManualUrgencyNudgeScore != 0;
 
   bool get hasManualNudges => hasManualImportanceNudge || hasManualUrgencyNudge;
 
   TaskPriorityNudgeDirection get manualImportanceNudgeDirection =>
-      _directionFromScore(manualImportanceNudgeScore);
+      _directionFromScore(normalizedManualImportanceNudgeScore);
 
   TaskPriorityNudgeDirection get manualUrgencyNudgeDirection =>
-      _directionFromScore(manualUrgencyNudgeScore);
+      _directionFromScore(normalizedManualUrgencyNudgeScore);
 
-  TaskPriorityUserMoveDirection get userMoveDirection {
-    if (manualImportanceNudgeScore != 0) {
-      return TaskPriorityUserMoveDirection.none;
-    }
-    if (manualUrgencyNudgeScore == 1) return TaskPriorityUserMoveDirection.up;
-    if (manualUrgencyNudgeScore == -1) {
-      return TaskPriorityUserMoveDirection.down;
-    }
-    return TaskPriorityUserMoveDirection.none;
-  }
+  TaskPriorityUserMoveDirection get userMoveDirection =>
+      taskPriorityUserMoveDirectionFromScores(
+        manualImportanceNudgeScore,
+        manualUrgencyNudgeScore,
+      );
 
   bool get isExplicitlyImportant =>
       manualImportanceNudgeDirection == TaskPriorityNudgeDirection.up;

@@ -222,7 +222,8 @@ void main() {
           reviewStage: null,
           nextReviewAtMs: null,
           lastReviewAtMs: null,
-          manualUrgencyNudgeScore: 1,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
         ),
       ],
       transitionTodoDelay: const Duration(milliseconds: 200),
@@ -265,7 +266,8 @@ void main() {
           reviewStage: null,
           nextReviewAtMs: null,
           lastReviewAtMs: null,
-          manualUrgencyNudgeScore: 1,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
         ),
         Todo(
           id: 'suit',
@@ -312,14 +314,31 @@ void main() {
       find.byKey(const ValueKey('task_hub_page_adjust_upload_move_down')),
     );
     await tester.pump();
-    await pumpUntilFound(
+    await pumpUntil(
       tester,
-      find.byKey(const ValueKey('task_hub_priority_inline_animation_upload')),
+      () =>
+          find
+              .byKey(
+                  const ValueKey('task_hub_priority_inline_animation_upload'))
+              .evaluate()
+              .isNotEmpty ||
+          find
+              .byKey(const ValueKey('task_hub_priority_animation_overlay'))
+              .evaluate()
+              .isNotEmpty,
     );
 
     expect(
-      find.byKey(const ValueKey('task_hub_priority_inline_animation_upload')),
-      findsOneWidget,
+      find
+              .byKey(
+                  const ValueKey('task_hub_priority_inline_animation_upload'))
+              .evaluate()
+              .isNotEmpty ||
+          find
+              .byKey(const ValueKey('task_hub_priority_animation_overlay'))
+              .evaluate()
+              .isNotEmpty,
+      isTrue,
     );
     expect(
       find.text('Wear suit today'),

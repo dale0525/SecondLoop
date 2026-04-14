@@ -519,13 +519,15 @@ class _TaskHubPageState extends State<TaskHubPage> {
     TaskHubQuickAction action,
   ) {
     final todo = entry.todo;
+    final userMoveDirection = taskPriorityUserMoveDirectionFromScores(
+      todo.manualImportanceNudgeScore ?? 0,
+      todo.manualUrgencyNudgeScore ?? 0,
+    );
     return switch (action) {
       TaskHubQuickAction.moveUpABit =>
-        (todo.manualUrgencyNudgeScore ?? 0) >= 1 &&
-            (todo.manualImportanceNudgeScore ?? 0) == 0,
+        userMoveDirection == TaskPriorityUserMoveDirection.up,
       TaskHubQuickAction.moveDownABit =>
-        (todo.manualUrgencyNudgeScore ?? 0) <= -1 &&
-            (todo.manualImportanceNudgeScore ?? 0) == 0,
+        userMoveDirection == TaskPriorityUserMoveDirection.down,
       TaskHubQuickAction.restoreAiOrder =>
         (todo.manualUrgencyNudgeScore ?? 0) == 0 &&
             (todo.manualImportanceNudgeScore ?? 0) == 0,
