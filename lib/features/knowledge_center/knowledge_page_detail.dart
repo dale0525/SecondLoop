@@ -71,14 +71,37 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
     final relatedPages = allSummaries
         .where((page) => detail.page.relatedPageIds.contains(page.pageId))
         .toList(growable: false);
-    final mergeTargets = allSummaries
-        .where((page) =>
-            knowledgePageSupportsMerge(detail.page.pageType) &&
-            page.pageId != detail.page.pageId &&
-            page.pageType == detail.page.pageType &&
-            detail.page.relatedPageIds.contains(page.pageId) &&
-            page.state != KnowledgePageState.archived &&
-            page.state != KnowledgePageState.removed)
+    final mergeCandidates = knowledgePageSupportsMerge(detail.page.pageType)
+        ? allSummaries
+            .where((page) =>
+                page.pageId != detail.page.pageId &&
+                page.pageType == detail.page.pageType &&
+                page.state != KnowledgePageState.archived &&
+                page.state != KnowledgePageState.removed)
+            .toList(growable: false)
+        : const <KnowledgePageSummary>[];
+    final mergeTargets = (await Future.wait(
+      mergeCandidates.map((candidate) async {
+        final currentPointsToCandidate =
+            detail.page.relatedPageIds.contains(candidate.pageId);
+        if (currentPointsToCandidate) {
+          return candidate;
+        }
+        try {
+          final candidateDetail = await backend.getKnowledgePageDetail(
+            sessionKey,
+            pageId: candidate.pageId,
+          );
+          return candidateDetail.page.relatedPageIds
+                  .contains(detail.page.pageId)
+              ? candidate
+              : null;
+        } catch (_) {
+          return null;
+        }
+      }),
+    ))
+        .nonNulls
         .toList(growable: false);
     return _KnowledgePageDetailViewData(
       detail: detail,

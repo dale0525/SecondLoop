@@ -130,6 +130,7 @@ pub fn mark_knowledge_page_wrong(
         conn.execute(
             r#"UPDATE knowledge_pages
                SET state = ?2,
+                   state_before_answer_muted = NULL,
                    answer_default_allowed = ?3,
                    answer_requires_temporal_framing = ?4,
                    updated_at_ms = ?5
@@ -183,7 +184,7 @@ pub fn set_knowledge_page_answer_allowed(
         };
         let next_state = if allowed {
             if detail.page.state == crate::knowledge::KnowledgePageState::AnswerMuted {
-                restore_state_before_answer_muted(conn, key, page_id)?
+                restore_state_before_answer_muted(conn, page_id)?
             } else {
                 detail.page.state
             }
@@ -208,16 +209,25 @@ pub fn set_knowledge_page_answer_allowed(
             ));
         }
         let next_policy = answer_policy_for_state_with_override(next_state, allowed);
+        let next_state_before_answer_muted = if allowed {
+            None
+        } else if detail.page.state == crate::knowledge::KnowledgePageState::AnswerMuted {
+            load_stored_knowledge_page_row(conn, page_id)?.and_then(|row| row.state_before_answer_muted)
+        } else {
+            Some(detail.page.state)
+        };
         conn.execute(
             r#"UPDATE knowledge_pages
                SET state = ?2,
-                   answer_default_allowed = ?3,
-                   answer_requires_temporal_framing = ?4,
-                   updated_at_ms = ?5
+                   state_before_answer_muted = ?3,
+                   answer_default_allowed = ?4,
+                   answer_requires_temporal_framing = ?5,
+                   updated_at_ms = ?6
                WHERE page_id = ?1"#,
             params![
                 page_id,
                 encode_page_state(next_state)?,
+                encode_optional_page_state(next_state_before_answer_muted)?,
                 if next_policy.default_allowed { 1 } else { 0 },
                 if next_policy.requires_temporal_framing { 1 } else { 0 },
                 now,
@@ -268,16 +278,10 @@ fn resolve_manual_page_text_update(
 
 fn restore_state_before_answer_muted(
     conn: &Connection,
-    key: &[u8; 32],
     page_id: &str,
 ) -> Result<crate::knowledge::KnowledgePageState> {
-    let snapshots = list_knowledge_page_version_snapshots_internal(conn, key, page_id, 8)?;
-    Ok(snapshots
-        .into_iter()
-        .find_map(|snapshot| {
-            (snapshot.state != crate::knowledge::KnowledgePageState::AnswerMuted)
-                .then_some(snapshot.state)
-        })
+    Ok(load_stored_knowledge_page_row(conn, page_id)?
+        .and_then(|row| row.state_before_answer_muted)
         .unwrap_or(crate::knowledge::KnowledgePageState::Active))
 }
 
@@ -505,6 +509,7 @@ pub fn merge_knowledge_page_into(
         conn.execute(
             r#"UPDATE knowledge_pages
                SET state = ?2,
+                   state_before_answer_muted = NULL,
                    answer_default_allowed = 0,
                    answer_requires_temporal_framing = 0,
                    updated_at_ms = ?3,
@@ -620,6 +625,7 @@ fn set_knowledge_page_state(
         conn.execute(
             r#"UPDATE knowledge_pages
                SET state = ?2,
+                   state_before_answer_muted = NULL,
                    answer_default_allowed = ?3,
                    answer_requires_temporal_framing = ?4,
                    updated_at_ms = ?5,

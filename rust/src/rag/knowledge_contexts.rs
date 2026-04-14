@@ -18,14 +18,52 @@ pub(super) struct KnowledgeRenderedContextEntry {
 fn lexical_page_match_score(question: &str, haystack: &str) -> usize {
     let question = question.to_lowercase();
     let haystack = haystack.to_lowercase();
-    question
+    let word_score = question
         .split(|ch: char| !ch.is_alphanumeric() && !('\u{4E00}'..='\u{9FFF}').contains(&ch))
         .map(str::trim)
-        .filter(|token| token.chars().count() >= 2)
+        .filter(|token| token.chars().count() >= 2 && !token.chars().all(is_cjk_character))
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .filter(|token| haystack.contains(*token))
-        .count()
+        .count();
+    let cjk_score = cjk_query_ngrams(&question)
+        .into_iter()
+        .filter(|token| haystack.contains(token))
+        .count();
+    word_score + cjk_score
+}
+
+fn is_cjk_character(ch: char) -> bool {
+    ('\u{4E00}'..='\u{9FFF}').contains(&ch)
+}
+
+fn cjk_query_ngrams(text: &str) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::<String>::new();
+    let mut current = Vec::<char>::new();
+    for ch in text.chars() {
+        if is_cjk_character(ch) {
+            current.push(ch);
+            continue;
+        }
+        append_cjk_ngrams(&mut out, &current);
+        current.clear();
+    }
+    append_cjk_ngrams(&mut out, &current);
+    out
+}
+
+fn append_cjk_ngrams(out: &mut std::collections::BTreeSet<String>, chars: &[char]) {
+    if chars.len() < 2 {
+        return;
+    }
+    for gram_len in 2..=3 {
+        if chars.len() < gram_len {
+            continue;
+        }
+        for start in 0..=chars.len() - gram_len {
+            out.insert(chars[start..start + gram_len].iter().collect::<String>());
+        }
+    }
 }
 
 fn planning_context_group(block: &knowledge::KnowledgeContextBlock) -> u8 {
@@ -217,15 +255,13 @@ where
         &mut load_page,
         &mut candidates,
     );
-    if !is_planning_query {
-        append_matching_page_context_blocks(
-            question,
-            is_planning_query,
-            candidate_summaries.iter().skip(initial_candidate_limit),
-            &mut load_page,
-            &mut candidates,
-        );
-    }
+    append_matching_page_context_blocks(
+        question,
+        is_planning_query,
+        candidate_summaries.iter().skip(initial_candidate_limit),
+        &mut load_page,
+        &mut candidates,
+    );
     candidates.sort_by(|left, right| right.0.cmp(&left.0));
     candidates
         .into_iter()

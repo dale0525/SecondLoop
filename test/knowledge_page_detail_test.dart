@@ -231,6 +231,43 @@ void main() {
   });
 
   testWidgets(
+      'KnowledgePageDetailPage shows merge action when reverse related page points back to current page',
+      (tester) async {
+    final backend = _ReverseRelatedMergeableKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:topics:alpha'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Merge Pages'), findsOneWidget);
+
+    await tester.tap(find.text('Merge Pages'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Topic Beta'), findsOneWidget);
+    await tester.tap(find.text('Topic Beta'));
+    await tester.pumpAndSettle();
+
+    expect(backend.mergedPageId, 'page:topics:alpha');
+    expect(backend.mergedTargetPageId, 'page:topics:beta');
+  });
+
+  testWidgets(
       'KnowledgePageDetailPage navigates to the merge target after merging',
       (tester) async {
     final backend = _MergeableKnowledgePageDetailBackendStub();
@@ -867,6 +904,36 @@ final class _UnrelatedMergeableKnowledgePageDetailBackendStub
         summary: 'Separate topic summary.',
         body: 'Separate topic summary.\nTopic beta details.',
         relatedPageIds: const ['page:about-me'],
+        tags: const ['topics'],
+      );
+    }
+    return _buildDetail(
+      pageId: pageId,
+      pageType: KnowledgePageType.topics,
+      title: 'Topic Alpha',
+      summary: 'Current topic summary.',
+      body: 'Current topic summary.\nTopic alpha details.',
+      relatedPageIds: const ['page:about-me'],
+      tags: const ['topics'],
+    );
+  }
+}
+
+final class _ReverseRelatedMergeableKnowledgePageDetailBackendStub
+    extends _MergeableKnowledgePageDetailBackendStub {
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    if (pageId == 'page:topics:beta') {
+      return _buildDetail(
+        pageId: pageId,
+        pageType: KnowledgePageType.topics,
+        title: 'Topic Beta',
+        summary: 'Merged topic summary.',
+        body: 'Merged topic summary.\nTopic beta details.',
+        relatedPageIds: const ['page:about-me', 'page:topics:alpha'],
         tags: const ['topics'],
       );
     }

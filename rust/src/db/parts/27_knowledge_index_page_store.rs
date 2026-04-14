@@ -122,6 +122,9 @@ pub(crate) fn upsert_compiled_knowledge_pages(
                 .updated_at_ms
                 .max(existing.as_ref().map(|row| row.updated_at_ms).unwrap_or(0));
             let last_used_at_ms = existing.as_ref().and_then(|row| row.last_used_at_ms);
+            let state_before_answer_muted = existing
+                .as_ref()
+                .and_then(|row| row.state_before_answer_muted);
             let human_corrected = existing.as_ref().is_some_and(|row| {
                 row.manual_title_blob.is_some()
                     || row.manual_summary_blob.is_some()
@@ -287,6 +290,7 @@ pub(crate) fn upsert_compiled_knowledge_pages(
                        page_id,
                        page_type,
                        state,
+                       state_before_answer_muted,
                        answer_default_allowed,
                        answer_requires_temporal_framing,
                        confidence_level,
@@ -307,10 +311,11 @@ pub(crate) fn upsert_compiled_knowledge_pages(
                        manual_title,
                        manual_summary,
                        manual_body
-                   ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+                   ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
                    ON CONFLICT(page_id) DO UPDATE SET
                      page_type = excluded.page_type,
                      state = excluded.state,
+                     state_before_answer_muted = COALESCE(knowledge_pages.state_before_answer_muted, excluded.state_before_answer_muted),
                      answer_default_allowed = excluded.answer_default_allowed,
                      answer_requires_temporal_framing = excluded.answer_requires_temporal_framing,
                      confidence_level = excluded.confidence_level,
@@ -334,6 +339,7 @@ pub(crate) fn upsert_compiled_knowledge_pages(
                     item.page.page_id,
                     encode_page_type(item.page.page_type)?,
                     encode_page_state(preserved_state)?,
+                    encode_optional_page_state(state_before_answer_muted)?,
                     if answer_policy.default_allowed { 1 } else { 0 },
                     if answer_policy.requires_temporal_framing { 1 } else { 0 },
                     effective_page.confidence_level,
@@ -445,6 +451,7 @@ pub fn mark_missing_knowledge_pages_removed(
         conn.execute(
             r#"UPDATE knowledge_pages
                SET state = ?2,
+                   state_before_answer_muted = NULL,
                    answer_default_allowed = 0,
                    answer_requires_temporal_framing = 0,
                    updated_at_ms = ?3

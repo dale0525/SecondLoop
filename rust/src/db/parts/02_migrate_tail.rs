@@ -664,6 +664,25 @@ PRAGMA user_version = 47;
     Ok(())
 }
 
+fn migrate_from_v47_to_v48(conn: &Connection) -> Result<()> {
+    if !table_has_column(
+        conn,
+        "knowledge_pages",
+        "state_before_answer_muted",
+    )? {
+        execute_batch_allowing_duplicate_columns(
+            conn,
+            r#"
+ALTER TABLE knowledge_pages
+  ADD COLUMN state_before_answer_muted TEXT;
+"#,
+        )?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 48;")?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -826,6 +845,53 @@ CREATE TABLE knowledge_rebuild_state (
             .expect("collect column names");
         assert!(column_names.contains(&"pages_refresh_required".to_string()));
         assert!(column_names.contains(&"last_pages_refresh_completed_at_ms".to_string()));
+    }
+
+    #[test]
+    fn v48_knowledge_pages_migration_adds_previous_muted_state_column() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE knowledge_pages (
+  page_id TEXT PRIMARY KEY,
+  page_type TEXT NOT NULL,
+  state TEXT NOT NULL,
+  answer_default_allowed INTEGER NOT NULL DEFAULT 1,
+  answer_requires_temporal_framing INTEGER NOT NULL DEFAULT 0,
+  confidence_level REAL NOT NULL DEFAULT 0,
+  source_count INTEGER NOT NULL DEFAULT 0,
+  conflict_count INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  last_used_at_ms INTEGER,
+  human_corrected INTEGER NOT NULL DEFAULT 0,
+  tags_json TEXT NOT NULL,
+  primary_evidence_json TEXT NOT NULL,
+  related_page_ids_json TEXT NOT NULL,
+  source_document_ids_json TEXT NOT NULL,
+  claim_ids_json TEXT NOT NULL,
+  compiled_title BLOB NOT NULL,
+  compiled_summary BLOB NOT NULL,
+  compiled_body BLOB NOT NULL,
+  manual_title BLOB,
+  manual_summary BLOB,
+  manual_body BLOB
+);
+"#,
+        )
+        .expect("seed pre-v48 knowledge_pages");
+
+        migrate_from_v47_to_v48(&conn).expect("rerun v48 migration");
+
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(knowledge_pages)")
+            .expect("prepare table info");
+        let column_names = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query table info")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect column names");
+        assert!(column_names.contains(&"state_before_answer_muted".to_string()));
     }
 }
 

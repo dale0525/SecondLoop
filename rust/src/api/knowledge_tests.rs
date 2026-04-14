@@ -960,8 +960,54 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
         Some(crate::knowledge::history::KnowledgePageChangeType::Muted)
     );
 
+    assert!(muted.version_snapshots.len() >= 3);
+    assert!(muted
+        .version_snapshots
+        .iter()
+        .any(|snapshot| snapshot.title == "Reply Preferences"));
+    assert!(muted
+        .version_snapshots
+        .iter()
+        .any(|snapshot| snapshot.title == "Preferences"));
+
+    for revision in 0..9 {
+        let edited = crate::api::knowledge::db_correct_knowledge_page(
+            app_dir.to_string_lossy().into_owned(),
+            key.to_vec(),
+            "page:preferences".to_string(),
+            None,
+            Some(format!("Muted summary revision {revision}")),
+            Some(format!("Muted body revision {revision}")),
+        )
+        .expect("edit muted page");
+        assert_eq!(
+            edited.page.state,
+            crate::knowledge::KnowledgePageState::AnswerMuted
+        );
+    }
+
+    let unmuted_after_many_muted_versions =
+        crate::api::knowledge::db_set_knowledge_page_answer_allowed(
+            app_dir_string.clone(),
+            key.to_vec(),
+            "page:preferences".to_string(),
+            true,
+            Some("Restore previous governance after many muted edits.".to_string()),
+        )
+        .expect("unmute page answers after many muted versions");
+    assert_eq!(
+        unmuted_after_many_muted_versions.page.state,
+        crate::knowledge::KnowledgePageState::Outdated
+    );
+    assert!(
+        unmuted_after_many_muted_versions
+            .page
+            .answer_policy
+            .requires_temporal_framing
+    );
+
     let unmuted = crate::api::knowledge::db_set_knowledge_page_answer_allowed(
-        app_dir_string,
+        app_dir_string.clone(),
         key.to_vec(),
         "page:preferences".to_string(),
         true,
@@ -974,15 +1020,6 @@ fn knowledge_page_actions_update_state_history_and_answer_policy() {
     );
     assert!(unmuted.page.answer_policy.default_allowed);
     assert!(unmuted.page.answer_policy.requires_temporal_framing);
-    assert!(muted.version_snapshots.len() >= 3);
-    assert!(muted
-        .version_snapshots
-        .iter()
-        .any(|snapshot| snapshot.title == "Reply Preferences"));
-    assert!(muted
-        .version_snapshots
-        .iter()
-        .any(|snapshot| snapshot.title == "Preferences"));
 
     let cleared_body = crate::api::knowledge::db_correct_knowledge_page(
         app_dir.to_string_lossy().into_owned(),

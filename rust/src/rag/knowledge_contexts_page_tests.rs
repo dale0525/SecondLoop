@@ -179,6 +179,44 @@ fn collect_compiled_page_contexts_matches_keywords_found_only_in_page_body() {
 }
 
 #[test]
+fn collect_compiled_page_contexts_matches_cjk_query_against_page_body() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [96u8; 32];
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    insert_document(
+        &conn,
+        &key,
+        "generated:preference:response-language",
+        "generated",
+        10,
+        Some(&conv.id),
+        "User prefers concise replies.",
+    );
+    crate::knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh pages");
+    crate::db::apply_knowledge_page_correction(
+        &conn,
+        &key,
+        "page:preferences",
+        None,
+        Some("语言偏好保持最新。".to_string()),
+        Some("回答时使用中文，并保持简洁。".to_string()),
+    )
+    .expect("correct page");
+
+    let blocks = collect_compiled_page_contexts(&conn, &key, "请用中文回复", 4, Some(&conv.id))
+        .expect("compiled page contexts");
+
+    assert!(
+        blocks
+            .iter()
+            .any(|block| block.document_id == "page:preferences"),
+        "blocks: {blocks:?}"
+    );
+}
+
+#[test]
 fn collect_matching_page_context_blocks_keeps_late_candidates_available_for_reranking() {
     let mut inspected = Vec::<String>::new();
     let candidate_summaries = vec![
@@ -280,6 +318,50 @@ fn collect_matching_page_context_blocks_keeps_searching_when_early_match_is_weak
                 _page(page_id, "Mandarin", "Generic body")
             } else if page_id == "page:late" {
                 _page(page_id, "Generic summary", "Reply in Mandarin Chinese.")
+            } else {
+                _page(page_id, "Generic summary", "Generic body")
+            })
+        },
+    );
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["page:late"]
+    );
+    assert_eq!(inspected.len(), 9);
+}
+
+#[test]
+fn collect_matching_page_context_blocks_planning_queries_still_search_late_candidates() {
+    let mut inspected = Vec::<String>::new();
+    let candidate_summaries = vec![
+        (_summary("page:1", "Page 1", "Generic summary"), 0),
+        (_summary("page:2", "Page 2", "Generic summary"), 0),
+        (_summary("page:3", "Page 3", "Generic summary"), 0),
+        (_summary("page:4", "Page 4", "Generic summary"), 0),
+        (_summary("page:5", "Page 5", "Generic summary"), 0),
+        (_summary("page:6", "Page 6", "Generic summary"), 0),
+        (_summary("page:7", "Page 7", "Generic summary"), 0),
+        (_summary("page:8", "Page 8", "Generic summary"), 0),
+        (_summary("page:late", "Late Page", "Generic summary"), 0),
+    ];
+
+    let blocks = collect_matching_page_context_blocks(
+        "plan my week with Mandarin practice",
+        1,
+        true,
+        candidate_summaries,
+        |page_id| {
+            inspected.push(page_id.to_string());
+            Some(if page_id == "page:late" {
+                _page(
+                    page_id,
+                    "Generic summary",
+                    "Mandarin practice is still active.",
+                )
             } else {
                 _page(page_id, "Generic summary", "Generic body")
             })
