@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/navigation/inherited_scope_page_wrapper.dart';
@@ -125,6 +126,72 @@ void main() {
 
     expect(constrainedRoute, findsOneWidget);
     expect(tester.getRect(constrainedRoute).width, lessThanOrEqualTo(1120));
+  });
+
+  testWidgets('web cloud backend download action does not throw unimplemented',
+      (tester) async {
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://web.secondloop.invalid/',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+
+    await tester.pumpWidget(
+      _buildSyncSettingsApp(
+        backend: CloudWebBackend(
+          chatClient: const UnsupportedCloudWebChatClient(),
+        ),
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Download'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Download'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('UnimplementedError'), findsNothing);
+    expect(find.textContaining('Download failed'), findsNothing);
+    expect(find.text('No new changes'), findsOneWidget);
+  });
+
+  testWidgets('web cloud backend upload action does not throw unimplemented',
+      (tester) async {
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://web.secondloop.invalid/',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+
+    await tester.pumpWidget(
+      _buildSyncSettingsApp(
+        backend: CloudWebBackend(
+          chatClient: const UnsupportedCloudWebChatClient(),
+        ),
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Upload'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Upload'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('UnimplementedError'), findsNothing);
+    expect(find.textContaining('Upload failed'), findsNothing);
+    expect(find.text('Uploaded 0 changes'), findsOneWidget);
   });
 }
 
