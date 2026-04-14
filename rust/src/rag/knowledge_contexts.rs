@@ -225,22 +225,23 @@ pub(super) fn collect_compiled_page_contexts(
         .union(&answer_excluded_page_ids)
         .cloned()
         .collect::<std::collections::HashSet<_>>();
-    let candidate_limit = top_k.max(1).saturating_mul(4).max(8);
+    let candidate_limit = if is_planning_query {
+        top_k.max(1).saturating_mul(4).max(8)
+    } else {
+        page_summaries.len().max(top_k.max(1))
+    };
     let mut candidate_summaries = page_summaries
         .into_iter()
         .filter(|page| {
             page.answer_policy.default_allowed || page.answer_policy.requires_temporal_framing
         })
         .filter(|page| page_type_allowed_for_conversation_scope(page.page_type, conversation_scope))
-        .filter_map(|summary| {
+        .map(|summary| {
             let lexical_score = lexical_page_match_score(
                 question,
                 &format!("{}\n{}", summary.title, summary.current_summary),
             );
-            if !is_planning_query && lexical_score == 0 {
-                return None;
-            }
-            Some((summary, lexical_score))
+            (summary, lexical_score)
         })
         .collect::<Vec<_>>();
     candidate_summaries.sort_by(|left, right| {

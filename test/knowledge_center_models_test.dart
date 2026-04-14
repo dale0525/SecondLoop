@@ -146,4 +146,55 @@ void main() {
     expect(data.needsAttention, isEmpty);
     expect(data.systemActivity.pagesNeedingReview, 0);
   });
+
+  test(
+      'buildKnowledgeCenterHomeData keeps audit-only pages out of needs attention',
+      () {
+    final summaries = <KnowledgePageSummary>[
+      const KnowledgePageSummary(
+        pageId: 'page:preferences',
+        pageType: KnowledgePageType.preferences,
+        title: 'Preferences',
+        currentSummary: 'Archived preference page.',
+        state: KnowledgePageState.archived,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: false,
+          requiresTemporalFraming: false,
+        ),
+        updatedAtMs: 10,
+        lastUsedAtMs: null,
+        sourceCount: 3,
+        conflictCount: 2,
+        humanCorrected: false,
+        tags: [],
+        primaryEvidenceIds: [],
+      ),
+      const KnowledgePageSummary(
+        pageId: 'page:topics:removed',
+        pageType: KnowledgePageType.topics,
+        title: 'Removed Topic',
+        currentSummary: 'Removed topic page.',
+        state: KnowledgePageState.removed,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: false,
+          requiresTemporalFraming: false,
+        ),
+        updatedAtMs: 11,
+        lastUsedAtMs: null,
+        sourceCount: 2,
+        conflictCount: 1,
+        humanCorrected: false,
+        tags: [],
+        primaryEvidenceIds: [],
+      ),
+    ];
+
+    final data = buildKnowledgeCenterHomeData(
+      summaries: summaries,
+      recentChangeRecords: const <KnowledgePageChangeRecord>[],
+    );
+
+    expect(data.needsAttention, isEmpty);
+    expect(data.systemActivity.pagesNeedingReview, 0);
+  });
 }

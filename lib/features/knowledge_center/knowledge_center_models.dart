@@ -71,9 +71,11 @@ KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
 
   final needsAttention = summaries
       .where((page) =>
-          page.state == KnowledgePageState.needsReview ||
-          page.state == KnowledgePageState.outdated ||
-          page.conflictCount > 0)
+          page.state != KnowledgePageState.archived &&
+          page.state != KnowledgePageState.removed &&
+          (page.state == KnowledgePageState.needsReview ||
+              page.state == KnowledgePageState.outdated ||
+              page.conflictCount > 0))
       .toList(growable: false)
     ..sort(_sortByLastUsedThenUpdated);
 
