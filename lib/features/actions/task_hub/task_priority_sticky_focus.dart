@@ -54,6 +54,8 @@ class TaskPriorityStickyFocusState {
           entry.isInProgress,
           entry.effectiveUrgency,
           entry.effectiveImportance,
+          entry.manualUrgencyNudgeScore,
+          entry.manualImportanceNudgeScore,
           entry.urgencyScore,
           entry.importanceScore,
           entry.dueDerivedUrgencyScore,
