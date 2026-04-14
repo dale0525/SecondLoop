@@ -277,6 +277,28 @@ void main() {
     );
   });
 
+  test('base primary focus keeps pre-move order when a task is manually raised',
+      () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'top', title: 'Top task', updatedAtMs: 30),
+        todo(
+          id: 'raised',
+          title: 'Raised task',
+          updatedAtMs: 10,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(snapshot.primaryFocus?.todo.id, 'raised');
+    expect(snapshot.basePrimaryFocus?.todo.id, 'top');
+    expect(snapshot.baseSnapshot.primaryFocus?.todo.id, 'top');
+  });
+
   test('legacy importance-only signal does not gain extra one-slot move bias',
       () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);

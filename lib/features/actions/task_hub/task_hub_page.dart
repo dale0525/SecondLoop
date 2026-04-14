@@ -519,6 +519,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
     TaskHubQuickAction action,
   ) {
     final todo = entry.todo;
+    final normalizedImportance = entry.normalizedManualImportanceNudgeScore;
+    final normalizedUrgency = entry.normalizedManualUrgencyNudgeScore;
     final userMoveDirection = taskPriorityUserMoveDirectionFromScores(
       todo.manualImportanceNudgeScore ?? 0,
       todo.manualUrgencyNudgeScore ?? 0,
@@ -531,14 +533,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
       TaskHubQuickAction.restoreAiOrder =>
         (todo.manualUrgencyNudgeScore ?? 0) == 0 &&
             (todo.manualImportanceNudgeScore ?? 0) == 0,
-      TaskHubQuickAction.increaseUrgency =>
-        (todo.manualUrgencyNudgeScore ?? 0) >= 1,
-      TaskHubQuickAction.decreaseUrgency =>
-        (todo.manualUrgencyNudgeScore ?? 0) <= -1,
-      TaskHubQuickAction.increaseImportance =>
-        (todo.manualImportanceNudgeScore ?? 0) >= 1,
-      TaskHubQuickAction.decreaseImportance =>
-        (todo.manualImportanceNudgeScore ?? 0) <= -1,
+      TaskHubQuickAction.increaseUrgency => normalizedUrgency >= 1,
+      TaskHubQuickAction.decreaseUrgency => normalizedUrgency <= -1,
+      TaskHubQuickAction.increaseImportance => normalizedImportance >= 1,
+      TaskHubQuickAction.decreaseImportance => normalizedImportance <= -1,
       _ => false,
     };
   }
@@ -617,13 +615,13 @@ class _TaskHubPageState extends State<TaskHubPage> {
         TaskHubQuickAction.restoreAiOrder =>
           context.t.actions.taskHub.nudges.restoredAiOrder,
         TaskHubQuickAction.increaseUrgency =>
-          context.t.actions.taskHub.nudges.movedUpABit,
+          context.t.actions.taskHub.nudges.urgencyRaised,
         TaskHubQuickAction.decreaseUrgency =>
-          context.t.actions.taskHub.nudges.movedDownABit,
+          context.t.actions.taskHub.nudges.urgencyLowered,
         TaskHubQuickAction.increaseImportance =>
-          context.t.actions.taskHub.nudges.movedUpABit,
+          context.t.actions.taskHub.nudges.importanceRaised,
         TaskHubQuickAction.decreaseImportance =>
-          context.t.actions.taskHub.nudges.movedDownABit,
+          context.t.actions.taskHub.nudges.importanceLowered,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
         TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
         TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,

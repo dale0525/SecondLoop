@@ -13,13 +13,13 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
         TaskHubQuickAction.restoreAiOrder =>
           context.t.actions.taskHub.actions.restoreAiOrder,
         TaskHubQuickAction.increaseUrgency =>
-          context.t.actions.taskHub.actions.moveUpABit,
+          context.t.actions.taskHub.actions.increaseUrgency,
         TaskHubQuickAction.decreaseUrgency =>
-          context.t.actions.taskHub.actions.moveDownABit,
+          context.t.actions.taskHub.actions.decreaseUrgency,
         TaskHubQuickAction.increaseImportance =>
-          context.t.actions.taskHub.actions.moveUpABit,
+          context.t.actions.taskHub.actions.increaseImportance,
         TaskHubQuickAction.decreaseImportance =>
-          context.t.actions.taskHub.actions.moveDownABit,
+          context.t.actions.taskHub.actions.decreaseImportance,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
         TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
         TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,

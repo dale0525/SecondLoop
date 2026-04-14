@@ -177,21 +177,37 @@ class TaskHubQuickActionsController {
     int urgencyDelta = 0,
   }) async {
     final previousManualSignal = _manualSignalFromTodo(todo);
+    final currentImportance = normalizeTaskPriorityManualImportanceScore(
+      todo.manualImportanceNudgeScore ?? 0,
+      todo.manualUrgencyNudgeScore ?? 0,
+    );
+    final currentUrgency = normalizeTaskPriorityManualUrgencyScore(
+      todo.manualImportanceNudgeScore ?? 0,
+      todo.manualUrgencyNudgeScore ?? 0,
+    );
+    final clearsUserMoveEncoding = hasTaskPriorityUserMoveEncoding(
+      todo.manualImportanceNudgeScore ?? 0,
+      todo.manualUrgencyNudgeScore ?? 0,
+    );
     final nextImportance = switch (importanceDelta) {
       > 0 => 1,
       < 0 => -1,
-      _ => todo.manualImportanceNudgeScore ?? 0,
+      _ => currentImportance,
     };
     final nextUrgency = switch (urgencyDelta) {
       > 0 => 1,
       < 0 => -1,
-      _ => todo.manualUrgencyNudgeScore ?? 0,
+      _ => currentUrgency,
     };
     final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
-      manualImportanceNudgeScore: importanceDelta != 0 ? nextImportance : null,
-      manualUrgencyNudgeScore: urgencyDelta != 0 ? nextUrgency : null,
+      manualImportanceNudgeScore: importanceDelta != 0
+          ? nextImportance
+          : (clearsUserMoveEncoding ? currentImportance : null),
+      manualUrgencyNudgeScore: urgencyDelta != 0
+          ? nextUrgency
+          : (clearsUserMoveEncoding ? currentUrgency : null),
     );
     if ((updated.manualImportanceNudgeScore ?? 0) ==
             (todo.manualImportanceNudgeScore ?? 0) &&

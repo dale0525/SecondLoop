@@ -321,6 +321,40 @@ void main() {
     expect(backend.current('t-urgency').manualUrgencyNudgeScore, 0);
   });
 
+  test('legacy urgency action clears move encoding before applying signal',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-legacy-over-move',
+      title: 'Task legacy over move',
+      updatedAtMs: 10,
+      manualImportanceNudgeScore: 2,
+      manualUrgencyNudgeScore: 2,
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.decreaseUrgency,
+    );
+
+    expect(ticket, isNotNull);
+    expect(backend.current('t-legacy-over-move').manualUrgencyNudgeScore, -1);
+    expect(backend.current('t-legacy-over-move').manualImportanceNudgeScore, 0);
+
+    await controller.undo(ticket!);
+    expect(backend.current('t-legacy-over-move').manualUrgencyNudgeScore, 2);
+    expect(
+      backend.current('t-legacy-over-move').manualImportanceNudgeScore,
+      2,
+    );
+  });
+
   test('increase importance only increments manual importance score', () async {
     SharedPreferences.setMockInitialValues({});
 

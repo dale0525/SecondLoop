@@ -360,12 +360,6 @@ class TaskPrioritySnapshot {
       enhancementSource != TaskPriorityEnhancementSource.none;
 
   TaskPriorityEntry? get basePrimaryFocus {
-    final focusTodoId = selectedFocusTodoId;
-    if (focusTodoId != null) {
-      for (final entry in baseOrderedActive) {
-        if (entry.todo.id == focusTodoId) return entry;
-      }
-    }
     return baseOrderedActive.isEmpty ? null : baseOrderedActive.first;
   }
 
@@ -383,8 +377,7 @@ class TaskPrioritySnapshot {
         decide: baseDecide,
         done: baseDone,
         orderedActive: baseOrderedActive,
-        selectedFocusTodoId:
-            baseOrderedActive.isEmpty ? null : baseOrderedActive.first.todo.id,
+        selectedFocusTodoId: null,
         computedAtLocal: computedAtLocal,
       );
 

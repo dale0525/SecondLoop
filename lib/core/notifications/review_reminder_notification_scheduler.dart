@@ -761,10 +761,12 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       TaskHubQuickAction.moveUpABit => taskHubActions.moveUpABit,
       TaskHubQuickAction.moveDownABit => taskHubActions.moveDownABit,
       TaskHubQuickAction.restoreAiOrder => taskHubActions.restoreAiOrder,
-      TaskHubQuickAction.increaseUrgency => taskHubActions.moveUpABit,
-      TaskHubQuickAction.decreaseUrgency => taskHubActions.moveDownABit,
-      TaskHubQuickAction.increaseImportance => taskHubActions.moveUpABit,
-      TaskHubQuickAction.decreaseImportance => taskHubActions.moveDownABit,
+      TaskHubQuickAction.increaseUrgency => taskHubActions.increaseUrgency,
+      TaskHubQuickAction.decreaseUrgency => taskHubActions.decreaseUrgency,
+      TaskHubQuickAction.increaseImportance =>
+        taskHubActions.increaseImportance,
+      TaskHubQuickAction.decreaseImportance =>
+        taskHubActions.decreaseImportance,
     };
   }
 
