@@ -69,6 +69,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
         .toList(growable: false);
     final mergeTargets = allSummaries
         .where((page) =>
+            knowledgePageSupportsMerge(detail.page.pageType) &&
             page.pageId != detail.page.pageId &&
             page.pageType == detail.page.pageType &&
             page.state != KnowledgePageState.archived &&
@@ -265,7 +266,9 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
         final page = detail.page;
         final answerAllowed = page.answerPolicy.defaultAllowed;
         final isRemoved = page.state == KnowledgePageState.removed;
-        final canMerge = data.mergeTargets.isNotEmpty && !isRemoved;
+        final canMerge = knowledgePageSupportsMerge(page.pageType) &&
+            data.mergeTargets.isNotEmpty &&
+            !isRemoved;
         final canToggleAnswerPolicy =
             page.state != KnowledgePageState.archived &&
                 page.state != KnowledgePageState.removed;

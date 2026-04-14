@@ -28,6 +28,16 @@ String knowledgePageTypeLabel(Translations t, KnowledgePageType type) {
   };
 }
 
+bool knowledgePageSupportsMerge(KnowledgePageType type) {
+  return switch (type) {
+    KnowledgePageType.people ||
+    KnowledgePageType.topics ||
+    KnowledgePageType.openQuestions =>
+      true,
+    _ => false,
+  };
+}
+
 String knowledgePageUpdatedLabel(Translations t, int updatedAtMs) {
   return formatMemoryUpdatedLabel(t, updatedAtMs: updatedAtMs);
 }

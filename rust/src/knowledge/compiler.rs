@@ -15,6 +15,15 @@ pub(crate) struct CompiledKnowledgePageRecord {
     pub claim_ids: Vec<String>,
 }
 
+#[derive(Clone, Debug)]
+struct PageSeed {
+    page_id: String,
+    page_type: KnowledgePageType,
+    title: String,
+    related_page_ids: Vec<String>,
+    tags: Vec<String>,
+}
+
 pub fn refresh_knowledge_pages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<KnowledgePage>> {
     let generated_documents = load_all_generated_documents(conn, key)?;
     let claims = build_claims_from_documents(&generated_documents);
@@ -131,18 +140,20 @@ fn compile_pages_from_claims(
     documents: &[ContentKnowledgeDocument],
     claims: &[KnowledgeClaim],
 ) -> Vec<CompiledKnowledgePageRecord> {
-    let mut by_page_type = BTreeMap::<KnowledgePageType, Vec<usize>>::new();
+    let mut by_page_id = BTreeMap::<String, (PageSeed, Vec<usize>)>::new();
     for (index, document) in documents.iter().enumerate() {
-        for page_type in page_types_for_document_id(&document.document_id) {
-            by_page_type.entry(page_type).or_default().push(index);
+        for seed in page_seeds_for_document(document) {
+            by_page_id
+                .entry(seed.page_id.clone())
+                .or_insert_with(|| (seed.clone(), Vec::new()))
+                .1
+                .push(index);
         }
     }
 
-    by_page_type
+    let mut compiled = by_page_id
         .into_iter()
-        .map(|(page_type, indexes)| {
-            let page_id = page_id_for_type(page_type);
-            let title = page_title(page_type);
+        .map(|(_, (seed, indexes))| {
             let mut body_lines = Vec::<String>::new();
             let mut summary_lines = Vec::<String>::new();
             let mut primary_evidence_ids = Vec::<String>::new();
@@ -163,7 +174,7 @@ fn compile_pages_from_claims(
                     .as_deref()
                     .unwrap_or(document.raw_text.as_str())
                     .trim();
-                if page_type == KnowledgePageType::ActiveThreads
+                if seed.page_type == KnowledgePageType::ActiveThreads
                     && document.document_id == "generated:pattern:active-task-focus"
                 {
                     body_lines.push(document.raw_text.trim().to_string());
@@ -184,7 +195,13 @@ fn compile_pages_from_claims(
                 claim_ids.extend(
                     claims
                         .iter()
-                        .filter(|claim| page_type_for_claim(claim) == Some(page_type))
+                        .filter(|claim| {
+                            claim_belongs_to_page(
+                                claim,
+                                seed.page_type,
+                                Some(seed.page_id.as_str()),
+                            )
+                        })
                         .filter(|claim| {
                             claim
                                 .source_ref_ids
@@ -195,22 +212,25 @@ fn compile_pages_from_claims(
                 );
             }
 
-            let related_page_ids = related_page_ids_for_type(page_type);
-            let tags = tags_for_page_type(page_type);
-            let mut page = KnowledgePage::new(page_id.clone(), page_type, title, latest_updated_at);
+            let mut page = KnowledgePage::new(
+                seed.page_id.clone(),
+                seed.page_type,
+                seed.title.clone(),
+                latest_updated_at,
+            );
             page.current_summary = summarize_lines(&summary_lines);
             page.current_body = body_lines.join("\n");
             page.updated_at_ms = latest_updated_at;
             page.source_count = source_count.max(1);
-            page.conflict_count = count_conflicts_for_page(&page_id, claims);
+            page.conflict_count = count_conflicts_for_page(&seed.page_id, claims);
             page.confidence_level = if source_document_ids.is_empty() {
                 0.0
             } else {
                 confidence_total / source_document_ids.len() as f64
             };
-            page.tags = tags;
+            page.tags = seed.tags.clone();
             page.primary_evidence_ids = dedup(primary_evidence_ids);
-            page.related_page_ids = related_page_ids;
+            page.related_page_ids = seed.related_page_ids.clone();
             if page.current_body.is_empty() {
                 page.current_body = page.current_summary.clone();
             }
@@ -220,7 +240,9 @@ fn compile_pages_from_claims(
                 claim_ids: dedup(claim_ids),
             }
         })
-        .collect()
+        .collect::<Vec<_>>();
+    compiled.extend(compile_open_question_pages(claims));
+    compiled
 }
 
 fn summarize_lines(lines: &[String]) -> String {
@@ -234,14 +256,21 @@ fn summarize_lines(lines: &[String]) -> String {
 }
 
 fn count_conflicts_for_page(page_id: &str, claims: &[KnowledgeClaim]) -> i64 {
-    let page_type = page_type_for_page_id(page_id);
+    let Some((page_type, facet_key)) = page_scope_for_page_id(page_id) else {
+        return 0;
+    };
     let mut by_facet = BTreeMap::<String, BTreeSet<String>>::new();
     for claim in claims {
         let Some(claim_page_type) = page_type_for_claim(claim) else {
             continue;
         };
-        if Some(claim_page_type) != page_type {
+        if claim_page_type != page_type {
             continue;
+        }
+        if let Some(expected_facet_key) = facet_key {
+            if claim.facet_key != expected_facet_key {
+                continue;
+            }
         }
         by_facet
             .entry(claim.facet_key.clone())
@@ -297,46 +326,13 @@ fn claim_type_label(claim_type: KnowledgeClaimType) -> &'static str {
     }
 }
 
-fn facet_key_for_document_id(document_id: &str) -> String {
+pub(crate) fn facet_key_for_document_id(document_id: &str) -> String {
     document_id
         .split(':')
         .next_back()
         .unwrap_or(document_id)
         .trim()
         .replace('-', "_")
-}
-
-fn page_types_for_document_id(document_id: &str) -> Vec<KnowledgePageType> {
-    if document_id.starts_with("generated:preference:") {
-        vec![KnowledgePageType::Preferences]
-    } else if document_id.starts_with("generated:profile:") {
-        vec![KnowledgePageType::AboutMe]
-    } else if document_id.starts_with("generated:event:") {
-        vec![KnowledgePageType::RecentEvents]
-    } else if document_id.starts_with("generated:pattern:active-task-focus") {
-        vec![
-            KnowledgePageType::CurrentFocus,
-            KnowledgePageType::ActiveThreads,
-        ]
-    } else if document_id.starts_with("generated:pattern:") {
-        vec![KnowledgePageType::Topics]
-    } else {
-        Vec::new()
-    }
-}
-
-fn page_type_for_page_id(page_id: &str) -> Option<KnowledgePageType> {
-    match page_id {
-        "page:about-me" => Some(KnowledgePageType::AboutMe),
-        "page:preferences" => Some(KnowledgePageType::Preferences),
-        "page:current-focus" => Some(KnowledgePageType::CurrentFocus),
-        "page:active-threads" => Some(KnowledgePageType::ActiveThreads),
-        "page:recent-events" => Some(KnowledgePageType::RecentEvents),
-        "page:people" => Some(KnowledgePageType::People),
-        "page:topics" => Some(KnowledgePageType::Topics),
-        "page:open-questions" => Some(KnowledgePageType::OpenQuestions),
-        _ => None,
-    }
 }
 
 fn page_id_for_type(page_type: KnowledgePageType) -> String {
@@ -351,6 +347,28 @@ fn page_id_for_type(page_type: KnowledgePageType) -> String {
         KnowledgePageType::OpenQuestions => "page:open-questions",
     }
     .to_string()
+}
+
+pub(crate) fn primary_page_ids_for_generated_document(document_id: &str) -> Vec<String> {
+    if document_id.starts_with("generated:preference:") {
+        vec![page_id_for_type(KnowledgePageType::Preferences)]
+    } else if document_id.starts_with("generated:profile:") {
+        vec![page_id_for_type(KnowledgePageType::AboutMe)]
+    } else if document_id.starts_with("generated:event:") {
+        vec![page_id_for_type(KnowledgePageType::RecentEvents)]
+    } else if document_id.starts_with("generated:pattern:active-task-focus") {
+        vec![
+            page_id_for_type(KnowledgePageType::CurrentFocus),
+            page_id_for_type(KnowledgePageType::ActiveThreads),
+        ]
+    } else if document_id.starts_with("generated:pattern:") {
+        vec![page_id_for_type_with_facet(
+            KnowledgePageType::Topics,
+            &facet_key_for_document_id(document_id),
+        )]
+    } else {
+        Vec::new()
+    }
 }
 
 fn page_title(page_type: KnowledgePageType) -> &'static str {
@@ -396,6 +414,264 @@ fn fallback_title_for_document(document: &ContentKnowledgeDocument) -> &str {
         .as_deref()
         .or(document.title.as_deref())
         .unwrap_or(document.document_id.as_str())
+}
+
+fn page_seeds_for_document(document: &ContentKnowledgeDocument) -> Vec<PageSeed> {
+    if document.document_id.starts_with("generated:preference:") {
+        vec![singleton_page_seed(KnowledgePageType::Preferences)]
+    } else if document.document_id.starts_with("generated:profile:") {
+        vec![singleton_page_seed(KnowledgePageType::AboutMe)]
+    } else if document.document_id.starts_with("generated:event:") {
+        vec![singleton_page_seed(KnowledgePageType::RecentEvents)]
+    } else if document
+        .document_id
+        .starts_with("generated:pattern:active-task-focus")
+    {
+        vec![
+            singleton_page_seed(KnowledgePageType::CurrentFocus),
+            singleton_page_seed(KnowledgePageType::ActiveThreads),
+        ]
+    } else if document.document_id.starts_with("generated:pattern:") {
+        let facet_key = facet_key_for_document_id(&document.document_id);
+        vec![faceted_page_seed(
+            KnowledgePageType::Topics,
+            &facet_key,
+            page_title_for_facet(
+                document.title.as_deref(),
+                fallback_title_for_document(document),
+                "Topic",
+                &facet_key,
+            ),
+        )]
+    } else {
+        Vec::new()
+    }
+}
+
+fn singleton_page_seed(page_type: KnowledgePageType) -> PageSeed {
+    PageSeed {
+        page_id: page_id_for_type(page_type),
+        page_type,
+        title: page_title(page_type).to_string(),
+        related_page_ids: related_page_ids_for_type(page_type),
+        tags: tags_for_page_type(page_type),
+    }
+}
+
+fn faceted_page_seed(page_type: KnowledgePageType, facet_key: &str, title: String) -> PageSeed {
+    PageSeed {
+        page_id: page_id_for_type_with_facet(page_type, facet_key),
+        page_type,
+        title,
+        related_page_ids: related_page_ids_for_type(page_type),
+        tags: tags_for_page_type(page_type),
+    }
+}
+
+fn page_id_for_type_with_facet(page_type: KnowledgePageType, facet_key: &str) -> String {
+    format!("{}:{facet_key}", page_id_for_type(page_type))
+}
+
+fn page_scope_for_page_id(page_id: &str) -> Option<(KnowledgePageType, Option<&str>)> {
+    match page_id {
+        "page:about-me" => Some((KnowledgePageType::AboutMe, None)),
+        "page:preferences" => Some((KnowledgePageType::Preferences, None)),
+        "page:current-focus" => Some((KnowledgePageType::CurrentFocus, None)),
+        "page:active-threads" => Some((KnowledgePageType::ActiveThreads, None)),
+        "page:recent-events" => Some((KnowledgePageType::RecentEvents, None)),
+        "page:people" => Some((KnowledgePageType::People, None)),
+        "page:topics" => Some((KnowledgePageType::Topics, None)),
+        "page:open-questions" => Some((KnowledgePageType::OpenQuestions, None)),
+        _ => {
+            if let Some(facet_key) = page_id.strip_prefix("page:topics:") {
+                Some((KnowledgePageType::Topics, Some(facet_key)))
+            } else if let Some(facet_key) = page_id.strip_prefix("page:people:") {
+                Some((KnowledgePageType::People, Some(facet_key)))
+            } else if let Some(facet_key) = page_id.strip_prefix("page:open-questions:") {
+                Some((KnowledgePageType::OpenQuestions, Some(facet_key)))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+fn claim_belongs_to_page(
+    claim: &KnowledgeClaim,
+    page_type: KnowledgePageType,
+    page_id: Option<&str>,
+) -> bool {
+    if page_type == KnowledgePageType::OpenQuestions {
+        return claim.status == KnowledgeClaimStatus::Disputed
+            && page_id
+                .map(|expected| expected == open_question_page_id_for_claim(claim))
+                .unwrap_or(true);
+    }
+    let Some(claim_page_type) = page_type_for_claim(claim) else {
+        return false;
+    };
+    if claim_page_type != page_type {
+        return false;
+    }
+    let Some(expected_page_id) = page_id else {
+        return true;
+    };
+    match page_scope_for_page_id(expected_page_id) {
+        Some((_, Some(facet_key))) => claim.facet_key == facet_key,
+        Some((_, None)) => true,
+        None => false,
+    }
+}
+
+fn compile_open_question_pages(claims: &[KnowledgeClaim]) -> Vec<CompiledKnowledgePageRecord> {
+    let mut by_page_id = BTreeMap::<String, Vec<&KnowledgeClaim>>::new();
+    for claim in claims
+        .iter()
+        .filter(|claim| claim.status == KnowledgeClaimStatus::Disputed)
+    {
+        by_page_id
+            .entry(open_question_page_id_for_claim(claim))
+            .or_default()
+            .push(claim);
+    }
+
+    by_page_id
+        .into_iter()
+        .map(|(page_id, grouped_claims)| {
+            let latest_updated_at = grouped_claims
+                .iter()
+                .map(|claim| claim.updated_at_ms)
+                .max()
+                .unwrap_or_default();
+            let summary_lines = grouped_claims
+                .iter()
+                .map(|claim| claim.statement.trim().to_string())
+                .collect::<Vec<_>>();
+            let claim_ids = grouped_claims
+                .iter()
+                .map(|claim| claim.claim_id.clone())
+                .collect::<Vec<_>>();
+            let source_document_ids = grouped_claims
+                .iter()
+                .flat_map(|claim| claim.source_ref_ids.iter().cloned())
+                .collect::<Vec<_>>();
+            let primary_evidence_ids = grouped_claims
+                .iter()
+                .flat_map(|claim| claim.source_ref_ids.iter().cloned())
+                .collect::<Vec<_>>();
+            let confidence_level = grouped_claims
+                .iter()
+                .map(|claim| claim.confidence)
+                .sum::<f64>()
+                / grouped_claims.len().max(1) as f64;
+            let mut page = KnowledgePage::new(
+                page_id.clone(),
+                KnowledgePageType::OpenQuestions,
+                open_question_title_for_claim(grouped_claims[0]),
+                latest_updated_at,
+            );
+            page.current_summary = summarize_lines(&summary_lines);
+            page.current_body = summary_lines
+                .iter()
+                .map(|line| format!("- {line}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            page.state = crate::knowledge::KnowledgePageState::NeedsReview;
+            page.answer_policy = crate::knowledge::state_default_answer_policy(page.state);
+            page.updated_at_ms = latest_updated_at;
+            page.source_count = grouped_claims
+                .iter()
+                .map(|claim| claim.source_count.max(1))
+                .sum::<i64>()
+                .max(1);
+            page.conflict_count = grouped_claims.len() as i64;
+            page.confidence_level = confidence_level;
+            page.tags = tags_for_page_type(KnowledgePageType::OpenQuestions);
+            page.primary_evidence_ids = dedup(primary_evidence_ids);
+            page.related_page_ids = related_page_ids_for_open_question(grouped_claims[0]);
+            CompiledKnowledgePageRecord {
+                page,
+                source_document_ids: dedup(source_document_ids),
+                claim_ids: dedup(claim_ids),
+            }
+        })
+        .collect()
+}
+
+fn open_question_page_id_for_claim(claim: &KnowledgeClaim) -> String {
+    format!(
+        "page:open-questions:{}:{}",
+        claim_type_label(claim.claim_type),
+        claim.facet_key
+    )
+}
+
+fn open_question_title_for_claim(claim: &KnowledgeClaim) -> String {
+    page_title_for_facet(None, &claim.statement, "Open Question", &claim.facet_key)
+}
+
+fn related_page_ids_for_open_question(claim: &KnowledgeClaim) -> Vec<String> {
+    match claim.claim_type {
+        KnowledgeClaimType::Preference => vec![page_id_for_type(KnowledgePageType::Preferences)],
+        KnowledgeClaimType::Identity => vec![page_id_for_type(KnowledgePageType::AboutMe)],
+        KnowledgeClaimType::Focus => vec![page_id_for_type(KnowledgePageType::CurrentFocus)],
+        KnowledgeClaimType::Thread => vec![page_id_for_type(KnowledgePageType::ActiveThreads)],
+        KnowledgeClaimType::Event => vec![page_id_for_type(KnowledgePageType::RecentEvents)],
+        KnowledgeClaimType::Relationship => {
+            vec![page_id_for_type_with_facet(
+                KnowledgePageType::People,
+                &claim.facet_key,
+            )]
+        }
+        KnowledgeClaimType::Topic => {
+            vec![page_id_for_type_with_facet(
+                KnowledgePageType::Topics,
+                &claim.facet_key,
+            )]
+        }
+        KnowledgeClaimType::Question => Vec::new(),
+    }
+}
+
+fn page_title_for_facet(
+    explicit_title: Option<&str>,
+    fallback_title: &str,
+    label_prefix: &str,
+    facet_key: &str,
+) -> String {
+    let explicit_title = explicit_title
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(fallback_title)
+        .trim();
+    if !explicit_title.is_empty() && explicit_title != fallback_title {
+        return explicit_title.to_string();
+    }
+    let humanized = humanize_facet_key(facet_key);
+    if humanized.is_empty() {
+        label_prefix.to_string()
+    } else {
+        format!("{label_prefix} {humanized}")
+    }
+}
+
+fn humanize_facet_key(facet_key: &str) -> String {
+    facet_key
+        .split('_')
+        .filter(|part| !part.trim().is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut word = first.to_uppercase().collect::<String>();
+                    word.push_str(chars.as_str());
+                    word
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn dedup(values: Vec<String>) -> Vec<String> {

@@ -110,13 +110,22 @@ fn refresh_knowledge_pages_paginates_generated_documents_past_first_512() {
         knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh knowledge pages");
     let topics = pages
         .iter()
-        .find(|page| page.page_type == knowledge::KnowledgePageType::Topics)
-        .expect("topics page");
+        .filter(|page| page.page_type == knowledge::KnowledgePageType::Topics)
+        .collect::<Vec<_>>();
 
-    assert_eq!(topics.page_id, "page:topics");
-    assert_eq!(topics.source_count, 513);
-    assert!(topics.current_body.contains("Topic signal 000"));
-    assert!(topics.current_body.contains("Topic signal 512"));
+    assert_eq!(topics.len(), 513);
+    assert!(topics
+        .iter()
+        .any(|page| page.page_id == "page:topics:topic_000"));
+    assert!(topics
+        .iter()
+        .any(|page| page.page_id == "page:topics:topic_512"));
+    assert!(topics
+        .iter()
+        .any(|page| page.current_body.contains("Topic signal 000")));
+    assert!(topics
+        .iter()
+        .any(|page| page.current_body.contains("Topic signal 512")));
 }
 
 #[test]
@@ -189,4 +198,46 @@ fn refresh_knowledge_pages_persists_thread_claims_for_active_threads_page() {
         )
         .expect("thread claim count");
     assert_eq!(thread_claim_count, 1);
+}
+
+#[test]
+fn refresh_knowledge_pages_compiles_disputed_claims_into_open_questions_pages() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [45u8; 32];
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:preference:response-language",
+        "User prefers responses in Chinese.",
+        34_567,
+    );
+    db::upsert_knowledge_memory_feedback(
+        &conn,
+        &key,
+        "generated:preference:response-language",
+        Some(knowledge::KnowledgeMemoryStatus::Confirmed),
+        false,
+        false,
+        true,
+        None,
+        None,
+    )
+    .expect("mark disputed");
+
+    let pages =
+        knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh knowledge pages");
+
+    let open_question = pages
+        .iter()
+        .find(|page| page.page_id == "page:open-questions:preference:response_language")
+        .expect("open question page");
+    assert_eq!(
+        open_question.page_type,
+        knowledge::KnowledgePageType::OpenQuestions
+    );
+    assert!(open_question.current_summary.contains("Chinese"));
+    assert!(open_question.current_body.contains("Chinese"));
+    assert!(!open_question.answer_policy.default_allowed);
 }

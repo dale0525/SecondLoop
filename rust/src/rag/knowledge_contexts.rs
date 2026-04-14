@@ -109,46 +109,62 @@ fn collect_compiled_page_contexts(
     }
 
     if out.is_empty() && is_planning_query {
-        let documents = knowledge::list_knowledge_documents_by_origin(
-            conn,
-            key,
-            knowledge::KnowledgeOriginType::Generated,
-            top_k.max(1),
-            0,
-        )?;
-        for document in documents {
-            if !document.memory_feedback.use_for_ask_ai || document.memory_feedback.is_deleted {
-                continue;
+        const PAGE_SIZE: usize = 64;
+        let mut offset = 0usize;
+        while out.len() < top_k.max(1) {
+            let documents = knowledge::list_knowledge_documents_by_origin(
+                conn,
+                key,
+                knowledge::KnowledgeOriginType::Generated,
+                PAGE_SIZE,
+                offset,
+            )?;
+            let fetched = documents.len();
+            if documents.is_empty() {
+                break;
             }
-            if generated_document_page_ids(&document.document_id)
+            for document in documents {
+                if !document.memory_feedback.use_for_ask_ai || document.memory_feedback.is_deleted {
+                    continue;
+                }
+                if knowledge::compiler::primary_page_ids_for_generated_document(
+                    &document.document_id,
+                )
                 .iter()
                 .any(|page_id| {
-                    muted_page_ids.contains(*page_id) || answer_excluded_page_ids.contains(*page_id)
-                })
-            {
-                continue;
+                    muted_page_ids.contains(page_id) || answer_excluded_page_ids.contains(page_id)
+                }) {
+                    continue;
+                }
+                let body = if document.raw_text.trim().is_empty() {
+                    document.normalized_text.trim()
+                } else {
+                    document.raw_text.trim()
+                };
+                if body.is_empty() {
+                    continue;
+                }
+                out.push(knowledge::KnowledgeContextBlock {
+                    document_id: document.document_id.clone(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: document.source_kind,
+                    role: document.role,
+                    anchors: document.anchors.clone(),
+                    score: FORCED_GENERATED_CONTEXT_SCORE,
+                    rendered_text: format!(
+                        "generated_memory=global\n[knowledge layer=document source=summary role=summary]\n{}",
+                        body
+                    ),
+                });
+                if out.len() >= top_k.max(1) {
+                    break;
+                }
             }
-            let body = if document.raw_text.trim().is_empty() {
-                document.normalized_text.trim()
-            } else {
-                document.raw_text.trim()
-            };
-            if body.is_empty() {
-                continue;
+            if fetched < PAGE_SIZE {
+                break;
             }
-            out.push(knowledge::KnowledgeContextBlock {
-                document_id: document.document_id.clone(),
-                unit_id: None,
-                unit_kind: None,
-                source_kind: document.source_kind,
-                role: document.role,
-                anchors: document.anchors.clone(),
-                score: FORCED_GENERATED_CONTEXT_SCORE,
-                rendered_text: format!(
-                    "generated_memory=global\n[knowledge layer=document source=summary role=summary]\n{}",
-                    body
-                ),
-            });
+            offset += fetched;
         }
     }
     Ok(out)
@@ -187,22 +203,6 @@ fn rebalance_planning_contexts(
     blocks.insert(replace_index, evidence);
 }
 
-fn generated_document_page_ids(document_id: &str) -> &'static [&'static str] {
-    if document_id.starts_with("generated:preference:") {
-        &["page:preferences"]
-    } else if document_id.starts_with("generated:profile:") {
-        &["page:about-me"]
-    } else if document_id.starts_with("generated:event:") {
-        &["page:recent-events"]
-    } else if document_id.starts_with("generated:pattern:active-task-focus") {
-        &["page:current-focus", "page:active-threads"]
-    } else if document_id.starts_with("generated:pattern:") {
-        &["page:topics"]
-    } else {
-        &[]
-    }
-}
-
 fn filter_disabled_generated_memory_blocks(
     conn: &Connection,
     _key: &[u8; 32],
@@ -224,9 +224,9 @@ fn filter_disabled_generated_memory_blocks(
             out.push(block);
             continue;
         }
-        if generated_document_page_ids(&block.document_id)
+        if knowledge::compiler::primary_page_ids_for_generated_document(&block.document_id)
             .iter()
-            .any(|page_id| answer_excluded_page_ids.contains(*page_id))
+            .any(|page_id| answer_excluded_page_ids.contains(page_id))
         {
             continue;
         }
@@ -592,6 +592,51 @@ mod tests {
                 .all(|block| block.document_id != "page:preferences"),
             "blocks: {blocks:?}"
         );
+    }
+
+    #[test]
+    fn collect_compiled_page_contexts_planning_fallback_paginates_until_it_finds_allowed_memory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [68u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+        insert_document(
+            &conn,
+            &key,
+            "generated:misc:muted-first",
+            "generated",
+            30,
+            Some(&conv.id),
+            "Muted planning signal.",
+        );
+        insert_document(
+            &conn,
+            &key,
+            "generated:misc:allowed-second",
+            "generated",
+            20,
+            Some(&conv.id),
+            "Allowed planning signal.",
+        );
+        crate::db::upsert_knowledge_memory_feedback(
+            &conn,
+            &key,
+            "generated:misc:muted-first",
+            Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+            false,
+            false,
+            false,
+            None,
+            None,
+        )
+        .expect("mute first generated memory");
+
+        let blocks = collect_compiled_page_contexts(&conn, &key, "plan my week", 1)
+            .expect("compiled page contexts");
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].document_id, "generated:misc:allowed-second");
     }
 
     #[test]

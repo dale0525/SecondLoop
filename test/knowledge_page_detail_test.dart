@@ -62,9 +62,9 @@ void main() {
   });
 
   testWidgets(
-      'KnowledgePageDetailPage shows merge action and merges into target',
+      'KnowledgePageDetailPage hides merge action for singleton page types',
       (tester) async {
-    final backend = _MergeableKnowledgePageDetailBackendStub();
+    final backend = _MutableKnowledgePageDetailBackendStub();
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -85,17 +85,44 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.more_horiz_rounded));
     await tester.pumpAndSettle();
+    expect(find.text('Merge Pages'), findsNothing);
+  });
+
+  testWidgets(
+      'KnowledgePageDetailPage shows merge action for mergeable topic pages and merges into target',
+      (tester) async {
+    final backend = _MergeableKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:topics:alpha'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
     expect(find.text('Merge Pages'), findsOneWidget);
 
     await tester.tap(find.text('Merge Pages'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Preferences (Archive)'), findsOneWidget);
-    await tester.tap(find.text('Preferences (Archive)'));
+    expect(find.text('Topic Beta'), findsOneWidget);
+    await tester.tap(find.text('Topic Beta'));
     await tester.pumpAndSettle();
 
-    expect(backend.mergedPageId, 'page:preferences');
-    expect(backend.mergedTargetPageId, 'page:preferences:archive');
+    expect(backend.mergedPageId, 'page:topics:alpha');
+    expect(backend.mergedTargetPageId, 'page:topics:beta');
   });
 
   testWidgets('KnowledgePageDetailPage shows final governance sections',
@@ -409,24 +436,6 @@ final class _MutableKnowledgePageDetailBackendStub extends TestAppBackend
   ) async =>
       const [
         KnowledgePageSummary(
-          pageId: 'page:preferences:archive',
-          pageType: KnowledgePageType.preferences,
-          title: 'Preferences (Archive)',
-          currentSummary: 'Historic preferences.',
-          state: KnowledgePageState.active,
-          answerPolicy: KnowledgeAnswerPolicy(
-            defaultAllowed: true,
-            requiresTemporalFraming: false,
-          ),
-          updatedAtMs: 1,
-          lastUsedAtMs: 1,
-          sourceCount: 1,
-          conflictCount: 0,
-          humanCorrected: false,
-          tags: [],
-          primaryEvidenceIds: [],
-        ),
-        KnowledgePageSummary(
           pageId: 'page:about-me',
           pageType: KnowledgePageType.aboutMe,
           title: 'About Me',
@@ -549,6 +558,65 @@ final class _MergeableKnowledgePageDetailBackendStub
   String? mergedTargetPageId;
 
   @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    return _buildDetail(
+      pageId: pageId,
+      pageType: KnowledgePageType.topics,
+      title: 'Topic Alpha',
+      summary: 'Current topic summary.',
+      body: 'Current topic summary.\nTopic alpha details.',
+      relatedPageIds: const ['page:about-me'],
+      tags: const ['topics'],
+    );
+  }
+
+  @override
+  Future<List<KnowledgePageSummary>> listKnowledgePageSummaries(
+    Uint8List key,
+  ) async =>
+      const [
+        KnowledgePageSummary(
+          pageId: 'page:topics:beta',
+          pageType: KnowledgePageType.topics,
+          title: 'Topic Beta',
+          currentSummary: 'Related topic summary.',
+          state: KnowledgePageState.active,
+          answerPolicy: KnowledgeAnswerPolicy(
+            defaultAllowed: true,
+            requiresTemporalFraming: false,
+          ),
+          updatedAtMs: 2,
+          lastUsedAtMs: 2,
+          sourceCount: 1,
+          conflictCount: 0,
+          humanCorrected: false,
+          tags: [],
+          primaryEvidenceIds: [],
+        ),
+        KnowledgePageSummary(
+          pageId: 'page:about-me',
+          pageType: KnowledgePageType.aboutMe,
+          title: 'About Me',
+          currentSummary: 'Stable identity details.',
+          state: KnowledgePageState.active,
+          answerPolicy: KnowledgeAnswerPolicy(
+            defaultAllowed: true,
+            requiresTemporalFraming: false,
+          ),
+          updatedAtMs: 1,
+          lastUsedAtMs: 1,
+          sourceCount: 1,
+          conflictCount: 0,
+          humanCorrected: false,
+          tags: [],
+          primaryEvidenceIds: [],
+        ),
+      ];
+
+  @override
   Future<KnowledgePageDetail> mergeKnowledgePageInto(
     Uint8List key, {
     required String pageId,
@@ -563,16 +631,22 @@ final class _MergeableKnowledgePageDetailBackendStub
 
 KnowledgePageDetail _buildDetail({
   required String pageId,
+  KnowledgePageType pageType = KnowledgePageType.preferences,
+  String title = 'Preferences',
+  String summary = 'Reply in Chinese by default.',
+  String body = 'Reply in Chinese by default.\nKeep answers concise.',
+  List<String> tags = const ['preferences'],
+  List<String> relatedPageIds = const ['page:about-me', 'page:recent-events'],
   KnowledgePageState state = KnowledgePageState.active,
   bool answerAllowed = true,
 }) {
   return KnowledgePageDetail(
     page: KnowledgePage(
-      pageId: 'page:preferences',
-      pageType: KnowledgePageType.preferences,
-      title: 'Preferences',
-      currentSummary: 'Reply in Chinese by default.',
-      currentBody: 'Reply in Chinese by default.\nKeep answers concise.',
+      pageId: pageId,
+      pageType: pageType,
+      title: title,
+      currentSummary: summary,
+      currentBody: body,
       state: state,
       answerPolicy: KnowledgeAnswerPolicy(
         defaultAllowed: answerAllowed,
@@ -585,16 +659,16 @@ KnowledgePageDetail _buildDetail({
       sourceCount: 2,
       conflictCount: 1,
       humanCorrected: true,
-      tags: const ['preferences'],
+      tags: tags,
       primaryEvidenceIds: const ['doc:language', 'doc:style'],
-      relatedPageIds: const ['page:about-me', 'page:recent-events'],
+      relatedPageIds: relatedPageIds,
     ),
     sourceDocumentIds: const ['doc:language', 'doc:style'],
     claimIds: const ['claim:language', 'claim:style'],
-    history: const [
+    history: [
       KnowledgePageChangeRecord(
         changeId: 'change:1',
-        pageId: 'page:preferences',
+        pageId: pageId,
         changeType: KnowledgePageChangeType.corrected,
         actor: 'user',
         reason: 'Manual correction applied.',
@@ -605,10 +679,10 @@ KnowledgePageDetail _buildDetail({
     versionSnapshots: [
       KnowledgePageVersionSnapshot(
         versionId: 'version:1',
-        pageId: 'page:preferences',
-        title: 'Reply Preferences',
-        summary: 'Reply in Chinese by default.',
-        body: 'Reply in Chinese by default.\nKeep answers concise.',
+        pageId: pageId,
+        title: title,
+        summary: summary,
+        body: body,
         state: state,
         answerPolicy: KnowledgeAnswerPolicy(
           defaultAllowed: answerAllowed,
