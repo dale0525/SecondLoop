@@ -150,3 +150,43 @@ fn refresh_knowledge_pages_compiles_active_threads_page_from_active_task_pattern
     assert!(active_threads.current_body.contains("Draft roadmap"));
     assert!(active_threads.current_body.contains("Review launch notes"));
 }
+
+#[test]
+fn refresh_knowledge_pages_persists_thread_claims_for_active_threads_page() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [44u8; 32];
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:pattern:active-task-focus",
+        "User is actively working across these task threads: Draft roadmap [in_progress]. Review launch notes [open].",
+        23_456,
+    );
+
+    knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh knowledge pages");
+
+    let active_threads = db::get_knowledge_page_detail(&conn, &key, "page:active-threads")
+        .expect("load active threads detail")
+        .expect("active threads detail");
+    assert!(
+        active_threads
+            .claim_ids
+            .iter()
+            .any(|claim_id| claim_id.starts_with("claim:thread:")),
+        "claim ids: {:?}",
+        active_threads.claim_ids
+    );
+
+    let thread_claim_count: i64 = conn
+        .query_row(
+            r#"SELECT COUNT(*)
+               FROM knowledge_claims
+               WHERE claim_type = 'thread'"#,
+            [],
+            |row| row.get(0),
+        )
+        .expect("thread claim count");
+    assert_eq!(thread_claim_count, 1);
+}

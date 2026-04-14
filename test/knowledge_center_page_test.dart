@@ -7,6 +7,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/knowledge_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/knowledge_center/knowledge_center_page.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/knowledge/history.dart';
 import 'package:secondloop/src/rust/knowledge/lint.dart';
 import 'package:secondloop/src/rust/knowledge/pages.dart';
@@ -362,6 +363,60 @@ void main() {
 
     expect(find.text('Topic Alpha'), findsOneWidget);
     expect(find.text('Topic Beta'), findsOneWidget);
+  });
+
+  testWidgets('KnowledgeCenterPage localizes portal sections in zh_CN',
+      (tester) async {
+    LocaleSettings.setLocale(AppLocale.zhCn);
+    addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
+
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _KnowledgeCenterBackendStub(
+      summaries: [
+        _summary(
+          pageId: 'page:about-me',
+          title: 'About Me',
+          pageType: KnowledgePageType.aboutMe,
+          state: KnowledgePageState.active,
+          updatedAtMs: nowMs,
+          lastUsedAtMs: nowMs,
+        ),
+      ],
+      details: {
+        'page:about-me': _detail(
+          pageId: 'page:about-me',
+          title: 'About Me',
+          pageType: KnowledgePageType.aboutMe,
+          state: KnowledgePageState.active,
+          summary: 'Stable identity details.',
+          updatedAtMs: nowMs,
+        ),
+      },
+      recentChanges: const [],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 5)),
+              lock: () {},
+              child: const KnowledgeCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前的我'), findsOneWidget);
+    expect(find.text('需要你处理'), findsOneWidget);
+    expect(find.text('我的 Wiki'), findsOneWidget);
+    expect(find.text('系统活动'), findsOneWidget);
+    expect(find.text('关于我'), findsWidgets);
   });
 }
 

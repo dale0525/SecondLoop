@@ -57,21 +57,11 @@ fn load_all_generated_documents(
 fn build_claims_from_documents(documents: &[ContentKnowledgeDocument]) -> Vec<KnowledgeClaim> {
     documents
         .iter()
-        .map(|document| {
+        .flat_map(|document| {
             let statement = document
                 .summary
                 .clone()
                 .unwrap_or_else(|| document.raw_text.clone());
-            let claim_type = claim_type_for_document_id(&document.document_id);
-            let time_scope = match claim_type {
-                KnowledgeClaimType::Preference | KnowledgeClaimType::Identity => {
-                    KnowledgeClaimTimeScope::Stable
-                }
-                KnowledgeClaimType::Event | KnowledgeClaimType::Thread => {
-                    KnowledgeClaimTimeScope::Recent
-                }
-                _ => KnowledgeClaimTimeScope::Current,
-            };
             let status = if document.memory_feedback.is_deleted {
                 KnowledgeClaimStatus::Dismissed
             } else if document.memory_feedback.marked_inaccurate {
@@ -82,33 +72,46 @@ fn build_claims_from_documents(documents: &[ContentKnowledgeDocument]) -> Vec<Kn
             let answer_allowed = document.memory_feedback.use_for_ask_ai
                 && !document.memory_feedback.is_deleted
                 && !document.memory_feedback.marked_inaccurate;
+            claim_types_for_document_id(&document.document_id)
+                .into_iter()
+                .map(move |claim_type| {
+                    let time_scope = match claim_type {
+                        KnowledgeClaimType::Preference | KnowledgeClaimType::Identity => {
+                            KnowledgeClaimTimeScope::Stable
+                        }
+                        KnowledgeClaimType::Event | KnowledgeClaimType::Thread => {
+                            KnowledgeClaimTimeScope::Recent
+                        }
+                        _ => KnowledgeClaimTimeScope::Current,
+                    };
 
-            KnowledgeClaim {
-                claim_id: format!("claim:{}", document.document_id),
-                subject_id: "user:self".to_string(),
-                claim_type,
-                facet_key: facet_key_for_document_id(&document.document_id),
-                statement: statement.trim().to_string(),
-                normalized_value: document.summary.clone(),
-                time_scope,
-                valid_from_ms: None,
-                valid_until_ms: None,
-                confidence: document.quality_score,
-                source_ref_ids: source_refs_for_document(document),
-                source_count: document
-                    .memory_display
-                    .as_ref()
-                    .map(|value| value.source_count)
-                    .unwrap_or(1),
-                conflict_with_claim_ids: Vec::new(),
-                status,
-                human_confirmed: document.memory_feedback.status.is_some(),
-                human_corrected: document.memory_feedback.corrected_title.is_some()
-                    || document.memory_feedback.corrected_summary.is_some(),
-                answer_allowed,
-                created_at_ms: document.created_at_ms,
-                updated_at_ms: document.updated_at_ms,
-            }
+                    KnowledgeClaim {
+                        claim_id: claim_id_for_document(&document.document_id, claim_type),
+                        subject_id: "user:self".to_string(),
+                        claim_type,
+                        facet_key: facet_key_for_document_id(&document.document_id),
+                        statement: statement.trim().to_string(),
+                        normalized_value: document.summary.clone(),
+                        time_scope,
+                        valid_from_ms: None,
+                        valid_until_ms: None,
+                        confidence: document.quality_score,
+                        source_ref_ids: source_refs_for_document(document),
+                        source_count: document
+                            .memory_display
+                            .as_ref()
+                            .map(|value| value.source_count)
+                            .unwrap_or(1),
+                        conflict_with_claim_ids: Vec::new(),
+                        status,
+                        human_confirmed: document.memory_feedback.status.is_some(),
+                        human_corrected: document.memory_feedback.corrected_title.is_some()
+                            || document.memory_feedback.corrected_summary.is_some(),
+                        answer_allowed,
+                        created_at_ms: document.created_at_ms,
+                        updated_at_ms: document.updated_at_ms,
+                    }
+                })
         })
         .collect()
 }
@@ -178,7 +181,18 @@ fn compile_pages_from_claims(
                     .unwrap_or(1)
                     .max(1);
                 confidence_total += document.quality_score;
-                claim_ids.push(format!("claim:{}", document.document_id));
+                claim_ids.extend(
+                    claims
+                        .iter()
+                        .filter(|claim| page_type_for_claim(claim) == Some(page_type))
+                        .filter(|claim| {
+                            claim
+                                .source_ref_ids
+                                .iter()
+                                .any(|source_ref| source_ref == &document.document_id)
+                        })
+                        .map(|claim| claim.claim_id.clone()),
+                );
             }
 
             let related_page_ids = related_page_ids_for_type(page_type);
@@ -250,19 +264,36 @@ fn page_type_for_claim(claim: &KnowledgeClaim) -> Option<KnowledgePageType> {
     }
 }
 
-fn claim_type_for_document_id(document_id: &str) -> KnowledgeClaimType {
+fn claim_types_for_document_id(document_id: &str) -> Vec<KnowledgeClaimType> {
     if document_id.starts_with("generated:preference:") {
-        KnowledgeClaimType::Preference
+        vec![KnowledgeClaimType::Preference]
     } else if document_id.starts_with("generated:profile:") {
-        KnowledgeClaimType::Identity
+        vec![KnowledgeClaimType::Identity]
     } else if document_id.starts_with("generated:event:") {
-        KnowledgeClaimType::Event
+        vec![KnowledgeClaimType::Event]
     } else if document_id.starts_with("generated:pattern:active-task-focus") {
-        KnowledgeClaimType::Focus
+        vec![KnowledgeClaimType::Focus, KnowledgeClaimType::Thread]
     } else if document_id.starts_with("generated:pattern:") {
-        KnowledgeClaimType::Topic
+        vec![KnowledgeClaimType::Topic]
     } else {
-        KnowledgeClaimType::Topic
+        vec![KnowledgeClaimType::Topic]
+    }
+}
+
+fn claim_id_for_document(document_id: &str, claim_type: KnowledgeClaimType) -> String {
+    format!("claim:{}:{document_id}", claim_type_label(claim_type))
+}
+
+fn claim_type_label(claim_type: KnowledgeClaimType) -> &'static str {
+    match claim_type {
+        KnowledgeClaimType::Identity => "identity",
+        KnowledgeClaimType::Preference => "preference",
+        KnowledgeClaimType::Focus => "focus",
+        KnowledgeClaimType::Thread => "thread",
+        KnowledgeClaimType::Event => "event",
+        KnowledgeClaimType::Relationship => "relationship",
+        KnowledgeClaimType::Topic => "topic",
+        KnowledgeClaimType::Question => "question",
     }
 }
 
