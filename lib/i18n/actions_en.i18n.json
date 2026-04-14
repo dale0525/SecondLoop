@@ -143,6 +143,7 @@
     "title": "Task hub",
     "focusSection": "Primary Focus",
     "focusHint": "Keep the best next task obvious.",
+    "openSection": "All Open Tasks",
     "scheduledSection": "Next Up",
     "reviewSection": "Needs confirmation",
     "unscheduledSection": "Backlog",
@@ -154,7 +155,7 @@
     "openFocus": "Open focus task",
     "wrapUpTitle": "Wrap up",
     "wrapUpHeadline": "No urgent task right now",
-    "wrapUpSubtitle": "Next up $upcoming • Backlog $backlog • $done done",
+    "wrapUpSubtitle": "Open $upcoming • $done done",
     "noTasksSubtitle": "You are clear for now. Keep the hub nearby for planning.",
     "overdueLabel": "Overdue",
     "dueTodayLabel": "Due today",
@@ -170,9 +171,19 @@
     "aiInsightLive": "Live AI insight",
     "aiInsightShared": "Shared AI insight",
     "aiInsightCached": "Cached AI insight",
-    "priorityPending": "Re-evaluating",
-    "priorityLocalFallback": "Using local priority for now.",
+    "priorityPending": "AI calibrating",
+    "priorityLocalFallback": "Using your local move for now.",
     "aiUpgradeHint": "Connect Cloud or BYOK to unlock smarter priority suggestions.",
+    "relativeTime": {
+      "noDeadline": "No deadline",
+      "today": "Today",
+      "inHours": "In $count h",
+      "inDays": "In $count d",
+      "inWeeks": "In $count w",
+      "overdueHours": "Overdue by $count h",
+      "overdueDays": "Overdue by $count d",
+      "overdueWeeks": "Overdue by $count w"
+    },
     "snackActionApplied": "$action \"$title\"",
     "actions": {
       "doNow": "Do now",
@@ -188,6 +199,10 @@
       "later": "Later",
       "start": "Start",
       "moveToInbox": "Move to inbox",
+      "adjust": "Adjust",
+      "moveUpABit": "Move Up a Bit",
+      "moveDownABit": "Move Down a Bit",
+      "restoreAiOrder": "Restore AI Order",
       "increaseUrgency": "More urgent",
       "decreaseUrgency": "Less urgent",
       "increaseImportance": "More important",
@@ -198,10 +213,20 @@
       "more": "More"
     },
     "nudges": {
+      "movedUpABit": "Moved up a bit",
+      "movedDownABit": "Moved down a bit",
+      "restoredAiOrder": "Restored AI order",
       "urgencyRaised": "Urgency raised",
       "urgencyLowered": "Urgency lowered",
       "importanceRaised": "Importance raised",
       "importanceLowered": "Importance lowered"
+    },
+    "reasons": {
+      "aiPromoted": "AI promoted",
+      "manuallyMovedUp": "Manually moved up",
+      "manuallyMovedDown": "Manually moved down",
+      "inProgress": "In progress",
+      "reviewDue": "Review due"
     }
   },
   "calendar": {

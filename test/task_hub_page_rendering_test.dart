@@ -14,7 +14,7 @@ void main() {
     clearTaskHubSharedAiCacheForTest();
   });
 
-  testWidgets('task hub shows primary focus plus remaining sections',
+  testWidgets('task hub shows focus plus unified open-tasks section',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final now = DateTime.now();
@@ -85,12 +85,20 @@ void main() {
     expect(find.byKey(const ValueKey('task_hub_page')), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_section_focus')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_section_open')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_section_upcoming')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_page_section_backlog')),
+        findsNothing);
     expect(
         find.byKey(const ValueKey('task_hub_page_item_focus')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('task_hub_checklist_progress_focus')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('task_hub_relative_time_focus')),
+        findsOneWidget);
     expect(find.text('1/2'), findsOneWidget);
     expect(find.text('Draft roadmap'), findsOneWidget);
     await tester.scrollUntilVisible(

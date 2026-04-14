@@ -214,6 +214,166 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'due-today');
   });
 
+  test('pure move-up intent only advances one slot after ai rerank', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'top', title: 'Top task', updatedAtMs: 30),
+        todo(id: 'middle', title: 'Middle task', updatedAtMs: 20),
+        todo(
+          id: 'raised',
+          title: 'Raised task',
+          updatedAtMs: 10,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
+        ),
+      ],
+      nowLocal: nowLocal,
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'top',
+            semanticAdjustment: 40,
+            reason: 'AI keeps this first.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['top', 'raised', 'middle'],
+    );
+  });
+
+  test('pure move-up intent cannot jump past a hard guard', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'guarded',
+          title: 'Due today',
+          updatedAtMs: 30,
+          dueAtMs: nowLocal
+              .add(const Duration(hours: 2))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'raised',
+          title: 'Raised task',
+          updatedAtMs: 10,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['guarded', 'raised'],
+    );
+  });
+
+  test('base primary focus keeps pre-move order when a task is manually raised',
+      () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'top', title: 'Top task', updatedAtMs: 30),
+        todo(
+          id: 'raised',
+          title: 'Raised task',
+          updatedAtMs: 10,
+          manualImportanceNudgeScore: 2,
+          manualUrgencyNudgeScore: 2,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(snapshot.primaryFocus?.todo.id, 'raised');
+    expect(snapshot.basePrimaryFocus?.todo.id, 'top');
+    expect(snapshot.baseSnapshot.primaryFocus?.todo.id, 'top');
+  });
+
+  test('legacy importance-only signal does not gain extra one-slot move bias',
+      () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'scheduled-top',
+          title: 'Scheduled top',
+          updatedAtMs: 30,
+          dueAtMs: nowLocal
+              .add(const Duration(days: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'legacy-important',
+          title: 'Legacy importance-only task',
+          updatedAtMs: 20,
+          manualImportanceNudgeScore: 1,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['scheduled-top', 'legacy-important'],
+    );
+  });
+
+  test('legacy large urgency signal keeps score semantics', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'neutral-top', title: 'Neutral top', updatedAtMs: 30),
+        todo(
+          id: 'legacy-up',
+          title: 'Legacy urgency +2',
+          updatedAtMs: 20,
+          manualUrgencyNudgeScore: 2,
+        ),
+        todo(id: 'neutral-bottom', title: 'Neutral bottom', updatedAtMs: 10),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['legacy-up', 'neutral-top', 'neutral-bottom'],
+    );
+  });
+
+  test('legacy urgency +1 keeps score semantics instead of one-slot move', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'neutral-top', title: 'Neutral top', updatedAtMs: 40),
+        todo(id: 'neutral-mid', title: 'Neutral mid', updatedAtMs: 30),
+        todo(id: 'neutral-low', title: 'Neutral low', updatedAtMs: 20),
+        todo(
+          id: 'legacy-up',
+          title: 'Legacy urgency +1',
+          updatedAtMs: 10,
+          manualUrgencyNudgeScore: 1,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(
+      snapshot.activeEntries.map((entry) => entry.todo.id).toList(),
+      <String>['legacy-up', 'neutral-top', 'neutral-mid', 'neutral-low'],
+    );
+  });
+
   test('negative urgency score sinks task below neutral peer', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -345,8 +505,7 @@ void main() {
     expect(snapshot.source, TaskPrioritySnapshotSource.hybrid);
   });
 
-  test(
-      'manual urgency down yields to user-raised next-up work despite overdue date pressure',
+  test('legacy mixed signals keep score semantics without extra move-down bias',
       () {
     final nowLocal = DateTime(2026, 4, 8, 12, 0);
     final snapshot = buildTaskPrioritySnapshot(

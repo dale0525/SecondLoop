@@ -758,6 +758,9 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       TaskHubQuickAction.reopen => taskHubActions.reopen,
       TaskHubQuickAction.redo => taskHubActions.redo,
       TaskHubQuickAction.dismiss => t.common.actions.delete,
+      TaskHubQuickAction.moveUpABit => taskHubActions.moveUpABit,
+      TaskHubQuickAction.moveDownABit => taskHubActions.moveDownABit,
+      TaskHubQuickAction.restoreAiOrder => taskHubActions.restoreAiOrder,
       TaskHubQuickAction.increaseUrgency => taskHubActions.increaseUrgency,
       TaskHubQuickAction.decreaseUrgency => taskHubActions.decreaseUrgency,
       TaskHubQuickAction.increaseImportance =>

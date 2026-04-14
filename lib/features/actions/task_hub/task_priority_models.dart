@@ -2,7 +2,15 @@ import '../../../src/rust/db.dart';
 
 import 'task_priority_guards.dart';
 
+const int taskPriorityUserMoveEncodedMarker = 2;
+
 enum TaskPriorityNudgeDirection {
+  none,
+  up,
+  down,
+}
+
+enum TaskPriorityUserMoveDirection {
   none,
   up,
   down,
@@ -67,6 +75,56 @@ enum TaskPriorityDisplayBucket {
   backlog,
 }
 
+TaskPriorityUserMoveDirection taskPriorityUserMoveDirectionFromScores(
+  int manualImportanceNudgeScore,
+  int manualUrgencyNudgeScore,
+) {
+  if (manualImportanceNudgeScore == taskPriorityUserMoveEncodedMarker &&
+      manualUrgencyNudgeScore == taskPriorityUserMoveEncodedMarker) {
+    return TaskPriorityUserMoveDirection.up;
+  }
+  if (manualImportanceNudgeScore == -taskPriorityUserMoveEncodedMarker &&
+      manualUrgencyNudgeScore == -taskPriorityUserMoveEncodedMarker) {
+    return TaskPriorityUserMoveDirection.down;
+  }
+  return TaskPriorityUserMoveDirection.none;
+}
+
+bool hasTaskPriorityUserMoveEncoding(
+  int manualImportanceNudgeScore,
+  int manualUrgencyNudgeScore,
+) {
+  return taskPriorityUserMoveDirectionFromScores(
+        manualImportanceNudgeScore,
+        manualUrgencyNudgeScore,
+      ) !=
+      TaskPriorityUserMoveDirection.none;
+}
+
+int normalizeTaskPriorityManualImportanceScore(
+  int manualImportanceNudgeScore,
+  int manualUrgencyNudgeScore,
+) {
+  return hasTaskPriorityUserMoveEncoding(
+    manualImportanceNudgeScore,
+    manualUrgencyNudgeScore,
+  )
+      ? 0
+      : manualImportanceNudgeScore;
+}
+
+int normalizeTaskPriorityManualUrgencyScore(
+  int manualImportanceNudgeScore,
+  int manualUrgencyNudgeScore,
+) {
+  return hasTaskPriorityUserMoveEncoding(
+    manualImportanceNudgeScore,
+    manualUrgencyNudgeScore,
+  )
+      ? 0
+      : manualUrgencyNudgeScore;
+}
+
 class TaskPriorityEntry {
   const TaskPriorityEntry({
     required this.todo,
@@ -114,6 +172,18 @@ class TaskPriorityEntry {
   final int manualUrgencyNudgeScore;
   final int dueDerivedUrgencyScore;
 
+  int get normalizedManualImportanceNudgeScore =>
+      normalizeTaskPriorityManualImportanceScore(
+        manualImportanceNudgeScore,
+        manualUrgencyNudgeScore,
+      );
+
+  int get normalizedManualUrgencyNudgeScore =>
+      normalizeTaskPriorityManualUrgencyScore(
+        manualImportanceNudgeScore,
+        manualUrgencyNudgeScore,
+      );
+
   bool get suppressesAutomaticUrgencyBoost =>
       manualUrgencyNudgeDirection == TaskPriorityNudgeDirection.down;
 
@@ -121,22 +191,30 @@ class TaskPriorityEntry {
 
   int get effectiveUrgency =>
       urgencyScore +
-      manualUrgencyNudgeScore +
+      normalizedManualUrgencyNudgeScore +
       (suppressesAutomaticUrgencyBoost ? 0 : dueDerivedUrgencyScore);
 
-  int get effectiveImportance => importanceScore + manualImportanceNudgeScore;
+  int get effectiveImportance =>
+      importanceScore + normalizedManualImportanceNudgeScore;
 
-  bool get hasManualImportanceNudge => manualImportanceNudgeScore != 0;
+  bool get hasManualImportanceNudge =>
+      normalizedManualImportanceNudgeScore != 0;
 
-  bool get hasManualUrgencyNudge => manualUrgencyNudgeScore != 0;
+  bool get hasManualUrgencyNudge => normalizedManualUrgencyNudgeScore != 0;
 
   bool get hasManualNudges => hasManualImportanceNudge || hasManualUrgencyNudge;
 
   TaskPriorityNudgeDirection get manualImportanceNudgeDirection =>
-      _directionFromScore(manualImportanceNudgeScore);
+      _directionFromScore(normalizedManualImportanceNudgeScore);
 
   TaskPriorityNudgeDirection get manualUrgencyNudgeDirection =>
-      _directionFromScore(manualUrgencyNudgeScore);
+      _directionFromScore(normalizedManualUrgencyNudgeScore);
+
+  TaskPriorityUserMoveDirection get userMoveDirection =>
+      taskPriorityUserMoveDirectionFromScores(
+        manualImportanceNudgeScore,
+        manualUrgencyNudgeScore,
+      );
 
   bool get isExplicitlyImportant =>
       manualImportanceNudgeDirection == TaskPriorityNudgeDirection.up;
@@ -282,12 +360,6 @@ class TaskPrioritySnapshot {
       enhancementSource != TaskPriorityEnhancementSource.none;
 
   TaskPriorityEntry? get basePrimaryFocus {
-    final focusTodoId = selectedFocusTodoId;
-    if (focusTodoId != null) {
-      for (final entry in baseOrderedActive) {
-        if (entry.todo.id == focusTodoId) return entry;
-      }
-    }
     return baseOrderedActive.isEmpty ? null : baseOrderedActive.first;
   }
 
@@ -305,8 +377,7 @@ class TaskPrioritySnapshot {
         decide: baseDecide,
         done: baseDone,
         orderedActive: baseOrderedActive,
-        selectedFocusTodoId:
-            baseOrderedActive.isEmpty ? null : baseOrderedActive.first.todo.id,
+        selectedFocusTodoId: null,
         computedAtLocal: computedAtLocal,
       );
 
@@ -321,6 +392,8 @@ class TaskPrioritySnapshot {
   }
 
   List<TaskPriorityEntry> get activeEntries => orderedActive;
+
+  List<TaskPriorityEntry> get openEntries => remainingActiveEntries;
 
   List<TaskPriorityEntry> get remainingActiveEntries {
     final primaryTodoId = primaryFocus?.todo.id;
@@ -351,6 +424,8 @@ class TaskPrioritySnapshot {
   int get upcomingDisplayCount => upcomingDisplayEntries.length;
 
   int get backlogDisplayCount => backlogEntries.length;
+
+  int get openDisplayCount => openEntries.length;
 
   List<TaskPriorityEntry> get allEntries => <TaskPriorityEntry>[
         ...orderedActive,

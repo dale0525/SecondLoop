@@ -6,6 +6,12 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
         TaskHubQuickAction.tomorrow =>
           context.t.actions.taskHub.actions.tomorrow,
         TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
+        TaskHubQuickAction.moveUpABit =>
+          context.t.actions.taskHub.actions.moveUpABit,
+        TaskHubQuickAction.moveDownABit =>
+          context.t.actions.taskHub.actions.moveDownABit,
+        TaskHubQuickAction.restoreAiOrder =>
+          context.t.actions.taskHub.actions.restoreAiOrder,
         TaskHubQuickAction.increaseUrgency =>
           context.t.actions.taskHub.actions.increaseUrgency,
         TaskHubQuickAction.decreaseUrgency =>

@@ -13,7 +13,7 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Task hub banner collapses on tab switch back to chat',
+  testWidgets('Task hub compact card stays preview-free across tab switches',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.binding.setSurfaceSize(const Size(900, 720));
@@ -60,10 +60,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
     expect(
-        find.byKey(const ValueKey('task_hub_banner_view_all')), findsOneWidget);
+      find.byKey(const ValueKey('task_hub_banner_view_all')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_open_task_center')), findsOneWidget);
 
     final rail = find.byType(NavigationRail);
     await tester.tap(
@@ -78,7 +80,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-        find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
+      find.byKey(const ValueKey('task_hub_banner_view_all')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_open_task_center')), findsOneWidget);
   });
 }
 

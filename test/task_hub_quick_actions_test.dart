@@ -218,6 +218,112 @@ void main() {
     expect(find.text('reopen|redo|dismiss'), findsOneWidget);
   });
 
+  test('move up a bit stores encoded move intent markers', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial =
+        todo(id: 't-move-up', title: 'Task move up', updatedAtMs: 10);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.moveUpABit,
+    );
+
+    expect(ticket, isNotNull);
+    if (ticket == null) fail('expected undo ticket');
+    expect(backend.current('t-move-up').manualUrgencyNudgeScore, 2);
+    expect(backend.current('t-move-up').manualImportanceNudgeScore, 2);
+
+    await controller.undo(ticket);
+    expect(backend.current('t-move-up').manualUrgencyNudgeScore, 0);
+  });
+
+  test('move down a bit stores encoded move intent markers', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial =
+        todo(id: 't-move-down', title: 'Task move down', updatedAtMs: 10);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.moveDownABit,
+    );
+
+    expect(ticket, isNotNull);
+    expect(backend.current('t-move-down').manualUrgencyNudgeScore, -2);
+    expect(backend.current('t-move-down').manualImportanceNudgeScore, -2);
+  });
+
+  test('restore ai order clears existing manual nudges', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-restore',
+      title: 'Task restore',
+      updatedAtMs: 10,
+      manualImportanceNudgeScore: 1,
+      manualUrgencyNudgeScore: -1,
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.restoreAiOrder,
+    );
+
+    expect(ticket, isNotNull);
+    expect(backend.current('t-restore').manualImportanceNudgeScore, 0);
+    expect(backend.current('t-restore').manualUrgencyNudgeScore, 0);
+
+    await controller.undo(ticket!);
+    expect(backend.current('t-restore').manualImportanceNudgeScore, 1);
+    expect(backend.current('t-restore').manualUrgencyNudgeScore, -1);
+  });
+
+  test('restore ai order returns null when backend leaves nudges unchanged',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-restore-noop',
+      title: 'Task restore noop',
+      updatedAtMs: 10,
+      manualImportanceNudgeScore: 2,
+      manualUrgencyNudgeScore: 2,
+    );
+    final backend = QuickActionBackendTestDouble(
+      initialTodos: [initial],
+      ignoreClearManualNudges: true,
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.restoreAiOrder,
+    );
+
+    expect(ticket, isNull);
+    expect(backend.current('t-restore-noop').manualImportanceNudgeScore, 2);
+    expect(backend.current('t-restore-noop').manualUrgencyNudgeScore, 2);
+  });
+
   test('increase urgency only increments manual urgency score', () async {
     SharedPreferences.setMockInitialValues({});
 
@@ -243,6 +349,40 @@ void main() {
 
     await controller.undo(ticket);
     expect(backend.current('t-urgency').manualUrgencyNudgeScore, 0);
+  });
+
+  test('legacy urgency action clears move encoding before applying signal',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-legacy-over-move',
+      title: 'Task legacy over move',
+      updatedAtMs: 10,
+      manualImportanceNudgeScore: 2,
+      manualUrgencyNudgeScore: 2,
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.decreaseUrgency,
+    );
+
+    expect(ticket, isNotNull);
+    expect(backend.current('t-legacy-over-move').manualUrgencyNudgeScore, -1);
+    expect(backend.current('t-legacy-over-move').manualImportanceNudgeScore, 0);
+
+    await controller.undo(ticket!);
+    expect(backend.current('t-legacy-over-move').manualUrgencyNudgeScore, 2);
+    expect(
+      backend.current('t-legacy-over-move').manualImportanceNudgeScore,
+      2,
+    );
   });
 
   test('increase importance only increments manual importance score', () async {

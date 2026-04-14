@@ -35,12 +35,10 @@ class TaskHubPriorityAnimationSnapshot {
         : snapshot.done.take(doneVisibleCount);
     return TaskHubPriorityAnimationSnapshot(
       focusTodoId: snapshot.primaryFocus?.todo.id,
-      nextUpTodoIds: snapshot.nextUpEntries
+      nextUpTodoIds: snapshot.openEntries
           .map((entry) => entry.todo.id)
           .toList(growable: false),
-      backlogTodoIds: snapshot.backlogEntries
-          .map((entry) => entry.todo.id)
-          .toList(growable: false),
+      backlogTodoIds: const <String>[],
       doneTodoIds:
           visibleDone.map((entry) => entry.todo.id).toList(growable: false),
     );
@@ -50,6 +48,16 @@ class TaskHubPriorityAnimationSnapshot {
   final List<String> nextUpTodoIds;
   final List<String> backlogTodoIds;
   final List<String> doneTodoIds;
+}
+
+TaskHubPriorityAnimationSection _canonicalVisibleSection(
+  TaskHubPriorityAnimationSection section,
+) {
+  return switch (section) {
+    TaskHubPriorityAnimationSection.backlog =>
+      TaskHubPriorityAnimationSection.nextUp,
+    _ => section,
+  };
 }
 
 class TaskHubPriorityAnimationPlan {
@@ -159,18 +167,15 @@ TaskHubPriorityAnimationPosition? locateTaskHubPriorityVisibleEntry(
       index: 0,
     );
   }
-  final nextUpIndex = snapshot.nextUpTodoIds.indexOf(todoId);
-  if (nextUpIndex != -1) {
+  final openTodoIds = <String>[
+    ...snapshot.nextUpTodoIds,
+    ...snapshot.backlogTodoIds,
+  ];
+  final openIndex = openTodoIds.indexOf(todoId);
+  if (openIndex != -1) {
     return TaskHubPriorityAnimationPosition(
       section: TaskHubPriorityAnimationSection.nextUp,
-      index: nextUpIndex,
-    );
-  }
-  final backlogIndex = snapshot.backlogTodoIds.indexOf(todoId);
-  if (backlogIndex != -1) {
-    return TaskHubPriorityAnimationPosition(
-      section: TaskHubPriorityAnimationSection.backlog,
-      index: backlogIndex,
+      index: openIndex,
     );
   }
   final doneIndex = snapshot.doneTodoIds.indexOf(todoId);
@@ -226,8 +231,14 @@ int _fallbackSectionDirection({
   required TaskHubPriorityAnimationSection? sourceSection,
   required TaskHubPriorityAnimationSection? targetSection,
 }) {
-  final fromOrder = sourceSection == null ? null : _sectionOrder(sourceSection);
-  final toOrder = targetSection == null ? null : _sectionOrder(targetSection);
+  final canonicalSource =
+      sourceSection == null ? null : _canonicalVisibleSection(sourceSection);
+  final canonicalTarget =
+      targetSection == null ? null : _canonicalVisibleSection(targetSection);
+  final fromOrder =
+      canonicalSource == null ? null : _sectionOrder(canonicalSource);
+  final toOrder =
+      canonicalTarget == null ? null : _sectionOrder(canonicalTarget);
   if (fromOrder != null && toOrder != null) {
     final delta = toOrder - fromOrder;
     return delta == 0 ? 0 : delta.sign;

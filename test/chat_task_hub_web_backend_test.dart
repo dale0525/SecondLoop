@@ -94,14 +94,7 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner_view_all')),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner_view_all')));
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
     await tester.pump();
     await _pumpUntilFound(tester, find.byType(TaskHubPage));
     await _pumpUntilFound(
@@ -158,20 +151,41 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pump();
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner_view_all')),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner_view_all')));
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
     await tester.pump();
     await _pumpUntilFound(tester, find.byType(TaskHubPage));
     await _pumpUntilFound(
       tester,
       find.byKey(const ValueKey('task_hub_page_item_todo:chat-hub')),
     );
+  });
+
+  testWidgets('Chat page header exposes a stable task center entry',
+      (tester) async {
+    final backend = CloudWebBackend(
+      chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+    );
+    final key = Uint8List.fromList(List<int>.filled(32, 1));
+    await backend.upsertTodo(
+      key,
+      id: 'todo:chat-header',
+      title: 'Chat header task',
+      dueAtMs: DateTime.now().toUtc().millisecondsSinceEpoch + 60000,
+      status: 'open',
+    );
+
+    await tester.pumpWidget(_buildLauncher(backend: backend, key: key));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('open_chat_page')));
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner')),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
+    await tester.pump();
+    await _pumpUntilFound(tester, find.byType(TaskHubPage));
   });
 }
 
