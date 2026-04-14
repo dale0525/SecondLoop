@@ -268,6 +268,7 @@ fn merge_knowledge_page_into_preserves_target_answer_policy_override() {
     target_page.current_summary = "Target summary".to_string();
     target_page.current_body = "Target detail".to_string();
     target_page.primary_evidence_ids = vec!["doc:target".to_string()];
+    target_page.related_page_ids = vec!["page:topics:source".to_string()];
     target_page.source_count = 4;
 
     let mut source_page = crate::knowledge::KnowledgePage::new(
@@ -279,6 +280,7 @@ fn merge_knowledge_page_into_preserves_target_answer_policy_override() {
     source_page.current_summary = "Source summary".to_string();
     source_page.current_body = "Source detail".to_string();
     source_page.primary_evidence_ids = vec!["doc:source".to_string()];
+    source_page.related_page_ids = vec!["page:topics:target".to_string()];
     source_page.source_count = 3;
 
     upsert_compiled_knowledge_pages(
@@ -343,6 +345,7 @@ fn merge_knowledge_page_into_preserves_combined_source_count() {
     target_page.current_summary = "Target summary".to_string();
     target_page.current_body = "Target detail".to_string();
     target_page.primary_evidence_ids = vec!["doc:target".to_string()];
+    target_page.related_page_ids = vec!["page:topics:source".to_string()];
     target_page.source_count = 4;
 
     let mut source_page = crate::knowledge::KnowledgePage::new(
@@ -354,6 +357,7 @@ fn merge_knowledge_page_into_preserves_combined_source_count() {
     source_page.current_summary = "Source summary".to_string();
     source_page.current_body = "Source detail".to_string();
     source_page.primary_evidence_ids = vec!["doc:source".to_string()];
+    source_page.related_page_ids = vec!["page:topics:target".to_string()];
     source_page.source_count = 3;
 
     upsert_compiled_knowledge_pages(
@@ -404,6 +408,7 @@ fn merge_knowledge_page_into_recomputes_conflict_count_from_merged_claims() {
     );
     target_page.current_summary = "Target summary".to_string();
     target_page.current_body = "Target detail".to_string();
+    target_page.related_page_ids = vec!["page:topics:source".to_string()];
     target_page.source_count = 1;
     target_page.conflict_count = 0;
 
@@ -415,6 +420,7 @@ fn merge_knowledge_page_into_recomputes_conflict_count_from_merged_claims() {
     );
     source_page.current_summary = "Source summary".to_string();
     source_page.current_body = "Source detail".to_string();
+    source_page.related_page_ids = vec!["page:topics:target".to_string()];
     source_page.source_count = 1;
     source_page.conflict_count = 0;
 
@@ -517,6 +523,7 @@ fn merge_knowledge_page_into_preserves_manual_content_and_provenance_on_recompil
     target_page.current_summary = "Target summary".to_string();
     target_page.current_body = "Target detail".to_string();
     target_page.primary_evidence_ids = vec!["doc:target".to_string()];
+    target_page.related_page_ids = vec!["page:topics:source".to_string()];
     target_page.source_count = 4;
 
     let mut source_page = crate::knowledge::KnowledgePage::new(
@@ -528,6 +535,7 @@ fn merge_knowledge_page_into_preserves_manual_content_and_provenance_on_recompil
     source_page.current_summary = "Source summary".to_string();
     source_page.current_body = "Source detail".to_string();
     source_page.primary_evidence_ids = vec!["doc:source".to_string()];
+    source_page.related_page_ids = vec!["page:topics:target".to_string()];
     source_page.source_count = 3;
 
     upsert_compiled_knowledge_pages(
@@ -618,6 +626,7 @@ fn merge_knowledge_page_into_keeps_merged_source_archived_during_refresh_cleanup
     );
     target_page.current_summary = "Target summary".to_string();
     target_page.current_body = "Target detail".to_string();
+    target_page.related_page_ids = vec!["page:topics:source".to_string()];
 
     let mut source_page = crate::knowledge::KnowledgePage::new(
         "page:topics:source",
@@ -627,6 +636,7 @@ fn merge_knowledge_page_into_keeps_merged_source_archived_during_refresh_cleanup
     );
     source_page.current_summary = "Source summary".to_string();
     source_page.current_body = "Source detail".to_string();
+    source_page.related_page_ids = vec!["page:topics:target".to_string()];
 
     upsert_compiled_knowledge_pages(
         &conn,
@@ -734,7 +744,7 @@ fn list_knowledge_page_summaries_excludes_archived_pages_from_normal_surfaces() 
 }
 
 #[test]
-fn list_knowledge_page_summaries_keeps_removed_pages_for_audit_surfaces() {
+fn list_knowledge_page_summaries_excludes_removed_pages_from_normal_surfaces() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");
     let key = [79u8; 32];
@@ -778,7 +788,7 @@ fn list_knowledge_page_summaries_keeps_removed_pages_for_audit_surfaces() {
         &conn,
         &key,
         "page:topics:removed",
-        Some("Keep removed page in audit surfaces".to_string()),
+        Some("Removed pages should stay out of browse surfaces".to_string()),
     )
     .expect("remove page");
 
@@ -788,13 +798,7 @@ fn list_knowledge_page_summaries_keeps_removed_pages_for_audit_surfaces() {
         .map(|page| page.page_id)
         .collect::<Vec<_>>();
 
-    assert_eq!(
-        page_ids,
-        vec![
-            "page:topics:removed".to_string(),
-            "page:topics:active".to_string(),
-        ]
-    );
+    assert_eq!(page_ids, vec!["page:topics:active".to_string()]);
 }
 
 #[test]

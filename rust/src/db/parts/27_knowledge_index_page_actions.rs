@@ -373,6 +373,25 @@ pub fn merge_knowledge_page_into(
                 "knowledge pages can only be merged within the same page type"
             ));
         }
+        if !page_type_supports_structured_merge(source.page_type) {
+            return Err(anyhow!(
+                "knowledge page merge is only supported for mergeable page types"
+            ));
+        }
+        if matches!(
+            target.state,
+            crate::knowledge::KnowledgePageState::Archived
+                | crate::knowledge::KnowledgePageState::Removed
+        ) {
+            return Err(anyhow!(
+                "knowledge page merge target must stay on normal wiki surfaces"
+            ));
+        }
+        if !pages_are_explicitly_related(&source, &target) {
+            return Err(anyhow!(
+                "knowledge pages can only be merged when they are explicitly related"
+            ));
+        }
 
         let now = now_ms();
         let merged_reason = note.unwrap_or_else(|| format!("Merged into {target_page_id}."));
@@ -438,18 +457,8 @@ pub fn merge_knowledge_page_into(
                 .collect::<Vec<_>>(),
             32,
         );
-        let merged_target_state = match target.state {
-            crate::knowledge::KnowledgePageState::Archived
-            | crate::knowledge::KnowledgePageState::Removed => {
-                crate::knowledge::KnowledgePageState::Active
-            }
-            state => state,
-        };
-        let merged_target_allowed = match merged_target_state {
-            crate::knowledge::KnowledgePageState::Archived
-            | crate::knowledge::KnowledgePageState::Removed => false,
-            _ => target.answer_policy.default_allowed,
-        };
+        let merged_target_state = target.state;
+        let merged_target_allowed = target.answer_policy.default_allowed;
         let merged_target_policy =
             answer_policy_for_state_with_override(merged_target_state, merged_target_allowed);
 
@@ -556,6 +565,31 @@ pub fn merge_knowledge_page_into(
             Err(error)
         }
     }
+}
+
+fn page_type_supports_structured_merge(
+    page_type: crate::knowledge::KnowledgePageType,
+) -> bool {
+    matches!(
+        page_type,
+        crate::knowledge::KnowledgePageType::People
+            | crate::knowledge::KnowledgePageType::Topics
+            | crate::knowledge::KnowledgePageType::OpenQuestions
+    )
+}
+
+fn pages_are_explicitly_related(
+    source: &crate::knowledge::KnowledgePage,
+    target: &crate::knowledge::KnowledgePage,
+) -> bool {
+    source
+        .related_page_ids
+        .iter()
+        .any(|page_id| page_id == &target.page_id)
+        || target
+            .related_page_ids
+            .iter()
+            .any(|page_id| page_id == &source.page_id)
 }
 
 fn set_knowledge_page_state(

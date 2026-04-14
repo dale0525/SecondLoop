@@ -1456,6 +1456,9 @@ fn merge_knowledge_page_into_combines_target_content_and_archives_source() {
     target_page.current_body = "Target detail".to_string();
     target_page.primary_evidence_ids = vec!["doc:target".to_string()];
     target_page.related_page_ids = vec!["page:topics:neighbor".to_string()];
+    target_page
+        .related_page_ids
+        .push("page:topics:source".to_string());
     target_page.source_count = 1;
     target_page.confidence_level = 0.62;
 
@@ -1468,6 +1471,7 @@ fn merge_knowledge_page_into_combines_target_content_and_archives_source() {
     source_page.current_summary = "Source summary".to_string();
     source_page.current_body = "Source detail".to_string();
     source_page.primary_evidence_ids = vec!["doc:source".to_string()];
+    source_page.related_page_ids = vec!["page:topics:target".to_string()];
     source_page.source_count = 1;
     source_page.confidence_level = 0.87;
 
@@ -1488,6 +1492,7 @@ fn merge_knowledge_page_into_combines_target_content_and_archives_source() {
         ],
     )
     .expect("seed pages");
+    crate::db::mark_knowledge_pages_refreshed(&conn, now + 2).expect("mark pages refreshed");
 
     let merged = crate::api::knowledge::db_merge_knowledge_page_into(
         app_dir_string.clone(),
@@ -1610,6 +1615,7 @@ fn merge_knowledge_page_into_rejects_different_page_types() {
         ],
     )
     .expect("seed pages");
+    crate::db::mark_knowledge_pages_refreshed(&conn, now + 2).expect("mark pages refreshed");
 
     let error = crate::api::knowledge::db_merge_knowledge_page_into(
         app_dir_string,
@@ -1622,6 +1628,141 @@ fn merge_knowledge_page_into_rejects_different_page_types() {
     assert!(error
         .to_string()
         .contains("knowledge pages can only be merged within the same page type"));
+}
+
+#[test]
+fn merge_knowledge_page_into_rejects_unrelated_mergeable_pages() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [39u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut target_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:alpha",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Topic Alpha",
+        now,
+    );
+    target_page.current_summary = "Alpha summary".to_string();
+    target_page.current_body = "Alpha detail".to_string();
+    target_page.primary_evidence_ids = vec!["doc:alpha".to_string()];
+    target_page.source_count = 1;
+
+    let mut source_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:beta",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Topic Beta",
+        now + 1,
+    );
+    source_page.current_summary = "Beta summary".to_string();
+    source_page.current_body = "Beta detail".to_string();
+    source_page.primary_evidence_ids = vec!["doc:beta".to_string()];
+    source_page.source_count = 1;
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: target_page,
+                source_document_ids: vec!["doc:alpha".to_string()],
+                claim_ids: vec!["claim:alpha".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: source_page,
+                source_document_ids: vec!["doc:beta".to_string()],
+                claim_ids: vec!["claim:beta".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+    crate::db::mark_knowledge_pages_refreshed(&conn, now + 2).expect("mark pages refreshed");
+
+    let error = crate::api::knowledge::db_merge_knowledge_page_into(
+        app_dir_string,
+        key.to_vec(),
+        "page:topics:beta".to_string(),
+        "page:topics:alpha".to_string(),
+        None,
+    )
+    .expect_err("merge should reject unrelated mergeable pages");
+    assert!(error
+        .to_string()
+        .contains("knowledge pages can only be merged when they are explicitly related"));
+}
+
+#[test]
+fn merge_knowledge_page_into_rejects_removed_target_pages() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [40u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut target_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:target",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Target Topic",
+        now,
+    );
+    target_page.current_summary = "Target summary".to_string();
+    target_page.current_body = "Target detail".to_string();
+    target_page.primary_evidence_ids = vec!["doc:target".to_string()];
+    target_page.related_page_ids = vec!["page:topics:source".to_string()];
+    target_page.source_count = 1;
+
+    let mut source_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:source",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Source Topic",
+        now + 1,
+    );
+    source_page.current_summary = "Source summary".to_string();
+    source_page.current_body = "Source detail".to_string();
+    source_page.primary_evidence_ids = vec!["doc:source".to_string()];
+    source_page.related_page_ids = vec!["page:topics:target".to_string()];
+    source_page.source_count = 1;
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: target_page,
+                source_document_ids: vec!["doc:target".to_string()],
+                claim_ids: vec!["claim:target".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: source_page,
+                source_document_ids: vec!["doc:source".to_string()],
+                claim_ids: vec!["claim:source".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    crate::api::knowledge::db_remove_knowledge_page(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:topics:target".to_string(),
+        Some("Removed target page.".to_string()),
+    )
+    .expect("remove target page");
+
+    let error = crate::api::knowledge::db_merge_knowledge_page_into(
+        app_dir_string,
+        key.to_vec(),
+        "page:topics:source".to_string(),
+        "page:topics:target".to_string(),
+        None,
+    )
+    .expect_err("merge should reject removed target");
+    assert!(error
+        .to_string()
+        .contains("knowledge page merge target must stay on normal wiki surfaces"));
 }
 
 #[test]

@@ -243,7 +243,7 @@ void main() {
     expect(find.text('Removed because it should not be used.'), findsOneWidget);
   });
 
-  testWidgets('KnowledgeCenterPage keeps audit-only pages visible in My Wiki',
+  testWidgets('KnowledgeCenterPage hides removed pages from My Wiki',
       (tester) async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final backend = _KnowledgeCenterBackendStub(
@@ -285,14 +285,8 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('My Wiki'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(ListTile, 'Preferences'), findsWidgets);
+    expect(find.widgetWithText(ListTile, 'Preferences'), findsNothing);
   });
 
   testWidgets(

@@ -136,6 +136,37 @@ fn render_page_context_block(
     }
 }
 
+fn build_generated_planning_fallback_block(
+    document: knowledge::ContentKnowledgeDocument,
+) -> Option<knowledge::KnowledgeContextBlock> {
+    let body = if document.raw_text.trim().is_empty() {
+        document.normalized_text.trim()
+    } else {
+        document.raw_text.trim()
+    };
+    if body.is_empty() {
+        return None;
+    }
+    Some(knowledge::KnowledgeContextBlock {
+        document_id: document.document_id.clone(),
+        unit_id: None,
+        unit_kind: None,
+        source_kind: document.source_kind,
+        role: document.role,
+        anchors: document.anchors.clone(),
+        score: FORCED_GENERATED_CONTEXT_SCORE,
+        rendered_text: format!(
+            "{}\n[knowledge layer=document source=summary role=summary]\n{}",
+            if let Some(conversation_id) = document.anchors.conversation_id.as_deref() {
+                format!("conversation_id={conversation_id}")
+            } else {
+                "generated_memory=global".to_string()
+            },
+            body,
+        ),
+    })
+}
+
 fn append_matching_page_context_blocks<'a, I, F>(
     question: &str,
     is_planning_query: bool,
@@ -333,6 +364,7 @@ pub(super) fn collect_compiled_page_contexts(
     if out.is_empty() && is_planning_query {
         const PAGE_SIZE: usize = 64;
         let mut offset = 0usize;
+        let mut global_fallback_blocks = Vec::<knowledge::KnowledgeContextBlock>::new();
         while out.len() < top_k.max(1) {
             let documents = knowledge::list_knowledge_documents_by_origin(
                 conn,
@@ -367,40 +399,30 @@ pub(super) fn collect_compiled_page_contexts(
                 ) {
                     continue;
                 }
-                let body = if document.raw_text.trim().is_empty() {
-                    document.normalized_text.trim()
-                } else {
-                    document.raw_text.trim()
+                let Some(block) = build_generated_planning_fallback_block(document) else {
+                    continue;
                 };
-                if body.is_empty() {
+                if conversation_scope.is_some() && block.anchors.conversation_id.is_none() {
+                    global_fallback_blocks.push(block);
                     continue;
                 }
-                out.push(knowledge::KnowledgeContextBlock {
-                    document_id: document.document_id.clone(),
-                    unit_id: None,
-                    unit_kind: None,
-                    source_kind: document.source_kind,
-                    role: document.role,
-                    anchors: document.anchors.clone(),
-                    score: FORCED_GENERATED_CONTEXT_SCORE,
-                    rendered_text: format!(
-                        "{}\n[knowledge layer=document source=summary role=summary]\n{}",
-                        if let Some(conversation_id) = document.anchors.conversation_id.as_deref() {
-                            format!("conversation_id={conversation_id}")
-                        } else {
-                            "generated_memory=global".to_string()
-                        },
-                        body,
-                    ),
-                });
-                if out.len() >= top_k.max(1) {
-                    break;
-                }
+                out.push(block);
             }
             if fetched < PAGE_SIZE {
                 break;
             }
+            if out.len() >= top_k.max(1) {
+                break;
+            }
             offset += fetched;
+        }
+        if out.len() < top_k.max(1) {
+            for block in global_fallback_blocks {
+                out.push(block);
+                if out.len() >= top_k.max(1) {
+                    break;
+                }
+            }
         }
     }
     Ok(out)

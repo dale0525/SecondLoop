@@ -502,7 +502,7 @@ pub fn list_knowledge_page_summaries(
                   manual_title,
                   manual_summary
            FROM knowledge_pages
-           WHERE state != 'archived'
+           WHERE state NOT IN ('archived', 'removed')
            ORDER BY COALESCE(last_used_at_ms, 0) DESC, updated_at_ms DESC, page_id ASC"#,
     )?;
     let rows = stmt

@@ -167,6 +167,33 @@ void main() {
   });
 
   testWidgets(
+      'KnowledgePageDetailPage hides merge action for unrelated mergeable topic pages',
+      (tester) async {
+    final backend = _UnrelatedMergeableKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:topics:alpha'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Merge Pages'), findsNothing);
+  });
+
+  testWidgets(
       'KnowledgePageDetailPage shows merge action for mergeable topic pages and merges into target',
       (tester) async {
     final backend = _MergeableKnowledgePageDetailBackendStub();
@@ -744,7 +771,7 @@ final class _MergeableKnowledgePageDetailBackendStub
         title: 'Topic Beta',
         summary: 'Merged topic summary.',
         body: 'Merged topic summary.\nTopic beta details.',
-        relatedPageIds: const ['page:about-me'],
+        relatedPageIds: const ['page:about-me', 'page:topics:alpha'],
         tags: const ['topics'],
       );
     }
@@ -754,7 +781,7 @@ final class _MergeableKnowledgePageDetailBackendStub
       title: 'Topic Alpha',
       summary: 'Current topic summary.',
       body: 'Current topic summary.\nTopic alpha details.',
-      relatedPageIds: const ['page:about-me'],
+      relatedPageIds: const ['page:about-me', 'page:topics:beta'],
       tags: const ['topics'],
     );
   }
@@ -817,10 +844,40 @@ final class _MergeableKnowledgePageDetailBackendStub
       title: 'Topic Alpha',
       summary: 'Current topic summary.',
       body: 'Current topic summary.\nTopic alpha details.',
-      relatedPageIds: const ['page:about-me'],
+      relatedPageIds: const ['page:about-me', 'page:topics:beta'],
       tags: const ['topics'],
       state: KnowledgePageState.archived,
       answerAllowed: false,
+    );
+  }
+}
+
+final class _UnrelatedMergeableKnowledgePageDetailBackendStub
+    extends _MergeableKnowledgePageDetailBackendStub {
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    if (pageId == 'page:topics:beta') {
+      return _buildDetail(
+        pageId: pageId,
+        pageType: KnowledgePageType.topics,
+        title: 'Topic Beta',
+        summary: 'Separate topic summary.',
+        body: 'Separate topic summary.\nTopic beta details.',
+        relatedPageIds: const ['page:about-me'],
+        tags: const ['topics'],
+      );
+    }
+    return _buildDetail(
+      pageId: pageId,
+      pageType: KnowledgePageType.topics,
+      title: 'Topic Alpha',
+      summary: 'Current topic summary.',
+      body: 'Current topic summary.\nTopic alpha details.',
+      relatedPageIds: const ['page:about-me'],
+      tags: const ['topics'],
     );
   }
 }

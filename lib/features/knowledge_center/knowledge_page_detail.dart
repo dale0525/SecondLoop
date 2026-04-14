@@ -76,6 +76,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
             knowledgePageSupportsMerge(detail.page.pageType) &&
             page.pageId != detail.page.pageId &&
             page.pageType == detail.page.pageType &&
+            detail.page.relatedPageIds.contains(page.pageId) &&
             page.state != KnowledgePageState.archived &&
             page.state != KnowledgePageState.removed)
         .toList(growable: false);

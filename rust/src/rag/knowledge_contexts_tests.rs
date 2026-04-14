@@ -250,6 +250,48 @@ fn collect_compiled_page_contexts_planning_fallback_respects_thread_scope() {
 }
 
 #[test]
+fn collect_compiled_page_contexts_planning_fallback_prioritizes_thread_documents_before_global() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [73u8; 32];
+    let planning_conv =
+        db::create_conversation(&conn, &key, "Planning").expect("planning conversation");
+
+    insert_document(
+        &conn,
+        &key,
+        "generated:misc:global-plan",
+        "generated",
+        30,
+        None,
+        "Global planning signal.",
+    );
+    insert_document(
+        &conn,
+        &key,
+        "generated:misc:this-thread-plan",
+        "generated",
+        10,
+        Some(&planning_conv.id),
+        "Current thread planning signal.",
+    );
+
+    let blocks =
+        collect_compiled_page_contexts(&conn, &key, "plan my week", 1, Some(&planning_conv.id))
+            .expect("compiled page contexts");
+
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks[0].document_id, "generated:misc:this-thread-plan");
+    assert!(
+        !blocks[0].rendered_text.contains("Global planning signal."),
+        "blocks: {blocks:?}"
+    );
+    assert!(blocks[0]
+        .rendered_text
+        .contains("Current thread planning signal."));
+}
+
+#[test]
 fn filter_disabled_generated_memory_blocks_uses_bulk_feedback_and_keeps_real_documents() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = db::open(dir.path()).expect("open");
