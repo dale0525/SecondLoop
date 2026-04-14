@@ -64,7 +64,6 @@ class TaskHubEntryCard extends StatelessWidget {
             dueAtMs: entry.todo.dueAtMs,
             nowLocal: nowLocal ?? DateTime.now(),
             labels: TaskHubRelativeTimeLabels(
-              noDeadline: context.t.actions.taskHub.relativeTime.noDeadline,
               today: context.t.actions.taskHub.relativeTime.today,
               inHours: (count) =>
                   context.t.actions.taskHub.relativeTime.inHours(count: count),

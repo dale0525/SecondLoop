@@ -4,7 +4,6 @@ import 'package:secondloop/features/actions/task_hub/task_hub_relative_time.dart
 
 void main() {
   const labels = TaskHubRelativeTimeLabels(
-    noDeadline: 'No deadline',
     today: 'Today',
     inHours: _inHours,
     inDays: _inDays,

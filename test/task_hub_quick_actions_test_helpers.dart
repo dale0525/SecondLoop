@@ -8,6 +8,7 @@ final class QuickActionBackendTestDouble extends AppBackend {
     List<Todo>? initialTodos,
     Map<String, List<TodoChecklistItem>>? checklistItemsByTodoId,
     this.failOnTransitionCall,
+    this.ignoreClearManualNudges = false,
     this.enableFollowupSuggestions = false,
   })  : _checklistItemsByTodoId = Map<String, List<TodoChecklistItem>>.from(
           checklistItemsByTodoId ?? const <String, List<TodoChecklistItem>>{},
@@ -19,6 +20,7 @@ final class QuickActionBackendTestDouble extends AppBackend {
   final Map<String, Todo> _todosById;
   final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
   final int? failOnTransitionCall;
+  final bool ignoreClearManualNudges;
   final bool enableFollowupSuggestions;
   var upsertTodoCalls = 0;
   var transitionTodoCalls = 0;
@@ -119,12 +121,16 @@ final class QuickActionBackendTestDouble extends AppBackend {
         ? null
         : (lastReviewAtMs ?? existing.lastReviewAtMs);
     final targetManualImportanceNudgeScore = clearManualImportanceNudgeScore
-        ? 0
+        ? (ignoreClearManualNudges
+            ? (existing.manualImportanceNudgeScore ?? 0)
+            : 0)
         : (manualImportanceNudgeScore ??
             existing.manualImportanceNudgeScore ??
             0);
     final targetManualUrgencyNudgeScore = clearManualUrgencyNudgeScore
-        ? 0
+        ? (ignoreClearManualNudges
+            ? (existing.manualUrgencyNudgeScore ?? 0)
+            : 0)
         : (manualUrgencyNudgeScore ?? existing.manualUrgencyNudgeScore ?? 0);
 
     if (targetDueAtMs == existing.dueAtMs &&

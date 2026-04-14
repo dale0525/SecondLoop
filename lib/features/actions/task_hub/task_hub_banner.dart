@@ -110,7 +110,6 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
             dueAtMs: primary.todo.dueAtMs,
             nowLocal: widget.snapshot.computedAtLocal ?? DateTime.now(),
             labels: TaskHubRelativeTimeLabels(
-              noDeadline: context.t.actions.taskHub.relativeTime.noDeadline,
               today: context.t.actions.taskHub.relativeTime.today,
               inHours: (count) =>
                   context.t.actions.taskHub.relativeTime.inHours(count: count),

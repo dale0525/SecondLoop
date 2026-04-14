@@ -294,6 +294,36 @@ void main() {
     expect(backend.current('t-restore').manualUrgencyNudgeScore, -1);
   });
 
+  test('restore ai order returns null when backend leaves nudges unchanged',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-restore-noop',
+      title: 'Task restore noop',
+      updatedAtMs: 10,
+      manualImportanceNudgeScore: 2,
+      manualUrgencyNudgeScore: 2,
+    );
+    final backend = QuickActionBackendTestDouble(
+      initialTodos: [initial],
+      ignoreClearManualNudges: true,
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.restoreAiOrder,
+    );
+
+    expect(ticket, isNull);
+    expect(backend.current('t-restore-noop').manualImportanceNudgeScore, 2);
+    expect(backend.current('t-restore-noop').manualUrgencyNudgeScore, 2);
+  });
+
   test('increase urgency only increments manual urgency score', () async {
     SharedPreferences.setMockInitialValues({});
 

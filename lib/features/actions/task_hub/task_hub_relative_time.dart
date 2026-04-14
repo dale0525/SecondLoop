@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 final class TaskHubRelativeTimeLabels {
   const TaskHubRelativeTimeLabels({
-    required this.noDeadline,
     required this.today,
     required this.inHours,
     required this.inDays,
@@ -12,7 +11,6 @@ final class TaskHubRelativeTimeLabels {
     required this.overdueWeeks,
   });
 
-  final String noDeadline;
   final String today;
   final String Function(int count) inHours;
   final String Function(int count) inDays;
