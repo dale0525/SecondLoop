@@ -5,6 +5,35 @@ import 'package:secondloop/features/chat/knowledge_page_memory_card_helpers.dart
 import 'package:secondloop/src/rust/knowledge/pages.dart';
 
 void main() {
+  test('page-backed evidence correction skips unchanged fields', () {
+    final patch = buildPageBackedEvidenceCorrectionPatch(
+      currentTitle: 'Preferences',
+      currentSummary: 'Reply in Chinese.',
+      nextTitle: 'Preferences',
+      nextSummary: 'Reply in Chinese.',
+    );
+
+    expect(patch.hasChanges, isFalse);
+    expect(patch.title, isNull);
+    expect(patch.summary, isNull);
+    expect(patch.body, isNull);
+  });
+
+  test('page-backed evidence correction updates only changed title/summary',
+      () {
+    final patch = buildPageBackedEvidenceCorrectionPatch(
+      currentTitle: 'Preferences',
+      currentSummary: 'Reply in Chinese.',
+      nextTitle: 'Language Preferences',
+      nextSummary: 'Reply in Chinese and keep it concise.',
+    );
+
+    expect(patch.hasChanges, isTrue);
+    expect(patch.title, 'Language Preferences');
+    expect(patch.summary, 'Reply in Chinese and keep it concise.');
+    expect(patch.body, isNull);
+  });
+
   test('resolveKnowledgePageCorrectionBody preserves the existing body', () {
     final resolved = resolveKnowledgePageCorrectionBody(
       existingBody: 'Keep the long-form details.',

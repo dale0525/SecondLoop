@@ -2,6 +2,20 @@ import '../../src/rust/knowledge/models.dart';
 import '../../src/rust/knowledge/pages.dart';
 import 'chat_answer_evidence_models.dart';
 
+class KnowledgePageCorrectionPatch {
+  const KnowledgePageCorrectionPatch({
+    this.title,
+    this.summary,
+    this.body,
+  });
+
+  final String? title;
+  final String? summary;
+  final String? body;
+
+  bool get hasChanges => title != null || summary != null || body != null;
+}
+
 bool isKnowledgePageDocumentId(String documentId) {
   return documentId.trim().startsWith('page:');
 }
@@ -41,6 +55,18 @@ String resolveKnowledgePageCorrectionBody({
     return existingBody!;
   }
   return summary;
+}
+
+KnowledgePageCorrectionPatch buildPageBackedEvidenceCorrectionPatch({
+  required String currentTitle,
+  required String currentSummary,
+  required String nextTitle,
+  required String nextSummary,
+}) {
+  return KnowledgePageCorrectionPatch(
+    title: nextTitle == currentTitle ? null : nextTitle,
+    summary: nextSummary == currentSummary ? null : nextSummary,
+  );
 }
 
 String _knowledgePageEvidenceStatusName(KnowledgePage page) {

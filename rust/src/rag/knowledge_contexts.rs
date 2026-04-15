@@ -53,6 +53,10 @@ fn cjk_query_ngrams(text: &str) -> std::collections::BTreeSet<String> {
 }
 
 fn append_cjk_ngrams(out: &mut std::collections::BTreeSet<String>, chars: &[char]) {
+    if chars.len() == 1 {
+        out.insert(chars[0].to_string());
+        return;
+    }
     if chars.len() < 2 {
         return;
     }

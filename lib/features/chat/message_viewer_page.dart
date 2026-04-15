@@ -229,15 +229,21 @@ class MessageViewerPage extends StatelessWidget {
         sessionKey,
         pageId: card.documentId,
       );
+      final patch = buildPageBackedEvidenceCorrectionPatch(
+        currentTitle: currentDetail.page.title,
+        currentSummary: currentDetail.page.currentSummary,
+        nextTitle: title,
+        nextSummary: summary,
+      );
+      if (!patch.hasChanges) {
+        return knowledgePageMemoryCardFromDetail(card, currentDetail);
+      }
       final detail = await pagesBackend.correctKnowledgePage(
         sessionKey,
         pageId: card.documentId,
-        title: title,
-        summary: summary,
-        body: resolveKnowledgePageCorrectionBody(
-          existingBody: currentDetail.page.currentBody,
-          summary: summary,
-        ),
+        title: patch.title,
+        summary: patch.summary,
+        body: patch.body,
       );
       return knowledgePageMemoryCardFromDetail(card, detail);
     }

@@ -217,6 +217,34 @@ fn collect_compiled_page_contexts_matches_cjk_query_against_page_body() {
 }
 
 #[test]
+fn collect_compiled_page_contexts_matches_single_cjk_character_query() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [96u8; 32];
+
+    insert_document(
+        &conn,
+        &key,
+        "generated:pattern:cat-habit",
+        "generated",
+        1,
+        None,
+        "猫咪相关偏好与习惯。",
+    );
+    crate::knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh pages");
+
+    let blocks =
+        collect_compiled_page_contexts(&conn, &key, "猫", 4, None).expect("compiled page contexts");
+
+    assert!(
+        blocks
+            .iter()
+            .any(|block| block.document_id == "page:topics:cat_habit"),
+        "blocks: {blocks:?}"
+    );
+}
+
+#[test]
 fn collect_matching_page_context_blocks_keeps_late_candidates_available_for_reranking() {
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();
