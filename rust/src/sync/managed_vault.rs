@@ -774,8 +774,6 @@ pub fn pull(
 
     let http = runtime::client()?;
     let local_device_id = super::get_or_create_device_id(conn)?;
-    let _ =
-        runtime::ensure_device_registered(&http, base_url, vault_id, id_token, &local_device_id)?;
 
     let scope_id = runtime::scope_id(base_url, vault_id);
     let mut since = load_since_map(conn, &scope_id)?;

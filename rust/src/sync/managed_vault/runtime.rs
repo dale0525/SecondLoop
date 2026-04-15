@@ -3,7 +3,10 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL;
 use base64::Engine as _;
 
 #[cfg(not(target_family = "wasm"))]
-use reqwest::blocking::Client;
+pub(super) use reqwest::blocking::Client;
+
+#[cfg(not(target_family = "wasm"))]
+pub(super) use reqwest::StatusCode;
 
 #[cfg(not(target_family = "wasm"))]
 use std::sync::OnceLock;

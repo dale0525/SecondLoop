@@ -29,13 +29,6 @@ pub fn pull_with_progress(
 
     let http = super::runtime::client()?;
     let local_device_id = super::super::get_or_create_device_id(conn)?;
-    let _ = super::runtime::ensure_device_registered(
-        &http,
-        base_url,
-        vault_id,
-        id_token,
-        &local_device_id,
-    )?;
 
     let scope_id = super::runtime::scope_id(base_url, vault_id);
     let mut since = super::load_since_map(conn, &scope_id)?;
