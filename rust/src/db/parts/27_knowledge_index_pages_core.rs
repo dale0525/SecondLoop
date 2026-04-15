@@ -1,3 +1,5 @@
+use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
+
 fn encode_string_list(values: &[String]) -> Result<String> {
     Ok(serde_json::to_string(values)?)
 }
@@ -565,7 +567,7 @@ fn merge_token_kept_for_identity(
 }
 
 fn merge_token_stream(value: &str) -> Vec<String> {
-    value
+    fold_merge_identity_text(value)
         .split(|ch: char| !ch.is_alphanumeric())
         .map(|token| token.trim().to_lowercase())
         .filter(|token| !token.is_empty())
@@ -576,7 +578,7 @@ fn collapsed_merge_token(
     page_type: crate::knowledge::KnowledgePageType,
     value: &str,
 ) -> Option<String> {
-    let collapsed = value
+    let collapsed = fold_merge_identity_text(value)
         .chars()
         .filter(|ch| ch.is_alphanumeric())
         .flat_map(|ch| ch.to_lowercase())
@@ -585,6 +587,13 @@ fn collapsed_merge_token(
         return None;
     }
     Some(collapsed)
+}
+
+fn fold_merge_identity_text(value: &str) -> String {
+    value
+        .nfd()
+        .filter(|ch| !is_combining_mark(*ch))
+        .collect()
 }
 
 fn merge_token_min_len(page_type: crate::knowledge::KnowledgePageType) -> usize {

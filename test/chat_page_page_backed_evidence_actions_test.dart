@@ -64,21 +64,83 @@ void main() {
       expect(find.text('Current conclusion'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'chat page open evidence prioritizes knowledge page actions when mixed evidence exists',
+    (tester) async {
+      final backend = _PageOnlyChatEvidenceBackend(
+        citationsJson: '''
+{
+  "direct_sources": [
+    {
+      "id": "message:source-1",
+      "href": "secondloop://message/source-1",
+      "source_type": "message",
+      "label": "History",
+      "source_type_label": "chat_message",
+      "scope_label": "this_thread",
+      "confidence_label": "high_relevance",
+      "snippet": "Reply in Chinese.",
+      "highlighted_text": "Reply in Chinese.",
+      "created_at_ms": 1,
+      "updated_at_ms": 1
+    }
+  ],
+  "memory_cards": [
+    {
+      "document_id": "page:preferences",
+      "title": "Preferences",
+      "summary": "Reply in Chinese.",
+      "source_kind": "summary",
+      "role": "summary",
+      "created_at_ms": 1,
+      "updated_at_ms": 2,
+      "status": "confirmed",
+      "source_count": 2
+    }
+  ]
+}
+''',
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'loop_home',
+                    title: 'Loop',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Open evidence'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Inspect page'), findsOneWidget);
+      expect(find.text('Stop using in answers'), findsOneWidget);
+      expect(find.text('View original'), findsNothing);
+    },
+  );
 }
 
 final class _PageOnlyChatEvidenceBackend extends TestAppBackend
     implements KnowledgePagesBackend {
-  _PageOnlyChatEvidenceBackend()
-      : super(
-          initialMessages: const <Message>[
-            Message(
-              id: 'm1',
-              conversationId: 'loop_home',
-              role: 'assistant',
-              content: 'Answer with page-backed evidence.',
-              createdAtMs: 1,
-              isMemory: false,
-              citationsJson: '''
+  _PageOnlyChatEvidenceBackend({
+    String citationsJson = '''
 {
   "direct_sources": [],
   "memory_cards": [
@@ -96,6 +158,16 @@ final class _PageOnlyChatEvidenceBackend extends TestAppBackend
   ]
 }
 ''',
+  }) : super(
+          initialMessages: <Message>[
+            Message(
+              id: 'm1',
+              conversationId: 'loop_home',
+              role: 'assistant',
+              content: 'Answer with page-backed evidence.',
+              createdAtMs: 1,
+              isMemory: false,
+              citationsJson: citationsJson,
             ),
           ],
         );

@@ -59,7 +59,7 @@ class ChatAnswerCitationController {
 
   Future<void> openEvidence(
     BuildContext context, {
-    ChatAnswerEvidenceTab initialTab = ChatAnswerEvidenceTab.directSources,
+    ChatAnswerEvidenceTab initialTab = ChatAnswerEvidenceTab.memoryCards,
     String? highlightedHref,
     required Future<void> Function(String href) onOpenDirectSource,
     Future<void> Function(String documentId)? onOpenMemoryCard,

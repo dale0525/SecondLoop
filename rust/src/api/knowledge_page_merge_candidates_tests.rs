@@ -411,3 +411,71 @@ fn list_mergeable_knowledge_page_summaries_allows_people_pages_with_punctuation_
         vec!["page:people:oneal"]
     );
 }
+
+#[test]
+fn list_mergeable_knowledge_page_summaries_allows_people_pages_with_diacritic_normalized_names() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [47u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: {
+                    let mut page = crate::knowledge::KnowledgePage::new(
+                        "page:people:élodie_durand",
+                        crate::knowledge::KnowledgePageType::People,
+                        "Élodie Durand",
+                        now,
+                    );
+                    page.current_summary = "Accent form".to_string();
+                    page.current_body = "Person detail".to_string();
+                    page.primary_evidence_ids = vec!["doc:elodie-accent".to_string()];
+                    page.source_count = 1;
+                    page
+                },
+                source_document_ids: vec!["doc:elodie-accent".to_string()],
+                claim_ids: vec!["claim:elodie-accent".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: {
+                    let mut page = crate::knowledge::KnowledgePage::new(
+                        "page:people:elodie_durand",
+                        crate::knowledge::KnowledgePageType::People,
+                        "Elodie Durand",
+                        now + 1,
+                    );
+                    page.current_summary = "Plain ascii form".to_string();
+                    page.current_body = "Potential duplicate person detail".to_string();
+                    page.primary_evidence_ids = vec!["doc:elodie-ascii".to_string()];
+                    page.source_count = 1;
+                    page
+                },
+                source_document_ids: vec!["doc:elodie-ascii".to_string()],
+                claim_ids: vec!["claim:elodie-ascii".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+    crate::db::mark_knowledge_pages_refreshed(&conn, now + 2).expect("mark pages refreshed");
+
+    let candidates = crate::api::knowledge::db_list_mergeable_knowledge_page_summaries(
+        app_dir_string,
+        key.to_vec(),
+        "page:people:élodie_durand".to_string(),
+    )
+    .expect("list mergeable pages");
+
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|page| page.page_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["page:people:elodie_durand"]
+    );
+}

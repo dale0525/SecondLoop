@@ -26,6 +26,7 @@ uuid = { version = "1", features = ["v4"] }
 zerocopy = { version = "0.8", features = ["alloc"] }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 time = { version = "=0.3.45", features = ["formatting", "parsing"] }
+unicode-normalization = "0.1"
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 fastembed = { version = "=5.8.0", default-features = false, features = ["hf-hub-rustls-tls", "ort-load-dynamic"] }
