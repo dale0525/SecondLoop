@@ -77,6 +77,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
   VoidCallback? _syncListener;
   TaskPriorityStore? _observedStore;
   VoidCallback? _storeListener;
+  String? _lastAiRefreshDependencyKey;
+  int _aiRefreshDependencyGeneration = 0;
 
   @override
   void dispose() {
@@ -154,6 +156,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     _attachStoreListener();
 
     unawaited(_store?.refresh() ?? Future<void>.value());
+    unawaited(_refreshAiAvailabilityIfNeeded());
   }
 
   void _attachSyncEngine() {
@@ -281,6 +284,44 @@ class _TaskHubPageState extends State<TaskHubPage> {
     setState(() {
       _doneVisibleCount = _kDonePageSize;
     });
+    await store.refresh(force: true);
+  }
+
+  Future<void> _refreshAiAvailabilityIfNeeded() async {
+    final backend = AppBackendScope.maybeOf(context);
+    if (backend == null) return;
+
+    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
+    final gatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+    final cloudUid = cloudAuthScope?.controller.uid;
+
+    final generation = ++_aiRefreshDependencyGeneration;
+    final nextKey = await buildTaskPriorityRefreshDependencyKey(
+      backend,
+      sessionKey,
+      subscriptionStatus: subscriptionStatus,
+      gatewayBaseUrl: gatewayConfig.baseUrl,
+      modelName: gatewayConfig.modelName,
+      localeTag: localeTag,
+      cloudUid: cloudUid,
+    );
+    if (!mounted || generation != _aiRefreshDependencyGeneration) {
+      return;
+    }
+
+    final previousKey = _lastAiRefreshDependencyKey;
+    if (previousKey == nextKey) return;
+    _lastAiRefreshDependencyKey = nextKey;
+    if (previousKey == null) return;
+
+    final store = _store;
+    if (store == null) return;
+    store.markDirty();
     await store.refresh(force: true);
   }
 

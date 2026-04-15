@@ -10,12 +10,17 @@ void main() {
     expect(source, contains('console_error_panic_hook::set_once();'));
   });
 
-  test('wasm managed vault pull starts with json fallback instead of pull_bin',
+  test('wasm managed vault pull prefers pull_bin before json fallback',
       () async {
     final source = await readRustSource('rust/src/sync/managed_vault.rs');
     expect(source, contains('fn should_try_pull_bin_first() -> bool'));
     expect(source, contains('#[cfg(target_family = "wasm")]'));
-    expect(source, contains('false'));
+    expect(
+      source,
+      contains(
+        '#[cfg(target_family = "wasm")]\n    {\n        true',
+      ),
+    );
   });
 
   test(

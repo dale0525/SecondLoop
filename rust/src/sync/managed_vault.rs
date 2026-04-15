@@ -265,10 +265,7 @@ fn should_fallback_to_json_pull(status: runtime::StatusCode) -> bool {
 fn should_try_pull_bin_first() -> bool {
     #[cfg(target_family = "wasm")]
     {
-        // Keep Web on the JSON pull path for now. The browser-specific binary
-        // pull path can panic after authenticated responses, while the JSON
-        // fallback reuses the same downstream apply logic.
-        false
+        true
     }
 
     #[cfg(not(target_family = "wasm"))]

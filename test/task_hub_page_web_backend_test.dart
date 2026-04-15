@@ -3,9 +3,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/cloud_web_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 
 import 'test_i18n.dart';
@@ -132,6 +136,73 @@ void main() {
     expect(activities.single.activityType, 'note');
     expect(activities.single.content, 'task hub web note');
   });
+
+  testWidgets(
+      'TaskHubPage refreshes AI availability when web subscription becomes entitled',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = CloudWebBackend(
+      chatClient: _FakeCloudWebChatClient(
+        responseText:
+            '{"entries":[{"todo_id":"todo:web-entitled","semantic_adjustment":18,"reason":"Cloud prioritizes this task.","confidence":"high","is_important":true,"is_urgent":true}]}',
+      ),
+    );
+    final key = Uint8List.fromList(List<int>.filled(32, 1));
+    await backend.upsertTodo(
+      key,
+      id: 'todo:web-entitled',
+      title: 'Entitled web task',
+      status: 'open',
+    );
+
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription = _MutableSubscriptionController(
+      SubscriptionStatus.unknown,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              gatewayConfig: const CloudGatewayConfig(
+                baseUrl: 'https://web.secondloop.invalid',
+                modelName: 'cloud',
+              ),
+              child: SubscriptionScope(
+                controller: subscription,
+                child: SessionScope(
+                  sessionKey: key,
+                  lock: () {},
+                  child: const TaskHubPage(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(
+      find.byKey(const ValueKey('task_hub_page_ai_upgrade_hint')),
+      findsOneWidget,
+    );
+
+    subscription.setStatus(SubscriptionStatus.entitled);
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.text('Cloud prioritizes this task.'),
+    );
+
+    expect(
+      find.byKey(const ValueKey('task_hub_page_ai_upgrade_hint')),
+      findsNothing,
+    );
+  });
 }
 
 final class _FakeCloudWebChatClient implements CloudWebChatClient {
@@ -148,4 +219,56 @@ final class _FakeCloudWebChatClient implements CloudWebChatClient {
   }) async {
     return responseText;
   }
+}
+
+final class _FakeCloudAuthController extends ChangeNotifier
+    implements CloudAuthController {
+  @override
+  String? get uid => 'uid-1';
+
+  @override
+  String? get email => 'user@example.com';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  Future<String?> getIdToken() async => 'token-1';
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}
+
+final class _MutableSubscriptionController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  _MutableSubscriptionController(this._status);
+
+  SubscriptionStatus _status;
+
+  void setStatus(SubscriptionStatus next) {
+    if (_status == next) return;
+    _status = next;
+    notifyListeners();
+  }
+
+  @override
+  SubscriptionStatus get status => _status;
 }
