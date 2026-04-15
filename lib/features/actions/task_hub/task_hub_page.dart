@@ -17,6 +17,7 @@ import '../../../src/rust/db.dart';
 import '../../../src/rust/platform_int.dart';
 import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
+import '../../../web_app/web_formal_settings_scope.dart';
 import 'task_hub_card_anchor.dart';
 import 'task_hub_focus_section.dart';
 import 'task_hub_page_sections.dart';
@@ -285,6 +286,16 @@ class _TaskHubPageState extends State<TaskHubPage> {
       _doneVisibleCount = _kDonePageSize;
     });
     await store.refresh(force: true);
+  }
+
+  bool _shouldShowAiUpgradeHint(TaskPriorityStore store) {
+    final isWebShell =
+        WebFormalSettingsScope.maybeOf(context)?.dependencies.isWebOverride ??
+            false;
+    if (isWebShell) {
+      return false;
+    }
+    return store.shouldShowAiUpgradeHint;
   }
 
   Future<void> _refreshAiAvailabilityIfNeeded() async {
@@ -784,7 +795,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                 ],
                               ),
                             ),
-                          if (store.shouldShowAiUpgradeHint) ...[
+                          if (_shouldShowAiUpgradeHint(store)) ...[
                             const SizedBox(height: 12),
                             SlSurface(
                               key: const ValueKey(

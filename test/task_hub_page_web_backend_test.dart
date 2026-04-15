@@ -8,9 +8,15 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/cloud/cloud_usage_client.dart';
+import 'package:secondloop/core/cloud/vault_attachments_client.dart';
+import 'package:secondloop/core/cloud/vault_usage_client.dart';
+import 'package:secondloop/core/subscription/creem_billing_client.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
+import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
+import 'package:secondloop/web_app/web_formal_settings_scope.dart';
 
 import 'test_i18n.dart';
 
@@ -203,6 +209,60 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('TaskHubPage hides AI upgrade hint inside web shell',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = CloudWebBackend(
+      chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+    );
+    final key = Uint8List.fromList(List<int>.filled(32, 1));
+    await backend.upsertTodo(
+      key,
+      id: 'todo:web-shell',
+      title: 'Web shell task',
+      status: 'open',
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: key,
+              lock: () {},
+              child: WebFormalSettingsScope(
+                dependencies: WebFormalSettingsDependencies(
+                  billingClient: _FakeBillingClient(),
+                  cloudUsageClient: CloudUsageClient(),
+                  vaultUsageClient: VaultUsageClient(),
+                  vaultAttachmentsClient: VaultAttachmentsClient(),
+                  vaultConfigStore: SyncConfigStore(),
+                  cloudAuthController: _FakeCloudAuthController(),
+                  cloudGatewayConfig: const CloudGatewayConfig(
+                    baseUrl: 'https://web.secondloop.invalid',
+                    modelName: 'cloud',
+                  ),
+                  subscriptionController: _MutableSubscriptionController(
+                    SubscriptionStatus.entitled,
+                  ),
+                  isWebOverride: true,
+                ),
+                child: const TaskHubPage(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(
+      find.byKey(const ValueKey('task_hub_page_ai_upgrade_hint')),
+      findsNothing,
+    );
+  });
 }
 
 final class _FakeCloudWebChatClient implements CloudWebChatClient {
@@ -271,4 +331,12 @@ final class _MutableSubscriptionController extends ChangeNotifier
 
   @override
   SubscriptionStatus get status => _status;
+}
+
+final class _FakeBillingClient implements BillingClient {
+  @override
+  Future<void> openCheckout() async {}
+
+  @override
+  Future<void> openPortal() async {}
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -246,5 +247,44 @@ void main() {
     expect(resolver.bumpGenerationCalls, 1);
     expect(recovery.reloadCalls, 1);
     expect(find.byType(Placeholder), findsNothing);
+  });
+
+  testWidgets('web initial sync gate stops blocking the shell after timeout',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final syncCompleter = Completer<void>();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: _FakeWebNativeBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: WebInitialSyncGate(
+                authController: _FakeCloudAuthController(
+                  initialUid: 'uid-1',
+                  initialEmail: 'user@example.com',
+                  initialEmailVerified: true,
+                ),
+                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
+                syncRunner: (_, __, ___) => syncCompleter.future,
+                blockingTimeout: const Duration(milliseconds: 100),
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Placeholder), findsNothing);
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.byType(Placeholder), findsOneWidget);
+
+    syncCompleter.complete();
+    await tester.pump();
+    await tester.pump();
   });
 }

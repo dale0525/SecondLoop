@@ -30,6 +30,7 @@ class WebInitialSyncGate extends StatefulWidget {
     this.syncRunner,
     this.appDirResolver,
     this.localRuntimeRecovery,
+    this.blockingTimeout = const Duration(seconds: 2),
     super.key,
   });
 
@@ -40,26 +41,69 @@ class WebInitialSyncGate extends StatefulWidget {
   final WebInitialSyncRunner? syncRunner;
   final WebPersistentAppDirResolver? appDirResolver;
   final WebLocalRuntimeRecovery? localRuntimeRecovery;
+  final Duration blockingTimeout;
 
   @override
   State<WebInitialSyncGate> createState() => _WebInitialSyncGateState();
 }
 
 class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
-  Future<void>? _bootstrapFuture;
+  bool _bootstrapStarted = false;
+  Timer? _blockingTimeoutTimer;
+  Object? _bootstrapError;
+  bool _allowPassThrough = false;
+  bool _bootstrapCompleted = false;
+  bool _didPassThroughBeforeBootstrapCompleted = false;
+  int _childGeneration = 0;
+
+  @override
+  void dispose() {
+    _blockingTimeoutTimer?.cancel();
+    _blockingTimeoutTimer = null;
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _bootstrapFuture ??= _bootstrap();
+    if (_bootstrapStarted) return;
+    _bootstrapStarted = true;
+    unawaited(_startBootstrap());
   }
 
-  Future<void> _bootstrap() async {
-    final runner = widget.syncRunner ?? _defaultSyncRunner;
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    await runner(context, backend, sessionKey);
-    await _maybeRecoverLocalRuntime(backend, sessionKey);
+  Future<void> _startBootstrap() async {
+    _blockingTimeoutTimer?.cancel();
+    _blockingTimeoutTimer = Timer(widget.blockingTimeout, () {
+      if (!mounted || _bootstrapCompleted || _allowPassThrough) return;
+      setState(() {
+        _allowPassThrough = true;
+        _didPassThroughBeforeBootstrapCompleted = true;
+      });
+    });
+
+    try {
+      final runner = widget.syncRunner ?? _defaultSyncRunner;
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      await runner(context, backend, sessionKey);
+      await _maybeRecoverLocalRuntime(backend, sessionKey);
+      if (!mounted) return;
+      _blockingTimeoutTimer?.cancel();
+      setState(() {
+        _bootstrapCompleted = true;
+        _allowPassThrough = true;
+        if (_didPassThroughBeforeBootstrapCompleted) {
+          _childGeneration += 1;
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _blockingTimeoutTimer?.cancel();
+      setState(() {
+        _bootstrapCompleted = true;
+        _bootstrapError = error;
+      });
+    }
   }
 
   Future<void> _defaultSyncRunner(
@@ -134,30 +178,29 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _bootstrapFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.error is _WebInitialSyncReloadRequested) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError) {
-          return Scaffold(
-            body: Center(
-              child: Text(
-                context.t.errors.loadFailed(error: '${snapshot.error}'),
-              ),
-            ),
-          );
-        }
-        return widget.child;
-      },
+    final error = _bootstrapError;
+    if (!_allowPassThrough && !_bootstrapCompleted) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (error is _WebInitialSyncReloadRequested) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (error != null && !_allowPassThrough) {
+      return Scaffold(
+        body: Center(
+          child: Text(
+            context.t.errors.loadFailed(error: '$error'),
+          ),
+        ),
+      );
+    }
+    return KeyedSubtree(
+      key: ValueKey<int>(_childGeneration),
+      child: widget.child,
     );
   }
 }
