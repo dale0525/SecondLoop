@@ -166,6 +166,26 @@ final class _EmptyWebNativeBackend extends WebNativeAppBackend {
       const <Conversation>[];
 }
 
+final class _PendingWebNativeBackend extends WebNativeAppBackend {
+  _PendingWebNativeBackend()
+      : super(
+          appDirProvider: () async => '/opfs/secondloop/vaults/uid-1/v0',
+          storageScope: 'web-native:uid-1',
+          rustLibInit: () async {},
+        );
+
+  @override
+  Future<List<Conversation>> listConversations(Uint8List key) async =>
+      <Conversation>[
+        const Conversation(
+          id: 'conversation-1',
+          title: 'Synced',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        ),
+      ];
+}
+
 void main() {
   testWidgets(
       'first entitled launch triggers managed-vault pull before chat loads',
@@ -286,5 +306,46 @@ void main() {
     syncCompleter.complete();
     await tester.pump();
     await tester.pump();
+  });
+
+  testWidgets(
+      'web initial sync gate keeps blocking web-native shell while sync is pending',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final syncCompleter = Completer<void>();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: _PendingWebNativeBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: WebInitialSyncGate(
+                authController: _FakeCloudAuthController(
+                  initialUid: 'uid-1',
+                  initialEmail: 'user@example.com',
+                  initialEmailVerified: true,
+                ),
+                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
+                syncRunner: (_, __, ___) => syncCompleter.future,
+                blockingTimeout: const Duration(milliseconds: 100),
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Placeholder), findsNothing);
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.byType(Placeholder), findsNothing);
+
+    syncCompleter.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(Placeholder), findsOneWidget);
   });
 }

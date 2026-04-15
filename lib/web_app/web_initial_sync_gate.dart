@@ -56,6 +56,14 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
   bool _didPassThroughBeforeBootstrapCompleted = false;
   int _childGeneration = 0;
 
+  bool _canPassThroughBeforeBootstrapCompletes() {
+    final backend = AppBackendScope.of(context);
+    // Web-native shells share the same wasm SQLite runtime as the initial
+    // managed-vault bootstrap pull. Letting the shell mount early can trigger
+    // overlapping local DB access and trip memvfs re-entrancy panics.
+    return backend is! WebNativeAppBackend;
+  }
+
   @override
   void dispose() {
     _blockingTimeoutTimer?.cancel();
@@ -75,6 +83,7 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
     _blockingTimeoutTimer?.cancel();
     _blockingTimeoutTimer = Timer(widget.blockingTimeout, () {
       if (!mounted || _bootstrapCompleted || _allowPassThrough) return;
+      if (!_canPassThroughBeforeBootstrapCompletes()) return;
       setState(() {
         _allowPassThrough = true;
         _didPassThroughBeforeBootstrapCompleted = true;
