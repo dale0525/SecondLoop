@@ -8,6 +8,7 @@ import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/knowledge/pages.dart';
 import '../../ui/sl_surface.dart';
+import '../settings/semantic_search_debug_page.dart';
 import 'knowledge_center_models.dart';
 import 'knowledge_page_display_text.dart';
 import 'knowledge_page_detail.dart';
@@ -131,7 +132,17 @@ class _KnowledgeCenterPageState extends State<KnowledgeCenterPage> {
             home.systemActivity.totalPages > 0 ||
             home.systemActivity.pagesUsedInAnswersRecently.isNotEmpty;
         return Scaffold(
-          appBar: AppBar(title: Text(context.t.memory.title)),
+          appBar: AppBar(
+            title: Text(context.t.memory.title),
+            actions: [
+              IconButton(
+                key: const ValueKey('knowledge_center_search'),
+                tooltip: context.t.common.actions.search,
+                icon: const Icon(Icons.search_rounded),
+                onPressed: _openSearch,
+              ),
+            ],
+          ),
           body: !hasVisibleContent
               ? Center(child: Text(context.t.memory.emptyState))
               : ListView(
@@ -227,6 +238,10 @@ class _KnowledgeCenterPageState extends State<KnowledgeCenterPage> {
     );
     if (!mounted) return;
     _reload();
+  }
+
+  Future<void> _openSearch() {
+    return SemanticSearchDebugPage.openSearch(context);
   }
 }
 

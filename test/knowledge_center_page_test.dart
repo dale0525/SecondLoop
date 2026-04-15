@@ -173,6 +173,64 @@ void main() {
   });
 
   testWidgets(
+      'KnowledgeCenterPage exposes a search entry that opens the search page without debug controls',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _KnowledgeCenterBackendStub(
+      summaries: [
+        _summary(
+          pageId: 'page:about-me',
+          title: 'About Me',
+          pageType: KnowledgePageType.aboutMe,
+          state: KnowledgePageState.active,
+          updatedAtMs: nowMs,
+          lastUsedAtMs: nowMs,
+        ),
+      ],
+      details: {
+        'page:about-me': _detail(
+          pageId: 'page:about-me',
+          title: 'About Me',
+          pageType: KnowledgePageType.aboutMe,
+          state: KnowledgePageState.active,
+          summary: 'Stable identity details.',
+          updatedAtMs: nowMs,
+        ),
+      },
+      recentChanges: const [],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 11)),
+              lock: () {},
+              child: const KnowledgeCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('knowledge_center_search')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('knowledge_center_search')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search'), findsWidgets);
+    expect(find.text('Query'), findsOneWidget);
+    expect(find.text('Use model'), findsNothing);
+    expect(find.text('Process pending'), findsNothing);
+    expect(find.text('Rebuild embeddings'), findsNothing);
+  });
+
+  testWidgets(
       'KnowledgeCenterPage keeps removed pages visible in recent changes',
       (tester) async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
