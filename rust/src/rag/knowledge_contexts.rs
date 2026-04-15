@@ -123,7 +123,7 @@ pub(super) fn should_exclude_generated_document_for_page_policies(
     !related_page_ids.is_empty()
         && related_page_ids
             .iter()
-            .any(|page_id| excluded_page_ids.contains(page_id))
+            .all(|page_id| excluded_page_ids.contains(page_id))
 }
 
 fn page_context_allowed(page: &knowledge::KnowledgePage) -> bool {
@@ -268,10 +268,6 @@ where
             chunk.iter(),
             &mut load_page_body,
         ));
-
-        if candidates.len() >= target_count {
-            break;
-        }
     }
     candidates.sort_by(|left, right| right.1.cmp(&left.1));
     candidates

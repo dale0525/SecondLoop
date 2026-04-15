@@ -516,17 +516,7 @@ fn knowledge_pages_are_merge_related(
         return true;
     }
 
-    let source_tokens = merge_candidate_tokens(page_type, source_page_id, source_title);
-    let target_tokens = merge_candidate_tokens(page_type, target_page_id, target_title);
-    if source_tokens.is_empty() || target_tokens.is_empty() {
-        return false;
-    }
-
-    let shared_token_count = source_tokens
-        .iter()
-        .filter(|token| target_tokens.contains(*token))
-        .count();
-    shared_token_count >= 2
+    false
 }
 
 fn merge_candidate_identities(
@@ -554,40 +544,16 @@ fn normalized_merge_identity_variants(
         .collect::<Vec<_>>();
     if !tokens.is_empty() {
         out.insert(tokens.join(" "));
+        if page_type == crate::knowledge::KnowledgePageType::People {
+            let mut sorted_tokens = tokens.clone();
+            sorted_tokens.sort();
+            out.insert(sorted_tokens.join(" "));
+        }
     }
     if let Some(collapsed) = collapsed_merge_token(page_type, value) {
         out.insert(collapsed);
     }
     out
-}
-
-fn merge_candidate_tokens(
-    page_type: crate::knowledge::KnowledgePageType,
-    page_id: &str,
-    title: &str,
-) -> std::collections::BTreeSet<String> {
-    let mut out = std::collections::BTreeSet::<String>::new();
-    let merge_key = page_id.rsplit(':').next().unwrap_or(page_id);
-    append_merge_tokens(page_type, &mut out, merge_key);
-    append_merge_tokens(page_type, &mut out, title);
-    out
-}
-
-fn append_merge_tokens(
-    page_type: crate::knowledge::KnowledgePageType,
-    out: &mut std::collections::BTreeSet<String>,
-    value: &str,
-) {
-    out.extend(
-        merge_token_stream(value)
-            .into_iter()
-            .filter(|token| {
-                token.len() >= merge_token_min_len(page_type) && !merge_token_is_stopword(token)
-            }),
-    );
-    if let Some(collapsed) = collapsed_merge_token(page_type, value) {
-        out.insert(collapsed);
-    }
 }
 
 fn merge_token_stream(value: &str) -> Vec<String> {

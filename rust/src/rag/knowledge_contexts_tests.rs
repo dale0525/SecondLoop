@@ -519,10 +519,10 @@ fn filter_disabled_generated_memory_blocks_excludes_documents_backed_by_archived
 }
 
 #[test]
-fn shared_generated_document_is_excluded_when_any_related_page_is_blocked() {
+fn shared_generated_document_is_not_excluded_when_one_related_page_is_blocked() {
     let excluded = std::collections::HashSet::from([String::from("page:current-focus")]);
 
-    assert!(should_exclude_generated_document_for_page_policies(
+    assert!(!should_exclude_generated_document_for_page_policies(
         "generated:pattern:active-task-focus",
         &excluded,
     ));
@@ -552,8 +552,7 @@ fn generated_document_without_page_mapping_is_not_excluded_by_page_policies() {
 }
 
 #[test]
-fn filter_disabled_generated_memory_blocks_excludes_shared_document_when_any_related_page_is_muted()
-{
+fn filter_disabled_generated_memory_blocks_keeps_shared_document_when_one_related_page_is_muted() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = db::open(dir.path()).expect("open");
     let key = [71u8; 32];
@@ -587,7 +586,14 @@ fn filter_disabled_generated_memory_blocks_excludes_shared_document_when_any_rel
     )
     .expect("filter blocks");
 
-    assert!(filtered.is_empty(), "filtered: {filtered:?}");
+    assert_eq!(
+        filtered
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["generated:pattern:active-task-focus"],
+        "filtered: {filtered:?}"
+    );
 }
 
 #[test]

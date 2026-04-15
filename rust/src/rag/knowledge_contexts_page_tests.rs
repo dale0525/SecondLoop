@@ -525,8 +525,8 @@ fn collect_matching_page_context_blocks_planning_queries_still_search_late_candi
 }
 
 #[test]
-fn collect_matching_page_context_blocks_stops_scanning_after_first_window_when_it_has_top_k_matches(
-) {
+fn collect_matching_page_context_blocks_keeps_scanning_when_later_pages_can_outscore_early_window()
+{
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = (0..20)
@@ -545,7 +545,7 @@ fn collect_matching_page_context_blocks_stops_scanning_after_first_window_when_i
         .collect::<Vec<_>>();
 
     let blocks = collect_matching_page_context_blocks(
-        "Mandarin project notes",
+        "Mandarin project notes Chinese tutor",
         2,
         false,
         candidate_summaries,
@@ -554,6 +554,9 @@ fn collect_matching_page_context_blocks_stops_scanning_after_first_window_when_i
             Some(match page_id {
                 "page:3" => "Mandarin project notes and vocabulary".to_string(),
                 "page:11" => "Mandarin notes".to_string(),
+                "page:19" => {
+                    "Mandarin project notes with Chinese vocabulary and tutor follow-up".to_string()
+                }
                 _ => "Generic body".to_string(),
             })
         },
@@ -568,18 +571,18 @@ fn collect_matching_page_context_blocks_stops_scanning_after_first_window_when_i
             .iter()
             .map(|block| block.document_id.as_str())
             .collect::<Vec<_>>(),
-        vec!["page:3", "page:11"]
+        vec!["page:19", "page:3"]
     );
-    assert_eq!(inspected_bodies.len(), 12);
     assert!(
-        inspected_bodies.iter().all(|page_id| page_id != "page:19"),
+        inspected_bodies.iter().any(|page_id| page_id == "page:19"),
         "inspected_bodies: {inspected_bodies:?}"
     );
-    assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
+    assert_eq!(inspected_bodies.len(), 20);
+    assert_eq!(loaded_pages, vec!["page:19", "page:3"]);
 }
 
 #[test]
-fn collect_matching_page_context_blocks_avoids_global_scans_for_large_candidate_sets() {
+fn collect_matching_page_context_blocks_scans_large_candidate_sets_before_final_rerank() {
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = (0..64)
@@ -598,7 +601,7 @@ fn collect_matching_page_context_blocks_avoids_global_scans_for_large_candidate_
         .collect::<Vec<_>>();
 
     let blocks = collect_matching_page_context_blocks(
-        "Mandarin project notes",
+        "Mandarin project notes Chinese tutor",
         2,
         false,
         candidate_summaries,
@@ -607,6 +610,10 @@ fn collect_matching_page_context_blocks_avoids_global_scans_for_large_candidate_
             Some(match page_id {
                 "page:3" => "Mandarin project notes and vocabulary".to_string(),
                 "page:11" => "Mandarin notes".to_string(),
+                "page:63" => {
+                    "Mandarin project notes Chinese vocabulary tutor pronunciation practice"
+                        .to_string()
+                }
                 _ => "Generic body".to_string(),
             })
         },
@@ -621,14 +628,14 @@ fn collect_matching_page_context_blocks_avoids_global_scans_for_large_candidate_
             .iter()
             .map(|block| block.document_id.as_str())
             .collect::<Vec<_>>(),
-        vec!["page:3", "page:11"]
+        vec!["page:63", "page:3"]
     );
-    assert_eq!(inspected_bodies.len(), 12);
     assert!(
-        inspected_bodies.iter().all(|page_id| page_id != "page:63"),
+        inspected_bodies.iter().any(|page_id| page_id == "page:63"),
         "inspected_bodies: {inspected_bodies:?}"
     );
-    assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
+    assert_eq!(inspected_bodies.len(), 64);
+    assert_eq!(loaded_pages, vec!["page:63", "page:3"]);
 }
 
 #[test]
@@ -671,10 +678,7 @@ fn collect_matching_page_context_blocks_keeps_scanning_large_candidate_sets_unti
             .collect::<Vec<_>>(),
         vec!["page:27"]
     );
-    assert!(
-        inspected_bodies.len() > 12 && inspected_bodies.len() < 64,
-        "inspected_bodies: {inspected_bodies:?}"
-    );
+    assert_eq!(inspected_bodies.len(), 64);
     assert!(
         inspected_bodies.iter().any(|page_id| page_id == "page:27"),
         "inspected_bodies: {inspected_bodies:?}"
