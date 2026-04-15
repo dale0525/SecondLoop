@@ -525,8 +525,7 @@ fn collect_matching_page_context_blocks_planning_queries_still_search_late_candi
 }
 
 #[test]
-fn collect_matching_page_context_blocks_keeps_scanning_when_later_pages_can_outscore_early_window()
-{
+fn collect_matching_page_context_blocks_limits_large_candidate_scans_to_capped_window() {
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = (0..20)
@@ -571,18 +570,18 @@ fn collect_matching_page_context_blocks_keeps_scanning_when_later_pages_can_outs
             .iter()
             .map(|block| block.document_id.as_str())
             .collect::<Vec<_>>(),
-        vec!["page:19", "page:3"]
+        vec!["page:3", "page:11"]
     );
     assert!(
-        inspected_bodies.iter().any(|page_id| page_id == "page:19"),
+        inspected_bodies.iter().all(|page_id| page_id != "page:19"),
         "inspected_bodies: {inspected_bodies:?}"
     );
-    assert_eq!(inspected_bodies.len(), 20);
-    assert_eq!(loaded_pages, vec!["page:19", "page:3"]);
+    assert_eq!(inspected_bodies.len(), 12);
+    assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
 }
 
 #[test]
-fn collect_matching_page_context_blocks_scans_large_candidate_sets_before_final_rerank() {
+fn collect_matching_page_context_blocks_caps_body_scans_before_final_rerank() {
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = (0..64)
@@ -628,19 +627,18 @@ fn collect_matching_page_context_blocks_scans_large_candidate_sets_before_final_
             .iter()
             .map(|block| block.document_id.as_str())
             .collect::<Vec<_>>(),
-        vec!["page:63", "page:3"]
+        vec!["page:3", "page:11"]
     );
     assert!(
-        inspected_bodies.iter().any(|page_id| page_id == "page:63"),
+        inspected_bodies.iter().all(|page_id| page_id != "page:63"),
         "inspected_bodies: {inspected_bodies:?}"
     );
-    assert_eq!(inspected_bodies.len(), 64);
-    assert_eq!(loaded_pages, vec!["page:63", "page:3"]);
+    assert_eq!(inspected_bodies.len(), 12);
+    assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
 }
 
 #[test]
-fn collect_matching_page_context_blocks_keeps_scanning_large_candidate_sets_until_late_match_found()
-{
+fn collect_matching_page_context_blocks_can_miss_late_body_only_match_after_scan_cap() {
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = (0..64)
@@ -676,14 +674,14 @@ fn collect_matching_page_context_blocks_keeps_scanning_large_candidate_sets_unti
             .iter()
             .map(|block| block.document_id.as_str())
             .collect::<Vec<_>>(),
-        vec!["page:27"]
+        Vec::<&str>::new()
     );
-    assert_eq!(inspected_bodies.len(), 64);
     assert!(
-        inspected_bodies.iter().any(|page_id| page_id == "page:27"),
+        inspected_bodies.iter().all(|page_id| page_id != "page:27"),
         "inspected_bodies: {inspected_bodies:?}"
     );
-    assert_eq!(loaded_pages, vec!["page:27"]);
+    assert_eq!(inspected_bodies.len(), 12);
+    assert!(loaded_pages.is_empty(), "loaded_pages: {loaded_pages:?}");
 }
 
 fn _summary(

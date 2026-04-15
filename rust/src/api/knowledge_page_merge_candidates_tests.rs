@@ -212,6 +212,71 @@ fn list_mergeable_knowledge_page_summaries_rejects_topics_with_only_two_shared_t
 }
 
 #[test]
+fn list_mergeable_knowledge_page_summaries_rejects_short_version_token_differences() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [46u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: {
+                    let mut page = crate::knowledge::KnowledgePage::new(
+                        "page:topics:roadmap_2025_q1",
+                        crate::knowledge::KnowledgePageType::Topics,
+                        "Roadmap 2025 Q1",
+                        now,
+                    );
+                    page.current_summary = "Quarter one roadmap".to_string();
+                    page.current_body = "Topic detail for Q1".to_string();
+                    page.primary_evidence_ids = vec!["doc:roadmap-2025-q1".to_string()];
+                    page.source_count = 1;
+                    page
+                },
+                source_document_ids: vec!["doc:roadmap-2025-q1".to_string()],
+                claim_ids: vec!["claim:roadmap-2025-q1".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: {
+                    let mut page = crate::knowledge::KnowledgePage::new(
+                        "page:topics:roadmap_2025_q2",
+                        crate::knowledge::KnowledgePageType::Topics,
+                        "Roadmap 2025 Q2",
+                        now + 1,
+                    );
+                    page.current_summary = "Quarter two roadmap".to_string();
+                    page.current_body = "Topic detail for Q2".to_string();
+                    page.primary_evidence_ids = vec!["doc:roadmap-2025-q2".to_string()];
+                    page.source_count = 1;
+                    page
+                },
+                source_document_ids: vec!["doc:roadmap-2025-q2".to_string()],
+                claim_ids: vec!["claim:roadmap-2025-q2".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+    crate::db::mark_knowledge_pages_refreshed(&conn, now + 2).expect("mark pages refreshed");
+
+    let candidates = crate::api::knowledge::db_list_mergeable_knowledge_page_summaries(
+        app_dir_string,
+        key.to_vec(),
+        "page:topics:roadmap_2025_q1".to_string(),
+    )
+    .expect("list mergeable pages");
+
+    assert!(
+        candidates.is_empty(),
+        "unexpected candidates: {candidates:?}"
+    );
+}
+
+#[test]
 fn list_mergeable_knowledge_page_summaries_allows_people_pages_with_short_reordered_tokens() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

@@ -539,7 +539,7 @@ fn normalized_merge_identity_variants(
     let tokens = merge_token_stream(value)
         .into_iter()
         .filter(|token| {
-            token.len() >= merge_token_min_len(page_type) && !merge_token_is_stopword(token)
+            merge_token_kept_for_identity(page_type, token) && !merge_token_is_stopword(token)
         })
         .collect::<Vec<_>>();
     if !tokens.is_empty() {
@@ -554,6 +554,14 @@ fn normalized_merge_identity_variants(
         out.insert(collapsed);
     }
     out
+}
+
+fn merge_token_kept_for_identity(
+    page_type: crate::knowledge::KnowledgePageType,
+    token: &str,
+) -> bool {
+    token.len() >= merge_token_min_len(page_type)
+        || token.chars().any(|ch| ch.is_ascii_digit())
 }
 
 fn merge_token_stream(value: &str) -> Vec<String> {
