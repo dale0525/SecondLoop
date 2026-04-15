@@ -398,10 +398,10 @@ fn collect_matching_page_context_blocks_keeps_searching_when_early_match_is_weak
 }
 
 #[test]
-fn collect_matching_page_context_blocks_scans_past_first_window_for_stronger_late_body_match() {
+fn collect_matching_page_context_blocks_extends_scan_when_first_window_finds_nothing() {
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();
-    let mut candidate_summaries = vec![(_summary("page:weak", "Weak Page", "Mandarin"), 1)];
+    let mut candidate_summaries = Vec::new();
     for index in 2..=12 {
         candidate_summaries.push((
             _summary(
@@ -421,9 +421,7 @@ fn collect_matching_page_context_blocks_scans_past_first_window_for_stronger_lat
         candidate_summaries,
         |page_id| {
             inspected_bodies.push(page_id.to_string());
-            Some(if page_id == "page:weak" {
-                "Generic body".to_string()
-            } else if page_id == "page:late" {
+            Some(if page_id == "page:late" {
                 "Reply in Mandarin Chinese.".to_string()
             } else {
                 "Generic body".to_string()
@@ -431,9 +429,7 @@ fn collect_matching_page_context_blocks_scans_past_first_window_for_stronger_lat
         },
         |page_id| {
             loaded_pages.push(page_id.to_string());
-            Some(if page_id == "page:weak" {
-                _page(page_id, "Mandarin", "Generic body")
-            } else if page_id == "page:late" {
+            Some(if page_id == "page:late" {
                 _page(page_id, "Generic summary", "Reply in Mandarin Chinese.")
             } else {
                 _page(page_id, "Generic summary", "Generic body")
@@ -448,7 +444,7 @@ fn collect_matching_page_context_blocks_scans_past_first_window_for_stronger_lat
             .collect::<Vec<_>>(),
         vec!["page:late"]
     );
-    assert_eq!(inspected_bodies.len(), 13);
+    assert_eq!(inspected_bodies.len(), 12);
     assert_eq!(loaded_pages, vec!["page:late"]);
 }
 
@@ -529,7 +525,8 @@ fn collect_matching_page_context_blocks_planning_queries_still_search_late_candi
 }
 
 #[test]
-fn collect_matching_page_context_blocks_scans_all_candidate_bodies_but_only_loads_finalists() {
+fn collect_matching_page_context_blocks_stops_scanning_after_first_window_when_it_has_top_k_matches(
+) {
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = (0..20)
@@ -573,12 +570,16 @@ fn collect_matching_page_context_blocks_scans_all_candidate_bodies_but_only_load
             .collect::<Vec<_>>(),
         vec!["page:3", "page:11"]
     );
-    assert_eq!(inspected_bodies.len(), 20);
+    assert_eq!(inspected_bodies.len(), 12);
+    assert!(
+        inspected_bodies.iter().all(|page_id| page_id != "page:19"),
+        "inspected_bodies: {inspected_bodies:?}"
+    );
     assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
 }
 
 #[test]
-fn collect_matching_page_context_blocks_scans_large_candidate_sets_globally() {
+fn collect_matching_page_context_blocks_avoids_global_scans_for_large_candidate_sets() {
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = (0..64)
@@ -622,7 +623,11 @@ fn collect_matching_page_context_blocks_scans_large_candidate_sets_globally() {
             .collect::<Vec<_>>(),
         vec!["page:3", "page:11"]
     );
-    assert_eq!(inspected_bodies.len(), 64);
+    assert_eq!(inspected_bodies.len(), 12);
+    assert!(
+        inspected_bodies.iter().all(|page_id| page_id != "page:63"),
+        "inspected_bodies: {inspected_bodies:?}"
+    );
     assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
 }
 
@@ -667,7 +672,7 @@ fn collect_matching_page_context_blocks_keeps_scanning_large_candidate_sets_unti
         vec!["page:27"]
     );
     assert!(
-        inspected_bodies.len() > 12,
+        inspected_bodies.len() > 12 && inspected_bodies.len() < 64,
         "inspected_bodies: {inspected_bodies:?}"
     );
     assert!(

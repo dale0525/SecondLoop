@@ -211,7 +211,7 @@ fn build_generated_planning_fallback_block(
     })
 }
 
-fn candidate_body_scan_limit(top_k: usize, candidate_count: usize) -> usize {
+fn candidate_body_scan_window_size(top_k: usize, candidate_count: usize) -> usize {
     candidate_count
         .min(PAGE_BODY_SCAN_WINDOW_MIN.max(top_k.max(1) * PAGE_BODY_SCAN_WINDOW_PER_RESULT))
 }
@@ -258,20 +258,25 @@ where
     F: FnMut(&str) -> Option<String>,
     G: FnMut(&str) -> Option<knowledge::KnowledgePage>,
 {
-    let scan_limit = candidate_body_scan_limit(top_k, candidate_summaries.len());
+    let scan_window_size = candidate_body_scan_window_size(top_k, candidate_summaries.len()).max(1);
     let mut candidates = Vec::<(String, usize)>::new();
-    for chunk in candidate_summaries.chunks(scan_limit.max(1)) {
+    let target_count = top_k.max(1);
+    for chunk in candidate_summaries.chunks(scan_window_size) {
         candidates.extend(collect_matching_page_context_candidates(
             question,
             is_planning_query,
             chunk.iter(),
             &mut load_page_body,
         ));
+
+        if candidates.len() >= target_count {
+            break;
+        }
     }
     candidates.sort_by(|left, right| right.1.cmp(&left.1));
     candidates
         .into_iter()
-        .take(top_k.max(1))
+        .take(target_count)
         .filter_map(|(page_id, score)| {
             load_page(&page_id).map(|page| render_page_context_block(&page, score as f64))
         })

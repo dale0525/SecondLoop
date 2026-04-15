@@ -507,8 +507,8 @@ fn knowledge_pages_are_merge_related(
         return false;
     }
 
-    let source_identities = merge_candidate_identities(source_page_id, source_title);
-    let target_identities = merge_candidate_identities(target_page_id, target_title);
+    let source_identities = merge_candidate_identities(page_type, source_page_id, source_title);
+    let target_identities = merge_candidate_identities(page_type, target_page_id, target_title);
     if source_identities
         .iter()
         .any(|identity| target_identities.contains(identity))
@@ -516,8 +516,8 @@ fn knowledge_pages_are_merge_related(
         return true;
     }
 
-    let source_tokens = merge_candidate_tokens(source_page_id, source_title);
-    let target_tokens = merge_candidate_tokens(target_page_id, target_title);
+    let source_tokens = merge_candidate_tokens(page_type, source_page_id, source_title);
+    let target_tokens = merge_candidate_tokens(page_type, target_page_id, target_title);
     if source_tokens.is_empty() || target_tokens.is_empty() {
         return false;
     }
@@ -530,54 +530,94 @@ fn knowledge_pages_are_merge_related(
 }
 
 fn merge_candidate_identities(
+    page_type: crate::knowledge::KnowledgePageType,
     page_id: &str,
     title: &str,
 ) -> std::collections::BTreeSet<String> {
     let mut out = std::collections::BTreeSet::<String>::new();
     let merge_key = page_id.rsplit(':').next().unwrap_or(page_id);
-    if let Some(identity) = normalized_merge_identity(merge_key) {
-        out.insert(identity);
-    }
-    if let Some(identity) = normalized_merge_identity(title) {
-        out.insert(identity);
-    }
+    out.extend(normalized_merge_identity_variants(page_type, merge_key));
+    out.extend(normalized_merge_identity_variants(page_type, title));
     out
 }
 
-fn normalized_merge_identity(value: &str) -> Option<String> {
+fn normalized_merge_identity_variants(
+    page_type: crate::knowledge::KnowledgePageType,
+    value: &str,
+) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::<String>::new();
     let tokens = merge_token_stream(value)
         .into_iter()
-        .filter(|token| !merge_token_is_stopword(token))
+        .filter(|token| {
+            token.len() >= merge_token_min_len(page_type) && !merge_token_is_stopword(token)
+        })
         .collect::<Vec<_>>();
-    if tokens.is_empty() {
-        None
-    } else {
-        Some(tokens.join(" "))
+    if !tokens.is_empty() {
+        out.insert(tokens.join(" "));
     }
-}
-
-fn merge_candidate_tokens(page_id: &str, title: &str) -> std::collections::BTreeSet<String> {
-    let mut out = std::collections::BTreeSet::<String>::new();
-    let merge_key = page_id.rsplit(':').next().unwrap_or(page_id);
-    append_merge_tokens(&mut out, merge_key);
-    append_merge_tokens(&mut out, title);
+    if let Some(collapsed) = collapsed_merge_token(page_type, value) {
+        out.insert(collapsed);
+    }
     out
 }
 
-fn append_merge_tokens(out: &mut std::collections::BTreeSet<String>, value: &str) {
+fn merge_candidate_tokens(
+    page_type: crate::knowledge::KnowledgePageType,
+    page_id: &str,
+    title: &str,
+) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::<String>::new();
+    let merge_key = page_id.rsplit(':').next().unwrap_or(page_id);
+    append_merge_tokens(page_type, &mut out, merge_key);
+    append_merge_tokens(page_type, &mut out, title);
+    out
+}
+
+fn append_merge_tokens(
+    page_type: crate::knowledge::KnowledgePageType,
+    out: &mut std::collections::BTreeSet<String>,
+    value: &str,
+) {
     out.extend(
         merge_token_stream(value)
             .into_iter()
-            .filter(|token| !merge_token_is_stopword(token)),
+            .filter(|token| {
+                token.len() >= merge_token_min_len(page_type) && !merge_token_is_stopword(token)
+            }),
     );
+    if let Some(collapsed) = collapsed_merge_token(page_type, value) {
+        out.insert(collapsed);
+    }
 }
 
 fn merge_token_stream(value: &str) -> Vec<String> {
     value
         .split(|ch: char| !ch.is_alphanumeric())
         .map(|token| token.trim().to_lowercase())
-        .filter(|token| token.len() >= 3)
+        .filter(|token| !token.is_empty())
         .collect()
+}
+
+fn collapsed_merge_token(
+    page_type: crate::knowledge::KnowledgePageType,
+    value: &str,
+) -> Option<String> {
+    let collapsed = value
+        .chars()
+        .filter(|ch| ch.is_alphanumeric())
+        .flat_map(|ch| ch.to_lowercase())
+        .collect::<String>();
+    if collapsed.len() < merge_token_min_len(page_type) || merge_token_is_stopword(&collapsed) {
+        return None;
+    }
+    Some(collapsed)
+}
+
+fn merge_token_min_len(page_type: crate::knowledge::KnowledgePageType) -> usize {
+    match page_type {
+        crate::knowledge::KnowledgePageType::People => 2,
+        _ => 3,
+    }
 }
 
 fn merge_token_is_stopword(token: &str) -> bool {
