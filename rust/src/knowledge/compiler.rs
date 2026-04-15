@@ -332,8 +332,14 @@ fn page_type_for_claim(claim: &KnowledgeClaim) -> Option<KnowledgePageType> {
     }
 }
 
+fn is_non_page_generated_document(document_id: &str) -> bool {
+    document_id.starts_with("generated:session-digest:")
+}
+
 fn claim_types_for_document_id(document_id: &str) -> Vec<KnowledgeClaimType> {
-    if document_id.starts_with("generated:preference:") {
+    if is_non_page_generated_document(document_id) {
+        Vec::new()
+    } else if document_id.starts_with("generated:preference:") {
         vec![KnowledgeClaimType::Preference]
     } else if document_id.starts_with("generated:profile:person-") {
         vec![KnowledgeClaimType::Relationship]
@@ -345,8 +351,10 @@ fn claim_types_for_document_id(document_id: &str) -> Vec<KnowledgeClaimType> {
         vec![KnowledgeClaimType::Focus, KnowledgeClaimType::Thread]
     } else if document_id.starts_with("generated:pattern:") {
         vec![KnowledgeClaimType::Topic]
-    } else {
+    } else if document_id.starts_with("generated:") {
         vec![KnowledgeClaimType::Topic]
+    } else {
+        Vec::new()
     }
 }
 
@@ -402,7 +410,9 @@ fn page_id_for_type(page_type: KnowledgePageType) -> String {
 }
 
 pub(crate) fn primary_page_ids_for_generated_document(document_id: &str) -> Vec<String> {
-    if document_id.starts_with("generated:preference:") {
+    if is_non_page_generated_document(document_id) {
+        Vec::new()
+    } else if document_id.starts_with("generated:preference:") {
         vec![page_id_for_type(KnowledgePageType::Preferences)]
     } else if document_id.starts_with("generated:profile:person-") {
         vec![page_id_for_type_with_facet(
@@ -419,6 +429,11 @@ pub(crate) fn primary_page_ids_for_generated_document(document_id: &str) -> Vec<
             page_id_for_type(KnowledgePageType::ActiveThreads),
         ]
     } else if document_id.starts_with("generated:pattern:") {
+        vec![page_id_for_type_with_facet(
+            KnowledgePageType::Topics,
+            &facet_key_for_document_id(document_id),
+        )]
+    } else if document_id.starts_with("generated:") {
         vec![page_id_for_type_with_facet(
             KnowledgePageType::Topics,
             &facet_key_for_document_id(document_id),
@@ -474,7 +489,9 @@ fn fallback_title_for_document(document: &ContentKnowledgeDocument) -> &str {
 }
 
 fn page_seeds_for_document(document: &ContentKnowledgeDocument) -> Vec<PageSeed> {
-    if document.document_id.starts_with("generated:preference:") {
+    if is_non_page_generated_document(&document.document_id) {
+        Vec::new()
+    } else if document.document_id.starts_with("generated:preference:") {
         vec![singleton_page_seed(KnowledgePageType::Preferences)]
     } else if document
         .document_id
@@ -504,6 +521,18 @@ fn page_seeds_for_document(document: &ContentKnowledgeDocument) -> Vec<PageSeed>
             singleton_page_seed(KnowledgePageType::ActiveThreads),
         ]
     } else if document.document_id.starts_with("generated:pattern:") {
+        let facet_key = facet_key_for_document_id(&document.document_id);
+        vec![faceted_page_seed(
+            KnowledgePageType::Topics,
+            &facet_key,
+            page_title_for_facet(
+                document.title.as_deref(),
+                fallback_title_for_document(document),
+                "Topic",
+                &facet_key,
+            ),
+        )]
+    } else if document.document_id.starts_with("generated:") {
         let facet_key = facet_key_for_document_id(&document.document_id);
         vec![faceted_page_seed(
             KnowledgePageType::Topics,

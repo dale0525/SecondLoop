@@ -164,6 +164,41 @@ fn refresh_knowledge_pages_paginates_generated_documents_past_first_512() {
 }
 
 #[test]
+fn refresh_knowledge_pages_compiles_unknown_generated_documents_into_topic_pages() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [142u8; 32];
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:misc:travel-rhythm",
+        "User is alternating between Beijing and Shanghai this month.",
+        7_654,
+    );
+
+    let pages =
+        knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh knowledge pages");
+    let topic_page = pages
+        .iter()
+        .find(|page| page.page_id == "page:topics:travel_rhythm")
+        .expect("topic page for unknown generated document");
+
+    assert_eq!(topic_page.page_type, knowledge::KnowledgePageType::Topics);
+    assert!(topic_page.current_body.contains("Beijing"));
+    assert!(topic_page
+        .primary_evidence_ids
+        .iter()
+        .any(|document_id| document_id == "generated:misc:travel-rhythm"));
+    assert_eq!(
+        knowledge::compiler::primary_page_ids_for_generated_document(
+            "generated:misc:travel-rhythm"
+        ),
+        vec!["page:topics:travel_rhythm".to_string()]
+    );
+}
+
+#[test]
 fn refresh_knowledge_pages_compiles_active_threads_page_from_active_task_pattern() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = db::open(dir.path()).expect("open");

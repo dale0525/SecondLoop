@@ -96,6 +96,35 @@ fn knowledge_schema_migration_seeds_rebuild_policy_versions() {
 }
 
 #[test]
+fn reset_knowledge_index_resets_page_refresh_state() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    conn.execute(
+        r#"UPDATE knowledge_rebuild_state
+           SET pages_refresh_required = 0,
+               last_pages_refresh_completed_at_ms = 12345
+           WHERE state_key = 1"#,
+        [],
+    )
+    .expect("seed page refresh state");
+
+    reset_knowledge_index(&conn).expect("reset knowledge index");
+
+    let state: (i64, Option<i64>) = conn
+        .query_row(
+            r#"SELECT pages_refresh_required, last_pages_refresh_completed_at_ms
+               FROM knowledge_rebuild_state
+               WHERE state_key = 1"#,
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("load page refresh state");
+
+    assert_eq!(state, (1, None));
+}
+
+#[test]
 fn load_knowledge_memory_feedback_map_returns_defaults_for_missing_rows() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");
