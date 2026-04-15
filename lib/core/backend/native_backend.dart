@@ -34,6 +34,7 @@ import 'app_backend.dart';
 import 'attachments_backend.dart';
 import 'semantic_parse_attempt_aware_backend.dart';
 import 'rust_external_library_resolver.dart';
+import 'serialized_rust_handler.dart';
 
 part 'native_backend_knowledge.dart';
 part 'native_backend_todo_followups.dart';
@@ -467,6 +468,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
             recoverInterruptedExternalImportBatchesOnInit,
         _rustLibInit = rustLibInit ??
             (() => RustLib.init(
+                  handler: kIsWeb ? SerializedRustHandler() : null,
                   externalLibrary: resolveDesktopRustExternalLibrary(),
                 ));
 
