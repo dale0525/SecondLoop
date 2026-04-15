@@ -251,7 +251,10 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
     final candidates = data.mergeTargets;
     if (candidates.isEmpty) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text(context.t.memory.emptyState)),
+        SnackBar(
+          content: Text(context.t.memory.emptyState),
+          duration: const Duration(seconds: 3),
+        ),
       );
       return null;
     }
