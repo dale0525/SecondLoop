@@ -259,12 +259,18 @@ where
     G: FnMut(&str) -> Option<knowledge::KnowledgePage>,
 {
     let scan_window_size = candidate_body_scan_window_size(top_k, candidate_summaries.len()).max(1);
-    let mut candidates = collect_matching_page_context_candidates(
-        question,
-        is_planning_query,
-        candidate_summaries.iter().take(scan_window_size),
-        &mut load_page_body,
-    );
+    let mut candidates = Vec::<(String, usize)>::new();
+    let mut start = 0usize;
+    while start < candidate_summaries.len() {
+        let end = (start + scan_window_size).min(candidate_summaries.len());
+        candidates.extend(collect_matching_page_context_candidates(
+            question,
+            is_planning_query,
+            candidate_summaries[start..end].iter(),
+            &mut load_page_body,
+        ));
+        start = end;
+    }
     let target_count = top_k.max(1);
     candidates.sort_by(|left, right| right.1.cmp(&left.1));
     candidates

@@ -55,22 +55,23 @@ fn sanitize_key(value: &str) -> String {
     let mut out = String::new();
     let mut last_dash = false;
     for ch in value.chars() {
-        let normalized = if ch.is_ascii_alphanumeric() {
-            ch.to_ascii_lowercase()
-        } else {
-            '-'
-        };
-        if normalized == '-' {
-            if !last_dash {
-                out.push('-');
+        if ch.is_alphanumeric() || is_cjk_unified_ideograph(ch) {
+            for normalized in ch.to_lowercase() {
+                out.push(normalized);
             }
-            last_dash = true;
-        } else {
-            out.push(normalized);
             last_dash = false;
+            continue;
+        }
+        if !last_dash {
+            out.push('-');
+            last_dash = true;
         }
     }
     out.trim_matches('-').to_string()
+}
+
+fn is_cjk_unified_ideograph(ch: char) -> bool {
+    ('\u{4E00}'..='\u{9FFF}').contains(&ch)
 }
 
 #[cfg(test)]
