@@ -267,11 +267,7 @@ fn collect_matching_page_context_blocks_keeps_late_candidates_available_for_rera
         candidate_summaries,
         |page_id| {
             inspected_bodies.push(page_id.to_string());
-            Some(if page_id == "page:match" {
-                "Generic body".to_string()
-            } else {
-                "Generic body".to_string()
-            })
+            Some("Generic body".to_string())
         },
         |page_id| {
             loaded_pages.push(page_id.to_string());

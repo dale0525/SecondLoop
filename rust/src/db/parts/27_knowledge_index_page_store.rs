@@ -4,9 +4,7 @@ pub fn replace_knowledge_claims(
     claims: &[crate::knowledge::KnowledgeClaim],
 ) -> Result<()> {
     conn.execute_batch("BEGIN IMMEDIATE;")?;
-    let result = (|| -> Result<()> {
-        replace_knowledge_claims_in_transaction(conn, key, claims)
-    })();
+    let result = replace_knowledge_claims_in_transaction(conn, key, claims);
 
     match result {
         Ok(()) => {
@@ -92,9 +90,7 @@ pub(crate) fn upsert_compiled_knowledge_pages(
     pages: &[crate::knowledge::compiler::CompiledKnowledgePageRecord],
 ) -> Result<()> {
     conn.execute_batch("BEGIN IMMEDIATE;")?;
-    let result = (|| -> Result<()> {
-        upsert_compiled_knowledge_pages_in_transaction(conn, key, pages)
-    })();
+    let result = upsert_compiled_knowledge_pages_in_transaction(conn, key, pages);
 
     match result {
         Ok(()) => {

@@ -192,7 +192,7 @@ fn compile_pages_from_claims(
 
     let mut compiled = by_page_id
         .into_iter()
-        .map(|(_, (seed, indexes))| {
+        .filter_map(|(_, (seed, indexes))| {
             let mut body_lines = Vec::<String>::new();
             let mut summary_lines = Vec::<String>::new();
             let mut primary_evidence_ids = Vec::<String>::new();
@@ -299,7 +299,6 @@ fn compile_pages_from_claims(
                 claim_ids: dedup(claim_ids),
             })
         })
-        .flatten()
         .collect::<Vec<_>>();
     compiled.extend(compile_open_question_pages(claims));
     compiled
@@ -362,8 +361,6 @@ fn claim_types_for_document_id(document_id: &str) -> Vec<KnowledgeClaimType> {
         vec![KnowledgeClaimType::Event]
     } else if document_id.starts_with("generated:pattern:active-task-focus") {
         vec![KnowledgeClaimType::Focus, KnowledgeClaimType::Thread]
-    } else if document_id.starts_with("generated:pattern:") {
-        vec![KnowledgeClaimType::Topic]
     } else if document_id.starts_with("generated:") {
         vec![KnowledgeClaimType::Topic]
     } else {
@@ -441,11 +438,6 @@ pub(crate) fn primary_page_ids_for_generated_document(document_id: &str) -> Vec<
             page_id_for_type(KnowledgePageType::CurrentFocus),
             page_id_for_type(KnowledgePageType::ActiveThreads),
         ]
-    } else if document_id.starts_with("generated:pattern:") {
-        vec![page_id_for_type_with_facet(
-            KnowledgePageType::Topics,
-            &facet_key_for_document_id(document_id),
-        )]
     } else if document_id.starts_with("generated:") {
         vec![page_id_for_type_with_facet(
             KnowledgePageType::Topics,
@@ -533,18 +525,6 @@ fn page_seeds_for_document(document: &ContentKnowledgeDocument) -> Vec<PageSeed>
             singleton_page_seed(KnowledgePageType::CurrentFocus),
             singleton_page_seed(KnowledgePageType::ActiveThreads),
         ]
-    } else if document.document_id.starts_with("generated:pattern:") {
-        let facet_key = facet_key_for_document_id(&document.document_id);
-        vec![faceted_page_seed(
-            KnowledgePageType::Topics,
-            &facet_key,
-            page_title_for_facet(
-                document.title.as_deref(),
-                fallback_title_for_document(document),
-                "Topic",
-                &facet_key,
-            ),
-        )]
     } else if document.document_id.starts_with("generated:") {
         let facet_key = facet_key_for_document_id(&document.document_id);
         vec![faceted_page_seed(
