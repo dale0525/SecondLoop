@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -73,4 +75,89 @@ void main() {
     expect(await second.readSyncKey(),
         Uint8List.fromList(List<int>.filled(32, 2)));
   });
+
+  test('SyncConfigStore migrates legacy unscoped secure storage into a scope',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final storage = _InMemorySecureStorage({
+      'sync_config_blob_json_v1':
+          '{"sync_backend_type":"managedvault","sync_webdav_remote_root":"uid-1","sync_managed_vault_base_url":"https://vault-1.example"}',
+    });
+    final store = SyncConfigStore(
+      storage: storage,
+      scopeKey: 'web-native:uid-1',
+      allowSecureStoreMigrationInTestEnvironment: true,
+    );
+
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(await store.readRemoteRoot(), 'uid-1');
+    expect(await store.resolveManagedVaultBaseUrl(), 'https://vault-1.example');
+    expect(storage.values['sync_config_blob_json_v1'], isNull);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getString('sync_config_public_json_v2::web-native:uid-1'),
+      isNotNull,
+    );
+    expect(
+      jsonDecode(
+          prefs.getString('sync_config_public_json_v2::web-native:uid-1')!),
+      {
+        'sync_backend_type': 'managedvault',
+        'sync_webdav_remote_root': 'uid-1',
+        'sync_managed_vault_base_url': 'https://vault-1.example',
+      },
+    );
+  });
+}
+
+final class _InMemorySecureStorage extends FlutterSecureStorage {
+  _InMemorySecureStorage(this.values);
+
+  final Map<String, String> values;
+
+  @override
+  Future<String?> read({
+    required String key,
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    return values[key];
+  }
+
+  @override
+  Future<void> write({
+    required String key,
+    required String? value,
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    if (value == null) {
+      values.remove(key);
+      return;
+    }
+    values[key] = value;
+  }
+
+  @override
+  Future<void> delete({
+    required String key,
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    values.remove(key);
+  }
 }

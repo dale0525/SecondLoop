@@ -18,18 +18,22 @@ final class SyncConfigStore {
     FlutterSecureStorage? storage,
     SyncSecretStore? secretStore,
     String? scopeKey,
+    bool allowSecureStoreMigrationInTestEnvironment = false,
     String managedVaultDefaultBaseUrl = const String.fromEnvironment(
       'SECONDLOOP_MANAGED_VAULT_BASE_URL',
       defaultValue: '',
     ),
   })  : _unusedLegacySecureStorage = storage,
         _scopeKey = _normalizeScopeKey(scopeKey),
+        _allowSecureStoreMigrationInTestEnvironment =
+            allowSecureStoreMigrationInTestEnvironment,
         _secretStore = secretStore ??
             SyncSecretStore(scopeKey: _normalizeScopeKey(scopeKey)),
         _managedVaultDefaultBaseUrl = managedVaultDefaultBaseUrl;
 
   final FlutterSecureStorage? _unusedLegacySecureStorage;
   final String? _scopeKey;
+  final bool _allowSecureStoreMigrationInTestEnvironment;
   final SyncSecretStore _secretStore;
   final String _managedVaultDefaultBaseUrl;
   late final SyncConfigMigrator _migrator =
@@ -604,25 +608,38 @@ final class SyncConfigStore {
   }
 
   Future<Map<String, String>> _tryMigrateFromSecureStore() async {
-    if (syncConfigStoreIsFlutterTestEnvironment()) {
+    if (syncConfigStoreIsFlutterTestEnvironment() &&
+        !_allowSecureStoreMigrationInTestEnvironment) {
       return <String, String>{};
     }
 
-    if (syncConfigStoreIsMacPlatform()) {
+    if (syncConfigStoreIsMacPlatform() &&
+        !_allowSecureStoreMigrationInTestEnvironment) {
       return <String, String>{};
     }
 
-    final secure = SecureBlobStore(
-      storage: _unusedLegacySecureStorage ?? const FlutterSecureStorage(),
+    final storage = _unusedLegacySecureStorage ?? const FlutterSecureStorage();
+    final scopedSecure = SecureBlobStore(
+      storage: storage,
       scopeKey: _scopeKey,
     );
 
-    Map<String, String> legacy;
-    try {
-      legacy = await secure.readAll().timeout(const Duration(seconds: 1),
-          onTimeout: () => <String, String>{});
-    } catch (_) {
-      return <String, String>{};
+    Future<Map<String, String>> readSecure(SecureBlobStore secure) async {
+      try {
+        return await secure.readAll().timeout(const Duration(seconds: 1),
+            onTimeout: () => <String, String>{});
+      } catch (_) {
+        return <String, String>{};
+      }
+    }
+
+    var legacy = await readSecure(scopedSecure);
+    var migratedFromUnscoped = false;
+    SecureBlobStore? unscopedSecure;
+    if (legacy.isEmpty && _scopeKey != null) {
+      unscopedSecure = SecureBlobStore(storage: storage);
+      legacy = await readSecure(unscopedSecure);
+      migratedFromUnscoped = legacy.isNotEmpty;
     }
 
     final migrated = <String, String>{};
@@ -630,6 +647,7 @@ final class SyncConfigStore {
       kBackendType,
       kAutoEnabled,
       kLocalDir,
+      kManagedVaultBaseUrl,
       kWebdavBaseUrl,
       kWebdavUsername,
       kRemoteRoot,
@@ -665,6 +683,9 @@ final class SyncConfigStore {
     }
     if (migratedSecret) {
       await _markSecretStoreVersion();
+    }
+    if (migratedFromUnscoped) {
+      await unscopedSecure?.clear();
     }
     return migrated;
   }

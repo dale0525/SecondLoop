@@ -3866,7 +3866,7 @@ pub fn sync_managed_vault_push_ops_only(
 }
 
 #[flutter_rust_bridge::frb]
-pub fn sync_managed_vault_pull(
+pub async fn sync_managed_vault_pull(
     app_dir: String,
     key: Vec<u8>,
     sync_key: Vec<u8>,
@@ -3877,14 +3877,30 @@ pub fn sync_managed_vault_pull(
     let key = key_from_bytes(key)?;
     let sync_key = sync_key_from_bytes(sync_key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    sync::managed_vault::pull(
-        &conn,
-        &key,
-        &sync_key,
-        &base_url,
-        &vault_id,
-        &firebase_id_token,
-    )
+    #[cfg(target_family = "wasm")]
+    {
+        sync::managed_vault::pull(
+            &conn,
+            &key,
+            &sync_key,
+            &base_url,
+            &vault_id,
+            &firebase_id_token,
+        )
+        .await
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    {
+        sync::managed_vault::pull(
+            &conn,
+            &key,
+            &sync_key,
+            &base_url,
+            &vault_id,
+            &firebase_id_token,
+        )
+    }
 }
 
 #[flutter_rust_bridge::frb]

@@ -86,6 +86,17 @@ class _FakeCloudAuthController extends ChangeNotifier
   }
 }
 
+final class _MissingTokenCloudAuthController extends _FakeCloudAuthController {
+  _MissingTokenCloudAuthController({
+    super.initialUid,
+    super.initialEmail,
+    super.initialEmailVerified,
+  });
+
+  @override
+  Future<String?> getIdToken() async => null;
+}
+
 class _FakeWebNativeBackend extends TestAppBackend {
   int syncManagedVaultPullCalls = 0;
   int deriveSyncKeyCalls = 0;
@@ -241,6 +252,41 @@ void main() {
     expect(backend.lastSyncKey, Uint8List.fromList(List<int>.filled(32, 3)));
     expect(
         await store.readSyncKey(), Uint8List.fromList(List<int>.filled(32, 3)));
+  });
+
+  testWidgets(
+      'web initial sync gate surfaces missing auth token instead of silently skipping bootstrap sync',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: _EmptyWebNativeBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: WebInitialSyncGate(
+                authController: _MissingTokenCloudAuthController(
+                  initialUid: 'uid-1',
+                  initialEmail: 'user@example.com',
+                  initialEmailVerified: true,
+                ),
+                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(Placeholder), findsNothing);
+    expect(find.textContaining('cloud_auth_token_unavailable'), findsOneWidget);
   });
 
   testWidgets(

@@ -23,6 +23,39 @@ void main() {
     );
   });
 
+  test('wasm managed vault pull stays async end-to-end', () async {
+    final managedVault = await readRustSource('rust/src/sync/managed_vault.rs');
+    final artifacts =
+        await readRustSource('rust/src/sync/managed_vault/artifacts.rs');
+    final core = await readRustSource('rust/src/api/core.rs');
+
+    expect(
+      RegExp(
+        r'#\[cfg\(target_family = "wasm"\)\]\s+pub async fn pull\(',
+        multiLine: true,
+      ).hasMatch(managedVault),
+      isTrue,
+    );
+    expect(
+      managedVault,
+      contains('download_missing_embedding_artifact_blobs_async('),
+    );
+    expect(
+      RegExp(
+        r'#\[cfg\(target_family = "wasm"\)\]\s+pub\(super\) async fn download_missing_embedding_artifact_blobs_async\(',
+        multiLine: true,
+      ).hasMatch(artifacts),
+      isTrue,
+    );
+    expect(
+      RegExp(
+        r'#\[flutter_rust_bridge::frb\]\s+pub async fn sync_managed_vault_pull\(',
+        multiLine: true,
+      ).hasMatch(core),
+      isTrue,
+    );
+  });
+
   test(
       'wasm shared rust modules use platform time helper instead of SystemTime',
       () async {

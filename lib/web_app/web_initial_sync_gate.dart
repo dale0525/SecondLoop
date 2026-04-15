@@ -129,7 +129,9 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
       widget.authController,
       mode: CloudAuthAccessMode.interactive,
     );
-    if (idToken == null || idToken.trim().isEmpty) return;
+    if (idToken == null || idToken.trim().isEmpty) {
+      throw const _WebInitialSyncAuthTokenUnavailable();
+    }
 
     final syncKey = await syncConfigStore.readSyncKey() ??
         await SyncKeyManager.deriveManagedVaultSyncKey(
@@ -208,4 +210,13 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
 
 final class _WebInitialSyncReloadRequested implements Exception {
   const _WebInitialSyncReloadRequested();
+}
+
+final class _WebInitialSyncAuthTokenUnavailable implements Exception {
+  const _WebInitialSyncAuthTokenUnavailable();
+
+  @override
+  String toString() {
+    return 'cloud_auth_token_unavailable';
+  }
 }

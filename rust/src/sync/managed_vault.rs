@@ -197,6 +197,39 @@ fn try_recover_pull_forbidden_by_rotating_device_id(
     }
 }
 
+#[cfg(target_family = "wasm")]
+async fn try_recover_pull_forbidden_by_rotating_device_id_async(
+    conn: &Connection,
+    http: &reqwest::Client,
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+    local_device_id: &str,
+) -> Result<Option<String>> {
+    if has_local_oplog_for_device(conn, local_device_id)? {
+        return Ok(None);
+    }
+
+    let next_device_id = uuid::Uuid::new_v4().to_string();
+    write_local_device_id(conn, &next_device_id)?;
+
+    match runtime::ensure_device_registered_async(
+        http,
+        base_url,
+        vault_id,
+        id_token,
+        &next_device_id,
+    )
+    .await
+    {
+        Ok(_) => Ok(Some(next_device_id)),
+        Err(error) => {
+            let _ = write_local_device_id(conn, local_device_id);
+            Err(error)
+        }
+    }
+}
+
 fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
     if bytes.len() < PULL_BIN_MAGIC_V1.len() + 4 {
         return Err(anyhow!("invalid pull_bin response: too short"));
@@ -290,9 +323,11 @@ fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
     Ok(out)
 }
 
-fn should_fallback_to_json_pull(status: runtime::StatusCode) -> bool {
-    let code = status.as_u16();
-    code == 404 || code == 408 || code == 429 || status.is_server_error()
+fn should_fallback_to_json_pull(status_code: u16) -> bool {
+    status_code == 404
+        || status_code == 408
+        || status_code == 429
+        || (500..600).contains(&status_code)
 }
 
 fn should_try_pull_bin_first() -> bool {
@@ -305,6 +340,142 @@ fn should_try_pull_bin_first() -> bool {
     {
         true
     }
+}
+
+fn apply_pull_bin_batch(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    scope_id: &str,
+    since: &BTreeMap<String, i64>,
+    ops: &[PullOpBin],
+) -> Result<(u64, BTreeMap<String, i64>)> {
+    let mut next_since = since.clone();
+    for op in ops {
+        next_since
+            .entry(op.device_id.clone())
+            .and_modify(|v| *v = (*v).max(op.seq))
+            .or_insert(op.seq);
+    }
+
+    let mut batch_applied = 0u64;
+    with_immediate_transaction(conn, || {
+        let mut pending = load_pending_apply_op_ids(conn, scope_id)?;
+        for op in ops {
+            let plaintext = decrypt_bytes(
+                sync_key,
+                &op.ciphertext,
+                format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
+            )?;
+            let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
+            let op_id = op_json["op_id"]
+                .as_str()
+                .ok_or_else(|| anyhow!("sync op missing op_id"))?;
+            let envelope_op_id = op.op_id.trim();
+            if !envelope_op_id.is_empty() && op_id != envelope_op_id {
+                return Err(anyhow!(
+                    "managed vault pull op_id mismatch: envelope={} plaintext={}",
+                    op.op_id,
+                    op_id
+                ));
+            }
+
+            let inserted = super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
+            if !inserted {
+                continue;
+            }
+
+            match super::apply_op(conn, db_key, &op_json) {
+                Ok(_) => {
+                    batch_applied += 1;
+                }
+                Err(e) if is_foreign_key_constraint_error(&e) => {
+                    pending.insert(op_id.to_string());
+                    super::kv_set_i64(conn, &pending_apply_key(scope_id, op_id), 1)?;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        apply_pending_ops_until_stable(conn, db_key, scope_id, &mut pending)?;
+        rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
+
+        if next_since != *since {
+            update_since_map(conn, scope_id, &next_since)?;
+        }
+
+        Ok(())
+    })?;
+
+    Ok((batch_applied, next_since))
+}
+
+fn apply_pull_json_batch(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    scope_id: &str,
+    since: &BTreeMap<String, i64>,
+    parsed: &PullResponse,
+) -> Result<(u64, BTreeMap<String, i64>)> {
+    let mut next_since = since.clone();
+    for (device_id, last_seq) in &parsed.next {
+        next_since.insert(device_id.to_string(), *last_seq);
+    }
+
+    let mut batch_applied = 0u64;
+    with_immediate_transaction(conn, || {
+        let mut pending = load_pending_apply_op_ids(conn, scope_id)?;
+        for op in &parsed.ops {
+            let ciphertext = B64_STD
+                .decode(op.ciphertext_b64.as_bytes())
+                .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?;
+            let plaintext = decrypt_bytes(
+                sync_key,
+                &ciphertext,
+                format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
+            )?;
+            let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
+            let op_id = op_json["op_id"]
+                .as_str()
+                .ok_or_else(|| anyhow!("sync op missing op_id"))?;
+            let envelope_op_id = op.op_id.trim();
+            if !envelope_op_id.is_empty() && op_id != envelope_op_id {
+                return Err(anyhow!(
+                    "managed vault pull op_id mismatch: envelope={} plaintext={}",
+                    op.op_id,
+                    op_id
+                ));
+            }
+
+            let inserted = super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
+            if !inserted {
+                continue;
+            }
+
+            match super::apply_op(conn, db_key, &op_json) {
+                Ok(_) => {
+                    batch_applied += 1;
+                }
+                Err(e) if is_foreign_key_constraint_error(&e) => {
+                    pending.insert(op_id.to_string());
+                    super::kv_set_i64(conn, &pending_apply_key(scope_id, op_id), 1)?;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        apply_pending_ops_until_stable(conn, db_key, scope_id, &mut pending)?;
+        rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
+
+        if next_since != *since {
+            update_since_map(conn, scope_id, &next_since)?;
+        }
+
+        Ok(())
+    })?;
+
+    Ok((batch_applied, next_since))
 }
 
 pub fn push(
@@ -795,6 +966,7 @@ fn with_immediate_transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 pub fn pull(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -836,7 +1008,8 @@ pub fn pull(
                 .send()?;
 
             let status = resp.status();
-            if status.as_u16() == 403 && !forbidden_device_recovery_attempted {
+            let status_code = status.as_u16();
+            if status_code == 403 && !forbidden_device_recovery_attempted {
                 forbidden_device_recovery_attempted = true;
                 if let Ok(Some(next_device_id)) = try_recover_pull_forbidden_by_rotating_device_id(
                     conn,
@@ -850,7 +1023,7 @@ pub fn pull(
                     continue;
                 }
             }
-            if should_fallback_to_json_pull(status) {
+            if should_fallback_to_json_pull(status_code) {
                 pull_bin_supported = Some(false);
             } else {
                 if !status.is_success() {
@@ -863,7 +1036,6 @@ pub fn pull(
                 pull_bin_supported = Some(true);
                 let body = resp.bytes()?;
                 let ops = decode_pull_bin_response(body.as_ref())?;
-
                 let mut next_since = since.clone();
                 for op in &ops {
                     next_since
@@ -884,57 +1056,10 @@ pub fn pull(
                     continue;
                 }
 
-                let mut batch_applied = 0u64;
-                with_immediate_transaction(conn, || {
-                    let mut pending = load_pending_apply_op_ids(conn, &scope_id)?;
-                    for op in &ops {
-                        let plaintext = decrypt_bytes(
-                            sync_key,
-                            &op.ciphertext,
-                            format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
-                        )?;
-                        let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-                        let op_id = op_json["op_id"]
-                            .as_str()
-                            .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-                        let envelope_op_id = op.op_id.trim();
-                        if !envelope_op_id.is_empty() && op_id != envelope_op_id {
-                            return Err(anyhow!(
-                                "managed vault pull op_id mismatch: envelope={} plaintext={}",
-                                op.op_id,
-                                op_id
-                            ));
-                        }
-
-                        let inserted =
-                            super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
-                        if !inserted {
-                            continue;
-                        }
-
-                        match super::apply_op(conn, db_key, &op_json) {
-                            Ok(_) => {
-                                batch_applied += 1;
-                            }
-                            Err(e) if is_foreign_key_constraint_error(&e) => {
-                                pending.insert(op_id.to_string());
-                                super::kv_set_i64(conn, &pending_apply_key(&scope_id, op_id), 1)?;
-                            }
-                            Err(e) => return Err(e),
-                        }
-                    }
-
-                    apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
-                    rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
-
-                    if next_since != since {
-                        update_since_map(conn, &scope_id, &next_since)?;
-                    }
-
-                    Ok(())
-                })?;
+                let (batch_applied, committed_since) =
+                    apply_pull_bin_batch(conn, db_key, sync_key, &scope_id, &since, &ops)?;
                 applied += batch_applied;
-                since = next_since;
+                since = committed_since;
 
                 if ops.len() < (PULL_LIMIT as usize) {
                     break;
@@ -989,59 +1114,10 @@ pub fn pull(
             continue;
         }
 
-        let mut batch_applied = 0u64;
-        with_immediate_transaction(conn, || {
-            let mut pending = load_pending_apply_op_ids(conn, &scope_id)?;
-            for op in &parsed.ops {
-                let ciphertext = B64_STD
-                    .decode(op.ciphertext_b64.as_bytes())
-                    .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?;
-                let plaintext = decrypt_bytes(
-                    sync_key,
-                    &ciphertext,
-                    format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
-                )?;
-                let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-                let op_id = op_json["op_id"]
-                    .as_str()
-                    .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-                let envelope_op_id = op.op_id.trim();
-                if !envelope_op_id.is_empty() && op_id != envelope_op_id {
-                    return Err(anyhow!(
-                        "managed vault pull op_id mismatch: envelope={} plaintext={}",
-                        op.op_id,
-                        op_id
-                    ));
-                }
-
-                let inserted = super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
-                if !inserted {
-                    continue;
-                }
-
-                match super::apply_op(conn, db_key, &op_json) {
-                    Ok(_) => {
-                        batch_applied += 1;
-                    }
-                    Err(e) if is_foreign_key_constraint_error(&e) => {
-                        pending.insert(op_id.to_string());
-                        super::kv_set_i64(conn, &pending_apply_key(&scope_id, op_id), 1)?;
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
-
-            apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
-            rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
-
-            if next_since != since {
-                update_since_map(conn, &scope_id, &next_since)?;
-            }
-
-            Ok(())
-        })?;
+        let (batch_applied, committed_since) =
+            apply_pull_json_batch(conn, db_key, sync_key, &scope_id, &since, &parsed)?;
         applied += batch_applied;
-        since = next_since;
+        since = committed_since;
 
         if parsed.ops.len() < (PULL_LIMIT as usize) {
             break;
@@ -1060,6 +1136,188 @@ pub fn pull(
         app_dir: app_dir.as_path(),
     };
     let _ = artifacts::download_missing_embedding_artifact_blobs(&download_ctx)?;
+
+    Ok(applied)
+}
+
+#[cfg(target_family = "wasm")]
+pub async fn pull(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+) -> Result<u64> {
+    const PULL_LIMIT: i64 = 500;
+
+    let http = runtime::async_client()?;
+    let mut local_device_id = super::get_or_create_device_id(conn)?;
+
+    let scope_id = runtime::scope_id(base_url, vault_id);
+    let mut since = load_since_map(conn, &scope_id)?;
+
+    let endpoint_json = runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
+    let endpoint_bin = runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull_bin"))?;
+    let mut applied: u64 = 0;
+    let mut pull_bin_supported: Option<bool> = if should_try_pull_bin_first() {
+        None
+    } else {
+        Some(false)
+    };
+    let mut stale_cursor_recovery_attempted = false;
+    let mut forbidden_device_recovery_attempted = false;
+    loop {
+        let request = PullRequest {
+            device_id: local_device_id.as_str(),
+            since: since.clone(),
+            limit: PULL_LIMIT,
+        };
+
+        if pull_bin_supported != Some(false) {
+            let resp = http
+                .post(&endpoint_bin)
+                .bearer_auth(id_token)
+                .json(&request)
+                .send()
+                .await?;
+
+            let status = resp.status();
+            let status_code = status.as_u16();
+            if status_code == 403 && !forbidden_device_recovery_attempted {
+                forbidden_device_recovery_attempted = true;
+                if let Ok(Some(next_device_id)) =
+                    try_recover_pull_forbidden_by_rotating_device_id_async(
+                        conn,
+                        &http,
+                        base_url,
+                        vault_id,
+                        id_token,
+                        &local_device_id,
+                    )
+                    .await
+                {
+                    local_device_id = next_device_id;
+                    continue;
+                }
+            }
+            if should_fallback_to_json_pull(status_code) {
+                pull_bin_supported = Some(false);
+            } else {
+                if !status.is_success() {
+                    let text = resp.text().await.unwrap_or_default();
+                    return Err(anyhow!(
+                        "managed-vault pull_bin failed: HTTP {status} {text}"
+                    ));
+                }
+
+                pull_bin_supported = Some(true);
+                let body = resp.bytes().await?;
+                let ops = decode_pull_bin_response(body.as_ref())?;
+                let mut next_since = since.clone();
+                for op in &ops {
+                    next_since
+                        .entry(op.device_id.clone())
+                        .and_modify(|v| *v = (*v).max(op.seq))
+                        .or_insert(op.seq);
+                }
+
+                if next_since == since && !ops.is_empty() {
+                    return Err(anyhow!("managed-vault pull made no progress"));
+                }
+
+                if ops.is_empty()
+                    && !stale_cursor_recovery_attempted
+                    && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
+                {
+                    stale_cursor_recovery_attempted = true;
+                    continue;
+                }
+
+                let (batch_applied, committed_since) =
+                    apply_pull_bin_batch(conn, db_key, sync_key, &scope_id, &since, &ops)?;
+                applied += batch_applied;
+                since = committed_since;
+
+                if ops.len() < (PULL_LIMIT as usize) {
+                    break;
+                }
+                continue;
+            }
+        }
+
+        let resp = http
+            .post(&endpoint_json)
+            .bearer_auth(id_token)
+            .json(&request)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if status.as_u16() == 403 && !forbidden_device_recovery_attempted {
+            forbidden_device_recovery_attempted = true;
+            if let Ok(Some(next_device_id)) =
+                try_recover_pull_forbidden_by_rotating_device_id_async(
+                    conn,
+                    &http,
+                    base_url,
+                    vault_id,
+                    id_token,
+                    &local_device_id,
+                )
+                .await
+            {
+                local_device_id = next_device_id;
+                continue;
+            }
+        }
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));
+        }
+
+        let body = resp.bytes().await?;
+        let parsed: PullResponse = serde_json::from_slice(body.as_ref())?;
+
+        let mut next_since = since.clone();
+        for (device_id, last_seq) in &parsed.next {
+            next_since.insert(device_id.to_string(), *last_seq);
+        }
+
+        if next_since == since && !parsed.ops.is_empty() {
+            return Err(anyhow!("managed-vault pull made no progress"));
+        }
+
+        if parsed.ops.is_empty()
+            && !stale_cursor_recovery_attempted
+            && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
+        {
+            stale_cursor_recovery_attempted = true;
+            continue;
+        }
+
+        let (batch_applied, committed_since) =
+            apply_pull_json_batch(conn, db_key, sync_key, &scope_id, &since, &parsed)?;
+        applied += batch_applied;
+        since = committed_since;
+
+        if parsed.ops.len() < (PULL_LIMIT as usize) {
+            break;
+        }
+    }
+
+    let app_dir = super::app_dir_from_conn(conn)?;
+    let _ = artifacts::download_missing_embedding_artifact_blobs_async(
+        conn,
+        db_key,
+        sync_key,
+        &http,
+        base_url,
+        vault_id,
+        id_token,
+        app_dir.as_path(),
+    )
+    .await?;
 
     Ok(applied)
 }
