@@ -34,13 +34,26 @@ pub fn refresh_knowledge_pages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<
     let generated_documents = load_all_generated_documents(conn, key)?;
     let claims = build_claims_from_documents(&generated_documents);
     let compiled_pages = compile_pages_from_claims(&generated_documents, &claims);
-    crate::db::replace_knowledge_claims(conn, key, &claims)?;
-    crate::db::upsert_compiled_knowledge_pages(conn, key, &compiled_pages)?;
-    let page_ids = compiled_pages
-        .iter()
-        .map(|item| item.page.page_id.clone())
-        .collect::<Vec<_>>();
-    crate::db::mark_missing_knowledge_pages_removed(conn, key, &page_ids)?;
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result = (|| -> Result<()> {
+        crate::db::replace_knowledge_claims_in_transaction(conn, key, &claims)?;
+        crate::db::upsert_compiled_knowledge_pages_in_transaction(conn, key, &compiled_pages)?;
+        let page_ids = compiled_pages
+            .iter()
+            .map(|item| item.page.page_id.clone())
+            .collect::<Vec<_>>();
+        crate::db::mark_missing_knowledge_pages_removed(conn, key, &page_ids)?;
+        Ok(())
+    })();
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+        }
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            return Err(error);
+        }
+    }
     Ok(compiled_pages.into_iter().map(|item| item.page).collect())
 }
 

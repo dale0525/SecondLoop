@@ -5,64 +5,7 @@ pub fn replace_knowledge_claims(
 ) -> Result<()> {
     conn.execute_batch("BEGIN IMMEDIATE;")?;
     let result = (|| -> Result<()> {
-        conn.execute("DELETE FROM knowledge_claims", [])?;
-        for claim in claims {
-            conn.execute(
-                r#"INSERT INTO knowledge_claims(
-                       claim_id,
-                       subject_id,
-                       claim_type,
-                       facet_key,
-                       statement,
-                       normalized_value,
-                       time_scope,
-                       valid_from_ms,
-                       valid_until_ms,
-                       confidence,
-                       source_ref_ids_json,
-                       source_count,
-                       conflict_with_claim_ids_json,
-                       status,
-                       human_confirmed,
-                       human_corrected,
-                       answer_allowed,
-                       created_at_ms,
-                       updated_at_ms
-                   ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)"#,
-                params![
-                    claim.claim_id,
-                    claim.subject_id,
-                    encode_claim_type(claim.claim_type)?,
-                    claim.facet_key,
-                    encode_knowledge_claim_text(key, &claim.claim_id, "statement", &claim.statement)?,
-                    claim.normalized_value
-                        .as_ref()
-                        .map(|value| {
-                            encode_knowledge_claim_text(
-                                key,
-                                &claim.claim_id,
-                                "normalized_value",
-                                value,
-                            )
-                        })
-                        .transpose()?,
-                    encode_claim_time_scope(claim.time_scope)?,
-                    claim.valid_from_ms,
-                    claim.valid_until_ms,
-                    claim.confidence,
-                    encode_string_list(&claim.source_ref_ids)?,
-                    claim.source_count,
-                    encode_string_list(&claim.conflict_with_claim_ids)?,
-                    encode_claim_status(claim.status)?,
-                    if claim.human_confirmed { 1 } else { 0 },
-                    if claim.human_corrected { 1 } else { 0 },
-                    if claim.answer_allowed { 1 } else { 0 },
-                    claim.created_at_ms,
-                    claim.updated_at_ms,
-                ],
-            )?;
-        }
-        Ok(())
+        replace_knowledge_claims_in_transaction(conn, key, claims)
     })();
 
     match result {
@@ -77,6 +20,72 @@ pub fn replace_knowledge_claims(
     }
 }
 
+pub(crate) fn replace_knowledge_claims_in_transaction(
+    conn: &Connection,
+    key: &[u8; 32],
+    claims: &[crate::knowledge::KnowledgeClaim],
+) -> Result<()> {
+    conn.execute("DELETE FROM knowledge_claims", [])?;
+    for claim in claims {
+        conn.execute(
+            r#"INSERT INTO knowledge_claims(
+                   claim_id,
+                   subject_id,
+                   claim_type,
+                   facet_key,
+                   statement,
+                   normalized_value,
+                   time_scope,
+                   valid_from_ms,
+                   valid_until_ms,
+                   confidence,
+                   source_ref_ids_json,
+                   source_count,
+                   conflict_with_claim_ids_json,
+                   status,
+                   human_confirmed,
+                   human_corrected,
+                   answer_allowed,
+                   created_at_ms,
+                   updated_at_ms
+               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)"#,
+            params![
+                claim.claim_id,
+                claim.subject_id,
+                encode_claim_type(claim.claim_type)?,
+                claim.facet_key,
+                encode_knowledge_claim_text(key, &claim.claim_id, "statement", &claim.statement)?,
+                claim.normalized_value
+                    .as_ref()
+                    .map(|value| {
+                        encode_knowledge_claim_text(
+                            key,
+                            &claim.claim_id,
+                            "normalized_value",
+                            value,
+                        )
+                    })
+                    .transpose()?,
+                encode_claim_time_scope(claim.time_scope)?,
+                claim.valid_from_ms,
+                claim.valid_until_ms,
+                claim.confidence,
+                encode_string_list(&claim.source_ref_ids)?,
+                claim.source_count,
+                encode_string_list(&claim.conflict_with_claim_ids)?,
+                encode_claim_status(claim.status)?,
+                if claim.human_confirmed { 1 } else { 0 },
+                if claim.human_corrected { 1 } else { 0 },
+                if claim.answer_allowed { 1 } else { 0 },
+                claim.created_at_ms,
+                claim.updated_at_ms,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn upsert_compiled_knowledge_pages(
     conn: &Connection,
     key: &[u8; 32],
@@ -84,6 +93,26 @@ pub(crate) fn upsert_compiled_knowledge_pages(
 ) -> Result<()> {
     conn.execute_batch("BEGIN IMMEDIATE;")?;
     let result = (|| -> Result<()> {
+        upsert_compiled_knowledge_pages_in_transaction(conn, key, pages)
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(error)
+        }
+    }
+}
+
+pub(crate) fn upsert_compiled_knowledge_pages_in_transaction(
+    conn: &Connection,
+    key: &[u8; 32],
+    pages: &[crate::knowledge::compiler::CompiledKnowledgePageRecord],
+) -> Result<()> {
         for item in pages {
             let existing = load_stored_knowledge_page_row(conn, &item.page.page_id)?;
             let existing_page = existing
@@ -395,18 +424,6 @@ pub(crate) fn upsert_compiled_knowledge_pages(
             }
         }
         Ok(())
-    })();
-
-    match result {
-        Ok(()) => {
-            conn.execute_batch("COMMIT;")?;
-            Ok(())
-        }
-        Err(error) => {
-            let _ = conn.execute_batch("ROLLBACK;");
-            Err(error)
-        }
-    }
 }
 
 pub fn mark_missing_knowledge_pages_removed(

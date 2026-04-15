@@ -126,6 +126,63 @@ fn refresh_knowledge_pages_excludes_muted_generated_documents_from_compiled_page
 }
 
 #[test]
+fn refresh_knowledge_pages_rolls_back_claim_updates_when_page_refresh_fails() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [97u8; 32];
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:preference:response-language",
+        "User prefers responses in Chinese.",
+        1_000,
+    );
+
+    knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("initial refresh");
+
+    let initial_claim_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM knowledge_claims", [], |row| {
+            row.get(0)
+        })
+        .expect("initial claim count");
+    assert_eq!(initial_claim_count, 1);
+
+    insert_generated_document(
+        &conn,
+        &key,
+        "generated:preference:response-style",
+        "User prefers concise responses.",
+        2_000,
+    );
+    conn.execute_batch(
+        r#"CREATE TRIGGER abort_preferences_page_refresh
+           BEFORE UPDATE ON knowledge_pages
+           WHEN NEW.page_id = 'page:preferences'
+           BEGIN
+             SELECT RAISE(ABORT, 'stop page refresh');
+           END;"#,
+    )
+    .expect("create page refresh abort trigger");
+
+    let error = knowledge::compiler::refresh_knowledge_pages(&conn, &key)
+        .expect_err("refresh should abort when page refresh fails");
+    assert!(error.to_string().contains("stop page refresh"));
+
+    let claim_count_after_failure: i64 = conn
+        .query_row("SELECT COUNT(*) FROM knowledge_claims", [], |row| {
+            row.get(0)
+        })
+        .expect("claim count after failure");
+    assert_eq!(claim_count_after_failure, 1);
+
+    let page_count_after_failure: i64 = conn
+        .query_row("SELECT COUNT(*) FROM knowledge_pages", [], |row| row.get(0))
+        .expect("page count after failure");
+    assert_eq!(page_count_after_failure, 1);
+}
+
+#[test]
 fn refresh_knowledge_pages_paginates_generated_documents_past_first_512() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = db::open(dir.path()).expect("open");
