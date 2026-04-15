@@ -3,16 +3,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/backend/cloud_web_backend.dart';
+import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/features/lock/lock_gate.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 import 'package:secondloop/web_app/web_entry_intent.dart';
 import 'package:secondloop/web_app/web_formal_settings_adapters.dart';
+import 'package:secondloop/web_app/web_initial_sync_gate.dart';
+import 'package:secondloop/web_app/web_native_app_backend.dart';
 
 import '../test_i18n.dart';
+import '../test_backend.dart';
 
 class _FakeCloudAuthController extends ChangeNotifier
     implements ObservableCloudAuthController, CloudPasswordRecoveryController {
@@ -111,13 +116,39 @@ class _FakeWebAppService extends WebAppService {
   Future<void> openPortal({required String idToken}) async {}
 }
 
+final class _FakeUnlockedWebBackend extends TestAppBackend {
+  @override
+  Future<bool> isMasterPasswordSet() async => false;
+}
+
+final class _InitRequiredWebBackend extends TestAppBackend {
+  int initCalls = 0;
+  bool _initialized = false;
+
+  @override
+  Future<void> init() async {
+    initCalls += 1;
+    _initialized = true;
+  }
+
+  @override
+  Future<bool> isMasterPasswordSet() async {
+    if (!_initialized) {
+      throw StateError('flutter_rust_bridge has not been initialized');
+    }
+    return false;
+  }
+}
+
 Widget _buildApp({
   required ObservableCloudAuthController controller,
   required WebAppService service,
+  AppBackend? backend,
   CloudWebBackend? chatBackend,
   Locale? locale,
   WebEntryIntent entryIntent = WebEntryIntent.open,
   String managedVaultBaseUrl = '',
+  bool injectTestBackend = true,
 }) {
   return wrapWithI18n(
     MaterialApp(
@@ -125,6 +156,8 @@ Widget _buildApp({
       home: WebAppGate(
         authController: controller,
         service: service,
+        backend:
+            backend ?? (injectTestBackend ? _FakeUnlockedWebBackend() : null),
         chatBackend: chatBackend,
         entryIntent: entryIntent,
         managedVaultBaseUrl: managedVaultBaseUrl,
@@ -294,6 +327,74 @@ void main() {
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(ChatPage), findsOneWidget);
     expect(find.text('Files'), findsNothing);
+  });
+
+  testWidgets('entitled web app boots through lock and initial sync gates',
+      (tester) async {
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        service:
+            _FakeWebAppService(subscription: WebSubscriptionState.entitled),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LockGate), findsOneWidget);
+    expect(find.byType(WebInitialSyncGate), findsOneWidget);
+  });
+
+  testWidgets('entitled web app initializes backend before lock gate',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _InitRequiredWebBackend();
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        service:
+            _FakeWebAppService(subscription: WebSubscriptionState.entitled),
+        backend: backend,
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(backend.initCalls, 1);
+    expect(find.byType(AppShell), findsOneWidget);
+    expect(
+      find.textContaining('flutter_rust_bridge has not been initialized'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('web gate provisions WebNativeAppBackend by default',
+      (tester) async {
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        service:
+            _FakeWebAppService(subscription: WebSubscriptionState.entitled),
+        injectTestBackend: false,
+      ),
+    );
+    await tester.pump();
+
+    final backendScope =
+        tester.widget<AppBackendScope>(find.byType(AppBackendScope).first);
+    expect(backendScope.backend, isA<WebNativeAppBackend>());
   });
 
   testWidgets('wide-screen entitled shell uses a navigation rail',

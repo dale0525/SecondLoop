@@ -54,14 +54,21 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
             "UPDATE messages SET needs_embedding = 1 WHERE needs_embedding IS NULL;",
         )?;
 
-        conn.execute_batch(
+        conn.execute_batch(if crate::vector::is_available() {
             r#"
 CREATE VIRTUAL TABLE IF NOT EXISTS message_embeddings USING vec0(
   embedding float[384],
   +message_id TEXT
 );
-"#,
-        )?;
+"#
+        } else {
+            r#"
+CREATE TABLE IF NOT EXISTS message_embeddings (
+  embedding BLOB,
+  message_id TEXT
+);
+"#
+        })?;
 
         conn.execute_batch("PRAGMA user_version = 2;")?;
         user_version = 2;
@@ -73,7 +80,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS message_embeddings USING vec0(
         // Different embedding models are NOT backward compatible. To prevent mixing vectors from
         // different models, the vector index must record `model_name`. Since `vec0` virtual tables
         // cannot be altered in-place reliably, we rebuild the table and trigger a full re-index.
-        conn.execute_batch(
+        conn.execute_batch(if crate::vector::is_available() {
             r#"
 DROP TABLE IF EXISTS message_embeddings;
 CREATE VIRTUAL TABLE IF NOT EXISTS message_embeddings USING vec0(
@@ -83,8 +90,19 @@ CREATE VIRTUAL TABLE IF NOT EXISTS message_embeddings USING vec0(
 );
 UPDATE messages SET needs_embedding = 1;
 PRAGMA user_version = 3;
-"#,
-        )?;
+"#
+        } else {
+            r#"
+DROP TABLE IF EXISTS message_embeddings;
+CREATE TABLE IF NOT EXISTS message_embeddings (
+  embedding BLOB,
+  message_id TEXT,
+  model_name TEXT
+);
+UPDATE messages SET needs_embedding = 1;
+PRAGMA user_version = 3;
+"#
+        })?;
         user_version = 3;
     }
 
@@ -384,7 +402,7 @@ PRAGMA user_version = 11;
             )?;
         }
 
-        conn.execute_batch(
+        conn.execute_batch(if crate::vector::is_available() {
             r#"
 CREATE VIRTUAL TABLE IF NOT EXISTS todo_embeddings USING vec0(
   embedding float[384],
@@ -398,8 +416,23 @@ CREATE VIRTUAL TABLE IF NOT EXISTS todo_activity_embeddings USING vec0(
   model_name TEXT
 );
 PRAGMA user_version = 12;
-"#,
-        )?;
+"#
+        } else {
+            r#"
+CREATE TABLE IF NOT EXISTS todo_embeddings (
+  embedding BLOB,
+  todo_id TEXT,
+  model_name TEXT
+);
+CREATE TABLE IF NOT EXISTS todo_activity_embeddings (
+  embedding BLOB,
+  activity_id TEXT,
+  todo_id TEXT,
+  model_name TEXT
+);
+PRAGMA user_version = 12;
+"#
+        })?;
         user_version = 12;
     }
 
@@ -1012,7 +1045,7 @@ PRAGMA user_version = 29;
 }
 
 pub fn open(app_dir: &Path) -> Result<Connection> {
-    fs::create_dir_all(app_dir)?;
+    crate::platform::sqlite_runtime::ensure_sqlite_parent_dir(app_dir)?;
     vector::register_sqlite_vec()?;
     let conn = Connection::open(db_path(app_dir))?;
     conn.busy_timeout(Duration::from_millis(5_000))?;

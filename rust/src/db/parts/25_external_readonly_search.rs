@@ -3,6 +3,10 @@ fn process_pending_external_document_embeddings_with_default(
     key: &[u8; 32],
     limit: usize,
 ) -> Result<usize> {
+    if !crate::vector::is_available() {
+        return Ok(0);
+    }
+
     let space_id = upsert_external_embedding_space(
         conn,
         crate::embedding::DEFAULT_MODEL_NAME,
@@ -91,6 +95,10 @@ fn process_pending_external_document_embeddings_with_embedder<E: Embedder + ?Siz
     embedder: &E,
     limit: usize,
 ) -> Result<usize> {
+    if !crate::vector::is_available() {
+        return Ok(0);
+    }
+
     let dim = embedder.dim().max(1);
     let space_id = upsert_external_embedding_space(conn, embedder.model_name(), dim)?;
     let vec_table = ensure_external_chunk_vec_table_for_space(conn, &space_id, dim)?;
@@ -255,6 +263,10 @@ fn search_similar_external_document_chunks_by_embedding_conn(
     query_vector: &[f32],
     top_k: usize,
 ) -> Result<Vec<SimilarExternalDocumentChunk>> {
+    if !crate::vector::is_available() {
+        return Ok(Vec::new());
+    }
+
     let space_id = embedding_space_id(model_name, dim)?;
     let vec_table = ensure_external_chunk_vec_table_for_space(conn, &space_id, dim)?;
     let top_k = top_k.max(1);

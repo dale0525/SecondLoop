@@ -257,9 +257,24 @@ fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
     Ok(out)
 }
 
-fn should_fallback_to_json_pull(status: reqwest::StatusCode) -> bool {
+fn should_fallback_to_json_pull(status: runtime::StatusCode) -> bool {
     let code = status.as_u16();
     code == 404 || code == 408 || code == 429 || status.is_server_error()
+}
+
+fn should_try_pull_bin_first() -> bool {
+    #[cfg(target_family = "wasm")]
+    {
+        // Keep Web on the JSON pull path for now. The browser-specific binary
+        // pull path can panic after authenticated responses, while the JSON
+        // fallback reuses the same downstream apply logic.
+        false
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    {
+        true
+    }
 }
 
 pub fn push(
@@ -771,7 +786,11 @@ pub fn pull(
     let endpoint_json = runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
     let endpoint_bin = runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull_bin"))?;
     let mut applied: u64 = 0;
-    let mut pull_bin_supported: Option<bool> = None;
+    let mut pull_bin_supported: Option<bool> = if should_try_pull_bin_first() {
+        None
+    } else {
+        Some(false)
+    };
     let mut stale_cursor_recovery_attempted = false;
     loop {
         let request = PullRequest {

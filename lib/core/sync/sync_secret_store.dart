@@ -6,7 +6,8 @@ import 'package:cryptography/cryptography.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final class SyncSecretStore {
-  SyncSecretStore();
+  SyncSecretStore({String? scopeKey})
+      : _scopeKey = _normalizeScopeKey(scopeKey);
 
   static const _kPrefsBlobKey = 'sync_secret_json_v1';
 
@@ -23,6 +24,7 @@ final class SyncSecretStore {
   static final Cipher _cipher = AesGcm.with256bits();
   static Uint8List? _processSessionKey;
 
+  final String? _scopeKey;
   Future<void> _tail = Future<void>.value();
   Future<SharedPreferences>? _prefsFuture;
 
@@ -280,7 +282,7 @@ final class SyncSecretStore {
     }
 
     final prefs = await _prefs();
-    final deferredB64 = prefs.getString(_kDeferredSessionKeyB64PrefsKey);
+    final deferredB64 = prefs.getString(_deferredSessionKeyPrefsKey);
     if (deferredB64 == null || deferredB64.isEmpty) return null;
 
     final decoded = _decodeBase64(deferredB64);
@@ -306,7 +308,7 @@ final class SyncSecretStore {
   Future<void> clearAll() async {
     await _serial(() async {
       final prefs = await _prefs();
-      await prefs.remove(_kPrefsBlobKey);
+      await prefs.remove(_prefsBlobKey);
       _loaded = true;
       _lastRaw = null;
       _cache = <String, String>{};
@@ -317,7 +319,7 @@ final class SyncSecretStore {
     if (!_loaded) return;
 
     final prefs = await _prefs();
-    final raw = prefs.getString(_kPrefsBlobKey);
+    final raw = prefs.getString(_prefsBlobKey);
     if (raw == _lastRaw) return;
 
     if (raw == null || raw.trim().isEmpty) {
@@ -334,7 +336,7 @@ final class SyncSecretStore {
     if (_loaded) return;
 
     final prefs = await _prefs();
-    final raw = prefs.getString(_kPrefsBlobKey);
+    final raw = prefs.getString(_prefsBlobKey);
     if (raw == null || raw.trim().isEmpty) {
       _lastRaw = null;
       _cache = <String, String>{};
@@ -372,13 +374,30 @@ final class SyncSecretStore {
   Future<void> _persistCache() async {
     final prefs = await _prefs();
     if (_cache.isEmpty) {
-      await prefs.remove(_kPrefsBlobKey);
+      await prefs.remove(_prefsBlobKey);
       _lastRaw = null;
       return;
     }
     final raw = jsonEncode(_cache);
-    await prefs.setString(_kPrefsBlobKey, raw);
+    await prefs.setString(_prefsBlobKey, raw);
     _lastRaw = raw;
+  }
+
+  String get _prefsBlobKey => _scopedKey(_kPrefsBlobKey);
+
+  String get _deferredSessionKeyPrefsKey =>
+      _scopedKey(_kDeferredSessionKeyB64PrefsKey);
+
+  String _scopedKey(String key) {
+    final scopeKey = _scopeKey;
+    if (scopeKey == null) return key;
+    return '$key::$scopeKey';
+  }
+
+  static String? _normalizeScopeKey(String? scopeKey) {
+    final normalized = scopeKey?.trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
   }
 }
 

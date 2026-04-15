@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
@@ -9,6 +10,7 @@ import 'package:secondloop/web_app/web_app_gate.dart';
 import 'package:secondloop/web_app/web_entry_intent.dart';
 
 import '../test_i18n.dart';
+import '../test_backend.dart';
 
 class _FakeCloudAuthController extends ChangeNotifier
     implements ObservableCloudAuthController, CloudPasswordRecoveryController {
@@ -93,15 +95,22 @@ Widget _buildApp({
         authController: controller,
         service: service,
         chatBackend: chatBackend,
+        defaultBackendBuilder: () => _FakeUnlockedWebBackend(),
         entryIntent: entryIntent,
       ),
     ),
   );
 }
 
+final class _FakeUnlockedWebBackend extends TestAppBackend {
+  @override
+  Future<bool> isMasterPasswordSet() async => false;
+}
+
 void main() {
   testWidgets('entitled users enter shared AppShell instead of WebAppShell',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       _buildApp(
         controller: _FakeCloudAuthController(
@@ -121,6 +130,7 @@ void main() {
 
   testWidgets('manage intent opens shared shell on settings tab',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       _buildApp(
         controller: _FakeCloudAuthController(

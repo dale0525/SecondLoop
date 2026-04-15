@@ -48,6 +48,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   late int _selectedIndex = widget.initialTab.index;
+  late final Set<int> _loadedIndexes = <int>{_selectedIndex};
   QuickCaptureController? _quickCaptureController;
 
   @override
@@ -73,7 +74,7 @@ class _AppShellState extends State<AppShell> {
       return;
     }
 
-    setState(() => _selectedIndex = 0);
+    _selectTab(0);
   }
 
   @override
@@ -87,7 +88,30 @@ class _AppShellState extends State<AppShell> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialTab != widget.initialTab) {
       _selectedIndex = widget.initialTab.index;
+      _loadedIndexes.add(_selectedIndex);
     }
+  }
+
+  void _selectTab(int index) {
+    if (_selectedIndex == index) return;
+    setState(() {
+      _selectedIndex = index;
+      _loadedIndexes.add(index);
+    });
+  }
+
+  Widget _buildWideShellTab(
+    BuildContext context,
+    AppTab tab, {
+    required bool isActive,
+  }) {
+    if (!_loadedIndexes.contains(tab.index)) {
+      return const SizedBox.shrink();
+    }
+    return switch (tab) {
+      AppTab.chat => _buildChatTab(context, isActive: isActive),
+      AppTab.settings => _buildSettingsTab(context, isActive: isActive),
+    };
   }
 
   Widget _buildChatTab(BuildContext context, {required bool isActive}) {
@@ -120,8 +144,16 @@ class _AppShellState extends State<AppShell> {
             ? IndexedStack(
                 index: _selectedIndex,
                 children: <Widget>[
-                  _buildChatTab(context, isActive: _selectedIndex == 0),
-                  _buildSettingsTab(context, isActive: _selectedIndex == 1),
+                  _buildWideShellTab(
+                    context,
+                    AppTab.chat,
+                    isActive: _selectedIndex == 0,
+                  ),
+                  _buildWideShellTab(
+                    context,
+                    AppTab.settings,
+                    isActive: _selectedIndex == 1,
+                  ),
                 ],
               )
             : _buildChatTab(context, isActive: true);
@@ -149,8 +181,7 @@ class _AppShellState extends State<AppShell> {
                                       const EdgeInsets.symmetric(vertical: 8),
                                   child: NavigationRail(
                                     selectedIndex: _selectedIndex,
-                                    onDestinationSelected: (index) =>
-                                        setState(() => _selectedIndex = index),
+                                    onDestinationSelected: _selectTab,
                                     labelType: NavigationRailLabelType.all,
                                     destinations: [
                                       for (final t in AppTab.values)

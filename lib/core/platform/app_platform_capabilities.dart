@@ -55,6 +55,20 @@ class AppPlatformCapabilities {
     );
   }
 
+  factory AppPlatformCapabilities.webNative() {
+    return const AppPlatformCapabilities(
+      supportsDesktopHotkey: false,
+      supportsBiometricUnlock: false,
+      supportsMigrationArchive: false,
+      supportsAudioRecording: false,
+      supportsDesktopDrop: false,
+      supportsExternalImport: false,
+      supportsDesktopBootSettings: false,
+      supportsCameraCapture: false,
+      usesCloudSessionModel: false,
+    );
+  }
+
   final bool supportsDesktopHotkey;
   final bool supportsBiometricUnlock;
   final bool supportsMigrationArchive;

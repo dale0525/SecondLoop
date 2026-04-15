@@ -568,6 +568,10 @@ pub fn process_pending_attachment_chunk_embeddings_default(
     key: &[u8; 32],
     limit: usize,
 ) -> Result<usize> {
+    if !crate::vector::is_available() {
+        return Ok(0);
+    }
+
     let expected_dim = DEFAULT_EMBEDDING_DIM;
     let space_id = embedding_space_id(crate::embedding::DEFAULT_MODEL_NAME, expected_dim)?;
     ensure_attachment_chunk_vec_table_for_space(conn, &space_id, expected_dim)?;
@@ -826,6 +830,10 @@ pub fn search_similar_attachment_chunks_default(
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarAttachmentChunk>> {
+    if !crate::vector::is_available() {
+        return Ok(Vec::new());
+    }
+
     let query_vector = default_embed_text(&format!("query: {query}"));
     search_similar_attachment_chunks_by_embedding(
         conn,
@@ -843,6 +851,10 @@ pub fn search_similar_attachment_chunks_by_embedding(
     query_vector: &[f32],
     top_k: usize,
 ) -> Result<Vec<SimilarAttachmentChunk>> {
+    if !crate::vector::is_available() {
+        return Ok(Vec::new());
+    }
+
     if top_k == 0 {
         return Ok(Vec::new());
     }

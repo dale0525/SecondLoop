@@ -44,4 +44,33 @@ void main() {
     expect(await staleReader.readSyncBackgroundDiagV1Enabled(), isFalse);
     expect(await staleReader.readSyncBackoffV1Enabled(), isFalse);
   });
+
+  test('SyncConfigStore isolates scoped data between users', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final first = SyncConfigStore(scopeKey: 'web-native:uid-1');
+    final second = SyncConfigStore(scopeKey: 'web-native:uid-2');
+
+    await first.writeBackendType(SyncBackendType.managedVault);
+    await first.writeRemoteRoot('uid-1');
+    await first.writeManagedVaultBaseUrl('https://vault-1.example');
+    await first.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+
+    await second.writeBackendType(SyncBackendType.managedVault);
+    await second.writeRemoteRoot('uid-2');
+    await second.writeManagedVaultBaseUrl('https://vault-2.example');
+    await second.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 2)));
+
+    expect(await first.readRemoteRoot(), 'uid-1');
+    expect(await second.readRemoteRoot(), 'uid-2');
+    expect(await first.resolveManagedVaultBaseUrl(), 'https://vault-1.example');
+    expect(
+      await second.resolveManagedVaultBaseUrl(),
+      'https://vault-2.example',
+    );
+    expect(
+        await first.readSyncKey(), Uint8List.fromList(List<int>.filled(32, 1)));
+    expect(await second.readSyncKey(),
+        Uint8List.fromList(List<int>.filled(32, 2)));
+  });
 }

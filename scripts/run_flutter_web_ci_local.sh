@@ -61,7 +61,14 @@ sync_workspace_state_into_worktree "${web_worktree}"
   run_with_periodic_status \
     "flutter web smoke tests" \
     run_flutter_tool test test/web_app/web_app_gate_test.dart test/web_app/web_app_service_http_test.dart
+  run_with_periodic_status \
+    "flutter rust web build" \
+    env RUST_LOG=info CC_wasm32_unknown_unknown="$CONDA_PREFIX/bin/clang-21" AR_wasm32_unknown_unknown="$CONDA_PREFIX/bin/llvm-ar" RANLIB_wasm32_unknown_unknown="$CONDA_PREFIX/bin/llvm-ranlib" PATH="$web_worktree/.tool/bin:$web_worktree/.fvm/flutter_sdk/bin:$HOME/.cargo/bin:$PATH" \
+      flutter_rust_bridge_codegen build-web --dart-root . -c rust -o web --release --wasm-pack-rustflags "-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base -C link-arg=--max-memory=1073741824"
   MSYS2_ARG_CONV_EXCL='*' run_with_periodic_status \
     "flutter build web" \
     run_flutter_tool build web --base-href /app/
+  run_with_periodic_status \
+    "sync flutter rust web package" \
+    run_flutter_tool pub run tools/sync_web_build_rust_pkg.dart
 )

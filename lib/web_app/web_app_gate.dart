@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../app/router.dart';
+import '../core/app_bootstrap.dart';
 import '../core/ai/ai_routing.dart';
 import '../core/backend/app_backend.dart';
 import '../core/backend/cloud_web_backend.dart';
@@ -17,12 +18,16 @@ import '../core/platform/app_platform_capability_scope.dart';
 import '../core/session/session_scope.dart';
 import '../core/sync/sync_config_store.dart';
 import '../core/sync/sync_engine.dart';
+import '../features/lock/lock_gate.dart';
 import 'web_entry_intent.dart';
 import 'web_public_entry_scaffold.dart';
 import 'web_app_service.dart';
 import '../features/settings/cloud_account_panel.dart';
 import 'web_formal_settings_adapters.dart';
 import 'web_formal_settings_scope.dart';
+import 'web_initial_sync_gate.dart';
+import 'web_native_app_backend.dart';
+import 'web_persistent_app_dir.dart';
 import '../core/subscription/cloud_subscription_controller.dart';
 import '../core/subscription/subscription_scope.dart';
 
@@ -32,7 +37,9 @@ class WebAppGate extends StatefulWidget {
   const WebAppGate({
     required this.authController,
     required this.service,
+    this.backend,
     this.chatBackend,
+    this.defaultBackendBuilder,
     this.entryIntent = WebEntryIntent.open,
     this.managedVaultBaseUrl = '',
     super.key,
@@ -40,7 +47,9 @@ class WebAppGate extends StatefulWidget {
 
   final ObservableCloudAuthController authController;
   final WebAppService service;
+  final AppBackend? backend;
   final CloudWebBackend? chatBackend;
+  final AppBackend Function()? defaultBackendBuilder;
   final WebEntryIntent entryIntent;
   final String managedVaultBaseUrl;
 
@@ -49,7 +58,9 @@ class WebAppGate extends StatefulWidget {
 }
 
 class _WebAppGateState extends State<WebAppGate> {
-  late CloudWebBackend _chatBackend;
+  final WebPersistentAppDirResolver _appDirResolver =
+      OpfsWebPersistentAppDirResolver();
+  late AppBackend _appBackend;
   late CloudSubscriptionController _subscriptionController;
   late WebAppBillingClient _billingClient;
   late CloudUsageClient _cloudUsageClient;
@@ -60,6 +71,7 @@ class _WebAppGateState extends State<WebAppGate> {
   bool _canAccessMainShell = false;
   String? _activeUid;
   String? _mainShellUid;
+  late bool _usesManagedWebNativeBackend;
 
   String? _normalizedUid() {
     final uid = widget.authController.uid?.trim() ?? '';
@@ -67,15 +79,33 @@ class _WebAppGateState extends State<WebAppGate> {
   }
 
   void _resetSessionScopedState() {
-    _chatBackend.clearWebSessionState();
+    if (_appBackend case final CloudWebBackend backend) {
+      backend.clearWebSessionState();
+    }
     _subscriptionController.reset();
     _canAccessMainShell = false;
     _mainShellUid = null;
   }
 
   void _createInjectedDependencies() {
-    _chatBackend = widget.chatBackend ??
-        CloudWebBackend(chatClient: const UnsupportedCloudWebChatClient());
+    final uid = _normalizedUid();
+    _usesManagedWebNativeBackend = widget.backend == null &&
+        widget.chatBackend == null &&
+        widget.defaultBackendBuilder == null;
+    _appBackend = widget.backend ??
+        widget.chatBackend ??
+        widget.defaultBackendBuilder?.call() ??
+        WebNativeAppBackend.withDefaults(
+          appDirProvider: () async {
+            final resolvedUid = _normalizedUid();
+            if (resolvedUid == null) {
+              throw StateError('missing_web_uid');
+            }
+            return _appDirResolver.resolve(uid: resolvedUid);
+          },
+          storageScope: _storageScopeForUid(uid),
+          webAppService: widget.service,
+        );
     _subscriptionController = createWebFormalSubscriptionController(
       service: widget.service,
       authController: widget.authController,
@@ -98,9 +128,16 @@ class _WebAppGateState extends State<WebAppGate> {
       authController: widget.authController,
     );
     _vaultConfigStore = SyncConfigStore(
+      scopeKey: _storageScopeForUid(uid),
       managedVaultDefaultBaseUrl: widget.managedVaultBaseUrl.trim(),
     );
     unawaited(_primeWebFormalSyncDefaults());
+  }
+
+  String? _storageScopeForUid(String? uid) {
+    final normalizedUid = uid?.trim();
+    if (normalizedUid == null || normalizedUid.isEmpty) return null;
+    return 'web-native:$normalizedUid';
   }
 
   Future<void> _primeWebFormalSyncDefaults() async {
@@ -134,8 +171,12 @@ class _WebAppGateState extends State<WebAppGate> {
     super.didUpdateWidget(oldWidget);
     final authChanged = oldWidget.authController != widget.authController;
     final serviceChanged = oldWidget.service != widget.service;
+    final backendChanged = oldWidget.backend != widget.backend;
     final chatBackendChanged = oldWidget.chatBackend != widget.chatBackend;
-    if (!authChanged && !serviceChanged && !chatBackendChanged) {
+    if (!authChanged &&
+        !serviceChanged &&
+        !backendChanged &&
+        !chatBackendChanged) {
       return;
     }
 
@@ -145,7 +186,7 @@ class _WebAppGateState extends State<WebAppGate> {
     widget.authController.addListener(_onAuthChanged);
 
     _activeUid = _normalizedUid();
-    if (authChanged || chatBackendChanged) {
+    if (authChanged || backendChanged || chatBackendChanged) {
       _resetSessionScopedState();
     } else {
       _syncMainShellAccess();
@@ -167,8 +208,13 @@ class _WebAppGateState extends State<WebAppGate> {
   void _onAuthChanged() {
     final nextUid = _normalizedUid();
     if (nextUid != _activeUid) {
+      final shouldRecreateInjectedDependencies = _usesManagedWebNativeBackend;
       _activeUid = nextUid;
       _resetSessionScopedState();
+      if (shouldRecreateInjectedDependencies) {
+        _disposeInjectedDependencies();
+        _createInjectedDependencies();
+      }
     }
     _syncMainShellAccess();
     if (mounted) {
@@ -262,18 +308,29 @@ class _WebAppGateState extends State<WebAppGate> {
         ),
       );
     } else {
-      child = AppShell(
-        key: ValueKey<String>('web-main-shell-$uid'),
-        initialTab: widget.entryIntent == WebEntryIntent.manage
-            ? AppTab.settings
-            : AppTab.chat,
+      child = AppBootstrap(
+        child: LockGate(
+          child: WebInitialSyncGate(
+            authController: widget.authController,
+            managedVaultBaseUrl: widget.managedVaultBaseUrl,
+            syncConfigStore: _vaultConfigStore,
+            child: AppShell(
+              key: ValueKey<String>('web-main-shell-$uid'),
+              initialTab: widget.entryIntent == WebEntryIntent.manage
+                  ? AppTab.settings
+                  : AppTab.chat,
+            ),
+          ),
+        ),
       );
     }
 
     return AppPlatformCapabilityScope(
-      capabilities: AppPlatformCapabilities.webCloud(),
+      capabilities: _appBackend is WebNativeAppBackend
+          ? AppPlatformCapabilities.webNative()
+          : AppPlatformCapabilities.webCloud(),
       child: AppBackendScope(
-        backend: _chatBackend,
+        backend: _appBackend,
         child: CloudAuthScope(
           controller: widget.authController,
           gatewayConfig: const CloudGatewayConfig(

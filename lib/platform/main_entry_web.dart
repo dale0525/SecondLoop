@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../core/backend/app_backend.dart';
 import '../core/desktop/desktop_launch_args.dart';

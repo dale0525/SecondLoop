@@ -22,6 +22,7 @@ import '../../core/sync/sync_key_manager.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
+import '../../web_app/web_formal_settings_scope.dart';
 import '../media_backup/cloud_media_backup_runner.dart';
 
 part 'sync_settings_page_media_actions.dart';
@@ -103,7 +104,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   bool _showManagedVaultEndpointOverride = false;
   bool _showRecoveryHintBanner = false;
 
-  late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
+  SyncConfigStore? _fallbackStore;
+  late SyncConfigStore _store;
+  bool _storeLoaded = false;
 
   SyncBackendType _backendType = SyncBackendType.webdav;
   bool _autoEnabled = true;
@@ -126,7 +129,29 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   @override
   void initState() {
     super.initState();
-    _load();
+  }
+
+  SyncConfigStore _resolveSyncConfigStore(BuildContext context) {
+    final explicitStore = widget.configStore;
+    if (explicitStore != null) return explicitStore;
+
+    final webStore =
+        WebFormalSettingsScope.maybeOf(context)?.dependencies.vaultConfigStore;
+    if (webStore != null) return webStore;
+
+    return _fallbackStore ??= SyncConfigStore();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final resolvedStore = _resolveSyncConfigStore(context);
+    if (_storeLoaded && identical(_store, resolvedStore)) {
+      return;
+    }
+    _store = resolvedStore;
+    _storeLoaded = true;
+    unawaited(_load());
   }
 
   @override

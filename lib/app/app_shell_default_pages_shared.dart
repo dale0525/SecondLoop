@@ -36,7 +36,10 @@ final class _DefaultChatTabState extends State<_DefaultChatTab> {
   Future<Conversation> _load() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    return backend.getOrCreateLoopHomeConversation(sessionKey);
+    return _withHomeLoadStage(
+      'home.loopHomeConversation.initial',
+      () => backend.getOrCreateLoopHomeConversation(sessionKey),
+    );
   }
 
   @override
@@ -80,6 +83,27 @@ final class _DefaultChatTabState extends State<_DefaultChatTab> {
       },
     );
   }
+}
+
+Future<T> _withHomeLoadStage<T>(
+  String stage,
+  Future<T> Function() action,
+) async {
+  try {
+    return await action();
+  } catch (error, stackTrace) {
+    Error.throwWithStackTrace(_HomeLoadStageError(stage, error), stackTrace);
+  }
+}
+
+final class _HomeLoadStageError implements Exception {
+  const _HomeLoadStageError(this.stage, this.cause);
+
+  final String stage;
+  final Object cause;
+
+  @override
+  String toString() => '$stage: $cause';
 }
 
 final class _DefaultSettingsTab extends StatelessWidget {

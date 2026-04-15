@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 
 import '../test_i18n.dart';
+import '../test_backend.dart';
 
 void main() {
   testWidgets('WebAppGate rebinds injected auth controller and service',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       _buildApp(
         controller: _FakeObservableCloudAuthController(uid: null),
@@ -18,7 +21,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(find.byType(CloudAccountPanel), findsOneWidget);
     expect(find.byType(AppShell), findsNothing);
@@ -32,7 +36,8 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(CloudAccountPanel), findsNothing);
@@ -48,9 +53,15 @@ Widget _buildApp({
       home: WebAppGate(
         authController: controller,
         service: service,
+        defaultBackendBuilder: () => _FakeUnlockedWebBackend(),
       ),
     ),
   );
+}
+
+final class _FakeUnlockedWebBackend extends TestAppBackend {
+  @override
+  Future<bool> isMasterPasswordSet() async => false;
 }
 
 final class _FakeObservableCloudAuthController extends ChangeNotifier

@@ -232,10 +232,13 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     if (_usePagination &&
         _selectedTagFilterIds.isEmpty &&
         _selectedTagExcludeIds.isEmpty) {
-      final page = await backend.listMessagesPage(
-        sessionKey,
-        widget.conversation.id,
-        limit: _kMessagePageSize,
+      final page = await _withChatLoadStage(
+        'chat.listMessagesPage.initial',
+        () => backend.listMessagesPage(
+          sessionKey,
+          widget.conversation.id,
+          limit: _kMessagePageSize,
+        ),
       );
       final normalizedPage = _normalizeMessagesForList(page);
       if (mounted) {
@@ -251,7 +254,10 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       return normalizedPage;
     }
 
-    final list = await backend.listMessages(sessionKey, widget.conversation.id);
+    final list = await _withChatLoadStage(
+      'chat.listMessages.initial',
+      () => backend.listMessages(sessionKey, widget.conversation.id),
+    );
     final filtered = await _filterMessagesBySelectedTags(sessionKey, list);
     final normalizedFiltered = _normalizeMessagesForList(filtered);
 
@@ -962,4 +968,25 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       }
     }
   }
+}
+
+Future<T> _withChatLoadStage<T>(
+  String stage,
+  Future<T> Function() action,
+) async {
+  try {
+    return await action();
+  } catch (error, stackTrace) {
+    Error.throwWithStackTrace(_ChatLoadStageError(stage, error), stackTrace);
+  }
+}
+
+final class _ChatLoadStageError implements Exception {
+  const _ChatLoadStageError(this.stage, this.cause);
+
+  final String stage;
+  final Object cause;
+
+  @override
+  String toString() => '$stage: $cause';
 }

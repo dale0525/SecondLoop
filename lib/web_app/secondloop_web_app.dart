@@ -95,25 +95,7 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
     return WebAppBootstrapData(
       authController: authController,
       service: service,
-      chatBackend: CloudWebBackend(
-        chatClient: _WebAppCloudWebChatClient(service: service),
-        fetchTaskPriorityAssessments: ({
-          required idToken,
-          required cacheScopeKey,
-        }) =>
-            service.fetchTaskPriorityAssessments(
-          idToken: idToken,
-          scope: cacheScopeKey,
-        ),
-        upsertTaskPriorityAssessments: ({
-          required idToken,
-          required payload,
-        }) =>
-            service.upsertTaskPriorityAssessments(
-          idToken: idToken,
-          payload: payload,
-        ),
-      ),
+      chatBackend: null,
       managedVaultBaseUrl: config.managedVaultBaseUrl,
     );
   }
@@ -205,27 +187,6 @@ class WebAppBootstrapData {
 
   final ObservableCloudAuthController authController;
   final WebAppService service;
-  final CloudWebBackend chatBackend;
+  final CloudWebBackend? chatBackend;
   final String managedVaultBaseUrl;
-}
-
-final class _WebAppCloudWebChatClient implements CloudWebChatClient {
-  const _WebAppCloudWebChatClient({required this.service});
-
-  final WebAppService service;
-
-  @override
-  Future<String> sendMessages({
-    required String idToken,
-    required String gatewayBaseUrl,
-    required String modelName,
-    required List<Map<String, String>> messages,
-  }) {
-    // Web does not honor client-side model overrides.
-    // The site backend chooses the server-owned model for Pro users.
-    return service.sendChat(
-      idToken: idToken,
-      messages: messages,
-    );
-  }
 }

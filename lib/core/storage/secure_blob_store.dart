@@ -5,19 +5,27 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 final class SecureBlobStore {
-  SecureBlobStore._(this._storage);
+  SecureBlobStore._(this._storage, this._scopeKey);
 
-  factory SecureBlobStore({FlutterSecureStorage? storage}) {
-    if (storage == null) return _defaultInstance;
-    return SecureBlobStore._(storage);
+  factory SecureBlobStore({
+    FlutterSecureStorage? storage,
+    String? scopeKey,
+  }) {
+    final normalizedScopeKey = _normalizeScopeKey(scopeKey);
+    if (storage == null && normalizedScopeKey == null) return _defaultInstance;
+    return SecureBlobStore._(
+      storage ?? _createDefaultSecureStorage(),
+      normalizedScopeKey,
+    );
   }
 
   static const kBlobKey = 'sync_config_blob_json_v1';
 
   static final SecureBlobStore _defaultInstance =
-      SecureBlobStore._(_createDefaultSecureStorage());
+      SecureBlobStore._(_createDefaultSecureStorage(), null);
 
   final FlutterSecureStorage _storage;
+  final String? _scopeKey;
 
   Future<void> _tail = Future<void>.value();
   bool _loaded = false;
@@ -76,7 +84,7 @@ final class SecureBlobStore {
 
   Future<void> clear() async {
     return _serial(() async {
-      await _safeDelete(kBlobKey);
+      await _safeDelete(_scopedKey(kBlobKey));
       _cache = <String, String>{};
       _loaded = true;
     });
@@ -84,8 +92,9 @@ final class SecureBlobStore {
 
   Future<void> deleteKey(String key) async {
     return _serial(() async {
-      await _safeDelete(key);
-      if (key == kBlobKey) {
+      final scopedKey = _scopedKey(key);
+      await _safeDelete(scopedKey);
+      if (scopedKey == _scopedKey(kBlobKey)) {
         _cache = <String, String>{};
         _loaded = true;
       }
@@ -95,7 +104,7 @@ final class SecureBlobStore {
   Future<void> _ensureLoaded() async {
     if (_loaded) return;
 
-    final raw = await _safeRead(kBlobKey);
+    final raw = await _safeRead(_scopedKey(kBlobKey));
     if (raw == null || raw.trim().isEmpty) {
       _cache = <String, String>{};
       _loaded = true;
@@ -131,10 +140,22 @@ final class SecureBlobStore {
 
   Future<void> _persistCache() async {
     if (_cache.isEmpty) {
-      await _safeDelete(kBlobKey);
+      await _safeDelete(_scopedKey(kBlobKey));
       return;
     }
-    await _safeWrite(kBlobKey, jsonEncode(_cache));
+    await _safeWrite(_scopedKey(kBlobKey), jsonEncode(_cache));
+  }
+
+  String _scopedKey(String key) {
+    final scopeKey = _scopeKey;
+    if (scopeKey == null) return key;
+    return '$key::$scopeKey';
+  }
+
+  static String? _normalizeScopeKey(String? scopeKey) {
+    final normalized = scopeKey?.trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
   }
 
   static FlutterSecureStorage _createDefaultSecureStorage() {

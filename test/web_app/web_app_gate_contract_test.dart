@@ -17,7 +17,10 @@ void main() {
   test('entitled web users are routed into shared AppShell', () {
     final source = File('lib/web_app/web_app_gate.dart').readAsStringSync();
 
-    expect(source, contains('child = AppShell('));
+    expect(source, contains('child = AppBootstrap('));
+    expect(source, contains('child: LockGate('));
+    expect(source, contains('child: WebInitialSyncGate('));
+    expect(source, contains('child: AppShell('));
     expect(
       source,
       contains("key: ValueKey<String>('web-main-shell-\$uid')"),

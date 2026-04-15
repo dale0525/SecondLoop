@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct KnowledgeUsageStats {
     pub retrieve_count: i64,
@@ -9,12 +7,7 @@ pub struct KnowledgeUsageStats {
 pub const DEFAULT_HALF_LIFE_DAYS: f64 = 7.0;
 
 pub fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .try_into()
-        .unwrap_or(i64::MAX)
+    crate::platform::time::now_ms()
 }
 
 pub fn hotness_score(retrieve_count: i64, last_retrieved_at_ms: Option<i64>, now_ms: i64) -> f64 {

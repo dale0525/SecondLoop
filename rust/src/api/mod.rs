@@ -4,6 +4,10 @@
 
 pub mod ask_scope;
 pub mod attachments;
+#[cfg(not(target_family = "wasm"))]
+pub mod audio_transcribe;
+#[cfg(target_family = "wasm")]
+#[path = "audio_transcribe_wasm.rs"]
 pub mod audio_transcribe;
 pub mod content_enrichment;
 pub mod content_extract;
@@ -18,7 +22,15 @@ pub mod migration_archive;
 pub mod oplog_maintenance;
 pub mod remote_embedding_bootstrap;
 pub mod simple;
+#[cfg(not(target_family = "wasm"))]
 pub mod sync_diagnostics;
+#[cfg(target_family = "wasm")]
+#[path = "sync_diagnostics_wasm.rs"]
+pub mod sync_diagnostics;
+#[cfg(not(target_family = "wasm"))]
+pub mod sync_progress;
+#[cfg(target_family = "wasm")]
+#[path = "sync_progress_wasm.rs"]
 pub mod sync_progress;
 pub mod tags;
 pub mod todo_followup_generation;

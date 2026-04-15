@@ -621,10 +621,7 @@ fn maybe_run_oplog_retention_after_push(
 }
 
 fn current_unix_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
+    crate::platform::time::now_ms()
 }
 
 fn upload_ops_files_batch(

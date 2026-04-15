@@ -72,12 +72,17 @@ build-android-apk-cn = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondlo
 
 # Code/resource generation helpers.
 # - frb-generate: regenerate Rust <-> Flutter bridge code
+# - frb-build-web: build Rust wasm package into rust/web/pkg for Flutter web
+# - sync-web-rust-pkg: mirror rust/web/pkg into build/web/pkg after flutter build
 # - prepare-desktop-runtime-payload: materialize OCR models for runtime release packaging
 # - prepare-desktop-runtime: fetch + install desktop OCR runtime assets from release
 # - sync-desktop-runtime-to-appdir: mirror prepared desktop runtime into app support dir and stamp standard manifest
 # - i18n-sync: translate and refresh strings.g.dart
 # - icons-update: regenerate app icons (including macOS round-corner pre-processing)
 frb-generate = "env RUST_LOG=info PATH=\"$PWD/.fvm/flutter_sdk/bin:$HOME/.cargo/bin:$PATH\" flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml"
+frb-build-web = "bash scripts/setup_web_rust_toolchain.sh && env RUST_LOG=info CC_wasm32_unknown_unknown=\"$CONDA_PREFIX/bin/clang-21\" AR_wasm32_unknown_unknown=\"$CONDA_PREFIX/bin/llvm-ar\" RANLIB_wasm32_unknown_unknown=\"$CONDA_PREFIX/bin/llvm-ranlib\" CARGO_HOME=\"$PWD/.tool/cargo-home\" RUSTUP_HOME=\"$PWD/.tool/rustup-home\" PATH=\"$PWD/.tool/bin:$PWD/.tool/cargo-home/bin:$HOME/.cargo/bin:$PWD/.fvm/flutter_sdk/bin:$PATH\" flutter_rust_bridge_codegen build-web --dart-root . -c rust -o web --release --wasm-pack-rustflags \"-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base -C link-arg=--max-memory=1073741824\""
+sync-web-rust-pkg = "dart pub global run fvm:main dart run tools/sync_web_build_rust_pkg.dart"
+preview-local-web-app = { cmd = "bash scripts/preview_local_web_app.sh", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "frb-build-web"] }
 prepare-desktop-runtime-payload = "bash scripts/prepare_desktop_runtime_payload.sh --output-dir assets/ocr/desktop_runtime"
 prepare-desktop-runtime = "dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart"
 sync-desktop-runtime-to-appdir = "dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart"

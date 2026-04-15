@@ -4,17 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/cloud/cloud_usage_client.dart';
+import 'package:secondloop/core/cloud/vault_attachments_client.dart';
+import 'package:secondloop/core/cloud/vault_usage_client.dart';
 import 'package:secondloop/core/navigation/inherited_scope_page_wrapper.dart';
 import 'package:secondloop/core/platform/app_platform_capabilities.dart';
 import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/subscription/creem_billing_client.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/features/settings/sync_settings_page.dart';
+import 'package:secondloop/web_app/web_formal_settings_scope.dart';
 
 import '../../test_backend.dart';
 import '../../test_i18n.dart';
@@ -193,6 +200,39 @@ void main() {
     expect(find.textContaining('Upload failed'), findsNothing);
     expect(find.text('Uploaded 0 changes'), findsOneWidget);
   });
+
+  testWidgets(
+      'web sync settings without explicit config store reuses web formal settings vault store',
+      (tester) async {
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.runtime.example',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+
+    await tester.pumpWidget(
+      _buildWebFormalSyncSettingsApp(
+        backend: CloudWebBackend(
+          chatClient: const UnsupportedCloudWebChatClient(),
+        ),
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Download'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Download'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Server address is required'), findsNothing);
+    expect(find.text('No new changes'), findsOneWidget);
+  });
 }
 
 Widget _buildSyncSettingsApp({
@@ -216,6 +256,52 @@ Widget _buildSyncSettingsApp({
             MaterialApp(
               home: Scaffold(
                 body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildWebFormalSyncSettingsApp({
+  required AppBackend backend,
+  required SyncConfigStore store,
+}) {
+  final cloudAuth = _FakeCloudAuthController();
+  const cloudGatewayConfig = CloudGatewayConfig(
+    baseUrl: 'https://web.secondloop.invalid/',
+    modelName: 'cloud',
+  );
+
+  return AppPlatformCapabilityScope(
+    capabilities: AppPlatformCapabilities.webCloud(),
+    child: AppBackendScope(
+      backend: backend,
+      child: CloudAuthScope(
+        controller: cloudAuth,
+        gatewayConfig: cloudGatewayConfig,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: WebFormalSettingsScope(
+            dependencies: WebFormalSettingsDependencies(
+              billingClient: _FakeBillingClient(),
+              cloudUsageClient: CloudUsageClient(),
+              vaultUsageClient: VaultUsageClient(),
+              vaultAttachmentsClient: VaultAttachmentsClient(),
+              vaultConfigStore: store,
+              cloudAuthController: cloudAuth,
+              cloudGatewayConfig: cloudGatewayConfig,
+              subscriptionController: _FakeSubscriptionController(),
+              isWebOverride: true,
+            ),
+            child: wrapWithI18n(
+              const MaterialApp(
+                home: Scaffold(
+                  body: SyncSettingsPage(),
+                ),
               ),
             ),
           ),
@@ -262,6 +348,20 @@ final class _FakeCloudAuthController extends ChangeNotifier
     required String email,
     required String password,
   }) async {}
+}
+
+final class _FakeBillingClient implements BillingClient {
+  @override
+  Future<void> openCheckout() async {}
+
+  @override
+  Future<void> openPortal() async {}
+}
+
+final class _FakeSubscriptionController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  @override
+  SubscriptionStatus get status => SubscriptionStatus.unknown;
 }
 
 final class _CountingWebSyncBackend extends TestAppBackend {

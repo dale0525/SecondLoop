@@ -70,14 +70,7 @@ pub trait AnswerProvider {
 }
 
 fn now_ms() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .try_into()
-        .unwrap_or(i64::MAX)
+    crate::platform::time::now_ms()
 }
 
 fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {

@@ -407,12 +407,14 @@ class ChatPage extends StatefulWidget {
   const ChatPage({
     required this.conversation,
     this.isTabActive = true,
+    this.showAppBar = true,
     this.tagRepository = const TagRepository(),
     super.key,
   });
 
   final Conversation conversation;
   final bool isTabActive;
+  final bool showAppBar;
   final TagRepository tagRepository;
 
   @override

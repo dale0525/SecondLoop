@@ -527,14 +527,7 @@ fn db_path(app_dir: &Path) -> PathBuf {
 }
 
 fn now_ms() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .try_into()
-        .unwrap_or(i64::MAX)
+    crate::platform::time::now_ms()
 }
 
 fn semantic_parse_job_title_aad(message_id: &str) -> Vec<u8> {
@@ -786,6 +779,14 @@ fn sqlite_table_exists(conn: &Connection, name: &str) -> Result<bool> {
     Ok(count > 0)
 }
 
+fn sqlite_vec_table_sql(table: &str, columns: &str) -> String {
+    if crate::vector::is_available() {
+        format!(r#"CREATE VIRTUAL TABLE "{table}" USING vec0({columns});"#)
+    } else {
+        format!(r#"CREATE TABLE "{table}"({columns});"#)
+    }
+}
+
 fn vec0_dim_from_sqlite_master(conn: &Connection, table: &str) -> Result<Option<usize>> {
     let sql: Option<String> = conn
         .query_row(
@@ -848,18 +849,28 @@ fn ensure_attachment_chunk_vec_table_for_space(
 
     let table = attachment_chunk_embeddings_table(space_id)?;
     if !sqlite_table_exists(conn, &table)? {
-        conn.execute_batch(&format!(
-            r#"
-CREATE VIRTUAL TABLE "{table}" USING vec0(
-  embedding float[{dim}],
+        conn.execute_batch(&sqlite_vec_table_sql(
+            &table,
+            &format!(
+                r#"
+  embedding {},
   chunk_rowid INTEGER,
   attachment_sha256 TEXT,
   kind TEXT,
   chunk_index INTEGER,
   model_name TEXT
-);
-"#
+"#,
+                if crate::vector::is_available() {
+                    format!("float[{dim}]")
+                } else {
+                    "BLOB".to_string()
+                }
+            ),
         ))?;
+    }
+
+    if !crate::vector::is_available() {
+        return Ok(());
     }
 
     let actual_dim = vec0_dim_from_sqlite_master(conn, &table)?.unwrap_or(0);
@@ -882,41 +893,63 @@ fn ensure_vec_tables_for_space(conn: &Connection, space_id: &str, dim: usize) ->
     let activity_table = todo_activity_embeddings_table(space_id)?;
 
     if !sqlite_table_exists(conn, &message_table)? {
-        conn.execute_batch(&format!(
-            r#"
-CREATE VIRTUAL TABLE "{message_table}" USING vec0(
-  embedding float[{dim}],
-  +message_id TEXT,
+        conn.execute_batch(&sqlite_vec_table_sql(
+            &message_table,
+            &format!(
+                r#"
+  embedding {},
+  message_id TEXT,
   model_name TEXT
-);
-"#
+"#,
+                if crate::vector::is_available() {
+                    format!("float[{dim}]")
+                } else {
+                    "BLOB".to_string()
+                }
+            ),
         ))?;
     }
     if !sqlite_table_exists(conn, &todo_table)? {
-        conn.execute_batch(&format!(
-            r#"
-CREATE VIRTUAL TABLE "{todo_table}" USING vec0(
-  embedding float[{dim}],
+        conn.execute_batch(&sqlite_vec_table_sql(
+            &todo_table,
+            &format!(
+                r#"
+  embedding {},
   todo_id TEXT,
   model_name TEXT
-);
-"#
+"#,
+                if crate::vector::is_available() {
+                    format!("float[{dim}]")
+                } else {
+                    "BLOB".to_string()
+                }
+            ),
         ))?;
     }
     if !sqlite_table_exists(conn, &activity_table)? {
-        conn.execute_batch(&format!(
-            r#"
-CREATE VIRTUAL TABLE "{activity_table}" USING vec0(
-  embedding float[{dim}],
+        conn.execute_batch(&sqlite_vec_table_sql(
+            &activity_table,
+            &format!(
+                r#"
+  embedding {},
   activity_id TEXT,
   todo_id TEXT,
   model_name TEXT
-);
-"#
+"#,
+                if crate::vector::is_available() {
+                    format!("float[{dim}]")
+                } else {
+                    "BLOB".to_string()
+                }
+            ),
         ))?;
     }
 
     ensure_attachment_chunk_vec_table_for_space(conn, space_id, dim)?;
+
+    if !crate::vector::is_available() {
+        return Ok(());
+    }
 
     let msg_dim = vec0_dim_from_sqlite_master(conn, &message_table)?.unwrap_or(0);
     if msg_dim != dim {

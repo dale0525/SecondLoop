@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
@@ -14,11 +15,13 @@ import 'package:secondloop/web_app/web_app_gate.dart';
 import 'package:secondloop/web_app/web_formal_settings_scope.dart';
 
 import '../test_i18n.dart';
+import '../test_backend.dart';
 
 void main() {
   testWidgets(
       'settings cloud account page reuses web billing adapters from the gate',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final service = _FakeWebAppService(
       subscription: WebSubscriptionState.entitled,
     );
@@ -32,20 +35,26 @@ void main() {
               email: 'user@example.com',
             ),
             service: service,
+            defaultBackendBuilder: () => _FakeUnlockedWebBackend(),
           ),
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
 
     await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     await tester.tap(find.text('Cloud account'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('cloud_manage_subscription')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(service.openPortalCount, 1);
   });
@@ -92,6 +101,11 @@ void main() {
     expect(find.textContaining('Signed in as'), findsOneWidget);
     expect(find.byKey(const ValueKey('cloud_sign_in')), findsNothing);
   });
+}
+
+final class _FakeUnlockedWebBackend extends TestAppBackend {
+  @override
+  Future<bool> isMasterPasswordSet() async => false;
 }
 
 final class _FakeCloudAuthController extends ChangeNotifier

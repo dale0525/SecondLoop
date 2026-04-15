@@ -100,7 +100,9 @@ fn external_chunk_aad(doc_id: &str, chunk_index: i64) -> Vec<u8> {
 }
 
 pub fn open_external_readonly_db(app_dir: &Path) -> Result<Connection> {
-    fs::create_dir_all(external_readonly_root_dir(app_dir))?;
+    crate::platform::sqlite_runtime::ensure_sqlite_parent_dir(
+        &external_readonly_root_dir(app_dir),
+    )?;
     vector::register_sqlite_vec()?;
     let conn = Connection::open(external_readonly_db_path(app_dir))?;
     conn.busy_timeout(Duration::from_millis(5_000))?;
@@ -293,8 +295,9 @@ fn ensure_external_chunk_vec_table_for_space(
     }
     let table = external_chunk_embeddings_table(space_id)?;
     if !sqlite_table_exists(conn, &table)? {
-        conn.execute_batch(&format!(
-            r#"
+        conn.execute_batch(&if crate::vector::is_available() {
+            format!(
+                r#"
 CREATE VIRTUAL TABLE "{table}" USING vec0(
   embedding float[{dim}],
   chunk_rowid INTEGER,
@@ -303,7 +306,24 @@ CREATE VIRTUAL TABLE "{table}" USING vec0(
   model_name TEXT
 );
 "#
-        ))?;
+            )
+        } else {
+            format!(
+                r#"
+CREATE TABLE "{table}"(
+  embedding BLOB,
+  chunk_rowid INTEGER,
+  doc_id TEXT,
+  chunk_index INTEGER,
+  model_name TEXT
+);
+"#
+            )
+        })?;
+    }
+
+    if !crate::vector::is_available() {
+        return Ok(table);
     }
 
     let actual_dim = vec0_dim_from_sqlite_master(conn, &table)?.unwrap_or(0);

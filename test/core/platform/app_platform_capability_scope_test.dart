@@ -41,4 +41,27 @@ void main() {
 
     expect(resolved.usesCloudSessionModel, isFalse);
   });
+
+  testWidgets('capability scope returns injected web native profile',
+      (tester) async {
+    late AppPlatformCapabilities resolved;
+
+    await tester.pumpWidget(
+      AppPlatformCapabilityScope(
+        capabilities: AppPlatformCapabilities.webNative(),
+        child: Builder(
+          builder: (context) {
+            resolved = AppPlatformCapabilityScope.of(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    expect(resolved.supportsDesktopHotkey, isFalse);
+    expect(resolved.supportsBiometricUnlock, isFalse);
+    expect(resolved.supportsMigrationArchive, isFalse);
+    expect(resolved.supportsDesktopDrop, isFalse);
+    expect(resolved.usesCloudSessionModel, isFalse);
+  });
 }
