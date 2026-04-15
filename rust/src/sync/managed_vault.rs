@@ -173,7 +173,7 @@ fn write_local_device_id(conn: &Connection, device_id: &str) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn try_recover_pull_forbidden_by_rotating_device_id(
+fn try_recover_pull_forbidden_by_rotating_device_id(
     conn: &Connection,
     http: &runtime::Client,
     base_url: &str,
