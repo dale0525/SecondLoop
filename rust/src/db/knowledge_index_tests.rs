@@ -715,6 +715,218 @@ fn merge_knowledge_page_into_keeps_merged_source_archived_during_refresh_cleanup
 }
 
 #[test]
+fn mark_missing_knowledge_pages_removed_preserves_manually_archived_pages() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [84u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut archived_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:archived",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Archived Topic",
+        now,
+    );
+    archived_page.current_summary = "Archived summary".to_string();
+    archived_page.current_body = "Archived detail".to_string();
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page: archived_page,
+            source_document_ids: vec!["doc:archived".to_string()],
+            claim_ids: vec!["claim:archived".to_string()],
+        }],
+    )
+    .expect("seed archived page");
+
+    archive_knowledge_page(
+        &conn,
+        &key,
+        "page:topics:archived",
+        Some("Keep only for audit.".to_string()),
+    )
+    .expect("archive page");
+
+    mark_missing_knowledge_pages_removed(&conn, &key, &[]).expect("mark missing pages");
+
+    let detail = get_knowledge_page_detail(&conn, &key, "page:topics:archived")
+        .expect("load archived detail")
+        .expect("archived detail should remain");
+    assert_eq!(
+        detail.page.state,
+        crate::knowledge::KnowledgePageState::Archived
+    );
+}
+
+#[test]
+fn merged_page_recomputes_conflict_count_after_refresh_preserving_provenance() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [88u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let mut target_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:target",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Target Topic",
+        now,
+    );
+    target_page.current_summary = "Target summary".to_string();
+    target_page.current_body = "Target detail".to_string();
+    target_page.related_page_ids = vec!["page:topics:source".to_string()];
+    target_page.conflict_count = 1;
+
+    let mut source_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:source",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Source Topic",
+        now + 1,
+    );
+    source_page.current_summary = "Source summary".to_string();
+    source_page.current_body = "Source detail".to_string();
+    source_page.related_page_ids = vec!["page:topics:target".to_string()];
+    source_page.conflict_count = 1;
+
+    replace_knowledge_claims(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::KnowledgeClaim {
+                claim_id: "claim:target".to_string(),
+                subject_id: "user:self".to_string(),
+                claim_type: crate::knowledge::KnowledgeClaimType::Topic,
+                facet_key: "launch-plan".to_string(),
+                statement: "Freeze work this week.".to_string(),
+                normalized_value: None,
+                time_scope: crate::knowledge::KnowledgeClaimTimeScope::Current,
+                valid_from_ms: None,
+                valid_until_ms: None,
+                confidence: 0.8,
+                source_ref_ids: vec!["generated:target".to_string()],
+                source_count: 1,
+                conflict_with_claim_ids: vec!["claim:source".to_string()],
+                status: crate::knowledge::KnowledgeClaimStatus::Active,
+                human_confirmed: false,
+                human_corrected: false,
+                answer_allowed: true,
+                created_at_ms: now,
+                updated_at_ms: now,
+            },
+            crate::knowledge::KnowledgeClaim {
+                claim_id: "claim:source".to_string(),
+                subject_id: "user:self".to_string(),
+                claim_type: crate::knowledge::KnowledgeClaimType::Topic,
+                facet_key: "launch-plan".to_string(),
+                statement: "Keep shipping as planned.".to_string(),
+                normalized_value: None,
+                time_scope: crate::knowledge::KnowledgeClaimTimeScope::Current,
+                valid_from_ms: None,
+                valid_until_ms: None,
+                confidence: 0.7,
+                source_ref_ids: vec!["generated:source".to_string()],
+                source_count: 1,
+                conflict_with_claim_ids: vec!["claim:target".to_string()],
+                status: crate::knowledge::KnowledgeClaimStatus::Active,
+                human_confirmed: false,
+                human_corrected: false,
+                answer_allowed: true,
+                created_at_ms: now + 1,
+                updated_at_ms: now + 1,
+            },
+        ],
+    )
+    .expect("seed conflicting claims");
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: target_page,
+                source_document_ids: vec!["doc:target".to_string()],
+                claim_ids: vec!["claim:target".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: source_page,
+                source_document_ids: vec!["doc:source".to_string()],
+                claim_ids: vec!["claim:source".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    merge_knowledge_page_into(
+        &conn,
+        &key,
+        "page:topics:source",
+        "page:topics:target",
+        None,
+    )
+    .expect("merge pages");
+
+    let merged_detail = get_knowledge_page_detail(&conn, &key, "page:topics:target")
+        .expect("load merged detail")
+        .expect("merged detail");
+    assert_eq!(merged_detail.page.conflict_count, 1);
+
+    replace_knowledge_claims(
+        &conn,
+        &key,
+        &[crate::knowledge::KnowledgeClaim {
+            claim_id: "claim:target".to_string(),
+            subject_id: "user:self".to_string(),
+            claim_type: crate::knowledge::KnowledgeClaimType::Topic,
+            facet_key: "launch-plan".to_string(),
+            statement: "Freeze work this week.".to_string(),
+            normalized_value: None,
+            time_scope: crate::knowledge::KnowledgeClaimTimeScope::Current,
+            valid_from_ms: None,
+            valid_until_ms: None,
+            confidence: 0.8,
+            source_ref_ids: vec!["generated:target".to_string()],
+            source_count: 1,
+            conflict_with_claim_ids: Vec::new(),
+            status: crate::knowledge::KnowledgeClaimStatus::Active,
+            human_confirmed: false,
+            human_corrected: false,
+            answer_allowed: true,
+            created_at_ms: now,
+            updated_at_ms: now + 2,
+        }],
+    )
+    .expect("replace with resolved claims");
+
+    let mut recompiled_target = crate::knowledge::KnowledgePage::new(
+        "page:topics:target",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Target Topic",
+        now + 2,
+    );
+    recompiled_target.current_summary = "Resolved target summary".to_string();
+    recompiled_target.current_body = "Resolved target detail".to_string();
+    recompiled_target.related_page_ids = vec!["page:topics:source".to_string()];
+    recompiled_target.conflict_count = 0;
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page: recompiled_target,
+            source_document_ids: vec!["doc:target".to_string()],
+            claim_ids: vec!["claim:target".to_string()],
+        }],
+    )
+    .expect("recompile target page");
+
+    let refreshed_detail = get_knowledge_page_detail(&conn, &key, "page:topics:target")
+        .expect("load refreshed detail")
+        .expect("refreshed detail");
+    assert_eq!(refreshed_detail.page.conflict_count, 0);
+}
+
+#[test]
 fn list_knowledge_page_summaries_excludes_archived_pages_from_normal_surfaces() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");

@@ -547,6 +547,87 @@ void main() {
     expect(find.text('Topic Beta'), findsOneWidget);
   });
 
+  testWidgets(
+      'KnowledgeCenterPage refreshes directory entries after page changes',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _MutableKnowledgeCenterBackendStub(
+      summaries: [
+        _summary(
+          pageId: 'page:topics:alpha',
+          title: 'Topic Alpha',
+          pageType: KnowledgePageType.topics,
+          state: KnowledgePageState.active,
+          updatedAtMs: nowMs,
+        ),
+        _summary(
+          pageId: 'page:topics:beta',
+          title: 'Topic Beta',
+          pageType: KnowledgePageType.topics,
+          state: KnowledgePageState.active,
+          updatedAtMs: nowMs - 1000,
+        ),
+      ],
+      details: {
+        'page:topics:alpha': _detail(
+          pageId: 'page:topics:alpha',
+          title: 'Topic Alpha',
+          pageType: KnowledgePageType.topics,
+          state: KnowledgePageState.active,
+          summary: 'Alpha summary.',
+          updatedAtMs: nowMs,
+        ),
+        'page:topics:beta': _detail(
+          pageId: 'page:topics:beta',
+          title: 'Topic Beta',
+          pageType: KnowledgePageType.topics,
+          state: KnowledgePageState.active,
+          summary: 'Beta summary.',
+          updatedAtMs: nowMs - 1000,
+        ),
+      },
+      recentChanges: const [],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 8)),
+              lock: () {},
+              child: const KnowledgeCenterPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('My Wiki'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Topics'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Topic Alpha'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Archive Page'));
+    await tester.pumpAndSettle();
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Topic Alpha'), findsNothing);
+    expect(find.text('Topic Beta'), findsOneWidget);
+  });
+
   testWidgets('KnowledgeCenterPage localizes portal sections in zh_CN',
       (tester) async {
     LocaleSettings.setLocale(AppLocale.zhCn);
@@ -758,6 +839,137 @@ final class _ConcurrentKnowledgeCenterBackendStub extends TestAppBackend
     String? note,
   }) async =>
       throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> removeKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> mergeKnowledgePageInto(
+    Uint8List key, {
+    required String pageId,
+    required String targetPageId,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> correctKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? title,
+    String? summary,
+    String? body,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> markKnowledgePageWrong(
+    Uint8List key, {
+    required String pageId,
+    required KnowledgeWrongReason reason,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<KnowledgePageDetail> setKnowledgePageAnswerAllowed(
+    Uint8List key, {
+    required String pageId,
+    required bool allowed,
+    String? note,
+  }) async =>
+      throw UnimplementedError();
+}
+
+final class _MutableKnowledgeCenterBackendStub extends TestAppBackend
+    implements KnowledgePagesBackend {
+  _MutableKnowledgeCenterBackendStub({
+    required List<KnowledgePageSummary> summaries,
+    required Map<String, KnowledgePageDetail> details,
+    required this.recentChanges,
+  })  : _summaries = List<KnowledgePageSummary>.from(summaries),
+        _details = Map<String, KnowledgePageDetail>.from(details);
+
+  final List<KnowledgePageSummary> _summaries;
+  final Map<String, KnowledgePageDetail> _details;
+  final List<KnowledgePageChangeRecord> recentChanges;
+
+  @override
+  Future<List<KnowledgePageSummary>> listKnowledgePageSummaries(
+    Uint8List key,
+  ) async =>
+      List<KnowledgePageSummary>.from(_summaries);
+
+  @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      const <KnowledgePageSummary>[];
+
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      _details[pageId] ?? (throw StateError('missing detail for $pageId'));
+
+  @override
+  Future<List<KnowledgePageChangeRecord>> listRecentKnowledgePageChanges(
+    Uint8List key, {
+    int limit = 8,
+  }) async =>
+      recentChanges.take(limit).toList(growable: false);
+
+  @override
+  Future<KnowledgePageDetail> archiveKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) async {
+    _summaries.removeWhere((page) => page.pageId == pageId);
+    final detail = _details[pageId];
+    if (detail == null) {
+      throw StateError('missing detail for $pageId');
+    }
+    final archived = KnowledgePageDetail(
+      page: KnowledgePage(
+        pageId: detail.page.pageId,
+        pageType: detail.page.pageType,
+        title: detail.page.title,
+        currentSummary: detail.page.currentSummary,
+        currentBody: detail.page.currentBody,
+        state: KnowledgePageState.archived,
+        answerPolicy: const KnowledgeAnswerPolicy(
+          defaultAllowed: false,
+          requiresTemporalFraming: false,
+        ),
+        confidenceLevel: detail.page.confidenceLevel,
+        createdAtMs: detail.page.createdAtMs,
+        updatedAtMs: detail.page.updatedAtMs + 1,
+        lastUsedAtMs: detail.page.lastUsedAtMs,
+        sourceCount: detail.page.sourceCount,
+        conflictCount: detail.page.conflictCount,
+        humanCorrected: detail.page.humanCorrected,
+        tags: detail.page.tags,
+        primaryEvidenceIds: detail.page.primaryEvidenceIds,
+        relatedPageIds: detail.page.relatedPageIds,
+      ),
+      sourceDocumentIds: detail.sourceDocumentIds,
+      claimIds: detail.claimIds,
+      history: detail.history,
+      versionSnapshots: detail.versionSnapshots,
+      evidenceEntries: detail.evidenceEntries,
+      lintRecords: detail.lintRecords,
+    );
+    _details[pageId] = archived;
+    return archived;
+  }
 
   @override
   Future<KnowledgePageDetail> removeKnowledgePage(

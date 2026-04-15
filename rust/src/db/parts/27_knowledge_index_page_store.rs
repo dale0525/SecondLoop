@@ -271,11 +271,7 @@ pub(crate) fn upsert_compiled_knowledge_pages(
                     item.page.source_count
                 },
                 conflict_count: if preserve_merged_provenance {
-                    existing
-                        .as_ref()
-                        .map(|row| row.conflict_count)
-                        .unwrap_or(item.page.conflict_count)
-                        .max(item.page.conflict_count)
+                    count_current_conflicts_for_claim_ids(conn, key, &claim_ids)?
                 } else {
                     item.page.conflict_count
                 },
@@ -443,7 +439,11 @@ pub fn mark_missing_knowledge_pages_removed(
         let page_id: String = row.get(0)?;
         let state = decode_page_state(row.get(1)?)?;
         let tags = decode_string_list(row.get(2)?)?;
-        if state == crate::knowledge::KnowledgePageState::Removed
+        if matches!(
+            state,
+            crate::knowledge::KnowledgePageState::Archived
+                | crate::knowledge::KnowledgePageState::Removed
+        )
             || tags.iter().any(|tag| tag == MERGED_ARCHIVED_TAG)
         {
             continue;
@@ -485,6 +485,41 @@ pub fn mark_missing_knowledge_pages_removed(
         )?;
     }
     Ok(())
+}
+
+fn count_current_conflicts_for_claim_ids(
+    conn: &Connection,
+    key: &[u8; 32],
+    claim_ids: &[String],
+) -> Result<i64> {
+    let mut by_facet =
+        std::collections::BTreeMap::<String, std::collections::BTreeSet<String>>::new();
+    for claim_id in claim_ids {
+        let row = conn
+            .query_row(
+                r#"SELECT facet_key, statement, status
+                   FROM knowledge_claims
+                   WHERE claim_id = ?1"#,
+                params![claim_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Vec<u8>>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((facet_key, statement_blob, status_raw)) = row else {
+            continue;
+        };
+        if decode_claim_status(status_raw)? == crate::knowledge::KnowledgeClaimStatus::Dismissed {
+            continue;
+        }
+        let statement = decode_knowledge_claim_text(key, claim_id, "statement", &statement_blob)?;
+        by_facet.entry(facet_key).or_default().insert(statement);
+    }
+    Ok(by_facet.values().filter(|values| values.len() > 1).count() as i64)
 }
 
 pub fn list_knowledge_page_summaries(

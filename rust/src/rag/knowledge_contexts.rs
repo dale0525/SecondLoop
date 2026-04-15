@@ -253,7 +253,7 @@ where
         candidate_summaries.iter(),
         &mut load_page_body,
     );
-    candidates.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    candidates.sort_by(|left, right| right.1.cmp(&left.1));
     candidates
         .into_iter()
         .take(top_k.max(1))

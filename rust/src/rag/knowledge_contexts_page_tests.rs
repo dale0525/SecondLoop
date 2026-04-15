@@ -370,6 +370,36 @@ fn collect_matching_page_context_blocks_keeps_searching_when_early_match_is_weak
 }
 
 #[test]
+fn collect_matching_page_context_blocks_preserves_incoming_rank_for_tied_scores() {
+    let mut loaded_pages = Vec::<String>::new();
+    let candidate_summaries = vec![
+        (_summary("page:zeta", "Zeta Page", "Mandarin"), 1),
+        (_summary("page:alpha", "Alpha Page", "Mandarin"), 1),
+    ];
+
+    let blocks = collect_matching_page_context_blocks(
+        "Mandarin",
+        1,
+        false,
+        candidate_summaries,
+        |_| Some("Generic body".to_string()),
+        |page_id| {
+            loaded_pages.push(page_id.to_string());
+            Some(_page(page_id, "Mandarin", "Generic body"))
+        },
+    );
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["page:zeta"]
+    );
+    assert_eq!(loaded_pages, vec!["page:zeta"]);
+}
+
+#[test]
 fn collect_matching_page_context_blocks_planning_queries_still_search_late_candidates() {
     let mut inspected_bodies = Vec::<String>::new();
     let mut loaded_pages = Vec::<String>::new();

@@ -397,9 +397,12 @@ class _DirectoryTile extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => _KnowledgeDirectoryListPage(
-              entry: entry,
-              onOpen: onOpen,
+            builder: (_) => wrapPushedPageWithInheritedScopes(
+              context,
+              _KnowledgeDirectoryListPage(
+                entry: entry,
+                onOpen: onOpen,
+              ),
             ),
           ),
         ),
@@ -408,7 +411,7 @@ class _DirectoryTile extends StatelessWidget {
   }
 }
 
-class _KnowledgeDirectoryListPage extends StatelessWidget {
+class _KnowledgeDirectoryListPage extends StatefulWidget {
   const _KnowledgeDirectoryListPage({
     required this.entry,
     required this.onOpen,
@@ -418,19 +421,93 @@ class _KnowledgeDirectoryListPage extends StatelessWidget {
   final Future<void> Function(KnowledgePageSummary page) onOpen;
 
   @override
+  State<_KnowledgeDirectoryListPage> createState() =>
+      _KnowledgeDirectoryListPageState();
+}
+
+class _KnowledgeDirectoryListPageState
+    extends State<_KnowledgeDirectoryListPage> {
+  Future<List<KnowledgePageSummary>>? _future;
+  Uint8List? _loadedSessionKey;
+  AppBackend? _loadedBackend;
+
+  Future<List<KnowledgePageSummary>> _loadPages() async {
+    final backend = maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
+    if (backend == null) {
+      throw StateError('knowledge_pages_backend_unavailable');
+    }
+    final summaries = await backend.listKnowledgePageSummaries(
+      SessionScope.of(context).sessionKey,
+    );
+    final pages = summaries
+        .where((page) =>
+            page.pageType == widget.entry.pageType &&
+            page.state != KnowledgePageState.archived &&
+            page.state != KnowledgePageState.removed)
+        .toList(growable: false)
+      ..sort((left, right) {
+        final lastUsedCompare =
+            (right.lastUsedAtMs ?? 0).compareTo(left.lastUsedAtMs ?? 0);
+        if (lastUsedCompare != 0) return lastUsedCompare;
+        return right.updatedAtMs.compareTo(left.updatedAtMs);
+      });
+    return pages;
+  }
+
+  void _reload() {
+    setState(() {
+      _future = _loadPages();
+    });
+  }
+
+  Future<void> _openPage(KnowledgePageSummary page) async {
+    await widget.onOpen(page);
+    if (!mounted) return;
+    _reload();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
+    final backend = AppBackendScope.of(context);
+    final shouldReload = _future == null ||
+        !listEquals(_loadedSessionKey, sessionKey) ||
+        !identical(_loadedBackend, backend);
+    if (shouldReload) {
+      _loadedSessionKey = sessionKey;
+      _loadedBackend = backend;
+      _future = _loadPages();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(knowledgePageTypeLabel(context.t, entry.pageType)),
-      ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemBuilder: (context, index) => _PageTile(
-          page: entry.pages[index],
-          onOpen: onOpen,
+    return FutureBuilder<List<KnowledgePageSummary>>(
+      future: _future,
+      builder: (context, snapshot) => Scaffold(
+        appBar: AppBar(
+          title: Text(knowledgePageTypeLabel(context.t, widget.entry.pageType)),
         ),
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemCount: entry.pages.length,
+        body: snapshot.connectionState != ConnectionState.done
+            ? const Center(child: CircularProgressIndicator())
+            : snapshot.hasError
+                ? Center(
+                    child: Text(
+                      context.t.errors.loadFailed(error: '${snapshot.error}'),
+                    ),
+                  )
+                : (snapshot.data?.isEmpty ?? true)
+                    ? Center(child: Text(context.t.memory.emptyState))
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemBuilder: (context, index) => _PageTile(
+                          page: snapshot.data![index],
+                          onOpen: _openPage,
+                        ),
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemCount: snapshot.data!.length,
+                      ),
       ),
     );
   }
