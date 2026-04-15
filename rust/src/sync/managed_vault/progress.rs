@@ -28,7 +28,7 @@ pub fn pull_with_progress(
     const PULL_LIMIT: i64 = 500;
 
     let http = super::runtime::client()?;
-    let local_device_id = super::super::get_or_create_device_id(conn)?;
+    let mut local_device_id = super::super::get_or_create_device_id(conn)?;
 
     let scope_id = super::runtime::scope_id(base_url, vault_id);
     let mut since = super::load_since_map(conn, &scope_id)?;
@@ -38,6 +38,7 @@ pub fn pull_with_progress(
 
     let mut total_ops: Option<u64> = None;
     let mut done_ops = 0u64;
+    let mut forbidden_device_recovery_attempted = false;
 
     loop {
         let request = super::PullRequest {
@@ -53,6 +54,22 @@ pub fn pull_with_progress(
             .send()?;
 
         let status = resp.status();
+        if status.as_u16() == 403 && !forbidden_device_recovery_attempted {
+            forbidden_device_recovery_attempted = true;
+            if let Ok(Some(next_device_id)) =
+                super::try_recover_pull_forbidden_by_rotating_device_id(
+                    conn,
+                    &http,
+                    base_url,
+                    vault_id,
+                    id_token,
+                    &local_device_id,
+                )
+            {
+                local_device_id = next_device_id;
+                continue;
+            }
+        }
         if !status.is_success() {
             let text = resp.text().unwrap_or_default();
             return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));
