@@ -195,6 +195,25 @@ impl From<&KnowledgePage> for KnowledgePageSummary {
     }
 }
 
+pub fn evidence_memory_status_for_page(
+    page: &KnowledgePage,
+) -> crate::knowledge::KnowledgeMemoryStatus {
+    match page.state {
+        KnowledgePageState::Outdated => crate::knowledge::KnowledgeMemoryStatus::MaybeOutdated,
+        KnowledgePageState::NeedsReview
+        | KnowledgePageState::AnswerMuted
+        | KnowledgePageState::Archived
+        | KnowledgePageState::Removed => crate::knowledge::KnowledgeMemoryStatus::Inferred,
+        KnowledgePageState::Active => {
+            if page.human_corrected {
+                crate::knowledge::KnowledgeMemoryStatus::Confirmed
+            } else {
+                crate::knowledge::KnowledgeMemoryStatus::Inferred
+            }
+        }
+    }
+}
+
 pub fn state_default_answer_policy(state: KnowledgePageState) -> KnowledgeAnswerPolicy {
     match state {
         KnowledgePageState::Active => KnowledgeAnswerPolicy {

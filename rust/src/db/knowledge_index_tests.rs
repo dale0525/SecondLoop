@@ -423,6 +423,129 @@ fn merge_knowledge_page_into_preserves_combined_source_count() {
 }
 
 #[test]
+fn merge_knowledge_page_into_deduplicates_overlapping_source_documents() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [76u8; 32];
+    let now = 1_710_000_000_000i64;
+
+    let anchor_json =
+        serde_json::to_string(&crate::knowledge::KnowledgeAnchorSet::default()).expect("anchor");
+    let raw = encode_knowledge_document_text(
+        &key,
+        "generated:topic:shared",
+        "raw",
+        "Shared topic evidence",
+    )
+    .expect("encode raw");
+    let normalized = encode_knowledge_document_text(
+        &key,
+        "generated:topic:shared",
+        "normalized",
+        "Shared topic evidence",
+    )
+    .expect("encode normalized");
+    conn.execute(
+        r#"INSERT INTO knowledge_documents(
+               document_id,
+               origin_type,
+               source_kind,
+               role,
+               language,
+               quality_score,
+               title,
+               summary,
+               anchor_json,
+               raw_text,
+               normalized_text,
+               created_at_ms,
+               updated_at_ms,
+               memory_section,
+               memory_source_count,
+               schema_version,
+               normalization_version,
+               segmentation_version,
+               embedding_policy_version,
+               retrieval_policy_version,
+               last_indexed_at_ms
+           ) VALUES (
+               ?1, 'generated', 'summary', 'summary', NULL, 1.0, NULL, ?2, ?3, ?4, ?5,
+               1, ?6, 'topic', 4, ?7, ?8, ?9, ?10, ?11, NULL
+           )"#,
+        params![
+            "generated:topic:shared",
+            "Shared topic evidence",
+            anchor_json,
+            raw,
+            normalized,
+            now,
+            crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+            crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+            crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+            crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+            crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+        ],
+    )
+    .expect("insert generated document");
+
+    let mut target_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:target",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Target Topic",
+        now,
+    );
+    target_page.current_summary = "Target summary".to_string();
+    target_page.current_body = "Target detail".to_string();
+    target_page.primary_evidence_ids = vec!["generated:topic:shared".to_string()];
+    target_page.related_page_ids = vec!["page:topics:source".to_string()];
+    target_page.source_count = 4;
+
+    let mut source_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:source",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Source Topic",
+        now + 1,
+    );
+    source_page.current_summary = "Source summary".to_string();
+    source_page.current_body = "Source detail".to_string();
+    source_page.primary_evidence_ids = vec!["generated:topic:shared".to_string()];
+    source_page.related_page_ids = vec!["page:topics:target".to_string()];
+    source_page.source_count = 4;
+
+    upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: target_page,
+                source_document_ids: vec!["generated:topic:shared".to_string()],
+                claim_ids: vec!["claim:target".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: source_page,
+                source_document_ids: vec!["generated:topic:shared".to_string()],
+                claim_ids: vec!["claim:source".to_string()],
+            },
+        ],
+    )
+    .expect("seed pages");
+
+    merge_knowledge_page_into(
+        &conn,
+        &key,
+        "page:topics:source",
+        "page:topics:target",
+        None,
+    )
+    .expect("merge knowledge page");
+
+    let target_detail = get_knowledge_page_detail(&conn, &key, "page:topics:target")
+        .expect("load target detail")
+        .expect("target detail after merge");
+    assert_eq!(target_detail.page.source_count, 4);
+}
+
+#[test]
 fn merge_knowledge_page_into_recomputes_conflict_count_from_merged_claims() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");

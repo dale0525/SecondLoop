@@ -507,7 +507,7 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
                 children: [
                   Text(
                     context.t.memory.detail.evidenceSummaryBody(
-                      sourceCount: detail.evidenceEntries.length,
+                      sourceCount: page.sourceCount,
                       conflictCount: page.conflictCount,
                     ),
                   ),

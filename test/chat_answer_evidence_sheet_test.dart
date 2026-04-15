@@ -223,6 +223,44 @@ void main() {
     expect(find.text('因与这个问题相关而被使用：用中文总结一下最近变化'), findsOneWidget);
   });
 
+  testWidgets(
+      'ChatAnswerEvidencePanel shows needs-review pill for flagged pages',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: ChatAnswerEvidencePanel(
+            evidence: ChatAnswerEvidence(
+              directSources: [],
+              memoryCards: [
+                ChatAnswerEvidenceMemoryCard(
+                  documentId: 'page:preferences',
+                  title: 'Preferences',
+                  summary: 'Reply in Chinese by default.',
+                  sourceKind: 'summary',
+                  role: 'summary',
+                  createdAtMs: 3,
+                  updatedAtMs: 4,
+                  status: 'inferred',
+                  sourceCount: 2,
+                  whyUsed: 'How should you answer me?',
+                  markedInaccurate: true,
+                ),
+              ],
+            ),
+            initialTab: ChatAnswerEvidenceTab.memoryCards,
+            onOpenDirectSource: _noopOpenDirectSource,
+            onOpenMemoryCard: _noopOpenMemoryCard,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Needs review'), findsOneWidget);
+  });
+
   testWidgets('showChatAnswerEvidenceSheet uses right drawer on wide layouts',
       (tester) async {
     await tester.pumpWidget(

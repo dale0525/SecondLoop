@@ -43,21 +43,32 @@ String resolveKnowledgePageCorrectionBody({
   return summary;
 }
 
+String _knowledgePageEvidenceStatusName(KnowledgePage page) {
+  switch (page.state) {
+    case KnowledgePageState.outdated:
+      return KnowledgeMemoryStatus.maybeOutdated.name;
+    case KnowledgePageState.active:
+      return page.humanCorrected
+          ? KnowledgeMemoryStatus.confirmed.name
+          : KnowledgeMemoryStatus.inferred.name;
+    case KnowledgePageState.needsReview:
+    case KnowledgePageState.answerMuted:
+    case KnowledgePageState.archived:
+    case KnowledgePageState.removed:
+      return KnowledgeMemoryStatus.inferred.name;
+  }
+}
+
 ChatAnswerEvidenceMemoryCard knowledgePageMemoryCardFromDetail(
   ChatAnswerEvidenceMemoryCard card,
   KnowledgePageDetail detail,
 ) {
   final page = detail.page;
-  final status = page.humanCorrected
-      ? KnowledgeMemoryStatus.confirmed.name
-      : (page.state == KnowledgePageState.outdated
-          ? KnowledgeMemoryStatus.maybeOutdated.name
-          : KnowledgeMemoryStatus.inferred.name);
   return card.copyWith(
     title: page.title,
     summary: page.currentSummary,
     body: page.currentBody,
-    status: status,
+    status: _knowledgePageEvidenceStatusName(page),
     sourceCount: page.sourceCount.toInt(),
     updatedAtMs: page.updatedAtMs.toInt(),
     useForAskAi: page.answerPolicy.defaultAllowed,

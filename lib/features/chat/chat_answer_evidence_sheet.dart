@@ -291,6 +291,11 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                     item.status,
                                   ),
                                 ),
+                                if (item.markedInaccurate)
+                                  _MetaPill(
+                                    label: context
+                                        .t.memory.detail.markedInaccurate,
+                                  ),
                                 _MetaPill(
                                   label: isDeleted
                                       ? context.t.memory.detail.deleted

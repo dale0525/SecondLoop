@@ -253,13 +253,7 @@ pub(super) fn build_memory_card_from_document(
             .ok()
             .flatten()?;
         let why_used = why_used.trim();
-        let status = if detail.page.human_corrected {
-            knowledge::KnowledgeMemoryStatus::Confirmed
-        } else if detail.page.state == knowledge::KnowledgePageState::Outdated {
-            knowledge::KnowledgeMemoryStatus::MaybeOutdated
-        } else {
-            knowledge::KnowledgeMemoryStatus::Inferred
-        };
+        let status = knowledge::evidence_memory_status_for_page(&detail.page);
         return Some(AnswerEvidenceMemoryCard {
             document_id: detail.page.page_id,
             title: Some(detail.page.title),

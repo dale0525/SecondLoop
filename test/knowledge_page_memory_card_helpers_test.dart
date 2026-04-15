@@ -77,6 +77,59 @@ void main() {
     expect(updated.markedInaccurate, isTrue);
   });
 
+  test(
+      'memory card conversion does not mark needs-review pages as confirmed just because they were corrected',
+      () {
+    const card = ChatAnswerEvidenceMemoryCard(
+      documentId: 'page:preferences',
+      title: 'Old title',
+      summary: 'Old summary',
+      body: 'Old body',
+      sourceKind: 'summary',
+      role: 'summary',
+      createdAtMs: 1,
+      updatedAtMs: 2,
+      status: 'confirmed',
+      sourceCount: 1,
+      whyUsed: 'Because it matched',
+    );
+    const detail = KnowledgePageDetail(
+      page: KnowledgePage(
+        pageId: 'page:preferences',
+        pageType: KnowledgePageType.preferences,
+        title: 'Preferences',
+        currentSummary: 'Reply in Chinese.',
+        currentBody: 'Reply in Chinese.\nKeep it concise.',
+        state: KnowledgePageState.needsReview,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: false,
+          requiresTemporalFraming: false,
+        ),
+        confidenceLevel: 0.9,
+        createdAtMs: 1,
+        updatedAtMs: 5,
+        lastUsedAtMs: 4,
+        sourceCount: 3,
+        conflictCount: 1,
+        humanCorrected: true,
+        tags: [],
+        primaryEvidenceIds: [],
+        relatedPageIds: [],
+      ),
+      sourceDocumentIds: [],
+      claimIds: [],
+      history: [],
+      versionSnapshots: [],
+      evidenceEntries: [],
+      lintRecords: [],
+    );
+
+    final updated = knowledgePageMemoryCardFromDetail(card, detail);
+
+    expect(updated.status, isNot('confirmed'));
+    expect(updated.markedInaccurate, isTrue);
+  });
+
   test('page memory cards can open without a viewer backend', () {
     expect(
       canOpenEvidenceMemoryCard(

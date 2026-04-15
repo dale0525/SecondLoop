@@ -376,6 +376,42 @@ void main() {
     expect(find.text('Related Pages'), findsOneWidget);
   });
 
+  testWidgets(
+      'KnowledgePageDetailPage evidence summary uses page source count instead of entry count',
+      (tester) async {
+    final backend = _EvidenceCountKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:preferences'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Evidence Basis'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        '4 source documents currently support this page. Conflicts detected: 1.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('KnowledgePageDetailPage localizes the body field label',
       (tester) async {
     LocaleSettings.setLocale(AppLocale.zhCn);
@@ -801,6 +837,36 @@ final class _ReloadAwareKnowledgePageDetailBackendStub
   }
 }
 
+final class _EvidenceCountKnowledgePageDetailBackendStub
+    extends _KnowledgePageDetailBackendStub {
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    return _buildDetail(
+      pageId: pageId,
+      sourceCount: 4,
+      evidenceEntries: const [
+        KnowledgePageEvidenceEntry(
+          evidenceId: 'evidence:1',
+          kind: KnowledgePageEvidenceKind.support,
+          summary: 'Reply in Chinese by default.',
+          sourceRefIds: ['doc:language'],
+          createdAtMs: 2,
+        ),
+        KnowledgePageEvidenceEntry(
+          evidenceId: 'evidence:2',
+          kind: KnowledgePageEvidenceKind.conflict,
+          summary: 'There is conflicting language evidence.',
+          sourceRefIds: ['doc:style'],
+          createdAtMs: 3,
+        ),
+      ],
+    );
+  }
+}
+
 final class _RemovedKnowledgePageDetailBackendStub
     extends _KnowledgePageDetailBackendStub {
   @override
@@ -1064,6 +1130,23 @@ KnowledgePageDetail _buildDetail({
   List<String> relatedPageIds = const ['page:about-me', 'page:recent-events'],
   KnowledgePageState state = KnowledgePageState.active,
   bool answerAllowed = true,
+  int sourceCount = 2,
+  List<KnowledgePageEvidenceEntry> evidenceEntries = const [
+    KnowledgePageEvidenceEntry(
+      evidenceId: 'evidence:1',
+      kind: KnowledgePageEvidenceKind.support,
+      summary: 'Reply in Chinese by default.',
+      sourceRefIds: ['doc:language'],
+      createdAtMs: 2,
+    ),
+    KnowledgePageEvidenceEntry(
+      evidenceId: 'evidence:2',
+      kind: KnowledgePageEvidenceKind.conflict,
+      summary: 'There is conflicting language evidence.',
+      sourceRefIds: ['doc:style'],
+      createdAtMs: 3,
+    ),
+  ],
 }) {
   return KnowledgePageDetail(
     page: KnowledgePage(
@@ -1081,7 +1164,7 @@ KnowledgePageDetail _buildDetail({
       createdAtMs: 1,
       updatedAtMs: 2,
       lastUsedAtMs: 3,
-      sourceCount: 2,
+      sourceCount: sourceCount,
       conflictCount: 1,
       humanCorrected: true,
       tags: tags,
@@ -1114,7 +1197,7 @@ KnowledgePageDetail _buildDetail({
           requiresTemporalFraming: false,
         ),
         confidenceLevel: 0.92,
-        sourceCount: 2,
+        sourceCount: sourceCount,
         conflictCount: 1,
         humanCorrected: true,
         actor: 'user',
@@ -1123,22 +1206,7 @@ KnowledgePageDetail _buildDetail({
         createdAtMs: 2,
       ),
     ],
-    evidenceEntries: const [
-      KnowledgePageEvidenceEntry(
-        evidenceId: 'evidence:1',
-        kind: KnowledgePageEvidenceKind.support,
-        summary: 'Reply in Chinese by default.',
-        sourceRefIds: ['doc:language'],
-        createdAtMs: 2,
-      ),
-      KnowledgePageEvidenceEntry(
-        evidenceId: 'evidence:2',
-        kind: KnowledgePageEvidenceKind.conflict,
-        summary: 'There is conflicting language evidence.',
-        sourceRefIds: ['doc:style'],
-        createdAtMs: 3,
-      ),
-    ],
+    evidenceEntries: evidenceEntries,
     lintRecords: const [
       KnowledgeLintRecord(
         lintId: 'lint:1',

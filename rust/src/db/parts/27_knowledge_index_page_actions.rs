@@ -322,6 +322,34 @@ fn count_conflicts_for_claim_ids(
     Ok(by_facet.values().filter(|values| values.len() > 1).count() as i64)
 }
 
+fn recompute_source_count_for_document_ids(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_ids: &[String],
+    fallback_source_counts: &std::collections::BTreeMap<String, i64>,
+) -> Result<i64> {
+    let unique_document_ids = document_ids
+        .iter()
+        .filter(|document_id| !document_id.trim().is_empty())
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>();
+    if unique_document_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let mut source_count = 0_i64;
+    for document_id in unique_document_ids {
+        let document = crate::knowledge::get_knowledge_document(conn, key, &document_id)?;
+        source_count += document
+            .as_ref()
+            .and_then(|value| value.memory_display.as_ref())
+            .map(|value| value.source_count.max(1))
+            .or_else(|| fallback_source_counts.get(&document_id).copied())
+            .unwrap_or(1);
+    }
+    Ok(source_count)
+}
+
 pub fn archive_knowledge_page(
     conn: &Connection,
     key: &[u8; 32],
@@ -437,6 +465,31 @@ pub fn merge_knowledge_page_into(
                 .collect::<Vec<_>>(),
             128,
         );
+        let fallback_source_counts = [(&target_row, &target), (&source_row, &source)]
+            .into_iter()
+            .filter_map(|(row, page)| {
+                if row.source_document_ids.len() == 1 {
+                    row.source_document_ids.first().and_then(|document_id| {
+                        let trimmed = document_id.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some((trimmed.to_string(), page.source_count.max(1)))
+                        }
+                    })
+                } else {
+                    None
+                }
+            })
+            .fold(
+                std::collections::BTreeMap::<String, i64>::new(),
+                |mut acc, (document_id, source_count)| {
+                    acc.entry(document_id)
+                        .and_modify(|value| *value = (*value).max(source_count))
+                        .or_insert(source_count);
+                    acc
+                },
+            );
         let merged_claim_ids = normalize_knowledge_string_set(
             &target_row
                 .claim_ids
@@ -449,7 +502,14 @@ pub fn merge_knowledge_page_into(
         let merged_summary = merge_page_text(&target.current_summary, &source.current_summary);
         let merged_body = merge_page_text(&target.current_body, &source.current_body);
         let merged_confidence = target.confidence_level.max(source.confidence_level);
-        let merged_source_count = target.source_count.saturating_add(source.source_count);
+        let merged_source_count =
+            recompute_source_count_for_document_ids(
+                conn,
+                key,
+                &merged_source_document_ids,
+                &fallback_source_counts,
+            )?
+                .max(1);
         let merged_conflict_count =
             count_conflicts_for_claim_ids(conn, key, &merged_claim_ids)?;
         let merged_source_tags = normalize_knowledge_string_set(

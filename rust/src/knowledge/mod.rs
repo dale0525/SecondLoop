@@ -42,9 +42,10 @@ pub use models::{
 };
 pub use normalize::normalize_text_for_source;
 pub use pages::{
-    apply_wrong_reason, state_default_answer_policy, KnowledgeAnswerPolicy, KnowledgePage,
-    KnowledgePageDetail, KnowledgePageEvidenceEntry, KnowledgePageEvidenceKind, KnowledgePageState,
-    KnowledgePageSummary, KnowledgePageType, KnowledgePageVersionSnapshot, KnowledgeWrongReason,
+    apply_wrong_reason, evidence_memory_status_for_page, state_default_answer_policy,
+    KnowledgeAnswerPolicy, KnowledgePage, KnowledgePageDetail, KnowledgePageEvidenceEntry,
+    KnowledgePageEvidenceKind, KnowledgePageState, KnowledgePageSummary, KnowledgePageType,
+    KnowledgePageVersionSnapshot, KnowledgeWrongReason,
 };
 pub use rebuild::{
     cancel_knowledge_rebuild, get_knowledge_document, list_knowledge_documents,
