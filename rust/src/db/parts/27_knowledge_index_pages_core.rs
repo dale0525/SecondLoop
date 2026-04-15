@@ -26,16 +26,8 @@ fn encode_claim_type(claim_type: crate::knowledge::KnowledgeClaimType) -> Result
     Ok(serde_json::to_string(&claim_type)?.trim_matches('"').to_string())
 }
 
-fn decode_claim_type(raw: String) -> Result<crate::knowledge::KnowledgeClaimType> {
-    Ok(serde_json::from_str(&format!("\"{raw}\""))?)
-}
-
 fn encode_claim_time_scope(scope: crate::knowledge::KnowledgeClaimTimeScope) -> Result<String> {
     Ok(serde_json::to_string(&scope)?.trim_matches('"').to_string())
-}
-
-fn decode_claim_time_scope(raw: String) -> Result<crate::knowledge::KnowledgeClaimTimeScope> {
-    Ok(serde_json::from_str(&format!("\"{raw}\""))?)
 }
 
 fn encode_claim_status(status: crate::knowledge::KnowledgeClaimStatus) -> Result<String> {
