@@ -186,6 +186,20 @@ final class _PendingWebNativeBackend extends WebNativeAppBackend {
       ];
 }
 
+final class _FailingWebNativeBackend extends WebNativeAppBackend {
+  _FailingWebNativeBackend()
+      : super(
+          appDirProvider: () async => '/opfs/secondloop/vaults/uid-1/v0',
+          storageScope: 'web-native:uid-1',
+          rustLibInit: () async {},
+        );
+
+  @override
+  Future<List<Conversation>> listConversations(Uint8List key) async {
+    throw StateError('opfs_unavailable');
+  }
+}
+
 void main() {
   testWidgets(
       'first entitled launch triggers managed-vault pull before chat loads',
@@ -230,7 +244,7 @@ void main() {
   });
 
   testWidgets(
-      'web initial sync gate rotates local runtime once when local vault stays empty',
+      'web initial sync gate does not reset local runtime when an entitled vault is simply empty',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final resolver = _FakeRuntimeResolver();
@@ -241,6 +255,47 @@ void main() {
         MaterialApp(
           home: AppBackendScope(
             backend: _EmptyWebNativeBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: WebInitialSyncGate(
+                authController: _FakeCloudAuthController(
+                  initialUid: 'uid-1',
+                  initialEmail: 'user@example.com',
+                  initialEmailVerified: true,
+                ),
+                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
+                syncRunner: (_, __, ___) async {},
+                appDirResolver: resolver,
+                localRuntimeRecovery: recovery,
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(resolver.bumpGenerationCalls, 0);
+    expect(recovery.reloadCalls, 0);
+    expect(find.byType(Placeholder), findsOneWidget);
+  });
+
+  testWidgets(
+      'web initial sync gate rotates local runtime once when local runtime reads fail after sync',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final resolver = _FakeRuntimeResolver();
+    final recovery = _FakeRuntimeRecovery();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: _FailingWebNativeBackend(),
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
               lock: () {},

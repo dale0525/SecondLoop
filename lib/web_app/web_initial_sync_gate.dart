@@ -161,22 +161,14 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
     final recovery =
         widget.localRuntimeRecovery ?? createDefaultWebLocalRuntimeRecovery();
 
-    Object? localReadError;
     try {
-      final conversations = await backend.listConversations(sessionKey);
-      if (conversations.isNotEmpty) {
-        recovery.clearResetAttempted(uid: uid);
-        return;
-      }
-    } catch (error) {
-      localReadError = error;
-    }
-
-    if (recovery.hasAttemptedReset(uid: uid)) {
-      if (localReadError != null) {
-        throw localReadError;
-      }
+      await backend.listConversations(sessionKey);
+      recovery.clearResetAttempted(uid: uid);
       return;
+    } catch (_) {
+      if (recovery.hasAttemptedReset(uid: uid)) {
+        rethrow;
+      }
     }
 
     recovery.markResetAttempted(uid: uid);
