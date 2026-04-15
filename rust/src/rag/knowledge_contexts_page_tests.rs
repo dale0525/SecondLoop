@@ -518,7 +518,56 @@ fn collect_matching_page_context_blocks_only_loads_full_pages_for_finalists() {
             .collect::<Vec<_>>(),
         vec!["page:3", "page:11"]
     );
-    assert_eq!(inspected_bodies.len(), 20);
+    assert_eq!(inspected_bodies.len(), 12);
+    assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
+}
+
+#[test]
+fn collect_matching_page_context_blocks_limits_body_search_window_for_large_candidate_sets() {
+    let mut inspected_bodies = Vec::<String>::new();
+    let mut loaded_pages = Vec::<String>::new();
+    let candidate_summaries = (0..64)
+        .map(|index| {
+            let page_id = format!("page:{index}");
+            let score = match index {
+                3 => 3,
+                11 => 2,
+                _ => 0,
+            };
+            (
+                _summary(&page_id, &format!("Page {index}"), "Generic summary"),
+                score,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let blocks = collect_matching_page_context_blocks(
+        "Mandarin project notes",
+        2,
+        false,
+        candidate_summaries,
+        |page_id| {
+            inspected_bodies.push(page_id.to_string());
+            Some(match page_id {
+                "page:3" => "Mandarin project notes and vocabulary".to_string(),
+                "page:11" => "Mandarin notes".to_string(),
+                _ => "Generic body".to_string(),
+            })
+        },
+        |page_id| {
+            loaded_pages.push(page_id.to_string());
+            Some(_page(page_id, "Generic summary", "Generic body"))
+        },
+    );
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["page:3", "page:11"]
+    );
+    assert_eq!(inspected_bodies.len(), 12);
     assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
 }
 

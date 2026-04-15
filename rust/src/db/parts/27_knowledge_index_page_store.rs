@@ -558,6 +558,61 @@ pub fn list_knowledge_page_summaries(
     Ok(out)
 }
 
+pub fn list_knowledge_page_summaries_by_ids(
+    conn: &Connection,
+    key: &[u8; 32],
+    page_ids: &[String],
+) -> Result<Vec<crate::knowledge::KnowledgePageSummary>> {
+    if page_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders = page_ids
+        .iter()
+        .enumerate()
+        .map(|(index, _)| format!("?{}", index + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        r#"SELECT page_id,
+                  page_type,
+                  state,
+                  answer_default_allowed,
+                  answer_requires_temporal_framing,
+                  source_count,
+                  conflict_count,
+                  updated_at_ms,
+                  last_used_at_ms,
+                  human_corrected,
+                  tags_json,
+                  primary_evidence_json,
+                  compiled_title,
+                  compiled_summary,
+                  manual_title,
+                  manual_summary
+           FROM knowledge_pages
+           WHERE state NOT IN ('archived', 'removed')
+             AND page_id IN ({placeholders})"#
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(
+            rusqlite::params_from_iter(page_ids.iter().map(String::as_str)),
+            read_knowledge_page_summary_sql_row,
+        )?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(anyhow::Error::from)?;
+    let mut summaries_by_id =
+        std::collections::BTreeMap::<String, crate::knowledge::KnowledgePageSummary>::new();
+    for row in rows {
+        let summary = decode_knowledge_page_summary(key, row)?;
+        summaries_by_id.insert(summary.page_id.clone(), summary);
+    }
+    Ok(page_ids
+        .iter()
+        .filter_map(|page_id| summaries_by_id.remove(page_id))
+        .collect())
+}
+
 pub fn list_answer_excluded_knowledge_page_ids(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare(
         r#"SELECT page_id

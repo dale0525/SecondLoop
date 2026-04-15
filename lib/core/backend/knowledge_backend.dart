@@ -118,6 +118,14 @@ abstract interface class KnowledgePagesBackend {
   });
 }
 
+abstract interface class KnowledgePageSummariesByIdBackend {
+  Future<List<rust_knowledge_pages.KnowledgePageSummary>>
+      listKnowledgePageSummariesByIds(
+    Uint8List key, {
+    required List<String> pageIds,
+  });
+}
+
 KnowledgeBackend? maybeKnowledgeBackendFor(AppBackend backend) {
   if (backend is KnowledgeBackend) return backend as KnowledgeBackend;
   if (backend is NativeAppBackend) return NativeKnowledgeBackend(backend);
@@ -128,7 +136,8 @@ final class NativeKnowledgeBackend
     implements
         KnowledgeBackend,
         GeneratedMemoryKnowledgeBackend,
-        KnowledgePagesBackend {
+        KnowledgePagesBackend,
+        KnowledgePageSummariesByIdBackend {
   NativeKnowledgeBackend(this._backend);
 
   final NativeAppBackend _backend;
@@ -168,6 +177,17 @@ final class NativeKnowledgeBackend
   Future<List<rust_knowledge_pages.KnowledgePageSummary>>
       listKnowledgePageSummaries(Uint8List key) =>
           _backend.listKnowledgePageSummaries(key);
+
+  @override
+  Future<List<rust_knowledge_pages.KnowledgePageSummary>>
+      listKnowledgePageSummariesByIds(
+    Uint8List key, {
+    required List<String> pageIds,
+  }) =>
+          _backend.listKnowledgePageSummariesByIds(
+            key,
+            pageIds: pageIds,
+          );
 
   @override
   Future<List<rust_knowledge_pages.KnowledgePageSummary>>

@@ -67,10 +67,11 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
       sessionKey,
       pageId: widget.pageId,
     );
-    final allSummaries = await backend.listKnowledgePageSummaries(sessionKey);
-    final relatedPages = allSummaries
-        .where((page) => detail.page.relatedPageIds.contains(page.pageId))
-        .toList(growable: false);
+    final relatedPages = await _loadRelatedPages(
+      backend,
+      sessionKey,
+      detail.page.relatedPageIds,
+    );
     final mergeTargets = knowledgePageSupportsMerge(detail.page.pageType)
         ? await backend.listMergeableKnowledgePageSummaries(
             sessionKey,
@@ -82,6 +83,29 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
       relatedPages: relatedPages,
       mergeTargets: mergeTargets,
     );
+  }
+
+  Future<List<KnowledgePageSummary>> _loadRelatedPages(
+    KnowledgePagesBackend backend,
+    Uint8List sessionKey,
+    List<String> relatedPageIds,
+  ) async {
+    if (relatedPageIds.isEmpty) {
+      return const <KnowledgePageSummary>[];
+    }
+    final relatedBackend = backend is KnowledgePageSummariesByIdBackend
+        ? backend as KnowledgePageSummariesByIdBackend
+        : null;
+    if (relatedBackend != null) {
+      return relatedBackend.listKnowledgePageSummariesByIds(
+        sessionKey,
+        pageIds: relatedPageIds,
+      );
+    }
+    final allSummaries = await backend.listKnowledgePageSummaries(sessionKey);
+    return allSummaries
+        .where((page) => relatedPageIds.contains(page.pageId))
+        .toList(growable: false);
   }
 
   @override

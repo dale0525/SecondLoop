@@ -58,6 +58,13 @@ Future<List<KnowledgePageSummary>> dbListKnowledgePageSummaries(
     RustLib.instance.api.crateApiKnowledgeDbListKnowledgePageSummaries(
         appDir: appDir, key: key);
 
+Future<List<KnowledgePageSummary>> dbListKnowledgePageSummariesByIds(
+        {required String appDir,
+        required List<int> key,
+        required List<String> pageIds}) =>
+    RustLib.instance.api.crateApiKnowledgeDbListKnowledgePageSummariesByIds(
+        appDir: appDir, key: key, pageIds: pageIds);
+
 Future<List<KnowledgePageSummary>> dbListMergeableKnowledgePageSummaries(
         {required String appDir,
         required List<int> key,

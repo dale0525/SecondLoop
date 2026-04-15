@@ -26,6 +26,7 @@ import 'chat_markdown_link_handler.dart';
 import 'knowledge_page_memory_card_helpers.dart';
 import 'knowledge_document_deeplink.dart';
 import 'message_deeplink.dart';
+import 'page_backed_evidence_actions.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
@@ -148,10 +149,10 @@ class MessageViewerPage extends StatelessWidget {
     if (documentId.startsWith('page:') &&
         pagesBackend != null &&
         sessionKey != null) {
-      await pagesBackend.setKnowledgePageAnswerAllowed(
+      await disablePageBackedEvidenceMemoryCard(
+        pagesBackend,
         sessionKey,
         pageId: documentId,
-        allowed: false,
       );
       return;
     }
@@ -186,7 +187,8 @@ class MessageViewerPage extends StatelessWidget {
     if (documentId.startsWith('page:') &&
         pagesBackend != null &&
         sessionKey != null) {
-      await pagesBackend.removeKnowledgePage(
+      await removePageBackedEvidenceMemoryCard(
+        pagesBackend,
         sessionKey,
         pageId: documentId,
       );
@@ -225,27 +227,13 @@ class MessageViewerPage extends StatelessWidget {
     if (card.documentId.startsWith('page:') &&
         pagesBackend != null &&
         sessionKey != null) {
-      final currentDetail = await pagesBackend.getKnowledgePageDetail(
+      return correctPageBackedEvidenceMemoryCard(
+        pagesBackend,
         sessionKey,
-        pageId: card.documentId,
+        card,
+        title: title,
+        summary: summary,
       );
-      final patch = buildPageBackedEvidenceCorrectionPatch(
-        currentTitle: currentDetail.page.title,
-        currentSummary: currentDetail.page.currentSummary,
-        nextTitle: title,
-        nextSummary: summary,
-      );
-      if (!patch.hasChanges) {
-        return knowledgePageMemoryCardFromDetail(card, currentDetail);
-      }
-      final detail = await pagesBackend.correctKnowledgePage(
-        sessionKey,
-        pageId: card.documentId,
-        title: patch.title,
-        summary: patch.summary,
-        body: patch.body,
-      );
-      return knowledgePageMemoryCardFromDetail(card, detail);
     }
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     final viewerBackend =
@@ -285,11 +273,11 @@ class MessageViewerPage extends StatelessWidget {
     if (card.documentId.startsWith('page:') &&
         pagesBackend != null &&
         sessionKey != null) {
-      final detail = await pagesBackend.getKnowledgePageDetail(
+      return refreshPageBackedEvidenceMemoryCard(
+        pagesBackend,
         sessionKey,
-        pageId: card.documentId,
+        card,
       );
-      return knowledgePageMemoryCardFromDetail(card, detail);
     }
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));

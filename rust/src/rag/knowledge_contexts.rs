@@ -3,6 +3,8 @@ use rusqlite::Connection;
 use std::cmp::Ordering;
 
 const FORCED_GENERATED_CONTEXT_SCORE: f64 = 0.0;
+const PAGE_BODY_SCAN_WINDOW_MIN: usize = 12;
+const PAGE_BODY_SCAN_WINDOW_PER_RESULT: usize = 6;
 
 use crate::knowledge;
 use crate::message_citations::append_message_citation_if_missing;
@@ -209,6 +211,11 @@ fn build_generated_planning_fallback_block(
     })
 }
 
+fn candidate_body_scan_limit(top_k: usize, candidate_count: usize) -> usize {
+    candidate_count
+        .min(PAGE_BODY_SCAN_WINDOW_MIN.max(top_k.max(1) * PAGE_BODY_SCAN_WINDOW_PER_RESULT))
+}
+
 fn collect_matching_page_context_candidates<'a, I, F>(
     question: &str,
     is_planning_query: bool,
@@ -251,10 +258,11 @@ where
     F: FnMut(&str) -> Option<String>,
     G: FnMut(&str) -> Option<knowledge::KnowledgePage>,
 {
+    let scan_limit = candidate_body_scan_limit(top_k, candidate_summaries.len());
     let mut candidates = collect_matching_page_context_candidates(
         question,
         is_planning_query,
-        candidate_summaries.iter(),
+        candidate_summaries.iter().take(scan_limit),
         &mut load_page_body,
     );
     candidates.sort_by(|left, right| right.1.cmp(&left.1));

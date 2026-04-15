@@ -6,10 +6,10 @@ extension _ChatPageStateKnowledgePageEvidence on _ChatPageState {
         maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
     final sessionKey = SessionScope.of(context).sessionKey;
     if (documentId.startsWith('page:') && pagesBackend != null) {
-      await pagesBackend.setKnowledgePageAnswerAllowed(
+      await disablePageBackedEvidenceMemoryCard(
+        pagesBackend,
         sessionKey,
         pageId: documentId,
-        allowed: false,
       );
       return;
     }
@@ -39,7 +39,8 @@ extension _ChatPageStateKnowledgePageEvidence on _ChatPageState {
         maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
     final sessionKey = SessionScope.of(context).sessionKey;
     if (documentId.startsWith('page:') && pagesBackend != null) {
-      await pagesBackend.removeKnowledgePage(
+      await removePageBackedEvidenceMemoryCard(
+        pagesBackend,
         sessionKey,
         pageId: documentId,
       );
@@ -75,27 +76,13 @@ extension _ChatPageStateKnowledgePageEvidence on _ChatPageState {
         maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
     final sessionKey = SessionScope.of(context).sessionKey;
     if (card.documentId.startsWith('page:') && pagesBackend != null) {
-      final currentDetail = await pagesBackend.getKnowledgePageDetail(
+      return correctPageBackedEvidenceMemoryCard(
+        pagesBackend,
         sessionKey,
-        pageId: card.documentId,
+        card,
+        title: title,
+        summary: summary,
       );
-      final patch = buildPageBackedEvidenceCorrectionPatch(
-        currentTitle: currentDetail.page.title,
-        currentSummary: currentDetail.page.currentSummary,
-        nextTitle: title,
-        nextSummary: summary,
-      );
-      if (!patch.hasChanges) {
-        return knowledgePageMemoryCardFromDetail(card, currentDetail);
-      }
-      final detail = await pagesBackend.correctKnowledgePage(
-        sessionKey,
-        pageId: card.documentId,
-        title: patch.title,
-        summary: patch.summary,
-        body: patch.body,
-      );
-      return knowledgePageMemoryCardFromDetail(card, detail);
     }
     final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
     final viewerBackend =
@@ -130,11 +117,11 @@ extension _ChatPageStateKnowledgePageEvidence on _ChatPageState {
         maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
     final sessionKey = SessionScope.of(context).sessionKey;
     if (card.documentId.startsWith('page:') && pagesBackend != null) {
-      final detail = await pagesBackend.getKnowledgePageDetail(
+      return refreshPageBackedEvidenceMemoryCard(
+        pagesBackend,
         sessionKey,
-        pageId: card.documentId,
+        card,
       );
-      return knowledgePageMemoryCardFromDetail(card, detail);
     }
     final viewerBackend =
         maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));

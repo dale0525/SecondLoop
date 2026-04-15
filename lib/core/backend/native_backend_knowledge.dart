@@ -60,6 +60,19 @@ extension NativeAppBackendKnowledgeExtension on NativeAppBackend {
   }
 
   Future<List<rust_knowledge_pages.KnowledgePageSummary>>
+      listKnowledgePageSummariesByIds(
+    Uint8List key, {
+    required List<String> pageIds,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbListKnowledgePageSummariesByIds(
+      appDir: appDir,
+      key: key,
+      pageIds: pageIds,
+    );
+  }
+
+  Future<List<rust_knowledge_pages.KnowledgePageSummary>>
       listMergeableKnowledgePageSummaries(
     Uint8List key, {
     required String pageId,
