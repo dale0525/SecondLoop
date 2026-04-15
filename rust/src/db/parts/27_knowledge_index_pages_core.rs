@@ -161,6 +161,8 @@ type KnowledgePageSummarySqlRow = (
     Option<Vec<u8>>,
 );
 
+type MergeableKnowledgePageSummarySqlRow = (KnowledgePageSummarySqlRow, String);
+
 fn read_stored_knowledge_page_sql_row(
     row: &rusqlite::Row<'_>,
 ) -> rusqlite::Result<StoredKnowledgePageSqlRow> {
@@ -213,6 +215,12 @@ fn read_knowledge_page_summary_sql_row(
         row.get::<_, Option<Vec<u8>>>(14)?,
         row.get::<_, Option<Vec<u8>>>(15)?,
     ))
+}
+
+fn read_mergeable_knowledge_page_summary_sql_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<MergeableKnowledgePageSummarySqlRow> {
+    Ok((read_knowledge_page_summary_sql_row(row)?, row.get::<_, String>(16)?))
 }
 
 fn decode_stored_knowledge_page_sql_row(row: StoredKnowledgePageSqlRow) -> Result<StoredKnowledgePageRow> {
@@ -388,6 +396,80 @@ pub(crate) fn load_current_knowledge_page(
         .as_ref()
         .map(|row| stored_row_to_page(key, row))
         .transpose()
+}
+
+pub(crate) fn load_current_knowledge_page_body(
+    conn: &Connection,
+    key: &[u8; 32],
+    page_id: &str,
+) -> Result<Option<String>> {
+    let Some(row) = load_stored_knowledge_page_row(conn, page_id)? else {
+        return Ok(None);
+    };
+    Ok(Some(
+        row.manual_body_blob
+            .as_ref()
+            .map(|blob| decode_knowledge_page_text(key, page_id, "manual_body", blob))
+            .transpose()?
+            .unwrap_or(decode_knowledge_page_text(
+                key,
+                page_id,
+                "compiled_body",
+                &row.compiled_body_blob,
+            )?),
+    ))
+}
+
+pub fn list_mergeable_knowledge_page_summaries(
+    conn: &Connection,
+    key: &[u8; 32],
+    page_id: &str,
+) -> Result<Vec<crate::knowledge::KnowledgePageSummary>> {
+    let Some(current) = load_stored_knowledge_page_row(conn, page_id)? else {
+        return Ok(Vec::new());
+    };
+    let mut stmt = conn.prepare(
+        r#"SELECT page_id,
+                  page_type,
+                  state,
+                  answer_default_allowed,
+                  answer_requires_temporal_framing,
+                  source_count,
+                  conflict_count,
+                  updated_at_ms,
+                  last_used_at_ms,
+                  human_corrected,
+                  tags_json,
+                  primary_evidence_json,
+                  compiled_title,
+                  compiled_summary,
+                  manual_title,
+                  manual_summary,
+                  related_page_ids_json
+           FROM knowledge_pages
+           WHERE page_id != ?1
+             AND page_type = ?2
+             AND state NOT IN ('archived', 'removed')
+           ORDER BY COALESCE(last_used_at_ms, 0) DESC, updated_at_ms DESC, page_id ASC"#,
+    )?;
+    let rows = stmt
+        .query_map(
+            params![page_id, encode_page_type(current.page_type)?],
+            read_mergeable_knowledge_page_summary_sql_row,
+        )?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(anyhow::Error::from)?;
+    let mut out = Vec::<crate::knowledge::KnowledgePageSummary>::new();
+    for (summary_row, related_page_ids_json) in rows {
+        let summary = decode_knowledge_page_summary(key, summary_row)?;
+        let related_page_ids = decode_string_list(related_page_ids_json)?;
+        if current.related_page_ids.contains(&summary.page_id)
+            || related_page_ids.iter().any(|candidate_id| candidate_id == page_id)
+        {
+            out.push(summary);
+        }
+    }
+    Ok(out)
 }
 
 fn evidence_kind_for_claim_status(

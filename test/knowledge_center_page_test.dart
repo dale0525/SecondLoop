@@ -621,6 +621,13 @@ final class _KnowledgeCenterBackendStub extends TestAppBackend
       summaries;
 
   @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      const <KnowledgePageSummary>[];
+
+  @override
   Future<KnowledgePageDetail> getKnowledgePageDetail(
     Uint8List key, {
     required String pageId,
@@ -705,6 +712,13 @@ final class _ConcurrentKnowledgeCenterBackendStub extends TestAppBackend
   Future<List<KnowledgePageSummary>> listKnowledgePageSummaries(
     Uint8List key,
   ) async =>
+      const <KnowledgePageSummary>[];
+
+  @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
       const <KnowledgePageSummary>[];
 
   @override

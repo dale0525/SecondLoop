@@ -205,68 +205,61 @@ fn build_generated_planning_fallback_block(
     })
 }
 
-fn append_matching_page_context_blocks<'a, I, F>(
+fn collect_matching_page_context_candidates<'a, I, F>(
     question: &str,
     is_planning_query: bool,
     summaries: I,
-    load_page: &mut F,
-    candidates: &mut Vec<(usize, knowledge::KnowledgeContextBlock)>,
-) where
+    load_page_body: &mut F,
+) -> Vec<(String, usize)>
+where
     I: IntoIterator<Item = &'a (knowledge::KnowledgePageSummary, usize)>,
-    F: FnMut(&str) -> Option<knowledge::KnowledgePage>,
+    F: FnMut(&str) -> Option<String>,
 {
+    let mut candidates = Vec::<(String, usize)>::new();
     for (summary, prefilter_score) in summaries {
-        let Some(page) = load_page(&summary.page_id) else {
+        let Some(page_body) = load_page_body(&summary.page_id) else {
             continue;
         };
         let lexical_score = lexical_page_match_score(
             question,
             &format!(
                 "{}\n{}\n{}",
-                page.title, page.current_summary, page.current_body
+                summary.title, summary.current_summary, page_body
             ),
         );
         if !is_planning_query && lexical_score == 0 {
             continue;
         }
-        candidates.push((
-            lexical_score.max(*prefilter_score),
-            render_page_context_block(&page, lexical_score.max(*prefilter_score) as f64),
-        ));
+        candidates.push((summary.page_id.clone(), lexical_score.max(*prefilter_score)));
     }
+    candidates
 }
 
-pub(super) fn collect_matching_page_context_blocks<F>(
+pub(super) fn collect_matching_page_context_blocks<F, G>(
     question: &str,
     top_k: usize,
     is_planning_query: bool,
     candidate_summaries: Vec<(knowledge::KnowledgePageSummary, usize)>,
-    mut load_page: F,
+    mut load_page_body: F,
+    mut load_page: G,
 ) -> Vec<knowledge::KnowledgeContextBlock>
 where
-    F: FnMut(&str) -> Option<knowledge::KnowledgePage>,
+    F: FnMut(&str) -> Option<String>,
+    G: FnMut(&str) -> Option<knowledge::KnowledgePage>,
 {
-    let initial_candidate_limit = top_k.max(1).saturating_mul(4).max(8);
-    let mut candidates = Vec::<(usize, knowledge::KnowledgeContextBlock)>::new();
-    append_matching_page_context_blocks(
+    let mut candidates = collect_matching_page_context_candidates(
         question,
         is_planning_query,
-        candidate_summaries.iter().take(initial_candidate_limit),
-        &mut load_page,
-        &mut candidates,
+        candidate_summaries.iter(),
+        &mut load_page_body,
     );
-    append_matching_page_context_blocks(
-        question,
-        is_planning_query,
-        candidate_summaries.iter().skip(initial_candidate_limit),
-        &mut load_page,
-        &mut candidates,
-    );
-    candidates.sort_by(|left, right| right.0.cmp(&left.0));
+    candidates.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
     candidates
         .into_iter()
         .take(top_k.max(1))
-        .map(|(_, block)| block)
+        .filter_map(|(page_id, score)| {
+            load_page(&page_id).map(|page| render_page_context_block(&page, score as f64))
+        })
         .collect()
 }
 
@@ -388,6 +381,11 @@ pub(super) fn collect_compiled_page_contexts(
         top_k,
         is_planning_query,
         candidate_summaries,
+        |page_id| {
+            crate::db::load_current_knowledge_page_body(conn, key, page_id)
+                .ok()
+                .flatten()
+        },
         |page_id| {
             crate::db::load_current_knowledge_page(conn, key, page_id)
                 .ok()

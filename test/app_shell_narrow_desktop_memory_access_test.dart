@@ -190,6 +190,13 @@ final class _CountingKnowledgeBackend extends TestAppBackend
   }
 
   @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      const <KnowledgePageSummary>[];
+
+  @override
   Future<KnowledgePageDetail> correctKnowledgePage(
     Uint8List key, {
     required String pageId,

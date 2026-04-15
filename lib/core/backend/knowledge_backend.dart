@@ -58,6 +58,12 @@ abstract interface class KnowledgePagesBackend {
   Future<List<rust_knowledge_pages.KnowledgePageSummary>>
       listKnowledgePageSummaries(Uint8List key);
 
+  Future<List<rust_knowledge_pages.KnowledgePageSummary>>
+      listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  });
+
   Future<List<rust_knowledge_history.KnowledgePageChangeRecord>>
       listRecentKnowledgePageChanges(
     Uint8List key, {
@@ -162,6 +168,17 @@ final class NativeKnowledgeBackend
   Future<List<rust_knowledge_pages.KnowledgePageSummary>>
       listKnowledgePageSummaries(Uint8List key) =>
           _backend.listKnowledgePageSummaries(key);
+
+  @override
+  Future<List<rust_knowledge_pages.KnowledgePageSummary>>
+      listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) =>
+          _backend.listMergeableKnowledgePageSummaries(
+            key,
+            pageId: pageId,
+          );
 
   @override
   Future<List<rust_knowledge_history.KnowledgePageChangeRecord>>

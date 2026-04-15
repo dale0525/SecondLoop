@@ -268,6 +268,32 @@ void main() {
   });
 
   testWidgets(
+      'KnowledgePageDetailPage resolves merge targets without loading every candidate detail',
+      (tester) async {
+    final backend = _ReverseRelatedMergeableKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:topics:alpha'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(backend.detailLoadPageIds, ['page:topics:alpha']);
+    expect(backend.mergeSummaryLoadCount, 1);
+  });
+
+  testWidgets(
       'KnowledgePageDetailPage navigates to the merge target after merging',
       (tester) async {
     final backend = _MergeableKnowledgePageDetailBackendStub();
@@ -563,6 +589,13 @@ final class _KnowledgePageDetailBackendStub extends TestAppBackend
       ];
 
   @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      const [];
+
+  @override
   Future<List<KnowledgePageChangeRecord>> listRecentKnowledgePageChanges(
     Uint8List key, {
     int limit = 8,
@@ -679,6 +712,13 @@ final class _MutableKnowledgePageDetailBackendStub extends TestAppBackend
           primaryEvidenceIds: [],
         ),
       ];
+
+  @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      const [];
 
   @override
   Future<List<KnowledgePageChangeRecord>> listRecentKnowledgePageChanges(
@@ -867,6 +907,32 @@ final class _MergeableKnowledgePageDetailBackendStub
       ];
 
   @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      const [
+        KnowledgePageSummary(
+          pageId: 'page:topics:beta',
+          pageType: KnowledgePageType.topics,
+          title: 'Topic Beta',
+          currentSummary: 'Related topic summary.',
+          state: KnowledgePageState.active,
+          answerPolicy: KnowledgeAnswerPolicy(
+            defaultAllowed: true,
+            requiresTemporalFraming: false,
+          ),
+          updatedAtMs: 2,
+          lastUsedAtMs: 2,
+          sourceCount: 1,
+          conflictCount: 0,
+          humanCorrected: false,
+          tags: [],
+          primaryEvidenceIds: [],
+        ),
+      ];
+
+  @override
   Future<KnowledgePageDetail> mergeKnowledgePageInto(
     Uint8List key, {
     required String pageId,
@@ -891,6 +957,13 @@ final class _MergeableKnowledgePageDetailBackendStub
 
 final class _UnrelatedMergeableKnowledgePageDetailBackendStub
     extends _MergeableKnowledgePageDetailBackendStub {
+  @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      const [];
+
   @override
   Future<KnowledgePageDetail> getKnowledgePageDetail(
     Uint8List key, {
@@ -921,11 +994,15 @@ final class _UnrelatedMergeableKnowledgePageDetailBackendStub
 
 final class _ReverseRelatedMergeableKnowledgePageDetailBackendStub
     extends _MergeableKnowledgePageDetailBackendStub {
+  final List<String> detailLoadPageIds = <String>[];
+  int mergeSummaryLoadCount = 0;
+
   @override
   Future<KnowledgePageDetail> getKnowledgePageDetail(
     Uint8List key, {
     required String pageId,
   }) async {
+    detailLoadPageIds.add(pageId);
     if (pageId == 'page:topics:beta') {
       return _buildDetail(
         pageId: pageId,
@@ -946,6 +1023,34 @@ final class _ReverseRelatedMergeableKnowledgePageDetailBackendStub
       relatedPageIds: const ['page:about-me'],
       tags: const ['topics'],
     );
+  }
+
+  @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    mergeSummaryLoadCount += 1;
+    return const [
+      KnowledgePageSummary(
+        pageId: 'page:topics:beta',
+        pageType: KnowledgePageType.topics,
+        title: 'Topic Beta',
+        currentSummary: 'Merged topic summary.',
+        state: KnowledgePageState.active,
+        answerPolicy: KnowledgeAnswerPolicy(
+          defaultAllowed: true,
+          requiresTemporalFraming: false,
+        ),
+        updatedAtMs: 4,
+        lastUsedAtMs: 3,
+        sourceCount: 2,
+        conflictCount: 0,
+        humanCorrected: false,
+        tags: ['topics'],
+        primaryEvidenceIds: ['doc:beta'],
+      ),
+    ];
   }
 }
 

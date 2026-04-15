@@ -168,6 +168,18 @@ pub fn db_list_knowledge_page_summaries(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_list_mergeable_knowledge_page_summaries(
+    app_dir: String,
+    key: Vec<u8>,
+    page_id: String,
+) -> Result<Vec<knowledge::KnowledgePageSummary>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let _ = knowledge::compiler::refresh_knowledge_pages_if_required(&conn, &key)?;
+    db::list_mergeable_knowledge_page_summaries(&conn, &key, &page_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_recent_knowledge_page_changes(
     app_dir: String,
     key: Vec<u8>,

@@ -1512,6 +1512,19 @@ fn merge_knowledge_page_into_combines_target_content_and_archives_source() {
     source_page.source_count = 1;
     source_page.confidence_level = 0.87;
 
+    let mut neighbor_page = crate::knowledge::KnowledgePage::new(
+        "page:topics:neighbor",
+        crate::knowledge::KnowledgePageType::Topics,
+        "Neighbor Topic",
+        now + 2,
+    );
+    neighbor_page.current_summary = "Neighbor summary".to_string();
+    neighbor_page.current_body = "Neighbor detail".to_string();
+    neighbor_page.primary_evidence_ids = vec!["doc:neighbor".to_string()];
+    neighbor_page.related_page_ids = vec!["page:topics:source".to_string()];
+    neighbor_page.source_count = 1;
+    neighbor_page.confidence_level = 0.51;
+
     db::upsert_compiled_knowledge_pages(
         &conn,
         &key,
@@ -1525,6 +1538,11 @@ fn merge_knowledge_page_into_combines_target_content_and_archives_source() {
                 page: source_page,
                 source_document_ids: vec!["doc:source".to_string()],
                 claim_ids: vec!["claim:source".to_string()],
+            },
+            crate::knowledge::compiler::CompiledKnowledgePageRecord {
+                page: neighbor_page,
+                source_document_ids: vec!["doc:neighbor".to_string()],
+                claim_ids: vec!["claim:neighbor".to_string()],
             },
         ],
     )
@@ -1602,6 +1620,20 @@ fn merge_knowledge_page_into_combines_target_content_and_archives_source() {
             .and_then(|item| item.reason.as_deref()),
         Some("Merged content and provenance from page:topics:source.")
     );
+
+    let neighbor_detail = db::get_knowledge_page_detail(&conn, &key, "page:topics:neighbor")
+        .expect("load neighbor detail")
+        .expect("neighbor detail after merge");
+    assert!(neighbor_detail
+        .page
+        .related_page_ids
+        .iter()
+        .any(|page_id| page_id == "page:topics:target"));
+    assert!(neighbor_detail
+        .page
+        .related_page_ids
+        .iter()
+        .all(|page_id| page_id != "page:topics:source"));
 }
 
 #[test]

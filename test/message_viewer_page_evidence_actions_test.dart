@@ -108,6 +108,13 @@ final class _PageOnlyEvidenceBackend extends TestAppBackend
       ];
 
   @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      const <KnowledgePageSummary>[];
+
+  @override
   Future<List<KnowledgePageChangeRecord>> listRecentKnowledgePageChanges(
     Uint8List key, {
     int limit = 8,

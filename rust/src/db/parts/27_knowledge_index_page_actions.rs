@@ -522,6 +522,7 @@ pub fn merge_knowledge_page_into(
                 encode_string_list(&merged_source_tags)?,
             ],
         )?;
+        rewrite_related_page_links_for_merge(conn, page_id, target_page_id, now)?;
         record_knowledge_page_change(
             conn,
             key,
@@ -570,6 +571,53 @@ pub fn merge_knowledge_page_into(
             Err(error)
         }
     }
+}
+
+fn rewrite_related_page_links_for_merge(
+    conn: &Connection,
+    source_page_id: &str,
+    target_page_id: &str,
+    now_ms: i64,
+) -> Result<()> {
+    let mut stmt = conn.prepare(
+        r#"SELECT page_id, related_page_ids_json
+           FROM knowledge_pages
+           WHERE page_id NOT IN (?1, ?2)
+             AND state NOT IN ('archived', 'removed')"#,
+    )?;
+    let mut rows = stmt.query(params![source_page_id, target_page_id])?;
+    while let Some(row) = rows.next()? {
+        let page_id: String = row.get(0)?;
+        let related_page_ids = decode_string_list(row.get(1)?)?;
+        if !related_page_ids.iter().any(|value| value == source_page_id) {
+            continue;
+        }
+        let rewritten_related_page_ids = normalize_knowledge_string_set(
+            &related_page_ids
+                .into_iter()
+                .map(|value| {
+                    if value == source_page_id {
+                        target_page_id.to_string()
+                    } else {
+                        value
+                    }
+                })
+                .collect::<Vec<_>>(),
+            32,
+        );
+        conn.execute(
+            r#"UPDATE knowledge_pages
+               SET related_page_ids_json = ?2,
+                   updated_at_ms = ?3
+               WHERE page_id = ?1"#,
+            params![
+                page_id,
+                encode_string_list(&rewritten_related_page_ids)?,
+                now_ms,
+            ],
+        )?;
+    }
+    Ok(())
 }
 
 fn page_type_supports_structured_merge(

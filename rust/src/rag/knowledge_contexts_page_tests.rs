@@ -218,7 +218,8 @@ fn collect_compiled_page_contexts_matches_cjk_query_against_page_body() {
 
 #[test]
 fn collect_matching_page_context_blocks_keeps_late_candidates_available_for_reranking() {
-    let mut inspected = Vec::<String>::new();
+    let mut inspected_bodies = Vec::<String>::new();
+    let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = vec![
         (_summary("page:match", "Alpha", "Generic summary"), 1),
         (_summary("page:2", "Page 2", "Generic summary"), 0),
@@ -231,15 +232,28 @@ fn collect_matching_page_context_blocks_keeps_late_candidates_available_for_rera
         (_summary("page:late", "Late Page", "Generic summary"), 0),
     ];
 
-    let blocks =
-        collect_matching_page_context_blocks("Alpha", 1, false, candidate_summaries, |page_id| {
-            inspected.push(page_id.to_string());
+    let blocks = collect_matching_page_context_blocks(
+        "Alpha",
+        1,
+        false,
+        candidate_summaries,
+        |page_id| {
+            inspected_bodies.push(page_id.to_string());
+            Some(if page_id == "page:match" {
+                "Generic body".to_string()
+            } else {
+                "Generic body".to_string()
+            })
+        },
+        |page_id| {
+            loaded_pages.push(page_id.to_string());
             Some(if page_id == "page:match" {
                 _page(page_id, "Alpha summary", "Generic body")
             } else {
                 _page(page_id, "Generic summary", "Generic body")
             })
-        });
+        },
+    );
 
     assert_eq!(
         blocks
@@ -248,13 +262,17 @@ fn collect_matching_page_context_blocks_keeps_late_candidates_available_for_rera
             .collect::<Vec<_>>(),
         vec!["page:match"]
     );
-    assert_eq!(inspected.len(), 9);
-    assert!(inspected.iter().any(|page_id| page_id == "page:late"));
+    assert_eq!(inspected_bodies.len(), 9);
+    assert!(inspected_bodies
+        .iter()
+        .any(|page_id| page_id == "page:late"));
+    assert_eq!(loaded_pages, vec!["page:match"]);
 }
 
 #[test]
 fn collect_matching_page_context_blocks_falls_back_to_late_body_match_when_needed() {
-    let mut inspected = Vec::<String>::new();
+    let mut inspected_bodies = Vec::<String>::new();
+    let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = vec![
         (_summary("page:1", "Page 1", "Generic summary"), 0),
         (_summary("page:2", "Page 2", "Generic summary"), 0),
@@ -273,12 +291,16 @@ fn collect_matching_page_context_blocks_falls_back_to_late_body_match_when_neede
         false,
         candidate_summaries,
         |page_id| {
-            inspected.push(page_id.to_string());
+            inspected_bodies.push(page_id.to_string());
             Some(if page_id == "page:late" {
-                _page(page_id, "Generic summary", "Reply in Mandarin when asked.")
+                "Reply in Mandarin when asked.".to_string()
             } else {
-                _page(page_id, "Generic summary", "Generic body")
+                "Generic body".to_string()
             })
+        },
+        |page_id| {
+            loaded_pages.push(page_id.to_string());
+            Some(_page(page_id, "Generic summary", "Generic body"))
         },
     );
 
@@ -289,12 +311,14 @@ fn collect_matching_page_context_blocks_falls_back_to_late_body_match_when_neede
             .collect::<Vec<_>>(),
         vec!["page:late"]
     );
-    assert_eq!(inspected.len(), 9);
+    assert_eq!(inspected_bodies.len(), 9);
+    assert_eq!(loaded_pages, vec!["page:late"]);
 }
 
 #[test]
 fn collect_matching_page_context_blocks_keeps_searching_when_early_match_is_weaker() {
-    let mut inspected = Vec::<String>::new();
+    let mut inspected_bodies = Vec::<String>::new();
+    let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = vec![
         (_summary("page:weak", "Weak Page", "Mandarin"), 1),
         (_summary("page:2", "Page 2", "Generic summary"), 0),
@@ -313,7 +337,17 @@ fn collect_matching_page_context_blocks_keeps_searching_when_early_match_is_weak
         false,
         candidate_summaries,
         |page_id| {
-            inspected.push(page_id.to_string());
+            inspected_bodies.push(page_id.to_string());
+            Some(if page_id == "page:weak" {
+                "Generic body".to_string()
+            } else if page_id == "page:late" {
+                "Reply in Mandarin Chinese.".to_string()
+            } else {
+                "Generic body".to_string()
+            })
+        },
+        |page_id| {
+            loaded_pages.push(page_id.to_string());
             Some(if page_id == "page:weak" {
                 _page(page_id, "Mandarin", "Generic body")
             } else if page_id == "page:late" {
@@ -331,12 +365,14 @@ fn collect_matching_page_context_blocks_keeps_searching_when_early_match_is_weak
             .collect::<Vec<_>>(),
         vec!["page:late"]
     );
-    assert_eq!(inspected.len(), 9);
+    assert_eq!(inspected_bodies.len(), 9);
+    assert_eq!(loaded_pages, vec!["page:late"]);
 }
 
 #[test]
 fn collect_matching_page_context_blocks_planning_queries_still_search_late_candidates() {
-    let mut inspected = Vec::<String>::new();
+    let mut inspected_bodies = Vec::<String>::new();
+    let mut loaded_pages = Vec::<String>::new();
     let candidate_summaries = vec![
         (_summary("page:1", "Page 1", "Generic summary"), 0),
         (_summary("page:2", "Page 2", "Generic summary"), 0),
@@ -355,16 +391,16 @@ fn collect_matching_page_context_blocks_planning_queries_still_search_late_candi
         true,
         candidate_summaries,
         |page_id| {
-            inspected.push(page_id.to_string());
+            inspected_bodies.push(page_id.to_string());
             Some(if page_id == "page:late" {
-                _page(
-                    page_id,
-                    "Generic summary",
-                    "Mandarin practice is still active.",
-                )
+                "Mandarin practice is still active.".to_string()
             } else {
-                _page(page_id, "Generic summary", "Generic body")
+                "Generic body".to_string()
             })
+        },
+        |page_id| {
+            loaded_pages.push(page_id.to_string());
+            Some(_page(page_id, "Generic summary", "Generic body"))
         },
     );
 
@@ -375,7 +411,57 @@ fn collect_matching_page_context_blocks_planning_queries_still_search_late_candi
             .collect::<Vec<_>>(),
         vec!["page:late"]
     );
-    assert_eq!(inspected.len(), 9);
+    assert_eq!(inspected_bodies.len(), 9);
+    assert_eq!(loaded_pages, vec!["page:late"]);
+}
+
+#[test]
+fn collect_matching_page_context_blocks_only_loads_full_pages_for_finalists() {
+    let mut inspected_bodies = Vec::<String>::new();
+    let mut loaded_pages = Vec::<String>::new();
+    let candidate_summaries = (0..20)
+        .map(|index| {
+            let page_id = format!("page:{index}");
+            let score = match index {
+                3 => 3,
+                11 => 2,
+                _ => 0,
+            };
+            (
+                _summary(&page_id, &format!("Page {index}"), "Generic summary"),
+                score,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let blocks = collect_matching_page_context_blocks(
+        "Mandarin project notes",
+        2,
+        false,
+        candidate_summaries,
+        |page_id| {
+            inspected_bodies.push(page_id.to_string());
+            Some(match page_id {
+                "page:3" => "Mandarin project notes and vocabulary".to_string(),
+                "page:11" => "Mandarin notes".to_string(),
+                _ => "Generic body".to_string(),
+            })
+        },
+        |page_id| {
+            loaded_pages.push(page_id.to_string());
+            Some(_page(page_id, "Generic summary", "Generic body"))
+        },
+    );
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["page:3", "page:11"]
+    );
+    assert_eq!(inspected_bodies.len(), 20);
+    assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
 }
 
 fn _summary(
