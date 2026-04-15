@@ -123,7 +123,7 @@ pub(super) fn should_exclude_generated_document_for_page_policies(
     !related_page_ids.is_empty()
         && related_page_ids
             .iter()
-            .all(|page_id| excluded_page_ids.contains(page_id))
+            .any(|page_id| excluded_page_ids.contains(page_id))
 }
 
 fn page_context_allowed(page: &knowledge::KnowledgePage) -> bool {
@@ -259,12 +259,18 @@ where
     G: FnMut(&str) -> Option<knowledge::KnowledgePage>,
 {
     let scan_limit = candidate_body_scan_limit(top_k, candidate_summaries.len());
-    let mut candidates = collect_matching_page_context_candidates(
-        question,
-        is_planning_query,
-        candidate_summaries.iter().take(scan_limit),
-        &mut load_page_body,
-    );
+    let mut candidates = Vec::<(String, usize)>::new();
+    for chunk in candidate_summaries.chunks(scan_limit.max(1)) {
+        candidates.extend(collect_matching_page_context_candidates(
+            question,
+            is_planning_query,
+            chunk.iter(),
+            &mut load_page_body,
+        ));
+        if candidates.len() >= top_k.max(1) {
+            break;
+        }
+    }
     candidates.sort_by(|left, right| right.1.cmp(&left.1));
     candidates
         .into_iter()

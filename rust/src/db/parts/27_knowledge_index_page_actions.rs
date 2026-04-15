@@ -695,14 +695,15 @@ fn pages_are_explicitly_related(
     source: &crate::knowledge::KnowledgePage,
     target: &crate::knowledge::KnowledgePage,
 ) -> bool {
-    source
-        .related_page_ids
-        .iter()
-        .any(|page_id| page_id == &target.page_id)
-        || target
-            .related_page_ids
-            .iter()
-            .any(|page_id| page_id == &source.page_id)
+    knowledge_pages_are_merge_related(
+        source.page_type,
+        &source.page_id,
+        &source.title,
+        &source.related_page_ids,
+        &target.page_id,
+        &target.title,
+        &target.related_page_ids,
+    )
 }
 
 fn set_knowledge_page_state(

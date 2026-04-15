@@ -26,4 +26,6 @@ pub mod todo_followup_generation;
 #[cfg(test)]
 mod knowledge_page_governance_tests;
 #[cfg(test)]
+mod knowledge_page_merge_candidates_tests;
+#[cfg(test)]
 mod knowledge_tests;

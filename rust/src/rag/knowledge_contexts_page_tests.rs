@@ -571,6 +571,57 @@ fn collect_matching_page_context_blocks_limits_body_search_window_for_large_cand
     assert_eq!(loaded_pages, vec!["page:3", "page:11"]);
 }
 
+#[test]
+fn collect_matching_page_context_blocks_keeps_scanning_large_candidate_sets_until_late_match_found()
+{
+    let mut inspected_bodies = Vec::<String>::new();
+    let mut loaded_pages = Vec::<String>::new();
+    let candidate_summaries = (0..64)
+        .map(|index| {
+            let page_id = format!("page:{index}");
+            (
+                _summary(&page_id, &format!("Page {index}"), "Generic summary"),
+                0,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let blocks = collect_matching_page_context_blocks(
+        "Mandarin project notes",
+        1,
+        false,
+        candidate_summaries,
+        |page_id| {
+            inspected_bodies.push(page_id.to_string());
+            Some(match page_id {
+                "page:27" => "Mandarin project notes and vocabulary".to_string(),
+                _ => "Generic body".to_string(),
+            })
+        },
+        |page_id| {
+            loaded_pages.push(page_id.to_string());
+            Some(_page(page_id, "Generic summary", "Generic body"))
+        },
+    );
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.document_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["page:27"]
+    );
+    assert!(
+        inspected_bodies.len() > 12,
+        "inspected_bodies: {inspected_bodies:?}"
+    );
+    assert!(
+        inspected_bodies.iter().any(|page_id| page_id == "page:27"),
+        "inspected_bodies: {inspected_bodies:?}"
+    );
+    assert_eq!(loaded_pages, vec!["page:27"]);
+}
+
 fn _summary(
     page_id: &str,
     title: &str,

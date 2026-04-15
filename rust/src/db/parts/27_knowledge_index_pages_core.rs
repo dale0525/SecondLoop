@@ -420,6 +420,15 @@ pub fn list_mergeable_knowledge_page_summaries(
     let Some(current) = load_stored_knowledge_page_row(conn, page_id)? else {
         return Ok(Vec::new());
     };
+    if !matches!(
+        current.page_type,
+        crate::knowledge::KnowledgePageType::People
+            | crate::knowledge::KnowledgePageType::Topics
+            | crate::knowledge::KnowledgePageType::OpenQuestions
+    ) {
+        return Ok(Vec::new());
+    }
+    let current_page = stored_row_to_page(key, &current)?;
     let mut stmt = conn.prepare(
         r#"SELECT page_id,
                   page_type,
@@ -455,13 +464,114 @@ pub fn list_mergeable_knowledge_page_summaries(
     for (summary_row, related_page_ids_json) in rows {
         let summary = decode_knowledge_page_summary(key, summary_row)?;
         let related_page_ids = decode_string_list(related_page_ids_json)?;
-        if current.related_page_ids.contains(&summary.page_id)
-            || related_page_ids.iter().any(|candidate_id| candidate_id == page_id)
-        {
+        if knowledge_pages_are_merge_related(
+            current.page_type,
+            &current.page_id,
+            &current_page.title,
+            &current.related_page_ids,
+            &summary.page_id,
+            &summary.title,
+            &related_page_ids,
+        ) {
             out.push(summary);
         }
     }
     Ok(out)
+}
+
+fn knowledge_pages_are_merge_related(
+    page_type: crate::knowledge::KnowledgePageType,
+    source_page_id: &str,
+    source_title: &str,
+    source_related_page_ids: &[String],
+    target_page_id: &str,
+    target_title: &str,
+    target_related_page_ids: &[String],
+) -> bool {
+    if source_related_page_ids
+        .iter()
+        .any(|page_id| page_id == target_page_id)
+        || target_related_page_ids
+            .iter()
+            .any(|page_id| page_id == source_page_id)
+    {
+        return true;
+    }
+
+    if !matches!(
+        page_type,
+        crate::knowledge::KnowledgePageType::People
+            | crate::knowledge::KnowledgePageType::Topics
+            | crate::knowledge::KnowledgePageType::OpenQuestions
+    ) {
+        return false;
+    }
+
+    let source_tokens = merge_candidate_tokens(source_page_id, source_title);
+    let target_tokens = merge_candidate_tokens(target_page_id, target_title);
+    if source_tokens.is_empty() || target_tokens.is_empty() {
+        return false;
+    }
+
+    let shared_token_count = source_tokens
+        .iter()
+        .filter(|token| target_tokens.contains(*token))
+        .count();
+    if shared_token_count >= 2 {
+        return true;
+    }
+
+    let source_primary = merge_primary_candidate_token(source_page_id, source_title);
+    let target_primary = merge_primary_candidate_token(target_page_id, target_title);
+    shared_token_count >= 1
+        && source_primary.is_some()
+        && source_primary == target_primary
+}
+
+fn merge_candidate_tokens(page_id: &str, title: &str) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::<String>::new();
+    let merge_key = page_id.rsplit(':').next().unwrap_or(page_id);
+    append_merge_tokens(&mut out, merge_key);
+    append_merge_tokens(&mut out, title);
+    out
+}
+
+fn merge_primary_candidate_token(page_id: &str, title: &str) -> Option<String> {
+    let merge_key = page_id.rsplit(':').next().unwrap_or(page_id);
+    merge_token_stream(merge_key)
+        .into_iter()
+        .chain(merge_token_stream(title))
+        .find(|token| !merge_token_is_stopword(token))
+}
+
+fn append_merge_tokens(out: &mut std::collections::BTreeSet<String>, value: &str) {
+    out.extend(
+        merge_token_stream(value)
+            .into_iter()
+            .filter(|token| !merge_token_is_stopword(token)),
+    );
+}
+
+fn merge_token_stream(value: &str) -> Vec<String> {
+    value
+        .split(|ch: char| !ch.is_alphanumeric())
+        .map(|token| token.trim().to_lowercase())
+        .filter(|token| token.len() >= 3)
+        .collect()
+}
+
+fn merge_token_is_stopword(token: &str) -> bool {
+    matches!(
+        token,
+        "page"
+            | "topic"
+            | "topics"
+            | "person"
+            | "people"
+            | "open"
+            | "question"
+            | "questions"
+    )
 }
 
 fn evidence_kind_for_claim_status(
