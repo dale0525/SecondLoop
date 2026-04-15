@@ -843,7 +843,7 @@ fn knowledge_pages_api_lists_page_summaries_and_reads_detail() {
 }
 
 #[test]
-fn knowledge_pages_api_keeps_audit_only_pages_in_summary_listing() {
+fn knowledge_pages_api_keeps_removed_pages_available_for_audit_reads() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
     let app_dir_string = app_dir.to_string_lossy().into_owned();
@@ -871,16 +871,40 @@ fn knowledge_pages_api_keeps_audit_only_pages_in_summary_listing() {
     )
     .expect("remove page");
 
+    let detail = crate::api::knowledge::db_get_knowledge_page_detail(
+        app_dir_string.clone(),
+        key.to_vec(),
+        "page:preferences".to_string(),
+    )
+    .expect("read removed page detail");
+    assert_eq!(
+        detail.page.state,
+        crate::knowledge::KnowledgePageState::Removed
+    );
+
+    let changes = crate::api::knowledge::db_list_recent_knowledge_page_changes(
+        app_dir_string.clone(),
+        key.to_vec(),
+        8,
+    )
+    .expect("list recent changes");
+    let removed = changes
+        .iter()
+        .find(|change| change.page_id == "page:preferences")
+        .expect("removed preferences change");
+    assert_eq!(
+        removed.change_type,
+        crate::knowledge::KnowledgePageChangeType::Removed
+    );
+
     let summaries =
         crate::api::knowledge::db_list_knowledge_page_summaries(app_dir_string, key.to_vec())
             .expect("list page summaries");
-    let preferences = summaries
-        .iter()
-        .find(|page| page.page_id == "page:preferences")
-        .expect("removed preferences summary");
-    assert_eq!(
-        preferences.state,
-        crate::knowledge::KnowledgePageState::Removed
+    assert!(
+        summaries
+            .iter()
+            .all(|page| page.page_id != "page:preferences"),
+        "removed page should stay hidden from normal summary surfaces"
     );
 }
 
