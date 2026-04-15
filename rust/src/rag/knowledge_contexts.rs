@@ -267,9 +267,6 @@ where
             chunk.iter(),
             &mut load_page_body,
         ));
-        if candidates.len() >= top_k.max(1) {
-            break;
-        }
     }
     candidates.sort_by(|left, right| right.1.cmp(&left.1));
     candidates

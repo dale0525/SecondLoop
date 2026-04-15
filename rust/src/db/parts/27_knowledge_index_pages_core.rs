@@ -507,6 +507,15 @@ fn knowledge_pages_are_merge_related(
         return false;
     }
 
+    let source_identities = merge_candidate_identities(source_page_id, source_title);
+    let target_identities = merge_candidate_identities(target_page_id, target_title);
+    if source_identities
+        .iter()
+        .any(|identity| target_identities.contains(identity))
+    {
+        return true;
+    }
+
     let source_tokens = merge_candidate_tokens(source_page_id, source_title);
     let target_tokens = merge_candidate_tokens(target_page_id, target_title);
     if source_tokens.is_empty() || target_tokens.is_empty() {
@@ -517,15 +526,34 @@ fn knowledge_pages_are_merge_related(
         .iter()
         .filter(|token| target_tokens.contains(*token))
         .count();
-    if shared_token_count >= 2 {
-        return true;
-    }
+    shared_token_count >= 2
+}
 
-    let source_primary = merge_primary_candidate_token(source_page_id, source_title);
-    let target_primary = merge_primary_candidate_token(target_page_id, target_title);
-    shared_token_count >= 1
-        && source_primary.is_some()
-        && source_primary == target_primary
+fn merge_candidate_identities(
+    page_id: &str,
+    title: &str,
+) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::<String>::new();
+    let merge_key = page_id.rsplit(':').next().unwrap_or(page_id);
+    if let Some(identity) = normalized_merge_identity(merge_key) {
+        out.insert(identity);
+    }
+    if let Some(identity) = normalized_merge_identity(title) {
+        out.insert(identity);
+    }
+    out
+}
+
+fn normalized_merge_identity(value: &str) -> Option<String> {
+    let tokens = merge_token_stream(value)
+        .into_iter()
+        .filter(|token| !merge_token_is_stopword(token))
+        .collect::<Vec<_>>();
+    if tokens.is_empty() {
+        None
+    } else {
+        Some(tokens.join(" "))
+    }
 }
 
 fn merge_candidate_tokens(page_id: &str, title: &str) -> std::collections::BTreeSet<String> {
@@ -534,14 +562,6 @@ fn merge_candidate_tokens(page_id: &str, title: &str) -> std::collections::BTree
     append_merge_tokens(&mut out, merge_key);
     append_merge_tokens(&mut out, title);
     out
-}
-
-fn merge_primary_candidate_token(page_id: &str, title: &str) -> Option<String> {
-    let merge_key = page_id.rsplit(':').next().unwrap_or(page_id);
-    merge_token_stream(merge_key)
-        .into_iter()
-        .chain(merge_token_stream(title))
-        .find(|token| !merge_token_is_stopword(token))
 }
 
 fn append_merge_tokens(out: &mut std::collections::BTreeSet<String>, value: &str) {

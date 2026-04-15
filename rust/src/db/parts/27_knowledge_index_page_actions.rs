@@ -421,7 +421,7 @@ pub fn merge_knowledge_page_into(
         }
         if !pages_are_explicitly_related(&source, &target) {
             return Err(anyhow!(
-                "knowledge pages can only be merged when they are explicitly related"
+                "knowledge pages can only be merged when they are explicitly related or obvious duplicates"
             ));
         }
 

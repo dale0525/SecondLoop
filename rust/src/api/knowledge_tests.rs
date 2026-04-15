@@ -1781,9 +1781,9 @@ fn merge_knowledge_page_into_rejects_unrelated_mergeable_pages() {
         None,
     )
     .expect_err("merge should reject unrelated mergeable pages");
-    assert!(error
-        .to_string()
-        .contains("knowledge pages can only be merged when they are explicitly related"));
+    assert!(error.to_string().contains(
+        "knowledge pages can only be merged when they are explicitly related or obvious duplicates"
+    ));
 }
 
 #[test]
