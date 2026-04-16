@@ -145,7 +145,8 @@ pub fn pull_with_progress(
                 }
             }
 
-            super::apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
+            batch_applied +=
+                super::apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
             super::rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
 
             if next_since != since {

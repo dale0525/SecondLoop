@@ -8,8 +8,9 @@ use super::*;
 
 #[derive(Default)]
 struct PullRecoveryState {
+    initial_registered_device_id: Option<String>,
     first_pull_device_id: Option<String>,
-    registered_device_id: Option<String>,
+    rotated_registered_device_id: Option<String>,
     second_pull_device_id: Option<String>,
 }
 
@@ -90,7 +91,7 @@ fn pull_recovers_from_forbidden_requester_device_by_rotating_local_device_id() {
     let addr = listener.local_addr().expect("local addr");
 
     let handle = thread::spawn(move || {
-        for step in 0..3 {
+        for step in 0..4 {
             let (mut stream, _) = listener.accept().expect("accept");
             stream
                 .set_read_timeout(Some(Duration::from_secs(30)))
@@ -99,17 +100,11 @@ fn pull_recovers_from_forbidden_requester_device_by_rotating_local_device_id() {
             let parsed: serde_json::Value =
                 serde_json::from_slice(&body).expect("parse request body");
             match (step, method.as_str(), path.as_str()) {
-                (0, "POST", "/v1/vaults/v1/ops:pull_bin") => {
-                    state_clone.lock().expect("lock").first_pull_device_id =
-                        parsed["device_id"].as_str().map(str::to_string);
-                    respond_json(
-                        &mut stream,
-                        "HTTP/1.1 403 Forbidden",
-                        r#"{"error":"forbidden"}"#,
-                    );
-                }
-                (1, "POST", "/v1/vaults/v1/devices") => {
-                    state_clone.lock().expect("lock").registered_device_id =
+                (0, "POST", "/v1/vaults/v1/devices") => {
+                    state_clone
+                        .lock()
+                        .expect("lock")
+                        .initial_registered_device_id =
                         parsed["device_id"].as_str().map(str::to_string);
                     respond_json(
                         &mut stream,
@@ -120,7 +115,31 @@ fn pull_recovers_from_forbidden_requester_device_by_rotating_local_device_id() {
                         ),
                     );
                 }
-                (2, "POST", "/v1/vaults/v1/ops:pull_bin") => {
+                (1, "POST", "/v1/vaults/v1/ops:pull_bin") => {
+                    state_clone.lock().expect("lock").first_pull_device_id =
+                        parsed["device_id"].as_str().map(str::to_string);
+                    respond_json(
+                        &mut stream,
+                        "HTTP/1.1 403 Forbidden",
+                        r#"{"error":"forbidden"}"#,
+                    );
+                }
+                (2, "POST", "/v1/vaults/v1/devices") => {
+                    state_clone
+                        .lock()
+                        .expect("lock")
+                        .rotated_registered_device_id =
+                        parsed["device_id"].as_str().map(str::to_string);
+                    respond_json(
+                        &mut stream,
+                        "HTTP/1.1 200 OK",
+                        &format!(
+                            r#"{{"device_id":"{}"}}"#,
+                            parsed["device_id"].as_str().unwrap_or("")
+                        ),
+                    );
+                }
+                (3, "POST", "/v1/vaults/v1/ops:pull_bin") => {
                     state_clone.lock().expect("lock").second_pull_device_id =
                         parsed["device_id"].as_str().map(str::to_string);
                     respond_bin(&mut stream, "HTTP/1.1 200 OK", b"SLVB1\0\0\0\0");
@@ -129,7 +148,7 @@ fn pull_recovers_from_forbidden_requester_device_by_rotating_local_device_id() {
                 _ => panic!("unexpected request: step={step} method={method} path={path}"),
             }
         }
-        panic!("expected exactly 3 requests");
+        panic!("expected exactly 4 requests");
     });
 
     let pulled = pull(
@@ -145,9 +164,13 @@ fn pull_recovers_from_forbidden_requester_device_by_rotating_local_device_id() {
 
     let final_device_id = super::super::get_or_create_device_id(&conn).expect("read device id");
     let state = state.lock().expect("lock");
+    assert_eq!(
+        state.initial_registered_device_id.as_deref(),
+        Some("stale-device")
+    );
     assert_eq!(state.first_pull_device_id.as_deref(), Some("stale-device"));
     let registered_device_id = state
-        .registered_device_id
+        .rotated_registered_device_id
         .clone()
         .expect("registered device id");
     assert_ne!(registered_device_id, "stale-device");

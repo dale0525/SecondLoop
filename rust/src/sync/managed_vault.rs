@@ -401,7 +401,7 @@ fn apply_pull_bin_batch(
             }
         }
 
-        apply_pending_ops_until_stable(conn, db_key, scope_id, &mut pending)?;
+        batch_applied += apply_pending_ops_until_stable(conn, db_key, scope_id, &mut pending)?;
         rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
 
         if next_since != *since {
@@ -469,7 +469,7 @@ fn apply_pull_json_batch(
             }
         }
 
-        apply_pending_ops_until_stable(conn, db_key, scope_id, &mut pending)?;
+        batch_applied += apply_pending_ops_until_stable(conn, db_key, scope_id, &mut pending)?;
         rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
 
         if next_since != *since {
