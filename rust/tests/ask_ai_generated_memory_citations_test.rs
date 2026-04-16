@@ -1,5 +1,6 @@
 use anyhow::Result;
 use secondloop_rust::crypto::KdfParams;
+use secondloop_rust::embedding::DEFAULT_MODEL_NAME;
 use secondloop_rust::llm::ChatDelta;
 use secondloop_rust::{auth, db, knowledge, rag};
 
@@ -32,6 +33,7 @@ fn ask_ai_citations_json_fixture() -> serde_json::Value {
 
     let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
     let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, DEFAULT_MODEL_NAME).expect("set active model");
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
 
     db::insert_message(
@@ -76,26 +78,15 @@ fn ask_ai_citations_json_fixture() -> serde_json::Value {
 }
 
 #[test]
-fn ask_ai_citations_json_includes_page_backed_memory_entries() {
+fn ask_ai_citations_json_no_longer_includes_memory_cards() {
     let value = ask_ai_citations_json_fixture();
 
     let direct_sources = value["direct_sources"]
         .as_array()
         .expect("direct_sources array");
-    let memory_cards = value["memory_cards"]
-        .as_array()
-        .expect("memory_cards array");
 
     assert!(!direct_sources.is_empty());
-    assert!(!memory_cards.is_empty());
-    assert_eq!(
-        memory_cards[0]["document_id"]
-            .as_str()
-            .map(|value| value.starts_with("page:")),
-        Some(true)
-    );
-    assert_eq!(memory_cards[0]["status"].as_str(), Some("inferred"));
-    assert_eq!(memory_cards[0]["use_for_ask_ai"].as_bool(), Some(true));
+    assert!(value.get("memory_cards").is_none());
     assert!(direct_sources[0]["source_type_label"]
         .as_str()
         .is_some_and(|value| !value.trim().is_empty()));

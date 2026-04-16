@@ -10,9 +10,12 @@ import '../../core/backend/knowledge_viewer_backend.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
+import '../../src/rust/db.dart';
 import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_markdown_style.dart';
 import '../actions/assistant_message_actions.dart';
+import '../actions/todo/todo_deeplink.dart';
+import '../actions/todo/todo_detail_page.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
@@ -123,6 +126,40 @@ class MessageViewerPage extends StatelessWidget {
       attachmentSha256: parsed.attachmentSha256,
       initialContentKind: parsed.kind,
       initialChunkIndex: parsed.chunk,
+    );
+    return true;
+  }
+
+  Future<bool> _openInAppTodo(BuildContext context, String href) async {
+    final parsed = parseTodoDeepLink(href);
+    if (parsed == null) return false;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (sessionKey == null) return true;
+
+    Todo? todo;
+    try {
+      final todos = await backend.listTodos(sessionKey);
+      for (final item in todos) {
+        if (item.id == parsed.todoId) {
+          todo = item;
+          break;
+        }
+      }
+    } catch (_) {
+      todo = null;
+    }
+    if (todo == null) return true;
+    if (!context.mounted) return true;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          TodoDetailPage(initialTodo: todo!),
+        ),
+      ),
     );
     return true;
   }
@@ -342,6 +379,12 @@ class MessageViewerPage extends StatelessWidget {
   }
 
   Future<bool> _openInAppLink(BuildContext context, String href) async {
+    if (await _openInAppTodo(context, href)) {
+      return true;
+    }
+    if (!context.mounted) {
+      return false;
+    }
     if (await _openInAppAttachment(context, href)) {
       return true;
     }

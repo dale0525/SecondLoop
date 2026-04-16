@@ -99,7 +99,7 @@ fn ask_ai_saves_structured_citations_json_on_assistant_message() {
 }
 
 #[test]
-fn ask_ai_citations_json_includes_external_document_direct_sources() {
+fn ask_ai_citations_json_excludes_external_document_direct_sources() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
     let source = create_external_markdown_source(temp_dir.path());
@@ -127,28 +127,15 @@ fn ask_ai_citations_json_includes_external_document_direct_sources() {
     let assistant = db::get_message_by_id_optional(&conn, &key, &result.assistant_message_id)
         .expect("message lookup")
         .expect("assistant message");
-    let raw = assistant.citations_json.as_deref().expect("citations json");
-    let value: serde_json::Value = serde_json::from_str(raw).expect("valid json");
-    let direct_sources = value["direct_sources"]
-        .as_array()
-        .expect("direct_sources array");
-
-    assert!(direct_sources.iter().any(|source| {
-        source["source_type"].as_str() == Some("document")
-            && source["document_id"]
-                .as_str()
-                .is_some_and(|value| value.starts_with("external:"))
-            && source["unit_id"]
-                .as_str()
-                .is_some_and(|value| value.starts_with("external:") && value.contains(":chunk:"))
-            && source["href"].as_str().is_some_and(|value| {
-                value.contains("secondloop://knowledge-document/") && value.contains("unit=")
-            })
-    }));
+    assert!(
+        assistant.citations_json.is_none(),
+        "external documents should no longer appear in ask-ai citations: {:?}",
+        assistant.citations_json
+    );
 }
 
 #[test]
-fn active_embeddings_citations_json_keeps_external_document_direct_sources() {
+fn active_embeddings_citations_json_excludes_external_document_direct_sources() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
     let source = create_external_markdown_source(temp_dir.path());
@@ -183,24 +170,11 @@ fn active_embeddings_citations_json_keeps_external_document_direct_sources() {
     let assistant = db::get_message_by_id_optional(&conn, &key, &result.assistant_message_id)
         .expect("message lookup")
         .expect("assistant message");
-    let raw = assistant.citations_json.as_deref().expect("citations json");
-    let value: serde_json::Value = serde_json::from_str(raw).expect("valid json");
-    let direct_sources = value["direct_sources"]
-        .as_array()
-        .expect("direct_sources array");
-
-    assert!(direct_sources.iter().any(|source| {
-        source["source_type"].as_str() == Some("document")
-            && source["document_id"]
-                .as_str()
-                .is_some_and(|value| value.starts_with("external:"))
-            && source["unit_id"]
-                .as_str()
-                .is_some_and(|value| value.starts_with("external:") && value.contains(":chunk:"))
-            && source["href"].as_str().is_some_and(|value| {
-                value.contains("secondloop://knowledge-document/") && value.contains("unit=")
-            })
-    }));
+    assert!(
+        assistant.citations_json.is_none(),
+        "external documents should no longer appear in active-embedding ask-ai citations: {:?}",
+        assistant.citations_json
+    );
 }
 
 #[test]

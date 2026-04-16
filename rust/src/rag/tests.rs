@@ -1,7 +1,5 @@
-use super::{
-    build_external_document_direct_source, build_message_direct_source, format_history_line,
-    should_include_actions_context, ContextItem, ContextSource,
-};
+use super::{build_message_direct_source, format_history_line, should_include_actions_context};
+use super::{ContextItem, ContextSource};
 use crate::auth;
 use crate::crypto::KdfParams;
 use crate::db;
@@ -13,7 +11,7 @@ use crate::message_citations::AnswerEvidenceDirectSource;
 use crate::rag::evidence::filter_direct_sources_for_question;
 use crate::rag::evidence::{
     build_direct_sources_for_context_candidate, build_direct_sources_from_knowledge_entry,
-    build_memory_card_from_document,
+    build_external_document_direct_source, build_memory_card_from_document,
 };
 use crate::rag::knowledge_contexts::KnowledgeRenderedContextEntry;
 use rusqlite::params;
@@ -220,6 +218,53 @@ fn attachment_direct_sources_strip_internal_markup_when_chunk_text_is_unavailabl
     assert!(
         !source.snippet.contains("[Attachment]("),
         "expected markdown citation suffix to stay out of fallback snippet: {}",
+        source.snippet
+    );
+}
+
+#[test]
+fn todo_thread_candidates_build_item_direct_sources() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let todo = db::upsert_todo(
+        &conn,
+        &key,
+        "todo:budget-follow-up",
+        "Prepare budget freeze follow-up",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+    let candidate = ContextItem {
+        source: ContextSource::TodoThread,
+        id: todo.id.clone(),
+        created_at_ms: todo.created_at_ms,
+        distance: Some(0.1),
+        text: "TODO_THREAD todo_id=todo-1\nTODO [open] Prepare budget freeze follow-up".to_string(),
+        citation_suffix: None,
+    };
+
+    let direct_sources = build_direct_sources_for_context_candidate(&conn, &key, &candidate);
+    let source = direct_sources.first().expect("todo direct source");
+
+    assert_eq!(source.source_type, "item");
+    assert_eq!(source.href, format!("secondloop://todo/{}", todo.id));
+    assert_eq!(
+        source.title.as_deref(),
+        Some("Prepare budget freeze follow-up")
+    );
+    assert!(
+        source.snippet.contains("Prepare budget freeze follow-up"),
+        "expected todo snippet to contain the todo title: {}",
         source.snippet
     );
 }

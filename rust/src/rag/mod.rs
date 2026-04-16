@@ -38,7 +38,7 @@ use citations_prompt::{build_prompt as build_prompt_base, build_prompt_with_acti
 use context_selection::{ContextItem, ContextSource};
 use evidence::{
     build_attachment_direct_source, build_attachment_resource_direct_source,
-    build_external_document_direct_source, build_message_direct_source,
+    build_message_direct_source, build_todo_direct_source,
     encode_context_evidence_json_for_question,
 };
 use history::{build_recent_conversation_history, build_recent_conversation_history_in_range};
@@ -449,15 +449,6 @@ pub fn ask_ai_with_provider(
     let similar_todos = db::search_similar_todo_threads_default(conn, key, question, top_k)?;
     let attachment_resources =
         collect_attachment_resources_default(conn, key, question, top_k).unwrap_or_default();
-    let app_dir = db::app_dir_from_conn(conn).ok();
-    let external_chunks = app_dir
-        .as_ref()
-        .map(|app_dir| {
-            db::search_similar_external_document_chunks_default(app_dir, key, question, top_k)
-                .unwrap_or_default()
-        })
-        .unwrap_or_default();
-
     let mut contexts_with_distance: Vec<(f64, ContextWithEvidence)> = Vec::new();
     for sm in similar_messages {
         let context = db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
@@ -480,15 +471,20 @@ pub fn ask_ai_with_provider(
         if !seen_todos.insert(st.todo_id.clone()) {
             continue;
         }
+        let todo = match db::get_todo(conn, key, &st.todo_id) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
         let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
             Ok(v) => v,
             Err(_) => continue,
         };
+        let direct_source = build_todo_direct_source(&todo, &ctx, todo.created_at_ms);
         contexts_with_distance.push((
             st.distance,
             ContextWithEvidence {
                 text: ctx,
-                direct_sources: Vec::new(),
+                direct_sources: vec![direct_source],
                 memory_cards: Vec::new(),
             },
         ));
@@ -517,33 +513,6 @@ pub fn ask_ai_with_provider(
             },
         ));
     }
-    if let Some(app_dir) = app_dir.as_ref() {
-        for chunk in external_chunks {
-            let context = match db::build_external_document_chunk_rag_context(
-                app_dir,
-                key,
-                &chunk.doc_id,
-                chunk.chunk_index,
-            ) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            contexts_with_distance.push((
-                chunk.distance,
-                ContextWithEvidence {
-                    text: context,
-                    direct_sources: vec![build_external_document_direct_source(
-                        &chunk.doc_id,
-                        chunk.chunk_index,
-                        &chunk.title,
-                        &chunk.snippet,
-                        chunk.created_at_ms,
-                    )],
-                    memory_cards: Vec::new(),
-                },
-            ));
-        }
-    }
     contexts_with_distance
         .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
     contexts_with_distance.truncate(top_k);
@@ -551,7 +520,6 @@ pub fn ask_ai_with_provider(
         .into_iter()
         .map(|(_, ctx)| ctx)
         .collect();
-    let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
     let attachment_direct_sources = attachment_resources
         .resources
@@ -570,7 +538,7 @@ pub fn ask_ai_with_provider(
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        actions.as_deref(),
+        None,
         history.as_deref(),
         attachment_resources.catalog_markdown.as_deref(),
     );
@@ -668,23 +636,6 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                 )
             })
             .collect();
-        let app_dir = db::app_dir_from_conn(conn).ok();
-        let external_chunks = app_dir
-            .as_ref()
-            .map(|app_dir| {
-                let _ =
-                    db::process_pending_external_document_embeddings(app_dir, key, embedder, 1024);
-                db::search_similar_external_document_chunks_by_embedding(
-                    app_dir,
-                    key,
-                    embedder.model_name(),
-                    &query_vector,
-                    top_k,
-                )
-                .unwrap_or_default()
-            })
-            .unwrap_or_default();
-
         let mut contexts_with_distance: Vec<(f64, ContextWithEvidence)> = Vec::new();
         for sm in similar_messages {
             let context =
@@ -708,15 +659,20 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             if !seen_todos.insert(st.todo_id.clone()) {
                 continue;
             }
+            let todo = match db::get_todo(conn, key, &st.todo_id) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
             let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
                 Ok(v) => v,
                 Err(_) => continue,
             };
+            let direct_source = build_todo_direct_source(&todo, &ctx, todo.created_at_ms);
             contexts_with_distance.push((
                 st.distance,
                 ContextWithEvidence {
                     text: ctx,
-                    direct_sources: Vec::new(),
+                    direct_sources: vec![direct_source],
                     memory_cards: Vec::new(),
                 },
             ));
@@ -745,33 +701,6 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                 },
             ));
         }
-        if let Some(app_dir) = app_dir.as_ref() {
-            for chunk in external_chunks {
-                let context = match db::build_external_document_chunk_rag_context(
-                    app_dir,
-                    key,
-                    &chunk.doc_id,
-                    chunk.chunk_index,
-                ) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                contexts_with_distance.push((
-                    chunk.distance,
-                    ContextWithEvidence {
-                        text: context,
-                        direct_sources: vec![build_external_document_direct_source(
-                            &chunk.doc_id,
-                            chunk.chunk_index,
-                            &chunk.title,
-                            &chunk.snippet,
-                            chunk.created_at_ms,
-                        )],
-                        memory_cards: Vec::new(),
-                    },
-                ));
-            }
-        }
         contexts_with_distance
             .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
         contexts_with_distance.truncate(top_k);
@@ -782,7 +711,6 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
 
         resources_catalog = attachment_resources.catalog_markdown;
     }
-    let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
     let prompt = build_prompt_with_actions_and_history(
         question,
@@ -790,7 +718,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        actions.as_deref(),
+        None,
         history.as_deref(),
         resources_catalog.as_deref(),
     );

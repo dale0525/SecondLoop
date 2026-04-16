@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/features/chat/chat_answer_evidence_parser.dart';
 
 void main() {
-  test('parseChatAnswerEvidence parses direct sources and memory cards', () {
+  test('parseChatAnswerEvidence ignores legacy memory cards', () {
     const raw = '''
 {
   "direct_sources": [
@@ -43,7 +43,7 @@ void main() {
 
     expect(evidence, isNotNull);
     expect(evidence!.directSources, hasLength(1));
-    expect(evidence.memoryCards, hasLength(1));
+    expect(evidence.memoryCards, isEmpty);
     expect(
       evidence.directSources.single.displayTitle,
       'Kickoff notes',
@@ -59,12 +59,6 @@ void main() {
       evidence.chipLabelForHref('secondloop://message/history-1'),
       '[1]',
     );
-    expect(
-      evidence.memoryCards.single.displaySummary,
-      'User prefers Chinese.',
-    );
-    expect(evidence.memoryCards.single.status, 'confirmed');
-    expect(evidence.memoryCards.single.whyUsed, '用中文总结一下最近变化');
   });
 
   test('parseChatAnswerEvidence returns null for invalid payload', () {

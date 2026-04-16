@@ -1314,6 +1314,29 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     );
   }
 
+  Future<void> _openTodoById(String todoId) async {
+    final normalizedTodoId = todoId.trim();
+    if (normalizedTodoId.isEmpty) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    Todo? todo;
+    try {
+      final todos = await backend.listTodos(sessionKey);
+      for (final item in todos) {
+        if (item.id == normalizedTodoId) {
+          todo = item;
+          break;
+        }
+      }
+    } catch (_) {
+      todo = null;
+    }
+
+    await _openLinkedTodo(todo);
+  }
+
   String? _extractCloudDetachedRequestIdFromPayloadJson(String? payloadJson) {
     final raw = payloadJson?.trim() ?? '';
     if (raw.isEmpty) return null;

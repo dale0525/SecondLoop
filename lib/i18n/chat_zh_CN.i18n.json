@@ -282,6 +282,7 @@
       "sourceCount": "$count 个来源"
     },
     "sourceTypeLabels": {
+      "item": "事项",
       "chatMessage": "聊天消息",
       "attachment": "附件",
       "attachmentOcr": "附件 OCR",

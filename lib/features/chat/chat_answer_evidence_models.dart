@@ -7,7 +7,7 @@ class ChatAnswerEvidence {
   final List<ChatAnswerEvidenceDirectSource> directSources;
   final List<ChatAnswerEvidenceMemoryCard> memoryCards;
 
-  bool get hasEvidence => directSources.isNotEmpty || memoryCards.isNotEmpty;
+  bool get hasEvidence => directSources.isNotEmpty;
 
   List<ChatAnswerEvidenceDirectSource> findDirectSourcesByHref(String href) {
     final normalized = href.trim();
@@ -204,6 +204,8 @@ const Object _copyWithUnset = Object();
 String sourceTypeDisplayLabel(String rawType) {
   final normalized = rawType.trim().toLowerCase();
   return switch (normalized) {
+    'item' => 'Item',
+    'todo' => 'Item',
     'message' => 'Message',
     'attachment' => 'Attachment',
     'document' => 'Document',

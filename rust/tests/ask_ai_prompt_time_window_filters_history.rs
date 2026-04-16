@@ -411,7 +411,7 @@ fn ask_ai_time_window_persists_attachment_evidence_for_catalog_resources() {
 }
 
 #[test]
-fn ask_ai_time_window_prompt_filters_external_documents_by_range() {
+fn ask_ai_time_window_prompt_excludes_external_documents() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
     let source = create_external_markdown_source(temp_dir.path());
@@ -465,11 +465,11 @@ fn ask_ai_time_window_prompt_filters_external_documents_by_range() {
         .expect("prompt");
 
     assert!(
-        prompt.contains("current budget cap is 600"),
-        "expected in-range external document in prompt: {prompt}"
+        !prompt.contains("stale budget cap was 1000"),
+        "out-of-range external document should stay out of prompt: {prompt}"
     );
     assert!(
-        !prompt.contains("stale budget cap was 1000"),
-        "expected out-of-range external document to stay out of prompt: {prompt}"
+        !prompt.contains("current budget cap is 600"),
+        "in-range external document should also stay out after external docs removal: {prompt}"
     );
 }

@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
-import '../memory/memory_display_text.dart';
-import '../memory/memory_correction_dialog.dart';
 import 'chat_answer_evidence_models.dart';
 
 enum ChatAnswerEvidenceTab {
@@ -40,16 +38,7 @@ Future<void> showChatAnswerEvidenceSheet(
     initialTab: initialTab,
     highlightedHref: highlightedHref,
     onOpenDirectSource: onOpenDirectSource,
-    onOpenMemoryCard: onOpenMemoryCard,
-    canOpenMemoryCard: canOpenMemoryCard,
     canOpenDirectSource: canOpenDirectSource,
-    onCorrectMemoryCard: onCorrectMemoryCard,
-    canCorrectMemoryCard: canCorrectMemoryCard,
-    onRefreshMemoryCard: onRefreshMemoryCard,
-    onDisableMemoryCard: onDisableMemoryCard,
-    canDisableMemoryCard: canDisableMemoryCard,
-    onDeleteMemoryCard: onDeleteMemoryCard,
-    canDeleteMemoryCard: canDeleteMemoryCard,
   );
 
   if (!isWide) {
@@ -95,14 +84,15 @@ Future<void> showChatAnswerEvidenceSheet(
   );
 }
 
-class ChatAnswerEvidencePanel extends StatefulWidget {
+class ChatAnswerEvidencePanel extends StatelessWidget {
   const ChatAnswerEvidencePanel({
     required this.evidence,
     required this.initialTab,
     required this.onOpenDirectSource,
+    this.canOpenDirectSource,
+    this.highlightedHref,
     this.onOpenMemoryCard,
     this.canOpenMemoryCard,
-    this.canOpenDirectSource,
     this.onCorrectMemoryCard,
     this.canCorrectMemoryCard,
     this.onRefreshMemoryCard,
@@ -110,7 +100,6 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
     this.canDisableMemoryCard,
     this.onDeleteMemoryCard,
     this.canDeleteMemoryCard,
-    this.highlightedHref,
     super.key,
   });
 
@@ -118,9 +107,9 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
   final ChatAnswerEvidenceTab initialTab;
   final String? highlightedHref;
   final Future<void> Function(String href) onOpenDirectSource;
+  final bool Function(String href)? canOpenDirectSource;
   final Future<void> Function(String documentId)? onOpenMemoryCard;
   final bool Function(String documentId)? canOpenMemoryCard;
-  final bool Function(String href)? canOpenDirectSource;
   final Future<ChatAnswerEvidenceMemoryCard?> Function(
     ChatAnswerEvidenceMemoryCard card,
     String title,
@@ -136,340 +125,17 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
   final bool Function(String documentId)? canDeleteMemoryCard;
 
   @override
-  State<ChatAnswerEvidencePanel> createState() =>
-      _ChatAnswerEvidencePanelState();
-}
-
-class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
-  late List<ChatAnswerEvidenceMemoryCard> _memoryCards;
-  int _refreshEpoch = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _memoryCards = List<ChatAnswerEvidenceMemoryCard>.from(
-      widget.evidence.memoryCards,
-    );
-    _refreshMemoryCards();
-  }
-
-  @override
-  void didUpdateWidget(covariant ChatAnswerEvidencePanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!identical(
-        oldWidget.evidence.memoryCards, widget.evidence.memoryCards)) {
-      _memoryCards = List<ChatAnswerEvidenceMemoryCard>.from(
-        widget.evidence.memoryCards,
-      );
-      _refreshMemoryCards();
-    }
-  }
-
-  Future<void> _refreshMemoryCards() async {
-    final refresh = widget.onRefreshMemoryCard;
-    if (refresh == null || _memoryCards.isEmpty) return;
-    final refreshEpoch = ++_refreshEpoch;
-    final cardsToRefresh =
-        List<ChatAnswerEvidenceMemoryCard>.from(_memoryCards);
-    final refreshed = await Future.wait(
-      cardsToRefresh.map((card) async {
-        try {
-          final updated = await refresh(card);
-          if (refreshEpoch != _refreshEpoch) return card;
-          return updated ?? card;
-        } catch (_) {
-          if (refreshEpoch != _refreshEpoch) return card;
-          return card;
-        }
-      }),
-    );
-    if (!mounted || refreshEpoch != _refreshEpoch) return;
-    setState(() {
-      _memoryCards = refreshed;
-    });
-  }
-
-  void _invalidatePendingRefreshes() {
-    _refreshEpoch += 1;
-  }
-
-  void _showActionError(Object error) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(context.t.errors.loadFailed(error: '$error')),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tabs = <ChatAnswerEvidenceTab>[
-      if (widget.evidence.directSources.isNotEmpty)
-        ChatAnswerEvidenceTab.directSources,
-      if (_memoryCards.isNotEmpty) ChatAnswerEvidenceTab.memoryCards,
-    ];
-    final effectiveInitialTab =
-        tabs.contains(widget.initialTab) ? widget.initialTab : tabs.first;
-
-    return DefaultTabController(
-      length: tabs.length,
-      initialIndex: tabs.indexOf(effectiveInitialTab),
-      child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          title: Text(context.t.chat.answerEvidence.title),
-          bottom: TabBar(
-            tabs: [
-              for (final tab in tabs)
-                Tab(
-                  text: switch (tab) {
-                    ChatAnswerEvidenceTab.directSources =>
-                      context.t.chat.answerEvidence.tabs.directSources(
-                        count: widget.evidence.directSources.length,
-                      ),
-                    ChatAnswerEvidenceTab.memoryCards =>
-                      context.t.chat.answerEvidence.tabs.memoryCards(
-                        count: _memoryCards.length,
-                      ),
-                  },
-                ),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            for (final tab in tabs)
-              switch (tab) {
-                ChatAnswerEvidenceTab.directSources => _DirectSourceList(
-                    evidence: widget.evidence,
-                    highlightedHref: widget.highlightedHref,
-                    canOpenDirectSource: widget.canOpenDirectSource,
-                    onOpenDirectSource: widget.onOpenDirectSource,
-                  ),
-                ChatAnswerEvidenceTab.memoryCards => ListView.separated(
-                    key: const ValueKey('answer_evidence_memory_cards'),
-                    padding: const EdgeInsets.all(16),
-                    itemBuilder: (context, index) {
-                      final item = _memoryCards[index];
-                      final whyUsed = item.whyUsed?.trim() ?? '';
-                      final isDisabled = !item.useForAskAi;
-                      final isDeleted = item.isDeleted;
-                      final isKnowledgePage =
-                          item.documentId.startsWith('page:');
-                      final canOpenMemoryCard = widget.onOpenMemoryCard !=
-                              null &&
-                          (widget.canOpenMemoryCard?.call(item.documentId) ??
-                              true);
-                      final canCorrectMemoryCard = widget.onCorrectMemoryCard !=
-                              null &&
-                          (widget.canCorrectMemoryCard?.call(item.documentId) ??
-                              true);
-                      final canDisableMemoryCard = widget.onDisableMemoryCard !=
-                              null &&
-                          (widget.canDisableMemoryCard?.call(item.documentId) ??
-                              true);
-                      final canDeleteMemoryCard = widget.onDeleteMemoryCard !=
-                              null &&
-                          (widget.canDeleteMemoryCard?.call(item.documentId) ??
-                              true);
-                      return SlSurface(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                _MetaPill(
-                                  label: _memoryStatusLabel(
-                                    context,
-                                    item.status,
-                                  ),
-                                ),
-                                if (item.markedInaccurate)
-                                  _MetaPill(
-                                    label: context
-                                        .t.memory.detail.markedInaccurate,
-                                  ),
-                                _MetaPill(
-                                  label: isDeleted
-                                      ? context.t.memory.detail.deleted
-                                      : (isDisabled
-                                          ? context
-                                              .t.memory.detail.notUsedByAskAi
-                                          : context
-                                              .t.memory.detail.usedByAskAi),
-                                ),
-                                if (item.sourceCount > 0)
-                                  _MetaPill(
-                                    label: context.t.chat.answerEvidence.labels
-                                        .sourceCount(
-                                      count: item.sourceCount,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              resolveMemoryDisplayTitle(
-                                context.t,
-                                documentId: item.documentId,
-                                explicitTitle: item.title,
-                              ),
-                              style: theme.textTheme.titleSmall,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              resolveMemoryDisplaySummary(
-                                context.t,
-                                documentId: item.documentId,
-                                explicitSummary: item.summary,
-                                rawText: item.body ?? item.summary,
-                              ),
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                            if (whyUsed.isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              Text(
-                                context.t.chat.answerEvidence.labels.whyUsed,
-                                style: theme.textTheme.labelMedium,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _localizedWhyUsed(context, whyUsed),
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            ],
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                if (canOpenMemoryCard)
-                                  TextButton(
-                                    onPressed: () => widget.onOpenMemoryCard!(
-                                      item.documentId,
-                                    ),
-                                    child: Text(
-                                      context.t.chat.answerEvidence.actions
-                                          .inspectMemory,
-                                    ),
-                                  ),
-                                if (canOpenMemoryCard && canCorrectMemoryCard)
-                                  TextButton(
-                                    onPressed: () async {
-                                      final draft =
-                                          await showMemoryCorrectionDialog(
-                                        context,
-                                        initialTitle: item.title ?? '',
-                                        initialSummary: isKnowledgePage
-                                            ? (item.summary ?? item.body ?? '')
-                                            : (item.body ?? item.summary ?? ''),
-                                      );
-                                      if (draft == null) return;
-                                      ChatAnswerEvidenceMemoryCard? updated;
-                                      try {
-                                        updated =
-                                            await widget.onCorrectMemoryCard!(
-                                          item,
-                                          draft.title,
-                                          draft.summary,
-                                        );
-                                      } catch (error) {
-                                        if (!mounted) return;
-                                        _showActionError(error);
-                                        return;
-                                      }
-                                      if (!mounted || updated == null) return;
-                                      final updatedCard = updated;
-                                      _invalidatePendingRefreshes();
-                                      setState(() {
-                                        _memoryCards[index] = updatedCard;
-                                      });
-                                    },
-                                    child: Text(
-                                      context.t.chat.answerEvidence.actions
-                                          .correct,
-                                    ),
-                                  ),
-                                if (canOpenMemoryCard &&
-                                    canDisableMemoryCard &&
-                                    !isDeleted)
-                                  TextButton(
-                                    onPressed: isDisabled
-                                        ? null
-                                        : () async {
-                                            try {
-                                              await widget.onDisableMemoryCard!(
-                                                item.documentId,
-                                              );
-                                            } catch (error) {
-                                              if (!mounted) return;
-                                              _showActionError(error);
-                                              return;
-                                            }
-                                            if (!mounted) return;
-                                            _invalidatePendingRefreshes();
-                                            setState(() {
-                                              _memoryCards[index] =
-                                                  item.copyWith(
-                                                useForAskAi: false,
-                                              );
-                                            });
-                                          },
-                                    child: Text(
-                                      context.t.chat.answerEvidence.actions
-                                          .dontUse,
-                                    ),
-                                  ),
-                                if (canOpenMemoryCard && canDeleteMemoryCard)
-                                  TextButton(
-                                    onPressed: isDeleted
-                                        ? null
-                                        : () async {
-                                            try {
-                                              await widget.onDeleteMemoryCard!(
-                                                item.documentId,
-                                              );
-                                            } catch (error) {
-                                              if (!mounted) return;
-                                              _showActionError(error);
-                                              return;
-                                            }
-                                            if (!mounted) return;
-                                            _invalidatePendingRefreshes();
-                                            setState(() {
-                                              _memoryCards[index] =
-                                                  item.copyWith(
-                                                isDeleted: true,
-                                              );
-                                            });
-                                          },
-                                    child: Text(
-                                      isKnowledgePage
-                                          ? context.t.memory.actions
-                                              .permanentlyRemove
-                                          : context.t.chat.answerEvidence
-                                              .actions.deleteMemory,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemCount: _memoryCards.length,
-                  ),
-              },
-          ],
-        ),
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Text(context.t.chat.answerEvidence.title),
+      ),
+      body: _DirectSourceList(
+        evidence: evidence,
+        highlightedHref: highlightedHref,
+        onOpenDirectSource: onOpenDirectSource,
+        canOpenDirectSource: canOpenDirectSource,
       ),
     );
   }
@@ -498,7 +164,9 @@ class _DirectSourceList extends StatelessWidget {
         final item = evidence.directSources[index];
         final isHighlighted =
             highlightedHref != null && item.href == highlightedHref;
-        final canOpen = canOpenDirectSource?.call(item.href) ?? true;
+        final isMessage = item.sourceType.trim().toLowerCase() == 'message';
+        final canOpen =
+            !isMessage && (canOpenDirectSource?.call(item.href) ?? true);
         return SlSurface(
           color: isHighlighted
               ? theme.colorScheme.secondaryContainer.withOpacity(0.65)
@@ -511,12 +179,8 @@ class _DirectSourceList extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _MetaPill(
-                    label: '[${index + 1}]',
-                  ),
-                  _MetaPill(
-                    label: _localizedSourceTypeLabel(context, item),
-                  ),
+                  _MetaPill(label: '[${index + 1}]'),
+                  _MetaPill(label: _localizedSourceTypeLabel(context, item)),
                   if ((item.scopeLabel ?? '').trim().isNotEmpty)
                     _MetaPill(
                       label: _localizedScopeLabel(context, item.scopeLabel!),
@@ -527,6 +191,10 @@ class _DirectSourceList extends StatelessWidget {
                         context,
                         item.confidenceLabel!,
                       ),
+                    ),
+                  if (isMessage)
+                    _MetaPill(
+                      label: _messageTimestampLabel(context, item.createdAtMs),
                     ),
                 ],
               ),
@@ -540,17 +208,18 @@ class _DirectSourceList extends StatelessWidget {
                 item.displaySnippet,
                 style: theme.textTheme.bodyMedium,
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed:
-                      canOpen ? () => onOpenDirectSource(item.href) : null,
-                  child: Text(
-                    context.t.chat.answerEvidence.actions.viewOriginal,
+              if (canOpen) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => onOpenDirectSource(item.href),
+                    child: Text(
+                      context.t.chat.answerEvidence.actions.viewOriginal,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         );
@@ -586,24 +255,13 @@ class _MetaPill extends StatelessWidget {
   }
 }
 
-String _memoryStatusLabel(BuildContext context, String rawStatus) {
-  switch (rawStatus.trim().toLowerCase()) {
-    case 'confirmed':
-      return context.t.memory.status.confirmed;
-    case 'maybe_outdated':
-    case 'maybeoutdated':
-      return context.t.memory.status.maybeOutdated;
-    case 'inferred':
-    default:
-      return context.t.memory.status.inferred;
-  }
-}
-
 String _localizedSourceTypeLabel(
   BuildContext context,
   ChatAnswerEvidenceDirectSource item,
 ) {
   switch (item.sourceTypeLabel?.trim().toLowerCase()) {
+    case 'item':
+      return context.t.chat.answerEvidence.sourceTypeLabels.item;
     case 'chat_message':
       return context.t.chat.answerEvidence.sourceTypeLabels.chatMessage;
     case 'attachment':
@@ -648,28 +306,14 @@ String _localizedConfidenceLabel(BuildContext context, String rawConfidence) {
   }
 }
 
-String _localizedWhyUsed(BuildContext context, String rawWhyUsed) {
-  final trimmed = rawWhyUsed.trim();
-  if (trimmed.isEmpty) return trimmed;
-
-  const legacyPrefix = 'Retrieved as relevant context for:';
-  if (trimmed.startsWith(legacyPrefix)) {
-    final query = trimmed.substring(legacyPrefix.length).trim();
-    if (query.isNotEmpty) {
-      return context.t.chat.answerEvidence.labels.whyUsedForQuery(query: query);
-    }
+String _messageTimestampLabel(BuildContext context, int? createdAtMs) {
+  if (createdAtMs == null || createdAtMs <= 0) {
+    return context.t.chat.answerEvidence.sourceTypeLabels.chatMessage;
   }
 
-  if (!trimmed.contains(' ') &&
-      !trimmed.contains('\n') &&
-      trimmed.toLowerCase().startsWith('retrieved_as_')) {
-    return trimmed;
-  }
-
-  if (trimmed.startsWith('The user asked') ||
-      trimmed.startsWith('Used because it was relevant')) {
-    return trimmed;
-  }
-
-  return context.t.chat.answerEvidence.labels.whyUsedForQuery(query: trimmed);
+  final dateTime = DateTime.fromMillisecondsSinceEpoch(createdAtMs).toLocal();
+  final localizations = MaterialLocalizations.of(context);
+  final date = localizations.formatShortDate(dateTime);
+  final time = localizations.formatTimeOfDay(TimeOfDay.fromDateTime(dateTime));
+  return '$date $time';
 }

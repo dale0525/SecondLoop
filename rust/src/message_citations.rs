@@ -44,7 +44,9 @@ pub struct AnswerEvidenceMemoryCard {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnswerEvidencePayload {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub direct_sources: Vec<AnswerEvidenceDirectSource>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub memory_cards: Vec<AnswerEvidenceMemoryCard>,
 }
 

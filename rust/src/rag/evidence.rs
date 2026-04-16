@@ -67,6 +67,31 @@ pub(super) fn build_message_direct_source(
     })
 }
 
+pub(super) fn build_todo_direct_source(
+    todo: &db::Todo,
+    snippet_source: &str,
+    created_at_ms: i64,
+) -> AnswerEvidenceDirectSource {
+    let snippet = compact_snippet(snippet_source, 180);
+    AnswerEvidenceDirectSource {
+        id: format!("todo:{}", todo.id),
+        href: format!("secondloop://todo/{}", todo.id),
+        source_type: "item".to_string(),
+        label: "Item".to_string(),
+        source_type_label: Some("item".to_string()),
+        scope_label: None,
+        confidence_label: None,
+        title: Some(todo.title.clone()),
+        snippet,
+        highlighted_text: None,
+        created_at_ms: Some(created_at_ms),
+        updated_at_ms: Some(todo.updated_at_ms),
+        anchors: None,
+        document_id: None,
+        unit_id: None,
+    }
+}
+
 pub(super) fn build_attachment_direct_source(
     attachment_sha256: &str,
     kind: &str,
@@ -485,14 +510,12 @@ pub(super) fn encode_context_evidence_json_for_question(
     extra_direct_sources: &[AnswerEvidenceDirectSource],
 ) -> Option<String> {
     let mut direct_sources = Vec::<AnswerEvidenceDirectSource>::new();
-    let mut memory_cards = Vec::<AnswerEvidenceMemoryCard>::new();
     for context in contexts {
         direct_sources.extend(context.direct_sources.clone());
-        memory_cards.extend(context.memory_cards.clone());
     }
     direct_sources.extend(extra_direct_sources.iter().cloned());
     let filtered_sources = filter_direct_sources_for_question(question, direct_sources);
-    encode_answer_evidence_json(filtered_sources, memory_cards)
+    encode_answer_evidence_json(filtered_sources, Vec::new())
 }
 
 pub(super) fn filter_direct_sources_for_question(
@@ -599,6 +622,14 @@ pub(super) fn build_direct_sources_for_context_candidate(
                 .into_iter()
                 .collect::<Vec<_>>(),
             _ => Vec::new(),
+        },
+        ContextSource::TodoThread => match db::get_todo(conn, key, &candidate.id) {
+            Ok(todo) => vec![build_todo_direct_source(
+                &todo,
+                &candidate.text,
+                candidate.created_at_ms,
+            )],
+            Err(_) => Vec::new(),
         },
         ContextSource::AttachmentChunk => {
             let mut parts = candidate.id.splitn(3, ':');

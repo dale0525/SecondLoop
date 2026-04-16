@@ -59,7 +59,7 @@ class ChatAnswerCitationController {
 
   Future<void> openEvidence(
     BuildContext context, {
-    ChatAnswerEvidenceTab initialTab = ChatAnswerEvidenceTab.memoryCards,
+    ChatAnswerEvidenceTab initialTab = ChatAnswerEvidenceTab.directSources,
     String? highlightedHref,
     required Future<void> Function(String href) onOpenDirectSource,
     Future<void> Function(String documentId)? onOpenMemoryCard,
@@ -127,13 +127,6 @@ class ChatAnswerEvidenceSummaryBar extends StatelessWidget {
               count: evidence.directSources.length,
             ),
             onPressed: onOpenSources,
-          ),
-        if (evidence.memoryCards.isNotEmpty)
-          _SummaryActionChip(
-            label: context.t.chat.answerEvidence.summary.memoryCardsUsed(
-              count: evidence.memoryCards.length,
-            ),
-            onPressed: onOpenMemory,
           ),
         _SummaryActionChip(
           label: context.t.chat.answerEvidence.summary.openEvidence,

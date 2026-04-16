@@ -37,6 +37,12 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
   }
 
   Future<bool> _handleMarkdownInAppLink(String href) async {
+    final todoLink = parseTodoDeepLink(href);
+    if (todoLink != null) {
+      await _openTodoById(todoLink.todoId);
+      return true;
+    }
+
     final attachmentLink = parseAttachmentDeepLink(href);
     if (attachmentLink != null) {
       await AttachmentViewerPage.openBySha(

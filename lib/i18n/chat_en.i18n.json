@@ -282,6 +282,7 @@
       "sourceCount": "$count sources"
     },
     "sourceTypeLabels": {
+      "item": "Item",
       "chatMessage": "Chat message",
       "attachment": "Attachment",
       "attachmentOcr": "Attachment OCR",
