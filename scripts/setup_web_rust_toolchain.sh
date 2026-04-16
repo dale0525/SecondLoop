@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LLVM_SOURCE_ROOT="${SECONDLOOP_WEB_LLVM_SOURCE_ROOT:-$ROOT_DIR}"
 TOOL_BIN_DIR="$ROOT_DIR/.tool/bin"
-WASM_PACK_NIGHTLY_TOOLCHAIN="nightly-2025-04-01"
+WASM_PACK_NIGHTLY_TOOLCHAIN="nightly-2026-04-10"
 export CARGO_HOME="$ROOT_DIR/.tool/cargo-home"
 export RUSTUP_HOME="$ROOT_DIR/.tool/rustup-home"
 export PATH="$CARGO_HOME/bin:$PATH"
