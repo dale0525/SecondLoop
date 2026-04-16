@@ -1636,6 +1636,26 @@ abstract class AppBackend {
   }
 }
 
+abstract interface class AssistantCitationWriteBackend {
+  Future<Message> insertAssistantMessageWithCitations(
+    Uint8List key,
+    String conversationId, {
+    required String content,
+    String? citationsJson,
+  });
+}
+
+abstract interface class DetachedAskCompletionRecoveryBackend {
+  Future<bool> applyDetachedAskCompletionOnce(
+    Uint8List key, {
+    required String requestId,
+    required String conversationId,
+    required String question,
+    required String answer,
+    String? citationsJson,
+  });
+}
+
 class AppBackendScope extends InheritedWidget {
   const AppBackendScope({
     required this.backend,

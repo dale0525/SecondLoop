@@ -25,6 +25,23 @@ extension _ChatPageStateBuild on _ChatPageState {
                 title: Text(title),
                 actions: [
                   IconButton(
+                    key: const ValueKey('chat_open_task_center'),
+                    tooltip: context.t.actions.taskHub.openTaskHub,
+                    onPressed: () {
+                      unawaited(
+                        _pushRouteFromChat(
+                          MaterialPageRoute(
+                            builder: (_) => wrapPushedPageWithInheritedScopes(
+                              context,
+                              const TaskHubPage(),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.checklist_rtl_rounded),
+                  ),
+                  IconButton(
                     key: const ValueKey('chat_tag_filter_button'),
                     tooltip: _tagFilterTooltip(locale),
                     onPressed: () => unawaited(_openTagFilterSheet()),
@@ -58,6 +75,14 @@ extension _ChatPageStateBuild on _ChatPageState {
                       ],
                     ),
                   ),
+                  if (!isDesktopPlatform)
+                    IconButton(
+                      key: const ValueKey('chat_open_memory'),
+                      tooltip: context.t.app.tabs.memory,
+                      onPressed: () =>
+                          unawaited(MemoryCenterPage.open(context)),
+                      icon: const Icon(Icons.auto_stories_outlined),
+                    ),
                   if (!isDesktopPlatform)
                     IconButton(
                       key: const ValueKey('chat_open_settings'),

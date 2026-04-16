@@ -4,6 +4,8 @@ export '../../src/rust/knowledge/models.dart'
         KnowledgeDebugStats,
         KnowledgeAnchorSet,
         KnowledgeIndexStatus,
+        KnowledgeMemoryFeedback,
+        KnowledgeMemoryStatus,
         KnowledgeOriginType,
         KnowledgeRetrievalLayer,
         KnowledgeRole,

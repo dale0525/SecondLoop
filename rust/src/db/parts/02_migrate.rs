@@ -1039,7 +1039,62 @@ PRAGMA user_version = 29;
         user_version = 37;
     }
 
-    debug_assert!(user_version >= 37);
+    if user_version < 38 {
+        migrate_from_v37_to_v38(conn)?;
+        user_version = 38;
+    }
+
+    if user_version < 39 {
+        migrate_from_v38_to_v39(conn)?;
+        user_version = 39;
+    }
+
+    if user_version < 40 {
+        migrate_from_v39_to_v40(conn)?;
+        user_version = 40;
+    }
+
+    if user_version < 41 {
+        migrate_from_v40_to_v41(conn)?;
+        user_version = 41;
+    }
+
+    if user_version < 42 {
+        migrate_from_v41_to_v42(conn)?;
+        user_version = 42;
+    }
+
+    if user_version < 43 {
+        migrate_from_v42_to_v43(conn)?;
+        user_version = 43;
+    }
+
+    if user_version < 44 {
+        migrate_from_v43_to_v44(conn)?;
+        user_version = 44;
+    }
+
+    if user_version < 45 {
+        migrate_from_v44_to_v45(conn)?;
+        user_version = 45;
+    }
+
+    if user_version < 46 {
+        migrate_from_v45_to_v46(conn)?;
+        user_version = 46;
+    }
+
+    if user_version < 47 {
+        migrate_from_v46_to_v47(conn)?;
+        user_version = 47;
+    }
+
+    if user_version < 48 {
+        migrate_from_v47_to_v48(conn)?;
+        user_version = 48;
+    }
+
+    debug_assert!(user_version >= 48);
 
     Ok(())
 }

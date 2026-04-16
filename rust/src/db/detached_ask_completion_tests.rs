@@ -15,6 +15,7 @@ fn apply_detached_ask_completion_once_is_idempotent() {
         &conversation.id,
         "question_a",
         "answer_a",
+        None,
     )
     .expect("first apply");
     assert!(first);
@@ -26,6 +27,7 @@ fn apply_detached_ask_completion_once_is_idempotent() {
         &conversation.id,
         "question_b_should_not_insert",
         "answer_b_should_not_insert",
+        None,
     )
     .expect("second apply");
     assert!(!second);

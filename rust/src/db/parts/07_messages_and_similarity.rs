@@ -4,7 +4,7 @@ pub fn list_messages(
     conversation_id: &str,
 ) -> Result<Vec<Message>> {
     let mut stmt = conn.prepare(
-        r#"SELECT id, role, content, created_at, COALESCE(is_memory, 1)
+        r#"SELECT id, role, content, created_at, COALESCE(is_memory, 1), citations_json
            FROM messages
            WHERE conversation_id = ?1 AND COALESCE(is_deleted, 0) = 0
            ORDER BY created_at ASC"#,
@@ -18,6 +18,7 @@ pub fn list_messages(
         let content_blob: Vec<u8> = row.get(2)?;
         let created_at_ms: i64 = row.get(3)?;
         let is_memory_i64: i64 = row.get(4)?;
+        let citations_json: Option<String> = row.get(5)?;
 
         let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
         let content = String::from_utf8(content_bytes)
@@ -30,6 +31,7 @@ pub fn list_messages(
             content,
             created_at_ms,
             is_memory: is_memory_i64 != 0,
+            citations_json,
         });
     }
 
@@ -48,14 +50,14 @@ pub fn list_messages_page(
 
     let mut stmt = match (before_created_at_ms, before_id) {
         (None, None) => conn.prepare(
-            r#"SELECT id, role, content, created_at, COALESCE(is_memory, 1)
+            r#"SELECT id, role, content, created_at, COALESCE(is_memory, 1), citations_json
                FROM messages
                WHERE conversation_id = ?1 AND COALESCE(is_deleted, 0) = 0
                ORDER BY created_at DESC, id DESC
                LIMIT ?2"#,
         )?,
         (Some(_), Some(_)) => conn.prepare(
-            r#"SELECT id, role, content, created_at, COALESCE(is_memory, 1)
+            r#"SELECT id, role, content, created_at, COALESCE(is_memory, 1), citations_json
                FROM messages
                WHERE conversation_id = ?1 AND COALESCE(is_deleted, 0) = 0
                  AND (created_at < ?2 OR (created_at = ?2 AND id < ?3))
@@ -82,6 +84,7 @@ pub fn list_messages_page(
         let content_blob: Vec<u8> = row.get(2)?;
         let created_at_ms: i64 = row.get(3)?;
         let is_memory_i64: i64 = row.get(4)?;
+        let citations_json: Option<String> = row.get(5)?;
 
         let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
         let content = String::from_utf8(content_bytes)
@@ -94,6 +97,7 @@ pub fn list_messages_page(
             content,
             created_at_ms,
             is_memory: is_memory_i64 != 0,
+            citations_json,
         });
     }
 
@@ -161,6 +165,75 @@ pub fn list_memory_messages_in_range(
             content,
             created_at_ms,
             is_memory: true,
+            citations_json: None,
+        });
+    }
+
+    Ok(result)
+}
+
+pub fn list_memory_messages_in_range_recent(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: Option<&str>,
+    start_at_ms_inclusive: i64,
+    end_at_ms_exclusive: i64,
+    limit: i64,
+) -> Result<Vec<Message>> {
+    let limit = limit.clamp(1, 2000);
+
+    let mut stmt = match conversation_id {
+        Some(_) => conn.prepare(
+            r#"SELECT id, conversation_id, role, content, created_at
+               FROM messages
+               WHERE conversation_id = ?1
+                 AND created_at >= ?2 AND created_at < ?3
+                 AND COALESCE(is_deleted, 0) = 0
+                 AND COALESCE(is_memory, 1) = 1
+               ORDER BY created_at DESC, id DESC
+               LIMIT ?4"#,
+        )?,
+        None => conn.prepare(
+            r#"SELECT id, conversation_id, role, content, created_at
+               FROM messages
+               WHERE created_at >= ?1 AND created_at < ?2
+                 AND COALESCE(is_deleted, 0) = 0
+                 AND COALESCE(is_memory, 1) = 1
+               ORDER BY created_at DESC, id DESC
+               LIMIT ?3"#,
+        )?,
+    };
+
+    let mut rows = match conversation_id {
+        Some(cid) => stmt.query(params![
+            cid,
+            start_at_ms_inclusive,
+            end_at_ms_exclusive,
+            limit
+        ])?,
+        None => stmt.query(params![start_at_ms_inclusive, end_at_ms_exclusive, limit])?,
+    };
+
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let conversation_id: String = row.get(1)?;
+        let role: String = row.get(2)?;
+        let content_blob: Vec<u8> = row.get(3)?;
+        let created_at_ms: i64 = row.get(4)?;
+
+        let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
+        let content = String::from_utf8(content_bytes)
+            .map_err(|_| anyhow!("message content is not valid utf-8"))?;
+
+        result.push(Message {
+            id,
+            conversation_id,
+            role,
+            content,
+            created_at_ms,
+            is_memory: true,
+            citations_json: None,
         });
     }
 
@@ -172,9 +245,11 @@ pub fn get_message_by_id_optional(
     key: &[u8; 32],
     id: &str,
 ) -> Result<Option<Message>> {
-    let row: Option<(String, String, Vec<u8>, i64, i64)> = conn
+    type MessageLookupRow = (String, String, Vec<u8>, i64, i64, Option<String>);
+
+    let row: Option<MessageLookupRow> = conn
         .query_row(
-            r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1)
+            r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1), citations_json
                FROM messages
                WHERE id = ?1 AND COALESCE(is_deleted, 0) = 0"#,
             params![id],
@@ -185,12 +260,13 @@ pub fn get_message_by_id_optional(
                     row.get(2)?,
                     row.get(3)?,
                     row.get(4)?,
+                    row.get(5)?,
                 ))
             },
         )
         .optional()?;
 
-    let Some((conversation_id, role, content_blob, created_at_ms, is_memory_i64)) = row else {
+    let Some((conversation_id, role, content_blob, created_at_ms, is_memory_i64, citations_json)) = row else {
         return Ok(None);
     };
 
@@ -205,19 +281,21 @@ pub fn get_message_by_id_optional(
         content,
         created_at_ms,
         is_memory: is_memory_i64 != 0,
+        citations_json,
     }))
 }
 
 fn get_message_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Message> {
-    let (conversation_id, role, content_blob, created_at_ms, is_memory_i64): (
+    let (conversation_id, role, content_blob, created_at_ms, is_memory_i64, citations_json): (
         String,
         String,
         Vec<u8>,
         i64,
         i64,
+        Option<String>,
     ) = conn
         .query_row(
-            r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1)
+            r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1), citations_json
                FROM messages
                WHERE id = ?1"#,
             params![id],
@@ -228,6 +306,7 @@ fn get_message_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Mess
                     row.get(2)?,
                     row.get(3)?,
                     row.get(4)?,
+                    row.get(5)?,
                 ))
             },
         )
@@ -244,6 +323,7 @@ fn get_message_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Mess
         content,
         created_at_ms,
         is_memory: is_memory_i64 != 0,
+        citations_json,
     })
 }
 
@@ -252,15 +332,16 @@ fn get_message_by_id_with_is_memory(
     key: &[u8; 32],
     id: &str,
 ) -> Result<(Message, bool)> {
-    let (conversation_id, role, content_blob, created_at_ms, is_memory_i64): (
+    let (conversation_id, role, content_blob, created_at_ms, is_memory_i64, citations_json): (
         String,
         String,
         Vec<u8>,
         i64,
         i64,
+        Option<String>,
     ) = conn
         .query_row(
-            r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1)
+            r#"SELECT conversation_id, role, content, created_at, COALESCE(is_memory, 1), citations_json
                FROM messages
                WHERE id = ?1"#,
             params![id],
@@ -271,6 +352,7 @@ fn get_message_by_id_with_is_memory(
                     row.get(2)?,
                     row.get(3)?,
                     row.get(4)?,
+                    row.get(5)?,
                 ))
             },
         )
@@ -288,6 +370,7 @@ fn get_message_by_id_with_is_memory(
             content,
             created_at_ms,
             is_memory: is_memory_i64 != 0,
+            citations_json,
         },
         is_memory_i64 != 0,
     ))
@@ -667,6 +750,7 @@ fn search_similar_messages_lite(
                 content,
                 created_at_ms,
                 is_memory: true,
+                citations_json: None,
             },
             distance,
         });

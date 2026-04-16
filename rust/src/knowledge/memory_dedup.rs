@@ -55,19 +55,16 @@ fn sanitize_key(value: &str) -> String {
     let mut out = String::new();
     let mut last_dash = false;
     for ch in value.chars() {
-        let normalized = if ch.is_ascii_alphanumeric() {
-            ch.to_ascii_lowercase()
-        } else {
-            '-'
-        };
-        if normalized == '-' {
-            if !last_dash {
-                out.push('-');
+        if ch.is_alphanumeric() {
+            for normalized in ch.to_lowercase() {
+                out.push(normalized);
             }
-            last_dash = true;
-        } else {
-            out.push(normalized);
             last_dash = false;
+            continue;
+        }
+        if !last_dash {
+            out.push('-');
+            last_dash = true;
         }
     }
     out.trim_matches('-').to_string()
@@ -98,5 +95,12 @@ mod tests {
     fn merge_lines_deduplicates_repeated_entries() {
         let merged = merge_lines("- concise\n- chinese", "- chinese\n- bullets");
         assert_eq!(merged, "- concise\n- chinese\n- bullets");
+    }
+
+    #[test]
+    fn generated_document_id_preserves_cjk_facet_keys() {
+        let document_id =
+            build_generated_document_id(GeneratedMemoryKind::Preference, "偏好 设置", None);
+        assert_eq!(document_id, "generated:preference:偏好-设置");
     }
 }

@@ -64,7 +64,12 @@ extension _TaskHubPageStateHelpers on _TaskHubPageState {
   }
 
   String _sectionAnchorId(TaskHubPriorityAnimationSection section) {
-    return 'task_hub_section_anchor_${section.name}';
+    final canonicalSection = switch (section) {
+      TaskHubPriorityAnimationSection.backlog =>
+        TaskHubPriorityAnimationSection.nextUp,
+      _ => section,
+    };
+    return 'task_hub_section_anchor_${canonicalSection.name}';
   }
 
   Rect? _visibleCardOrSectionRect(

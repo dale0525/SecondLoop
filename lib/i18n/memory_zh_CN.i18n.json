@@ -1,0 +1,167 @@
+{
+  "title": "知识中心",
+  "emptyState": "还没有知识页。",
+  "groups": {
+    "active": "当前页面",
+    "review": "需要处理",
+    "archived": "已静音或归档"
+  },
+  "homepage": {
+    "currentMe": "当前的我",
+    "needsAttention": "需要你处理",
+    "recentChanges": "最近变化",
+    "myWiki": "我的 Wiki",
+    "systemActivity": "系统活动",
+    "reviewCta": "查看",
+    "reviewReason": "这页在用于回答前还需要你再看一下。",
+    "outdatedReason": "这页可能已经过时，回答时应该带上时间语境。",
+    "directoryCount": "$count 页",
+    "pagesUsedInAnswersRecently": "最近用于回答的知识页",
+    "systemActivitySummary": "当前 wiki 共有 $totalPages 页，其中 $needsReview 页需要你处理。"
+  },
+  "sections": {
+    "aboutMe": "关于我",
+    "preferences": "偏好",
+    "currentFocus": "当前重点",
+    "activeThreads": "持续中的事项",
+    "recentEvents": "最近事件",
+    "people": "人物",
+    "topics": "主题",
+    "openQuestions": "开放问题",
+    "projects": "当前重点"
+  },
+  "meta": {
+    "sourceCount": "$count 个来源",
+    "updatedToday": "今天更新",
+    "updatedDaysAgo": "$count 天前更新",
+    "updatedOn": "$date 更新"
+  },
+  "status": {
+    "confirmed": "已确认",
+    "inferred": "推断",
+    "maybeOutdated": "可能过时"
+  },
+  "pageStates": {
+    "active": "当前有效",
+    "needsReview": "需要复核",
+    "outdated": "可能过时",
+    "answerMuted": "不用于回答",
+    "archived": "已归档",
+    "removed": "已移除"
+  },
+  "detail": {
+    "currentConclusion": "当前结论",
+    "evidenceBasis": "证据依据",
+    "evidenceSummary": "证据摘要",
+    "evidenceSummaryBody": "当前有 $sourceCount 个来源文档支撑这页。检测到的冲突数：$conflictCount。",
+    "evidenceTimeline": "证据时间线",
+    "versionHistory": "版本历史",
+    "supportingEvidence": "支持性证据",
+    "latestSupportingEvidence": "最新支持证据",
+    "conflictingEvidencePresent": "当前页面存在冲突证据。",
+    "conflictingEvidenceAbsent": "当前没有记录到冲突证据。",
+    "sourceMix": "来源构成：$types",
+    "noEvidenceEntries": "暂无证据条目。",
+    "noVersionSnapshots": "暂无历史版本。",
+    "usedByAskAi": "会用于回答",
+    "notUsedByAskAi": "不会用于回答",
+    "markedInaccurate": "需要复核",
+    "deleted": "页面已删除",
+    "actions": "页面操作",
+    "systemStatus": "系统判断",
+    "systemStatusBody": "页面类型：$pageType。置信度：$confidence%。来源数：$sourceCount。冲突数：$conflictCount。",
+    "youMayWantToDo": "你可能想做的事",
+    "guidanceNeedsReview": "这页当前默认不会用于回答，建议先复核。",
+    "guidanceMutedFromAnswers": "这页已从回答中静音，准备好后可恢复。",
+    "guidanceUsedRecently": "这页最近被用于回答，值得你核对一下。",
+    "guidanceEverythingStable": "这页目前看起来比较稳定。",
+    "history": "最近变化",
+    "lint": "系统提醒",
+    "relatedPages": "相关页面",
+    "sourceDocuments": "来源文档",
+    "sourceTypes": {
+      "message": "聊天消息",
+      "attachment": "附件",
+      "transcript": "转录内容",
+      "summary": "摘要",
+      "evidence": "证据"
+    },
+    "sourceTitles": {
+      "message": "消息来源",
+      "attachment": "附件来源",
+      "transcript": "转录片段",
+      "summary": "摘要来源",
+      "evidence": "证据条目"
+    }
+  },
+  "actions": {
+    "editMemory": "更正当前结论",
+    "markInaccurate": "这页不对",
+    "clearInaccurate": "恢复为当前有效",
+    "stopUsingForAskAi": "不再用于回答",
+    "useForAskAiAgain": "重新用于回答",
+    "deleteMemory": "归档页面",
+    "restoreMemory": "恢复页面",
+    "viewEvidence": "查看证据",
+    "viewHistory": "查看历史",
+    "reviewSignals": "查看复核信号",
+    "archivePage": "归档页面",
+    "mergePages": "合并页面",
+    "permanentlyRemove": "永久移除",
+    "fields": {
+      "title": "标题",
+      "summary": "结论",
+      "body": "正文"
+    }
+  },
+  "history": {
+    "created": "已创建",
+    "updated": "已更新",
+    "corrected": "已更正",
+    "downgraded": "需要复核",
+    "muted": "已停止用于回答",
+    "archived": "已归档",
+    "removed": "已移除",
+    "merged": "已合并",
+    "noReason": "没有记录原因。"
+  },
+  "lintKinds": {
+    "conflict": "冲突",
+    "staleness": "过时风险",
+    "fragmentation": "碎片化",
+    "unusedKnowledge": "未使用知识",
+    "evidenceWeakness": "证据薄弱",
+    "regenerationRisk": "再生成风险"
+  },
+  "evidenceKinds": {
+    "support": "支持",
+    "conflict": "冲突",
+    "supplement": "补充"
+  },
+  "views": {
+    "history": "历史",
+    "evidence": "证据",
+    "review": "复核与提示"
+  },
+  "wrongReasons": {
+    "statementWrong": "说法错误",
+    "outdated": "已经过时",
+    "incomplete": "这页信息不完整",
+    "shouldNotRemember": "不该记住这个"
+  },
+  "generatedTitles": {
+    "activeTaskPattern": "当前任务模式",
+    "weeklyFocus": "每周重点",
+    "responseLanguage": "回复语言",
+    "responseStyle": "回复风格",
+    "responseFormat": "回复格式",
+    "selfProfile": "自我画像",
+    "decisionMemory": "决策记录"
+  },
+  "generatedSummaries": {
+    "responseLanguage": "用户偏好使用$language回复。",
+    "responseStyle": "用户偏好简洁、务实的回复风格。",
+    "responseFormat": "用户偏好尽量使用要点式结构。",
+    "activeTaskPattern": "用户当前主要在推进这些任务："
+  }
+}

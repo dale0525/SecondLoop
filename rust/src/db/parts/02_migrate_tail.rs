@@ -158,6 +158,26 @@ PRAGMA user_version = 34;
     Ok(())
 }
 
+fn execute_batch_allowing_duplicate_columns(conn: &Connection, sql: &str) -> Result<()> {
+    match conn.execute_batch(sql) {
+        Ok(()) => Ok(()),
+        Err(err) if err.to_string().contains("duplicate column name") => Ok(()),
+        Err(err) => Err(err.into()),
+    }
+}
+
+fn table_has_column(conn: &Connection, table_name: &str, column_name: &str) -> Result<bool> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table_name})"))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column_name {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn ensure_todo_manual_nudge_columns(conn: &Connection) -> Result<()> {
     let has_manual_importance_nudge_score: bool = {
         let mut stmt = conn.prepare(r#"PRAGMA table_info(todos);"#)?;
@@ -173,7 +193,8 @@ fn ensure_todo_manual_nudge_columns(conn: &Connection) -> Result<()> {
         found
     };
     if !has_manual_importance_nudge_score {
-        conn.execute_batch(
+        execute_batch_allowing_duplicate_columns(
+            conn,
             "ALTER TABLE todos ADD COLUMN manual_importance_nudge_score INTEGER NOT NULL DEFAULT 0;",
         )?;
     }
@@ -192,7 +213,8 @@ fn ensure_todo_manual_nudge_columns(conn: &Connection) -> Result<()> {
         found
     };
     if !has_manual_urgency_nudge_score {
-        conn.execute_batch(
+        execute_batch_allowing_duplicate_columns(
+            conn,
             "ALTER TABLE todos ADD COLUMN manual_urgency_nudge_score INTEGER NOT NULL DEFAULT 0;",
         )?;
     }
@@ -278,7 +300,8 @@ fn migrate_from_v36_to_v37(conn: &Connection) -> Result<()> {
         .collect::<std::result::Result<Vec<_>, _>>()?;
 
     if !columns.iter().any(|column| column == "attempt_id") {
-        conn.execute_batch(
+        execute_batch_allowing_duplicate_columns(
+            conn,
             r#"
 ALTER TABLE semantic_parse_jobs
   ADD COLUMN attempt_id INTEGER NOT NULL DEFAULT 0;
@@ -287,6 +310,376 @@ ALTER TABLE semantic_parse_jobs
     }
 
     conn.execute_batch("PRAGMA user_version = 37;")?;
+    Ok(())
+}
+
+fn migrate_from_v37_to_v38(conn: &Connection) -> Result<()> {
+    let mut stmt = conn.prepare("PRAGMA table_info(messages)")?;
+    let columns: Vec<String> = stmt
+        .query_map([], |row| row.get(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if !columns.iter().any(|column| column == "citations_json") {
+        execute_batch_allowing_duplicate_columns(
+            conn,
+            r#"
+ALTER TABLE messages
+  ADD COLUMN citations_json TEXT;
+"#,
+        )?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 38;")?;
+    Ok(())
+}
+
+fn migrate_from_v38_to_v39(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS knowledge_document_feedback (
+  document_id TEXT PRIMARY KEY,
+  status TEXT,
+  use_for_ask_ai INTEGER NOT NULL DEFAULT 1,
+  is_deleted INTEGER NOT NULL DEFAULT 0,
+  marked_inaccurate INTEGER NOT NULL DEFAULT 0,
+  corrected_title TEXT,
+  corrected_summary TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(document_id) REFERENCES knowledge_documents(document_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_document_feedback_visibility
+  ON knowledge_document_feedback(is_deleted, use_for_ask_ai, updated_at_ms DESC);
+
+PRAGMA user_version = 39;
+"#,
+    )?;
+    Ok(())
+}
+
+fn migrate_from_v39_to_v40(conn: &Connection) -> Result<()> {
+    execute_batch_allowing_duplicate_columns(
+        conn,
+        "ALTER TABLE knowledge_documents ADD COLUMN memory_section TEXT;",
+    )?;
+    execute_batch_allowing_duplicate_columns(
+        conn,
+        "ALTER TABLE knowledge_documents ADD COLUMN memory_source_count INTEGER NOT NULL DEFAULT 0;",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 40;")?;
+    Ok(())
+}
+
+fn migrate_from_v40_to_v41(conn: &Connection) -> Result<()> {
+    execute_batch_allowing_duplicate_columns(
+        conn,
+        "ALTER TABLE detached_ask_completion_claims ADD COLUMN user_message_id TEXT;",
+    )?;
+    execute_batch_allowing_duplicate_columns(
+        conn,
+        "ALTER TABLE detached_ask_completion_claims ADD COLUMN assistant_message_id TEXT;",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 41;")?;
+    Ok(())
+}
+
+fn migrate_from_v41_to_v42(conn: &Connection) -> Result<()> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<()> = (|| {
+        conn.execute_batch(
+            r#"
+DROP TABLE IF EXISTS detached_ask_completion_claims_v42;
+
+CREATE TABLE detached_ask_completion_claims_v42 (
+  request_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  user_message_id TEXT,
+  assistant_message_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(request_id, conversation_id)
+);
+
+INSERT INTO detached_ask_completion_claims_v42(
+  request_id,
+  conversation_id,
+  user_message_id,
+  assistant_message_id,
+  created_at_ms,
+  updated_at_ms
+)
+SELECT request_id,
+       conversation_id,
+       user_message_id,
+       assistant_message_id,
+       created_at_ms,
+       updated_at_ms
+  FROM detached_ask_completion_claims;
+
+DROP TABLE detached_ask_completion_claims;
+ALTER TABLE detached_ask_completion_claims_v42 RENAME TO detached_ask_completion_claims;
+CREATE INDEX IF NOT EXISTS idx_detached_ask_completion_claims_conversation
+  ON detached_ask_completion_claims(conversation_id, created_at_ms DESC);
+
+PRAGMA user_version = 42;
+"#,
+        )?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(err) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(err)
+        }
+    }
+}
+
+fn migrate_from_v42_to_v43(conn: &Connection) -> Result<()> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<()> = (|| {
+        conn.execute_batch(
+            r#"
+DROP TABLE IF EXISTS knowledge_document_feedback_v43;
+
+CREATE TABLE knowledge_document_feedback_v43 (
+  document_id TEXT PRIMARY KEY,
+  status TEXT,
+  use_for_ask_ai INTEGER NOT NULL DEFAULT 1,
+  is_deleted INTEGER NOT NULL DEFAULT 0,
+  marked_inaccurate INTEGER NOT NULL DEFAULT 0,
+  corrected_title TEXT,
+  corrected_summary TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  updated_by_device_id TEXT NOT NULL DEFAULT '',
+  updated_by_seq INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT INTO knowledge_document_feedback_v43(
+  document_id,
+  status,
+  use_for_ask_ai,
+  is_deleted,
+  marked_inaccurate,
+  corrected_title,
+  corrected_summary,
+  created_at_ms,
+  updated_at_ms,
+  updated_by_device_id,
+  updated_by_seq
+)
+SELECT document_id,
+       status,
+       use_for_ask_ai,
+       is_deleted,
+       marked_inaccurate,
+       corrected_title,
+       corrected_summary,
+       created_at_ms,
+       updated_at_ms,
+       '',
+       0
+  FROM knowledge_document_feedback;
+
+DROP TABLE knowledge_document_feedback;
+ALTER TABLE knowledge_document_feedback_v43 RENAME TO knowledge_document_feedback;
+CREATE INDEX IF NOT EXISTS idx_knowledge_document_feedback_visibility
+  ON knowledge_document_feedback(is_deleted, use_for_ask_ai, updated_at_ms DESC);
+
+PRAGMA user_version = 43;
+"#,
+        )?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(err) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(err)
+        }
+    }
+}
+
+fn migrate_from_v43_to_v44(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS knowledge_claims (
+  claim_id TEXT PRIMARY KEY,
+  subject_id TEXT NOT NULL,
+  claim_type TEXT NOT NULL,
+  facet_key TEXT NOT NULL,
+  statement BLOB NOT NULL,
+  normalized_value BLOB,
+  time_scope TEXT NOT NULL,
+  valid_from_ms INTEGER,
+  valid_until_ms INTEGER,
+  confidence REAL NOT NULL,
+  source_ref_ids_json TEXT NOT NULL,
+  source_count INTEGER NOT NULL DEFAULT 0,
+  conflict_with_claim_ids_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  human_confirmed INTEGER NOT NULL DEFAULT 0,
+  human_corrected INTEGER NOT NULL DEFAULT 0,
+  answer_allowed INTEGER NOT NULL DEFAULT 1,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_claims_subject_status
+  ON knowledge_claims(subject_id, status, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS knowledge_pages (
+  page_id TEXT PRIMARY KEY,
+  page_type TEXT NOT NULL,
+  state TEXT NOT NULL,
+  answer_default_allowed INTEGER NOT NULL DEFAULT 1,
+  answer_requires_temporal_framing INTEGER NOT NULL DEFAULT 0,
+  confidence_level REAL NOT NULL DEFAULT 0,
+  source_count INTEGER NOT NULL DEFAULT 0,
+  conflict_count INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  last_used_at_ms INTEGER,
+  human_corrected INTEGER NOT NULL DEFAULT 0,
+  tags_json TEXT NOT NULL,
+  primary_evidence_json TEXT NOT NULL,
+  related_page_ids_json TEXT NOT NULL,
+  source_document_ids_json TEXT NOT NULL,
+  claim_ids_json TEXT NOT NULL,
+  compiled_title BLOB NOT NULL,
+  compiled_summary BLOB NOT NULL,
+  compiled_body BLOB NOT NULL,
+  manual_title BLOB,
+  manual_summary BLOB,
+  manual_body BLOB
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_pages_state_updated
+  ON knowledge_pages(state, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS knowledge_page_history (
+  change_id TEXT PRIMARY KEY,
+  page_id TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  reason TEXT,
+  answer_impacted INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(page_id) REFERENCES knowledge_pages(page_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_page_history_page_created
+  ON knowledge_page_history(page_id, created_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS knowledge_page_lints (
+  lint_id TEXT PRIMARY KEY,
+  page_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(page_id) REFERENCES knowledge_pages(page_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_page_lints_page_created
+  ON knowledge_page_lints(page_id, created_at_ms DESC);
+
+PRAGMA user_version = 44;
+"#,
+    )?;
+    Ok(())
+}
+
+fn migrate_from_v44_to_v45(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS knowledge_page_versions (
+  version_id TEXT PRIMARY KEY,
+  page_id TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  reason TEXT,
+  state TEXT NOT NULL,
+  answer_default_allowed INTEGER NOT NULL DEFAULT 1,
+  answer_requires_temporal_framing INTEGER NOT NULL DEFAULT 0,
+  confidence_level REAL NOT NULL DEFAULT 0,
+  source_count INTEGER NOT NULL DEFAULT 0,
+  conflict_count INTEGER NOT NULL DEFAULT 0,
+  human_corrected INTEGER NOT NULL DEFAULT 0,
+  title BLOB NOT NULL,
+  summary BLOB NOT NULL,
+  body BLOB NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(page_id) REFERENCES knowledge_pages(page_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_page_versions_page_created
+  ON knowledge_page_versions(page_id, created_at_ms DESC);
+
+PRAGMA user_version = 45;
+"#,
+    )?;
+    Ok(())
+}
+
+fn migrate_from_v45_to_v46(conn: &Connection) -> Result<()> {
+    if !table_has_column(conn, "knowledge_rebuild_state", "pages_refresh_required")? {
+        execute_batch_allowing_duplicate_columns(
+            conn,
+            r#"
+ALTER TABLE knowledge_rebuild_state
+  ADD COLUMN pages_refresh_required INTEGER NOT NULL DEFAULT 1;
+"#,
+        )?;
+    }
+    if !table_has_column(
+        conn,
+        "knowledge_rebuild_state",
+        "last_pages_refresh_completed_at_ms",
+    )? {
+        execute_batch_allowing_duplicate_columns(
+            conn,
+            r#"
+ALTER TABLE knowledge_rebuild_state
+  ADD COLUMN last_pages_refresh_completed_at_ms INTEGER;
+"#,
+        )?;
+    }
+    conn.execute_batch("PRAGMA user_version = 46;")?;
+    Ok(())
+}
+
+fn migrate_from_v46_to_v47(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE INDEX IF NOT EXISTS idx_knowledge_page_history_created
+  ON knowledge_page_history(created_at_ms DESC, change_id DESC);
+
+PRAGMA user_version = 47;
+"#,
+    )?;
+    Ok(())
+}
+
+fn migrate_from_v47_to_v48(conn: &Connection) -> Result<()> {
+    if !table_has_column(
+        conn,
+        "knowledge_pages",
+        "state_before_answer_muted",
+    )? {
+        execute_batch_allowing_duplicate_columns(
+            conn,
+            r#"
+ALTER TABLE knowledge_pages
+  ADD COLUMN state_before_answer_muted TEXT;
+"#,
+        )?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 48;")?;
     Ok(())
 }
 
@@ -310,6 +703,196 @@ pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
         return Ok(parent.to_path_buf());
     }
     Err(anyhow!("unable to derive app_dir from sqlite connection"))
+}
+
+#[cfg(test)]
+mod migrate_tail_tests {
+    use super::*;
+
+    #[test]
+    fn add_column_migration_tolerates_duplicate_column_errors() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE messages (
+  id TEXT PRIMARY KEY,
+  citations_json TEXT
+);
+"#,
+        )
+        .expect("create table");
+
+        execute_batch_allowing_duplicate_columns(
+            &conn,
+            r#"
+ALTER TABLE messages
+  ADD COLUMN citations_json TEXT;
+"#,
+        )
+        .expect("duplicate column should be ignored");
+    }
+
+    #[test]
+    fn add_column_migration_still_surfaces_real_sql_errors() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+
+        let err = execute_batch_allowing_duplicate_columns(
+            &conn,
+            "ALTER TABLE missing_table ADD COLUMN citations_json TEXT;",
+        )
+        .expect_err("missing table should still fail");
+
+        assert!(err.to_string().contains("missing_table"));
+    }
+
+    #[test]
+    fn v42_detached_claim_migration_recovers_from_stale_temp_table() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE detached_ask_completion_claims (
+  request_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  user_message_id TEXT,
+  assistant_message_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(request_id, conversation_id)
+);
+INSERT INTO detached_ask_completion_claims(
+  request_id,
+  conversation_id,
+  user_message_id,
+  assistant_message_id,
+  created_at_ms,
+  updated_at_ms
+)
+VALUES ('req-1', 'conv-1', 'user-1', 'assistant-1', 10, 20);
+
+CREATE TABLE detached_ask_completion_claims_v42 (
+  request_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  user_message_id TEXT,
+  assistant_message_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(request_id, conversation_id)
+);
+"#,
+        )
+        .expect("seed pre-migration state");
+
+        migrate_from_v41_to_v42(&conn).expect("rerun v42 migration");
+
+        let row: (String, String, String, String, i64, i64) = conn
+            .query_row(
+                r#"SELECT request_id,
+                          conversation_id,
+                          user_message_id,
+                          assistant_message_id,
+                          created_at_ms,
+                          updated_at_ms
+                   FROM detached_ask_completion_claims"#,
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("migrated row");
+
+        assert_eq!(
+            row,
+            (
+                "req-1".to_string(),
+                "conv-1".to_string(),
+                "user-1".to_string(),
+                "assistant-1".to_string(),
+                10,
+                20,
+            )
+        );
+    }
+
+    #[test]
+    fn v46_knowledge_rebuild_state_migration_tolerates_partially_applied_columns() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE knowledge_rebuild_state (
+  state_key INTEGER PRIMARY KEY,
+  pages_refresh_required INTEGER NOT NULL DEFAULT 1
+);
+"#,
+        )
+        .expect("seed partial table");
+
+        migrate_from_v45_to_v46(&conn).expect("rerun v46 migration");
+
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(knowledge_rebuild_state)")
+            .expect("prepare table info");
+        let column_names = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query table info")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect column names");
+        assert!(column_names.contains(&"pages_refresh_required".to_string()));
+        assert!(column_names.contains(&"last_pages_refresh_completed_at_ms".to_string()));
+    }
+
+    #[test]
+    fn v48_knowledge_pages_migration_adds_previous_muted_state_column() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE knowledge_pages (
+  page_id TEXT PRIMARY KEY,
+  page_type TEXT NOT NULL,
+  state TEXT NOT NULL,
+  answer_default_allowed INTEGER NOT NULL DEFAULT 1,
+  answer_requires_temporal_framing INTEGER NOT NULL DEFAULT 0,
+  confidence_level REAL NOT NULL DEFAULT 0,
+  source_count INTEGER NOT NULL DEFAULT 0,
+  conflict_count INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  last_used_at_ms INTEGER,
+  human_corrected INTEGER NOT NULL DEFAULT 0,
+  tags_json TEXT NOT NULL,
+  primary_evidence_json TEXT NOT NULL,
+  related_page_ids_json TEXT NOT NULL,
+  source_document_ids_json TEXT NOT NULL,
+  claim_ids_json TEXT NOT NULL,
+  compiled_title BLOB NOT NULL,
+  compiled_summary BLOB NOT NULL,
+  compiled_body BLOB NOT NULL,
+  manual_title BLOB,
+  manual_summary BLOB,
+  manual_body BLOB
+);
+"#,
+        )
+        .expect("seed pre-v48 knowledge_pages");
+
+        migrate_from_v47_to_v48(&conn).expect("rerun v48 migration");
+
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(knowledge_pages)")
+            .expect("prepare table info");
+        let column_names = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query table info")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect column names");
+        assert!(column_names.contains(&"state_before_answer_muted".to_string()));
+    }
 }
 
 pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()> {
@@ -356,6 +939,12 @@ DELETE FROM events;
 DELETE FROM detached_ask_completion_claims;
 DELETE FROM embedding_artifact_manifests;
 DELETE FROM knowledge_document_usage;
+DELETE FROM knowledge_document_feedback;
+DELETE FROM knowledge_page_lints;
+DELETE FROM knowledge_page_history;
+DELETE FROM knowledge_page_versions;
+DELETE FROM knowledge_pages;
+DELETE FROM knowledge_claims;
 DELETE FROM knowledge_embeddings;
 DELETE FROM knowledge_index_jobs;
 DELETE FROM knowledge_units;
@@ -374,6 +963,8 @@ SET status = 'empty',
     embeddings_indexed = 0,
     total_documents = 0,
     cancel_requested = 0,
+    pages_refresh_required = 1,
+    last_pages_refresh_completed_at_ms = NULL,
     last_indexed_model_name = NULL,
     last_indexed_dim = NULL;
 DELETE FROM oplog;

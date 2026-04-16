@@ -120,6 +120,7 @@ pub fn download_attachment_bytes(
 ) -> Result<()> {
     let http = super::runtime::client()?;
     let app_dir = super::super::app_dir_from_conn(conn)?;
+    let scope_id = super::runtime::scope_id(base_url, vault_id);
 
     let stored_path: Option<String> = conn
         .query_row(
@@ -138,6 +139,13 @@ pub fn download_attachment_bytes(
 
     let status = resp.status();
     if status.as_u16() == 404 {
+        super::super::blob_repair::enqueue_blob_repair(
+            conn,
+            &scope_id,
+            super::super::blob_repair::BlobRepairKind::DownloadAttachment {
+                sha256: sha256.to_string(),
+            },
+        )?;
         return Err(super::super::NotFound {
             path: format!("/v1/vaults/{vault_id}/attachments/{sha256}"),
         }
@@ -215,6 +223,14 @@ pub(super) fn upload_attachment_bytes_if_present(
                 if e.downcast_ref::<std::io::Error>()
                     .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound) =>
             {
+                let scope_id = super::runtime::scope_id(ctx.base_url, ctx.vault_id);
+                super::super::blob_repair::enqueue_blob_repair(
+                    ctx.conn,
+                    &scope_id,
+                    super::super::blob_repair::BlobRepairKind::UploadAttachment {
+                        sha256: sha256.to_string(),
+                    },
+                )?;
                 return Ok(false);
             }
             Err(e) => return Err(e),

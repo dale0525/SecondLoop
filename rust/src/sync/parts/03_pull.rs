@@ -33,16 +33,13 @@ fn pull_internal(
     let local_device_id = get_or_create_device_id(conn)?;
     let remote_root_dir = normalize_dir(remote_root);
     let scope_id = sync_scope_id(remote, &remote_root_dir);
-
-    let device_dirs = remote.list(&remote_root_dir)?;
+    reconcile_remote_generation_before_pull(conn, remote, &remote_root_dir, &scope_id)?;
+    let remote_device_ids = list_remote_sync_device_ids(remote, &remote_root_dir)?;
 
     let total_ops = if progress.is_some() {
         let mut total = 0u64;
-        for device_dir in device_dirs.iter() {
-            let Some(device_id) = device_id_from_child_dir(&remote_root_dir, device_dir) else {
-                continue;
-            };
-            if device_id == local_device_id {
+        for device_id in remote_device_ids.iter() {
+            if *device_id == local_device_id {
                 continue;
             }
 
@@ -51,7 +48,7 @@ fn pull_internal(
             let last_pulled_key = format!("sync.last_pulled_seq:{scope_id}:{device_id}");
             let last_pulled_seq = kv_get_i64(conn, &last_pulled_key)?.unwrap_or(0);
 
-            let max_seq = read_remote_cursor_max_seq(remote, &remote_root_dir, &device_id)?
+            let max_seq = read_remote_device_max_seq(remote, &remote_root_dir, device_id)?
                 .or_else(|| infer_remote_max_seq_from_packs(remote, &packs_dir).ok().flatten())
                 .unwrap_or(last_pulled_seq);
 
@@ -71,10 +68,7 @@ fn pull_internal(
 
     let mut applied: u64 = 0;
 
-    for device_dir in device_dirs {
-        let Some(device_id) = device_id_from_child_dir(&remote_root_dir, &device_dir) else {
-            continue;
-        };
+    for device_id in remote_device_ids {
         if device_id == local_device_id {
             continue;
         }
@@ -261,6 +255,7 @@ fn pull_internal(
             }
         };
         let outcome = download_embedding_artifact_blobs_by_refs(
+            conn,
             db_key,
             sync_key,
             remote,
@@ -272,6 +267,8 @@ fn pull_internal(
         total_units = total_units.saturating_sub(outcome.missing_remote);
         done_units = done_units.min(total_units);
     }
+
+    let _ = process_pending_blob_repairs_for_scope(conn, db_key, sync_key, remote, remote_root, 8)?;
 
     if let Some(cb) = progress {
         cb(done_units, total_units);
@@ -422,6 +419,45 @@ fn read_remote_cursor_max_seq(
     }
 }
 
+fn reconcile_remote_generation_before_pull(
+    conn: &Connection,
+    remote: &impl RemoteStore,
+    remote_root_dir: &str,
+    scope_id: &str,
+) -> Result<()> {
+    let local_generation = webdav_manifest::load_local_generation_id(conn, scope_id)?;
+    let remote_generation = webdav_manifest::read_sync_manifest(remote, remote_root_dir)?
+        .map(|manifest| manifest.generation_id);
+
+    match (local_generation, remote_generation) {
+        (Some(local), Some(remote)) if local != remote => {
+            webdav_manifest::clear_local_scope_state(conn, scope_id)?;
+            webdav_manifest::store_local_generation_id(conn, scope_id, &remote)?;
+        }
+        (None, Some(remote)) => {
+            webdav_manifest::store_local_generation_id(conn, scope_id, &remote)?;
+        }
+        (Some(_), None) => {
+            webdav_manifest::clear_local_scope_state(conn, scope_id)?;
+        }
+        (None, None) => {}
+        (Some(_), Some(_)) => {}
+    }
+    Ok(())
+}
+
+fn read_remote_device_max_seq(
+    remote: &impl RemoteStore,
+    remote_root_dir: &str,
+    device_id: &str,
+) -> Result<Option<i64>> {
+    if let Some(manifest) = webdav_manifest::read_device_manifest(remote, remote_root_dir, device_id)?
+    {
+        return Ok(Some(manifest.max_seq.max(0)));
+    }
+    read_remote_cursor_max_seq(remote, remote_root_dir, device_id)
+}
+
 fn infer_remote_max_seq_from_packs(
     remote: &impl RemoteStore,
     packs_dir: &str,
@@ -455,6 +491,45 @@ fn infer_remote_max_seq_from_packs(
 
     let entries = decode_ops_pack(&bytes)?;
     Ok(entries.iter().map(|(seq, _)| *seq).max())
+}
+
+fn is_reserved_remote_dir(device_id: &str) -> bool {
+    matches!(device_id, "attachments" | "embedding_artifacts")
+}
+
+fn list_remote_sync_device_ids(
+    remote: &impl RemoteStore,
+    remote_root_dir: &str,
+) -> Result<Vec<String>> {
+    let mut device_ids = std::collections::BTreeSet::new();
+    let sync_manifest_path = webdav_manifest::sync_manifest_path(remote_root_dir);
+    for entry in remote.list(remote_root_dir)? {
+        if entry == sync_manifest_path {
+            continue;
+        }
+        let Some(device_id) = device_id_from_child_dir(remote_root_dir, &entry) else {
+            continue;
+        };
+        if is_reserved_remote_dir(&device_id) {
+            continue;
+        }
+
+        if webdav_manifest::read_device_manifest(remote, remote_root_dir, &device_id)?.is_some() {
+            device_ids.insert(device_id);
+            continue;
+        }
+
+        let cursor_path = format!("{remote_root_dir}{device_id}/cursor.json");
+        let ops_dir = format!("{remote_root_dir}{device_id}/ops/");
+        let packs_dir = format!("{remote_root_dir}{device_id}/packs/");
+        if remote.exists(&cursor_path)?
+            || !remote.list(&ops_dir)?.is_empty()
+            || !remote.list(&packs_dir)?.is_empty()
+        {
+            device_ids.insert(device_id);
+        }
+    }
+    Ok(device_ids.into_iter().collect())
 }
 
 #[cfg(test)]

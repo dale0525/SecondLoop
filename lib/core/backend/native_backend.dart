@@ -21,9 +21,12 @@ import '../../src/rust/api/external_import.dart' as rust_external_import;
 import '../../src/rust/api/migration_archive.dart' as rust_migration_archive;
 import '../../src/rust/api/knowledge.dart' as rust_knowledge;
 import '../../src/rust/api/core.dart' as rust_core;
+import '../../src/rust/api/detached_ask.dart' as rust_detached_ask;
 import '../../src/rust/api/todo_followup_generation.dart'
     as rust_todo_followup_generation;
 import '../../src/rust/knowledge/models.dart' as rust_knowledge_models;
+import '../../src/rust/knowledge/history.dart' as rust_knowledge_history;
+import '../../src/rust/knowledge/pages.dart' as rust_knowledge_pages;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
@@ -78,6 +81,7 @@ typedef DbInsertMessageFn = Future<Message> Function({
   required String conversationId,
   required String role,
   required String content,
+  String? citationsJson,
 });
 
 typedef DbProcessPendingMessageEmbeddingsFn = Future<int> Function({
@@ -308,7 +312,9 @@ class NativeAppBackend extends _NativeAppBackendAccess
         AppBackend,
         AttachmentsBackend,
         AttachmentAnnotationMutationsBackend,
-        SemanticParseAttemptAwareBackend {
+        SemanticParseAttemptAwareBackend,
+        AssistantCitationWriteBackend,
+        DetachedAskCompletionRecoveryBackend {
   @override
   bool get supportsTodoFollowupSuggestions => true;
 
@@ -846,6 +852,45 @@ class NativeAppBackend extends _NativeAppBackendAccess
     );
 
     return message;
+  }
+
+  @override
+  Future<Message> insertAssistantMessageWithCitations(
+    Uint8List key,
+    String conversationId, {
+    required String content,
+    String? citationsJson,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbInsertMessage(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      role: 'assistant',
+      content: content,
+      citationsJson: citationsJson,
+    );
+  }
+
+  @override
+  Future<bool> applyDetachedAskCompletionOnce(
+    Uint8List key, {
+    required String requestId,
+    required String conversationId,
+    required String question,
+    required String answer,
+    String? citationsJson,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_detached_ask.dbApplyDetachedAskCompletionOnce(
+      appDir: appDir,
+      key: key,
+      requestId: requestId,
+      conversationId: conversationId,
+      question: question,
+      answer: answer,
+      citationsJson: citationsJson,
+    );
   }
 
   @override

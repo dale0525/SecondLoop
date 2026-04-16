@@ -224,6 +224,19 @@ final class _RetryingKnowledgeBackend extends TestAppBackend
   String status = 'running';
 
   @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
 
   @override
@@ -317,6 +330,19 @@ final class _ActiveRebuildKnowledgeBackend extends TestAppBackend
   int processCalls = 0;
 
   @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
 
   @override
@@ -402,6 +428,19 @@ final class _ActiveRebuildKnowledgeBackend extends TestAppBackend
 final class _AlwaysFailingKnowledgeBackend extends TestAppBackend
     implements KnowledgeBackend {
   @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
 
   @override
@@ -483,6 +522,19 @@ final class _AlwaysFailingKnowledgeBackend extends TestAppBackend
 final class _FailedBackoffKnowledgeBackend extends TestAppBackend
     implements KnowledgeBackend {
   int processCalls = 0;
+
+  @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
@@ -570,6 +622,19 @@ final class _PostProcessStatusKnowledgeBackend extends TestAppBackend
   int processCalls = 0;
   int statusCalls = 0;
   String status = 'failed';
+
+  @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
@@ -660,6 +725,19 @@ final class _AlwaysEmptyKnowledgeBackend extends TestAppBackend
   int processCalls = 0;
 
   @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
 
   @override
@@ -746,6 +824,19 @@ final class _AlwaysStaleKnowledgeBackend extends TestAppBackend
     implements KnowledgeBackend {
   int requestCalls = 0;
   int processCalls = 0;
+
+  @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {}

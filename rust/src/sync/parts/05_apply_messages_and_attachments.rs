@@ -28,12 +28,13 @@ fn apply_message_insert(
     let is_memory = payload["is_memory"]
         .as_bool()
         .unwrap_or_else(|| role != "assistant");
+    let citations_json = payload["citations_json"].as_str();
 
     let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
     let insert_result = conn.execute(
         r#"INSERT INTO messages
-           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, ?8, ?9)
+           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory, citations_json)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, ?8, ?9, ?10)
            ON CONFLICT(id) DO NOTHING"#,
         params![
             message_id,
@@ -44,7 +45,8 @@ fn apply_message_insert(
             device_id,
             seq,
             if is_memory { 1 } else { 0 },
-            if is_memory { 1 } else { 0 }
+            if is_memory { 1 } else { 0 },
+            citations_json,
         ],
     );
     let inserted_message = match insert_result {
@@ -53,8 +55,8 @@ fn apply_message_insert(
             ensure_placeholder_conversation_row(conn, db_key, conversation_id, created_at_ms)?;
             conn.execute(
                 r#"INSERT INTO messages
-                   (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
-                   VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, ?8, ?9)
+                   (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory, citations_json)
+                   VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, 0, ?8, ?9, ?10)
                    ON CONFLICT(id) DO NOTHING"#,
                 params![
                     message_id,
@@ -65,7 +67,8 @@ fn apply_message_insert(
                     device_id,
                     seq,
                     if is_memory { 1 } else { 0 },
-                    if is_memory { 1 } else { 0 }
+                    if is_memory { 1 } else { 0 },
+                    citations_json,
                 ],
             )? > 0
         }
@@ -102,6 +105,116 @@ fn apply_message_insert(
             conn, db_key, message_id, "sync_message_insert", created_at_ms,
         );
     }
+
+    Ok(())
+}
+
+fn apply_knowledge_memory_feedback_upsert(
+    conn: &Connection,
+    op: &serde_json::Value,
+) -> Result<()> {
+    let device_id = op["device_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing device_id"))?;
+    let seq = op["seq"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing seq"))?;
+    let payload = &op["payload"];
+
+    let document_id = payload["document_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing document_id"))?;
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing created_at_ms"))?;
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing updated_at_ms"))?;
+    let use_for_ask_ai = payload["use_for_ask_ai"]
+        .as_bool()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing use_for_ask_ai"))?;
+    let is_deleted = payload["is_deleted"]
+        .as_bool()
+        .ok_or_else(|| anyhow!("knowledge.memory_feedback.upsert.v1 missing is_deleted"))?;
+    let marked_inaccurate = payload["marked_inaccurate"].as_bool().ok_or_else(|| {
+        anyhow!("knowledge.memory_feedback.upsert.v1 missing marked_inaccurate")
+    })?;
+
+    let existing: Option<(i64, String, i64)> = conn
+        .query_row(
+            r#"SELECT updated_at_ms,
+                      COALESCE(updated_by_device_id, ''),
+                      COALESCE(updated_by_seq, 0)
+               FROM knowledge_document_feedback
+               WHERE document_id = ?1"#,
+            params![document_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+    if let Some((existing_updated_at_ms, existing_device_id, existing_seq)) = existing {
+        if !message_version_newer(
+            updated_at_ms,
+            device_id,
+            seq,
+            existing_updated_at_ms,
+            &existing_device_id,
+            existing_seq,
+        ) {
+            return Ok(());
+        }
+    }
+
+    let normalize_optional = |value: Option<&str>| -> Option<String> {
+        value.and_then(|raw| {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+    };
+
+    conn.execute(
+        r#"INSERT INTO knowledge_document_feedback(
+               document_id,
+               status,
+               use_for_ask_ai,
+               is_deleted,
+               marked_inaccurate,
+               corrected_title,
+               corrected_summary,
+               created_at_ms,
+               updated_at_ms,
+               updated_by_device_id,
+               updated_by_seq
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+           ON CONFLICT(document_id) DO UPDATE SET
+             status = excluded.status,
+             use_for_ask_ai = excluded.use_for_ask_ai,
+             is_deleted = excluded.is_deleted,
+             marked_inaccurate = excluded.marked_inaccurate,
+             corrected_title = excluded.corrected_title,
+             corrected_summary = excluded.corrected_summary,
+             created_at_ms = excluded.created_at_ms,
+             updated_at_ms = excluded.updated_at_ms,
+             updated_by_device_id = excluded.updated_by_device_id,
+             updated_by_seq = excluded.updated_by_seq"#,
+        params![
+            document_id,
+            payload["status"].as_str(),
+            if use_for_ask_ai { 1 } else { 0 },
+            if is_deleted { 1 } else { 0 },
+            if marked_inaccurate { 1 } else { 0 },
+            normalize_optional(payload["corrected_title"].as_str()),
+            normalize_optional(payload["corrected_summary"].as_str()),
+            created_at_ms,
+            updated_at_ms,
+            device_id,
+            seq,
+        ],
+    )?;
+    crate::db::mark_knowledge_pages_refresh_required(conn)?;
 
     Ok(())
 }
@@ -155,6 +268,11 @@ fn apply_message_set_v2(
         .as_bool()
         .ok_or_else(|| anyhow!("message.set.v2 missing is_deleted"))?;
     let incoming_is_memory = payload["is_memory"].as_bool();
+    let incoming_citations_json = if payload.get("citations_json").is_some() {
+        Some(payload["citations_json"].as_str().map(ToOwned::to_owned))
+    } else {
+        None
+    };
 
     let payload_conversation_id = payload["conversation_id"].as_str();
     let existing_conversation_id: Option<String> = conn
@@ -174,18 +292,24 @@ fn apply_message_set_v2(
         }
     };
 
-    let existing: Option<(i64, String, i64, i64)> = conn
+    let existing: Option<(i64, String, i64, i64, Option<String>)> = conn
         .query_row(
-            r#"SELECT updated_at, updated_by_device_id, updated_by_seq, COALESCE(is_memory, 1)
+            r#"SELECT updated_at, updated_by_device_id, updated_by_seq, COALESCE(is_memory, 1), citations_json
                FROM messages
                WHERE id = ?1"#,
             params![message_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
         )
         .optional()?;
     let mut inserted_message = false;
 
-    if let Some((existing_updated_at, existing_device_id, existing_seq, existing_is_memory_i64)) =
+    if let Some((
+        existing_updated_at,
+        existing_device_id,
+        existing_seq,
+        existing_is_memory_i64,
+        existing_citations_json,
+    )) =
         existing
     {
         if !message_version_newer(
@@ -200,6 +324,9 @@ fn apply_message_set_v2(
         }
 
         let is_memory = incoming_is_memory.unwrap_or(existing_is_memory_i64 != 0);
+        let citations_json = incoming_citations_json
+            .clone()
+            .unwrap_or(existing_citations_json);
         let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
         conn.execute(
             r#"UPDATE messages
@@ -210,7 +337,8 @@ fn apply_message_set_v2(
                    updated_by_seq = ?6,
                    is_deleted = ?7,
                    is_memory = ?8,
-                   needs_embedding = CASE WHEN ?7 = 0 AND ?8 = 1 THEN 1 ELSE 0 END
+                   needs_embedding = CASE WHEN ?7 = 0 AND ?8 = 1 THEN 1 ELSE 0 END,
+                   citations_json = ?9
                WHERE id = ?1"#,
             params![
                 message_id,
@@ -220,17 +348,19 @@ fn apply_message_set_v2(
                 device_id,
                 seq,
                 if is_deleted { 1 } else { 0 },
-                if is_memory { 1 } else { 0 }
+                if is_memory { 1 } else { 0 },
+                citations_json,
             ],
         )?;
     } else {
         let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
         let is_memory = incoming_is_memory.unwrap_or_else(|| role != "assistant");
         let needs_embedding = !is_deleted && is_memory;
+        let citations_json = incoming_citations_json.flatten();
         let insert_result = conn.execute(
             r#"INSERT INTO messages
-               (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
+               (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory, citations_json)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"#,
             params![
                 message_id,
                 conversation_id.as_str(),
@@ -242,7 +372,8 @@ fn apply_message_set_v2(
                 seq,
                 if is_deleted { 1 } else { 0 },
                 if needs_embedding { 1 } else { 0 },
-                if is_memory { 1 } else { 0 }
+                if is_memory { 1 } else { 0 },
+                citations_json.as_deref(),
             ],
         );
         match insert_result {
@@ -256,8 +387,8 @@ fn apply_message_set_v2(
                 )?;
                 conn.execute(
                     r#"INSERT INTO messages
-                       (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
-                       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
+                       (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory, citations_json)
+                       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"#,
                     params![
                         message_id,
                         conversation_id.as_str(),
@@ -269,7 +400,8 @@ fn apply_message_set_v2(
                         seq,
                         if is_deleted { 1 } else { 0 },
                         if needs_embedding { 1 } else { 0 },
-                        if is_memory { 1 } else { 0 }
+                        if is_memory { 1 } else { 0 },
+                        citations_json,
                     ],
                 )?;
                 inserted_message = true;

@@ -8,6 +8,7 @@ import 'task_hub_card_anchor.dart';
 import 'task_hub_priority_animation_controller.dart';
 import 'task_hub_priority_controls.dart';
 import 'task_hub_quick_actions.dart';
+import 'task_hub_relative_time.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
 
@@ -26,6 +27,7 @@ class TaskHubEntryCard extends StatelessWidget {
     this.anchorRegistry,
     this.inlineAnimation,
     this.onInlineAnimationCompleted,
+    this.nowLocal,
     super.key,
   });
 
@@ -42,6 +44,7 @@ class TaskHubEntryCard extends StatelessWidget {
   final TaskHubCardAnchorRegistry? anchorRegistry;
   final TaskHubPriorityInlineAnimationState? inlineAnimation;
   final VoidCallback? onInlineAnimationCompleted;
+  final DateTime? nowLocal;
 
   @override
   Widget build(BuildContext context) {
@@ -62,8 +65,36 @@ class TaskHubEntryCard extends StatelessWidget {
         theme.colorScheme.primaryContainer.withOpacity(emphasize ? 0.64 : 0.58);
     final restoredBorder = theme.colorScheme.primary.withOpacity(0.28);
     final defaultBackground = emphasize ? tokens.surface2 : null;
+    final relativeTimeText = entry.todo.status == 'done'
+        ? null
+        : formatTaskHubRelativeTime(
+            dueAtMs: entry.todo.dueAtMs,
+            nowLocal: nowLocal ?? DateTime.now(),
+            labels: TaskHubRelativeTimeLabels(
+              today: context.t.actions.taskHub.relativeTime.today,
+              inHours: (count) =>
+                  context.t.actions.taskHub.relativeTime.inHours(count: count),
+              inDays: (count) =>
+                  context.t.actions.taskHub.relativeTime.inDays(count: count),
+              inWeeks: (count) =>
+                  context.t.actions.taskHub.relativeTime.inWeeks(count: count),
+              overdueHours: (count) => context.t.actions.taskHub.relativeTime
+                  .overdueHours(count: count),
+              overdueDays: (count) => context.t.actions.taskHub.relativeTime
+                  .overdueDays(count: count),
+              overdueWeeks: (count) => context.t.actions.taskHub.relativeTime
+                  .overdueWeeks(count: count),
+            ),
+          );
     final metaChips = <Widget>[
       _TaskHubMetaChip(label: _subtitle(context, entry), emphasize: true),
+      if (_rankingReasonLabel(context, entry) case final rankingReasonLabel?)
+        _TaskHubMetaChip(
+          child: Text(
+            rankingReasonLabel,
+            key: ValueKey('task_hub_reason_chip_${entry.todo.id}'),
+          ),
+        ),
       if (checklistProgressText != null)
         _TaskHubMetaChip(
           child: Text(
@@ -88,8 +119,8 @@ class TaskHubEntryCard extends StatelessWidget {
           ),
         ),
     ];
-    final supportingText =
-        (entry.reasonText ?? '').isNotEmpty ? entry.reasonText! : null;
+    final hasAiReason = (entry.reasonText ?? '').isNotEmpty;
+    final supportingText = emphasize && hasAiReason ? entry.reasonText! : null;
     Widget card = AnimatedContainer(
       key: ValueKey(
         'task_hub_page_item_state_${entry.todo.id}_${recentlyRestored ? 'restored' : 'default'}',
@@ -119,19 +150,40 @@ class TaskHubEntryCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  entry.todo.title,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (relativeTimeText != null) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  relativeTimeText,
+                                  key: ValueKey(
+                                    'task_hub_relative_time_${entry.todo.id}',
+                                  ),
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  textAlign: TextAlign.right,
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 6),
                           Wrap(
                             spacing: 6,
                             runSpacing: 6,
                             children: metaChips,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            entry.todo.title,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
                           if (supportingText != null) ...[
                             const SizedBox(height: 4),
@@ -148,22 +200,10 @@ class TaskHubEntryCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
-                          if (supportingText == null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              _subtitle(context, entry),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
                         ],
                       ),
                     ),
-                    if (onFeedback != null &&
-                        (entry.reasonText ?? '').isNotEmpty)
+                    if (onFeedback != null && hasAiReason)
                       TaskHubFeedbackMenu(
                         todoId: entry.todo.id,
                         onSelected: onFeedback!,
@@ -183,6 +223,7 @@ class TaskHubEntryCard extends StatelessWidget {
               entry: entry,
               onQuickAction: onQuickAction,
               showPriorityControls: showPriorityControls,
+              compactActions: !emphasize,
             ),
           ],
         ),
@@ -231,6 +272,36 @@ class TaskHubEntryCard extends StatelessWidget {
     }
     if (entry.isSnoozed) return context.t.actions.taskHub.snoozedLabel;
     return context.t.actions.taskHub.decideLabel;
+  }
+
+  String? _rankingReasonLabel(BuildContext context, TaskPriorityEntry entry) {
+    return switch (entry.userMoveDirection) {
+      TaskPriorityUserMoveDirection.up =>
+        context.t.actions.taskHub.reasons.manuallyMovedUp,
+      TaskPriorityUserMoveDirection.down =>
+        context.t.actions.taskHub.reasons.manuallyMovedDown,
+      TaskPriorityUserMoveDirection.none => _defaultRankingReasonLabel(
+          context,
+          entry,
+        ),
+    };
+  }
+
+  String? _defaultRankingReasonLabel(
+    BuildContext context,
+    TaskPriorityEntry entry,
+  ) {
+    if (entry.reasons.contains(TaskPriorityReasonKind.aiSuggested) ||
+        (entry.reasonText ?? '').isNotEmpty) {
+      return context.t.actions.taskHub.reasons.aiPromoted;
+    }
+    if (entry.isReviewDue) {
+      return context.t.actions.taskHub.reasons.reviewDue;
+    }
+    if (entry.isInProgress) {
+      return context.t.actions.taskHub.reasons.inProgress;
+    }
+    return null;
   }
 }
 

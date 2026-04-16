@@ -8,25 +8,32 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
 mod admin;
+mod apply_batch;
 mod artifacts;
 mod attachments;
+mod blob_repair;
+mod checkpoint;
 mod pending_apply;
 mod probe;
 mod progress;
-mod pull;
+mod progress_metrics;
+mod protocol;
+mod pull_loop;
+mod pull_recovery;
+mod reseed;
 mod runtime;
+pub(crate) mod state_machine;
+mod v2_client;
 
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
 use pending_apply::{
-    apply_pending_ops_until_stable, cursor_repair_marker_attempted, has_local_oplog_for_device,
-    is_foreign_key_constraint_error, load_pending_apply_op_ids, mark_cursor_repair_attempted,
-    pending_apply_key, rewind_since_for_unresolved_pending_devices, update_since_map,
+    apply_pending_ops_until_stable, has_local_oplog_for_device, is_foreign_key_constraint_error,
+    load_pending_apply_op_ids, pending_apply_key, rewind_since_for_unresolved_pending_devices,
+    update_since_map,
 };
 pub use progress::{pull_with_progress, push_ops_only_with_progress};
-pub use pull::pull;
-#[cfg(test)]
-mod tests;
+pub use pull_loop::pull;
 
 #[derive(Debug, Serialize)]
 struct RegisterDeviceRequest<'a> {
@@ -73,13 +80,7 @@ struct PullRequest<'a> {
     limit: i64,
 }
 
-#[derive(Debug, Deserialize)]
-struct PullResponse {
-    ops: Vec<PullOp>,
-    next: BTreeMap<String, i64>,
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 struct PullOp {
     device_id: String,
     seq: i64,
@@ -99,14 +100,6 @@ struct PushErrorResponse {
 }
 
 const PULL_BIN_MAGIC_V1: &[u8; 5] = b"SLVB1";
-
-#[derive(Debug)]
-struct PullOpBin {
-    device_id: String,
-    seq: i64,
-    op_id: String,
-    ciphertext: Vec<u8>,
-}
 
 fn load_since_map(conn: &Connection, scope_id: &str) -> Result<BTreeMap<String, i64>> {
     let prefix = format!("managed_vault.last_pulled_seq:{scope_id}:");
@@ -130,42 +123,6 @@ fn load_since_map(conn: &Connection, scope_id: &str) -> Result<BTreeMap<String, 
         }
     }
     Ok(out)
-}
-
-fn maybe_recover_stale_since_map(
-    conn: &Connection,
-    scope_id: &str,
-    local_device_id: &str,
-    since: &mut BTreeMap<String, i64>,
-) -> Result<bool> {
-    if since.is_empty() {
-        return Ok(false);
-    }
-
-    let mut changed = false;
-    for (device_id, last_seq) in since.clone() {
-        if device_id == local_device_id || last_seq <= 0 {
-            continue;
-        }
-
-        if cursor_repair_marker_attempted(conn, scope_id, &device_id)? {
-            continue;
-        }
-
-        if has_local_oplog_for_device(conn, &device_id)? {
-            continue;
-        }
-
-        since.insert(device_id.clone(), 0);
-        mark_cursor_repair_attempted(conn, scope_id, &device_id)?;
-        changed = true;
-    }
-
-    if changed {
-        update_since_map(conn, scope_id, since)?;
-    }
-
-    Ok(changed)
 }
 
 fn write_local_device_id(conn: &Connection, device_id: &str) -> Result<()> {
@@ -233,253 +190,9 @@ async fn try_recover_pull_forbidden_by_rotating_device_id_async(
         }
     }
 }
-
-fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
-    if bytes.len() < PULL_BIN_MAGIC_V1.len() + 4 {
-        return Err(anyhow!("invalid pull_bin response: too short"));
-    }
-    if &bytes[..PULL_BIN_MAGIC_V1.len()] != PULL_BIN_MAGIC_V1 {
-        return Err(anyhow!("invalid pull_bin response: bad magic"));
-    }
-
-    let mut cursor = PULL_BIN_MAGIC_V1.len();
-    let count = u32::from_le_bytes(
-        bytes[cursor..cursor + 4]
-            .try_into()
-            .map_err(|_| anyhow!("invalid pull_bin response: count"))?,
-    ) as usize;
-    cursor += 4;
-
-    let mut out: Vec<PullOpBin> = Vec::with_capacity(count);
-    for _ in 0..count {
-        if cursor + 2 > bytes.len() {
-            return Err(anyhow!(
-                "invalid pull_bin response: truncated device_id_len"
-            ));
-        }
-        let device_len = u16::from_le_bytes(
-            bytes[cursor..cursor + 2]
-                .try_into()
-                .map_err(|_| anyhow!("invalid pull_bin response: device_id_len"))?,
-        ) as usize;
-        cursor += 2;
-
-        if cursor + device_len > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated device_id"));
-        }
-        let device_id = String::from_utf8(bytes[cursor..cursor + device_len].to_vec())
-            .map_err(|_| anyhow!("invalid pull_bin response: device_id not utf-8"))?;
-        cursor += device_len;
-
-        if cursor + 8 > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated seq"));
-        }
-        let seq = i64::from_le_bytes(
-            bytes[cursor..cursor + 8]
-                .try_into()
-                .map_err(|_| anyhow!("invalid pull_bin response: seq"))?,
-        );
-        cursor += 8;
-
-        if cursor + 2 > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated op_id_len"));
-        }
-        let op_id_len = u16::from_le_bytes(
-            bytes[cursor..cursor + 2]
-                .try_into()
-                .map_err(|_| anyhow!("invalid pull_bin response: op_id_len"))?,
-        ) as usize;
-        cursor += 2;
-
-        if cursor + op_id_len > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated op_id"));
-        }
-        let op_id = String::from_utf8(bytes[cursor..cursor + op_id_len].to_vec())
-            .map_err(|_| anyhow!("invalid pull_bin response: op_id not utf-8"))?;
-        cursor += op_id_len;
-
-        if cursor + 4 > bytes.len() {
-            return Err(anyhow!(
-                "invalid pull_bin response: truncated ciphertext_len"
-            ));
-        }
-        let cipher_len = u32::from_le_bytes(
-            bytes[cursor..cursor + 4]
-                .try_into()
-                .map_err(|_| anyhow!("invalid pull_bin response: ciphertext_len"))?,
-        ) as usize;
-        cursor += 4;
-
-        if cursor + cipher_len > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated ciphertext"));
-        }
-        let ciphertext = bytes[cursor..cursor + cipher_len].to_vec();
-        cursor += cipher_len;
-
-        out.push(PullOpBin {
-            device_id,
-            seq,
-            op_id,
-            ciphertext,
-        });
-    }
-
-    Ok(out)
-}
-
-fn should_fallback_to_json_pull(status_code: u16) -> bool {
-    status_code == 404
-        || status_code == 408
-        || status_code == 429
-        || (500..600).contains(&status_code)
-}
-
-fn should_try_pull_bin_first() -> bool {
-    #[cfg(target_family = "wasm")]
-    {
-        true
-    }
-
-    #[cfg(not(target_family = "wasm"))]
-    {
-        true
-    }
-}
-
-fn apply_pull_bin_batch(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    scope_id: &str,
-    since: &BTreeMap<String, i64>,
-    ops: &[PullOpBin],
-) -> Result<(u64, BTreeMap<String, i64>)> {
-    let mut next_since = since.clone();
-    for op in ops {
-        next_since
-            .entry(op.device_id.clone())
-            .and_modify(|v| *v = (*v).max(op.seq))
-            .or_insert(op.seq);
-    }
-
-    let mut batch_applied = 0u64;
-    with_immediate_transaction(conn, || {
-        let mut pending = load_pending_apply_op_ids(conn, scope_id)?;
-        for op in ops {
-            let plaintext = decrypt_bytes(
-                sync_key,
-                &op.ciphertext,
-                format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
-            )?;
-            let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-            let op_id = op_json["op_id"]
-                .as_str()
-                .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-            let envelope_op_id = op.op_id.trim();
-            if !envelope_op_id.is_empty() && op_id != envelope_op_id {
-                return Err(anyhow!(
-                    "managed vault pull op_id mismatch: envelope={} plaintext={}",
-                    op.op_id,
-                    op_id
-                ));
-            }
-
-            let inserted = super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
-            if !inserted {
-                continue;
-            }
-
-            match super::apply_op(conn, db_key, &op_json) {
-                Ok(_) => {
-                    batch_applied += 1;
-                }
-                Err(e) if is_foreign_key_constraint_error(&e) => {
-                    pending.insert(op_id.to_string());
-                    super::kv_set_i64(conn, &pending_apply_key(scope_id, op_id), 1)?;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-
-        batch_applied += apply_pending_ops_until_stable(conn, db_key, scope_id, &mut pending)?;
-        rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
-
-        if next_since != *since {
-            update_since_map(conn, scope_id, &next_since)?;
-        }
-
-        Ok(())
-    })?;
-
-    Ok((batch_applied, next_since))
-}
-
-fn apply_pull_json_batch(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    scope_id: &str,
-    since: &BTreeMap<String, i64>,
-    parsed: &PullResponse,
-) -> Result<(u64, BTreeMap<String, i64>)> {
-    let mut next_since = since.clone();
-    for (device_id, last_seq) in &parsed.next {
-        next_since.insert(device_id.to_string(), *last_seq);
-    }
-
-    let mut batch_applied = 0u64;
-    with_immediate_transaction(conn, || {
-        let mut pending = load_pending_apply_op_ids(conn, scope_id)?;
-        for op in &parsed.ops {
-            let ciphertext = B64_STD
-                .decode(op.ciphertext_b64.as_bytes())
-                .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?;
-            let plaintext = decrypt_bytes(
-                sync_key,
-                &ciphertext,
-                format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
-            )?;
-            let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-            let op_id = op_json["op_id"]
-                .as_str()
-                .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-            let envelope_op_id = op.op_id.trim();
-            if !envelope_op_id.is_empty() && op_id != envelope_op_id {
-                return Err(anyhow!(
-                    "managed vault pull op_id mismatch: envelope={} plaintext={}",
-                    op.op_id,
-                    op_id
-                ));
-            }
-
-            let inserted = super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
-            if !inserted {
-                continue;
-            }
-
-            match super::apply_op(conn, db_key, &op_json) {
-                Ok(_) => {
-                    batch_applied += 1;
-                }
-                Err(e) if is_foreign_key_constraint_error(&e) => {
-                    pending.insert(op_id.to_string());
-                    super::kv_set_i64(conn, &pending_apply_key(scope_id, op_id), 1)?;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-
-        batch_applied += apply_pending_ops_until_stable(conn, db_key, scope_id, &mut pending)?;
-        rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
-
-        if next_since != *since {
-            update_since_map(conn, scope_id, &next_since)?;
-        }
-
-        Ok(())
-    })?;
-
-    Ok((batch_applied, next_since))
+fn should_fallback_to_json_pull(status: reqwest::StatusCode) -> bool {
+    let code = status.as_u16();
+    code == 404 || code == 408 || code == 429 || status.is_server_error()
 }
 
 pub fn push(
@@ -559,6 +272,7 @@ fn push_internal(
     }
 
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
+    crate::db::backfill_knowledge_memory_feedback_oplog_if_needed(conn, db_key)?;
 
     let local_pending_ops = conn
         .query_row(
@@ -695,6 +409,7 @@ fn push_internal(
         }
 
         if ops.is_empty() {
+            let _ = blob_repair::process_pending_blob_repairs(&upload_ctx, 8)?;
             if pushed_total > 0 {
                 maybe_run_managed_vault_retention(conn, &scope_id)?;
             }
@@ -957,6 +672,10 @@ fn rebase_local_device_seqs(
 }
 
 fn with_immediate_transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    if !conn.is_autocommit() {
+        return f();
+    }
+
     conn.execute_batch("BEGIN IMMEDIATE;")?;
     match f() {
         Ok(v) => {

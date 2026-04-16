@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/attachments_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
 import 'package:secondloop/features/chat/message_viewer_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -53,6 +54,43 @@ void main() {
     expect(
         find.byKey(const ValueKey('attachment_detail_action_open_with_system')),
         findsOneWidget);
+    final page = tester.widget<AttachmentViewerPage>(
+      find.byType(AttachmentViewerPage),
+    );
+    expect(page.initialContentKind, 'readable_text_full');
+    expect(page.initialChunkIndex, 1);
+  });
+
+  testWidgets(
+      'message viewer knowledge-document link degrades gracefully without knowledge backend',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: TestAppBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+              lock: () {},
+              child: const MessageViewerPage(
+                content:
+                    '[Open Knowledge](secondloop://knowledge-document/external%3Adoc-1?chunk=7&unit=external%3Adoc-1%3Achunk%3A0007)',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open Knowledge', findRichText: true));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('message_viewer_page')), findsOneWidget);
+    expect(find.textContaining('knowledge_viewer_backend_unavailable'),
+        findsOneWidget);
+    expect(find.byType(AttachmentViewerPage), findsNothing);
   });
 }
 

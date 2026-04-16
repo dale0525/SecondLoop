@@ -30,7 +30,10 @@ import 'dart:convert';
 import 'db.dart';
 import 'desktop_media/ocr.dart';
 import 'frb_generated.dart';
+import 'knowledge/history.dart';
+import 'knowledge/lint.dart';
 import 'knowledge/models.dart';
+import 'knowledge/pages.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
 import 'semantic_parse.dart';
 
@@ -96,6 +99,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   KnowledgeAnchorSet dco_decode_box_autoadd_knowledge_anchor_set(dynamic raw);
 
   @protected
+  KnowledgeMemoryDisplay dco_decode_box_autoadd_knowledge_memory_display(
+      dynamic raw);
+
+  @protected
+  KnowledgeMemoryStatus dco_decode_box_autoadd_knowledge_memory_status(
+      dynamic raw);
+
+  @protected
   KnowledgeUnitKind dco_decode_box_autoadd_knowledge_unit_kind(dynamic raw);
 
   @protected
@@ -157,13 +168,68 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   KnowledgeAnchorSet dco_decode_knowledge_anchor_set(dynamic raw);
 
   @protected
+  KnowledgeAnswerPolicy dco_decode_knowledge_answer_policy(dynamic raw);
+
+  @protected
   KnowledgeDebugStats dco_decode_knowledge_debug_stats(dynamic raw);
 
   @protected
   KnowledgeIndexStatus dco_decode_knowledge_index_status(dynamic raw);
 
   @protected
+  KnowledgeLintKind dco_decode_knowledge_lint_kind(dynamic raw);
+
+  @protected
+  KnowledgeLintRecord dco_decode_knowledge_lint_record(dynamic raw);
+
+  @protected
+  KnowledgeMemoryDisplay dco_decode_knowledge_memory_display(dynamic raw);
+
+  @protected
+  KnowledgeMemoryFeedback dco_decode_knowledge_memory_feedback(dynamic raw);
+
+  @protected
+  KnowledgeMemorySection dco_decode_knowledge_memory_section(dynamic raw);
+
+  @protected
+  KnowledgeMemoryStatus dco_decode_knowledge_memory_status(dynamic raw);
+
+  @protected
   KnowledgeOriginType dco_decode_knowledge_origin_type(dynamic raw);
+
+  @protected
+  KnowledgePage dco_decode_knowledge_page(dynamic raw);
+
+  @protected
+  KnowledgePageChangeRecord dco_decode_knowledge_page_change_record(
+      dynamic raw);
+
+  @protected
+  KnowledgePageChangeType dco_decode_knowledge_page_change_type(dynamic raw);
+
+  @protected
+  KnowledgePageDetail dco_decode_knowledge_page_detail(dynamic raw);
+
+  @protected
+  KnowledgePageEvidenceEntry dco_decode_knowledge_page_evidence_entry(
+      dynamic raw);
+
+  @protected
+  KnowledgePageEvidenceKind dco_decode_knowledge_page_evidence_kind(
+      dynamic raw);
+
+  @protected
+  KnowledgePageState dco_decode_knowledge_page_state(dynamic raw);
+
+  @protected
+  KnowledgePageSummary dco_decode_knowledge_page_summary(dynamic raw);
+
+  @protected
+  KnowledgePageType dco_decode_knowledge_page_type(dynamic raw);
+
+  @protected
+  KnowledgePageVersionSnapshot dco_decode_knowledge_page_version_snapshot(
+      dynamic raw);
 
   @protected
   KnowledgeRetrievalLayer dco_decode_knowledge_retrieval_layer(dynamic raw);
@@ -191,6 +257,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   KnowledgeViewerPage dco_decode_knowledge_viewer_page(dynamic raw);
+
+  @protected
+  KnowledgeWrongReason dco_decode_knowledge_wrong_reason(dynamic raw);
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
@@ -224,6 +293,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<ExternalImportBatchSummary>
       dco_decode_list_external_import_batch_summary(dynamic raw);
+
+  @protected
+  List<KnowledgeLintRecord> dco_decode_list_knowledge_lint_record(dynamic raw);
+
+  @protected
+  List<KnowledgePageChangeRecord> dco_decode_list_knowledge_page_change_record(
+      dynamic raw);
+
+  @protected
+  List<KnowledgePageEvidenceEntry>
+      dco_decode_list_knowledge_page_evidence_entry(dynamic raw);
+
+  @protected
+  List<KnowledgePageSummary> dco_decode_list_knowledge_page_summary(
+      dynamic raw);
+
+  @protected
+  List<KnowledgePageVersionSnapshot>
+      dco_decode_list_knowledge_page_version_snapshot(dynamic raw);
 
   @protected
   List<KnowledgeSearchResult> dco_decode_list_knowledge_search_result(
@@ -365,6 +453,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
+  KnowledgeMemoryDisplay? dco_decode_opt_box_autoadd_knowledge_memory_display(
+      dynamic raw);
+
+  @protected
+  KnowledgeMemoryStatus? dco_decode_opt_box_autoadd_knowledge_memory_status(
+      dynamic raw);
+
+  @protected
   KnowledgeUnitKind? dco_decode_opt_box_autoadd_knowledge_unit_kind(
       dynamic raw);
 
@@ -501,6 +597,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  KnowledgeMemoryDisplay sse_decode_box_autoadd_knowledge_memory_display(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryStatus sse_decode_box_autoadd_knowledge_memory_status(
+      SseDeserializer deserializer);
+
+  @protected
   KnowledgeUnitKind sse_decode_box_autoadd_knowledge_unit_kind(
       SseDeserializer deserializer);
 
@@ -568,6 +672,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  KnowledgeAnswerPolicy sse_decode_knowledge_answer_policy(
+      SseDeserializer deserializer);
+
+  @protected
   KnowledgeDebugStats sse_decode_knowledge_debug_stats(
       SseDeserializer deserializer);
 
@@ -576,7 +684,70 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  KnowledgeLintKind sse_decode_knowledge_lint_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeLintRecord sse_decode_knowledge_lint_record(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryDisplay sse_decode_knowledge_memory_display(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryFeedback sse_decode_knowledge_memory_feedback(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemorySection sse_decode_knowledge_memory_section(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryStatus sse_decode_knowledge_memory_status(
+      SseDeserializer deserializer);
+
+  @protected
   KnowledgeOriginType sse_decode_knowledge_origin_type(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgePage sse_decode_knowledge_page(SseDeserializer deserializer);
+
+  @protected
+  KnowledgePageChangeRecord sse_decode_knowledge_page_change_record(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgePageChangeType sse_decode_knowledge_page_change_type(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgePageDetail sse_decode_knowledge_page_detail(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgePageEvidenceEntry sse_decode_knowledge_page_evidence_entry(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgePageEvidenceKind sse_decode_knowledge_page_evidence_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgePageState sse_decode_knowledge_page_state(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgePageSummary sse_decode_knowledge_page_summary(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgePageType sse_decode_knowledge_page_type(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgePageVersionSnapshot sse_decode_knowledge_page_version_snapshot(
       SseDeserializer deserializer);
 
   @protected
@@ -614,6 +785,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  KnowledgeWrongReason sse_decode_knowledge_wrong_reason(
+      SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
@@ -648,6 +823,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<ExternalImportBatchSummary>
       sse_decode_list_external_import_batch_summary(
+          SseDeserializer deserializer);
+
+  @protected
+  List<KnowledgeLintRecord> sse_decode_list_knowledge_lint_record(
+      SseDeserializer deserializer);
+
+  @protected
+  List<KnowledgePageChangeRecord> sse_decode_list_knowledge_page_change_record(
+      SseDeserializer deserializer);
+
+  @protected
+  List<KnowledgePageEvidenceEntry>
+      sse_decode_list_knowledge_page_evidence_entry(
+          SseDeserializer deserializer);
+
+  @protected
+  List<KnowledgePageSummary> sse_decode_list_knowledge_page_summary(
+      SseDeserializer deserializer);
+
+  @protected
+  List<KnowledgePageVersionSnapshot>
+      sse_decode_list_knowledge_page_version_snapshot(
           SseDeserializer deserializer);
 
   @protected
@@ -808,6 +1005,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  KnowledgeMemoryDisplay? sse_decode_opt_box_autoadd_knowledge_memory_display(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryStatus? sse_decode_opt_box_autoadd_knowledge_memory_status(
+      SseDeserializer deserializer);
+
+  @protected
   KnowledgeUnitKind? sse_decode_opt_box_autoadd_knowledge_unit_kind(
       SseDeserializer deserializer);
 
@@ -957,6 +1162,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       KnowledgeAnchorSet self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_knowledge_memory_display(
+      KnowledgeMemoryDisplay self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_knowledge_memory_status(
+      KnowledgeMemoryStatus self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_knowledge_unit_kind(
       KnowledgeUnitKind self, SseSerializer serializer);
 
@@ -1026,6 +1239,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       KnowledgeAnchorSet self, SseSerializer serializer);
 
   @protected
+  void sse_encode_knowledge_answer_policy(
+      KnowledgeAnswerPolicy self, SseSerializer serializer);
+
+  @protected
   void sse_encode_knowledge_debug_stats(
       KnowledgeDebugStats self, SseSerializer serializer);
 
@@ -1034,8 +1251,71 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       KnowledgeIndexStatus self, SseSerializer serializer);
 
   @protected
+  void sse_encode_knowledge_lint_kind(
+      KnowledgeLintKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_lint_record(
+      KnowledgeLintRecord self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_memory_display(
+      KnowledgeMemoryDisplay self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_memory_feedback(
+      KnowledgeMemoryFeedback self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_memory_section(
+      KnowledgeMemorySection self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_memory_status(
+      KnowledgeMemoryStatus self, SseSerializer serializer);
+
+  @protected
   void sse_encode_knowledge_origin_type(
       KnowledgeOriginType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page(KnowledgePage self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page_change_record(
+      KnowledgePageChangeRecord self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page_change_type(
+      KnowledgePageChangeType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page_detail(
+      KnowledgePageDetail self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page_evidence_entry(
+      KnowledgePageEvidenceEntry self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page_evidence_kind(
+      KnowledgePageEvidenceKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page_state(
+      KnowledgePageState self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page_summary(
+      KnowledgePageSummary self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page_type(
+      KnowledgePageType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_page_version_snapshot(
+      KnowledgePageVersionSnapshot self, SseSerializer serializer);
 
   @protected
   void sse_encode_knowledge_retrieval_layer(
@@ -1070,6 +1350,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_knowledge_viewer_page(
       KnowledgeViewerPage self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_wrong_reason(
+      KnowledgeWrongReason self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
@@ -1108,6 +1392,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_external_import_batch_summary(
       List<ExternalImportBatchSummary> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_knowledge_lint_record(
+      List<KnowledgeLintRecord> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_knowledge_page_change_record(
+      List<KnowledgePageChangeRecord> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_knowledge_page_evidence_entry(
+      List<KnowledgePageEvidenceEntry> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_knowledge_page_summary(
+      List<KnowledgePageSummary> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_knowledge_page_version_snapshot(
+      List<KnowledgePageVersionSnapshot> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_knowledge_search_result(
@@ -1267,6 +1571,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_i_64(
       PlatformInt64? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_knowledge_memory_display(
+      KnowledgeMemoryDisplay? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_knowledge_memory_status(
+      KnowledgeMemoryStatus? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_knowledge_unit_kind(

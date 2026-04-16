@@ -85,47 +85,38 @@ class TaskHubSummary {
     int backlogPreviewLimit = 4,
   }) {
     final dueEntries = snapshot.focus;
-    final upcomingEntriesForSummary = snapshot.upcomingDisplayEntries;
+    final openEntriesForSummary = snapshot.openEntries;
     final reviewEntriesForSummary = snapshot.activeEntries
         .where((entry) => entry.isReviewDue)
         .toList(growable: false);
-    final backlogEntriesForSummary = snapshot.backlogEntries;
     final doneEntries = snapshot.done;
 
     final upcomingPreview = <Todo>[];
-    for (final entry in upcomingEntriesForSummary) {
+    for (final entry in openEntriesForSummary) {
       if (upcomingPreview.length >= upcomingPreviewLimit) break;
       upcomingPreview.add(entry.todo);
-    }
-
-    final backlogPreview = <Todo>[];
-    for (final entry in backlogEntriesForSummary) {
-      if (backlogPreview.length >= backlogPreviewLimit) break;
-      backlogPreview.add(entry.todo);
     }
 
     return TaskHubSummary(
       snapshot: snapshot,
       dueCount: dueEntries.length,
       overdueCount: dueEntries.where((entry) => entry.isOverdue).length,
-      upcomingCount: snapshot.upcomingDisplayCount,
-      backlogCount: snapshot.backlogDisplayCount,
+      upcomingCount: snapshot.openDisplayCount,
+      backlogCount: 0,
       reviewCount: reviewEntriesForSummary.length,
       doneCount: doneEntries.length,
       upcomingPreviewTodos: List<Todo>.unmodifiable(upcomingPreview),
-      backlogPreviewTodos: List<Todo>.unmodifiable(backlogPreview),
+      backlogPreviewTodos: const <Todo>[],
       dueTodos: List<Todo>.unmodifiable(
         dueEntries.map((entry) => entry.todo),
       ),
       upcomingTodos: List<Todo>.unmodifiable(
-        upcomingEntriesForSummary.map((entry) => entry.todo),
+        openEntriesForSummary.map((entry) => entry.todo),
       ),
       reviewTodos: List<Todo>.unmodifiable(
         reviewEntriesForSummary.map((entry) => entry.todo),
       ),
-      backlogTodos: List<Todo>.unmodifiable(
-        backlogEntriesForSummary.map((entry) => entry.todo),
-      ),
+      backlogTodos: const <Todo>[],
       doneTodos: List<Todo>.unmodifiable(
         doneEntries.map((entry) => entry.todo),
       ),

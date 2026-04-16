@@ -21,6 +21,8 @@ class ContentKnowledgeDocument {
   final String? summary;
   final String rawText;
   final String normalizedText;
+  final KnowledgeMemoryDisplay? memoryDisplay;
+  final KnowledgeMemoryFeedback memoryFeedback;
 
   const ContentKnowledgeDocument({
     required this.documentId,
@@ -37,6 +39,8 @@ class ContentKnowledgeDocument {
     this.summary,
     required this.rawText,
     required this.normalizedText,
+    this.memoryDisplay,
+    required this.memoryFeedback,
   });
 
   @override
@@ -54,7 +58,9 @@ class ContentKnowledgeDocument {
       title.hashCode ^
       summary.hashCode ^
       rawText.hashCode ^
-      normalizedText.hashCode;
+      normalizedText.hashCode ^
+      memoryDisplay.hashCode ^
+      memoryFeedback.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -74,7 +80,9 @@ class ContentKnowledgeDocument {
           title == other.title &&
           summary == other.summary &&
           rawText == other.rawText &&
-          normalizedText == other.normalizedText;
+          normalizedText == other.normalizedText &&
+          memoryDisplay == other.memoryDisplay &&
+          memoryFeedback == other.memoryFeedback;
 }
 
 class KnowledgeAnchorSet {
@@ -277,6 +285,89 @@ class KnowledgeIndexStatus {
           lastIndexedModelName == other.lastIndexedModelName &&
           lastIndexedDim == other.lastIndexedDim &&
           versions == other.versions;
+}
+
+class KnowledgeMemoryDisplay {
+  final KnowledgeMemorySection section;
+  final PlatformInt64 sourceCount;
+  final KnowledgeMemoryStatus status;
+
+  const KnowledgeMemoryDisplay({
+    required this.section,
+    required this.sourceCount,
+    required this.status,
+  });
+
+  @override
+  int get hashCode => section.hashCode ^ sourceCount.hashCode ^ status.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KnowledgeMemoryDisplay &&
+          runtimeType == other.runtimeType &&
+          section == other.section &&
+          sourceCount == other.sourceCount &&
+          status == other.status;
+}
+
+class KnowledgeMemoryFeedback {
+  final KnowledgeMemoryStatus? status;
+  final bool useForAskAi;
+  final bool isDeleted;
+  final bool markedInaccurate;
+  final String? correctedTitle;
+  final String? correctedSummary;
+  final PlatformInt64? updatedAtMs;
+
+  const KnowledgeMemoryFeedback({
+    this.status,
+    required this.useForAskAi,
+    required this.isDeleted,
+    required this.markedInaccurate,
+    this.correctedTitle,
+    this.correctedSummary,
+    this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      status.hashCode ^
+      useForAskAi.hashCode ^
+      isDeleted.hashCode ^
+      markedInaccurate.hashCode ^
+      correctedTitle.hashCode ^
+      correctedSummary.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KnowledgeMemoryFeedback &&
+          runtimeType == other.runtimeType &&
+          status == other.status &&
+          useForAskAi == other.useForAskAi &&
+          isDeleted == other.isDeleted &&
+          markedInaccurate == other.markedInaccurate &&
+          correctedTitle == other.correctedTitle &&
+          correctedSummary == other.correctedSummary &&
+          updatedAtMs == other.updatedAtMs;
+}
+
+enum KnowledgeMemorySection {
+  preference,
+  person,
+  project,
+  topic,
+  recentEvent,
+  ;
+}
+
+enum KnowledgeMemoryStatus {
+  confirmed,
+  inferred,
+  maybeOutdated,
+  ;
 }
 
 enum KnowledgeOriginType {

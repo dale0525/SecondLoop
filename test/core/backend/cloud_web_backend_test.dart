@@ -77,6 +77,68 @@ void main() {
       expect(loaded.content, 'stored reply');
     });
 
+    test('assistant citation writes stay assistant-scoped and non-memory',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+      final conversation = await backend.createConversation(key, 'Web Chat');
+
+      final inserted = await backend.insertAssistantMessageWithCitations(
+        key,
+        conversation.id,
+        content: 'stored reply',
+        citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+      );
+
+      expect(inserted.role, 'assistant');
+      expect(inserted.isMemory, isFalse);
+      expect(
+        inserted.citationsJson,
+        '{"direct_sources":[],"memory_cards":[]}',
+      );
+    });
+
+    test('detached completion fallback is atomic and idempotent', () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+      final conversation = await backend.createConversation(key, 'Web Chat');
+
+      final first = await backend.applyDetachedAskCompletionOnce(
+        key,
+        requestId: 'req_123456',
+        conversationId: conversation.id,
+        question: 'hello',
+        answer: 'world',
+        citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+      );
+      final second = await backend.applyDetachedAskCompletionOnce(
+        key,
+        requestId: 'req_123456',
+        conversationId: conversation.id,
+        question: 'hello',
+        answer: 'world',
+        citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+      );
+
+      final messages = await backend.listMessages(key, conversation.id);
+      expect(first, isTrue);
+      expect(second, isFalse);
+      expect(messages, hasLength(2));
+      expect(messages.map((message) => message.role).toList(), [
+        'user',
+        'assistant',
+      ]);
+      expect(messages.every((message) => !message.isMemory), isTrue);
+      expect(
+        messages.last.citationsJson,
+        '{"direct_sources":[],"memory_cards":[]}',
+      );
+    });
+
     test('setMessageDeleted can restore a previously deleted message',
         () async {
       final backend = CloudWebBackend(

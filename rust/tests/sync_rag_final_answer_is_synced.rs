@@ -42,12 +42,22 @@ fn sync_rag_final_answer_is_synced_via_message_set_v2() {
     let conversation =
         db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("loop home");
 
+    db::insert_message(
+        &conn_a,
+        &key_a,
+        &conversation.id,
+        "user",
+        "Project kickoff moved to Friday afternoon.",
+    )
+    .expect("seed");
+    db::process_pending_message_embeddings_default(&conn_a, &key_a, 100).expect("embed");
+
     let provider = OkProvider;
     rag::ask_ai_with_provider(
         &conn_a,
         &key_a,
         &conversation.id,
-        "question",
+        "What changed?",
         3,
         rag::Focus::AllMemories,
         &provider,
@@ -59,6 +69,10 @@ fn sync_rag_final_answer_is_synced_via_message_set_v2() {
     let assistant_a = msgs_a.last().expect("assistant msg");
     assert_eq!(assistant_a.role, "assistant");
     assert_eq!(assistant_a.content, "OK");
+    assert!(
+        assistant_a.citations_json.is_some(),
+        "assistant message should persist citations_json"
+    );
 
     let sync_key = derive_root_key(
         "sync-passphrase",
@@ -81,4 +95,29 @@ fn sync_rag_final_answer_is_synced_via_message_set_v2() {
     let assistant_b = msgs_b.last().expect("assistant msg B");
     assert_eq!(assistant_b.id, assistant_a.id);
     assert_eq!(assistant_b.content, "OK");
+    assert_eq!(assistant_b.citations_json, assistant_a.citations_json);
+
+    db::edit_message(&conn_a, &key_a, &assistant_a.id, "Edited answer")
+        .expect("edit assistant message");
+
+    let edited_a = db::get_message_by_id_optional(&conn_a, &key_a, &assistant_a.id)
+        .expect("edited assistant on A lookup")
+        .expect("edited assistant on A");
+    assert_eq!(edited_a.content, "Edited answer");
+    assert_eq!(
+        edited_a.citations_json, None,
+        "editing assistant content should clear stale citations"
+    );
+
+    sync::push(&conn_a, &key_a, &sync_key, &remote, remote_root).expect("push A3");
+    sync::pull(&conn_b, &key_b, &sync_key, &remote, remote_root).expect("pull B3");
+
+    let edited_b = db::get_message_by_id_optional(&conn_b, &key_b, &assistant_a.id)
+        .expect("edited assistant on B lookup")
+        .expect("edited assistant on B");
+    assert_eq!(edited_b.content, "Edited answer");
+    assert_eq!(
+        edited_b.citations_json, None,
+        "editing assistant content should also clear citations after sync"
+    );
 }

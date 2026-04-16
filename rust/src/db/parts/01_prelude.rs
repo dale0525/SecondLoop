@@ -161,6 +161,7 @@ pub struct Message {
     pub content: String,
     pub created_at_ms: i64,
     pub is_memory: bool,
+    pub citations_json: Option<String>,
 }
 
 #[derive(Clone, Debug)]

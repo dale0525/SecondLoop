@@ -22,6 +22,7 @@ class KnowledgeDocumentViewer extends StatefulWidget {
     required this.documentId,
     required this.initialDocument,
     required this.fallbackText,
+    this.initialHighlightedUnitId,
     this.onSave,
     this.extraActions = const <KnowledgeDocumentViewerAction>[],
     this.pageSize = 48,
@@ -33,6 +34,7 @@ class KnowledgeDocumentViewer extends StatefulWidget {
   final String documentId;
   final KnowledgeViewerDocument initialDocument;
   final String fallbackText;
+  final String? initialHighlightedUnitId;
   final Future<void> Function(String value)? onSave;
   final List<KnowledgeDocumentViewerAction> extraActions;
   final int pageSize;
@@ -48,6 +50,7 @@ class _KnowledgeDocumentViewerState extends State<KnowledgeDocumentViewer> {
 
   late final TextEditingController _queryController;
   late KnowledgeDocumentController _controller;
+  String? _lastAutoScrolledUnitId;
 
   @override
   void initState() {
@@ -60,7 +63,7 @@ class _KnowledgeDocumentViewerState extends State<KnowledgeDocumentViewer> {
       initialDocument: widget.initialDocument,
       pageSize: widget.pageSize,
     );
-    unawaited(_controller.loadPage(reset: true));
+    unawaited(_loadInitialDocument());
   }
 
   @override
@@ -73,7 +76,8 @@ class _KnowledgeDocumentViewerState extends State<KnowledgeDocumentViewer> {
         initialDocument: widget.initialDocument,
       );
       _queryController.text = '';
-      unawaited(_controller.loadPage(reset: true));
+      _lastAutoScrolledUnitId = null;
+      unawaited(_loadInitialDocument());
     }
   }
 
@@ -111,6 +115,16 @@ class _KnowledgeDocumentViewerState extends State<KnowledgeDocumentViewer> {
         curve: Curves.easeOut,
       );
     });
+  }
+
+  Future<void> _loadInitialDocument() async {
+    final initialHighlightedUnitId =
+        widget.initialHighlightedUnitId?.trim() ?? '';
+    if (initialHighlightedUnitId.isEmpty) {
+      await _controller.loadPage(reset: true);
+      return;
+    }
+    await _controller.showUnitId(initialHighlightedUnitId);
   }
 
   Future<void> _jumpToResult(KnowledgeSearchResult result) async {
@@ -239,6 +253,13 @@ class _KnowledgeDocumentViewerState extends State<KnowledgeDocumentViewer> {
             (_controller.viewerDocument.document.summary ?? '').trim();
         final units = _controller.units;
         final highlightedUnitId = _controller.highlightedUnitId;
+        if (highlightedUnitId != null &&
+            highlightedUnitId != _lastAutoScrolledUnitId) {
+          _lastAutoScrolledUnitId = highlightedUnitId;
+          _scrollToUnit(highlightedUnitId);
+        } else if (highlightedUnitId == null) {
+          _lastAutoScrolledUnitId = null;
+        }
 
         return Material(
           color: Colors.transparent,

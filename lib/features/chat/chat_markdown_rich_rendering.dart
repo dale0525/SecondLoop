@@ -7,6 +7,9 @@ import 'package:markdown/markdown.dart' as md;
 
 import 'chat_markdown_theme_presets.dart';
 
+typedef ChatMarkdownCitationLabelResolver = String? Function(String href);
+typedef ChatMarkdownTapLinkHandler = Future<void> Function(String href);
+
 List<md.BlockSyntax> buildChatMarkdownBlockSyntaxes() {
   return const <md.BlockSyntax>[
     _LatexBlockSyntax(),
@@ -30,8 +33,15 @@ const double _kLatexInlineMaxViewportWidth = 420;
 Map<String, MarkdownElementBuilder> buildChatMarkdownElementBuilders({
   required ChatMarkdownPreviewTheme previewTheme,
   required bool exportRenderMode,
+  ChatMarkdownCitationLabelResolver? citationLabelResolver,
+  ChatMarkdownTapLinkHandler? onTapLink,
 }) {
   return <String, MarkdownElementBuilder>{
+    'a': _MarkdownLinkBuilder(
+      previewTheme: previewTheme,
+      citationLabelResolver: citationLabelResolver,
+      onTapLink: onTapLink,
+    ),
     'latex-inline': _LatexInlineBuilder(
       previewTheme: previewTheme,
       exportRenderMode: exportRenderMode,
@@ -256,6 +266,99 @@ class _SecondLoopDeepLinkSyntax extends md.InlineSyntax {
       parser.addNode(md.Text(trailing));
     }
     return true;
+  }
+}
+
+bool isSecondLoopDeepLink(String href) =>
+    href.trim().startsWith('secondloop://');
+
+class _MarkdownLinkBuilder extends MarkdownElementBuilder {
+  _MarkdownLinkBuilder({
+    required this.previewTheme,
+    required this.citationLabelResolver,
+    required this.onTapLink,
+  });
+
+  final ChatMarkdownPreviewTheme previewTheme;
+  final ChatMarkdownCitationLabelResolver? citationLabelResolver;
+  final ChatMarkdownTapLinkHandler? onTapLink;
+
+  @override
+  Widget? visitElementAfterWithContext(
+    BuildContext context,
+    md.Element element,
+    TextStyle? preferredStyle,
+    TextStyle? parentStyle,
+  ) {
+    final href = (element.attributes['href'] ?? '').trim();
+    if (href.isEmpty) {
+      return Text(element.textContent);
+    }
+
+    final citationLabel = citationLabelResolver?.call(href);
+    final isCitation = citationLabel != null && citationLabel.isNotEmpty;
+    final label = isCitation
+        ? citationLabel
+        : (element.textContent.trim().isNotEmpty
+            ? element.textContent.trim()
+            : href);
+
+    return _MarkdownInlineLink(
+      href: href,
+      label: label,
+      isCitation: isCitation,
+      previewTheme: previewTheme,
+      preferredStyle: preferredStyle,
+      onTapLink: onTapLink,
+    );
+  }
+}
+
+class _MarkdownInlineLink extends StatelessWidget {
+  const _MarkdownInlineLink({
+    required this.href,
+    required this.label,
+    required this.isCitation,
+    required this.previewTheme,
+    required this.preferredStyle,
+    required this.onTapLink,
+  });
+
+  final String href;
+  final String label;
+  final bool isCitation;
+  final ChatMarkdownPreviewTheme previewTheme;
+  final TextStyle? preferredStyle;
+  final ChatMarkdownTapLinkHandler? onTapLink;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle =
+        (preferredStyle ?? DefaultTextStyle.of(context).style).copyWith(
+      color: isCitation ? previewTheme.textColor : previewTheme.linkColor,
+      decoration: isCitation ? TextDecoration.none : TextDecoration.underline,
+      fontWeight: isCitation ? FontWeight.w700 : FontWeight.w500,
+    );
+
+    return InkWell(
+      onTap: onTapLink == null ? null : () => onTapLink!(href),
+      borderRadius: BorderRadius.circular(isCitation ? 999 : 6),
+      child: Container(
+        padding: isCitation
+            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 2)
+            : EdgeInsets.zero,
+        decoration: isCitation
+            ? BoxDecoration(
+                color: previewTheme.inlineCodeBackground.withOpacity(0.46),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: previewTheme.borderColor.withOpacity(0.8),
+                ),
+              )
+            : null,
+        child: Text(label, style: textStyle),
+      ),
+    );
   }
 }
 

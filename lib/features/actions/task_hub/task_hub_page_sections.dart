@@ -12,6 +12,7 @@ import 'task_priority_models.dart';
 
 enum TaskHubPageSectionKind {
   focus,
+  open,
   scheduled,
   decide,
   done,
@@ -39,6 +40,7 @@ class TaskHubPageSection extends StatelessWidget {
     this.priorityPendingTodoId,
     this.priorityLocalFallbackTodoId,
     this.onInlineAnimationCompleted,
+    this.nowLocal,
     super.key,
   });
 
@@ -68,6 +70,7 @@ class TaskHubPageSection extends StatelessWidget {
   final String? priorityPendingTodoId;
   final String? priorityLocalFallbackTodoId;
   final VoidCallback? onInlineAnimationCompleted;
+  final DateTime? nowLocal;
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +112,7 @@ class TaskHubPageSection extends StatelessWidget {
                   showPriorityLocalFallbackBadge:
                       entries[i].todo.id == priorityLocalFallbackTodoId,
                   onInlineAnimationCompleted: onInlineAnimationCompleted,
+                  nowLocal: nowLocal,
                 ),
                 if (i != entries.length - 1) const SizedBox(height: 10),
               ],
@@ -250,6 +254,11 @@ _TaskHubSectionTone _taskHubSectionTone(
         foreground: scheme.primary,
         background: scheme.primaryContainer.withOpacity(0.7),
         border: scheme.primary.withOpacity(0.18),
+      ),
+    TaskHubPageSectionKind.open => _TaskHubSectionTone(
+        foreground: scheme.secondary,
+        background: scheme.secondaryContainer.withOpacity(0.68),
+        border: scheme.secondary.withOpacity(0.18),
       ),
     TaskHubPageSectionKind.scheduled => _TaskHubSectionTone(
         foreground: scheme.secondary,

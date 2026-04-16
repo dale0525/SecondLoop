@@ -572,15 +572,25 @@ class _TaskHubPageState extends State<TaskHubPage> {
     TaskHubQuickAction action,
   ) {
     final todo = entry.todo;
+    final normalizedImportance = entry.normalizedManualImportanceNudgeScore;
+    final normalizedUrgency = entry.normalizedManualUrgencyNudgeScore;
+    final userMoveDirection = taskPriorityUserMoveDirectionFromScores(
+      platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0,
+      platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0,
+    );
     return switch (action) {
-      TaskHubQuickAction.increaseUrgency =>
-        (platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0) >= 1,
-      TaskHubQuickAction.decreaseUrgency =>
-        (platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0) <= -1,
-      TaskHubQuickAction.increaseImportance =>
-        (platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0) >= 1,
-      TaskHubQuickAction.decreaseImportance =>
-        (platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0) <= -1,
+      TaskHubQuickAction.moveUpABit =>
+        userMoveDirection == TaskPriorityUserMoveDirection.up,
+      TaskHubQuickAction.moveDownABit =>
+        userMoveDirection == TaskPriorityUserMoveDirection.down,
+      TaskHubQuickAction.restoreAiOrder =>
+        (platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0) == 0 &&
+            (platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0) ==
+                0,
+      TaskHubQuickAction.increaseUrgency => normalizedUrgency >= 1,
+      TaskHubQuickAction.decreaseUrgency => normalizedUrgency <= -1,
+      TaskHubQuickAction.increaseImportance => normalizedImportance >= 1,
+      TaskHubQuickAction.decreaseImportance => normalizedImportance <= -1,
       _ => false,
     };
   }
@@ -652,6 +662,12 @@ class _TaskHubPageState extends State<TaskHubPage> {
         TaskHubQuickAction.tomorrow =>
           context.t.actions.taskHub.actions.tomorrow,
         TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
+        TaskHubQuickAction.moveUpABit =>
+          context.t.actions.taskHub.nudges.movedUpABit,
+        TaskHubQuickAction.moveDownABit =>
+          context.t.actions.taskHub.nudges.movedDownABit,
+        TaskHubQuickAction.restoreAiOrder =>
+          context.t.actions.taskHub.nudges.restoredAiOrder,
         TaskHubQuickAction.increaseUrgency =>
           context.t.actions.taskHub.nudges.urgencyRaised,
         TaskHubQuickAction.decreaseUrgency =>
@@ -687,8 +703,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
             final visibleFocus = snapshot.primaryFocus == null
                 ? const <TaskPriorityEntry>[]
                 : <TaskPriorityEntry>[snapshot.primaryFocus!];
-            final visibleNextUp = snapshot.nextUpEntries;
-            final visibleBacklog = snapshot.backlogEntries;
+            final visibleOpen = snapshot.openEntries;
+            final snapshotNowLocal = snapshot.computedAtLocal ?? DateTime.now();
             final doneSectionVisibleCount = _doneSectionVisibleCount(snapshot);
             final visibleDone = doneSectionVisibleCount == 0
                 ? const <TaskPriorityEntry>[]
@@ -764,6 +780,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                             activeInlineAnimation.token,
                                           ),
                               restoredTodoId: _restoredTodoId,
+                              nowLocal: snapshotNowLocal,
                               onOpenTodo: _openTodoDetail,
                               onQuickAction: _applyQuickAction,
                               onFeedback: _recordFeedback,
@@ -787,8 +804,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                   const SizedBox(height: 6),
                                   Text(
                                     context.t.actions.taskHub.wrapUpSubtitle(
-                                      upcoming: visibleNextUp.length,
-                                      backlog: visibleBacklog.length,
+                                      upcoming: visibleOpen.length,
                                       done: snapshot.done.length,
                                     ),
                                   ),
@@ -809,11 +825,11 @@ class _TaskHubPageState extends State<TaskHubPage> {
                           ],
                           const SizedBox(height: 12),
                           TaskHubPageSection(
-                            title: context.t.actions.taskHub.scheduledSection,
-                            sectionKey: const ValueKey(
-                                'task_hub_page_section_upcoming'),
-                            headerCount: visibleNextUp.length,
-                            entries: visibleNextUp,
+                            title: context.t.actions.taskHub.openSection,
+                            sectionKey:
+                                const ValueKey('task_hub_page_section_open'),
+                            headerCount: visibleOpen.length,
+                            entries: visibleOpen,
                             checklistProgressByTodoId:
                                 store.checklistProgressByTodoId,
                             anchorRegistry: _cardAnchorRegistry,
@@ -830,37 +846,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                           activeInlineAnimation.token,
                                         ),
                             restoredTodoId: _restoredTodoId,
-                            sectionKind: TaskHubPageSectionKind.scheduled,
-                            priorityPendingTodoId: pendingPriorityTodoId,
-                            priorityLocalFallbackTodoId:
-                                localFallbackPriorityTodoId,
-                            onOpenTodo: _openTodoDetail,
-                            onQuickAction: _applyQuickAction,
-                            onFeedback: _recordFeedback,
-                          ),
-                          TaskHubPageSection(
-                            title: context.t.actions.taskHub.unscheduledSection,
-                            sectionKey:
-                                const ValueKey('task_hub_page_section_backlog'),
-                            headerCount: visibleBacklog.length,
-                            entries: visibleBacklog,
-                            checklistProgressByTodoId:
-                                store.checklistProgressByTodoId,
-                            anchorRegistry: _cardAnchorRegistry,
-                            anchorId: _sectionAnchorId(
-                              TaskHubPriorityAnimationSection.backlog,
-                            ),
-                            inlineAnimation: activeInlineAnimation,
-                            onInlineAnimationCompleted:
-                                activeInlineAnimation == null
-                                    ? null
-                                    : () => _priorityAnimationController
-                                            .clearInlineAnimation(
-                                          activeInlineAnimation.todoId,
-                                          activeInlineAnimation.token,
-                                        ),
-                            restoredTodoId: _restoredTodoId,
-                            sectionKind: TaskHubPageSectionKind.decide,
+                            sectionKind: TaskHubPageSectionKind.open,
+                            nowLocal: snapshotNowLocal,
                             priorityPendingTodoId: pendingPriorityTodoId,
                             priorityLocalFallbackTodoId:
                                 localFallbackPriorityTodoId,
@@ -891,6 +878,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                         ),
                             restoredTodoId: _restoredTodoId,
                             sectionKind: TaskHubPageSectionKind.done,
+                            nowLocal: snapshotNowLocal,
                             collapsed: _doneSectionCollapsed,
                             onToggleCollapsed: snapshot.done.isEmpty
                                 ? null

@@ -36,6 +36,7 @@ enum PullBehavior {
     BinaryOnly,
     TemporaryErrorFallbackJson,
     EmptyEnvelopeOpId,
+    EmptyEnvelopeOpIdJson,
 }
 
 fn bench_ops_target(default_ops: usize) -> usize {
@@ -174,6 +175,15 @@ fn start_mock_server_pull_bin_empty_envelope_op_id() -> (
     thread::JoinHandle<()>,
 ) {
     start_mock_server(PullBehavior::EmptyEnvelopeOpId)
+}
+
+fn start_mock_server_pull_json_empty_envelope_op_id() -> (
+    String,
+    mpsc::Sender<()>,
+    Arc<Mutex<ServerState>>,
+    thread::JoinHandle<()>,
+) {
+    start_mock_server(PullBehavior::EmptyEnvelopeOpIdJson)
 }
 
 fn start_mock_server(
@@ -370,6 +380,18 @@ fn start_mock_server(
                         let mut st = state_clone.lock().expect("lock");
                         st.pull_requests += 1;
                     }
+
+                    let out_ops = if pull_behavior == PullBehavior::EmptyEnvelopeOpIdJson {
+                        out_ops
+                            .into_iter()
+                            .map(|mut op| {
+                                op.op_id.clear();
+                                op
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        out_ops
+                    };
 
                     let ops_json: Vec<serde_json::Value> = out_ops
                         .into_iter()
@@ -679,6 +701,88 @@ fn managed_vault_pull_recovers_from_stale_cursor_without_local_remote_ops() {
 }
 
 #[test]
+fn managed_vault_pull_with_progress_recovers_from_stale_cursor_without_local_remote_ops() {
+    let (base_url, stop_tx, _state, handle) =
+        start_mock_server_pull_bin_temporary_error_fallback_json();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello-a").expect("insert msg A");
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    let device_a_id: String = conn_a
+        .query_row(
+            r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+            [],
+            |row| row.get(0),
+        )
+        .expect("device a id");
+
+    let scope_raw = format!("managed_vault|{}|{}", base_url.trim(), vault_id.trim());
+    let scope_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(scope_raw.as_bytes());
+    let stale_cursor_key = format!("managed_vault.last_pulled_seq:{scope_id}:{device_a_id}");
+    conn_b
+        .execute(
+            r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            rusqlite::params![stale_cursor_key, "999"],
+        )
+        .expect("inject stale cursor");
+
+    let mut seen_progress = Vec::new();
+    let applied = sync::managed_vault::pull_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| seen_progress.push((done, total)),
+    )
+    .expect("pull with progress");
+    assert!(applied > 0);
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    assert_eq!(convs_b[0].title, "Inbox");
+    assert_eq!(convs_b[0].id, conv_a.id);
+
+    let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
+    assert_eq!(msgs_b.len(), 1);
+    assert_eq!(msgs_b[0].content, "hello-a");
+    assert!(
+        seen_progress.iter().any(|(done, _)| *done > 0),
+        "expected progress callback to report completed work, got {seen_progress:?}"
+    );
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_pull_accepts_empty_envelope_op_id_from_pull_bin() {
     let (base_url, stop_tx, _state, handle) = start_mock_server_pull_bin_empty_envelope_op_id();
     let vault_id = "v1".to_string();
@@ -723,6 +827,68 @@ fn managed_vault_pull_accepts_empty_envelope_op_id_from_pull_bin() {
     let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
     assert_eq!(msgs_b.len(), 1);
     assert_eq!(msgs_b[0].content, "hello-a");
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_with_progress_accepts_empty_envelope_op_id() {
+    let (base_url, stop_tx, _state, handle) = start_mock_server_pull_json_empty_envelope_op_id();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello-a").expect("insert msg A");
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    let mut seen_progress = Vec::new();
+    let applied = sync::managed_vault::pull_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| seen_progress.push((done, total)),
+    )
+    .expect("pull with progress");
+    assert!(applied > 0);
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    assert_eq!(convs_b[0].title, "Inbox");
+    assert_eq!(convs_b[0].id, conv_a.id);
+
+    let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
+    assert_eq!(msgs_b.len(), 1);
+    assert_eq!(msgs_b[0].content, "hello-a");
+    assert!(
+        seen_progress.iter().any(|(done, _)| *done > 0),
+        "expected progress callback to report completed work, got {seen_progress:?}"
+    );
 
     let _ = stop_tx.send(());
     handle.join().expect("join");

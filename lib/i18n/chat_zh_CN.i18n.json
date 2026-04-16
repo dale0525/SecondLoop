@@ -257,5 +257,47 @@
   },
   "recordingRecovery": {
     "recoveredToDraftSnack": "检测到未完成录音，已恢复到草稿区，发送后会提交。"
+  },
+  "answerEvidence": {
+    "title": "证据",
+    "summary": {
+      "sourcesUsed": "$count 个来源",
+      "memoryCardsUsed": "$count 张知识页",
+      "openEvidence": "打开证据"
+    },
+    "tabs": {
+      "directSources": "直接来源（$count）",
+      "memoryCards": "知识页（$count）"
+    },
+    "actions": {
+      "viewOriginal": "查看原文",
+      "inspectMemory": "查看知识页",
+      "correct": "纠正",
+      "dontUse": "不再用于回答",
+      "deleteMemory": "归档"
+    },
+    "labels": {
+      "whyUsed": "为何使用",
+      "whyUsedForQuery": "因与这个问题相关而被使用：$query",
+      "sourceCount": "$count 个来源"
+    },
+    "sourceTypeLabels": {
+      "chatMessage": "聊天消息",
+      "attachment": "附件",
+      "attachmentOcr": "附件 OCR",
+      "attachmentTranscript": "附件转录",
+      "attachmentText": "附件文本",
+      "attachmentSummary": "附件摘要",
+      "attachmentMetadata": "附件元数据",
+      "attachmentExcerpt": "附件片段"
+    },
+    "scopeLabels": {
+      "thisThread": "当前线程"
+    },
+    "confidenceLabels": {
+      "highRelevance": "高相关性",
+      "relevant": "相关",
+      "possibleMatch": "可能匹配"
+    }
   }
 }

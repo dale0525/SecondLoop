@@ -1,7 +1,7 @@
 use crate::knowledge::{
     build_chunk_units, build_section_units, build_segment_units, segment_document_text,
-    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeOriginType, KnowledgeRole,
-    KnowledgeSourceKind, KnowledgeVersionSet,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeMemoryFeedback, KnowledgeOriginType,
+    KnowledgeRole, KnowledgeSourceKind, KnowledgeVersionSet,
 };
 
 #[test]
@@ -21,6 +21,8 @@ fn knowledge_chunking_respects_token_budget_and_links_neighbors() {
         summary: None,
         raw_text: "Speaker A: one two three four five six.\n\nSpeaker B: seven eight nine ten eleven twelve.\n\nSpeaker A: thirteen fourteen fifteen sixteen seventeen eighteen.".to_string(),
         normalized_text: "Speaker A: one two three four five six.\n\nSpeaker B: seven eight nine ten eleven twelve.\n\nSpeaker A: thirteen fourteen fifteen sixteen seventeen eighteen.".to_string(),
+        memory_display: None,
+        memory_feedback: KnowledgeMemoryFeedback::default(),
     };
 
     let segments = segment_document_text(&doc);
@@ -63,6 +65,8 @@ Speaker B:   Three    Four."
 
 speaker b: three four."
             .to_string(),
+        memory_display: None,
+        memory_feedback: KnowledgeMemoryFeedback::default(),
     };
 
     let segments = segment_document_text(&doc);
@@ -98,6 +102,8 @@ fn knowledge_segmenting_does_not_cross_fill_missing_raw_paragraphs() {
 
 second normalized paragraph."
             .to_string(),
+        memory_display: None,
+        memory_feedback: KnowledgeMemoryFeedback::default(),
     };
 
     let segments = segment_document_text(&doc);
@@ -126,6 +132,8 @@ fn knowledge_chunking_does_not_cross_fill_raw_and_normalized_tail_parts() {
         summary: None,
         raw_text: "alpha beta gamma delta epsilon".to_string(),
         normalized_text: "alpha beta gamma delta".to_string(),
+        memory_display: None,
+        memory_feedback: KnowledgeMemoryFeedback::default(),
     };
 
     let segments = segment_document_text(&doc);

@@ -2,6 +2,7 @@
   "title": "SecondLoop",
   "tabs": {
     "main": "Loop",
+    "memory": "Memory",
     "settings": "Settings"
   },
   "web": {

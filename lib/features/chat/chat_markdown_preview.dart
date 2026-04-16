@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../attachments/attachment_draft_send_contract.dart';
 import 'chat_markdown_attachment_image.dart';
+import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
 
@@ -348,11 +349,15 @@ MarkdownBody buildChatMarkdownPreviewBody(
   List<AttachmentDraftPayload> draftAttachments =
       const <AttachmentDraftPayload>[],
   MarkdownTapLinkCallback? onTapLink,
+  ChatMarkdownCitationLabelResolver? citationLabelResolver,
+  ChatMarkdownTapLinkHandler? onTapRichLink,
 }) {
   final normalized = normalizeChatMarkdownForPreview(
     text,
     restoreEscapedNewlines: restoreEscapedNewlines,
   );
+  final theme = Theme.of(context);
+  final previewTheme = resolveChatMarkdownTheme(preset, theme);
   return MarkdownBody(
     key: key,
     data: normalized,
@@ -368,6 +373,16 @@ MarkdownBody buildChatMarkdownPreviewBody(
       uri: uri,
       alt: alt,
       draftAttachments: draftAttachments,
+    ),
+    blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
+    inlineSyntaxes: buildChatMarkdownInlineSyntaxes(
+      enableSecondLoopDeepLinks: true,
+    ),
+    builders: buildChatMarkdownElementBuilders(
+      previewTheme: previewTheme,
+      exportRenderMode: false,
+      citationLabelResolver: citationLabelResolver,
+      onTapLink: onTapRichLink,
     ),
     onTapLink: onTapLink,
   );

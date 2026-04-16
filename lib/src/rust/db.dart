@@ -775,6 +775,7 @@ class Message {
   final String content;
   final PlatformInt64 createdAtMs;
   final bool isMemory;
+  final String? citationsJson;
 
   const Message({
     required this.id,
@@ -783,6 +784,7 @@ class Message {
     required this.content,
     required this.createdAtMs,
     required this.isMemory,
+    this.citationsJson,
   });
 
   @override
@@ -792,7 +794,8 @@ class Message {
       role.hashCode ^
       content.hashCode ^
       createdAtMs.hashCode ^
-      isMemory.hashCode;
+      isMemory.hashCode ^
+      citationsJson.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -804,7 +807,8 @@ class Message {
           role == other.role &&
           content == other.content &&
           createdAtMs == other.createdAtMs &&
-          isMemory == other.isMemory;
+          isMemory == other.isMemory &&
+          citationsJson == other.citationsJson;
 }
 
 class MigrationArchiveAttachment {
