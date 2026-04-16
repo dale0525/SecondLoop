@@ -190,7 +190,6 @@ pub async fn pull(
     let http = runtime::async_client()?;
     let mut local_device_id = super::super::get_or_create_device_id(conn)?;
     let _ = runtime::ensure_device_registered_async(
-        conn,
         &http,
         base_url,
         vault_id,
