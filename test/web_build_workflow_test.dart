@@ -51,6 +51,24 @@ void main() {
       contains('flutter pub run flutter_rust_bridge build-web'),
     );
     expect(pixi, isNot(contains('flutter_rust_bridge_codegen build-web')));
+    expect(
+      pixi,
+      contains(r'CC_wasm32_unknown_unknown=\"$PWD/.tool/bin/clang\"'),
+    );
+    expect(
+      pixi,
+      contains(r'AR_wasm32_unknown_unknown=\"$PWD/.tool/bin/llvm-ar\"'),
+    );
+    expect(
+      pixi,
+      contains(r'RANLIB_wasm32_unknown_unknown=\"$PWD/.tool/bin/llvm-ranlib\"'),
+    );
+    expect(
+      pixi,
+      isNot(
+        contains(r'CC_wasm32_unknown_unknown=\"$CONDA_PREFIX/bin/clang-21\"'),
+      ),
+    );
     expect(pixi, contains('--shared-memory'));
     expect(pixi, contains('--import-memory'));
   });
