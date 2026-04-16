@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../app/theme.dart';
 import '../app/theme_mode_prefs.dart';
 import '../app/theme_palette_prefs.dart';
 import '../core/backend/cloud_web_backend.dart';
@@ -14,6 +13,7 @@ import '../i18n/locale_prefs.dart';
 import '../i18n/strings.g.dart';
 import 'web_entry_intent.dart';
 import 'web_app_gate.dart';
+import 'web_app_theme.dart';
 
 export 'web_entry_intent.dart' show WebEntryIntent, parseWebEntryIntent;
 
@@ -123,53 +123,47 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
       child: Builder(
         builder: (context) {
           final locale = TranslationProvider.of(context).flutterLocale;
-          return ListenableBuilder(
-            listenable: Listenable.merge([
-              AppThemeModePrefs.value,
-              AppThemePalettePrefs.value,
-            ]),
-            builder: (context, _) {
-              final themeMode = AppThemeModePrefs.value.value;
-              final palette = AppThemePalettePrefs.value.value;
-              return MaterialApp(
-                locale: locale,
-                supportedLocales: AppLocaleUtils.supportedLocales,
-                localizationsDelegates: GlobalMaterialLocalizations.delegates,
-                title: context.t.app.web.title,
-                theme: AppTheme.light(locale: locale, palette: palette),
-                darkTheme: AppTheme.dark(locale: locale, palette: palette),
-                themeMode: themeMode,
-                home: FutureBuilder<WebAppBootstrapData>(
-                  future: _bootstrapFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Scaffold(
-                        body: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    if (snapshot.hasError || !snapshot.hasData) {
-                      return Scaffold(
-                        body: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Text(context.t.app.web
-                                .bootstrapFailed(error: '${snapshot.error}')),
-                          ),
-                        ),
-                      );
-                    }
-
-                    return WebAppGate(
-                      authController: snapshot.data!.authController,
-                      service: snapshot.data!.service,
-                      chatBackend: snapshot.data!.chatBackend,
-                      entryIntent: entryIntent,
-                      managedVaultBaseUrl: snapshot.data!.managedVaultBaseUrl,
-                    );
-                  },
-                ),
+          return MaterialApp(
+            locale: locale,
+            supportedLocales: AppLocaleUtils.supportedLocales,
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            title: context.t.app.web.title,
+            theme: buildSecondLoopWebTheme(locale: locale),
+            themeMode: ThemeMode.light,
+            builder: (context, child) {
+              return SecondLoopWebAppFrame(
+                child: child ?? const SizedBox.shrink(),
               );
             },
+            home: FutureBuilder<WebAppBootstrapData>(
+              future: _bootstrapFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snapshot.hasError || !snapshot.hasData) {
+                  return Scaffold(
+                    body: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(context.t.app.web
+                            .bootstrapFailed(error: '${snapshot.error}')),
+                      ),
+                    ),
+                  );
+                }
+
+                return WebAppGate(
+                  authController: snapshot.data!.authController,
+                  service: snapshot.data!.service,
+                  chatBackend: snapshot.data!.chatBackend,
+                  entryIntent: entryIntent,
+                  managedVaultBaseUrl: snapshot.data!.managedVaultBaseUrl,
+                );
+              },
+            ),
           );
         },
       ),
