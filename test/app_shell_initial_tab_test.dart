@@ -30,4 +30,28 @@ void main() {
 
     expect(find.byType(SettingsPage), findsOneWidget);
   });
+
+  testWidgets('AppShell can open on Settings initially on narrow layouts',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: TestAppBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AppShell(initialTab: AppTab.settings),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+  });
 }

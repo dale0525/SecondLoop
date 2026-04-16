@@ -156,7 +156,10 @@ class _AppShellState extends State<AppShell> {
                   ),
                 ],
               )
-            : _buildChatTab(context, isActive: true);
+            : switch (AppTab.values[_selectedIndex]) {
+                AppTab.chat => _buildChatTab(context, isActive: true),
+                AppTab.settings => _buildSettingsTab(context, isActive: true),
+              };
 
         return Scaffold(
           resizeToAvoidBottomInset: false,
