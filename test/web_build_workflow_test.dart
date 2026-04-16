@@ -46,6 +46,11 @@ void main() {
     final pixi = File('pixi.toml').readAsStringSync();
 
     expect(pixi, contains('frb-build-web'));
+    expect(
+      pixi,
+      contains('flutter pub run flutter_rust_bridge build-web'),
+    );
+    expect(pixi, isNot(contains('flutter_rust_bridge_codegen build-web')));
     expect(pixi, contains('--shared-memory'));
     expect(pixi, contains('--import-memory'));
   });
