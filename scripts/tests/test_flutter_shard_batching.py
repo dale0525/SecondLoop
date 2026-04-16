@@ -175,3 +175,111 @@ class FlutterShardBatchingTests(unittest.TestCase):
                     "test --concurrency=1 test/unit_c_test.dart",
                 ],
             )
+
+    def test_flutter_test_shard_retries_transient_dart_compiler_crash_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root)
+
+            scripts_dir = repo_root / "scripts"
+            lib_i18n_dir = repo_root / "lib/i18n"
+            fake_bin_dir = repo_root / "fake-bin"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            lib_i18n_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+            (lib_i18n_dir / "strings.g.dart").write_text("// generated\n", encoding="utf-8")
+
+            shard_script = scripts_dir / "run_flutter_test_shard.sh"
+            shard_script.write_text(
+                RUN_FLUTTER_TEST_SHARD.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            self._make_executable(shard_script)
+
+            (scripts_dir / "pre_commit_common.sh").write_text(
+                "\n".join(
+                    [
+                        "die() {",
+                        "  echo \"pre-commit: $*\" >&2",
+                        "  exit 1",
+                        "}",
+                        "",
+                        f"resolve_flutter_bin() {{ printf '%s\\n' \"{(fake_bin_dir / 'flutter').as_posix()}\"; }}",
+                        "",
+                        "run_with_periodic_status() {",
+                        "  local _label=\"$1\"",
+                        "  shift",
+                        "  \"$@\"",
+                        "}",
+                        "",
+                        "run_flutter_tool() {",
+                        "  local flutter_bin",
+                        "  flutter_bin=\"$(resolve_flutter_bin)\"",
+                        "  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \"${flutter_bin}\" \"$@\"",
+                        "}",
+                        "",
+                        "is_windows_env() {",
+                        "  return 1",
+                        "}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            (scripts_dir / "select_flutter_test_targets.sh").write_text(
+                "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'test/unit_a_test.dart\\n'",
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "select_flutter_test_targets.sh")
+
+            (fake_bin_dir / "flutter").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        'repo_root="$(git rev-parse --show-toplevel)"',
+                        'attempt_file="${repo_root}/flutter-attempts.txt"',
+                        'attempt=0',
+                        'if [[ -f "${attempt_file}" ]]; then',
+                        '  attempt="$(cat "${attempt_file}")"',
+                        "fi",
+                        'attempt="$((attempt + 1))"',
+                        'printf \'%s\\n\' "${attempt}" > "${attempt_file}"',
+                        'printf \'%s\\n\' \"$*\" >> \"${repo_root}/flutter.log\"',
+                        'if [[ "${attempt}" == "1" ]]; then',
+                        '  echo "Error: the Dart compiler exited unexpectedly." >&2',
+                        '  echo "TestDeviceException(Shell subprocess crashed with SIGTERM (-15).)" >&2',
+                        "  exit 1",
+                        "fi",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(fake_bin_dir / "flutter")
+
+            result = self._run(
+                [
+                    "bash",
+                    "scripts/run_flutter_test_shard.sh",
+                    "--shard-index",
+                    "0",
+                    "--shard-count",
+                    "1",
+                ],
+                cwd=repo_root,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn(
+                "retrying unit batch 1 after transient Dart compiler failure",
+                result.stderr,
+            )
+            self.assertEqual(
+                (repo_root / "flutter.log").read_text(encoding="utf-8").splitlines(),
+                [
+                    "test --concurrency=1 test/unit_a_test.dart",
+                    "test --concurrency=1 test/unit_a_test.dart",
+                ],
+            )
