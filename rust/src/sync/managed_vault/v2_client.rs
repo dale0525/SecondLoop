@@ -18,6 +18,7 @@ pub(super) struct PullRequestV2<'a> {
 pub(super) enum PullV2RouteResult<T> {
     Parsed(T),
     Unsupported,
+    Forbidden,
     RetryLegacy,
 }
 
@@ -40,6 +41,9 @@ pub(super) fn fetch_pull_v2_json(
     let status_code = status.as_u16();
     if matches!(status_code, 404 | 405) {
         return Ok(PullV2RouteResult::Unsupported);
+    }
+    if status_code == 403 {
+        return Ok(PullV2RouteResult::Forbidden);
     }
     if should_retry_legacy_v2(status_code) {
         return Ok(PullV2RouteResult::RetryLegacy);
@@ -70,6 +74,9 @@ pub(super) fn fetch_pull_bin_v2(
     let status_code = status.as_u16();
     if matches!(status_code, 404 | 405) {
         return Ok(PullV2RouteResult::Unsupported);
+    }
+    if status_code == 403 {
+        return Ok(PullV2RouteResult::Forbidden);
     }
     if should_retry_legacy_v2(status_code) {
         return Ok(PullV2RouteResult::RetryLegacy);

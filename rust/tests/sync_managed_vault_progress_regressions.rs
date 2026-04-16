@@ -206,6 +206,69 @@ fn spawn_v2_reseed_progress_server(encrypted_op_b64: String) -> String {
     addr
 }
 
+fn spawn_v2_forbidden_progress_server(
+    encrypted_op_b64: String,
+) -> (String, Arc<Mutex<ServerState>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = format!("http://{}", listener.local_addr().expect("local addr"));
+    let state = Arc::new(Mutex::new(ServerState::default()));
+    let state_for_thread = Arc::clone(&state);
+
+    thread::spawn(move || {
+        for _ in 0..5 {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let (headers, body) = read_http_request(&mut stream);
+            let request_line = headers.lines().next().unwrap_or_default().to_string();
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/devices ") {
+                let payload: serde_json::Value =
+                    serde_json::from_slice(&body).expect("parse device body");
+                let device_id = payload["device_id"].as_str().unwrap_or_default();
+                respond_json(
+                    &mut stream,
+                    "200 OK",
+                    &format!(r#"{{"device_id":"{device_id}"}}"#),
+                );
+                continue;
+            }
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/ops:pull_v2 ") {
+                let payload: serde_json::Value =
+                    serde_json::from_slice(&body).expect("parse pull_v2 body");
+                let device_id = payload["device_id"].as_str().unwrap_or_default();
+                if device_id == "stale-device" {
+                    respond_json(&mut stream, "403 Forbidden", r#"{"error":"forbidden"}"#);
+                    continue;
+                }
+
+                state_for_thread
+                    .lock()
+                    .expect("lock state")
+                    .seen_since_values
+                    .push(payload["since"]["remote-a"].as_i64().unwrap_or(0));
+                respond_json(
+                    &mut stream,
+                    "200 OK",
+                    &format!(
+                        r#"{{"protocol_version":2,"generation_id":"generation-v2-progress","checkpoint_token":"checkpoint-v2-progress","has_more":false,"high_water":1,"history_lower_bound":{{"remote-a":1}},"reseed_required":false,"ops":[{{"device_id":"remote-a","seq":1,"op_id":"op-conversation-v2-forbidden-progress","ciphertext_b64":"{ciphertext}"}}]}}"#,
+                        ciphertext = encrypted_op_b64,
+                    ),
+                );
+                continue;
+            }
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/ops:pull_bin_v2 ") {
+                respond_json(&mut stream, "404 Not Found", r#"{"error":"not_found"}"#);
+                continue;
+            }
+
+            respond_json(&mut stream, "404 Not Found", r#"{"error":"not_found"}"#);
+        }
+    });
+
+    (addr, state)
+}
+
 fn spawn_missing_max_after_large_first_page_server(
     remote_device_id: String,
     first_page_ops: Vec<(i64, String, String)>,
@@ -583,6 +646,52 @@ fn managed_vault_pull_with_progress_resets_baseline_after_v2_reseed() {
         "expected progress to reset after reseed, got {seen_progress:?}"
     );
     assert_eq!(seen_progress.last().copied(), Some((1, 150)));
+}
+
+#[test]
+fn managed_vault_pull_with_progress_recovers_from_forbidden_v2_device_by_rotating_local_id() {
+    let db_key = [65u8; 32];
+    let sync_key = [66u8; 32];
+
+    let dir = tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('device_id', 'stale-device')"#,
+        [],
+    )
+    .expect("set stale device id");
+
+    let (base_url, state) = spawn_v2_forbidden_progress_server(encrypted_conversation_op(
+        &sync_key,
+        "remote-a",
+        1,
+        "conversation-v2-forbidden-progress",
+        "Recovered via v2",
+        1_775_811_649_000,
+    ));
+
+    let mut seen_progress = Vec::new();
+    let applied = sync::managed_vault::pull_with_progress(
+        &conn,
+        &db_key,
+        &sync_key,
+        &base_url,
+        "test-vault",
+        "test-token",
+        &mut |done, total| seen_progress.push((done, total)),
+    )
+    .expect("pull with v2 forbidden recovery");
+
+    assert_eq!(applied, 1);
+    assert_eq!(seen_progress.last().copied(), Some((1, 1)));
+    assert_ne!(
+        conn.query_row("SELECT value FROM kv WHERE key = 'device_id'", [], |row| {
+            row.get::<_, String>(0)
+        })
+        .expect("current device id"),
+        "stale-device"
+    );
+    assert_eq!(state.lock().expect("lock state").seen_since_values, vec![0]);
 }
 
 #[test]

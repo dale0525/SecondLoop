@@ -191,6 +191,24 @@ pub fn pull_with_progress(
                 super::v2_client::PullV2RouteResult::Unsupported => {
                     super::checkpoint::mark_pull_v2_unsupported(conn, &scope_id)?;
                 }
+                super::v2_client::PullV2RouteResult::Forbidden => {
+                    if !forbidden_device_recovery_attempted {
+                        forbidden_device_recovery_attempted = true;
+                        if let Ok(Some(next_device_id)) =
+                            super::try_recover_pull_forbidden_by_rotating_device_id(
+                                conn,
+                                &http,
+                                base_url,
+                                vault_id,
+                                id_token,
+                                &local_device_id,
+                            )
+                        {
+                            local_device_id = next_device_id;
+                            continue;
+                        }
+                    }
+                }
                 super::v2_client::PullV2RouteResult::RetryLegacy => {}
             }
         }
