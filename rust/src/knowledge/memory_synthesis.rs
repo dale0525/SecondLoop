@@ -503,7 +503,7 @@ fn sanitize_relationship_facet(value: &str) -> String {
     let mut out = String::new();
     let mut last_underscore = false;
     for ch in value.chars() {
-        if ch.is_alphanumeric() || is_cjk_unified_ideograph(ch) {
+        if ch.is_alphanumeric() {
             for normalized in ch.to_lowercase() {
                 out.push(normalized);
             }
@@ -607,7 +607,7 @@ fn collect_pattern_memories(
 
 #[cfg(test)]
 mod tests {
-    use super::collect_generated_memory_documents;
+    use super::{collect_generated_memory_documents, sanitize_relationship_facet};
     use crate::db;
     use crate::knowledge::KnowledgeOriginType;
 
@@ -994,5 +994,10 @@ mod tests {
             doc.raw_text,
             "My manager is Alice Chen and she approves budget requests."
         );
+    }
+
+    #[test]
+    fn sanitize_relationship_facet_preserves_cjk_characters() {
+        assert_eq!(sanitize_relationship_facet("张 伟"), "张_伟");
     }
 }

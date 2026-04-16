@@ -513,6 +513,10 @@ void main() {
     expect(find.text('Permanently Remove'), findsNothing);
     expect(find.text('View Evidence'), findsWidgets);
     expect(find.text('View History'), findsWidgets);
+    expect(
+      find.textContaining('muted from answers and can be restored when ready'),
+      findsNothing,
+    );
   });
 
   testWidgets('KnowledgePageDetailPage keeps archived pages audit-only',
@@ -544,5 +548,37 @@ void main() {
     expect(find.text('Permanently Remove'), findsNothing);
     expect(find.text('View Evidence'), findsWidgets);
     expect(find.text('View History'), findsWidgets);
+    expect(
+      find.textContaining('muted from answers and can be restored when ready'),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+      'KnowledgePageDetailPage hides muted guidance for needs-review pages',
+      (tester) async {
+    final backend = _NeedsReviewKnowledgePageDetailBackendStub();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const KnowledgePageDetailPage(pageId: 'page:preferences'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('muted from answers and can be restored when ready'),
+      findsNothing,
+    );
   });
 }

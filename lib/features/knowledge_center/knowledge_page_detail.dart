@@ -654,10 +654,16 @@ class _KnowledgePageDetailPageState extends State<KnowledgePageDetailPage> {
   List<Widget> _buildGuidance(
       BuildContext context, KnowledgePageDetail detail) {
     final items = <String>[];
-    if (detail.page.state == KnowledgePageState.needsReview) {
+    final state = detail.page.state;
+    final isNeedsReview = state == KnowledgePageState.needsReview;
+    final isAuditOnly = state == KnowledgePageState.archived ||
+        state == KnowledgePageState.removed;
+    if (isNeedsReview) {
       items.add(context.t.memory.detail.guidanceNeedsReview);
     }
-    if (!detail.page.answerPolicy.defaultAllowed) {
+    if (!isNeedsReview &&
+        !isAuditOnly &&
+        !detail.page.answerPolicy.defaultAllowed) {
       items.add(context.t.memory.detail.guidanceMutedFromAnswers);
     }
     if (detail.page.lastUsedAtMs != null) {

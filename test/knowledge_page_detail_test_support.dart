@@ -391,6 +391,21 @@ final class _ArchivedKnowledgePageDetailBackendStub
   }
 }
 
+final class _NeedsReviewKnowledgePageDetailBackendStub
+    extends _KnowledgePageDetailBackendStub {
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    return _buildDetail(
+      pageId: pageId,
+      state: KnowledgePageState.needsReview,
+      answerAllowed: false,
+    );
+  }
+}
+
 final class _MergeableKnowledgePageDetailBackendStub
     extends _MutableKnowledgePageDetailBackendStub {
   String? mergedPageId;
