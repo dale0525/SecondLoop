@@ -43,6 +43,17 @@ use evidence::{
 };
 use history::{build_recent_conversation_history, build_recent_conversation_history_in_range};
 const DETACHED_ASK_REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
+
+#[cfg(test)]
+fn format_history_line(role: &str, message_id: &str, content: &str) -> String {
+    match crate::message_citations::message_citation_link(message_id) {
+        Some(citation) => {
+            let sep = if content.ends_with('\n') { "" } else { "\n" };
+            format!("{role}: {content}{sep}{citation}\n")
+        }
+        None => format!("{role}: {content}\n"),
+    }
+}
 #[derive(Debug)]
 pub struct StreamCancelled;
 
