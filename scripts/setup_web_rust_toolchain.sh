@@ -162,18 +162,28 @@ link_wasm_toolchain_bins_if_available() {
 
   clang21_path="$(
     first_executable_path \
+      "${CONDA_PREFIX:-}/bin/clang" \
       "${CONDA_PREFIX:-}/bin/clang-21" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/clang" \
       "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/clang-21" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/clang" \
       "${ROOT_DIR}/.pixi/envs/default/bin/clang-21" \
+      "${ROOT_DIR}/.tool/bin/clang" \
       "${ROOT_DIR}/.tool/bin/clang-21" \
+      "$(command -v clang 2>/dev/null || true)" \
       "$(command -v clang-21 2>/dev/null || true)"
   )" || clang21_path=""
   clangxx21_path="$(
     first_executable_path \
+      "${CONDA_PREFIX:-}/bin/clang++" \
       "${CONDA_PREFIX:-}/bin/clang++-21" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/clang++" \
       "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/clang++-21" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/clang++" \
       "${ROOT_DIR}/.pixi/envs/default/bin/clang++-21" \
+      "${ROOT_DIR}/.tool/bin/clang++" \
       "${ROOT_DIR}/.tool/bin/clang++-21" \
+      "$(command -v clang++ 2>/dev/null || true)" \
       "$(command -v clang++-21 2>/dev/null || true)"
   )" || clangxx21_path=""
   llvm_ar_path="$(
