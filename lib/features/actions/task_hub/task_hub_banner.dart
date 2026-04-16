@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
@@ -107,7 +108,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
     final compactRelativeTimeText = !widget.compact || primary == null
         ? null
         : formatTaskHubRelativeTime(
-            dueAtMs: primary.todo.dueAtMs,
+            dueAtMs: platformIntToNullableInt(primary.todo.dueAtMs),
             nowLocal: widget.snapshot.computedAtLocal ?? DateTime.now(),
             labels: TaskHubRelativeTimeLabels(
               today: context.t.actions.taskHub.relativeTime.today,

@@ -1,6 +1,7 @@
 import '../../i18n/strings.g.dart';
 import '../../src/rust/knowledge/history.dart';
 import '../../src/rust/knowledge/pages.dart';
+import '../../src/rust/platform_int.dart';
 import 'knowledge_page_display_text.dart';
 
 class KnowledgeCenterHomeData {
@@ -75,7 +76,7 @@ KnowledgeCenterHomeData buildKnowledgeCenterHomeData({
           page.state != KnowledgePageState.removed &&
           (page.state == KnowledgePageState.needsReview ||
               page.state == KnowledgePageState.outdated ||
-              page.conflictCount > 0))
+              platformIntToInt(page.conflictCount) > 0))
       .toList(growable: false)
     ..sort(_sortByLastUsedThenUpdated);
 
@@ -147,8 +148,10 @@ int _sortByLastUsedThenUpdated(
   KnowledgePageSummary left,
   KnowledgePageSummary right,
 ) {
-  final lastUsedCompare =
-      (right.lastUsedAtMs ?? 0).compareTo(left.lastUsedAtMs ?? 0);
+  final lastUsedCompare = compareNullablePlatformIntDesc(
+    left.lastUsedAtMs,
+    right.lastUsedAtMs,
+  );
   if (lastUsedCompare != 0) return lastUsedCompare;
   return right.updatedAtMs.compareTo(left.updatedAtMs);
 }
@@ -199,7 +202,7 @@ String knowledgeAttentionReason(
   if (page.state == KnowledgePageState.outdated) {
     return t.memory.homepage.outdatedReason;
   }
-  if (page.conflictCount > 0) {
+  if (platformIntToInt(page.conflictCount) > 0) {
     return t.memory.detail.conflictingEvidencePresent;
   }
   return t.memory.homepage.reviewReason;

@@ -68,7 +68,7 @@ class TaskHubEntryCard extends StatelessWidget {
     final relativeTimeText = entry.todo.status == 'done'
         ? null
         : formatTaskHubRelativeTime(
-            dueAtMs: entry.todo.dueAtMs,
+            dueAtMs: platformIntToNullableInt(entry.todo.dueAtMs),
             nowLocal: nowLocal ?? DateTime.now(),
             labels: TaskHubRelativeTimeLabels(
               today: context.t.actions.taskHub.relativeTime.today,
