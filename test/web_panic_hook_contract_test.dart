@@ -10,50 +10,45 @@ void main() {
     expect(source, contains('console_error_panic_hook::set_once();'));
   });
 
-  test('wasm managed vault pull prefers pull_bin before json fallback',
+  test('wasm managed vault pull uses shared pull loop runtime helpers',
       () async {
-    final source = await readRustSource('rust/src/sync/managed_vault.rs');
-    expect(source, contains('fn should_try_pull_bin_first() -> bool'));
-    expect(source, contains('#[cfg(target_family = "wasm")]'));
+    final managedVault = await readRustSource('rust/src/sync/managed_vault.rs');
+    final pullLoop =
+        await readRustSource('rust/src/sync/managed_vault/pull_loop.rs');
+    final v2Client =
+        await readRustSource('rust/src/sync/managed_vault/v2_client.rs');
+    final pullRecovery =
+        await readRustSource('rust/src/sync/managed_vault/pull_recovery.rs');
+
+    expect(managedVault, contains('pub use pull_loop::pull;'));
     expect(
-      source,
-      contains(
-        '#[cfg(target_family = "wasm")]\n    {\n        true',
-      ),
+      managedVault,
+      contains('fn should_fallback_to_json_pull(status_code: u16) -> bool'),
     );
+    expect(pullLoop,
+        contains('super::should_fallback_to_json_pull(status.as_u16())'));
+    expect(v2Client, isNot(contains('reqwest::blocking::Client')));
+    expect(pullRecovery, isNot(contains('reqwest::blocking::Client')));
   });
 
-  test('wasm managed vault pull stays async end-to-end', () async {
-    final managedVaultPull =
-        await readRustSource('rust/src/sync/managed_vault/pull.rs');
-    final artifacts =
-        await readRustSource('rust/src/sync/managed_vault/artifacts.rs');
+  test('wasm managed vault FRB entrypoint stays async over shared pull',
+      () async {
     final core = await readRustSource('rust/src/api/core.rs');
 
-    expect(
-      RegExp(
-        r'#\[cfg\(target_family = "wasm"\)\]\s+pub async fn pull\(',
-        multiLine: true,
-      ).hasMatch(managedVaultPull),
-      isTrue,
-    );
-    expect(
-      managedVaultPull,
-      contains('download_missing_embedding_artifact_blobs_async('),
-    );
-    expect(
-      RegExp(
-        r'#\[cfg\(target_family = "wasm"\)\]\s+pub\(super\) async fn download_missing_embedding_artifact_blobs_async\(',
-        multiLine: true,
-      ).hasMatch(artifacts),
-      isTrue,
-    );
     expect(
       RegExp(
         r'#\[flutter_rust_bridge::frb\]\s+pub async fn sync_managed_vault_pull\(',
         multiLine: true,
       ).hasMatch(core),
       isTrue,
+    );
+    expect(core, contains('sync::managed_vault::pull('));
+    expect(
+      RegExp(
+        r'sync::managed_vault::pull\([\s\S]*?\)\s*\.await',
+        multiLine: true,
+      ).hasMatch(core),
+      isFalse,
     );
   });
 
