@@ -211,11 +211,6 @@ pub(super) fn client() -> Result<Client> {
     }
 }
 
-#[cfg(target_family = "wasm")]
-pub(super) fn async_client() -> Result<reqwest::Client> {
-    Ok(reqwest::Client::new())
-}
-
 pub(super) fn url(base_url: &str, path: &str) -> Result<String> {
     let base = base_url.trim_end_matches('/');
     if base.is_empty() {
@@ -247,39 +242,6 @@ pub(super) fn ensure_device_registered(
 
     let status = resp.status();
     let text = resp.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(anyhow!(
-            "managed-vault register-device failed: HTTP {status} {text}"
-        ));
-    }
-
-    let parsed: RegisterDeviceResponse = serde_json::from_str(&text)?;
-    Ok(parsed.device_id)
-}
-
-#[cfg(target_family = "wasm")]
-pub(super) async fn ensure_device_registered_async(
-    http: &reqwest::Client,
-    base_url: &str,
-    vault_id: &str,
-    id_token: &str,
-    device_id: &str,
-) -> Result<String> {
-    let request = RegisterDeviceRequest {
-        platform: "unknown",
-        device_id: Some(device_id),
-    };
-
-    let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/devices"))?;
-    let resp = http
-        .post(endpoint)
-        .bearer_auth(id_token)
-        .json(&request)
-        .send()
-        .await?;
-
-    let status = resp.status();
-    let text = resp.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(anyhow!(
             "managed-vault register-device failed: HTTP {status} {text}"

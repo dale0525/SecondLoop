@@ -10,7 +10,8 @@ void main() {
     expect(source, contains('console_error_panic_hook::set_once();'));
   });
 
-  test('wasm managed vault pull uses shared pull loop runtime helpers',
+  test(
+      'wasm managed vault pull keeps the shared pull loop and no dead wasm pull module',
       () async {
     final managedVault = await readRustSource('rust/src/sync/managed_vault.rs');
     final pullLoop =
@@ -20,7 +21,9 @@ void main() {
     final pullRecovery =
         await readRustSource('rust/src/sync/managed_vault/pull_recovery.rs');
 
+    expect(File('rust/src/sync/managed_vault/pull.rs').existsSync(), isFalse);
     expect(managedVault, contains('pub use pull_loop::pull;'));
+    expect(managedVault, isNot(contains('mod pull;')));
     expect(
       managedVault,
       contains('fn should_fallback_to_json_pull(status_code: u16) -> bool'),
@@ -42,7 +45,10 @@ void main() {
       ).hasMatch(core),
       isTrue,
     );
-    expect(core, contains('sync::managed_vault::pull('));
+    expect(
+      core,
+      contains('sync::managed_vault::pull('),
+    );
     expect(
       RegExp(
         r'sync::managed_vault::pull\([\s\S]*?\)\s*\.await',

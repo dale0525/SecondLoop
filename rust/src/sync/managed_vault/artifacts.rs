@@ -1,8 +1,4 @@
 use anyhow::{anyhow, Result};
-#[cfg(target_family = "wasm")]
-use rusqlite::Connection;
-#[cfg(target_family = "wasm")]
-use std::path::Path;
 
 use super::attachments::AttachmentUploadContext;
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
@@ -77,50 +73,6 @@ pub(super) fn download_missing_embedding_artifact_blobs(
 ) -> Result<u64> {
     let missing_blob_refs = list_missing_embedding_artifact_blob_refs(ctx)?;
     Ok(download_embedding_artifact_blobs_by_refs(ctx, &missing_blob_refs, None)?.downloaded)
-}
-
-#[cfg(target_family = "wasm")]
-pub(super) async fn download_missing_embedding_artifact_blobs_async(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    http: &reqwest::Client,
-    base_url: &str,
-    vault_id: &str,
-    id_token: &str,
-    app_dir: &Path,
-) -> Result<u64> {
-    let mut downloaded = 0u64;
-    for blob_ref in crate::db::list_distinct_embedding_artifact_blob_refs(conn)? {
-        if crate::db::has_embedding_artifact_blob(app_dir, &blob_ref) {
-            continue;
-        }
-
-        let artifact_id = remote_artifact_id(&blob_ref);
-        let endpoint = super::runtime::url(
-            base_url,
-            &format!("/v1/vaults/{vault_id}/attachments/{artifact_id}"),
-        )?;
-        let resp = http.get(endpoint).bearer_auth(id_token).send().await?;
-        let status = resp.status();
-        if status.as_u16() == 404 {
-            continue;
-        }
-        if !status.is_success() {
-            let text = resp.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "managed-vault get embedding artifact failed: HTTP {status} {text}"
-            ));
-        }
-
-        let ciphertext = resp.bytes().await?;
-        let aad = format!("sync.embedding_artifact.blob:{blob_ref}");
-        let plaintext = decrypt_bytes(sync_key, ciphertext.as_ref(), aad.as_bytes())?;
-        crate::db::write_embedding_artifact_blob(app_dir, db_key, &blob_ref, &plaintext)?;
-        downloaded += 1;
-    }
-
-    Ok(downloaded)
 }
 
 pub(super) struct EmbeddingArtifactBlobDownloadOutcome {

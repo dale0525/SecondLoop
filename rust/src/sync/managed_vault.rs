@@ -157,39 +157,6 @@ fn try_recover_pull_forbidden_by_rotating_device_id(
         }
     }
 }
-
-#[cfg(target_family = "wasm")]
-async fn try_recover_pull_forbidden_by_rotating_device_id_async(
-    conn: &Connection,
-    http: &reqwest::Client,
-    base_url: &str,
-    vault_id: &str,
-    id_token: &str,
-    local_device_id: &str,
-) -> Result<Option<String>> {
-    if has_local_oplog_for_device(conn, local_device_id)? {
-        return Ok(None);
-    }
-
-    let next_device_id = uuid::Uuid::new_v4().to_string();
-    write_local_device_id(conn, &next_device_id)?;
-
-    match runtime::ensure_device_registered_async(
-        http,
-        base_url,
-        vault_id,
-        id_token,
-        &next_device_id,
-    )
-    .await
-    {
-        Ok(_) => Ok(Some(next_device_id)),
-        Err(error) => {
-            let _ = write_local_device_id(conn, local_device_id);
-            Err(error)
-        }
-    }
-}
 fn should_fallback_to_json_pull(status_code: u16) -> bool {
     matches!(status_code, 404 | 408 | 429) || (500..600).contains(&status_code)
 }
