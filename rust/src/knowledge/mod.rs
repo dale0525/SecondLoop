@@ -4,6 +4,10 @@ pub const KNOWLEDGE_SEGMENTATION_VERSION: i64 = 1;
 pub const KNOWLEDGE_EMBEDDING_POLICY_VERSION: i64 = 1;
 pub const KNOWLEDGE_RETRIEVAL_POLICY_VERSION: i64 = 1;
 
+pub fn is_cjk_unified_ideograph(ch: char) -> bool {
+    ('\u{4E00}'..='\u{9FFF}').contains(&ch)
+}
+
 pub mod chunk;
 pub mod claims;
 pub mod compiler;

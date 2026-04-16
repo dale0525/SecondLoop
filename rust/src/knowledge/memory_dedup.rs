@@ -55,7 +55,7 @@ fn sanitize_key(value: &str) -> String {
     let mut out = String::new();
     let mut last_dash = false;
     for ch in value.chars() {
-        if ch.is_alphanumeric() || is_cjk_unified_ideograph(ch) {
+        if ch.is_alphanumeric() {
             for normalized in ch.to_lowercase() {
                 out.push(normalized);
             }
@@ -68,10 +68,6 @@ fn sanitize_key(value: &str) -> String {
         }
     }
     out.trim_matches('-').to_string()
-}
-
-fn is_cjk_unified_ideograph(ch: char) -> bool {
-    ('\u{4E00}'..='\u{9FFF}').contains(&ch)
 }
 
 #[cfg(test)]
@@ -99,5 +95,12 @@ mod tests {
     fn merge_lines_deduplicates_repeated_entries() {
         let merged = merge_lines("- concise\n- chinese", "- chinese\n- bullets");
         assert_eq!(merged, "- concise\n- chinese\n- bullets");
+    }
+
+    #[test]
+    fn generated_document_id_preserves_cjk_facet_keys() {
+        let document_id =
+            build_generated_document_id(GeneratedMemoryKind::Preference, "偏好 设置", None);
+        assert_eq!(document_id, "generated:preference:偏好-设置");
     }
 }

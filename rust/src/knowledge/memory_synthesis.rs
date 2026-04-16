@@ -6,9 +6,9 @@ use crate::crypto::decrypt_bytes;
 use crate::db;
 use crate::knowledge::models::GeneratedMemoryKind;
 use crate::knowledge::{
-    infer_generated_memory_section, infer_memory_status, memory_dedup, ContentKnowledgeDocument,
-    KnowledgeAnchorSet, KnowledgeMemoryDisplay, KnowledgeMemoryFeedback, KnowledgeOriginType,
-    KnowledgeRole, KnowledgeSourceKind, KnowledgeVersionSet,
+    infer_generated_memory_section, infer_memory_status, is_cjk_unified_ideograph, memory_dedup,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeMemoryDisplay, KnowledgeMemoryFeedback,
+    KnowledgeOriginType, KnowledgeRole, KnowledgeSourceKind, KnowledgeVersionSet,
 };
 
 struct GeneratedMemoryDraft {
@@ -493,7 +493,7 @@ fn looks_like_person_name(candidate: &str) -> bool {
         return ascii_words.iter().all(|part| {
             part.chars()
                 .next()
-                .is_some_and(|first| first.is_uppercase())
+                .is_some_and(|first| first.is_uppercase() || is_cjk_unified_ideograph(first))
         });
     }
     candidate.chars().count() <= 8
@@ -516,10 +516,6 @@ fn sanitize_relationship_facet(value: &str) -> String {
         }
     }
     out.trim_matches('_').to_string()
-}
-
-fn is_cjk_unified_ideograph(ch: char) -> bool {
-    ('\u{4E00}'..='\u{9FFF}').contains(&ch)
 }
 
 fn looks_like_decision_statement(content: &str, lower: &str) -> bool {

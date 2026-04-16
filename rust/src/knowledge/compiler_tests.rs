@@ -423,6 +423,37 @@ fn refresh_knowledge_pages_compiles_people_pages_for_accented_relationship_names
 }
 
 #[test]
+fn refresh_knowledge_pages_compiles_people_pages_from_cjk_relationship_memories() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    let key = [50u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "People").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "张伟是我的经理，负责预算审批。",
+    )
+    .expect("seed cjk relationship");
+
+    knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256).expect("process jobs");
+
+    let pages =
+        knowledge::compiler::refresh_knowledge_pages(&conn, &key).expect("refresh knowledge pages");
+
+    let people_page = pages
+        .iter()
+        .find(|page| page.page_id == "page:people:张伟")
+        .expect("people page");
+    assert_eq!(people_page.page_type, knowledge::KnowledgePageType::People);
+    assert_eq!(people_page.title, "张伟");
+    assert!(people_page.current_body.contains("经理"));
+}
+
+#[test]
 fn refresh_knowledge_pages_compiles_disputed_claims_into_open_questions_pages() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = db::open(dir.path()).expect("open");

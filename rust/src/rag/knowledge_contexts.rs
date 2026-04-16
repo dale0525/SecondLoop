@@ -21,9 +21,11 @@ fn lexical_page_match_score(question: &str, haystack: &str) -> usize {
     let question = question.to_lowercase();
     let haystack = haystack.to_lowercase();
     let word_score = question
-        .split(|ch: char| !ch.is_alphanumeric() && !('\u{4E00}'..='\u{9FFF}').contains(&ch))
+        .split(|ch: char| !ch.is_alphanumeric() && !knowledge::is_cjk_unified_ideograph(ch))
         .map(str::trim)
-        .filter(|token| token.chars().count() >= 2 && !token.chars().all(is_cjk_character))
+        .filter(|token| {
+            token.chars().count() >= 2 && !token.chars().all(knowledge::is_cjk_unified_ideograph)
+        })
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .filter(|token| haystack.contains(*token))
@@ -35,15 +37,11 @@ fn lexical_page_match_score(question: &str, haystack: &str) -> usize {
     word_score + cjk_score
 }
 
-fn is_cjk_character(ch: char) -> bool {
-    ('\u{4E00}'..='\u{9FFF}').contains(&ch)
-}
-
 fn cjk_query_ngrams(text: &str) -> std::collections::BTreeSet<String> {
     let mut out = std::collections::BTreeSet::<String>::new();
     let mut current = Vec::<char>::new();
     for ch in text.chars() {
-        if is_cjk_character(ch) {
+        if knowledge::is_cjk_unified_ideograph(ch) {
             current.push(ch);
             continue;
         }
