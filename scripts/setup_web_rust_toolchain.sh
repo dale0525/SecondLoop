@@ -55,6 +55,56 @@ resolve_rustup_init_url() {
   esac
 }
 
+sha256_file_hex() {
+  local file_path="$1"
+
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file_path" | awk '{print $1}'
+    return 0
+  fi
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file_path" | awk '{print $1}'
+    return 0
+  fi
+
+  if command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$file_path" | awk '{print $NF}'
+    return 0
+  fi
+
+  echo "no sha256 tool available to verify $file_path" >&2
+  return 1
+}
+
+download_file() {
+  local url="$1"
+  local output_path="$2"
+  curl --fail --show-error --location "$url" -o "$output_path"
+}
+
+verify_downloaded_sha256() {
+  local file_path="$1"
+  local checksum_url="$2"
+  local checksum_path="${file_path}.sha256"
+  local expected actual
+
+  download_file "$checksum_url" "$checksum_path"
+  expected="$(awk '{print $1}' "$checksum_path" | tr -d '\r\n')"
+  if [[ -z "$expected" ]]; then
+    echo "missing sha256 checksum for $file_path" >&2
+    return 1
+  fi
+
+  actual="$(sha256_file_hex "$file_path")"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "sha256 mismatch for $file_path" >&2
+    echo "expected: $expected" >&2
+    echo "actual:   $actual" >&2
+    return 1
+  fi
+}
+
 install_local_rustup_if_needed() {
   if [[ -x "$CARGO_HOME/bin/rustup" ]]; then
     return 0
@@ -63,7 +113,8 @@ install_local_rustup_if_needed() {
   local rustup_init="$TOOL_BIN_DIR/rustup-init"
   local rustup_url
   rustup_url="$(resolve_rustup_init_url)"
-  curl -L "$rustup_url" -o "$rustup_init"
+  download_file "$rustup_url" "$rustup_init"
+  verify_downloaded_sha256 "$rustup_init" "${rustup_url}.sha256"
   chmod +x "$rustup_init"
   RUSTUP_INIT_SKIP_PATH_CHECK=yes \
     "$rustup_init" -y --profile minimal --default-toolchain 1.85.1 --no-modify-path

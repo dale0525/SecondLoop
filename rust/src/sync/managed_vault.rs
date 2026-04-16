@@ -190,9 +190,8 @@ async fn try_recover_pull_forbidden_by_rotating_device_id_async(
         }
     }
 }
-fn should_fallback_to_json_pull(status: reqwest::StatusCode) -> bool {
-    let code = status.as_u16();
-    code == 404 || code == 408 || code == 429 || status.is_server_error()
+fn should_fallback_to_json_pull(status_code: u16) -> bool {
+    matches!(status_code, 404 | 408 | 429) || (500..600).contains(&status_code)
 }
 
 pub fn push(

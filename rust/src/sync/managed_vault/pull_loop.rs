@@ -264,7 +264,7 @@ pub fn pull(
                     continue;
                 }
             }
-            if super::should_fallback_to_json_pull(status) {
+            if super::should_fallback_to_json_pull(status.as_u16()) {
                 pull_bin_supported = Some(false);
             } else {
                 if !status.is_success() {

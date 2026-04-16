@@ -253,6 +253,8 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/clang-21', setup_script)
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar', setup_script)
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib', setup_script)
+        self.assertIn('verify_downloaded_sha256 "$rustup_init" "${rustup_url}.sha256"', setup_script)
+        self.assertIn('curl --fail --show-error --location "$url" -o "$output_path"', setup_script)
 
     def test_rust_nextest_wrapper_prefers_project_managed_cargo_environment(self) -> None:
         script = (REPO_ROOT / "scripts/run_rust_ci_nextest.sh").read_text(

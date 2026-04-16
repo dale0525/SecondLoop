@@ -7,6 +7,7 @@ void main() {
     final headers = File('web/_headers').readAsStringSync();
 
     expect(headers, contains('/app/*'));
+    expect(headers, isNot(contains('\n/*\n')));
     expect(
       headers,
       contains('Cross-Origin-Opener-Policy: same-origin'),
@@ -126,6 +127,13 @@ void main() {
     expect(workflow, contains('- "tools/**"'));
   });
 
+  test('web build workflow reruns when Rust web inputs change', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(workflow, contains('- "rust/**"'));
+    expect(workflow, contains('- "scripts/setup_web_rust_toolchain.sh"'));
+  });
+
   test('web build workflow quotes step names containing colons', () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
 
@@ -150,7 +158,9 @@ void main() {
     final script =
         File('scripts/run_flutter_web_ci_local.sh').readAsStringSync();
 
-    final buildRust = script.indexOf('flutter_rust_bridge_codegen build-web');
+    final buildRust = script.indexOf(
+      'run_flutter_tool pub run flutter_rust_bridge build-web',
+    );
     final buildFlutter =
         script.indexOf('run_flutter_tool build web --base-href /app/');
     final syncPkg = script.indexOf('tools/sync_web_build_rust_pkg.dart');
