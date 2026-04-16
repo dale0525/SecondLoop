@@ -240,11 +240,15 @@ class VerificationScriptsTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('CC_wasm32_unknown_unknown=${web_tool_bin}/clang', script)
-        self.assertIn('AR_wasm32_unknown_unknown=${web_tool_bin}/llvm-ar', script)
-        self.assertIn('RANLIB_wasm32_unknown_unknown=${web_tool_bin}/llvm-ranlib', script)
+        self.assertIn('export CC_wasm32_unknown_unknown="${web_tool_bin}/clang"', script)
+        self.assertIn('export AR_wasm32_unknown_unknown="${web_tool_bin}/llvm-ar"', script)
+        self.assertIn('export RANLIB_wasm32_unknown_unknown="${web_tool_bin}/llvm-ranlib"', script)
+        self.assertIn('run_flutter_tool pub run flutter_rust_bridge build-web', script)
         self.assertIn('SECONDLOOP_WEB_LLVM_SOURCE_ROOT="${repo_root}"', script)
         self.assertIn('LLVM_SOURCE_ROOT="${SECONDLOOP_WEB_LLVM_SOURCE_ROOT:-$ROOT_DIR}"', setup_script)
+        self.assertIn('seed_shared_web_toolchain_if_available()', setup_script)
+        self.assertIn('ln -s "${source_tool_root}/cargo-home" "$CARGO_HOME"', setup_script)
+        self.assertIn('ln -s "${source_tool_root}/rustup-home" "$RUSTUP_HOME"', setup_script)
         self.assertIn('${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/clang-21', setup_script)
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/clang-21', setup_script)
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar', setup_script)

@@ -8,7 +8,25 @@ export CARGO_HOME="$ROOT_DIR/.tool/cargo-home"
 export RUSTUP_HOME="$ROOT_DIR/.tool/rustup-home"
 export PATH="$CARGO_HOME/bin:$PATH"
 
-mkdir -p "$TOOL_BIN_DIR" "$CARGO_HOME" "$RUSTUP_HOME"
+seed_shared_web_toolchain_if_available() {
+  local source_tool_root="${LLVM_SOURCE_ROOT}/.tool"
+
+  if [[ "${LLVM_SOURCE_ROOT}" == "${ROOT_DIR}" ]]; then
+    return 0
+  fi
+
+  if [[ ! -x "${source_tool_root}/cargo-home/bin/rustup" || ! -d "${source_tool_root}/rustup-home" ]]; then
+    return 0
+  fi
+
+  rm -rf "$CARGO_HOME" "$RUSTUP_HOME"
+  ln -s "${source_tool_root}/cargo-home" "$CARGO_HOME"
+  ln -s "${source_tool_root}/rustup-home" "$RUSTUP_HOME"
+}
+
+mkdir -p "$TOOL_BIN_DIR"
+seed_shared_web_toolchain_if_available
+mkdir -p "$CARGO_HOME" "$RUSTUP_HOME"
 
 resolve_rustup_init_url() {
   local os arch

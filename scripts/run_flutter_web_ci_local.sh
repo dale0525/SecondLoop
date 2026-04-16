@@ -91,31 +91,29 @@ sync_workspace_state_into_worktree "${web_worktree}"
   web_tool_bin="${web_worktree}/.tool/bin"
   web_cargo_home="${web_worktree}/.tool/cargo-home"
   web_rustup_home="${web_worktree}/.tool/rustup-home"
-  web_codegen_env=(env RUST_LOG=info)
+  export RUST_LOG=info
+  unset CC_wasm32_unknown_unknown AR_wasm32_unknown_unknown RANLIB_wasm32_unknown_unknown
   if [[ -x "${web_tool_bin}/clang" ]]; then
-    web_codegen_env+=("CC_wasm32_unknown_unknown=${web_tool_bin}/clang")
+    export CC_wasm32_unknown_unknown="${web_tool_bin}/clang"
   elif [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/clang-21" ]]; then
-    web_codegen_env+=("CC_wasm32_unknown_unknown=${CONDA_PREFIX}/bin/clang-21")
+    export CC_wasm32_unknown_unknown="${CONDA_PREFIX}/bin/clang-21"
   fi
   if [[ -x "${web_tool_bin}/llvm-ar" ]]; then
-    web_codegen_env+=("AR_wasm32_unknown_unknown=${web_tool_bin}/llvm-ar")
+    export AR_wasm32_unknown_unknown="${web_tool_bin}/llvm-ar"
   elif [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/llvm-ar" ]]; then
-    web_codegen_env+=("AR_wasm32_unknown_unknown=${CONDA_PREFIX}/bin/llvm-ar")
+    export AR_wasm32_unknown_unknown="${CONDA_PREFIX}/bin/llvm-ar"
   fi
   if [[ -x "${web_tool_bin}/llvm-ranlib" ]]; then
-    web_codegen_env+=("RANLIB_wasm32_unknown_unknown=${web_tool_bin}/llvm-ranlib")
+    export RANLIB_wasm32_unknown_unknown="${web_tool_bin}/llvm-ranlib"
   elif [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/llvm-ranlib" ]]; then
-    web_codegen_env+=("RANLIB_wasm32_unknown_unknown=${CONDA_PREFIX}/bin/llvm-ranlib")
+    export RANLIB_wasm32_unknown_unknown="${CONDA_PREFIX}/bin/llvm-ranlib"
   fi
-  web_codegen_env+=(
-    "CARGO_HOME=${web_cargo_home}"
-    "RUSTUP_HOME=${web_rustup_home}"
-    "PATH=${web_tool_bin}:${web_cargo_home}/bin:${flutter_bin_dir}:${dart_bin_dir}:${HOME}/.cargo/bin:${PATH}"
-  )
+  export CARGO_HOME="${web_cargo_home}"
+  export RUSTUP_HOME="${web_rustup_home}"
+  export PATH="${web_tool_bin}:${web_cargo_home}/bin:${flutter_bin_dir}:${dart_bin_dir}:${HOME}/.cargo/bin:${PATH}"
   run_with_periodic_status \
     "flutter rust web build" \
-    "${web_codegen_env[@]}" \
-      flutter_rust_bridge_codegen build-web --dart-root . -c rust -o web --release --wasm-pack-rustflags "-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base -C link-arg=--max-memory=1073741824"
+    run_flutter_tool pub run flutter_rust_bridge build-web --dart-root . -c rust -o web --release --wasm-pack-rustflags "-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base -C link-arg=--max-memory=1073741824"
   MSYS2_ARG_CONV_EXCL='*' run_with_periodic_status \
     "flutter build web" \
     run_flutter_tool build web --base-href /app/
