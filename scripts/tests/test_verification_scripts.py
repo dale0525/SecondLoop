@@ -149,6 +149,8 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("trap cleanup EXIT INT TERM", script)
         self.assertIn('cancel_remaining_shards()', script)
         self.assertIn('overall_status=0', script)
+        self.assertIn('print_log_if_present()', script)
+        self.assertIn('cat "${log_path}" 2>/dev/null || true', script)
 
     def test_flutter_test_shard_requires_prepared_i18n_outputs(self) -> None:
         script = (REPO_ROOT / "scripts/run_flutter_test_shard.sh").read_text(
