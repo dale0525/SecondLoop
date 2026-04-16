@@ -154,6 +154,9 @@ class _AudioTranscriptKnowledgeContentPaneState
           sessionKey,
           documentId: documentId,
         );
+        if (_shouldPreferFallbackText(document)) {
+          return null;
+        }
         return _ResolvedKnowledgeDocument(
           documentId: documentId,
           document: document,
@@ -163,6 +166,23 @@ class _AudioTranscriptKnowledgeContentPaneState
       }
     }
     return null;
+  }
+
+  bool _shouldPreferFallbackText(KnowledgeViewerDocument document) {
+    if (document.document.sourceKind != KnowledgeSourceKind.transcript) {
+      return false;
+    }
+    final viewerText = document.document.rawText.trim();
+    final fallbackText = widget.text.trim();
+    if (viewerText.isEmpty || fallbackText.isEmpty) return false;
+    if (viewerText == fallbackText) return false;
+    if (!fallbackText.contains('\n\n')) return false;
+    return _compactComparableTranscriptText(viewerText) ==
+        _compactComparableTranscriptText(fallbackText);
+  }
+
+  String _compactComparableTranscriptText(String raw) {
+    return raw.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   Widget _buildFallback() {
