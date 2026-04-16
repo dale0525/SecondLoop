@@ -67,6 +67,8 @@ class _WebAppGateState extends State<WebAppGate> {
   late VaultUsageClient _vaultUsageClient;
   late VaultAttachmentsClient _vaultAttachmentsClient;
   late SyncConfigStore _vaultConfigStore;
+  Future<void>? _syncDefaultsPriming;
+  bool _syncDefaultsPrimed = false;
 
   bool _canAccessMainShell = false;
   String? _activeUid;
@@ -131,7 +133,13 @@ class _WebAppGateState extends State<WebAppGate> {
       scopeKey: _storageScopeForUid(uid),
       managedVaultDefaultBaseUrl: widget.managedVaultBaseUrl.trim(),
     );
-    unawaited(_primeWebFormalSyncDefaults());
+    _syncDefaultsPrimed = false;
+    _syncDefaultsPriming = _primeWebFormalSyncDefaults().whenComplete(() {
+      if (!mounted) return;
+      setState(() {
+        _syncDefaultsPrimed = true;
+      });
+    });
   }
 
   String? _storageScopeForUid(String? uid) {
@@ -265,6 +273,7 @@ class _WebAppGateState extends State<WebAppGate> {
   }
 
   Future<void> _refreshGateState({String? expectedUid}) async {
+    await _syncDefaultsPriming;
     final refreshUid = expectedUid ?? _normalizedUid();
     await _subscriptionController.refresh();
     if (refreshUid != _normalizedUid()) return;
@@ -275,6 +284,9 @@ class _WebAppGateState extends State<WebAppGate> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_syncDefaultsPrimed) {
+      return const SizedBox.shrink();
+    }
     final uid = widget.authController.uid;
     final webFormalSettings = WebFormalSettingsDependencies(
       billingClient: _billingClient,

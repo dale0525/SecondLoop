@@ -20,6 +20,8 @@ void main() {
         await readRustSource('rust/src/sync/managed_vault/v2_client.rs');
     final pullRecovery =
         await readRustSource('rust/src/sync/managed_vault/pull_recovery.rs');
+    final runtime =
+        await readRustSource('rust/src/sync/managed_vault/runtime.rs');
 
     expect(File('rust/src/sync/managed_vault/pull.rs').existsSync(), isFalse);
     expect(managedVault, contains('pub use pull_loop::pull;'));
@@ -30,6 +32,11 @@ void main() {
     );
     expect(pullLoop,
         contains('super::should_fallback_to_json_pull(status.as_u16())'));
+    expect(
+      managedVault,
+      isNot(contains('let _ = write_local_device_id(conn, local_device_id);')),
+    );
+    expect(runtime, contains('dedicated web worker path'));
     expect(v2Client, isNot(contains('reqwest::blocking::Client')));
     expect(pullRecovery, isNot(contains('reqwest::blocking::Client')));
   });

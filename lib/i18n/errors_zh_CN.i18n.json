@@ -2,6 +2,7 @@
   "initFailed": "初始化失败：$error",
   "loadFailed": "加载失败：$error",
   "saveFailed": "保存失败：$error",
+  "signInRequired": "请重新登录后继续。",
   "lockGateError": "锁定流程错误：$error",
   "missingLoopHomeConversation": "缺少记录会话",
   "attachmentNotFoundLocally": "附件当前未在本地可用。",

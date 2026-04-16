@@ -300,7 +300,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(Placeholder), findsNothing);
-    expect(find.textContaining('cloud_auth_token_unavailable'), findsOneWidget);
+    expect(find.text('Sign in again to continue.'), findsOneWidget);
   });
 
   testWidgets(

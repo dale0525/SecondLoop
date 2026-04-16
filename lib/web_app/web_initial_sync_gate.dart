@@ -213,10 +213,13 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
       );
     }
     if (error != null && !_allowPassThrough) {
+      final message = error is _WebInitialSyncAuthTokenUnavailable
+          ? context.t.errors.signInRequired
+          : context.t.errors.loadFailed(error: '$error');
       return Scaffold(
         body: Center(
           child: Text(
-            context.t.errors.loadFailed(error: '$error'),
+            message,
           ),
         ),
       );

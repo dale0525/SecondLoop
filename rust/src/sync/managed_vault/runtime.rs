@@ -153,6 +153,10 @@ impl RequestBuilder {
     }
 
     pub(super) fn send(self) -> Result<Response> {
+        // This sync XHR client is only used from the dedicated web worker path
+        // that fronts OPFS/SQLite access. Calling it on the main browser thread
+        // would block rendering, so wasm managed-vault callers must stay in that
+        // worker-backed execution context.
         let xhr = XmlHttpRequest::new()
             .map_err(|error| anyhow!("create XMLHttpRequest failed: {error:?}"))?;
         xhr.open_with_async(&self.method, &self.url, false)

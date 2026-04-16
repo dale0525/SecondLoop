@@ -15,6 +15,7 @@ import 'package:secondloop/web_app/web_entry_intent.dart';
 import 'package:secondloop/web_app/web_formal_settings_adapters.dart';
 import 'package:secondloop/web_app/web_initial_sync_gate.dart';
 import 'package:secondloop/web_app/web_native_app_backend.dart';
+import 'package:secondloop/web_app/web_public_entry_scaffold.dart';
 
 import '../test_i18n.dart';
 import '../test_backend.dart';
@@ -176,6 +177,9 @@ void main() {
       ),
     );
 
+    expect(find.byType(CloudAccountPanel), findsNothing);
+    await tester.pumpAndSettle();
+
     expect(find.byType(CloudAccountPanel), findsOneWidget);
     expect(find.byKey(const ValueKey('cloud_sign_in')), findsOneWidget);
     expect(find.byKey(const ValueKey('cloud_sign_up')), findsOneWidget);
@@ -191,6 +195,9 @@ void main() {
         entryIntent: WebEntryIntent.subscribe,
       ),
     );
+
+    expect(find.text('Subscribe for web access'), findsNothing);
+    await tester.pumpAndSettle();
 
     expect(find.text('Subscribe for web access'), findsOneWidget);
     expect(find.textContaining('Sign in first'), findsOneWidget);
@@ -437,8 +444,11 @@ void main() {
         managedVaultBaseUrl: 'https://vault.secondloop.example',
       ),
     );
+    expect(find.byType(WebPublicEntryScaffold), findsNothing);
+
     await tester.pumpAndSettle();
 
+    expect(find.byType(WebPublicEntryScaffold), findsOneWidget);
     expect(await store.readManagedVaultBaseUrl(), isNull);
     expect(
       await store.resolveManagedVaultBaseUrl(),
