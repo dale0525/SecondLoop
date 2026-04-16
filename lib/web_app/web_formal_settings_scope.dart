@@ -49,6 +49,21 @@ final class WebFormalSettingsScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(WebFormalSettingsScope oldWidget) {
-    return dependencies != oldWidget.dependencies;
+    final oldDependencies = oldWidget.dependencies;
+    return dependencies.billingClient != oldDependencies.billingClient ||
+        dependencies.cloudUsageClient != oldDependencies.cloudUsageClient ||
+        dependencies.vaultUsageClient != oldDependencies.vaultUsageClient ||
+        dependencies.vaultAttachmentsClient !=
+            oldDependencies.vaultAttachmentsClient ||
+        dependencies.vaultConfigStore != oldDependencies.vaultConfigStore ||
+        dependencies.cloudAuthController !=
+            oldDependencies.cloudAuthController ||
+        dependencies.cloudGatewayConfig.baseUrl !=
+            oldDependencies.cloudGatewayConfig.baseUrl ||
+        dependencies.cloudGatewayConfig.modelName !=
+            oldDependencies.cloudGatewayConfig.modelName ||
+        dependencies.subscriptionController !=
+            oldDependencies.subscriptionController ||
+        dependencies.isWebOverride != oldDependencies.isWebOverride;
   }
 }
