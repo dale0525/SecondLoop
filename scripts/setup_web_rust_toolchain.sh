@@ -7,7 +7,7 @@ TOOL_BIN_DIR="$ROOT_DIR/.tool/bin"
 WASM_PACK_NIGHTLY_TOOLCHAIN="nightly-2026-04-10"
 export CARGO_HOME="$ROOT_DIR/.tool/cargo-home"
 export RUSTUP_HOME="$ROOT_DIR/.tool/rustup-home"
-export PATH="$CARGO_HOME/bin:$PATH"
+export PATH="$TOOL_BIN_DIR:$CARGO_HOME/bin:$PATH"
 
 seed_shared_web_toolchain_if_available() {
   local source_tool_root="${LLVM_SOURCE_ROOT}/.tool"
@@ -144,6 +144,18 @@ install_wasm_pack_if_needed() {
     return 0
   fi
   "$CARGO_HOME/bin/rustup" run "$WASM_PACK_NIGHTLY_TOOLCHAIN" cargo install wasm-pack --locked
+}
+
+install_wasm_pack_wrapper() {
+  cat >"$TOOL_BIN_DIR/wasm-pack" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+export CARGO_HOME="$CARGO_HOME"
+export RUSTUP_HOME="$RUSTUP_HOME"
+RUSTUP_TOOLCHAIN="$WASM_PACK_NIGHTLY_TOOLCHAIN" exec "$CARGO_HOME/bin/wasm-pack" "\$@"
+EOF
+  chmod +x "$TOOL_BIN_DIR/wasm-pack"
 }
 
 first_executable_path() {
@@ -311,4 +323,5 @@ ensure_target "$stable_toolchain"
 ensure_target "$WASM_PACK_NIGHTLY_TOOLCHAIN"
 ensure_component "$WASM_PACK_NIGHTLY_TOOLCHAIN" "rust-src"
 install_wasm_pack_if_needed
+install_wasm_pack_wrapper
 link_wasm_toolchain_bins_if_available

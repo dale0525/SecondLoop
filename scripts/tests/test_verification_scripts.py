@@ -271,10 +271,16 @@ class VerificationScriptsTests(unittest.TestCase):
             'ensure_component "$WASM_PACK_NIGHTLY_TOOLCHAIN" "rust-src"',
             setup_script,
         )
+        self.assertIn('cat >"$TOOL_BIN_DIR/wasm-pack" <<EOF', setup_script)
+        self.assertIn(
+            'RUSTUP_TOOLCHAIN="$WASM_PACK_NIGHTLY_TOOLCHAIN" exec "$CARGO_HOME/bin/wasm-pack" "\\$@"',
+            setup_script,
+        )
         self.assertIn(
             '"$CARGO_HOME/bin/rustup" run "$WASM_PACK_NIGHTLY_TOOLCHAIN" cargo install wasm-pack --locked',
             setup_script,
         )
+        self.assertIn('export PATH="$TOOL_BIN_DIR:$CARGO_HOME/bin:$PATH"', setup_script)
         self.assertNotIn('ensure_toolchain "nightly"', setup_script)
         self.assertNotIn('ensure_target "nightly"', setup_script)
         self.assertNotIn('ensure_component "nightly" "rust-src"', setup_script)
