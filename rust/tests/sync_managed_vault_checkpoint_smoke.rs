@@ -18,7 +18,14 @@ fn read_request(stream: &mut TcpStream) -> (String, String, Vec<u8>) {
     let mut tmp = [0u8; 4096];
 
     while header_end.is_none() {
-        let n = stream.read(&mut tmp).expect("read");
+        let n = match stream.read(&mut tmp) {
+            Ok(n) => n,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(10));
+                continue;
+            }
+            Err(error) => panic!("read: {error}"),
+        };
         assert!(n > 0, "unexpected EOF");
         buf.extend_from_slice(&tmp[..n]);
         header_end = buf.windows(4).position(|w| w == b"\r\n\r\n").map(|p| p + 4);
@@ -39,7 +46,14 @@ fn read_request(stream: &mut TcpStream) -> (String, String, Vec<u8>) {
 
     let mut body = rest.to_vec();
     while body.len() < content_length {
-        let n = stream.read(&mut tmp).expect("read body");
+        let n = match stream.read(&mut tmp) {
+            Ok(n) => n,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(10));
+                continue;
+            }
+            Err(error) => panic!("read body: {error}"),
+        };
         assert!(n > 0, "unexpected EOF body");
         body.extend_from_slice(&tmp[..n]);
     }
