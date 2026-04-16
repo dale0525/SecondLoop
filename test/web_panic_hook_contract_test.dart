@@ -24,7 +24,8 @@ void main() {
   });
 
   test('wasm managed vault pull stays async end-to-end', () async {
-    final managedVault = await readRustSource('rust/src/sync/managed_vault.rs');
+    final managedVaultPull =
+        await readRustSource('rust/src/sync/managed_vault/pull.rs');
     final artifacts =
         await readRustSource('rust/src/sync/managed_vault/artifacts.rs');
     final core = await readRustSource('rust/src/api/core.rs');
@@ -33,11 +34,11 @@ void main() {
       RegExp(
         r'#\[cfg\(target_family = "wasm"\)\]\s+pub async fn pull\(',
         multiLine: true,
-      ).hasMatch(managedVault),
+      ).hasMatch(managedVaultPull),
       isTrue,
     );
     expect(
-      managedVault,
+      managedVaultPull,
       contains('download_missing_embedding_artifact_blobs_async('),
     );
     expect(
