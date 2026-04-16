@@ -2,10 +2,11 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
-use reqwest::blocking::Client;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
+
+use super::runtime::Client;
 
 fn resolve_attachment_group_metadata(
     conn: &Connection,

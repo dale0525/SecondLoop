@@ -22,7 +22,8 @@ extension _ChatPageStateMessageItemFooter on _ChatPageState {
     required int itemCount,
     required Message? Function(int targetIndex) messageAt,
   }) {
-    final dayLocal = _messageLocalDay(stableMsg.createdAtMs);
+    final stableCreatedAtMs = platformIntToInt(stableMsg.createdAtMs);
+    final dayLocal = _messageLocalDay(stableCreatedAtMs);
     if (_isTransientPendingMessageId(stableMsg.id)) {
       return const _MessageDividerState(
         dayLocal: null,
@@ -37,8 +38,9 @@ extension _ChatPageStateMessageItemFooter on _ChatPageState {
     while (neighborIndex >= 0 && neighborIndex < itemCount) {
       final neighborMsg = messageAt(neighborIndex);
       if (neighborMsg == null) break;
+      final neighborCreatedAtMs = platformIntToInt(neighborMsg.createdAtMs);
       if (!_isTransientPendingMessageId(neighborMsg.id) &&
-          neighborMsg.createdAtMs > 0) {
+          neighborCreatedAtMs > 0) {
         neighborStableMessage = neighborMsg;
         break;
       }
@@ -47,17 +49,19 @@ extension _ChatPageStateMessageItemFooter on _ChatPageState {
 
     final neighborDay = neighborStableMessage == null
         ? null
-        : _messageLocalDay(neighborStableMessage.createdAtMs);
+        : _messageLocalDay(
+            platformIntToInt(neighborStableMessage.createdAtMs),
+          );
     final showDateDivider =
         dayLocal != null && (neighborDay == null || neighborDay != dayLocal);
 
     final showTimeDivider = !showDateDivider &&
-        stableMsg.createdAtMs > 0 &&
+        stableCreatedAtMs > 0 &&
         neighborStableMessage != null &&
         Duration(
-              milliseconds:
-                  (stableMsg.createdAtMs - neighborStableMessage.createdAtMs)
-                      .abs(),
+              milliseconds: (stableCreatedAtMs -
+                      platformIntToInt(neighborStableMessage.createdAtMs))
+                  .abs(),
             ) >=
             _kMessageTimeDividerGap;
 
@@ -75,6 +79,7 @@ extension _ChatPageStateMessageItemFooter on _ChatPageState {
     required bool showDateDivider,
     required bool showTimeDivider,
   }) {
+    final stableCreatedAtMs = platformIntToInt(stableMsg.createdAtMs);
     if (showDateDivider && dayLocal != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -82,22 +87,22 @@ extension _ChatPageStateMessageItemFooter on _ChatPageState {
           context,
           dayLocal,
           key: ValueKey('message_date_divider_${stableMsg.id}'),
-          overrideLabel: stableMsg.createdAtMs > 0
+          overrideLabel: stableCreatedAtMs > 0
               ? _formatMessageDateTimeDividerLabel(
                   context,
-                  stableMsg.createdAtMs,
+                  stableCreatedAtMs,
                 )
               : null,
         ),
       );
     }
 
-    if (showTimeDivider && stableMsg.createdAtMs > 0) {
+    if (showTimeDivider && stableCreatedAtMs > 0) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: _buildMessageTimeDividerChip(
           context,
-          stableMsg.createdAtMs,
+          stableCreatedAtMs,
           key: ValueKey('message_time_divider_${stableMsg.id}'),
         ),
       );

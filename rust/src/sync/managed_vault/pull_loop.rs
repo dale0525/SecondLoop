@@ -47,7 +47,7 @@ pub fn pull(
     const PULL_LIMIT: i64 = 500;
 
     let http = super::runtime::client()?;
-    let local_device_id = super::super::get_or_create_device_id(conn)?;
+    let mut local_device_id = super::super::get_or_create_device_id(conn)?;
     let _ = super::runtime::ensure_device_registered(
         &http,
         base_url,
@@ -75,6 +75,7 @@ pub fn pull(
     let mut pull_bin_supported: Option<bool> = None;
     let mut stale_cursor_recovery_attempted = false;
     let mut remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
+    let mut forbidden_device_recovery_attempted = false;
     loop {
         let checkpoint_state = super::checkpoint::load_checkpoint_state(conn, &scope_id)?;
         let try_pull_bin_v2 = checkpoint_state.supports_pull_bin_v2 != Some(false);
@@ -158,6 +159,24 @@ pub fn pull(
                 super::v2_client::PullV2RouteResult::Unsupported => {
                     super::checkpoint::mark_pull_bin_v2_unsupported(conn, &scope_id)?;
                 }
+                super::v2_client::PullV2RouteResult::Forbidden => {
+                    if !forbidden_device_recovery_attempted {
+                        forbidden_device_recovery_attempted = true;
+                        if let Ok(Some(next_device_id)) =
+                            super::try_recover_pull_forbidden_by_rotating_device_id(
+                                conn,
+                                &http,
+                                base_url,
+                                vault_id,
+                                id_token,
+                                &local_device_id,
+                            )
+                        {
+                            local_device_id = next_device_id;
+                            continue;
+                        }
+                    }
+                }
                 super::v2_client::PullV2RouteResult::RetryLegacy => {}
             }
         }
@@ -230,6 +249,24 @@ pub fn pull(
                 super::v2_client::PullV2RouteResult::Unsupported => {
                     super::checkpoint::mark_pull_v2_unsupported(conn, &scope_id)?;
                 }
+                super::v2_client::PullV2RouteResult::Forbidden => {
+                    if !forbidden_device_recovery_attempted {
+                        forbidden_device_recovery_attempted = true;
+                        if let Ok(Some(next_device_id)) =
+                            super::try_recover_pull_forbidden_by_rotating_device_id(
+                                conn,
+                                &http,
+                                base_url,
+                                vault_id,
+                                id_token,
+                                &local_device_id,
+                            )
+                        {
+                            local_device_id = next_device_id;
+                            continue;
+                        }
+                    }
+                }
                 super::v2_client::PullV2RouteResult::RetryLegacy => {}
             }
         }
@@ -247,7 +284,23 @@ pub fn pull(
                 .json(&request)
                 .send()?;
             let status = resp.status();
-            if super::should_fallback_to_json_pull(status) {
+            if status.as_u16() == 403 && !forbidden_device_recovery_attempted {
+                forbidden_device_recovery_attempted = true;
+                if let Ok(Some(next_device_id)) =
+                    super::try_recover_pull_forbidden_by_rotating_device_id(
+                        conn,
+                        &http,
+                        base_url,
+                        vault_id,
+                        id_token,
+                        &local_device_id,
+                    )
+                {
+                    local_device_id = next_device_id;
+                    continue;
+                }
+            }
+            if super::should_fallback_to_json_pull(status.as_u16()) {
                 pull_bin_supported = Some(false);
             } else {
                 if !status.is_success() {
@@ -426,6 +479,22 @@ pub fn pull(
                 .send()?;
 
             let status = resp.status();
+            if status.as_u16() == 403 && !forbidden_device_recovery_attempted {
+                forbidden_device_recovery_attempted = true;
+                if let Ok(Some(next_device_id)) =
+                    super::try_recover_pull_forbidden_by_rotating_device_id(
+                        conn,
+                        &http,
+                        base_url,
+                        vault_id,
+                        id_token,
+                        &local_device_id,
+                    )
+                {
+                    local_device_id = next_device_id;
+                    continue;
+                }
+            }
             if !status.is_success() {
                 let text = resp.text().unwrap_or_default();
                 return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));

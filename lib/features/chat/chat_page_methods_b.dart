@@ -116,10 +116,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     final annotationJobsFuture = Future<List<AttachmentAnnotationJob>>.sync(() {
       if (nativeBackend == null) return const <AttachmentAnnotationJob>[];
 
-      const maxI64 = 9223372036854775807;
       return nativeBackend.listDueAttachmentAnnotations(
         sessionKey,
-        nowMs: maxI64,
+        nowMs: kPlatformSafeJsInt,
         limit: 500,
       );
     }).catchError((_) => const <AttachmentAnnotationJob>[]);
@@ -189,8 +188,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       conversationId: widget.conversation.id,
       role: 'user',
       content: question,
-      createdAtMs:
-          _askFailureCreatedAtMs ?? DateTime.now().millisecondsSinceEpoch,
+      createdAtMs: platformIntFromInt(
+        _askFailureCreatedAtMs ?? DateTime.now().millisecondsSinceEpoch,
+      ),
       isMemory: false,
     );
     final list = List<Message>.from(source);
@@ -232,10 +232,13 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     if (_usePagination &&
         _selectedTagFilterIds.isEmpty &&
         _selectedTagExcludeIds.isEmpty) {
-      final page = await backend.listMessagesPage(
-        sessionKey,
-        widget.conversation.id,
-        limit: _kMessagePageSize,
+      final page = await _withChatLoadStage(
+        'chat.listMessagesPage.initial',
+        () => backend.listMessagesPage(
+          sessionKey,
+          widget.conversation.id,
+          limit: _kMessagePageSize,
+        ),
       );
       final normalizedPage = _normalizeMessagesForList(page);
       if (mounted) {
@@ -251,7 +254,10 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       return normalizedPage;
     }
 
-    final list = await backend.listMessages(sessionKey, widget.conversation.id);
+    final list = await _withChatLoadStage(
+      'chat.listMessages.initial',
+      () => backend.listMessages(sessionKey, widget.conversation.id),
+    );
     final filtered = await _filterMessagesBySelectedTags(sessionKey, list);
     final normalizedFiltered = _normalizeMessagesForList(filtered);
 
@@ -289,7 +295,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       final page = await backend.listMessagesPage(
         sessionKey,
         widget.conversation.id,
-        beforeCreatedAtMs: oldest.createdAtMs,
+        beforeCreatedAtMs: platformIntToInt(oldest.createdAtMs),
         beforeId: oldest.id,
         limit: _kMessagePageSize,
       );
@@ -760,7 +766,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         _messageAutoActionsQueue!.enqueue(
           message: committedMessage,
           rawText: text,
-          createdAtMs: committedMessage.createdAtMs,
+          createdAtMs: platformIntToInt(committedMessage.createdAtMs),
         );
       }
     } catch (e) {
@@ -962,4 +968,25 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       }
     }
   }
+}
+
+Future<T> _withChatLoadStage<T>(
+  String stage,
+  Future<T> Function() action,
+) async {
+  try {
+    return await action();
+  } catch (error, stackTrace) {
+    Error.throwWithStackTrace(_ChatLoadStageError(stage, error), stackTrace);
+  }
+}
+
+final class _ChatLoadStageError implements Exception {
+  const _ChatLoadStageError(this.stage, this.cause);
+
+  final String stage;
+  final Object cause;
+
+  @override
+  String toString() => '$stage: $cause';
 }

@@ -7,6 +7,7 @@ import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/knowledge/pages.dart';
+import '../../src/rust/platform_int.dart';
 import '../../ui/sl_surface.dart';
 import '../settings/semantic_search_debug_page.dart';
 import 'knowledge_center_models.dart';
@@ -461,8 +462,10 @@ class _KnowledgeDirectoryListPageState
             page.state != KnowledgePageState.removed)
         .toList(growable: false)
       ..sort((left, right) {
-        final lastUsedCompare =
-            (right.lastUsedAtMs ?? 0).compareTo(left.lastUsedAtMs ?? 0);
+        final lastUsedCompare = compareNullablePlatformIntDesc(
+          left.lastUsedAtMs,
+          right.lastUsedAtMs,
+        );
         if (lastUsedCompare != 0) return lastUsedCompare;
         return right.updatedAtMs.compareTo(left.updatedAtMs);
       });

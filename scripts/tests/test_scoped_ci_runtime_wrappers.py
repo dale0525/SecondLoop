@@ -1215,9 +1215,11 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
             scripts_dir = repo_root / "scripts"
             test_web_dir = repo_root / "test/web_app"
             fvm_bin_dir = repo_root / ".fvm/flutter_sdk/bin"
+            fake_bin_dir = repo_root / "fake-bin"
             scripts_dir.mkdir(parents=True, exist_ok=True)
             test_web_dir.mkdir(parents=True, exist_ok=True)
             fvm_bin_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
             (repo_root / ".gitignore").write_text(".fvm/flutter_sdk\n", encoding="utf-8")
 
             for source, destination in [
@@ -1270,6 +1272,18 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
             )
             self._make_executable(scripts_dir / "run_i18n_refresh.sh")
 
+            (scripts_dir / "setup_web_rust_toolchain.sh").write_text(
+                "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n",
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "setup_web_rust_toolchain.sh")
+
+            (fake_bin_dir / "flutter_rust_bridge_codegen").write_text(
+                "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n",
+                encoding="utf-8",
+            )
+            self._make_executable(fake_bin_dir / "flutter_rust_bridge_codegen")
+
             self._commit_all(repo_root, "fixture")
 
             result = subprocess.run(
@@ -1280,7 +1294,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                 text=True,
                 env={
                     **os.environ,
-                    "PATH": "/usr/bin:/bin",
+                    "PATH": f"{fake_bin_dir.as_posix()}:/usr/bin:/bin",
                 },
             )
 

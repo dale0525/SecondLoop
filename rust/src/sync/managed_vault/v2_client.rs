@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
-use reqwest::blocking::Client;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
 use super::protocol::{decode_pull_bin_v2_response, PullEnvelopeV2, PullOpBinV2};
+use super::runtime::Client;
 
 #[derive(Debug, Serialize)]
 pub(super) struct PullRequestV2<'a> {
@@ -18,11 +18,12 @@ pub(super) struct PullRequestV2<'a> {
 pub(super) enum PullV2RouteResult<T> {
     Parsed(T),
     Unsupported,
+    Forbidden,
     RetryLegacy,
 }
 
-fn should_retry_legacy_v2(status: reqwest::StatusCode) -> bool {
-    matches!(status.as_u16(), 404 | 405 | 408 | 429) || status.is_server_error()
+fn should_retry_legacy_v2(status_code: u16) -> bool {
+    matches!(status_code, 404 | 405 | 408 | 429) || (500..600).contains(&status_code)
 }
 
 pub(super) fn fetch_pull_v2_json(
@@ -37,10 +38,14 @@ pub(super) fn fetch_pull_v2_json(
         .json(request)
         .send()?;
     let status = resp.status();
-    if matches!(status.as_u16(), 404 | 405) {
+    let status_code = status.as_u16();
+    if matches!(status_code, 404 | 405) {
         return Ok(PullV2RouteResult::Unsupported);
     }
-    if should_retry_legacy_v2(status) {
+    if status_code == 403 {
+        return Ok(PullV2RouteResult::Forbidden);
+    }
+    if should_retry_legacy_v2(status_code) {
         return Ok(PullV2RouteResult::RetryLegacy);
     }
     if !status.is_success() {
@@ -66,10 +71,14 @@ pub(super) fn fetch_pull_bin_v2(
         .json(request)
         .send()?;
     let status = resp.status();
-    if matches!(status.as_u16(), 404 | 405) {
+    let status_code = status.as_u16();
+    if matches!(status_code, 404 | 405) {
         return Ok(PullV2RouteResult::Unsupported);
     }
-    if should_retry_legacy_v2(status) {
+    if status_code == 403 {
+        return Ok(PullV2RouteResult::Forbidden);
+    }
+    if should_retry_legacy_v2(status_code) {
         return Ok(PullV2RouteResult::RetryLegacy);
     }
     if !status.is_success() {

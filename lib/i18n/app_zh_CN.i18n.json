@@ -48,6 +48,23 @@
         "continueInApp": "在 App 中继续"
       }
     },
+    "entryIntent": {
+      "open": {
+        "title": "打开 Web 应用",
+        "signedOutBody": "请先登录，然后继续进入 SecondLoop Web。网页访问需要有效的 Managed Pro 订阅。",
+        "signedInBody": "你的账号已就绪。请继续在下方确认访问资格并进入 SecondLoop Web。"
+      },
+      "subscribe": {
+        "title": "订阅以获取 Web 访问",
+        "signedOutBody": "请先登录，然后开通 Managed Pro 以解锁网页访问。",
+        "signedInBody": "你已登录。请继续在下方开通 Managed Pro 以解锁网页访问。"
+      },
+      "manage": {
+        "title": "管理你的订阅",
+        "signedOutBody": "请先登录，然后使用账单控制来管理你的订阅。",
+        "signedInBody": "你已登录。请继续在下方管理账单，或确认当前访问资格。"
+      }
+    },
     "mediaProcessing": {
       "title": "继续在 App 中处理",
       "description": "这里仍可查看已有云端结果。如果文件还需要 OCR、解码或转码，请在 App 中打开并继续处理。"

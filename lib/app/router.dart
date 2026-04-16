@@ -1,16 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../core/backend/app_backend.dart';
+import 'app_shell_default_pages_stub.dart'
+    if (dart.library.io) 'app_shell_default_pages_io.dart'
+    if (dart.library.html) 'app_shell_default_pages_web.dart'
+    as app_shell_defaults;
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
-import '../core/session/session_scope.dart';
 import '../core/update/update_badge_prefs.dart';
-import '../features/chat/chat_page.dart';
 import '../features/memory/memory_center_page.dart';
-import '../features/settings/settings_page.dart';
 import '../i18n/strings.g.dart';
-import '../src/rust/db.dart';
 import '../ui/sl_glass.dart';
 import '../ui/sl_surface.dart';
 import '../ui/sl_tokens.dart';
@@ -35,25 +34,25 @@ enum AppTab {
 }
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({
+    super.key,
+    this.initialTab = AppTab.chat,
+    this.chatTabBuilder,
+    this.settingsTabBuilder,
+  });
+
+  final AppTab initialTab;
+  final Widget Function(BuildContext context, bool isActive)? chatTabBuilder;
+  final Widget Function(BuildContext context, bool isActive)?
+      settingsTabBuilder;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
-  int _selectedIndex = 0;
-  bool _memoryTabInitialized = false;
-
-  void _selectTab(int index) {
-    setState(() {
-      _selectedIndex = index;
-      if (index == AppTab.memory.index) {
-        _memoryTabInitialized = true;
-      }
-    });
-  }
-
+  late int _selectedIndex = widget.initialTab.index;
+  late final Set<int> _loadedIndexes = <int>{_selectedIndex};
   QuickCaptureController? _quickCaptureController;
 
   @override
@@ -75,17 +74,67 @@ class _AppShellState extends State<AppShell> {
     if (controller == null) return;
 
     final shouldOpenChat = controller.consumeOpenChatRequest();
-    if (!shouldOpenChat || _selectedIndex == 0 || !mounted) {
+    if (!shouldOpenChat || _selectedIndex == AppTab.chat.index || !mounted) {
       return;
     }
 
-    setState(() => _selectedIndex = 0);
+    _selectTab(AppTab.chat.index);
   }
 
   @override
   void dispose() {
     _quickCaptureController?.removeListener(_onQuickCaptureChanged);
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      _selectedIndex = widget.initialTab.index;
+      _loadedIndexes.add(_selectedIndex);
+    }
+  }
+
+  void _selectTab(int index) {
+    if (_selectedIndex == index) return;
+    setState(() {
+      _selectedIndex = index;
+      _loadedIndexes.add(index);
+    });
+  }
+
+  Widget _buildWideShellTab(
+    BuildContext context,
+    AppTab tab, {
+    required bool isActive,
+  }) {
+    if (!_loadedIndexes.contains(tab.index)) {
+      return const SizedBox.shrink();
+    }
+    return switch (tab) {
+      AppTab.chat => _buildChatTab(context, isActive: isActive),
+      AppTab.memory => const MemoryCenterPage(),
+      AppTab.settings => _buildSettingsTab(context, isActive: isActive),
+    };
+  }
+
+  Widget _buildChatTab(BuildContext context, {required bool isActive}) {
+    final builder = widget.chatTabBuilder;
+    if (builder != null) return builder(context, isActive);
+    return app_shell_defaults.buildDefaultChatTab(
+      context,
+      isActive: isActive,
+    );
+  }
+
+  Widget _buildSettingsTab(BuildContext context, {required bool isActive}) {
+    final builder = widget.settingsTabBuilder;
+    if (builder != null) return builder(context, isActive);
+    return app_shell_defaults.buildDefaultSettingsTab(
+      context,
+      isActive: isActive,
+    );
   }
 
   @override
@@ -102,20 +151,32 @@ class _AppShellState extends State<AppShell> {
         final useRail = !useCollapsedShell && constraints.maxWidth >= 720;
         final useDesktopBottomNav =
             !useCollapsedShell && !useRail && isDesktopPlatform;
-        final shouldBuildMemoryTab =
-            _memoryTabInitialized || _selectedIndex == AppTab.memory.index;
         final content = useRail || useDesktopBottomNav
             ? IndexedStack(
                 index: _selectedIndex,
                 children: <Widget>[
-                  _ChatTab(isActive: _selectedIndex == 0),
-                  shouldBuildMemoryTab
-                      ? const _MemoryTab()
-                      : const SizedBox.shrink(),
-                  const _SettingsTab(),
+                  _buildWideShellTab(
+                    context,
+                    AppTab.chat,
+                    isActive: _selectedIndex == AppTab.chat.index,
+                  ),
+                  _buildWideShellTab(
+                    context,
+                    AppTab.memory,
+                    isActive: _selectedIndex == AppTab.memory.index,
+                  ),
+                  _buildWideShellTab(
+                    context,
+                    AppTab.settings,
+                    isActive: _selectedIndex == AppTab.settings.index,
+                  ),
                 ],
               )
-            : const _ChatTab(isActive: true);
+            : switch (AppTab.values[_selectedIndex]) {
+                AppTab.chat => _buildChatTab(context, isActive: true),
+                AppTab.memory => const MemoryCenterPage(),
+                AppTab.settings => _buildSettingsTab(context, isActive: true),
+              };
 
         return Scaffold(
           resizeToAvoidBottomInset: false,
@@ -271,81 +332,5 @@ final class _AppUpdateBadgeIcon extends StatelessWidget {
         );
       },
     );
-  }
-}
-
-final class _ChatTab extends StatefulWidget {
-  const _ChatTab({required this.isActive});
-
-  final bool isActive;
-
-  @override
-  State<_ChatTab> createState() => _ChatTabState();
-}
-
-final class _ChatTabState extends State<_ChatTab> {
-  Future<Conversation>? _conversationFuture;
-
-  Future<Conversation> _load() async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    return backend.getOrCreateLoopHomeConversation(sessionKey);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _conversationFuture ??= _load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Conversation>(
-      future: _conversationFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
-        }
-        if (snapshot.hasError) {
-          return Scaffold(
-              body: Center(
-                  child: Text(
-            context.t.errors.loadFailed(error: '${snapshot.error}'),
-          )));
-        }
-
-        final conversation = snapshot.data;
-        if (conversation == null) {
-          return Scaffold(
-            body: Center(
-                child: Text(context.t.errors.missingLoopHomeConversation)),
-          );
-        }
-        return ChatPage(
-            conversation: conversation, isTabActive: widget.isActive);
-      },
-    );
-  }
-}
-
-final class _SettingsTab extends StatelessWidget {
-  const _SettingsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(context.t.settings.title)),
-      body: const SettingsPage(),
-    );
-  }
-}
-
-final class _MemoryTab extends StatelessWidget {
-  const _MemoryTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return const MemoryCenterPage();
   }
 }

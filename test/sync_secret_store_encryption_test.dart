@@ -134,4 +134,16 @@ void main() {
     expect(raw, contains('enc1:'));
     expect(raw, isNot(contains(envelopeJson)));
   });
+
+  test('isolates scoped secret blobs between users', () async {
+    SharedPreferences.setMockInitialValues({});
+    final first = SyncSecretStore(scopeKey: 'web-native:uid-1');
+    final second = SyncSecretStore(scopeKey: 'web-native:uid-2');
+
+    await first.writeWebdavPassword('pw-1');
+    await second.writeWebdavPassword('pw-2');
+
+    expect(await first.readWebdavPassword(), 'pw-1');
+    expect(await second.readWebdavPassword(), 'pw-2');
+  });
 }

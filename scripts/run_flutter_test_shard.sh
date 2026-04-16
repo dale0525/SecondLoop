@@ -90,6 +90,7 @@ run_flutter_unit_tests_in_batches() {
   local batch_chars=0
   local max_batch_chars="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_CHARS:-1000000}"
   local max_batch_targets="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS:-1000000}"
+  local max_retry_attempts="${SECONDLOOP_FLUTTER_TEST_RETRY_ATTEMPTS:-2}"
   local target
   local target_chars
   local -a batch_targets=()
@@ -109,13 +110,56 @@ run_flutter_unit_tests_in_batches() {
     die "SECONDLOOP_FLUTTER_TEST_MAX_BATCH_CHARS must be greater than 0"
   (( max_batch_targets > 0 )) ||
     die "SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS must be greater than 0"
+  [[ "${max_retry_attempts}" =~ ^[0-9]+$ ]] ||
+    die "SECONDLOOP_FLUTTER_TEST_RETRY_ATTEMPTS must be a positive integer"
+  (( max_retry_attempts > 0 )) ||
+    die "SECONDLOOP_FLUTTER_TEST_RETRY_ATTEMPTS must be greater than 0"
+
+  is_retryable_flutter_test_failure() {
+    local log_path="$1"
+    grep -Fq "the Dart compiler exited unexpectedly" "${log_path}" || \
+      grep -Fq "TestDeviceException(Shell subprocess crashed with SIGTERM (-15).)" "${log_path}"
+  }
+
+  run_retryable_batch() {
+    local current_batch_index="$1"
+    shift
+
+    local attempt=1
+    local batch_log
+    local status
+
+    while true; do
+      batch_log="$(mktemp -t "secondloop_flutter_batch_${shard_index}_${current_batch_index}.XXXXXX.log")"
+      if run_with_periodic_status \
+        "flutter test shard ${shard_index}/${shard_count} (unit batch ${current_batch_index})" \
+        run_flutter_tool test --concurrency=1 "$@" >"${batch_log}" 2>&1; then
+        cat "${batch_log}"
+        rm -f "${batch_log}"
+        return 0
+      fi
+
+      status=$?
+      if (( attempt < max_retry_attempts )) && is_retryable_flutter_test_failure "${batch_log}"; then
+        echo \
+          "flutter-test-shard: retrying unit batch ${current_batch_index} after transient Dart compiler failure (${attempt}/${max_retry_attempts})" \
+          >&2
+        rm -f "${batch_log}"
+        attempt=$((attempt + 1))
+        sleep 1
+        continue
+      fi
+
+      cat "${batch_log}"
+      rm -f "${batch_log}"
+      return "${status}"
+    done
+  }
 
   run_batch() {
     local current_batch_index="$1"
     shift
-    run_with_periodic_status \
-      "flutter test shard ${shard_index}/${shard_count} (unit batch ${current_batch_index})" \
-      run_flutter_tool test --concurrency=1 "$@"
+    run_retryable_batch "${current_batch_index}" "$@"
   }
 
   for target in "$@"; do

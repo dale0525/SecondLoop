@@ -380,6 +380,10 @@ pub fn process_pending_message_embeddings_default(
     key: &[u8; 32],
     limit: usize,
 ) -> Result<usize> {
+    if !crate::vector::is_available() {
+        return Ok(0);
+    }
+
     let model_name = crate::embedding::DEFAULT_MODEL_NAME.to_string();
     let expected_dim = DEFAULT_EMBEDDING_DIM;
     let producer_class = default_local_message_artifact_producer_class();

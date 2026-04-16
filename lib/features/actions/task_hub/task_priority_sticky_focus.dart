@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../../src/rust/platform_int.dart';
 import 'task_priority_models.dart';
 
 class TaskPriorityStickyFocusState {
@@ -44,9 +45,9 @@ class TaskPriorityStickyFocusState {
       for (final entry in snapshot.activeEntries)
         entry.todo.id: jsonEncode(<Object?>[
           entry.todo.status,
-          entry.todo.dueAtMs,
-          entry.todo.reviewStage,
-          entry.todo.nextReviewAtMs,
+          platformIntToNullableInt(entry.todo.dueAtMs),
+          platformIntToNullableInt(entry.todo.reviewStage),
+          platformIntToNullableInt(entry.todo.nextReviewAtMs),
           entry.isOverdue,
           entry.isDueToday,
           entry.isReviewDue,

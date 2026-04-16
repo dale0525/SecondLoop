@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'sync_config_store_platform_stub.dart'
+    if (dart.library.io) 'sync_config_store_platform_io.dart';
 import '../storage/secure_blob_store.dart';
 import 'sync_config_migrator.dart';
 import 'sync_diagnostics.dart';
@@ -16,15 +17,23 @@ final class SyncConfigStore {
   SyncConfigStore({
     FlutterSecureStorage? storage,
     SyncSecretStore? secretStore,
+    String? scopeKey,
+    bool allowSecureStoreMigrationInTestEnvironment = false,
     String managedVaultDefaultBaseUrl = const String.fromEnvironment(
       'SECONDLOOP_MANAGED_VAULT_BASE_URL',
       defaultValue: '',
     ),
   })  : _unusedLegacySecureStorage = storage,
-        _secretStore = secretStore ?? SyncSecretStore(),
+        _scopeKey = _normalizeScopeKey(scopeKey),
+        _allowSecureStoreMigrationInTestEnvironment =
+            allowSecureStoreMigrationInTestEnvironment,
+        _secretStore = secretStore ??
+            SyncSecretStore(scopeKey: _normalizeScopeKey(scopeKey)),
         _managedVaultDefaultBaseUrl = managedVaultDefaultBaseUrl;
 
   final FlutterSecureStorage? _unusedLegacySecureStorage;
+  final String? _scopeKey;
+  final bool _allowSecureStoreMigrationInTestEnvironment;
   final SyncSecretStore _secretStore;
   final String _managedVaultDefaultBaseUrl;
   late final SyncConfigMigrator _migrator =
@@ -142,12 +151,16 @@ final class SyncConfigStore {
   }
 
   Future<Uint8List?> readSyncKey() async {
-    final cached = SyncKeyManager.readCachedSyncKey();
-    if (cached != null && cached.length == 32) return cached;
+    if (_scopeKey == null) {
+      final cached = SyncKeyManager.readCachedSyncKey();
+      if (cached != null && cached.length == 32) return cached;
+    }
 
     final secret = await _secretStore.readSyncKey();
     if (secret != null && secret.length == 32) {
-      SyncKeyManager.cacheSyncKey(secret);
+      if (_scopeKey == null) {
+        SyncKeyManager.cacheSyncKey(secret);
+      }
       return secret;
     }
 
@@ -165,9 +178,13 @@ final class SyncConfigStore {
 
     if (legacy != null) {
       await _secretStore.writeSyncKey(legacy);
-      SyncKeyManager.cacheSyncKey(legacy);
+      if (_scopeKey == null) {
+        SyncKeyManager.cacheSyncKey(legacy);
+      }
     } else {
-      SyncKeyManager.clearSyncKeyCache();
+      if (_scopeKey == null) {
+        SyncKeyManager.clearSyncKeyCache();
+      }
     }
     await _writeConfigUpdates({kSyncKeyB64: null});
     return legacy;
@@ -175,7 +192,9 @@ final class SyncConfigStore {
 
   Future<void> writeSyncKey(Uint8List key) async {
     await _secretStore.writeSyncKey(key);
-    SyncKeyManager.cacheSyncKey(key);
+    if (_scopeKey == null) {
+      SyncKeyManager.cacheSyncKey(key);
+    }
     await _writeConfigUpdates({kSyncKeyB64: null});
   }
 
@@ -508,11 +527,13 @@ final class SyncConfigStore {
   Future<void> clearAll() async {
     await _serial(() async {
       final prefs = await _prefs();
-      await prefs.remove(_kPrefsBlobKey);
-      await prefs.remove(_kLegacyPrefsBlobKey);
-      await prefs.remove(SyncConfigMigrator.secretStoreVersionPrefsKey);
+      await prefs.remove(_prefsBlobKey);
+      await prefs.remove(_legacyPrefsBlobKey);
+      await prefs.remove(_secretStoreVersionPrefsKey);
       await _secretStore.clearAll();
-      SyncKeyManager.clearSyncKeyCache();
+      if (_scopeKey == null) {
+        SyncKeyManager.clearSyncKeyCache();
+      }
       _lastRaw = null;
       _cache = <String, String>{};
       _loaded = true;
@@ -520,9 +541,9 @@ final class SyncConfigStore {
   }
 
   String? _readRawConfigBlob(SharedPreferences prefs) {
-    final raw = prefs.getString(_kPrefsBlobKey);
+    final raw = prefs.getString(_prefsBlobKey);
     if (raw != null && raw.trim().isNotEmpty) return raw;
-    final legacyRaw = prefs.getString(_kLegacyPrefsBlobKey);
+    final legacyRaw = prefs.getString(_legacyPrefsBlobKey);
     if (legacyRaw != null && legacyRaw.trim().isNotEmpty) return legacyRaw;
     return null;
   }
@@ -544,9 +565,9 @@ final class SyncConfigStore {
     _cache = _migrator.decodeRawConfigMap(raw);
     await _migrateSensitiveFieldsFromPublicCacheIfNeeded();
     final hasPublicBlob =
-        prefs.getString(_kPrefsBlobKey)?.trim().isNotEmpty == true;
+        prefs.getString(_prefsBlobKey)?.trim().isNotEmpty == true;
     final hasLegacyBlob =
-        prefs.getString(_kLegacyPrefsBlobKey)?.trim().isNotEmpty == true;
+        prefs.getString(_legacyPrefsBlobKey)?.trim().isNotEmpty == true;
     if (!hasPublicBlob && hasLegacyBlob) {
       await _persistCache();
     }
@@ -578,35 +599,47 @@ final class SyncConfigStore {
     _loaded = true;
     await _migrateSensitiveFieldsFromPublicCacheIfNeeded();
     final hasPublicBlob =
-        prefs.getString(_kPrefsBlobKey)?.trim().isNotEmpty == true;
+        prefs.getString(_prefsBlobKey)?.trim().isNotEmpty == true;
     final hasLegacyBlob =
-        prefs.getString(_kLegacyPrefsBlobKey)?.trim().isNotEmpty == true;
+        prefs.getString(_legacyPrefsBlobKey)?.trim().isNotEmpty == true;
     if (!hasPublicBlob && hasLegacyBlob) {
       await _persistCache();
     }
   }
 
   Future<Map<String, String>> _tryMigrateFromSecureStore() async {
-    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+    if (syncConfigStoreIsFlutterTestEnvironment() &&
+        !_allowSecureStoreMigrationInTestEnvironment) {
       return <String, String>{};
     }
 
-    final isMac =
-        Platform.isMacOS || defaultTargetPlatform == TargetPlatform.macOS;
-    if (isMac) {
+    if (syncConfigStoreIsMacPlatform() &&
+        !_allowSecureStoreMigrationInTestEnvironment) {
       return <String, String>{};
     }
 
-    final secure = SecureBlobStore(
-      storage: _unusedLegacySecureStorage ?? const FlutterSecureStorage(),
+    final storage = _unusedLegacySecureStorage ?? const FlutterSecureStorage();
+    final scopedSecure = SecureBlobStore(
+      storage: storage,
+      scopeKey: _scopeKey,
     );
 
-    Map<String, String> legacy;
-    try {
-      legacy = await secure.readAll().timeout(const Duration(seconds: 1),
-          onTimeout: () => <String, String>{});
-    } catch (_) {
-      return <String, String>{};
+    Future<Map<String, String>> readSecure(SecureBlobStore secure) async {
+      try {
+        return await secure.readAll().timeout(const Duration(seconds: 1),
+            onTimeout: () => <String, String>{});
+      } catch (_) {
+        return <String, String>{};
+      }
+    }
+
+    var legacy = await readSecure(scopedSecure);
+    var migratedFromUnscoped = false;
+    SecureBlobStore? unscopedSecure;
+    if (legacy.isEmpty && _scopeKey != null) {
+      unscopedSecure = SecureBlobStore(storage: storage);
+      legacy = await readSecure(unscopedSecure);
+      migratedFromUnscoped = legacy.isNotEmpty;
     }
 
     final migrated = <String, String>{};
@@ -614,6 +647,7 @@ final class SyncConfigStore {
       kBackendType,
       kAutoEnabled,
       kLocalDir,
+      kManagedVaultBaseUrl,
       kWebdavBaseUrl,
       kWebdavUsername,
       kRemoteRoot,
@@ -632,13 +666,17 @@ final class SyncConfigStore {
     }
 
     final legacySyncKeyB64 = legacy[kSyncKeyB64];
+    final legacyHadCredential =
+        legacySyncKeyB64 != null && legacySyncKeyB64.isNotEmpty;
     if (legacySyncKeyB64 != null && legacySyncKeyB64.isNotEmpty) {
       try {
         final decoded = base64Decode(legacySyncKeyB64);
         if (decoded.length == 32) {
           final key = Uint8List.fromList(decoded);
           await _secretStore.writeSyncKey(key);
-          SyncKeyManager.cacheSyncKey(key);
+          if (_scopeKey == null) {
+            SyncKeyManager.cacheSyncKey(key);
+          }
           migratedSecret = true;
         }
       } catch (_) {
@@ -647,6 +685,9 @@ final class SyncConfigStore {
     }
     if (migratedSecret) {
       await _markSecretStoreVersion();
+    }
+    if (migratedFromUnscoped && (!legacyHadCredential || migratedSecret)) {
+      await unscopedSecure?.clear();
     }
     return migrated;
   }
@@ -665,10 +706,10 @@ final class SyncConfigStore {
 
   Future<void> _markSecretStoreVersion() async {
     final prefs = await _prefs();
-    final current = prefs.getInt(SyncConfigMigrator.secretStoreVersionPrefsKey);
+    final current = prefs.getInt(_secretStoreVersionPrefsKey);
     if (current == SyncConfigMigrator.secretStoreVersion) return;
     await prefs.setInt(
-      SyncConfigMigrator.secretStoreVersionPrefsKey,
+      _secretStoreVersionPrefsKey,
       SyncConfigMigrator.secretStoreVersion,
     );
   }
@@ -676,14 +717,33 @@ final class SyncConfigStore {
   Future<void> _persistCache() async {
     final prefs = await _prefs();
     if (_cache.isEmpty) {
-      await prefs.remove(_kPrefsBlobKey);
-      await prefs.remove(_kLegacyPrefsBlobKey);
+      await prefs.remove(_prefsBlobKey);
+      await prefs.remove(_legacyPrefsBlobKey);
       _lastRaw = null;
       return;
     }
     final raw = jsonEncode(_cache);
-    await prefs.setString(_kPrefsBlobKey, raw);
-    await prefs.remove(_kLegacyPrefsBlobKey);
+    await prefs.setString(_prefsBlobKey, raw);
+    await prefs.remove(_legacyPrefsBlobKey);
     _lastRaw = raw;
+  }
+
+  String get _prefsBlobKey => _scopedKey(_kPrefsBlobKey);
+
+  String get _legacyPrefsBlobKey => _scopedKey(_kLegacyPrefsBlobKey);
+
+  String get _secretStoreVersionPrefsKey =>
+      _scopedKey(SyncConfigMigrator.secretStoreVersionPrefsKey);
+
+  String _scopedKey(String key) {
+    final scopeKey = _scopeKey;
+    if (scopeKey == null) return key;
+    return '$key::$scopeKey';
+  }
+
+  static String? _normalizeScopeKey(String? scopeKey) {
+    final normalized = scopeKey?.trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
   }
 }

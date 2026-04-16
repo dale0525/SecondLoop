@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
@@ -232,9 +232,11 @@ class _MigrationArchivePageState extends State<MigrationArchivePage> {
 
   MigrationArchiveManifest _manifestFromJson(Map<String, dynamic> json) {
     return MigrationArchiveManifest(
-      schemaVersion: (json['schema_version'] as num?)?.toInt() ?? 0,
+      schemaVersion: PlatformInt64Util.from(
+          (json['schema_version'] as num?)?.toInt() ?? 0),
       archiveKind: json['archive_kind'] as String? ?? '',
-      exportedAtMs: (json['exported_at_ms'] as num?)?.toInt() ?? 0,
+      exportedAtMs: PlatformInt64Util.from(
+          (json['exported_at_ms'] as num?)?.toInt() ?? 0),
       appVersion: json['app_version'] as String? ?? '',
       items: (json['items'] as List<dynamic>? ?? const <dynamic>[])
           .whereType<Map<String, dynamic>>()
@@ -243,8 +245,12 @@ class _MigrationArchivePageState extends State<MigrationArchivePage> {
               id: item['id'] as String? ?? '',
               entityType: item['entity_type'] as String? ?? '',
               markdownPath: item['markdown_path'] as String? ?? '',
-              createdAtMs: (item['created_at_ms'] as num?)?.toInt() ?? 0,
-              updatedAtMs: (item['updated_at_ms'] as num?)?.toInt() ?? 0,
+              createdAtMs: PlatformInt64Util.from(
+                (item['created_at_ms'] as num?)?.toInt() ?? 0,
+              ),
+              updatedAtMs: PlatformInt64Util.from(
+                (item['updated_at_ms'] as num?)?.toInt() ?? 0,
+              ),
               title: item['title'] as String? ?? '',
               tags: (item['tags'] as List<dynamic>? ?? const <dynamic>[])
                   .map((tag) => tag.toString())
@@ -263,7 +269,9 @@ class _MigrationArchivePageState extends State<MigrationArchivePage> {
               originalFilename:
                   attachment['original_filename'] as String? ?? '',
               mimeType: attachment['mime_type'] as String?,
-              sizeBytes: (attachment['size_bytes'] as num?)?.toInt() ?? 0,
+              sizeBytes: PlatformInt64Util.from(
+                (attachment['size_bytes'] as num?)?.toInt() ?? 0,
+              ),
               itemIds: (attachment['item_ids'] as List<dynamic>? ??
                       const <dynamic>[])
                   .map((id) => id.toString())

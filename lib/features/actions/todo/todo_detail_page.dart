@@ -31,6 +31,7 @@ import '../../../core/sync/sync_engine.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 import '../../../ui/sl_button.dart';
 import '../../../ui/sl_delete_confirm_dialog.dart';
 import '../../../ui/sl_focus_ring.dart';
@@ -272,8 +273,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   String? _formatDue(BuildContext context) {
     final dueAtMs = _todo.dueAtMs;
     if (dueAtMs == null) return null;
-    final dueAtLocal =
-        DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
+    final dueAtLocal = DateTime.fromMillisecondsSinceEpoch(
+      platformIntToInt(dueAtMs),
+      isUtc: true,
+    ).toLocal();
     final localizations = MaterialLocalizations.of(context);
     final date = localizations.formatShortDate(dueAtLocal);
     final time =
@@ -380,7 +383,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     final nowLocal = DateTime.now();
     final initialLocal = dueAtMs == null
         ? nowLocal
-        : DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
+        : DateTime.fromMillisecondsSinceEpoch(
+            platformIntToInt(dueAtMs),
+            isUtc: true,
+          ).toLocal();
 
     final picked = await showSlDateTimePickerDialog(
       context,
@@ -595,9 +601,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
     final colorScheme = theme.colorScheme;
-    final tsLocal =
-        DateTime.fromMillisecondsSinceEpoch(activity.createdAtMs, isUtc: true)
-            .toLocal();
+    final tsLocal = DateTime.fromMillisecondsSinceEpoch(
+      platformIntToInt(activity.createdAtMs),
+      isUtc: true,
+    ).toLocal();
 
     String activityTimeLabel() {
       final localizations = MaterialLocalizations.of(context);

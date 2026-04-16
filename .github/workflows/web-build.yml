@@ -18,6 +18,7 @@ on:
       - "flutter_rust_bridge.yaml"
       - "slang.yaml"
       - "lib/**"
+      - "rust/**"
       - "tools/**"
       - "test/**"
       - "integration_test/**"
@@ -26,6 +27,7 @@ on:
       - "third_party/**"
       - "assets/**"
       - "scripts/check_no_python_runtime.sh"
+      - "scripts/setup_web_rust_toolchain.sh"
       - "android/**"
       - "ios/**"
       - "linux/**"
@@ -46,6 +48,7 @@ on:
       - "flutter_rust_bridge.yaml"
       - "slang.yaml"
       - "lib/**"
+      - "rust/**"
       - "tools/**"
       - "test/**"
       - "integration_test/**"
@@ -54,6 +57,7 @@ on:
       - "third_party/**"
       - "assets/**"
       - "scripts/check_no_python_runtime.sh"
+      - "scripts/setup_web_rust_toolchain.sh"
       - "android/**"
       - "ios/**"
       - "linux/**"
@@ -103,9 +107,15 @@ jobs:
       - name: Generate i18n
         if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         run: pixi run i18n-gen
+      - name: Build Rust Web package
+        if: ${{ steps.release_scope.outputs.should_build == 'true' }}
+        run: pixi run frb-build-web
       - name: Build Flutter Web
         if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         run: pixi run flutter build "web --base-href /app/"
+      - name: Sync Rust wasm package into build/web
+        if: ${{ steps.release_scope.outputs.should_build == 'true' }}
+        run: pixi run sync-web-rust-pkg
       - name: Prune desktop ffmpeg assets from web build artifact
         if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         run: pixi run flutter pub "run tools/prune_web_build_ffmpeg.dart"

@@ -95,6 +95,13 @@ terminate_tracked_process() {
   wait "${pid}" 2>/dev/null || true
 }
 
+print_log_if_present() {
+  local log_path="$1"
+
+  [[ -n "${log_path}" ]] || return 0
+  cat "${log_path}" 2>/dev/null || true
+}
+
 cleanup() {
   local pid worktree
 
@@ -220,7 +227,7 @@ done
 
 gate_status=0
 wait "${flutter_gate_pid}" || gate_status=$?
-cat "${flutter_gate_log}"
+print_log_if_present "${flutter_gate_log}"
 
 if [[ ${gate_status} -ne 0 ]]; then
   for pid in "${flutter_test_pids[@]}"; do
@@ -228,7 +235,7 @@ if [[ ${gate_status} -ne 0 ]]; then
   done
 
   for index in "${!flutter_test_pids[@]}"; do
-    cat "${flutter_test_logs[$index]}"
+    print_log_if_present "${flutter_test_logs[$index]:-}"
   done
 
   exit "${gate_status}"
@@ -268,7 +275,7 @@ while [[ ${remaining_shards} -gt 0 ]]; do
 
     shard_status=0
     wait "${flutter_test_pids[$index]}" || shard_status=$?
-    cat "${flutter_test_logs[$index]}"
+    print_log_if_present "${flutter_test_logs[$index]:-}"
     shard_done[index]=1
     remaining_shards=$((remaining_shards - 1))
 

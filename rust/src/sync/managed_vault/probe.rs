@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
-use reqwest::blocking::Client;
 use reqwest::header::RANGE;
 use rusqlite::{params, Connection};
 use serde::Deserialize;
 
+use super::runtime::Client;
 use super::PullRequest;
 
 #[derive(Debug, Deserialize)]

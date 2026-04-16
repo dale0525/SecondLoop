@@ -149,6 +149,8 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("trap cleanup EXIT INT TERM", script)
         self.assertIn('cancel_remaining_shards()', script)
         self.assertIn('overall_status=0', script)
+        self.assertIn('print_log_if_present()', script)
+        self.assertIn('cat "${log_path}" 2>/dev/null || true', script)
 
     def test_flutter_test_shard_requires_prepared_i18n_outputs(self) -> None:
         script = (REPO_ROOT / "scripts/run_flutter_test_shard.sh").read_text(
@@ -229,6 +231,65 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn("MSYS2_ARG_CONV_EXCL='*' run_with_periodic_status", script)
         self.assertIn("run_flutter_tool build web --base-href /app/", script)
+
+    def test_local_flutter_web_ci_wrapper_prefers_project_managed_wasm_llvm_tools(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_web_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+        setup_script = (REPO_ROOT / "scripts/setup_web_rust_toolchain.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('export CC_wasm32_unknown_unknown="${web_tool_bin}/clang"', script)
+        self.assertIn('export AR_wasm32_unknown_unknown="${web_tool_bin}/llvm-ar"', script)
+        self.assertIn('export RANLIB_wasm32_unknown_unknown="${web_tool_bin}/llvm-ranlib"', script)
+        self.assertIn('run_flutter_tool pub run flutter_rust_bridge build-web', script)
+        self.assertIn('SECONDLOOP_WEB_LLVM_SOURCE_ROOT="${repo_root}"', script)
+        self.assertIn('LLVM_SOURCE_ROOT="${SECONDLOOP_WEB_LLVM_SOURCE_ROOT:-$ROOT_DIR}"', setup_script)
+        self.assertIn('seed_shared_web_toolchain_if_available()', setup_script)
+        self.assertIn('ln -s "${source_tool_root}/cargo-home" "$CARGO_HOME"', setup_script)
+        self.assertIn('ln -s "${source_tool_root}/rustup-home" "$RUSTUP_HOME"', setup_script)
+        self.assertIn('${CONDA_PREFIX:-}/bin/clang', setup_script)
+        self.assertIn('${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/clang-21', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/clang', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/clang-21', setup_script)
+        self.assertIn('${ROOT_DIR}/.tool/bin/clang', setup_script)
+        self.assertIn('$(command -v clang 2>/dev/null || true)', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-18', setup_script)
+        self.assertIn('$(command -v llvm-ar-18 2>/dev/null || true)', setup_script)
+
+    def test_web_rust_toolchain_pins_wasm_pack_nightly_toolchain(self) -> None:
+        setup_script = (REPO_ROOT / "scripts/setup_web_rust_toolchain.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('WASM_PACK_NIGHTLY_TOOLCHAIN="nightly-', setup_script)
+        self.assertIn('ensure_toolchain "$WASM_PACK_NIGHTLY_TOOLCHAIN"', setup_script)
+        self.assertIn('ensure_target "$WASM_PACK_NIGHTLY_TOOLCHAIN"', setup_script)
+        self.assertIn(
+            'ensure_component "$WASM_PACK_NIGHTLY_TOOLCHAIN" "rust-src"',
+            setup_script,
+        )
+        self.assertIn('cat >"$TOOL_BIN_DIR/wasm-pack" <<EOF', setup_script)
+        self.assertIn(
+            'RUSTUP_TOOLCHAIN="$WASM_PACK_NIGHTLY_TOOLCHAIN" exec "$CARGO_HOME/bin/wasm-pack" "\\$@"',
+            setup_script,
+        )
+        self.assertIn(
+            '"$CARGO_HOME/bin/rustup" run "$WASM_PACK_NIGHTLY_TOOLCHAIN" cargo install wasm-pack --locked',
+            setup_script,
+        )
+        self.assertIn('export PATH="$TOOL_BIN_DIR:$CARGO_HOME/bin:$PATH"', setup_script)
+        self.assertNotIn('ensure_toolchain "nightly"', setup_script)
+        self.assertNotIn('ensure_target "nightly"', setup_script)
+        self.assertNotIn('ensure_component "nightly" "rust-src"', setup_script)
+        self.assertNotIn('"$CARGO_HOME/bin/rustup" run nightly cargo install wasm-pack --locked', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-18', setup_script)
+        self.assertIn('$(command -v llvm-ranlib-18 2>/dev/null || true)', setup_script)
+        self.assertIn('verify_downloaded_sha256 "$rustup_init" "${rustup_url}.sha256"', setup_script)
+        self.assertIn('curl --fail --show-error --location "$url" -o "$output_path"', setup_script)
 
     def test_rust_nextest_wrapper_prefers_project_managed_cargo_environment(self) -> None:
         script = (REPO_ROOT / "scripts/run_rust_ci_nextest.sh").read_text(

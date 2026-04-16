@@ -37,6 +37,7 @@ import 'app_backend.dart';
 import 'attachments_backend.dart';
 import 'semantic_parse_attempt_aware_backend.dart';
 import 'rust_external_library_resolver.dart';
+import 'serialized_rust_handler.dart';
 
 part 'native_backend_knowledge.dart';
 part 'native_backend_todo_followups.dart';
@@ -323,6 +324,8 @@ class NativeAppBackend extends _NativeAppBackendAccess
   NativeAppBackend({
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,
+    String? storageScope,
+    bool recoverInterruptedExternalImportBatchesOnInit = true,
     DbListTodosFn? dbListTodos,
     DbGetTodoByIdFn? dbGetTodoById,
     DbUpsertTodoFn? dbUpsertTodo,
@@ -371,7 +374,11 @@ class NativeAppBackend extends _NativeAppBackendAccess
     DbMarkTodoFollowupGenerationJobCanceledFn?
         dbMarkTodoFollowupGenerationJobCanceled,
     RustLibInitFn? rustLibInit,
-  })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
+  })  : _storageScope = _normalizeStorageScope(storageScope),
+        _secureBlobStore = SecureBlobStore(
+          storage: secureStorage,
+          scopeKey: _normalizeStorageScope(storageScope),
+        ),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
         _dbListTodos = dbListTodos ?? rust_core.dbListTodos,
         _dbGetTodoById = dbGetTodoById ?? rust_core.dbGetTodoById,
@@ -463,12 +470,16 @@ class NativeAppBackend extends _NativeAppBackendAccess
         _dbMarkTodoFollowupGenerationJobCanceled =
             dbMarkTodoFollowupGenerationJobCanceled ??
                 rust_core.dbMarkTodoFollowupGenerationJobCanceled,
+        _recoverInterruptedExternalImportBatchesOnInit =
+            recoverInterruptedExternalImportBatchesOnInit,
         _rustLibInit = rustLibInit ??
             (() => RustLib.init(
+                  handler: kIsWeb ? SerializedRustHandler() : null,
                   externalLibrary: resolveDesktopRustExternalLibrary(),
                 ));
 
   final SecureBlobStore _secureBlobStore;
+  final String? _storageScope;
   final AppDirProvider _appDirProvider;
   @override
   final DbListTodosFn _dbListTodos;
@@ -555,6 +566,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
   @override
   final DbMarkTodoFollowupGenerationJobCanceledFn
       _dbMarkTodoFollowupGenerationJobCanceled;
+  final bool _recoverInterruptedExternalImportBatchesOnInit;
   final RustLibInitFn _rustLibInit;
 
   String? _appDir;
@@ -589,11 +601,16 @@ class NativeAppBackend extends _NativeAppBackendAccess
     return _appDir!;
   }
 
+  @visibleForTesting
+  Future<String> debugResolvedAppDir() => _getAppDir();
+
   @override
   Future<void> init() async {
     await _rustLibInit();
     await _getAppDir();
-    await _recoverInterruptedExternalImportBatches();
+    if (_recoverInterruptedExternalImportBatchesOnInit) {
+      await _recoverInterruptedExternalImportBatches();
+    }
   }
 
   Future<void> _recoverInterruptedExternalImportBatches() async {
@@ -698,7 +715,8 @@ class NativeAppBackend extends _NativeAppBackendAccess
   Future<Uint8List> initMasterPassword(String password) async {
     final appDir = await _getAppDir();
     final prefs = await SharedPreferences.getInstance();
-    final deferredB64 = prefs.getString(_kDeferredSessionKeyB64PrefsKey);
+    final deferredPrefsKey = _scopedPrefsKey(_kDeferredSessionKeyB64PrefsKey);
+    final deferredB64 = prefs.getString(deferredPrefsKey);
 
     Future<Uint8List> init() async {
       if (deferredB64 == null || deferredB64.isEmpty) {
@@ -711,7 +729,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
       try {
         final deferred = base64Decode(deferredB64);
         if (deferred.length != 32) {
-          await prefs.remove(_kDeferredSessionKeyB64PrefsKey);
+          await prefs.remove(deferredPrefsKey);
           return rust_core.authInitMasterPassword(
             appDir: appDir,
             password: password,
@@ -724,7 +742,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
           key: deferred,
         );
       } catch (_) {
-        await prefs.remove(_kDeferredSessionKeyB64PrefsKey);
+        await prefs.remove(deferredPrefsKey);
         return rust_core.authInitMasterPassword(
           appDir: appDir,
           password: password,
@@ -733,8 +751,20 @@ class NativeAppBackend extends _NativeAppBackendAccess
     }
 
     final key = await init();
-    await prefs.remove(_kDeferredSessionKeyB64PrefsKey);
+    await prefs.remove(deferredPrefsKey);
     return key;
+  }
+
+  String _scopedPrefsKey(String key) {
+    final storageScope = _storageScope;
+    if (storageScope == null) return key;
+    return '$key::$storageScope';
+  }
+
+  static String? _normalizeStorageScope(String? storageScope) {
+    final normalized = storageScope?.trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
   }
 
   @override

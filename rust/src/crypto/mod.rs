@@ -7,7 +7,11 @@ use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
+#[cfg(target_family = "wasm")]
+use getrandom::getrandom;
+#[cfg(not(target_family = "wasm"))]
 use rand::rngs::OsRng;
+#[cfg(not(target_family = "wasm"))]
 use rand::RngCore;
 
 const SYNC_OP_COMPRESSED_MAGIC_V1: &[u8; 5] = b"SLOP1";
@@ -32,6 +36,20 @@ impl KdfParams {
     }
 }
 
+pub fn fill_random_bytes(bytes: &mut [u8]) -> Result<()> {
+    #[cfg(target_family = "wasm")]
+    {
+        getrandom(bytes).map_err(|error| anyhow!("random fill failed: {error}"))?;
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    {
+        OsRng.fill_bytes(bytes);
+    }
+
+    Ok(())
+}
+
 pub fn derive_root_key(password: &str, salt: &[u8], params: &KdfParams) -> Result<[u8; 32]> {
     let argon_params = Params::new(params.m_cost_kib, params.t_cost, params.p_cost, Some(32))
         .map_err(|_| anyhow!("argon2 params"))?;
@@ -48,7 +66,7 @@ pub fn encrypt_bytes(key: &[u8; 32], plaintext: &[u8], aad: &[u8]) -> Result<Vec
     let cipher = XChaCha20Poly1305::new_from_slice(key).map_err(|_| anyhow!("invalid key"))?;
 
     let mut nonce_bytes = [0u8; 24];
-    OsRng.fill_bytes(&mut nonce_bytes);
+    fill_random_bytes(&mut nonce_bytes)?;
     let nonce = XNonce::from_slice(&nonce_bytes);
 
     let maybe_wrapped_plaintext = maybe_wrap_sync_op_payload(plaintext, aad)?;

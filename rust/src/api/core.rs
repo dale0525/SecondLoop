@@ -3877,7 +3877,7 @@ pub fn sync_managed_vault_push_ops_only(
 }
 
 #[flutter_rust_bridge::frb]
-pub fn sync_managed_vault_pull(
+pub async fn sync_managed_vault_pull(
     app_dir: String,
     key: Vec<u8>,
     sync_key: Vec<u8>,

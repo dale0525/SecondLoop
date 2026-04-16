@@ -7573,7 +7573,7 @@ fn wire__crate__api__core__sync_managed_vault_pull_impl(
     rust_vec_len_: i32,
     data_len_: i32,
 ) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "sync_managed_vault_pull",
             port: Some(port_),
@@ -7596,17 +7596,21 @@ fn wire__crate__api__core__sync_managed_vault_pull_impl(
             let api_vault_id = <String>::sse_decode(&mut deserializer);
             let api_firebase_id_token = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::core::sync_managed_vault_pull(
-                        api_app_dir,
-                        api_key,
-                        api_sync_key,
-                        api_base_url,
-                        api_vault_id,
-                        api_firebase_id_token,
-                    )
-                })())
+            move |context| async move {
+                transform_result_sse(
+                    (move || async move {
+                        crate::api::core::sync_managed_vault_pull(
+                            api_app_dir,
+                            api_key,
+                            api_sync_key,
+                            api_base_url,
+                            api_vault_id,
+                            api_firebase_id_token,
+                        )
+                        .await
+                    })()
+                    .await,
+                )
             }
         },
     )
@@ -10278,7 +10282,7 @@ fn wire__crate__api__simple__init_app_impl(
     rust_vec_len_: i32,
     data_len_: i32,
 ) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "init_app",
             port: Some(port_),
@@ -10295,12 +10299,10 @@ fn wire__crate__api__simple__init_app_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    Result::<_, ()>::Ok({
-                        crate::api::simple::init_app();
-                    })
-                })())
+            move |context| async move {
+                transform_result_sse(
+                    (move || async move { crate::api::simple::init_app().await })().await,
+                )
             }
         },
     )

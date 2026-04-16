@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use anyhow::{anyhow, Result};
 use rusqlite::{params, Connection};
 use sha2::{Digest, Sha256};
@@ -58,10 +56,7 @@ fn prior_stages_complete(conn: &Connection, document_id: &str, stage: &str) -> R
 }
 
 fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_millis().min(i64::MAX as u128) as i64)
-        .unwrap_or(0)
+    crate::platform::time::now_ms()
 }
 
 fn write_rebuild_embedding_model_state(

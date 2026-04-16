@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/audio_transcribe_whisper_model_prefs.dart';
@@ -893,11 +894,11 @@ class _MediaAnnotationSettingsPageState
       // OCR language hints are fixed to "device language + English".
       ocrLanguageHints: 'device_plus_en',
       // OCR DPI is fixed to 180 for stable quality/perf tradeoff.
-      ocrPdfDpi: 180,
+      ocrPdfDpi: PlatformInt64Util.from(180),
       // Auto OCR no longer exposes a page cap in settings.
-      ocrPdfAutoMaxPages: 0,
+      ocrPdfAutoMaxPages: PlatformInt64Util.from(0),
       // OCR page cap is removed.
-      ocrPdfMaxPages: 0,
+      ocrPdfMaxPages: PlatformInt64Util.from(0),
       mobileBackgroundEnabled: source.mobileBackgroundEnabled,
       mobileBackgroundRequiresWifi: source.mobileBackgroundRequiresWifi,
       mobileBackgroundRequiresCharging: source.mobileBackgroundRequiresCharging,

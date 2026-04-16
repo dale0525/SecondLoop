@@ -8,6 +8,28 @@ import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 
 void main() {
+  test('loadConfig parses managed vault base URL from runtime config',
+      () async {
+    final client = MockClient((request) async {
+      expect(request.url.path, '/api/cloud/config');
+      return http.Response(
+        jsonEncode({
+          'ok': true,
+          'firebase_web_api_key': 'firebase-key',
+          'has_managed_vault_base_url': true,
+          'managed_vault_base_url': 'https://vault.secondloop.example',
+        }),
+        200,
+      );
+    });
+
+    final config = await WebAppServiceHttp.loadConfig(client: client);
+
+    expect(config.firebaseWebApiKey, 'firebase-key');
+    expect(config.hasManagedVaultBaseUrl, isTrue);
+    expect(config.managedVaultBaseUrl, 'https://vault.secondloop.example');
+  });
+
   test('chat request sends messages only and does not expose model overrides',
       () async {
     http.BaseRequest? captured;

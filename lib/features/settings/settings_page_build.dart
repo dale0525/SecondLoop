@@ -2,18 +2,22 @@ part of 'settings_page.dart';
 
 extension _SettingsPageBuild on _SettingsPageState {
   Widget _buildSettingsPage(BuildContext context) {
+    final capabilities = AppPlatformCapabilityScope.of(context);
     final enabled = _appLockEnabled;
     final biometricEnabled = _biometricUnlockEnabled;
-    final isMobile = !kIsWeb &&
+    final isMobile = capabilities.supportsBiometricUnlock &&
         (defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.android);
-    final supportsDesktopHotkey = !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.linux);
-    const supportsMigrationArchive = !kIsWeb;
-    final isDesktop =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    final supportsDesktopHotkey = capabilities.supportsDesktopHotkey;
+    final supportsExternalImport = capabilities.supportsExternalImport;
+    final supportsMigrationArchive = capabilities.supportsMigrationArchive;
+    final supportsDesktopBootSettings =
+        capabilities.supportsDesktopBootSettings;
+    final supportsBiometricUnlock = capabilities.supportsBiometricUnlock;
+    final showsAppearancePreferences =
+        debugShowsAppearancePreferences(capabilities);
+    final showsSecurityPreferences = !capabilities.usesCloudSessionModel;
+    final isDesktop = supportsBiometricUnlock && !isMobile;
     final isZh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
@@ -55,43 +59,45 @@ extension _SettingsPageBuild on _SettingsPageState {
         ),
         const SizedBox(height: 8),
         sectionCard([
-          ListTile(
-            title: Text(context.t.settings.theme.title),
-            subtitle: Text(context.t.settings.theme.subtitle),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ValueListenableBuilder(
-                  valueListenable: AppThemeModePrefs.value,
-                  builder: (context, mode, child) {
-                    return Text(_themeModeLabel(context, mode));
-                  },
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.chevron_right),
-              ],
+          if (showsAppearancePreferences)
+            ListTile(
+              title: Text(context.t.settings.theme.title),
+              subtitle: Text(context.t.settings.theme.subtitle),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ValueListenableBuilder(
+                    valueListenable: AppThemeModePrefs.value,
+                    builder: (context, mode, child) {
+                      return Text(_themeModeLabel(context, mode));
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: _busy ? null : _selectThemeMode,
             ),
-            onTap: _busy ? null : _selectThemeMode,
-          ),
-          ListTile(
-            key: const ValueKey('settings_theme_palette'),
-            title: Text(_themePaletteTitle(context)),
-            subtitle: Text(_themePaletteSubtitle(context)),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ValueListenableBuilder(
-                  valueListenable: AppThemePalettePrefs.value,
-                  builder: (context, palette, child) {
-                    return Text(_themePaletteLabel(context, palette));
-                  },
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.chevron_right),
-              ],
+          if (showsAppearancePreferences)
+            ListTile(
+              key: const ValueKey('settings_theme_palette'),
+              title: Text(_themePaletteTitle(context)),
+              subtitle: Text(_themePaletteSubtitle(context)),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ValueListenableBuilder(
+                    valueListenable: AppThemePalettePrefs.value,
+                    builder: (context, palette, child) {
+                      return Text(_themePaletteLabel(context, palette));
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: _busy ? null : _selectThemePalette,
             ),
-            onTap: _busy ? null : _selectThemePalette,
-          ),
           ListTile(
             title: Text(context.t.settings.language.title),
             subtitle: Text(context.t.settings.language.subtitle),
@@ -107,45 +113,49 @@ extension _SettingsPageBuild on _SettingsPageState {
           ),
         ]),
         const SizedBox(height: 16),
-        Text(
-          context.t.settings.sections.security,
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        sectionCard([
-          SwitchListTile(
-            title: Text(context.t.settings.autoLock.title),
-            subtitle: Text(context.t.settings.autoLock.subtitle),
-            value: enabled ?? false,
-            onChanged: (_busy || enabled == null) ? null : _setAppLock,
+        if (showsSecurityPreferences) ...[
+          Text(
+            context.t.settings.sections.security,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          if ((enabled ?? false) && (isMobile || isDesktop))
+          const SizedBox(height: 8),
+          sectionCard([
             SwitchListTile(
-              title: Text(
-                isMobile
-                    ? context.t.settings.systemUnlock.titleMobile
-                    : context.t.settings.systemUnlock.titleDesktop,
-              ),
-              subtitle: Text(
-                isMobile
-                    ? systemUnlockSubtitleMobile
-                    : systemUnlockSubtitleDesktop,
-              ),
-              value: biometricEnabled ?? false,
-              onChanged: (_busy || biometricEnabled == null)
-                  ? null
-                  : _setBiometricUnlock,
+              title: Text(context.t.settings.autoLock.title),
+              subtitle: Text(context.t.settings.autoLock.subtitle),
+              value: enabled ?? false,
+              onChanged: (_busy || enabled == null) ? null : _setAppLock,
             ),
-          ListTile(
-            title: Text(context.t.settings.lockNow.title),
-            subtitle: Text(context.t.settings.lockNow.subtitle),
-            onTap: _busy ? null : _lockNow,
-          ),
-        ]),
-        const SizedBox(height: 16),
+            if ((enabled ?? false) &&
+                supportsBiometricUnlock &&
+                (isMobile || isDesktop))
+              SwitchListTile(
+                title: Text(
+                  isMobile
+                      ? context.t.settings.systemUnlock.titleMobile
+                      : context.t.settings.systemUnlock.titleDesktop,
+                ),
+                subtitle: Text(
+                  isMobile
+                      ? systemUnlockSubtitleMobile
+                      : systemUnlockSubtitleDesktop,
+                ),
+                value: biometricEnabled ?? false,
+                onChanged: (_busy || biometricEnabled == null)
+                    ? null
+                    : _setBiometricUnlock,
+              ),
+            ListTile(
+              title: Text(context.t.settings.lockNow.title),
+              subtitle: Text(context.t.settings.lockNow.subtitle),
+              onTap: _busy ? null : _lockNow,
+            ),
+          ]),
+          const SizedBox(height: 16),
+        ],
         Text(
           featureSettingsTitle,
           style: Theme.of(context)
@@ -195,7 +205,7 @@ extension _SettingsPageBuild on _SettingsPageState {
                     );
                   },
           ),
-          if (supportsDesktopHotkey)
+          if (supportsExternalImport)
             ListTile(
               key: const ValueKey('settings_external_import'),
               title: Text(context.t.settings.externalImport.title),
@@ -225,7 +235,7 @@ extension _SettingsPageBuild on _SettingsPageState {
                       );
                     },
             ),
-          if (supportsDesktopHotkey)
+          if (supportsDesktopBootSettings)
             SwitchListTile(
               key: const ValueKey('settings_start_with_system_switch'),
               title: Text(context.t.settings.desktopBoot.startWithSystem.title),
@@ -234,7 +244,7 @@ extension _SettingsPageBuild on _SettingsPageState {
               value: _desktopBootConfig.startWithSystem,
               onChanged: _busy ? null : _setDesktopStartWithSystem,
             ),
-          if (supportsDesktopHotkey)
+          if (supportsDesktopBootSettings)
             SwitchListTile(
               key: const ValueKey('settings_silent_startup_switch'),
               title: Text(context.t.settings.desktopBoot.silentStartup.title),
@@ -243,7 +253,7 @@ extension _SettingsPageBuild on _SettingsPageState {
               value: _desktopBootConfig.silentStartup,
               onChanged: _busy ? null : _setDesktopSilentStartup,
             ),
-          if (supportsDesktopHotkey)
+          if (supportsDesktopBootSettings)
             SwitchListTile(
               key: const ValueKey('settings_keep_running_in_background_switch'),
               title: Text(
@@ -264,39 +274,40 @@ extension _SettingsPageBuild on _SettingsPageState {
         ),
         const SizedBox(height: 8),
         sectionCard([
-          ListTile(
-            key: const ValueKey('settings_about'),
-            title: Text(context.t.settings.about.title),
-            subtitle: Text(context.t.settings.about.subtitle),
-            trailing: ValueListenableBuilder<String?>(
-              valueListenable: UpdateBadgePrefs.value,
-              builder: (context, latestTag, child) {
-                final hasUpdate =
-                    latestTag != null && latestTag.trim().isNotEmpty;
-                if (!hasUpdate) {
-                  return const SizedBox.shrink();
-                }
-                return Container(
-                  key: const ValueKey('settings_about_update_badge'),
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.error,
-                    shape: BoxShape.circle,
-                  ),
-                );
-              },
+          if (!capabilities.usesCloudSessionModel)
+            ListTile(
+              key: const ValueKey('settings_about'),
+              title: Text(context.t.settings.about.title),
+              subtitle: Text(context.t.settings.about.subtitle),
+              trailing: ValueListenableBuilder<String?>(
+                valueListenable: UpdateBadgePrefs.value,
+                builder: (context, latestTag, child) {
+                  final hasUpdate =
+                      latestTag != null && latestTag.trim().isNotEmpty;
+                  if (!hasUpdate) {
+                    return const SizedBox.shrink();
+                  }
+                  return Container(
+                    key: const ValueKey('settings_about_update_badge'),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.error,
+                      shape: BoxShape.circle,
+                    ),
+                  );
+                },
+              ),
+              onTap: _busy
+                  ? null
+                  : () {
+                      pushPageWithInheritedScopes(
+                        Navigator.of(context),
+                        context,
+                        const AboutPage(),
+                      );
+                    },
             ),
-            onTap: _busy
-                ? null
-                : () {
-                    pushPageWithInheritedScopes(
-                      Navigator.of(context),
-                      context,
-                      const AboutPage(),
-                    );
-                  },
-          ),
           ListTile(
             key: const ValueKey('settings_reopen_welcome_guide'),
             title: Text(context.t.welcomeGuide.reopen.title),

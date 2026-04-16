@@ -22,11 +22,20 @@ class _InboxPageState extends State<InboxPage> {
     final sessionKey = SessionScope.of(context).sessionKey;
     final defaultTitle = context.t.inbox.defaultTitle;
 
-    final conversations = await backend.listConversations(sessionKey);
+    final conversations = await _withInboxStage(
+      'inbox.listConversations.initial',
+      () => backend.listConversations(sessionKey),
+    );
     if (conversations.isNotEmpty) return conversations;
 
-    await backend.createConversation(sessionKey, defaultTitle);
-    return backend.listConversations(sessionKey);
+    await _withInboxStage(
+      'inbox.createConversation',
+      () => backend.createConversation(sessionKey, defaultTitle),
+    );
+    return _withInboxStage(
+      'inbox.listConversations.afterCreate',
+      () => backend.listConversations(sessionKey),
+    );
   }
 
   @override
@@ -70,7 +79,10 @@ class _InboxPageState extends State<InboxPage> {
                   MaterialPageRoute(
                     builder: (_) => wrapPushedPageWithInheritedScopes(
                       context,
-                      ChatPage(conversation: conversation),
+                      ChatPage(
+                        conversation: conversation,
+                        showAppBar: false,
+                      ),
                     ),
                   ),
                 );
@@ -81,4 +93,25 @@ class _InboxPageState extends State<InboxPage> {
       },
     );
   }
+}
+
+Future<T> _withInboxStage<T>(
+  String stage,
+  Future<T> Function() action,
+) async {
+  try {
+    return await action();
+  } catch (error, stackTrace) {
+    Error.throwWithStackTrace(_InboxLoadStageError(stage, error), stackTrace);
+  }
+}
+
+final class _InboxLoadStageError implements Exception {
+  const _InboxLoadStageError(this.stage, this.cause);
+
+  final String stage;
+  final Object cause;
+
+  @override
+  String toString() => '$stage: $cause';
 }

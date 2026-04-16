@@ -5,38 +5,49 @@ import 'package:flutter/material.dart';
 import '../backend/app_backend.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
+import '../platform/app_platform_capabilities.dart';
+import '../platform/app_platform_capability_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
+import '../../web_app/web_formal_settings_scope.dart';
+
+const double _kWebFormalSettingsRouteMaxWidth = 1120;
 
 final class InheritedScopeCapture {
   const InheritedScopeCapture({
     this.backend,
     this.sessionKey,
     this.lock,
+    this.platformCapabilities,
     this.subscriptionController,
     this.cloudAuthController,
     this.cloudGatewayConfig,
     this.syncEngine,
+    this.webFormalSettingsDependencies,
   });
 
   final AppBackend? backend;
   final Uint8List? sessionKey;
   final VoidCallback? lock;
+  final AppPlatformCapabilities? platformCapabilities;
   final SubscriptionStatusController? subscriptionController;
   final CloudAuthController? cloudAuthController;
   final CloudGatewayConfig? cloudGatewayConfig;
   final SyncEngine? syncEngine;
+  final WebFormalSettingsDependencies? webFormalSettingsDependencies;
 
   bool get isEmpty =>
       backend == null &&
       sessionKey == null &&
       lock == null &&
+      platformCapabilities == null &&
       subscriptionController == null &&
       cloudAuthController == null &&
       cloudGatewayConfig == null &&
-      syncEngine == null;
+      syncEngine == null &&
+      webFormalSettingsDependencies == null;
 }
 
 InheritedScopeCapture captureInheritedScopes(BuildContext context) {
@@ -48,10 +59,13 @@ InheritedScopeCapture captureInheritedScopes(BuildContext context) {
         ? null
         : Uint8List.fromList(sessionScope.sessionKey),
     lock: sessionScope?.lock,
+    platformCapabilities: AppPlatformCapabilityScope.maybeOf(context),
     subscriptionController: SubscriptionScope.maybeOf(context),
     cloudAuthController: cloudAuthScope?.controller,
     cloudGatewayConfig: cloudAuthScope?.gatewayConfig,
     syncEngine: SyncEngineScope.maybeOf(context),
+    webFormalSettingsDependencies:
+        WebFormalSettingsScope.maybeOf(context)?.dependencies,
   );
 }
 
@@ -96,6 +110,15 @@ Widget wrapPushedPageWithInheritedScopeCapture(
     );
   }
 
+  final webFormalSettingsDependencies =
+      capturedScopes.webFormalSettingsDependencies;
+  if (webFormalSettingsDependencies != null) {
+    wrapped = WebFormalSettingsScope(
+      dependencies: webFormalSettingsDependencies,
+      child: wrapped,
+    );
+  }
+
   final sessionKey = capturedScopes.sessionKey;
   final lock = capturedScopes.lock;
   if (sessionKey != null && lock != null) {
@@ -109,6 +132,25 @@ Widget wrapPushedPageWithInheritedScopeCapture(
   final backend = capturedScopes.backend;
   if (backend != null) {
     wrapped = AppBackendScope(backend: backend, child: wrapped);
+  }
+
+  final platformCapabilities = capturedScopes.platformCapabilities;
+  if (platformCapabilities != null) {
+    wrapped = AppPlatformCapabilityScope(
+      capabilities: platformCapabilities,
+      child: wrapped,
+    );
+    if (platformCapabilities.usesCloudSessionModel) {
+      wrapped = Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: _kWebFormalSettingsRouteMaxWidth,
+          ),
+          child: wrapped,
+        ),
+      );
+    }
   }
 
   return wrapped;

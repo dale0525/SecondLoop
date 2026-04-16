@@ -14,8 +14,10 @@ import '../../../core/sync/sync_engine.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
+import '../../../web_app/web_formal_settings_scope.dart';
 import 'task_hub_card_anchor.dart';
 import 'task_hub_focus_section.dart';
 import 'task_hub_page_sections.dart';
@@ -76,6 +78,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
   VoidCallback? _syncListener;
   TaskPriorityStore? _observedStore;
   VoidCallback? _storeListener;
+  String? _lastAiRefreshDependencyKey;
+  int _aiRefreshDependencyGeneration = 0;
 
   @override
   void dispose() {
@@ -153,6 +157,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     _attachStoreListener();
 
     unawaited(_store?.refresh() ?? Future<void>.value());
+    unawaited(_refreshAiAvailabilityIfNeeded());
   }
 
   void _attachSyncEngine() {
@@ -283,6 +288,54 @@ class _TaskHubPageState extends State<TaskHubPage> {
     await store.refresh(force: true);
   }
 
+  bool _shouldShowAiUpgradeHint(TaskPriorityStore store) {
+    final isWebShell =
+        WebFormalSettingsScope.maybeOf(context)?.dependencies.isWebOverride ??
+            false;
+    if (isWebShell) {
+      return false;
+    }
+    return store.shouldShowAiUpgradeHint;
+  }
+
+  Future<void> _refreshAiAvailabilityIfNeeded() async {
+    final backend = AppBackendScope.maybeOf(context);
+    if (backend == null) return;
+
+    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
+    final gatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+    final cloudUid = cloudAuthScope?.controller.uid;
+
+    final generation = ++_aiRefreshDependencyGeneration;
+    final nextKey = await buildTaskPriorityRefreshDependencyKey(
+      backend,
+      sessionKey,
+      subscriptionStatus: subscriptionStatus,
+      gatewayBaseUrl: gatewayConfig.baseUrl,
+      modelName: gatewayConfig.modelName,
+      localeTag: localeTag,
+      cloudUid: cloudUid,
+    );
+    if (!mounted || generation != _aiRefreshDependencyGeneration) {
+      return;
+    }
+
+    final previousKey = _lastAiRefreshDependencyKey;
+    if (previousKey == nextKey) return;
+    _lastAiRefreshDependencyKey = nextKey;
+    if (previousKey == null) return;
+
+    final store = _store;
+    if (store == null) return;
+    store.markDirty();
+    await store.refresh(force: true);
+  }
+
   bool _matchesPendingPriorityMutation(TaskPrioritySnapshot snapshot) {
     final pendingMutation = _pendingPriorityMutation;
     if (pendingMutation == null) {
@@ -310,9 +363,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
         todo.dueAtMs == pendingMutation.dueAtMs &&
         todo.reviewStage == pendingMutation.reviewStage &&
         todo.nextReviewAtMs == pendingMutation.nextReviewAtMs &&
-        (todo.manualImportanceNudgeScore ?? 0) ==
+        (platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0) ==
             pendingMutation.manualImportanceNudgeScore &&
-        (todo.manualUrgencyNudgeScore ?? 0) ==
+        (platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0) ==
             pendingMutation.manualUrgencyNudgeScore;
   }
 
@@ -522,8 +575,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
     final normalizedImportance = entry.normalizedManualImportanceNudgeScore;
     final normalizedUrgency = entry.normalizedManualUrgencyNudgeScore;
     final userMoveDirection = taskPriorityUserMoveDirectionFromScores(
-      todo.manualImportanceNudgeScore ?? 0,
-      todo.manualUrgencyNudgeScore ?? 0,
+      platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0,
+      platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0,
     );
     return switch (action) {
       TaskHubQuickAction.moveUpABit =>
@@ -531,8 +584,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
       TaskHubQuickAction.moveDownABit =>
         userMoveDirection == TaskPriorityUserMoveDirection.down,
       TaskHubQuickAction.restoreAiOrder =>
-        (todo.manualUrgencyNudgeScore ?? 0) == 0 &&
-            (todo.manualImportanceNudgeScore ?? 0) == 0,
+        (platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0) == 0 &&
+            (platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0) ==
+                0,
       TaskHubQuickAction.increaseUrgency => normalizedUrgency >= 1,
       TaskHubQuickAction.decreaseUrgency => normalizedUrgency <= -1,
       TaskHubQuickAction.increaseImportance => normalizedImportance >= 1,
@@ -757,7 +811,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                 ],
                               ),
                             ),
-                          if (store.shouldShowAiUpgradeHint) ...[
+                          if (_shouldShowAiUpgradeHint(store)) ...[
                             const SizedBox(height: 12),
                             SlSurface(
                               key: const ValueKey(

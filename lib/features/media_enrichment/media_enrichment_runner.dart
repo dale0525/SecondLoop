@@ -421,8 +421,8 @@ final class BackendMediaEnrichmentStore implements MediaEnrichmentStore {
             attachmentSha256: r.attachmentSha256,
             lang: r.lang,
             status: r.status,
-            attempts: r.attempts,
-            nextRetryAtMs: r.nextRetryAtMs,
+            attempts: r.attempts.toInt(),
+            nextRetryAtMs: r.nextRetryAtMs?.toInt(),
           ),
         )
         .toList(growable: false);
@@ -444,8 +444,8 @@ final class BackendMediaEnrichmentStore implements MediaEnrichmentStore {
             attachmentSha256: r.attachmentSha256,
             lang: r.lang,
             status: r.status,
-            attempts: r.attempts,
-            nextRetryAtMs: r.nextRetryAtMs,
+            attempts: r.attempts.toInt(),
+            nextRetryAtMs: r.nextRetryAtMs?.toInt(),
           ),
         )
         .toList(growable: false);

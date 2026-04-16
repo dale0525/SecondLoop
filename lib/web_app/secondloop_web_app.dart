@@ -1,11 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app/theme_mode_prefs.dart';
+import '../app/theme_palette_prefs.dart';
 import '../core/backend/cloud_web_backend.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/cloud/firebase_identity_toolkit.dart';
+import '../i18n/locale_prefs.dart';
 import '../i18n/strings.g.dart';
+import 'web_entry_intent.dart';
 import 'web_app_gate.dart';
+import 'web_app_theme.dart';
+
+export 'web_entry_intent.dart' show WebEntryIntent, parseWebEntryIntent;
 
 class SecondLoopWebApp extends StatefulWidget {
   const SecondLoopWebApp({
@@ -14,13 +24,15 @@ class SecondLoopWebApp extends StatefulWidget {
     this.configLoader,
     this.serviceFactory,
     this.authControllerFactory,
+    this.entryIntent,
   });
 
   final Future<WebAppBootstrapData> Function()? bootstrapLoader;
   final Future<WebAppConfig> Function()? configLoader;
-  final WebAppService Function()? serviceFactory;
+  final WebAppService Function(WebAppConfig config)? serviceFactory;
   final ObservableCloudAuthController Function(WebAppConfig config)?
       authControllerFactory;
+  final WebEntryIntent? entryIntent;
 
   @override
   State<SecondLoopWebApp> createState() => _SecondLoopWebAppState();
@@ -34,13 +46,33 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
   @override
   void initState() {
     super.initState();
+    unawaited(_initializeUiPrefs());
     _bootstrapFuture = (widget.bootstrapLoader ?? _bootstrap)();
+  }
+
+  Future<void> _initializeUiPrefs() async {
+    if (LocaleSettings.currentLocale == AppLocale.en) {
+      await AppLocaleBootstrap.ensureInitialized();
+    }
+    await AppThemeModePrefs.ensureInitialized();
+    await AppThemePalettePrefs.ensureInitialized();
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.containsKey(AppThemeModePrefs.prefsKey)) {
+      AppThemeModePrefs.value.value = ThemeMode.light;
+    }
+    if (!prefs.containsKey(AppThemePalettePrefs.prefsKey)) {
+      AppThemePalettePrefs.value.value = AppThemePalette.monochrome;
+    }
   }
 
   Future<WebAppBootstrapData> _bootstrap() async {
     final config =
         await (widget.configLoader ?? WebAppServiceHttp.loadConfig)();
-    final service = (widget.serviceFactory ?? () => WebAppServiceHttp())();
+    final service = (widget.serviceFactory ??
+        (config) => WebAppServiceHttp(
+              managedVaultConfigured: config.hasManagedVaultBaseUrl,
+            ))(config);
     final authController = (widget.authControllerFactory ??
         (config) => CloudAuthControllerImpl(
               identityToolkit: FirebaseIdentityToolkitHttp(
@@ -63,25 +95,8 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
     return WebAppBootstrapData(
       authController: authController,
       service: service,
-      chatBackend: CloudWebBackend(
-        chatClient: _WebAppCloudWebChatClient(service: service),
-        fetchTaskPriorityAssessments: ({
-          required idToken,
-          required cacheScopeKey,
-        }) =>
-            service.fetchTaskPriorityAssessments(
-          idToken: idToken,
-          scope: cacheScopeKey,
-        ),
-        upsertTaskPriorityAssessments: ({
-          required idToken,
-          required payload,
-        }) =>
-            service.upsertTaskPriorityAssessments(
-          idToken: idToken,
-          payload: payload,
-        ),
-      ),
+      chatBackend: null,
+      managedVaultBaseUrl: config.managedVaultBaseUrl,
     );
   }
 
@@ -102,19 +117,24 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
 
   @override
   Widget build(BuildContext context) {
+    final entryIntent = widget.entryIntent ?? parseWebEntryIntent(Uri.base);
+
     return TranslationProvider(
       child: Builder(
         builder: (context) {
+          final locale = TranslationProvider.of(context).flutterLocale;
           return MaterialApp(
-            locale: TranslationProvider.of(context).flutterLocale,
+            locale: locale,
             supportedLocales: AppLocaleUtils.supportedLocales,
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             title: context.t.app.web.title,
-            theme: ThemeData(
-              colorScheme:
-                  ColorScheme.fromSeed(seedColor: const Color(0xFF5B6CFF)),
-              useMaterial3: true,
-            ),
+            theme: buildSecondLoopWebTheme(locale: locale),
+            themeMode: ThemeMode.light,
+            builder: (context, child) {
+              return SecondLoopWebAppFrame(
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             home: FutureBuilder<WebAppBootstrapData>(
               future: _bootstrapFuture,
               builder: (context, snapshot) {
@@ -139,6 +159,8 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
                   authController: snapshot.data!.authController,
                   service: snapshot.data!.service,
                   chatBackend: snapshot.data!.chatBackend,
+                  entryIntent: entryIntent,
+                  managedVaultBaseUrl: snapshot.data!.managedVaultBaseUrl,
                 );
               },
             ),
@@ -154,30 +176,11 @@ class WebAppBootstrapData {
     required this.authController,
     required this.service,
     required this.chatBackend,
+    required this.managedVaultBaseUrl,
   });
 
   final ObservableCloudAuthController authController;
   final WebAppService service;
-  final CloudWebBackend chatBackend;
-}
-
-final class _WebAppCloudWebChatClient implements CloudWebChatClient {
-  const _WebAppCloudWebChatClient({required this.service});
-
-  final WebAppService service;
-
-  @override
-  Future<String> sendMessages({
-    required String idToken,
-    required String gatewayBaseUrl,
-    required String modelName,
-    required List<Map<String, String>> messages,
-  }) {
-    // Web does not honor client-side model overrides.
-    // The site backend chooses the server-owned model for Pro users.
-    return service.sendChat(
-      idToken: idToken,
-      messages: messages,
-    );
-  }
+  final CloudWebBackend? chatBackend;
+  final String managedVaultBaseUrl;
 }

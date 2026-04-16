@@ -37,6 +37,7 @@ import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_capability_auth.dart';
+import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
@@ -47,6 +48,7 @@ import '../../core/platform/audio_recording_foreground_service.dart';
 import '../../core/platform/ask_ai_foreground_service.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../../src/rust/platform_int.dart';
 import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_button.dart';
 import '../../ui/sl_focus_ring.dart';
@@ -420,12 +422,14 @@ class ChatPage extends StatefulWidget {
   const ChatPage({
     required this.conversation,
     this.isTabActive = true,
+    this.showAppBar = true,
     this.tagRepository = const TagRepository(),
     super.key,
   });
 
   final Conversation conversation;
   final bool isTabActive;
+  final bool showAppBar;
   final TagRepository tagRepository;
 
   @override
@@ -537,20 +541,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   bool get _usePagination => true;
   bool get _isDesktopPlatform =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows ||
-          defaultTargetPlatform == TargetPlatform.linux);
+      AppPlatformCapabilityScope.of(context).supportsDesktopDrop;
   bool get _supportsCamera =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+      AppPlatformCapabilityScope.of(context).supportsCameraCapture;
   bool get _supportsAudioRecording =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS ||
-          defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows);
+      AppPlatformCapabilityScope.of(context).supportsAudioRecording;
   bool get _supportsDesktopRecordAudioAction =>
       _isDesktopPlatform && _supportsAudioRecording;
   bool get _supportsImageUpload => _supportsCamera || _isDesktopPlatform;

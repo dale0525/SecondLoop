@@ -4,11 +4,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine as _;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use sha2::{Digest, Sha256};
 
-use crate::crypto::{decrypt_bytes, derive_root_key, encrypt_bytes, KdfParams};
+use crate::crypto::{decrypt_bytes, derive_root_key, encrypt_bytes, fill_random_bytes, KdfParams};
 
 const AUTH_FILE_VERSION_V2: u32 = 2;
 const AUTH_FILE_VERSION_V3: u32 = 3;
@@ -182,7 +180,7 @@ pub fn init_master_password(
     fs::create_dir_all(app_dir)?;
 
     let mut salt = [0u8; 16];
-    OsRng.fill_bytes(&mut salt);
+    fill_random_bytes(&mut salt)?;
 
     let key = derive_root_key(password, &salt, &kdf_params)?;
     write_auth_file(app_dir, salt, key, key, kdf_params)?;
@@ -202,7 +200,7 @@ pub fn init_master_password_with_existing_key(
     fs::create_dir_all(app_dir)?;
 
     let mut salt = [0u8; 16];
-    OsRng.fill_bytes(&mut salt);
+    fill_random_bytes(&mut salt)?;
 
     let password_hash = derive_root_key(password, &salt, &kdf_params)?;
     write_auth_file(app_dir, salt, password_hash, session_key, kdf_params)?;

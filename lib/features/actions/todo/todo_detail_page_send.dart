@@ -75,7 +75,8 @@ extension _TodoDetailPageStateSend on _TodoDetailPageState {
               conversationId: 'todo_${_todo.id}',
               role: 'user',
               content: noteContent,
-              createdAtMs: DateTime.now().millisecondsSinceEpoch,
+              createdAtMs:
+                  platformIntFromInt(DateTime.now().millisecondsSinceEpoch),
               isMemory: false,
             );
           }
@@ -84,7 +85,8 @@ extension _TodoDetailPageStateSend on _TodoDetailPageState {
             conversationId: 'todo_${_todo.id}',
             role: 'user',
             content: noteContent,
-            createdAtMs: DateTime.now().millisecondsSinceEpoch,
+            createdAtMs:
+                platformIntFromInt(DateTime.now().millisecondsSinceEpoch),
             isMemory: false,
           );
         },

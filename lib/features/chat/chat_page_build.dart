@@ -20,87 +20,92 @@ extension _ChatPageStateBuild on _ChatPageState {
       key: _scaffoldMessengerKey,
       child: Scaffold(
         resizeToAvoidBottomInset: useCompactComposer,
-        appBar: AppBar(
-          title: Text(title),
-          actions: [
-            IconButton(
-              key: const ValueKey('chat_open_task_center'),
-              tooltip: context.t.actions.taskHub.openTaskHub,
-              onPressed: () {
-                unawaited(
-                  _pushRouteFromChat(
-                    MaterialPageRoute(
-                      builder: (_) => wrapPushedPageWithInheritedScopes(
-                        context,
-                        const TaskHubPage(),
-                      ),
-                    ),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.checklist_rtl_rounded),
-            ),
-            IconButton(
-              key: const ValueKey('chat_tag_filter_button'),
-              tooltip: _tagFilterTooltip(locale),
-              onPressed: () => unawaited(_openTagFilterSheet()),
-              icon: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  const Icon(Icons.sell_outlined),
-                  if (activeTagFilterCount > 0)
-                    Positioned(
-                      right: -6,
-                      top: -6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          activeTagFilterCount.toString(),
-                          style: TextStyle(
-                            color: colorScheme.onPrimary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
+        appBar: widget.showAppBar
+            ? AppBar(
+                title: Text(title),
+                actions: [
+                  IconButton(
+                    key: const ValueKey('chat_open_task_center'),
+                    tooltip: context.t.actions.taskHub.openTaskHub,
+                    onPressed: () {
+                      unawaited(
+                        _pushRouteFromChat(
+                          MaterialPageRoute(
+                            builder: (_) => wrapPushedPageWithInheritedScopes(
+                              context,
+                              const TaskHubPage(),
+                            ),
                           ),
                         ),
-                      ),
+                      );
+                    },
+                    icon: const Icon(Icons.checklist_rtl_rounded),
+                  ),
+                  IconButton(
+                    key: const ValueKey('chat_tag_filter_button'),
+                    tooltip: _tagFilterTooltip(locale),
+                    onPressed: () => unawaited(_openTagFilterSheet()),
+                    icon: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(Icons.sell_outlined),
+                        if (activeTagFilterCount > 0)
+                          Positioned(
+                            right: -6,
+                            top: -6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                activeTagFilterCount.toString(),
+                                style: TextStyle(
+                                  color: colorScheme.onPrimary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (!isDesktopPlatform)
+                    IconButton(
+                      key: const ValueKey('chat_open_memory'),
+                      tooltip: context.t.app.tabs.memory,
+                      onPressed: () =>
+                          unawaited(MemoryCenterPage.open(context)),
+                      icon: const Icon(Icons.auto_stories_outlined),
+                    ),
+                  if (!isDesktopPlatform)
+                    IconButton(
+                      key: const ValueKey('chat_open_settings'),
+                      tooltip: context.t.app.tabs.settings,
+                      onPressed: () {
+                        unawaited(
+                          _pushRouteFromChat(
+                            MaterialPageRoute(
+                              builder: (context) => Scaffold(
+                                appBar: AppBar(
+                                  title: Text(context.t.settings.title),
+                                ),
+                                body: const SettingsPage(),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.settings_outlined),
                     ),
                 ],
-              ),
-            ),
-            if (!isDesktopPlatform)
-              IconButton(
-                key: const ValueKey('chat_open_memory'),
-                tooltip: context.t.app.tabs.memory,
-                onPressed: () => unawaited(MemoryCenterPage.open(context)),
-                icon: const Icon(Icons.auto_stories_outlined),
-              ),
-            if (!isDesktopPlatform)
-              IconButton(
-                key: const ValueKey('chat_open_settings'),
-                tooltip: context.t.app.tabs.settings,
-                onPressed: () {
-                  unawaited(
-                    _pushRouteFromChat(
-                      MaterialPageRoute(
-                        builder: (context) => Scaffold(
-                          appBar: AppBar(title: Text(context.t.settings.title)),
-                          body: const SettingsPage(),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.settings_outlined),
-              ),
-          ],
-        ),
+              )
+            : null,
         body: GestureDetector(
           key: const ValueKey('chat_blank_dismiss_region'),
           behavior: HitTestBehavior.translucent,

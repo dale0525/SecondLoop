@@ -6,8 +6,8 @@ use crate::db;
 use crate::embedding::Embedder;
 use crate::llm::ChatDelta;
 use crate::message_citations::{
-    append_message_citation_if_missing as append_message_citation, message_citation_link,
-    AnswerEvidenceDirectSource, AnswerEvidenceMemoryCard,
+    append_message_citation_if_missing as append_message_citation, AnswerEvidenceDirectSource,
+    AnswerEvidenceMemoryCard,
 };
 
 mod active_embeddings;
@@ -16,6 +16,7 @@ mod citations_prompt;
 mod context_selection;
 mod evidence;
 mod fallback;
+mod history;
 #[cfg(test)]
 mod knowledge_ask_ai_tests;
 mod knowledge_contexts;
@@ -40,13 +41,12 @@ use evidence::{
     build_external_document_direct_source, build_message_direct_source,
     encode_context_evidence_json_for_question,
 };
-
-const DEFAULT_MAX_HISTORY_MESSAGES: usize = 6;
-const DEFAULT_MAX_HISTORY_MESSAGE_CHARS: usize = 1200;
+use history::{build_recent_conversation_history, build_recent_conversation_history_in_range};
 const DETACHED_ASK_REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
 
+#[cfg(test)]
 fn format_history_line(role: &str, message_id: &str, content: &str) -> String {
-    match message_citation_link(message_id) {
+    match crate::message_citations::message_citation_link(message_id) {
         Some(citation) => {
             let sep = if content.ends_with('\n') { "" } else { "\n" };
             format!("{role}: {content}{sep}{citation}\n")
@@ -54,7 +54,6 @@ fn format_history_line(role: &str, message_id: &str, content: &str) -> String {
         None => format!("{role}: {content}\n"),
     }
 }
-
 #[derive(Debug)]
 pub struct StreamCancelled;
 
@@ -115,14 +114,7 @@ struct ContextWithEvidence {
 }
 
 fn now_ms() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .try_into()
-        .unwrap_or(i64::MAX)
+    crate::platform::time::now_ms()
 }
 
 fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
@@ -271,105 +263,6 @@ fn build_actions_context(
         out.push_str(&line);
         out.push('\n');
     }
-    Ok(Some(out))
-}
-
-fn build_recent_conversation_history(
-    conn: &Connection,
-    key: &[u8; 32],
-    conversation_id: &str,
-) -> Result<Option<String>> {
-    let page = db::list_messages_page(conn, key, conversation_id, None, None, 32)?;
-
-    let mut kept = Vec::new();
-    for msg in page {
-        let content = msg.content.trim();
-        if content.is_empty() {
-            continue;
-        }
-
-        let role = match msg.role.as_str() {
-            "user" => "User",
-            "assistant" => "Assistant",
-            other => other,
-        };
-
-        let truncated: String = content
-            .chars()
-            .take(DEFAULT_MAX_HISTORY_MESSAGE_CHARS)
-            .collect();
-        kept.push((role.to_string(), msg.id.clone(), truncated));
-        if kept.len() >= DEFAULT_MAX_HISTORY_MESSAGES {
-            break;
-        }
-    }
-
-    if kept.is_empty() {
-        return Ok(None);
-    }
-
-    kept.reverse();
-
-    let mut out = String::new();
-    for (role, message_id, content) in kept {
-        out.push_str(&format_history_line(&role, &message_id, &content));
-    }
-
-    Ok(Some(out))
-}
-
-fn build_recent_conversation_history_in_range(
-    conn: &Connection,
-    key: &[u8; 32],
-    conversation_id: &str,
-    start_at_ms_inclusive: i64,
-    end_at_ms_exclusive: i64,
-) -> Result<Option<String>> {
-    // Use a larger page so that "last week" (or similar) can skip current messages and still
-    // include enough in-range history.
-    let page = db::list_messages_page(conn, key, conversation_id, None, None, 200)?;
-
-    let mut kept = Vec::new();
-    for msg in page {
-        if msg.created_at_ms < start_at_ms_inclusive {
-            break;
-        }
-        if msg.created_at_ms >= end_at_ms_exclusive {
-            continue;
-        }
-
-        let content = msg.content.trim();
-        if content.is_empty() {
-            continue;
-        }
-
-        let role = match msg.role.as_str() {
-            "user" => "User",
-            "assistant" => "Assistant",
-            other => other,
-        };
-
-        let truncated: String = content
-            .chars()
-            .take(DEFAULT_MAX_HISTORY_MESSAGE_CHARS)
-            .collect();
-        kept.push((role.to_string(), msg.id.clone(), truncated));
-        if kept.len() >= DEFAULT_MAX_HISTORY_MESSAGES {
-            break;
-        }
-    }
-
-    if kept.is_empty() {
-        return Ok(None);
-    }
-
-    kept.reverse();
-
-    let mut out = String::new();
-    for (role, message_id, content) in kept {
-        out.push_str(&format_history_line(&role, &message_id, &content));
-    }
-
     Ok(Some(out))
 }
 

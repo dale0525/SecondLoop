@@ -128,7 +128,7 @@ pub(super) fn attempt_remote_ahead_repair(
 }
 
 pub(super) fn probe_pull_response_with_max(
-    http: &reqwest::blocking::Client,
+    http: &super::runtime::Client,
     endpoint_json: &str,
     id_token: &str,
     request: &super::PullRequest<'_>,

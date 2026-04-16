@@ -1,14 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use crate::knowledge::{
     ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeUnit, KnowledgeUnitKind, SegmentDraft,
 };
 
 fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_millis().min(i64::MAX as u128) as i64)
-        .unwrap_or(0)
+    crate::platform::time::now_ms()
 }
 
 fn estimate_token_count(text: &str) -> usize {

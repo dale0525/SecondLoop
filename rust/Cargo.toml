@@ -15,18 +15,31 @@ chacha20poly1305 = "0.10"
 flate2 = "1"
 lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
 rand = "0.8"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
-rusqlite = { version = "0.33", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 quick-xml = "0.31"
-sqlite-vec = "0.1.7-alpha.2"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "js"] }
 zerocopy = { version = "0.8", features = ["alloc"] }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 time = { version = "=0.3.45", features = ["formatting", "parsing"] }
 unicode-normalization = "0.1"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
+rusqlite = { version = "0.39", features = ["bundled"] }
+sqlite-vec = "0.1.7-alpha.2"
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+console_error_panic_hook = "0.1"
+getrandom = { version = "0.2", features = ["js"] }
+hound = "3.5"
+js-sys = "0.3"
+reqwest = { package = "reqwest-wasm", version = "0.11.16", default-features = false, features = ["blocking", "json", "multipart"] }
+rsqlite-vfs = "0.1"
+rusqlite = "0.39"
+sqlite-wasm-vfs = "0.2"
+web-sys = { version = "0.3", features = ["XmlHttpRequest", "XmlHttpRequestResponseType"] }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 fastembed = { version = "=5.8.0", default-features = false, features = ["hf-hub-rustls-tls", "ort-load-dynamic"] }
@@ -59,3 +72,5 @@ zune-jpeg = { path = "../third_party/zune-jpeg-patched" }
 # Work around cargo-expand failures on stable Rust (1.85) caused by a
 # let-chain expression in paddle-ocr-rs.
 paddle-ocr-rs = { path = "../third_party/paddle-ocr-rs-patched" }
+sqlite-wasm-rs = { path = "../third_party/sqlite-wasm-rs-patched" }
+rusqlite = { path = "../third_party/rusqlite-patched" }

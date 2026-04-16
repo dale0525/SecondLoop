@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/ai/ai_routing.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 import 'task_priority_ai_models.dart';
 import 'task_priority_models.dart';
 
@@ -544,7 +545,7 @@ TaskPriorityAiRequest buildTaskPriorityAiRequest(
   final candidates = <TaskPriorityAiCandidate>[];
   for (final entry in snapshot.activeEntries) {
     if (candidates.length >= candidateLimit) break;
-    final reviewStage = entry.todo.reviewStage ?? 0;
+    final reviewStage = platformIntToNullableInt(entry.todo.reviewStage) ?? 0;
     candidates.add(
       TaskPriorityAiCandidate(
         todoId: entry.todo.id,
@@ -563,7 +564,7 @@ TaskPriorityAiRequest buildTaskPriorityAiRequest(
                             ? 'snoozed'
                             : 'unscheduled',
         ruleScore: entry.ruleScore,
-        updatedAtMs: entry.todo.updatedAtMs,
+        updatedAtMs: platformIntToInt(entry.todo.updatedAtMs),
         recentInteractionSummary: _recentInteractionSummary(entry, nowLocal),
         sourceSummary: entry.todo.sourceEntryId == null
             ? 'standalone task'
@@ -585,9 +586,10 @@ TaskPriorityAiRequest buildTaskPriorityAiRequest(
 }
 
 String _recentInteractionSummary(TaskPriorityEntry entry, DateTime nowLocal) {
-  final updatedAt =
-      DateTime.fromMillisecondsSinceEpoch(entry.todo.updatedAtMs, isUtc: true)
-          .toLocal();
+  final updatedAt = DateTime.fromMillisecondsSinceEpoch(
+    platformIntToInt(entry.todo.updatedAtMs),
+    isUtc: true,
+  ).toLocal();
   final age = nowLocal.difference(updatedAt);
   if (age.inHours < 24) {
     return 'updated within the last day';

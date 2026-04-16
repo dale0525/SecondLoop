@@ -75,8 +75,9 @@ pub(super) fn apply_pending_ops_until_stable(
     db_key: &[u8; 32],
     scope_id: &str,
     pending: &mut BTreeSet<String>,
-) -> Result<()> {
+) -> Result<u64> {
     const MAX_PASSES: usize = 10;
+    let mut applied = 0u64;
     for _ in 0..MAX_PASSES {
         let mut progressed = false;
 
@@ -97,6 +98,7 @@ pub(super) fn apply_pending_ops_until_stable(
                         params![pending_apply_key(scope_id, &op_id)],
                     )?;
                     pending.remove(&op_id);
+                    applied += 1;
                     progressed = true;
                 }
                 Some(false) => {}
@@ -107,7 +109,7 @@ pub(super) fn apply_pending_ops_until_stable(
             break;
         }
     }
-    Ok(())
+    Ok(applied)
 }
 
 pub(super) fn rewind_since_for_unresolved_pending_devices(

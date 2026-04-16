@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +19,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/update/update_event_log.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/api/sync_diagnostics.dart' as rust_sync_diagnostics;
+import '../../web_app/web_formal_settings_scope.dart';
 
 class DiagnosticsPage extends StatefulWidget {
   const DiagnosticsPage({super.key});
@@ -31,6 +31,11 @@ class DiagnosticsPage extends StatefulWidget {
 class _DiagnosticsPageState extends State<DiagnosticsPage> {
   Future<String>? _jsonFuture;
   bool _busy = false;
+
+  SyncConfigStore _syncConfigStore(BuildContext context) {
+    final webSettings = WebFormalSettingsScope.maybeOf(context)?.dependencies;
+    return webSettings?.vaultConfigStore ?? SyncConfigStore();
+  }
 
   String _backendTypeToken(SyncBackendType backendType) {
     return switch (backendType) {
@@ -66,7 +71,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
   }
 
   Future<Map<String, Object?>> _buildSyncDiagnostics() async {
-    final store = SyncConfigStore();
+    final store = _syncConfigStore(context);
     final syncLogsByBackend = <String, Object?>{};
     final syncBackoffByBackend = <String, Object?>{};
     SyncBackgroundResult? latestSyncLog;
@@ -168,6 +173,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final now = DateTime.now();
+    final syncConfigStore = _syncConfigStore(context);
 
     final cloudScope = CloudAuthScope.maybeOf(context);
     final subscription = SubscriptionScope.maybeOf(context)?.status;
@@ -211,7 +217,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
 
     SyncConfig? syncConfig;
     try {
-      syncConfig = await SyncConfigStore().loadConfiguredSync();
+      syncConfig = await syncConfigStore.loadConfiguredSync();
     } catch (_) {
       syncConfig = null;
     }
@@ -330,13 +336,16 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     setState(() => _busy = true);
     try {
       final json = await _getJson();
-      final dir = await getTemporaryDirectory();
       final safeTs =
           DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
-      final file = File('${dir.path}/secondloop_diagnostics_$safeTs.json');
-      await file.writeAsString(json);
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [
+          XFile.fromData(
+            Uint8List.fromList(utf8.encode(json)),
+            mimeType: 'application/json',
+            name: 'secondloop_diagnostics_$safeTs.json',
+          ),
+        ],
         text: '${t.app.title} ${t.settings.diagnostics.title}',
       );
     } catch (e) {

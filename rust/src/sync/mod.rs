@@ -5,6 +5,10 @@ pub mod blob_repair;
 pub mod localdir;
 pub mod managed_vault;
 pub mod recovery_key;
+#[cfg(not(target_family = "wasm"))]
+pub mod webdav;
+#[cfg(target_family = "wasm")]
+#[path = "webdav_wasm.rs"]
 pub mod webdav;
 pub mod webdav_manifest;
 

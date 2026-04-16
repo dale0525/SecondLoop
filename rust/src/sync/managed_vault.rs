@@ -28,8 +28,9 @@ mod v2_client;
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
 use pending_apply::{
-    apply_pending_ops_until_stable, is_foreign_key_constraint_error, load_pending_apply_op_ids,
-    pending_apply_key, rewind_since_for_unresolved_pending_devices, update_since_map,
+    apply_pending_ops_until_stable, has_local_oplog_for_device, is_foreign_key_constraint_error,
+    load_pending_apply_op_ids, pending_apply_key, rewind_since_for_unresolved_pending_devices,
+    update_since_map,
 };
 pub use progress::{pull_with_progress, push_ops_only_with_progress};
 pub use pull_loop::pull;
@@ -124,9 +125,38 @@ fn load_since_map(conn: &Connection, scope_id: &str) -> Result<BTreeMap<String, 
     Ok(out)
 }
 
-fn should_fallback_to_json_pull(status: reqwest::StatusCode) -> bool {
-    let code = status.as_u16();
-    code == 404 || code == 408 || code == 429 || status.is_server_error()
+fn write_local_device_id(conn: &Connection, device_id: &str) -> Result<()> {
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('device_id', ?1)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        params![device_id],
+    )?;
+    Ok(())
+}
+
+fn try_recover_pull_forbidden_by_rotating_device_id(
+    conn: &Connection,
+    http: &runtime::Client,
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+    local_device_id: &str,
+) -> Result<Option<String>> {
+    if has_local_oplog_for_device(conn, local_device_id)? {
+        return Ok(None);
+    }
+
+    let next_device_id = uuid::Uuid::new_v4().to_string();
+    runtime::ensure_device_registered(http, base_url, vault_id, id_token, &next_device_id)?;
+    write_local_device_id(conn, &next_device_id).map_err(|error| {
+        anyhow!(
+            "managed-vault device-id rotation registered a new device_id but failed to persist it locally: device_id={next_device_id}; error: {error}"
+        )
+    })?;
+    Ok(Some(next_device_id))
+}
+fn should_fallback_to_json_pull(status_code: u16) -> bool {
+    matches!(status_code, 404 | 408 | 429) || (500..600).contains(&status_code)
 }
 
 pub fn push(

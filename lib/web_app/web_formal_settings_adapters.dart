@@ -15,6 +15,13 @@ import 'web_app_service.dart';
 // `WebFormalSettingsHttpClient.send` before any network call can happen.
 const String kWebFormalSettingsBaseUrl = 'https://web.secondloop.invalid/';
 
+bool isWebFormalSettingsBaseUrl(String baseUrl) {
+  final normalizedBaseUrl = baseUrl.trim().replaceFirst(RegExp(r'/+$'), '');
+  final normalizedSentinel =
+      kWebFormalSettingsBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+  return normalizedBaseUrl == normalizedSentinel;
+}
+
 final class WebAppBillingClient implements BillingClient {
   WebAppBillingClient({
     required this.service,

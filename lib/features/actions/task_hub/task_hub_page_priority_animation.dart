@@ -241,11 +241,13 @@ final class _TaskHubPendingPriorityMutation {
     return _TaskHubPendingPriorityMutation(
       todoId: ticket.createdTodoId ?? todo.id,
       status: todo.status,
-      dueAtMs: todo.dueAtMs,
-      reviewStage: todo.reviewStage,
-      nextReviewAtMs: todo.nextReviewAtMs,
-      manualImportanceNudgeScore: todo.manualImportanceNudgeScore ?? 0,
-      manualUrgencyNudgeScore: todo.manualUrgencyNudgeScore ?? 0,
+      dueAtMs: platformIntToNullableInt(todo.dueAtMs),
+      reviewStage: platformIntToNullableInt(todo.reviewStage),
+      nextReviewAtMs: platformIntToNullableInt(todo.nextReviewAtMs),
+      manualImportanceNudgeScore:
+          platformIntToNullableInt(todo.manualImportanceNudgeScore) ?? 0,
+      manualUrgencyNudgeScore:
+          platformIntToNullableInt(todo.manualUrgencyNudgeScore) ?? 0,
       shouldExistInSnapshot: todo.status != 'dismissed',
       baselineRefreshGeneration: baselineRefreshGeneration,
     );

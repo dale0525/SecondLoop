@@ -740,6 +740,41 @@ final class CloudWebBackend extends AppBackend
   }) {
     return _unsupportedFuture<int>('local dir sync');
   }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    // The shared web shell is already backed by cloud session state, so
+    // explicit managed-vault sync actions are treated as no-ops.
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    return 0;
+  }
 }
 
 final class _DeletedMessageSnapshot {

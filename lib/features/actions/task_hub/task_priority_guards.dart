@@ -1,4 +1,5 @@
 import '../../../src/rust/db.dart';
+import '../../../src/rust/platform_int.dart';
 
 bool hasTaskPriorityHardGuard({
   required bool isOverdue,
@@ -13,8 +14,10 @@ bool hasTaskPriorityHardGuardForTodo(
 }) {
   final dueAtMs = todo.dueAtMs;
   if (dueAtMs == null) return false;
-  final dueLocal =
-      DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
+  final dueLocal = DateTime.fromMillisecondsSinceEpoch(
+    platformIntToInt(dueAtMs),
+    isUtc: true,
+  ).toLocal();
   return dueLocal.isBefore(nowLocal) ||
       (dueLocal.year == nowLocal.year &&
           dueLocal.month == nowLocal.month &&

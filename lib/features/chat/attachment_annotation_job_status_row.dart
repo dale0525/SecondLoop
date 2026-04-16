@@ -12,6 +12,7 @@ import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../attachments/attachment_processing_status.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../../src/rust/platform_int.dart';
 
 enum _AudioTranscribeFailureHintKind {
   payloadTooLarge,
@@ -187,7 +188,7 @@ class _AttachmentAnnotationJobStatusRowState
         _hasLoadedAnnotationPayload = true;
         _lastLoadedPayloadSha256 = attachmentSha256;
         _lastLoadedPayloadStatus = status;
-        _lastLoadedPayloadUpdatedAtMs = updatedAtMs;
+        _lastLoadedPayloadUpdatedAtMs = platformIntToInt(updatedAtMs);
         _lastLoadedPayloadBackend = backendAny;
         _lastLoadedPayloadSessionFingerprint = sessionFingerprint;
       });

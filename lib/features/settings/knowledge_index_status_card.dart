@@ -30,9 +30,12 @@ final class _KnowledgeMemoryStatsCard extends StatelessWidget {
 
   final KnowledgeDebugStats stats;
 
-  String? _formatTimestamp(int? value) {
-    if (value == null || value <= 0) return null;
-    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: false)
+  String? _formatTimestamp(Object? value) {
+    if (value == null) return null;
+    final timestampMs =
+        value is BigInt ? value.toInt() : (value as num).toInt();
+    if (timestampMs <= 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(timestampMs, isUtc: false)
         .toLocal()
         .toString();
   }

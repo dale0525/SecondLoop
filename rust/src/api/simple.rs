@@ -4,7 +4,10 @@ pub fn greet(name: String) -> String {
 }
 
 #[flutter_rust_bridge::frb(init)]
-pub fn init_app() {
+pub async fn init_app() -> anyhow::Result<()> {
     // Default utilities - feel free to customize
     flutter_rust_bridge::setup_default_user_utils();
+    #[cfg(target_family = "wasm")]
+    console_error_panic_hook::set_once();
+    crate::platform::sqlite_runtime::ensure_ready().await
 }

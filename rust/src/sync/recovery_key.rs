@@ -1,10 +1,8 @@
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine as _;
-use rand::rngs::OsRng;
-use rand::RngCore;
 
-use crate::crypto::{decrypt_bytes, derive_root_key, encrypt_bytes, KdfParams};
+use crate::crypto::{decrypt_bytes, derive_root_key, encrypt_bytes, fill_random_bytes, KdfParams};
 
 const RECOVERY_ENVELOPE_AAD: &[u8] = b"sync.recovery.envelope.v1";
 const RECOVERY_SALT_LEN: usize = 16;
@@ -35,7 +33,7 @@ pub fn recovery_kdf_params_v1() -> KdfParams {
 
 pub fn create_recovery_envelope(sync_key: &[u8; 32], passphrase: &str) -> Result<RecoveryEnvelope> {
     let mut salt = [0u8; RECOVERY_SALT_LEN];
-    OsRng.fill_bytes(&mut salt);
+    fill_random_bytes(&mut salt)?;
     create_recovery_envelope_with_params(sync_key, passphrase, &salt, &recovery_kdf_params_v1())
 }
 
