@@ -138,13 +138,12 @@ class _WebAppGateState extends State<WebAppGate> {
       managedVaultDefaultBaseUrl: widget.managedVaultBaseUrl.trim(),
     );
     _syncDefaultsPrimed = false;
-    final primeSyncDefaults =
-        widget.syncDefaultsPrimer?.call(_vaultConfigStore) ??
-            _primeWebFormalSyncDefaults();
-    _syncDefaultsPriming = primeSyncDefaults
-        .timeout(widget.syncDefaultsPrimingTimeout, onTimeout: () {})
-        .whenComplete(() {
-      if (!mounted) return;
+    final primingFuture = (widget.syncDefaultsPrimer?.call(_vaultConfigStore) ??
+            _primeWebFormalSyncDefaults())
+        .timeout(widget.syncDefaultsPrimingTimeout, onTimeout: () {});
+    _syncDefaultsPriming = primingFuture;
+    primingFuture.whenComplete(() {
+      if (!mounted || !identical(_syncDefaultsPriming, primingFuture)) return;
       setState(() {
         _syncDefaultsPrimed = true;
       });

@@ -64,4 +64,33 @@ void main() {
     expect(resolved.supportsDesktopDrop, isFalse);
     expect(resolved.usesCloudSessionModel, isFalse);
   });
+
+  test('platform capabilities compare by value', () {
+    final usesCloudSessionModel = <bool>[true].single;
+    final left = AppPlatformCapabilities(
+      supportsDesktopHotkey: false,
+      supportsBiometricUnlock: false,
+      supportsMigrationArchive: false,
+      supportsAudioRecording: false,
+      supportsDesktopDrop: false,
+      supportsExternalImport: false,
+      supportsDesktopBootSettings: false,
+      supportsCameraCapture: false,
+      usesCloudSessionModel: usesCloudSessionModel,
+    );
+    final right = AppPlatformCapabilities(
+      supportsDesktopHotkey: false,
+      supportsBiometricUnlock: false,
+      supportsMigrationArchive: false,
+      supportsAudioRecording: false,
+      supportsDesktopDrop: false,
+      supportsExternalImport: false,
+      supportsDesktopBootSettings: false,
+      supportsCameraCapture: false,
+      usesCloudSessionModel: usesCloudSessionModel,
+    );
+
+    expect(left, right);
+    expect(left.hashCode, right.hashCode);
+  });
 }

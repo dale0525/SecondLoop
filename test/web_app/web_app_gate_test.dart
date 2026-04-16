@@ -54,6 +54,17 @@ class _FakeCloudAuthController extends ChangeNotifier
   @override
   Future<void> refreshUserInfo() async {}
 
+  void setSession({
+    String? uid,
+    String? email,
+    bool? emailVerified,
+  }) {
+    _uid = uid;
+    _email = email;
+    _emailVerified = emailVerified;
+    notifyListeners();
+  }
+
   @override
   Future<void> sendEmailVerification() async {}
 
@@ -481,5 +492,49 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(WebPublicEntryScaffold), findsOneWidget);
+  });
+
+  testWidgets('stale sync-default priming completion does not unlock new gate',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final firstPrimer = Completer<void>();
+    final secondPrimer = Completer<void>();
+    final controller = _FakeCloudAuthController();
+    final service =
+        _FakeWebAppService(subscription: WebSubscriptionState.unknown);
+    var primerCalls = 0;
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: controller,
+        service: service,
+        injectTestBackend: false,
+        syncDefaultsPrimer: (_) {
+          primerCalls += 1;
+          return primerCalls == 1 ? firstPrimer.future : secondPrimer.future;
+        },
+        syncDefaultsPrimingTimeout: const Duration(days: 1),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(WebPublicEntryScaffold), findsNothing);
+    await tester.pump();
+    controller.setSession(
+      uid: 'uid-2',
+      email: 'user@example.com',
+      emailVerified: true,
+    );
+    await tester.pump();
+
+    firstPrimer.complete();
+    await tester.pump();
+
+    expect(find.byType(WebPublicEntryScaffold), findsNothing);
+
+    secondPrimer.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CloudAccountPanel), findsOneWidget);
   });
 }

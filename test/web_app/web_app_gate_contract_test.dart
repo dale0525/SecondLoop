@@ -40,6 +40,12 @@ void main() {
     expect(source, contains('signedIn: true,'));
   });
 
+  test('web app gate ignores stale sync-default priming completions', () {
+    final source = File('lib/web_app/web_app_gate.dart').readAsStringSync();
+
+    expect(source, contains('identical(_syncDefaultsPriming, primingFuture)'));
+  });
+
   test('obsolete web-only main-shell pages are removed from gate', () {
     final source = File('lib/web_app/web_app_gate.dart').readAsStringSync();
 

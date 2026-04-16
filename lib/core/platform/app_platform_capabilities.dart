@@ -78,4 +78,32 @@ class AppPlatformCapabilities {
   final bool supportsDesktopBootSettings;
   final bool supportsCameraCapture;
   final bool usesCloudSessionModel;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is AppPlatformCapabilities &&
+        other.supportsDesktopHotkey == supportsDesktopHotkey &&
+        other.supportsBiometricUnlock == supportsBiometricUnlock &&
+        other.supportsMigrationArchive == supportsMigrationArchive &&
+        other.supportsAudioRecording == supportsAudioRecording &&
+        other.supportsDesktopDrop == supportsDesktopDrop &&
+        other.supportsExternalImport == supportsExternalImport &&
+        other.supportsDesktopBootSettings == supportsDesktopBootSettings &&
+        other.supportsCameraCapture == supportsCameraCapture &&
+        other.usesCloudSessionModel == usesCloudSessionModel;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        supportsDesktopHotkey,
+        supportsBiometricUnlock,
+        supportsMigrationArchive,
+        supportsAudioRecording,
+        supportsDesktopDrop,
+        supportsExternalImport,
+        supportsDesktopBootSettings,
+        supportsCameraCapture,
+        usesCloudSessionModel,
+      );
 }
