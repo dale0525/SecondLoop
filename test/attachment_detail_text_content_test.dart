@@ -248,7 +248,62 @@ void main() {
       },
     );
 
-    expect(content.full, 'Speaker A: Hello.\nSpeaker B: Hi.');
+    expect(content.full, 'Speaker A: Hello.\n\nSpeaker B: Hi.');
+  });
+
+  test('audio detail full lightly paragraphizes long transcript using segments',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Alice said we should keep the current draft. '
+            'Bob said the deadline felt too tight. '
+            'Alice proposed moving the launch to Friday. '
+            'Bob agreed and asked for one more review.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Alice said we should keep the current draft.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'Bob said the deadline felt too tight.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Alice proposed moving the launch to Friday.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Bob agreed and asked for one more review.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      'Alice said we should keep the current draft. '
+      'Bob said the deadline felt too tight.\n\n'
+      'Alice proposed moving the launch to Friday. '
+      'Bob agreed and asked for one more review.',
+    );
+  });
+
+  test('audio detail full upgrades existing single newlines into paragraphs',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full':
+            'Speaker A: Hello.\nSpeaker B: Hi.\nSpeaker A: Great.',
+      },
+    );
+
+    expect(
+      content.full,
+      'Speaker A: Hello.\n\nSpeaker B: Hi.\n\nSpeaker A: Great.',
+    );
   });
 
   test('audio detail full prefers transcript_full over generic full_text', () {

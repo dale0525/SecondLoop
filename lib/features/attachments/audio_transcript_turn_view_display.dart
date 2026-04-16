@@ -19,7 +19,7 @@ AudioTranscriptTurnViewDisplayText resolveAudioTranscriptTurnViewDisplayText(
   Map<String, Object?>? payload, {
   int maxChars = 280,
 }) {
-  final view = _resolveAudioTranscriptTurnView(payload);
+  final view = resolveAudioTranscriptTurnView(payload);
   if (view == null) {
     return const AudioTranscriptTurnViewDisplayText(excerpt: '', full: '');
   }
@@ -45,18 +45,9 @@ String resolveAudioTranscriptTurnViewDisplayExcerpt(
   ).excerpt;
 }
 
-AudioTranscriptTurnView? _resolveAudioTranscriptTurnView(
+AudioTranscriptTurnView? resolveAudioTranscriptTurnView(
   Map<String, Object?>? payload,
 ) {
-  final persisted = AudioTranscriptTurnView.fromJson(
-    payload?['transcript_turns_v1'],
-  );
-  if (persisted != null &&
-      persisted.status == AudioTranscriptTurnViewStatus.ok &&
-      persisted.turns.isNotEmpty) {
-    return persisted;
-  }
-
   if (payload == null) {
     return null;
   }
@@ -64,6 +55,17 @@ AudioTranscriptTurnView? _resolveAudioTranscriptTurnView(
   final cached = _audioTranscriptTurnViewCache[payload];
   if (cached != null) {
     return cached.view;
+  }
+
+  final persisted = AudioTranscriptTurnView.fromJson(
+    payload['transcript_turns_v1'],
+  );
+  if (persisted != null &&
+      persisted.status == AudioTranscriptTurnViewStatus.ok &&
+      persisted.turns.isNotEmpty) {
+    _audioTranscriptTurnViewCache[payload] =
+        _AudioTranscriptTurnViewCacheEntry(persisted);
+    return persisted;
   }
 
   final legacySegments = audioTranscriptTurnSourceSegmentsFromJson(

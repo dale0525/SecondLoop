@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../i18n/strings.g.dart';
 
+import 'audio_transcript_readable_text.dart';
 import 'audio_transcript_turn_view_display.dart';
 import 'attachment_ocr_text_normalizer.dart';
 import 'attachment_text_source_policy.dart';
@@ -215,6 +216,8 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
       : const AudioTranscriptTurnViewDisplayText(excerpt: '', full: '');
   final audioTurnSummary = audioTurnText.excerpt;
   final audioTurnFull = audioTurnText.full;
+  final audioReadableFull =
+      isAudioPayload ? resolveAudioTranscriptReadableFullText(payload) : '';
 
   final audioSummary = firstNonEmpty(<String?>[
     read('manual_summary'),
@@ -230,8 +233,9 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
 
   final audioFull = firstNonEmpty(<String?>[
     read('manual_full_text'),
-    read('transcript_full'),
+    audioReadableFull,
     audioTurnFull,
+    read('transcript_full'),
     read('full_text'),
     read('manual_summary'),
     read('llm_summary'),
