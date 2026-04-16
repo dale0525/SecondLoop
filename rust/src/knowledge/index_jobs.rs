@@ -831,7 +831,7 @@ fn clear_failed_rebuild_status_if_recovered(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn finalize_if_complete(conn: &Connection) -> Result<()> {
+fn finalize_if_complete(conn: &Connection, key: &[u8; 32]) -> Result<()> {
     let pending: i64 = conn.query_row(
         r#"SELECT COUNT(*)
            FROM knowledge_index_jobs
@@ -908,6 +908,7 @@ fn finalize_if_complete(conn: &Connection) -> Result<()> {
             ],
         )?;
     }
+    let _ = crate::knowledge::compiler::refresh_knowledge_pages_if_required(conn, key)?;
     Ok(())
 }
 
@@ -921,7 +922,8 @@ pub fn ensure_knowledge_rebuild_requested(conn: &Connection) -> Result<()> {
                last_error = NULL,
                current_document_id = NULL,
                current_stage = NULL,
-               cancel_requested = 0
+               cancel_requested = 0,
+               pages_refresh_required = 1
            WHERE state_key = 1"#,
         [],
     )?;
@@ -1004,7 +1006,7 @@ pub fn process_pending_knowledge_index_jobs_active(
     if first_error.is_none() {
         clear_failed_rebuild_status_if_recovered(conn)?;
     }
-    finalize_if_complete(conn)?;
+    finalize_if_complete(conn, key)?;
     if let Some(error) = first_error {
         return Err(error);
     }

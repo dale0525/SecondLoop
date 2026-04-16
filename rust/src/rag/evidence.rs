@@ -247,6 +247,35 @@ pub(super) fn build_memory_card_from_document(
     document_id: &str,
     why_used: &str,
 ) -> Option<AnswerEvidenceMemoryCard> {
+    if document_id.starts_with("page:") {
+        let _ = knowledge::compiler::refresh_knowledge_pages_if_required(conn, key).ok()?;
+        let detail = crate::db::get_knowledge_page_detail(conn, key, document_id)
+            .ok()
+            .flatten()?;
+        let why_used = why_used.trim();
+        let status = knowledge::evidence_memory_status_for_page(&detail.page);
+        return Some(AnswerEvidenceMemoryCard {
+            document_id: detail.page.page_id,
+            title: Some(detail.page.title),
+            summary: Some(detail.page.current_summary),
+            body: Some(detail.page.current_body),
+            source_kind: knowledge::KnowledgeSourceKind::Summary,
+            role: knowledge::KnowledgeRole::Summary,
+            created_at_ms: detail.page.created_at_ms,
+            updated_at_ms: detail.page.updated_at_ms,
+            status,
+            source_count: detail.page.source_count,
+            why_used: if why_used.is_empty() {
+                None
+            } else {
+                Some(why_used.to_string())
+            },
+            use_for_ask_ai: detail.page.answer_policy.default_allowed,
+            is_deleted: detail.page.state == knowledge::KnowledgePageState::Removed,
+            marked_inaccurate: detail.page.state == knowledge::KnowledgePageState::NeedsReview,
+            anchors: knowledge::KnowledgeAnchorSet::default(),
+        });
+    }
     if !document_id.starts_with("generated:")
         || document_id.starts_with("generated:session-digest:")
     {

@@ -1036,7 +1036,32 @@ PRAGMA user_version = 29;
         user_version = 43;
     }
 
-    debug_assert!(user_version >= 43);
+    if user_version < 44 {
+        migrate_from_v43_to_v44(conn)?;
+        user_version = 44;
+    }
+
+    if user_version < 45 {
+        migrate_from_v44_to_v45(conn)?;
+        user_version = 45;
+    }
+
+    if user_version < 46 {
+        migrate_from_v45_to_v46(conn)?;
+        user_version = 46;
+    }
+
+    if user_version < 47 {
+        migrate_from_v46_to_v47(conn)?;
+        user_version = 47;
+    }
+
+    if user_version < 48 {
+        migrate_from_v47_to_v48(conn)?;
+        user_version = 48;
+    }
+
+    debug_assert!(user_version >= 48);
 
     Ok(())
 }

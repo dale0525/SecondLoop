@@ -322,6 +322,77 @@ fn generated_memory_cards_use_corrected_feedback_fields() {
 }
 
 #[test]
+fn page_backed_memory_cards_do_not_report_confirmed_when_page_needs_review() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let mut page = crate::knowledge::KnowledgePage::new(
+        "page:preferences",
+        crate::knowledge::KnowledgePageType::Preferences,
+        "Preferences",
+        1,
+    );
+    page.current_summary = "Reply in Chinese by default.".to_string();
+    page.current_body = "Reply in Chinese by default.\nKeep answers concise.".to_string();
+    page.state = crate::knowledge::KnowledgePageState::NeedsReview;
+    page.answer_policy = crate::knowledge::state_default_answer_policy(page.state);
+    page.human_corrected = true;
+    page.conflict_count = 1;
+    page.source_count = 3;
+
+    crate::db::upsert_compiled_knowledge_pages(
+        &conn,
+        &key,
+        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
+            page,
+            source_document_ids: vec!["doc:language".to_string()],
+            claim_ids: vec!["claim:language".to_string()],
+        }],
+    )
+    .expect("seed page");
+
+    crate::db::apply_knowledge_page_correction(
+        &conn,
+        &key,
+        "page:preferences",
+        Some("Preferences".to_string()),
+        Some("Reply in Chinese by default.".to_string()),
+        Some("Reply in Chinese by default.\nKeep answers concise.".to_string()),
+    )
+    .expect("correct page");
+    crate::db::mark_knowledge_page_wrong(
+        &conn,
+        &key,
+        "page:preferences",
+        crate::knowledge::KnowledgeWrongReason::StatementWrong,
+        Some("Needs review".to_string()),
+    )
+    .expect("mark page wrong");
+    let detail = crate::db::get_knowledge_page_detail(&conn, &key, "page:preferences")
+        .expect("load page detail")
+        .expect("page detail");
+    assert_eq!(
+        detail.page.state,
+        crate::knowledge::KnowledgePageState::NeedsReview
+    );
+
+    let card = build_memory_card_from_document(
+        &conn,
+        &key,
+        "page:preferences",
+        "How should you answer me?",
+    )
+    .expect("page-backed memory card");
+
+    assert_eq!(
+        card.status,
+        crate::knowledge::KnowledgeMemoryStatus::Inferred
+    );
+}
+
+#[test]
 fn external_document_direct_source_percent_encodes_deeplink_targets() {
     let source = build_external_document_direct_source(
         "doc/with slash",

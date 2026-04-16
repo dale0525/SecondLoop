@@ -14,6 +14,7 @@ import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../chat/message_deeplink.dart';
 import '../chat/message_viewer_page.dart';
+import '../knowledge_center/knowledge_page_detail.dart';
 import '../knowledge_viewer/knowledge_document_viewer_page.dart';
 import 'memory_correction_dialog.dart';
 import 'memory_center_models.dart';
@@ -34,6 +35,9 @@ class MemoryDetailPage extends StatefulWidget {
     required String documentId,
     bool startInEditMode = false,
   }) {
+    if (documentId.startsWith('page:')) {
+      return KnowledgePageDetailPage.openPageId(context, pageId: documentId);
+    }
     return Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => wrapPushedPageWithInheritedScopes(

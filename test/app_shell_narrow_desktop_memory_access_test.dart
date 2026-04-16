@@ -8,7 +8,9 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/knowledge_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
+import 'package:secondloop/src/rust/knowledge/history.dart';
 import 'package:secondloop/src/rust/knowledge/models.dart';
+import 'package:secondloop/src/rust/knowledge/pages.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -81,12 +83,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(backend.listKnowledgeDocumentsCalls, 0);
+      expect(backend.listKnowledgePageSummariesCalls, 0);
 
       await tester.tap(find.text('Memory'));
       await tester.pumpAndSettle();
 
-      expect(backend.listKnowledgeDocumentsCalls, greaterThan(0));
+      expect(backend.listKnowledgePageSummariesCalls, greaterThan(0));
     } finally {
       debugDefaultTargetPlatformOverride = previousPlatform;
       await tester.binding.setSurfaceSize(null);
@@ -131,8 +133,8 @@ void main() {
 }
 
 final class _CountingKnowledgeBackend extends TestAppBackend
-    implements KnowledgeBackend {
-  int listKnowledgeDocumentsCalls = 0;
+    implements KnowledgeBackend, KnowledgePagesBackend {
+  int listKnowledgePageSummariesCalls = 0;
 
   @override
   Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) {
@@ -168,8 +170,96 @@ final class _CountingKnowledgeBackend extends TestAppBackend
     int limit = 100,
     int offset = 0,
   }) async {
-    listKnowledgeDocumentsCalls += 1;
     return const <ContentKnowledgeDocument>[];
+  }
+
+  @override
+  Future<List<KnowledgePageSummary>> listKnowledgePageSummaries(
+    Uint8List key,
+  ) async {
+    listKnowledgePageSummariesCalls += 1;
+    return const <KnowledgePageSummary>[];
+  }
+
+  @override
+  Future<KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<KnowledgePageSummary>> listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async =>
+      const <KnowledgePageSummary>[];
+
+  @override
+  Future<KnowledgePageDetail> correctKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? title,
+    String? summary,
+    String? body,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<KnowledgePageDetail> markKnowledgePageWrong(
+    Uint8List key, {
+    required String pageId,
+    required KnowledgeWrongReason reason,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<KnowledgePageDetail> setKnowledgePageAnswerAllowed(
+    Uint8List key, {
+    required String pageId,
+    required bool allowed,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<KnowledgePageChangeRecord>> listRecentKnowledgePageChanges(
+    Uint8List key, {
+    int limit = 8,
+  }) async =>
+      const <KnowledgePageChangeRecord>[];
+
+  @override
+  Future<KnowledgePageDetail> archiveKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<KnowledgePageDetail> removeKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<KnowledgePageDetail> mergeKnowledgePageInto(
+    Uint8List key, {
+    required String pageId,
+    required String targetPageId,
+    String? note,
+  }) {
+    throw UnimplementedError();
   }
 
   @override

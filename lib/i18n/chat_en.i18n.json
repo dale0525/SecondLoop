@@ -262,19 +262,19 @@
     "title": "Evidence",
     "summary": {
       "sourcesUsed": "$count sources",
-      "memoryCardsUsed": "$count memory cards",
+      "memoryCardsUsed": "$count knowledge pages",
       "openEvidence": "Open evidence"
     },
     "tabs": {
       "directSources": "Direct sources ($count)",
-      "memoryCards": "Memory cards ($count)"
+      "memoryCards": "Knowledge pages ($count)"
     },
     "actions": {
       "viewOriginal": "View original",
-      "inspectMemory": "Inspect memory",
+      "inspectMemory": "Inspect page",
       "correct": "Correct",
-      "dontUse": "Don't use",
-      "deleteMemory": "Delete"
+      "dontUse": "Stop using in answers",
+      "deleteMemory": "Archive"
     },
     "labels": {
       "whyUsed": "Why it was used",

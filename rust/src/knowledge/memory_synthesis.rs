@@ -6,9 +6,9 @@ use crate::crypto::decrypt_bytes;
 use crate::db;
 use crate::knowledge::models::GeneratedMemoryKind;
 use crate::knowledge::{
-    infer_generated_memory_section, infer_memory_status, memory_dedup, ContentKnowledgeDocument,
-    KnowledgeAnchorSet, KnowledgeMemoryDisplay, KnowledgeMemoryFeedback, KnowledgeOriginType,
-    KnowledgeRole, KnowledgeSourceKind, KnowledgeVersionSet,
+    infer_generated_memory_section, infer_memory_status, is_cjk_unified_ideograph, memory_dedup,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeMemoryDisplay, KnowledgeMemoryFeedback,
+    KnowledgeOriginType, KnowledgeRole, KnowledgeSourceKind, KnowledgeVersionSet,
 };
 
 struct GeneratedMemoryDraft {
@@ -77,6 +77,7 @@ pub fn collect_generated_memory_documents(
     let raw_messages = collect_raw_user_messages(conn, key)?;
     let mut drafts = Vec::<GeneratedMemoryDraft>::new();
     collect_preference_memories(&raw_messages, &mut drafts);
+    collect_relationship_memories(&raw_messages, &mut drafts);
     collect_profile_memories(&raw_messages, &mut drafts);
     collect_event_memories(&raw_messages, &mut drafts);
     collect_pattern_memories(conn, key, &mut drafts)?;
@@ -354,6 +355,169 @@ fn collect_profile_memories(messages: &[RawUserMessage], out: &mut Vec<Generated
     }
 }
 
+fn collect_relationship_memories(messages: &[RawUserMessage], out: &mut Vec<GeneratedMemoryDraft>) {
+    for message in messages {
+        let trimmed = message.content.trim();
+        let Some(name) = extract_relationship_person_name(trimmed) else {
+            continue;
+        };
+        let facet_key = format!("person_{}", sanitize_relationship_facet(&name));
+        out.push(GeneratedMemoryDraft {
+            kind: GeneratedMemoryKind::Profile,
+            facet_key,
+            title: name,
+            raw_text: trimmed.to_string(),
+            created_at_ms: message.created_at_ms,
+            updated_at_ms: message.updated_at_ms,
+            anchors: KnowledgeAnchorSet {
+                message_id: Some(message.message_id.clone()),
+                conversation_id: None,
+                section_label: Some("generated_relationship".to_string()),
+                ..KnowledgeAnchorSet::default()
+            },
+            source_id: Some(message.message_id.clone()),
+            source_keys: BTreeSet::from([message.message_id.clone()]),
+        });
+    }
+}
+
+fn extract_relationship_person_name(trimmed: &str) -> Option<String> {
+    const EN_RELATIONS: [&str; 17] = [
+        "manager",
+        "boss",
+        "coworker",
+        "colleague",
+        "teammate",
+        "mentor",
+        "teacher",
+        "doctor",
+        "lawyer",
+        "friend",
+        "partner",
+        "wife",
+        "husband",
+        "mother",
+        "father",
+        "mom",
+        "dad",
+    ];
+
+    let lower = trimmed.to_lowercase();
+    for relation in EN_RELATIONS {
+        let marker = format!(" is my {relation}");
+        if let Some(index) = lower.find(&marker) {
+            let candidate = trimmed[..index]
+                .trim()
+                .trim_matches(|ch: char| matches!(ch, ',' | '.' | '!' | '?'));
+            if looks_like_person_name(candidate) {
+                return Some(candidate.to_string());
+            }
+        }
+        let marker = format!("my {relation} is ");
+        if let Some(index) = lower.find(&marker) {
+            let candidate = extract_leading_person_name(&trimmed[index + marker.len()..]);
+            if looks_like_person_name(candidate) {
+                return Some(candidate.to_string());
+            }
+        }
+    }
+
+    const ZH_RELATIONS: [&str; 11] = [
+        "经理", "老板", "同事", "朋友", "老师", "医生", "律师", "伴侣", "妻子", "丈夫", "家人",
+    ];
+    for relation in ZH_RELATIONS {
+        let marker = format!("是我的{relation}");
+        if let Some(index) = trimmed.find(&marker) {
+            let candidate = trimmed[..index].trim();
+            if looks_like_person_name(candidate) {
+                return Some(candidate.to_string());
+            }
+        }
+        let marker = format!("我的{relation}是");
+        if let Some(index) = trimmed.find(&marker) {
+            let candidate = extract_leading_person_name(&trimmed[index + marker.len()..]);
+            if looks_like_person_name(candidate) {
+                return Some(candidate.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+fn extract_leading_person_name(value: &str) -> &str {
+    let trimmed = value.trim();
+    let mut end = trimmed.len();
+    for separator in [
+        ",",
+        ".",
+        "!",
+        "?",
+        " and ",
+        " but ",
+        " because ",
+        "，",
+        "。",
+        "！",
+        "？",
+        "、",
+        "并且",
+        "而且",
+        "负责",
+        "会",
+        "是",
+    ] {
+        if let Some(index) = trimmed.find(separator) {
+            end = end.min(index);
+        }
+    }
+    trimmed[..end].trim()
+}
+
+fn looks_like_person_name(candidate: &str) -> bool {
+    let candidate = candidate.trim();
+    if candidate.is_empty() {
+        return false;
+    }
+    if candidate
+        .chars()
+        .all(|ch| !ch.is_alphabetic() && !is_cjk_unified_ideograph(ch))
+    {
+        return false;
+    }
+    let ascii_words = candidate
+        .split_whitespace()
+        .filter(|part| !part.trim().is_empty())
+        .collect::<Vec<_>>();
+    if !ascii_words.is_empty() && ascii_words.len() <= 4 {
+        return ascii_words.iter().all(|part| {
+            part.chars()
+                .next()
+                .is_some_and(|first| first.is_uppercase() || is_cjk_unified_ideograph(first))
+        });
+    }
+    candidate.chars().count() <= 8
+}
+
+fn sanitize_relationship_facet(value: &str) -> String {
+    let mut out = String::new();
+    let mut last_underscore = false;
+    for ch in value.chars() {
+        if ch.is_alphanumeric() {
+            for normalized in ch.to_lowercase() {
+                out.push(normalized);
+            }
+            last_underscore = false;
+            continue;
+        }
+        if !last_underscore {
+            out.push('_');
+            last_underscore = true;
+        }
+    }
+    out.trim_matches('_').to_string()
+}
+
 fn looks_like_decision_statement(content: &str, lower: &str) -> bool {
     lower.contains("we decided")
         || lower.contains("team decided")
@@ -443,7 +607,7 @@ fn collect_pattern_memories(
 
 #[cfg(test)]
 mod tests {
-    use super::collect_generated_memory_documents;
+    use super::{collect_generated_memory_documents, sanitize_relationship_facet};
     use crate::db;
     use crate::knowledge::KnowledgeOriginType;
 
@@ -774,5 +938,66 @@ mod tests {
             .expect("profile doc");
 
         assert_eq!(doc.raw_text, "I am a developer.");
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_emits_relationship_memory_for_accented_name() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [104u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(
+            &conn,
+            &key,
+            &conv.id,
+            "user",
+            "Élodie Durand is my manager and approves budget requests.",
+        )
+        .expect("accented relationship");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.title.as_deref() == Some("Élodie Durand"))
+            .expect("relationship doc");
+
+        assert_eq!(doc.document_id, "generated:profile:person-élodie-durand");
+        assert_eq!(
+            doc.raw_text,
+            "Élodie Durand is my manager and approves budget requests."
+        );
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_emits_relationship_memory_for_relation_first_sentence() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [105u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(
+            &conn,
+            &key,
+            &conv.id,
+            "user",
+            "My manager is Alice Chen and she approves budget requests.",
+        )
+        .expect("relation-first relationship");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.title.as_deref() == Some("Alice Chen"))
+            .expect("relationship doc");
+
+        assert_eq!(doc.document_id, "generated:profile:person-alice-chen");
+        assert_eq!(
+            doc.raw_text,
+            "My manager is Alice Chen and she approves budget requests."
+        );
+    }
+
+    #[test]
+    fn sanitize_relationship_facet_preserves_cjk_characters() {
+        assert_eq!(sanitize_relationship_facet("张 伟"), "张_伟");
     }
 }

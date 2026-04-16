@@ -52,6 +52,159 @@ extension NativeAppBackendKnowledgeExtension on NativeAppBackend {
     );
   }
 
+  Future<List<rust_knowledge_pages.KnowledgePageSummary>>
+      listKnowledgePageSummaries(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbListKnowledgePageSummaries(
+        appDir: appDir, key: key);
+  }
+
+  Future<List<rust_knowledge_pages.KnowledgePageSummary>>
+      listKnowledgePageSummariesByIds(
+    Uint8List key, {
+    required List<String> pageIds,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbListKnowledgePageSummariesByIds(
+      appDir: appDir,
+      key: key,
+      pageIds: pageIds,
+    );
+  }
+
+  Future<List<rust_knowledge_pages.KnowledgePageSummary>>
+      listMergeableKnowledgePageSummaries(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbListMergeableKnowledgePageSummaries(
+      appDir: appDir,
+      key: key,
+      pageId: pageId,
+    );
+  }
+
+  Future<List<rust_knowledge_history.KnowledgePageChangeRecord>>
+      listRecentKnowledgePageChanges(
+    Uint8List key, {
+    int limit = 8,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbListRecentKnowledgePageChanges(
+      appDir: appDir,
+      key: key,
+      limit: limit,
+    );
+  }
+
+  Future<rust_knowledge_pages.KnowledgePageDetail> getKnowledgePageDetail(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbGetKnowledgePageDetail(
+      appDir: appDir,
+      key: key,
+      pageId: pageId,
+    );
+  }
+
+  Future<rust_knowledge_pages.KnowledgePageDetail> correctKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? title,
+    String? summary,
+    String? body,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbCorrectKnowledgePage(
+      appDir: appDir,
+      key: key,
+      pageId: pageId,
+      title: title,
+      summary: summary,
+      body: body,
+    );
+  }
+
+  Future<rust_knowledge_pages.KnowledgePageDetail> markKnowledgePageWrong(
+    Uint8List key, {
+    required String pageId,
+    required rust_knowledge_pages.KnowledgeWrongReason reason,
+    String? note,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbMarkKnowledgePageWrong(
+      appDir: appDir,
+      key: key,
+      pageId: pageId,
+      reason: reason,
+      note: note,
+    );
+  }
+
+  Future<rust_knowledge_pages.KnowledgePageDetail>
+      setKnowledgePageAnswerAllowed(
+    Uint8List key, {
+    required String pageId,
+    required bool allowed,
+    String? note,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbSetKnowledgePageAnswerAllowed(
+      appDir: appDir,
+      key: key,
+      pageId: pageId,
+      allowed: allowed,
+      note: note,
+    );
+  }
+
+  Future<rust_knowledge_pages.KnowledgePageDetail> archiveKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbArchiveKnowledgePage(
+      appDir: appDir,
+      key: key,
+      pageId: pageId,
+      note: note,
+    );
+  }
+
+  Future<rust_knowledge_pages.KnowledgePageDetail> removeKnowledgePage(
+    Uint8List key, {
+    required String pageId,
+    String? note,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbRemoveKnowledgePage(
+      appDir: appDir,
+      key: key,
+      pageId: pageId,
+      note: note,
+    );
+  }
+
+  Future<rust_knowledge_pages.KnowledgePageDetail> mergeKnowledgePageInto(
+    Uint8List key, {
+    required String pageId,
+    required String targetPageId,
+    String? note,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbMergeKnowledgePageInto(
+      appDir: appDir,
+      key: key,
+      pageId: pageId,
+      targetPageId: targetPageId,
+      note: note,
+    );
+  }
+
   Future<List<rust_knowledge_models.ContentKnowledgeDocument>>
       listGeneratedMemoryDocuments(
     Uint8List key, {

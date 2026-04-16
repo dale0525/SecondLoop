@@ -1,12 +1,34 @@
 {
-  "title": "Memory",
-  "emptyState": "No memory cards yet.",
+  "title": "Knowledge Center",
+  "emptyState": "No knowledge pages yet.",
+  "groups": {
+    "active": "Current pages",
+    "review": "Needs review",
+    "archived": "Muted or archived"
+  },
+  "homepage": {
+    "currentMe": "Current Me",
+    "needsAttention": "Needs Your Attention",
+    "recentChanges": "Recent Changes",
+    "myWiki": "My Wiki",
+    "systemActivity": "System Activity",
+    "reviewCta": "Review",
+    "reviewReason": "This page needs a closer look before it should guide answers.",
+    "outdatedReason": "This page may be outdated and should be checked with time context.",
+    "directoryCount": "$count pages",
+    "pagesUsedInAnswersRecently": "Pages used in answers recently",
+    "systemActivitySummary": "$totalPages pages in the wiki, $needsReview currently need review."
+  },
   "sections": {
+    "aboutMe": "About Me",
     "preferences": "Preferences",
+    "currentFocus": "Current Focus",
+    "activeThreads": "Active Threads",
+    "recentEvents": "Recent Events",
     "people": "People",
-    "projects": "Projects",
     "topics": "Topics",
-    "recentEvents": "Recent events"
+    "openQuestions": "Open Questions",
+    "projects": "Current focus"
   },
   "meta": {
     "sourceCount": "$count sources",
@@ -19,14 +41,44 @@
     "inferred": "Inferred",
     "maybeOutdated": "Maybe outdated"
   },
+  "pageStates": {
+    "active": "Current",
+    "needsReview": "Needs review",
+    "outdated": "Outdated",
+    "answerMuted": "Not used in answers",
+    "archived": "Archived",
+    "removed": "Removed"
+  },
   "detail": {
     "currentConclusion": "Current conclusion",
+    "evidenceBasis": "Evidence Basis",
+    "evidenceSummary": "Evidence summary",
+    "evidenceSummaryBody": "$sourceCount source documents currently support this page. Conflicts detected: $conflictCount.",
     "evidenceTimeline": "Evidence timeline",
-    "usedByAskAi": "Used by Ask AI",
-    "notUsedByAskAi": "Not used by Ask AI",
-    "markedInaccurate": "Marked inaccurate",
-    "deleted": "Memory deleted",
-    "actions": "Actions",
+    "versionHistory": "Version history",
+    "supportingEvidence": "Supporting evidence",
+    "latestSupportingEvidence": "Latest support",
+    "conflictingEvidencePresent": "Conflicting evidence exists for this page.",
+    "conflictingEvidenceAbsent": "No conflicting evidence is currently recorded.",
+    "sourceMix": "Source mix: $types",
+    "noEvidenceEntries": "No evidence entries yet.",
+    "noVersionSnapshots": "No prior versions yet.",
+    "usedByAskAi": "Used in answers",
+    "notUsedByAskAi": "Not used in answers",
+    "markedInaccurate": "Needs review",
+    "deleted": "Page deleted",
+    "actions": "Page actions",
+    "systemStatus": "System Judgment",
+    "systemStatusBody": "Page type: $pageType. Confidence: $confidence%. Sources: $sourceCount. Conflicts: $conflictCount.",
+    "youMayWantToDo": "You May Want to Do",
+    "guidanceNeedsReview": "This page is currently excluded from default answers and should be reviewed.",
+    "guidanceMutedFromAnswers": "This page is muted from answers and can be restored when ready.",
+    "guidanceUsedRecently": "This page was used in answers recently and is worth verifying.",
+    "guidanceEverythingStable": "This page currently looks stable.",
+    "history": "Recent changes",
+    "lint": "System warnings",
+    "relatedPages": "Related Pages",
+    "sourceDocuments": "Source documents",
     "sourceTypes": {
       "message": "Chat message",
       "attachment": "Attachment",
@@ -43,17 +95,59 @@
     }
   },
   "actions": {
-    "editMemory": "Edit memory",
-    "markInaccurate": "Mark inaccurate",
-    "clearInaccurate": "Clear inaccurate mark",
-    "stopUsingForAskAi": "Stop using for Ask AI",
-    "useForAskAiAgain": "Use for Ask AI again",
-    "deleteMemory": "Delete memory",
-    "restoreMemory": "Restore memory",
+    "editMemory": "Correct current conclusion",
+    "markInaccurate": "This page is wrong",
+    "clearInaccurate": "Restore as current",
+    "stopUsingForAskAi": "Stop using in answers",
+    "useForAskAiAgain": "Use in answers again",
+    "deleteMemory": "Archive page",
+    "restoreMemory": "Restore page",
+    "viewEvidence": "View Evidence",
+    "viewHistory": "View History",
+    "reviewSignals": "Review Signals",
+    "archivePage": "Archive Page",
+    "mergePages": "Merge Pages",
+    "permanentlyRemove": "Permanently Remove",
     "fields": {
       "title": "Title",
-      "summary": "Summary"
+      "summary": "Conclusion",
+      "body": "Body"
     }
+  },
+  "history": {
+    "created": "Created",
+    "updated": "Updated",
+    "corrected": "Corrected",
+    "downgraded": "Needs review",
+    "muted": "Muted from answers",
+    "archived": "Archived",
+    "removed": "Removed",
+    "merged": "Merged",
+    "noReason": "No reason recorded."
+  },
+  "lintKinds": {
+    "conflict": "Conflict",
+    "staleness": "Staleness",
+    "fragmentation": "Fragmentation",
+    "unusedKnowledge": "Unused knowledge",
+    "evidenceWeakness": "Evidence weakness",
+    "regenerationRisk": "Regeneration risk"
+  },
+  "evidenceKinds": {
+    "support": "Support",
+    "conflict": "Conflict",
+    "supplement": "Supplement"
+  },
+  "views": {
+    "history": "History",
+    "evidence": "Evidence",
+    "review": "Review and lint"
+  },
+  "wrongReasons": {
+    "statementWrong": "The conclusion is wrong",
+    "outdated": "This page is outdated",
+    "incomplete": "This page is incomplete",
+    "shouldNotRemember": "This should not be remembered"
   },
   "generatedTitles": {
     "activeTaskPattern": "Active task pattern",

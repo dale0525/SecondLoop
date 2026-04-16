@@ -20,6 +20,14 @@ mod fallback;
 mod knowledge_ask_ai_tests;
 mod knowledge_contexts;
 #[cfg(test)]
+mod knowledge_contexts_page_tests;
+#[cfg(test)]
+mod knowledge_contexts_refresh_tests;
+#[cfg(test)]
+mod knowledge_contexts_scope_tests;
+#[cfg(test)]
+mod knowledge_contexts_tests;
+#[cfg(test)]
 mod tests;
 
 use attachment_resources::{

@@ -14,7 +14,28 @@ import '../attachments/attachment_viewer_page.dart';
 import '../chat/message_viewer_page.dart';
 
 class SemanticSearchDebugPage extends StatefulWidget {
-  const SemanticSearchDebugPage({super.key});
+  const SemanticSearchDebugPage({
+    super.key,
+    this.showDebugControls = true,
+    this.title,
+  });
+
+  final bool showDebugControls;
+  final String? title;
+
+  static Future<void> openSearch(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          SemanticSearchDebugPage(
+            showDebugControls: false,
+            title: context.t.common.actions.search,
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   State<SemanticSearchDebugPage> createState() =>
@@ -36,7 +57,10 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadEmbeddingModels());
+    if (widget.showDebugControls) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _loadEmbeddingModels());
+    }
   }
 
   @override
@@ -369,8 +393,12 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     final results = _results;
     final models = _embeddingModels;
     final activeModel = _activeEmbeddingModel;
+    final title = widget.title ??
+        (widget.showDebugControls
+            ? context.t.semanticSearchDebug.title
+            : context.t.common.actions.search);
     return Scaffold(
-      appBar: AppBar(title: Text(context.t.semanticSearchDebug.title)),
+      appBar: AppBar(title: Text(title)),
       body: Column(
         children: [
           Padding(
@@ -378,46 +406,48 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        activeModel == null
-                            ? context
-                                .t.semanticSearchDebug.embeddingModelLoading
-                            : context.t.semanticSearchDebug
-                                .embeddingModel(model: activeModel),
+                if (widget.showDebugControls) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          activeModel == null
+                              ? context
+                                  .t.semanticSearchDebug.embeddingModelLoading
+                              : context.t.semanticSearchDebug
+                                  .embeddingModel(model: activeModel),
+                        ),
                       ),
-                    ),
-                    if (models != null && models.isNotEmpty) ...[
-                      DropdownButton<String>(
-                        value: _selectedEmbeddingModel,
-                        items: models
-                            .map((m) =>
-                                DropdownMenuItem(value: m, child: Text(m)))
-                            .toList(),
-                        onChanged: _busy
-                            ? null
-                            : (v) =>
-                                setState(() => _selectedEmbeddingModel = v),
-                      ),
-                      const SizedBox(width: 12),
-                      OutlinedButton(
-                        onPressed: _busy ? null : _applySelectedModel,
-                        child: Text(context.t.common.actions.useModel),
-                      ),
+                      if (models != null && models.isNotEmpty) ...[
+                        DropdownButton<String>(
+                          value: _selectedEmbeddingModel,
+                          items: models
+                              .map((m) =>
+                                  DropdownMenuItem(value: m, child: Text(m)))
+                              .toList(),
+                          onChanged: _busy
+                              ? null
+                              : (v) =>
+                                  setState(() => _selectedEmbeddingModel = v),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton(
+                          onPressed: _busy ? null : _applySelectedModel,
+                          child: Text(context.t.common.actions.useModel),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-                if (_modelStatus != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _modelStatus!,
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
+                  if (_modelStatus != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _modelStatus!,
+                      style:
+                          TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
                 ],
-                const SizedBox(height: 12),
                 TextField(
                   controller: _queryController,
                   decoration: InputDecoration(
@@ -451,20 +481,22 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    OutlinedButton(
-                      onPressed: _busy ? null : _processPending,
-                      child: Text(context.t.common.actions.processPending),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton(
-                      onPressed: _busy ? null : _rebuildIndex,
-                      child: Text(context.t.common.actions.rebuildEmbeddings),
-                    ),
-                  ],
-                ),
+                if (widget.showDebugControls) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: _busy ? null : _processPending,
+                        child: Text(context.t.common.actions.processPending),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton(
+                        onPressed: _busy ? null : _rebuildIndex,
+                        child: Text(context.t.common.actions.rebuildEmbeddings),
+                      ),
+                    ],
+                  ),
+                ],
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   Text(

@@ -4,13 +4,22 @@ pub const KNOWLEDGE_SEGMENTATION_VERSION: i64 = 1;
 pub const KNOWLEDGE_EMBEDDING_POLICY_VERSION: i64 = 1;
 pub const KNOWLEDGE_RETRIEVAL_POLICY_VERSION: i64 = 1;
 
+pub fn is_cjk_unified_ideograph(ch: char) -> bool {
+    ('\u{4E00}'..='\u{9FFF}').contains(&ch)
+}
+
 pub mod chunk;
+pub mod claims;
+pub mod compiler;
 pub mod embedding_batch;
+pub mod history;
 pub mod index_jobs;
+pub mod lint;
 pub mod memory_dedup;
 pub mod memory_synthesis;
 pub mod models;
 pub mod normalize;
+pub mod pages;
 pub mod rebuild;
 pub mod retrieval;
 pub mod segment;
@@ -19,9 +28,14 @@ pub mod source_adapters;
 pub mod usage;
 
 pub use chunk::{build_chunk_units, build_section_units, build_segment_units};
+pub use claims::{
+    KnowledgeClaim, KnowledgeClaimStatus, KnowledgeClaimTimeScope, KnowledgeClaimType,
+};
+pub use history::{KnowledgePageChangeRecord, KnowledgePageChangeType};
 pub use index_jobs::{
     ensure_knowledge_rebuild_requested, process_pending_knowledge_index_jobs_active,
 };
+pub use lint::{KnowledgeLintKind, KnowledgeLintRecord};
 pub use models::{
     infer_generated_memory_section, infer_memory_status, ContentKnowledgeDocument,
     KnowledgeAnchorSet, KnowledgeContextBlock, KnowledgeDebugStats, KnowledgeIndexStatus,
@@ -31,6 +45,12 @@ pub use models::{
     KnowledgeVersionSet, KnowledgeViewerDocument, KnowledgeViewerPage,
 };
 pub use normalize::normalize_text_for_source;
+pub use pages::{
+    apply_wrong_reason, evidence_memory_status_for_page, state_default_answer_policy,
+    KnowledgeAnswerPolicy, KnowledgePage, KnowledgePageDetail, KnowledgePageEvidenceEntry,
+    KnowledgePageEvidenceKind, KnowledgePageState, KnowledgePageSummary, KnowledgePageType,
+    KnowledgePageVersionSnapshot, KnowledgeWrongReason,
+};
 pub use rebuild::{
     cancel_knowledge_rebuild, get_knowledge_document, list_knowledge_documents,
     list_knowledge_documents_by_origin, list_knowledge_units, list_knowledge_units_around_anchor,
@@ -47,7 +67,13 @@ pub use source_adapters::{collect_source_knowledge_documents, visit_source_knowl
 #[cfg(test)]
 mod chunk_tests;
 #[cfg(test)]
+mod claims_tests;
+#[cfg(test)]
+mod compiler_tests;
+#[cfg(test)]
 mod embedding_batch_tests;
+#[cfg(test)]
+mod history_tests;
 #[cfg(test)]
 mod index_jobs_failure_tests;
 #[cfg(test)]
@@ -57,9 +83,13 @@ mod index_jobs_pagination_tests;
 #[cfg(test)]
 mod index_jobs_tests;
 #[cfg(test)]
+mod lint_tests;
+#[cfg(test)]
 mod models_tests;
 #[cfg(test)]
 mod normalize_tests;
+#[cfg(test)]
+mod pages_tests;
 #[cfg(test)]
 mod rebuild_tests;
 #[cfg(test)]

@@ -262,19 +262,19 @@
     "title": "证据",
     "summary": {
       "sourcesUsed": "$count 个来源",
-      "memoryCardsUsed": "$count 张记忆卡",
+      "memoryCardsUsed": "$count 张知识页",
       "openEvidence": "打开证据"
     },
     "tabs": {
       "directSources": "直接来源（$count）",
-      "memoryCards": "记忆卡（$count）"
+      "memoryCards": "知识页（$count）"
     },
     "actions": {
       "viewOriginal": "查看原文",
-      "inspectMemory": "查看记忆",
+      "inspectMemory": "查看知识页",
       "correct": "纠正",
-      "dontUse": "不要使用",
-      "deleteMemory": "删除"
+      "dontUse": "不再用于回答",
+      "deleteMemory": "归档"
     },
     "labels": {
       "whyUsed": "为何使用",
