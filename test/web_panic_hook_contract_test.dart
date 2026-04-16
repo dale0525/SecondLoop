@@ -36,7 +36,15 @@ void main() {
       managedVault,
       isNot(contains('let _ = write_local_device_id(conn, local_device_id);')),
     );
+    expect(
+      managedVault,
+      isNot(contains('write_local_device_id(conn, &next_device_id)?;')),
+    );
     expect(runtime, contains('dedicated web worker path'));
+    expect(
+      runtime,
+      contains('managed-vault sync XHR must run in a dedicated web worker'),
+    );
     expect(v2Client, isNot(contains('reqwest::blocking::Client')));
     expect(pullRecovery, isNot(contains('reqwest::blocking::Client')));
   });

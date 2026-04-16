@@ -42,6 +42,8 @@ class WebAppGate extends StatefulWidget {
     this.defaultBackendBuilder,
     this.entryIntent = WebEntryIntent.open,
     this.managedVaultBaseUrl = '',
+    this.syncDefaultsPrimer,
+    this.syncDefaultsPrimingTimeout = const Duration(seconds: 2),
     super.key,
   });
 
@@ -52,6 +54,8 @@ class WebAppGate extends StatefulWidget {
   final AppBackend Function()? defaultBackendBuilder;
   final WebEntryIntent entryIntent;
   final String managedVaultBaseUrl;
+  final Future<void> Function(SyncConfigStore store)? syncDefaultsPrimer;
+  final Duration syncDefaultsPrimingTimeout;
 
   @override
   State<WebAppGate> createState() => _WebAppGateState();
@@ -134,7 +138,12 @@ class _WebAppGateState extends State<WebAppGate> {
       managedVaultDefaultBaseUrl: widget.managedVaultBaseUrl.trim(),
     );
     _syncDefaultsPrimed = false;
-    _syncDefaultsPriming = _primeWebFormalSyncDefaults().whenComplete(() {
+    final primeSyncDefaults =
+        widget.syncDefaultsPrimer?.call(_vaultConfigStore) ??
+            _primeWebFormalSyncDefaults();
+    _syncDefaultsPriming = primeSyncDefaults
+        .timeout(widget.syncDefaultsPrimingTimeout, onTimeout: () {})
+        .whenComplete(() {
       if (!mounted) return;
       setState(() {
         _syncDefaultsPrimed = true;

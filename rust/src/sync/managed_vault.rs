@@ -147,19 +147,13 @@ fn try_recover_pull_forbidden_by_rotating_device_id(
     }
 
     let next_device_id = uuid::Uuid::new_v4().to_string();
-    write_local_device_id(conn, &next_device_id)?;
-
-    match runtime::ensure_device_registered(http, base_url, vault_id, id_token, &next_device_id) {
-        Ok(_) => Ok(Some(next_device_id)),
-        Err(error) => {
-            match write_local_device_id(conn, local_device_id) {
-                Ok(_) => Err(error),
-                Err(rollback_error) => Err(anyhow!(
-                    "managed-vault device-id rotation failed and rollback to the previous device_id also failed: registration error: {error}; rollback error: {rollback_error}"
-                )),
-            }
-        }
-    }
+    runtime::ensure_device_registered(http, base_url, vault_id, id_token, &next_device_id)?;
+    write_local_device_id(conn, &next_device_id).map_err(|error| {
+        anyhow!(
+            "managed-vault device-id rotation registered a new device_id but failed to persist it locally: device_id={next_device_id}; error: {error}"
+        )
+    })?;
+    Ok(Some(next_device_id))
 }
 fn should_fallback_to_json_pull(status_code: u16) -> bool {
     matches!(status_code, 404 | 408 | 429) || (500..600).contains(&status_code)

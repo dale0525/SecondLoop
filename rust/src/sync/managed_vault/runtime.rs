@@ -9,7 +9,7 @@ pub(super) use reqwest::blocking::Client;
 use std::sync::OnceLock;
 
 #[cfg(target_family = "wasm")]
-use js_sys::Uint8Array;
+use js_sys::{Reflect, Uint8Array};
 
 #[cfg(target_family = "wasm")]
 use serde::Serialize;
@@ -157,6 +157,14 @@ impl RequestBuilder {
         // that fronts OPFS/SQLite access. Calling it on the main browser thread
         // would block rendering, so wasm managed-vault callers must stay in that
         // worker-backed execution context.
+        let global = js_sys::global();
+        let is_main_thread_window = Reflect::has(&global, &"document".into())
+            .map_err(|error| anyhow!("inspect wasm execution context failed: {error:?}"))?;
+        if is_main_thread_window {
+            return Err(anyhow!(
+                "managed-vault sync XHR must run in a dedicated web worker"
+            ));
+        }
         let xhr = XmlHttpRequest::new()
             .map_err(|error| anyhow!("create XMLHttpRequest failed: {error:?}"))?;
         xhr.open_with_async(&self.method, &self.url, false)

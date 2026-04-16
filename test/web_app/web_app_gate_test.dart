@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -150,6 +152,8 @@ Widget _buildApp({
   WebEntryIntent entryIntent = WebEntryIntent.open,
   String managedVaultBaseUrl = '',
   bool injectTestBackend = true,
+  Future<void> Function(SyncConfigStore store)? syncDefaultsPrimer,
+  Duration syncDefaultsPrimingTimeout = const Duration(seconds: 2),
 }) {
   return wrapWithI18n(
     MaterialApp(
@@ -162,6 +166,8 @@ Widget _buildApp({
         chatBackend: chatBackend,
         entryIntent: entryIntent,
         managedVaultBaseUrl: managedVaultBaseUrl,
+        syncDefaultsPrimer: syncDefaultsPrimer,
+        syncDefaultsPrimingTimeout: syncDefaultsPrimingTimeout,
       ),
     ),
   );
@@ -454,5 +460,26 @@ void main() {
       await store.resolveManagedVaultBaseUrl(),
       'https://vault.secondloop.example',
     );
+  });
+
+  testWidgets('web gate times out hung sync-default priming', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final hungPrimer = Completer<void>();
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(),
+        service: _FakeWebAppService(subscription: WebSubscriptionState.unknown),
+        syncDefaultsPrimer: (_) => hungPrimer.future,
+        syncDefaultsPrimingTimeout: const Duration(milliseconds: 10),
+      ),
+    );
+
+    expect(find.byType(WebPublicEntryScaffold), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 20));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WebPublicEntryScaffold), findsOneWidget);
   });
 }
