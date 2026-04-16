@@ -21,6 +21,12 @@ typedef WebInitialSyncRunner = Future<void> Function(
   Uint8List sessionKey,
 );
 
+String? _syncConfigScopeForUid(String? uid) {
+  final normalizedUid = uid?.trim();
+  if (normalizedUid == null || normalizedUid.isEmpty) return null;
+  return 'web-native:$normalizedUid';
+}
+
 class WebInitialSyncGate extends StatefulWidget {
   const WebInitialSyncGate({
     required this.authController,
@@ -140,7 +146,8 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
     final uid = widget.authController.uid?.trim() ?? '';
     final baseUrl = widget.managedVaultBaseUrl.trim();
     if (uid.isEmpty || baseUrl.isEmpty) return;
-    final syncConfigStore = widget.syncConfigStore ?? SyncConfigStore();
+    final syncConfigStore = widget.syncConfigStore ??
+        SyncConfigStore(scopeKey: _syncConfigScopeForUid(uid));
 
     final idToken = await readCloudAuthIdToken(
       widget.authController,

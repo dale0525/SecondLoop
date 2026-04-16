@@ -258,6 +258,27 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar', setup_script)
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-18', setup_script)
         self.assertIn('$(command -v llvm-ar-18 2>/dev/null || true)', setup_script)
+
+    def test_web_rust_toolchain_pins_wasm_pack_nightly_toolchain(self) -> None:
+        setup_script = (REPO_ROOT / "scripts/setup_web_rust_toolchain.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('WASM_PACK_NIGHTLY_TOOLCHAIN="nightly-', setup_script)
+        self.assertIn('ensure_toolchain "$WASM_PACK_NIGHTLY_TOOLCHAIN"', setup_script)
+        self.assertIn('ensure_target "$WASM_PACK_NIGHTLY_TOOLCHAIN"', setup_script)
+        self.assertIn(
+            'ensure_component "$WASM_PACK_NIGHTLY_TOOLCHAIN" "rust-src"',
+            setup_script,
+        )
+        self.assertIn(
+            '"$CARGO_HOME/bin/rustup" run "$WASM_PACK_NIGHTLY_TOOLCHAIN" cargo install wasm-pack --locked',
+            setup_script,
+        )
+        self.assertNotIn('ensure_toolchain "nightly"', setup_script)
+        self.assertNotIn('ensure_target "nightly"', setup_script)
+        self.assertNotIn('ensure_component "nightly" "rust-src"', setup_script)
+        self.assertNotIn('"$CARGO_HOME/bin/rustup" run nightly cargo install wasm-pack --locked', setup_script)
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib', setup_script)
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-18', setup_script)
         self.assertIn('$(command -v llvm-ranlib-18 2>/dev/null || true)', setup_script)

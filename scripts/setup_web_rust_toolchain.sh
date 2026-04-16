@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LLVM_SOURCE_ROOT="${SECONDLOOP_WEB_LLVM_SOURCE_ROOT:-$ROOT_DIR}"
 TOOL_BIN_DIR="$ROOT_DIR/.tool/bin"
+WASM_PACK_NIGHTLY_TOOLCHAIN="nightly-2025-04-01"
 export CARGO_HOME="$ROOT_DIR/.tool/cargo-home"
 export RUSTUP_HOME="$ROOT_DIR/.tool/rustup-home"
 export PATH="$CARGO_HOME/bin:$PATH"
@@ -142,7 +143,7 @@ install_wasm_pack_if_needed() {
   if [[ -x "$CARGO_HOME/bin/wasm-pack" ]]; then
     return 0
   fi
-  "$CARGO_HOME/bin/rustup" run nightly cargo install wasm-pack --locked
+  "$CARGO_HOME/bin/rustup" run "$WASM_PACK_NIGHTLY_TOOLCHAIN" cargo install wasm-pack --locked
 }
 
 first_executable_path() {
@@ -305,9 +306,9 @@ resolve_stable_toolchain_name() {
 install_local_rustup_if_needed
 stable_toolchain="$(resolve_stable_toolchain_name)"
 ensure_toolchain "$stable_toolchain"
-ensure_toolchain "nightly"
+ensure_toolchain "$WASM_PACK_NIGHTLY_TOOLCHAIN"
 ensure_target "$stable_toolchain"
-ensure_target "nightly"
-ensure_component "nightly" "rust-src"
+ensure_target "$WASM_PACK_NIGHTLY_TOOLCHAIN"
+ensure_component "$WASM_PACK_NIGHTLY_TOOLCHAIN" "rust-src"
 install_wasm_pack_if_needed
 link_wasm_toolchain_bins_if_available

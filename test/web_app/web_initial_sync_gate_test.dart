@@ -269,6 +269,44 @@ void main() {
   });
 
   testWidgets(
+      'web initial sync gate keeps bootstrap sync config scoped by uid when no store is injected',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _FakeWebNativeBackend();
+    final leakedUnscopedStore = SyncConfigStore();
+    await leakedUnscopedStore.writeSyncKey(
+      Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: WebInitialSyncGate(
+                authController: _FakeCloudAuthController(
+                  initialUid: 'uid-1',
+                  initialEmail: 'user@example.com',
+                  initialEmailVerified: true,
+                ),
+                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(backend.syncManagedVaultPullCalls, 1);
+    expect(backend.deriveSyncKeyCalls, 1);
+    expect(backend.lastSyncKey, Uint8List.fromList(List<int>.filled(32, 3)));
+  });
+
+  testWidgets(
       'web initial sync gate surfaces missing auth token instead of silently skipping bootstrap sync',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
