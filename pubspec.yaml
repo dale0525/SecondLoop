@@ -96,6 +96,7 @@ dev_dependencies:
   flutter_local_notifications_windows: ^1.0.3
   icons_launcher: 3.0.0
   path_provider_platform_interface: ^2.1.2
+  shared_preferences_platform_interface: ^2.4.1
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -165,7 +166,6 @@ icons_launcher:
       favicon_path: "assets/icon/app_icon.png"
     linux:
       enable: true
-
 
 
 

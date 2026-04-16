@@ -666,6 +666,8 @@ final class SyncConfigStore {
     }
 
     final legacySyncKeyB64 = legacy[kSyncKeyB64];
+    final legacyHadCredential =
+        legacySyncKeyB64 != null && legacySyncKeyB64.isNotEmpty;
     if (legacySyncKeyB64 != null && legacySyncKeyB64.isNotEmpty) {
       try {
         final decoded = base64Decode(legacySyncKeyB64);
@@ -684,7 +686,7 @@ final class SyncConfigStore {
     if (migratedSecret) {
       await _markSecretStoreVersion();
     }
-    if (migratedFromUnscoped) {
+    if (migratedFromUnscoped && (!legacyHadCredential || migratedSecret)) {
       await unscopedSecure?.clear();
     }
     return migrated;

@@ -4,9 +4,11 @@ import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_secret_store.dart';
 
 void main() {
   test('SyncConfigStore notices updates from other instances', () async {
@@ -110,6 +112,58 @@ void main() {
       },
     );
   });
+
+  test(
+      'SyncConfigStore keeps legacy unscoped secure storage when scoped sync key migration fails',
+      () async {
+    SharedPreferences.resetStatic();
+    SharedPreferences.setMockInitialValues({});
+    addTearDown(() {
+      SharedPreferences.resetStatic();
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    final prefsStore = _FailingPrefsStore(
+      failOnSetKeySuffix:
+          '${SyncSecretStore.kPrefsBlobKeyForTest}::web-native:uid-1',
+    );
+    SharedPreferencesStorePlatform.instance = prefsStore;
+
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    final storage = _InMemorySecureStorage({
+      'sync_config_blob_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'managedvault',
+        SyncConfigStore.kRemoteRoot: 'uid-1',
+        SyncConfigStore.kManagedVaultBaseUrl: 'https://vault-1.example',
+        SyncConfigStore.kSyncKeyB64: base64Encode(syncKey),
+      }),
+    });
+    final store = SyncConfigStore(
+      storage: storage,
+      scopeKey: 'web-native:uid-1',
+      allowSecureStoreMigrationInTestEnvironment: true,
+    );
+
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(storage.values['sync_config_blob_json_v1'], isNotNull);
+
+    final persisted = await prefsStore.getAll();
+    expect(
+      jsonDecode(
+          persisted['flutter.sync_config_public_json_v2::web-native:uid-1']
+              as String),
+      {
+        'sync_backend_type': 'managedvault',
+        'sync_webdav_remote_root': 'uid-1',
+        'sync_managed_vault_base_url': 'https://vault-1.example',
+      },
+    );
+    expect(
+      persisted.containsKey('flutter.sync_secret_json_v1::web-native:uid-1'),
+      isFalse,
+      reason: 'written keys: ${prefsStore.writtenKeys}',
+    );
+  });
 }
 
 final class _InMemorySecureStorage extends FlutterSecureStorage {
@@ -159,5 +213,21 @@ final class _InMemorySecureStorage extends FlutterSecureStorage {
     WindowsOptions? wOptions,
   }) async {
     values.remove(key);
+  }
+}
+
+final class _FailingPrefsStore extends InMemorySharedPreferencesStore {
+  _FailingPrefsStore({required this.failOnSetKeySuffix}) : super.empty();
+
+  final String failOnSetKeySuffix;
+  final List<String> writtenKeys = <String>[];
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    writtenKeys.add(key);
+    if (key.endsWith(failOnSetKeySuffix)) {
+      throw Exception('injected prefs write failure for $key');
+    }
+    return super.setValue(valueType, key, value);
   }
 }
