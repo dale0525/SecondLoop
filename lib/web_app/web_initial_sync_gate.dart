@@ -64,6 +64,23 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
     return backend is! WebNativeAppBackend;
   }
 
+  bool _shouldResetLocalRuntimeAfterReadFailure(Object error) {
+    final text = error.toString().trim().toLowerCase();
+    if (text.isEmpty) return false;
+    const resetSignals = <String>[
+      'opfs',
+      'memvfs',
+      're-entr',
+      'reentr',
+      'sqlite',
+      'sqlcipher',
+      'database is malformed',
+      'not a database',
+      'corrupt',
+    ];
+    return resetSignals.any(text.contains);
+  }
+
   @override
   void dispose() {
     _blockingTimeoutTimer?.cancel();
@@ -167,7 +184,10 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
       await backend.listConversations(sessionKey);
       recovery.clearResetAttempted(uid: uid);
       return;
-    } catch (_) {
+    } catch (error) {
+      if (!_shouldResetLocalRuntimeAfterReadFailure(error)) {
+        rethrow;
+      }
       if (recovery.hasAttemptedReset(uid: uid)) {
         rethrow;
       }

@@ -173,10 +173,16 @@ class _WebAppGateState extends State<WebAppGate> {
     final serviceChanged = oldWidget.service != widget.service;
     final backendChanged = oldWidget.backend != widget.backend;
     final chatBackendChanged = oldWidget.chatBackend != widget.chatBackend;
+    final defaultBackendBuilderChanged =
+        oldWidget.defaultBackendBuilder != widget.defaultBackendBuilder;
+    final managedVaultBaseUrlChanged = oldWidget.managedVaultBaseUrl.trim() !=
+        widget.managedVaultBaseUrl.trim();
     if (!authChanged &&
         !serviceChanged &&
         !backendChanged &&
-        !chatBackendChanged) {
+        !chatBackendChanged &&
+        !defaultBackendBuilderChanged &&
+        !managedVaultBaseUrlChanged) {
       return;
     }
 
@@ -186,7 +192,11 @@ class _WebAppGateState extends State<WebAppGate> {
     widget.authController.addListener(_onAuthChanged);
 
     _activeUid = _normalizedUid();
-    if (authChanged || backendChanged || chatBackendChanged) {
+    if (authChanged ||
+        backendChanged ||
+        chatBackendChanged ||
+        defaultBackendBuilderChanged ||
+        managedVaultBaseUrlChanged) {
       _resetSessionScopedState();
     } else {
       _syncMainShellAccess();
@@ -311,6 +321,9 @@ class _WebAppGateState extends State<WebAppGate> {
       child = AppBootstrap(
         child: LockGate(
           child: WebInitialSyncGate(
+            key: ValueKey<String>(
+              'web-initial-sync-$uid-${widget.managedVaultBaseUrl.trim()}',
+            ),
             authController: widget.authController,
             managedVaultBaseUrl: widget.managedVaultBaseUrl,
             syncConfigStore: _vaultConfigStore,

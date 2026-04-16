@@ -211,6 +211,20 @@ final class _FailingWebNativeBackend extends WebNativeAppBackend {
   }
 }
 
+final class _UnexpectedFailureWebNativeBackend extends WebNativeAppBackend {
+  _UnexpectedFailureWebNativeBackend()
+      : super(
+          appDirProvider: () async => '/opfs/secondloop/vaults/uid-1/v0',
+          storageScope: 'web-native:uid-1',
+          rustLibInit: () async {},
+        );
+
+  @override
+  Future<List<Conversation>> listConversations(Uint8List key) async {
+    throw StateError('unexpected_bootstrap_failure');
+  }
+}
+
 void main() {
   testWidgets(
       'first entitled launch triggers managed-vault pull before chat loads',
@@ -368,6 +382,51 @@ void main() {
     expect(resolver.bumpGenerationCalls, 1);
     expect(recovery.reloadCalls, 1);
     expect(find.byType(Placeholder), findsNothing);
+  });
+
+  testWidgets(
+      'web initial sync gate surfaces non-runtime read failures without resetting OPFS generation',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final resolver = _FakeRuntimeResolver();
+    final recovery = _FakeRuntimeRecovery();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: _UnexpectedFailureWebNativeBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: WebInitialSyncGate(
+                authController: _FakeCloudAuthController(
+                  initialUid: 'uid-1',
+                  initialEmail: 'user@example.com',
+                  initialEmailVerified: true,
+                ),
+                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
+                syncRunner: (_, __, ___) async {},
+                appDirResolver: resolver,
+                localRuntimeRecovery: recovery,
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(resolver.bumpGenerationCalls, 0);
+    expect(recovery.reloadCalls, 0);
+    expect(find.byType(Placeholder), findsNothing);
+    expect(
+      find.textContaining('unexpected_bootstrap_failure'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('web initial sync gate stops blocking the shell after timeout',
