@@ -6,9 +6,6 @@ use base64::Engine as _;
 pub(super) use reqwest::blocking::Client;
 
 #[cfg(not(target_family = "wasm"))]
-pub(super) use reqwest::StatusCode;
-
-#[cfg(not(target_family = "wasm"))]
 use std::sync::OnceLock;
 
 #[cfg(target_family = "wasm")]

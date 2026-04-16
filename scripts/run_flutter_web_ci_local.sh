@@ -84,18 +84,33 @@ sync_workspace_state_into_worktree "${web_worktree}"
   run_with_periodic_status \
     "flutter web smoke tests" \
     run_flutter_tool test test/web_app/web_app_gate_test.dart test/web_app/web_app_service_http_test.dart
+  run_with_periodic_status \
+    "prepare flutter rust web toolchain" \
+    env SECONDLOOP_WEB_LLVM_SOURCE_ROOT="${repo_root}" \
+      bash scripts/setup_web_rust_toolchain.sh
+  web_tool_bin="${web_worktree}/.tool/bin"
+  web_cargo_home="${web_worktree}/.tool/cargo-home"
+  web_rustup_home="${web_worktree}/.tool/rustup-home"
   web_codegen_env=(env RUST_LOG=info)
-  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/clang-21" ]]; then
+  if [[ -x "${web_tool_bin}/clang" ]]; then
+    web_codegen_env+=("CC_wasm32_unknown_unknown=${web_tool_bin}/clang")
+  elif [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/clang-21" ]]; then
     web_codegen_env+=("CC_wasm32_unknown_unknown=${CONDA_PREFIX}/bin/clang-21")
   fi
-  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/llvm-ar" ]]; then
+  if [[ -x "${web_tool_bin}/llvm-ar" ]]; then
+    web_codegen_env+=("AR_wasm32_unknown_unknown=${web_tool_bin}/llvm-ar")
+  elif [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/llvm-ar" ]]; then
     web_codegen_env+=("AR_wasm32_unknown_unknown=${CONDA_PREFIX}/bin/llvm-ar")
   fi
-  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/llvm-ranlib" ]]; then
+  if [[ -x "${web_tool_bin}/llvm-ranlib" ]]; then
+    web_codegen_env+=("RANLIB_wasm32_unknown_unknown=${web_tool_bin}/llvm-ranlib")
+  elif [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/llvm-ranlib" ]]; then
     web_codegen_env+=("RANLIB_wasm32_unknown_unknown=${CONDA_PREFIX}/bin/llvm-ranlib")
   fi
   web_codegen_env+=(
-    "PATH=${web_worktree}/.tool/bin:${web_worktree}/.tool/cargo-home/bin:${dart_bin_dir}:${flutter_bin_dir}:${HOME}/.cargo/bin:${PATH}"
+    "CARGO_HOME=${web_cargo_home}"
+    "RUSTUP_HOME=${web_rustup_home}"
+    "PATH=${web_tool_bin}:${web_cargo_home}/bin:${flutter_bin_dir}:${dart_bin_dir}:${HOME}/.cargo/bin:${PATH}"
   )
   run_with_periodic_status \
     "flutter rust web build" \

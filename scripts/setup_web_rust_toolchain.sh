@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LLVM_SOURCE_ROOT="${SECONDLOOP_WEB_LLVM_SOURCE_ROOT:-$ROOT_DIR}"
 TOOL_BIN_DIR="$ROOT_DIR/.tool/bin"
 export CARGO_HOME="$ROOT_DIR/.tool/cargo-home"
 export RUSTUP_HOME="$ROOT_DIR/.tool/rustup-home"
@@ -75,13 +76,60 @@ install_wasm_pack_if_needed() {
   "$CARGO_HOME/bin/rustup" run nightly cargo install wasm-pack --locked
 }
 
-link_wasm_capable_clang_if_available() {
-  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/clang-21" ]]; then
-    ln -sf "${CONDA_PREFIX}/bin/clang-21" "$TOOL_BIN_DIR/clang"
-  fi
-  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/clang++-21" ]]; then
-    ln -sf "${CONDA_PREFIX}/bin/clang++-21" "$TOOL_BIN_DIR/clang++"
-  fi
+first_executable_path() {
+  local candidate
+  for candidate in "$@"; do
+    [[ -n "${candidate}" ]] || continue
+    [[ -x "${candidate}" ]] || continue
+    printf '%s\n' "${candidate}"
+    return 0
+  done
+
+  return 1
+}
+
+link_wasm_toolchain_bins_if_available() {
+  local clang21_path clangxx21_path llvm_ar_path llvm_ranlib_path
+
+  clang21_path="$(
+    first_executable_path \
+      "${CONDA_PREFIX:-}/bin/clang-21" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/clang-21" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/clang-21" \
+      "${ROOT_DIR}/.tool/bin/clang-21" \
+      "$(command -v clang-21 2>/dev/null || true)"
+  )" || clang21_path=""
+  clangxx21_path="$(
+    first_executable_path \
+      "${CONDA_PREFIX:-}/bin/clang++-21" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/clang++-21" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/clang++-21" \
+      "${ROOT_DIR}/.tool/bin/clang++-21" \
+      "$(command -v clang++-21 2>/dev/null || true)"
+  )" || clangxx21_path=""
+  llvm_ar_path="$(
+    first_executable_path \
+      "${CONDA_PREFIX:-}/bin/llvm-ar" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar" \
+      "${ROOT_DIR}/.tool/bin/llvm-ar" \
+      "$(command -v llvm-ar 2>/dev/null || true)"
+  )" || llvm_ar_path=""
+  llvm_ranlib_path="$(
+    first_executable_path \
+      "${CONDA_PREFIX:-}/bin/llvm-ranlib" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib" \
+      "${ROOT_DIR}/.tool/bin/llvm-ranlib" \
+      "$(command -v llvm-ranlib 2>/dev/null || true)"
+  )" || llvm_ranlib_path=""
+
+  [[ -n "${clang21_path}" ]] && ln -sf "${clang21_path}" "$TOOL_BIN_DIR/clang"
+  [[ -n "${clangxx21_path}" ]] && ln -sf "${clangxx21_path}" "$TOOL_BIN_DIR/clang++"
+  [[ -n "${llvm_ar_path}" ]] && ln -sf "${llvm_ar_path}" "$TOOL_BIN_DIR/llvm-ar"
+  [[ -n "${llvm_ranlib_path}" ]] && ln -sf "${llvm_ranlib_path}" "$TOOL_BIN_DIR/llvm-ranlib"
+
+  return 0
 }
 
 resolve_stable_toolchain_name() {
@@ -119,4 +167,4 @@ ensure_target "$stable_toolchain"
 ensure_target "nightly"
 ensure_component "nightly" "rust-src"
 install_wasm_pack_if_needed
-link_wasm_capable_clang_if_available
+link_wasm_toolchain_bins_if_available

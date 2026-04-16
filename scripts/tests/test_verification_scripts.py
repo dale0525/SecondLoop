@@ -230,6 +230,24 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("MSYS2_ARG_CONV_EXCL='*' run_with_periodic_status", script)
         self.assertIn("run_flutter_tool build web --base-href /app/", script)
 
+    def test_local_flutter_web_ci_wrapper_prefers_project_managed_wasm_llvm_tools(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_web_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+        setup_script = (REPO_ROOT / "scripts/setup_web_rust_toolchain.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('CC_wasm32_unknown_unknown=${web_tool_bin}/clang', script)
+        self.assertIn('AR_wasm32_unknown_unknown=${web_tool_bin}/llvm-ar', script)
+        self.assertIn('RANLIB_wasm32_unknown_unknown=${web_tool_bin}/llvm-ranlib', script)
+        self.assertIn('SECONDLOOP_WEB_LLVM_SOURCE_ROOT="${repo_root}"', script)
+        self.assertIn('LLVM_SOURCE_ROOT="${SECONDLOOP_WEB_LLVM_SOURCE_ROOT:-$ROOT_DIR}"', setup_script)
+        self.assertIn('${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/clang-21', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/clang-21', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib', setup_script)
+
     def test_rust_nextest_wrapper_prefers_project_managed_cargo_environment(self) -> None:
         script = (REPO_ROOT / "scripts/run_rust_ci_nextest.sh").read_text(
             encoding="utf-8"
