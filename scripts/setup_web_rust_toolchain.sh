@@ -189,18 +189,82 @@ link_wasm_toolchain_bins_if_available() {
   llvm_ar_path="$(
     first_executable_path \
       "${CONDA_PREFIX:-}/bin/llvm-ar" \
+      "${CONDA_PREFIX:-}/bin/llvm-ar-21" \
+      "${CONDA_PREFIX:-}/bin/llvm-ar-20" \
+      "${CONDA_PREFIX:-}/bin/llvm-ar-19" \
+      "${CONDA_PREFIX:-}/bin/llvm-ar-18" \
+      "${CONDA_PREFIX:-}/bin/llvm-ar-17" \
+      "${CONDA_PREFIX:-}/bin/llvm-ar-16" \
+      "${CONDA_PREFIX:-}/bin/llvm-ar-15" \
+      "${CONDA_PREFIX:-}/bin/llvm-ar-14" \
       "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar-21" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar-20" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar-19" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar-18" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar-17" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar-16" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar-15" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ar-14" \
       "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-21" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-20" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-19" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-18" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-17" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-16" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-15" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-14" \
       "${ROOT_DIR}/.tool/bin/llvm-ar" \
-      "$(command -v llvm-ar 2>/dev/null || true)"
+      "$(command -v llvm-ar 2>/dev/null || true)" \
+      "$(command -v llvm-ar-21 2>/dev/null || true)" \
+      "$(command -v llvm-ar-20 2>/dev/null || true)" \
+      "$(command -v llvm-ar-19 2>/dev/null || true)" \
+      "$(command -v llvm-ar-18 2>/dev/null || true)" \
+      "$(command -v llvm-ar-17 2>/dev/null || true)" \
+      "$(command -v llvm-ar-16 2>/dev/null || true)" \
+      "$(command -v llvm-ar-15 2>/dev/null || true)" \
+      "$(command -v llvm-ar-14 2>/dev/null || true)"
   )" || llvm_ar_path=""
   llvm_ranlib_path="$(
     first_executable_path \
       "${CONDA_PREFIX:-}/bin/llvm-ranlib" \
+      "${CONDA_PREFIX:-}/bin/llvm-ranlib-21" \
+      "${CONDA_PREFIX:-}/bin/llvm-ranlib-20" \
+      "${CONDA_PREFIX:-}/bin/llvm-ranlib-19" \
+      "${CONDA_PREFIX:-}/bin/llvm-ranlib-18" \
+      "${CONDA_PREFIX:-}/bin/llvm-ranlib-17" \
+      "${CONDA_PREFIX:-}/bin/llvm-ranlib-16" \
+      "${CONDA_PREFIX:-}/bin/llvm-ranlib-15" \
+      "${CONDA_PREFIX:-}/bin/llvm-ranlib-14" \
       "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib-21" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib-20" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib-19" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib-18" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib-17" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib-16" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib-15" \
+      "${LLVM_SOURCE_ROOT}/.pixi/envs/default/bin/llvm-ranlib-14" \
       "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-21" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-20" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-19" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-18" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-17" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-16" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-15" \
+      "${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-14" \
       "${ROOT_DIR}/.tool/bin/llvm-ranlib" \
-      "$(command -v llvm-ranlib 2>/dev/null || true)"
+      "$(command -v llvm-ranlib 2>/dev/null || true)" \
+      "$(command -v llvm-ranlib-21 2>/dev/null || true)" \
+      "$(command -v llvm-ranlib-20 2>/dev/null || true)" \
+      "$(command -v llvm-ranlib-19 2>/dev/null || true)" \
+      "$(command -v llvm-ranlib-18 2>/dev/null || true)" \
+      "$(command -v llvm-ranlib-17 2>/dev/null || true)" \
+      "$(command -v llvm-ranlib-16 2>/dev/null || true)" \
+      "$(command -v llvm-ranlib-15 2>/dev/null || true)" \
+      "$(command -v llvm-ranlib-14 2>/dev/null || true)"
   )" || llvm_ranlib_path=""
 
   [[ -n "${clang21_path}" ]] && ln -sf "${clang21_path}" "$TOOL_BIN_DIR/clang"

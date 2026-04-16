@@ -256,7 +256,11 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('${ROOT_DIR}/.tool/bin/clang', setup_script)
         self.assertIn('$(command -v clang 2>/dev/null || true)', setup_script)
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ar-18', setup_script)
+        self.assertIn('$(command -v llvm-ar-18 2>/dev/null || true)', setup_script)
         self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib', setup_script)
+        self.assertIn('${ROOT_DIR}/.pixi/envs/default/bin/llvm-ranlib-18', setup_script)
+        self.assertIn('$(command -v llvm-ranlib-18 2>/dev/null || true)', setup_script)
         self.assertIn('verify_downloaded_sha256 "$rustup_init" "${rustup_url}.sha256"', setup_script)
         self.assertIn('curl --fail --show-error --location "$url" -o "$output_path"', setup_script)
 
