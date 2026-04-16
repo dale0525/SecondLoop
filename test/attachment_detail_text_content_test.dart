@@ -167,7 +167,8 @@ void main() {
     expect(content.full, 'Local extracted full text.');
   });
 
-  test('audio detail prefers turn view for display text', () {
+  test('audio detail summary prefers turn view while full keeps transcript',
+      () {
     final content = resolveAttachmentDetailTextContent(
       const <String, Object?>{
         'mime_type': 'audio/mp4',
@@ -191,7 +192,7 @@ void main() {
     );
 
     expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
-    expect(content.full, '[00:12–00:18] Hello everyone.');
+    expect(content.full, 'raw transcript body');
   });
 
   test('audio detail resolves persisted turn view only once', () {
@@ -220,16 +221,16 @@ void main() {
     final content = resolveAttachmentDetailTextContent(payload);
 
     expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
-    expect(content.full, '[00:12–00:18] Hello everyone.');
+    expect(content.full, 'raw transcript body');
     expect(payload.transcriptTurnViewReadCount, 1);
   });
 
-  test('audio detail full prefers turn view over generic full_text', () {
+  test('audio detail full prefers transcript_full over turn view', () {
     final content = resolveAttachmentDetailTextContent(
       const <String, Object?>{
         'mime_type': 'audio/mp4',
         'full_text': 'generic enrichment full text',
-        'transcript_full': 'raw transcript body',
+        'transcript_full': 'Speaker A: Hello.\nSpeaker B: Hi.',
         'transcript_turns_v1': {
           'builder_version': 'turns_v1',
           'status': 'ok',
@@ -247,7 +248,7 @@ void main() {
       },
     );
 
-    expect(content.full, '[00:12–00:18] Hello everyone.');
+    expect(content.full, 'Speaker A: Hello.\nSpeaker B: Hi.');
   });
 
   test('audio detail full prefers transcript_full over generic full_text', () {
@@ -291,7 +292,6 @@ void main() {
       const <String, Object?>{
         'mime_type': 'audio/mp4',
         'transcript_excerpt': 'raw excerpt',
-        'transcript_full': 'raw transcript body',
         'transcript_segments': [
           {
             't_ms': 12000,

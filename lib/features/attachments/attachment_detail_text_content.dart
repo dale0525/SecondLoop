@@ -230,8 +230,8 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
 
   final audioFull = firstNonEmpty(<String?>[
     read('manual_full_text'),
-    audioTurnFull,
     read('transcript_full'),
+    audioTurnFull,
     read('full_text'),
     read('manual_summary'),
     read('llm_summary'),

@@ -170,7 +170,8 @@ void main() {
     expect(find.text('16 B'), findsOneWidget);
   });
 
-  testWidgets('AudioAttachmentPlayerView shows turn view by default', (
+  testWidgets('AudioAttachmentPlayerView keeps transcript_full for detail text',
+      (
     tester,
   ) async {
     final attachment = Attachment(
@@ -216,9 +217,11 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 200));
 
+    expect(find.text('raw transcript body'), findsOneWidget);
     expect(
-        find.textContaining('[00:12–00:18] Hello everyone.'), findsOneWidget);
-    expect(find.text('raw transcript body'), findsNothing);
+      find.textContaining('[00:12–00:18] Hello everyone.'),
+      findsNothing,
+    );
   });
 }
 
