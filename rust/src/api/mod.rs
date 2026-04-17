@@ -16,7 +16,6 @@ pub mod desktop_media;
 pub mod detached_ask;
 pub mod embedding_lifecycle;
 pub mod external_import;
-pub mod knowledge;
 pub mod media_annotation;
 pub mod migration_archive;
 pub mod oplog_maintenance;
@@ -34,10 +33,3 @@ pub mod sync_progress;
 pub mod sync_progress;
 pub mod tags;
 pub mod todo_followup_generation;
-
-#[cfg(test)]
-mod knowledge_page_governance_tests;
-#[cfg(test)]
-mod knowledge_page_merge_candidates_tests;
-#[cfg(test)]
-mod knowledge_tests;

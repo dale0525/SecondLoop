@@ -54,7 +54,6 @@ pub(super) fn build_message_direct_source(
         highlighted_text: Some(snippet),
         created_at_ms: Some(message.created_at_ms),
         updated_at_ms: Some(message.created_at_ms),
-        anchors: None,
         document_id: None,
         unit_id: None,
     })
@@ -79,7 +78,6 @@ pub(super) fn build_todo_direct_source(
         highlighted_text: None,
         created_at_ms: Some(created_at_ms),
         updated_at_ms: Some(todo.updated_at_ms),
-        anchors: None,
         document_id: None,
         unit_id: None,
     }
@@ -106,7 +104,6 @@ pub(super) fn build_event_direct_source(event: &db::Event) -> AnswerEvidenceDire
         highlighted_text: None,
         created_at_ms: Some(event.start_at_ms),
         updated_at_ms: Some(event.updated_at_ms),
-        anchors: None,
         document_id: None,
         unit_id: None,
     }
@@ -135,7 +132,6 @@ pub(super) fn build_attachment_direct_source(
         highlighted_text: Some(snippet),
         created_at_ms: Some(created_at_ms),
         updated_at_ms: Some(created_at_ms),
-        anchors: None,
         document_id: None,
         unit_id: None,
     }
@@ -171,7 +167,6 @@ pub(super) fn build_attachment_resource_direct_source(
         highlighted_text: None,
         created_at_ms: Some(created_at_ms),
         updated_at_ms: Some(created_at_ms),
-        anchors: None,
         document_id: None,
         unit_id: None,
     }

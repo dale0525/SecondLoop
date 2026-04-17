@@ -15,7 +15,6 @@ pub mod geo;
 #[cfg(target_family = "wasm")]
 #[path = "geo/wasm.rs"]
 pub mod geo;
-pub mod knowledge;
 #[cfg(not(target_family = "wasm"))]
 pub mod llm;
 #[cfg(target_family = "wasm")]

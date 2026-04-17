@@ -1,10 +1,10 @@
-use crate::knowledge::embedding_batch::{
+use crate::embedding::batch::{
     average_piece_embeddings, batch_embedding_inputs, ensure_non_empty_embedding_results,
     split_oversized_embedding_input, EmbeddingBatchPolicy,
 };
 
 #[test]
-fn knowledge_embedding_batch_splits_oversized_input_by_policy_caps() {
+fn embedding_batch_splits_oversized_input_by_policy_caps() {
     let oversized = "alpha ".repeat(220);
     let pieces = split_oversized_embedding_input(
         &oversized,
@@ -22,7 +22,7 @@ fn knowledge_embedding_batch_splits_oversized_input_by_policy_caps() {
 }
 
 #[test]
-fn knowledge_embedding_batch_groups_inputs_without_exceeding_caps() {
+fn embedding_batch_groups_inputs_without_exceeding_caps() {
     let inputs = vec![
         "one two three".to_string(),
         "four five six".to_string(),
@@ -46,7 +46,7 @@ fn knowledge_embedding_batch_groups_inputs_without_exceeding_caps() {
 }
 
 #[test]
-fn knowledge_embedding_batch_renormalizes_averaged_piece_embeddings() {
+fn embedding_batch_renormalizes_averaged_piece_embeddings() {
     let averaged = average_piece_embeddings(vec![vec![vec![1.0, 0.0], vec![0.0, 1.0]]], 1);
 
     assert_eq!(averaged.len(), 1);
@@ -64,7 +64,7 @@ fn knowledge_embedding_batch_renormalizes_averaged_piece_embeddings() {
 }
 
 #[test]
-fn knowledge_embedding_batch_rejects_empty_embeddings() {
+fn embedding_batch_rejects_empty_embeddings() {
     let err = ensure_non_empty_embedding_results(&[vec![1.0, 0.0], Vec::new()])
         .expect_err("empty embedding slots should be rejected");
     assert!(err

@@ -119,7 +119,6 @@ fn filter_direct_sources_prefers_question_matching_messages() {
             highlighted_text: Some(text.to_string()),
             created_at_ms: Some(1),
             updated_at_ms: Some(1),
-            anchors: None,
             document_id: None,
             unit_id: None,
         }

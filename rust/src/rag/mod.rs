@@ -19,17 +19,6 @@ mod evidence;
 mod fallback;
 mod history;
 #[cfg(test)]
-mod knowledge_ask_ai_tests;
-mod knowledge_contexts;
-#[cfg(test)]
-mod knowledge_contexts_page_tests;
-#[cfg(test)]
-mod knowledge_contexts_refresh_tests;
-#[cfg(test)]
-mod knowledge_contexts_scope_tests;
-#[cfg(test)]
-mod knowledge_contexts_tests;
-#[cfg(test)]
 mod tests;
 
 use actions_context::{build_actions_context, build_actions_context_in_range};
@@ -81,27 +70,6 @@ pub enum Focus {
 pub struct AskAiResult {
     pub user_message_id: String,
     pub assistant_message_id: String,
-}
-
-#[cfg(test)]
-pub(crate) fn try_build_knowledge_contexts_for_tests(
-    conn: &Connection,
-    key: &[u8; 32],
-    question: &str,
-    top_k: usize,
-    focus: Focus,
-    conversation_id: &str,
-    time_window: Option<(i64, i64)>,
-) -> Result<Vec<String>> {
-    knowledge_contexts::try_build_knowledge_contexts(
-        conn,
-        key,
-        question,
-        top_k,
-        focus,
-        conversation_id,
-        time_window,
-    )
 }
 
 pub trait AnswerProvider {

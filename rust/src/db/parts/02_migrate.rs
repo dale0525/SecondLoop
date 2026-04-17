@@ -1108,6 +1108,5 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     migrate(&conn)?;
     ensure_todo_manual_nudge_columns(&conn)?;
     ensure_content_enrichment_kv_defaults(&conn)?;
-    ensure_knowledge_rebuild_state_defaults(&conn)?;
     Ok(conn)
 }

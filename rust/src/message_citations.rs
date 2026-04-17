@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::knowledge::KnowledgeAnchorSet;
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnswerEvidenceDirectSource {
     pub id: String,
@@ -16,7 +14,6 @@ pub struct AnswerEvidenceDirectSource {
     pub highlighted_text: Option<String>,
     pub created_at_ms: Option<i64>,
     pub updated_at_ms: Option<i64>,
-    pub anchors: Option<KnowledgeAnchorSet>,
     pub document_id: Option<String>,
     pub unit_id: Option<String>,
 }
@@ -136,7 +133,6 @@ mod tests {
             highlighted_text: Some("hello".to_string()),
             created_at_ms: Some(1),
             updated_at_ms: Some(1),
-            anchors: None,
             document_id: None,
             unit_id: None,
         };
