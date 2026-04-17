@@ -39,14 +39,12 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
   Future<bool> _handleMarkdownInAppLink(String href) async {
     final todoLink = parseTodoDeepLink(href);
     if (todoLink != null) {
-      await _openTodoById(todoLink.todoId);
-      return true;
+      return _openTodoById(todoLink.todoId);
     }
 
     final eventLink = parseEventDeepLink(href);
     if (eventLink != null) {
-      await _openEventById(eventLink.eventId);
-      return true;
+      return _openEventById(eventLink.eventId);
     }
 
     final attachmentLink = parseAttachmentDeepLink(href);

@@ -171,16 +171,6 @@ fn has_future_actions_timeframe(question: &str) -> bool {
         || question.contains("明天")
 }
 
-fn has_past_actions_timeframe(question: &str) -> bool {
-    let q = question.trim().to_lowercase();
-    q.contains("yesterday")
-        || q.contains("last week")
-        || question.contains("昨天")
-        || question.contains("昨日")
-        || question.contains("上周")
-        || question.contains("上週")
-}
-
 fn has_agenda_keywords(question: &str) -> bool {
     let q = question.trim().to_lowercase();
     q.contains("agenda")
@@ -250,12 +240,9 @@ fn should_include_actions_context(question: &str) -> bool {
 }
 
 fn should_include_actions_context_in_range(question: &str) -> bool {
-    let has_timeframe =
-        has_future_actions_timeframe(question) || has_past_actions_timeframe(question);
-    has_timeframe
-        && (has_explicit_agenda_intent(question)
-            || (has_generic_task_words(question) && has_timeframe)
-            || (has_past_actions_timeframe(question) && has_past_actions_intent(question)))
+    has_explicit_agenda_intent(question)
+        || has_generic_task_words(question)
+        || has_past_actions_intent(question)
 }
 
 fn build_actions_context(
@@ -332,7 +319,7 @@ fn build_actions_context_in_range(
         return Ok(None);
     }
 
-    if has_past_actions_timeframe(question) {
+    if has_past_actions_intent(question) {
         return build_past_actions_context_in_range(conn, key, time_start_ms, time_end_ms);
     }
 

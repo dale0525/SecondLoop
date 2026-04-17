@@ -1253,9 +1253,9 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     );
   }
 
-  Future<void> _openTodoById(String todoId) async {
+  Future<bool> _openTodoById(String todoId) async {
     final normalizedTodoId = todoId.trim();
-    if (normalizedTodoId.isEmpty) return;
+    if (normalizedTodoId.isEmpty) return false;
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -1267,12 +1267,17 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       todo = null;
     }
 
+    if (!mounted || todo == null) {
+      return false;
+    }
+
     await _openLinkedTodo(todo);
+    return true;
   }
 
-  Future<void> _openEventById(String eventId) async {
+  Future<bool> _openEventById(String eventId) async {
     final normalizedEventId = eventId.trim();
-    if (normalizedEventId.isEmpty) return;
+    if (normalizedEventId.isEmpty) return false;
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -1284,7 +1289,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       event = null;
     }
 
-    if (!mounted || event == null) return;
+    if (!mounted || event == null) return false;
     await _pushRouteFromChat(
       MaterialPageRoute(
         builder: (_) => wrapPushedPageWithInheritedScopes(
@@ -1293,6 +1298,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         ),
       ),
     );
+    return true;
   }
 
   String? _extractCloudDetachedRequestIdFromPayloadJson(String? payloadJson) {

@@ -32,6 +32,13 @@ class EventViewerPage extends StatelessWidget {
             _formatEventRange(localizations, start, end),
             key: const ValueKey('event_viewer_time_range'),
           ),
+          if (event.tz.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SelectableText(
+              event.tz,
+              key: const ValueKey('event_viewer_timezone'),
+            ),
+          ],
         ],
       ),
     );

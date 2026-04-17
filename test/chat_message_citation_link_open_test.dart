@@ -442,6 +442,111 @@ secondloop://message/history-1
     );
   });
 
+  testWidgets(
+      'chat missing secondloop event link falls back to unsupported snackbar',
+      (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm1',
+          conversationId: 'loop_home',
+          role: 'assistant',
+          content:
+              'See [Budget review](secondloop://event/event:missing-review)',
+          createdAtMs: 2,
+          isMemory: false,
+        ),
+      ],
+      throwOnListEvents: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Budget review', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.byType(EventViewerPage), findsNothing);
+    expect(find.text('Load failed: unsupported_secondloop_link'), findsOne);
+  });
+
+  testWidgets(
+      'chat missing secondloop todo link falls back to unsupported snackbar',
+      (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm1',
+          conversationId: 'loop_home',
+          role: 'assistant',
+          content:
+              'See [Launch checklist](secondloop://todo/todo:missing-checklist)',
+          createdAtMs: 2,
+          isMemory: false,
+        ),
+      ],
+      throwOnListTodos: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.textContaining('Launch checklist', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.byType(TodoDetailPage), findsNothing);
+    expect(find.text('Load failed: unsupported_secondloop_link'), findsOne);
+  });
+
   testWidgets('chat ignores knowledge-document deeplinks after removal',
       (tester) async {
     final launchedUrls = <String>[];

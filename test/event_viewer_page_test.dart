@@ -7,7 +7,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('event viewer omits timezone labels to avoid misleading offsets',
+  testWidgets('event viewer surfaces original timezone alongside local range',
       (tester) async {
     const event = Event(
       id: 'event:cross-zone',
@@ -33,6 +33,7 @@ void main() {
       find.byKey(const ValueKey('event_viewer_time_range')),
     );
     expect(rendered.data, isNot(contains('UTC')));
-    expect(rendered.data, isNot(contains(event.tz)));
+    expect(find.byKey(const ValueKey('event_viewer_timezone')), findsOneWidget);
+    expect(find.textContaining(event.tz), findsOneWidget);
   });
 }

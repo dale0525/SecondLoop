@@ -125,6 +125,129 @@ fn ask_ai_time_window_past_actions_use_activity_timestamps_not_due_dates() {
 }
 
 #[test]
+fn ask_ai_time_window_past_actions_supports_today_retrospective_questions() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 350_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:today-retro",
+        "Today retrospective completion",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+    db::set_todo_status(&conn, &key, "todo:today-retro", "done", None).expect("set done");
+    let activity = db::list_todo_activities(&conn, &key, "todo:today-retro")
+        .expect("activities")
+        .into_iter()
+        .last()
+        .expect("done activity");
+    conn.execute(
+        "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+        params![activity.id, time_start_ms + 1_500],
+    )
+    .expect("update activity ts");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "我今天做了什么？",
+        0,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = capture_prompt(&provider);
+    assert!(
+        prompt.contains("Past actions (from local todos/events):"),
+        "expected today retrospective question to use past actions context: {prompt}"
+    );
+    assert!(
+        prompt.contains("Today retrospective completion"),
+        "expected completed item in today retrospective prompt: {prompt}"
+    );
+}
+
+#[test]
+fn ask_ai_time_window_uses_explicit_range_even_without_time_words() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 360_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:range-only",
+        "Range-only planning item",
+        Some(time_start_ms + 2_000),
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "What is on my schedule?",
+        0,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = capture_prompt(&provider);
+    assert!(
+        prompt.contains("Upcoming actions (from local todos/events):"),
+        "expected explicit time-window request to include upcoming actions context: {prompt}"
+    );
+    assert!(
+        prompt.contains("Range-only planning item"),
+        "expected in-range todo to appear even without time words in question: {prompt}"
+    );
+}
+
+#[test]
 fn ask_ai_time_window_todo_thread_excludes_out_of_range_activities() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
