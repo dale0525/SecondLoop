@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
@@ -161,6 +163,13 @@ fn should_fallback_to_json_pull(status_code: u16) -> bool {
     matches!(status_code, 404 | 408 | 429) || (500..600).contains(&status_code)
 }
 
+fn v2_route_unavailable(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.contains("managed-vault v2 head route unavailable")
+        || message.contains("managed-vault v2 pull route unavailable")
+        || message.contains("managed-vault v2 push route unavailable")
+}
+
 pub fn push(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -169,7 +178,13 @@ pub fn push(
     vault_id: &str,
     id_token: &str,
 ) -> Result<u64> {
-    global_log_client::push_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None)
+    match global_log_client::push_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None) {
+        Ok(pushed) => Ok(pushed),
+        Err(error) if v2_route_unavailable(&error) => {
+            push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub fn push_ops_only(
@@ -180,7 +195,13 @@ pub fn push_ops_only(
     vault_id: &str,
     id_token: &str,
 ) -> Result<u64> {
-    global_log_client::push_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None)
+    match global_log_client::push_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None) {
+        Ok(pushed) => Ok(pushed),
+        Err(error) if v2_route_unavailable(&error) => {
+            push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, false)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub fn pull(
@@ -191,7 +212,13 @@ pub fn pull(
     vault_id: &str,
     id_token: &str,
 ) -> Result<u64> {
-    global_log_client::pull_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None)
+    match global_log_client::pull_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None) {
+        Ok(pulled) => Ok(pulled),
+        Err(error) if v2_route_unavailable(&error) => {
+            pull_loop::pull(conn, db_key, sync_key, base_url, vault_id, id_token)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub fn pull_with_progress(
@@ -203,7 +230,7 @@ pub fn pull_with_progress(
     id_token: &str,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<u64> {
-    global_log_client::pull_v2(
+    match global_log_client::pull_v2(
         conn,
         db_key,
         sync_key,
@@ -211,7 +238,13 @@ pub fn pull_with_progress(
         vault_id,
         id_token,
         Some(progress),
-    )
+    ) {
+        Ok(pulled) => Ok(pulled),
+        Err(error) if v2_route_unavailable(&error) => progress::pull_with_progress(
+            conn, db_key, sync_key, base_url, vault_id, id_token, progress,
+        ),
+        Err(error) => Err(error),
+    }
 }
 
 pub fn push_ops_only_with_progress(
@@ -223,7 +256,7 @@ pub fn push_ops_only_with_progress(
     id_token: &str,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<u64> {
-    global_log_client::push_v2(
+    match global_log_client::push_v2(
         conn,
         db_key,
         sync_key,
@@ -231,7 +264,13 @@ pub fn push_ops_only_with_progress(
         vault_id,
         id_token,
         Some(progress),
-    )
+    ) {
+        Ok(pushed) => Ok(pushed),
+        Err(error) if v2_route_unavailable(&error) => progress::push_ops_only_with_progress(
+            conn, db_key, sync_key, base_url, vault_id, id_token, progress,
+        ),
+        Err(error) => Err(error),
+    }
 }
 
 fn push_internal(
