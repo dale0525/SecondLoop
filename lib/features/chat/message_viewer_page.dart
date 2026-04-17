@@ -13,6 +13,8 @@ import '../../src/rust/db.dart';
 import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_markdown_style.dart';
 import '../actions/assistant_message_actions.dart';
+import '../actions/calendar/event_deeplink.dart';
+import '../actions/calendar/event_viewer_page.dart';
 import '../actions/todo/todo_deeplink.dart';
 import '../actions/todo/todo_detail_page.dart';
 import '../attachments/attachment_deeplink.dart';
@@ -155,6 +157,39 @@ class MessageViewerPage extends StatelessWidget {
     return true;
   }
 
+  Future<bool> _openInAppEvent(BuildContext context, String href) async {
+    final parsed = parseEventDeepLink(href);
+    if (parsed == null) return false;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (sessionKey == null) return false;
+
+    Event? event;
+    try {
+      final events = await backend.listEvents(sessionKey);
+      for (final item in events) {
+        if (item.id == parsed.eventId) {
+          event = item;
+          break;
+        }
+      }
+    } catch (_) {
+      event = null;
+    }
+    if (event == null || !context.mounted) return false;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          EventViewerPage(event: event!),
+        ),
+      ),
+    );
+    return true;
+  }
+
   Future<bool> _openInAppMessage(BuildContext context, String href) async {
     final parsed = parseMessageDeepLink(href);
     if (parsed == null) return false;
@@ -169,6 +204,12 @@ class MessageViewerPage extends StatelessWidget {
 
   Future<bool> _openInAppLink(BuildContext context, String href) async {
     if (await _openInAppTodo(context, href)) {
+      return true;
+    }
+    if (!context.mounted) {
+      return false;
+    }
+    if (await _openInAppEvent(context, href)) {
       return true;
     }
     if (!context.mounted) {

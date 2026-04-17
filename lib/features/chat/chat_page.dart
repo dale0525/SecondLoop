@@ -56,6 +56,8 @@ import '../../ui/sl_tokens.dart';
 import '../../ui/sl_typing_indicator.dart';
 import '../actions/assistant_message_actions.dart';
 import '../actions/calendar/calendar_action.dart';
+import '../actions/calendar/event_deeplink.dart';
+import '../actions/calendar/event_viewer_page.dart';
 import '../actions/review/review_backoff.dart';
 import '../actions/settings/actions_settings_store.dart';
 import '../actions/suggestions_card.dart';

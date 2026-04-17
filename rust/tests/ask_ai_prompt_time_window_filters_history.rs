@@ -902,8 +902,8 @@ fn ask_ai_time_window_prompt_includes_done_items_for_past_agenda_queries() {
         &key,
         "todo:done-in-window",
         "Ship launch recap",
-        Some(time_start_ms + 500),
-        "done",
+        None,
+        "open",
         None,
         None,
         None,
@@ -911,14 +911,27 @@ fn ask_ai_time_window_prompt_includes_done_items_for_past_agenda_queries() {
         None,
         None,
     )
-    .expect("done todo");
+    .expect("window todo");
+    db::set_todo_status(&conn, &key, "todo:done-in-window", "done", None)
+        .expect("set window todo done");
+    let window_activity = db::list_todo_activities(&conn, &key, "todo:done-in-window")
+        .expect("window activities")
+        .into_iter()
+        .last()
+        .expect("window activity");
+    conn.execute(
+        "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+        params![window_activity.id, time_start_ms + 500],
+    )
+    .expect("set window activity ts");
+
     db::upsert_todo(
         &conn,
         &key,
         "todo:done-outside-window",
         "Old completed item",
-        Some(time_start_ms - 86_400_000),
-        "done",
+        None,
+        "open",
         None,
         None,
         None,
@@ -926,7 +939,19 @@ fn ask_ai_time_window_prompt_includes_done_items_for_past_agenda_queries() {
         None,
         None,
     )
-    .expect("old done todo");
+    .expect("old todo");
+    db::set_todo_status(&conn, &key, "todo:done-outside-window", "done", None)
+        .expect("set old todo done");
+    let old_activity = db::list_todo_activities(&conn, &key, "todo:done-outside-window")
+        .expect("old activities")
+        .into_iter()
+        .last()
+        .expect("old activity");
+    conn.execute(
+        "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+        params![old_activity.id, time_start_ms - 86_400_000],
+    )
+    .expect("set old activity ts");
 
     let provider = FakeProvider::default();
     rag::ask_ai_with_provider_using_active_embeddings_time_window(

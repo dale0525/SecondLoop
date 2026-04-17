@@ -332,11 +332,23 @@ fn build_actions_context_in_range(
         return Ok(None);
     }
 
+    if has_past_actions_timeframe(question) {
+        return build_past_actions_context_in_range(conn, key, time_start_ms, time_end_ms);
+    }
+
+    build_upcoming_actions_context_in_range(conn, key, time_start_ms, time_end_ms)
+}
+
+fn build_upcoming_actions_context_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    time_start_ms: i64,
+    time_end_ms: i64,
+) -> Result<Option<String>> {
     let mut lines: Vec<String> = Vec::new();
-    let include_completed = has_past_actions_timeframe(question);
 
     for todo in db::list_todos(conn, key)? {
-        if todo.status == "dismissed" || (todo.status == "done" && !include_completed) {
+        if todo.status == "dismissed" || todo.status == "done" {
             continue;
         }
 
@@ -385,10 +397,100 @@ fn build_actions_context_in_range(
     Ok(Some(out))
 }
 
+fn build_past_actions_context_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    time_start_ms: i64,
+    time_end_ms: i64,
+) -> Result<Option<String>> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut latest_activity_by_todo = std::collections::BTreeMap::<String, db::TodoActivity>::new();
+
+    for activity in db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)? {
+        let should_replace = latest_activity_by_todo
+            .get(&activity.todo_id)
+            .map(|current| activity.created_at_ms >= current.created_at_ms)
+            .unwrap_or(true);
+        if should_replace {
+            latest_activity_by_todo.insert(activity.todo_id.clone(), activity);
+        }
+    }
+
+    for activity in latest_activity_by_todo.into_values() {
+        let todo = match db::get_todo(conn, key, &activity.todo_id) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        let line = match activity.to_status.as_deref() {
+            Some("done") => format!(
+                "TODO [done] {} (completed_at_ms={})",
+                todo.title, activity.created_at_ms
+            ),
+            _ => match activity.content.as_deref() {
+                Some(content) if !content.trim().is_empty() => format!(
+                    "TODO_ACTIVITY [{}] {} (created_at_ms={}) content={}",
+                    todo.status, todo.title, activity.created_at_ms, content
+                ),
+                _ => format!(
+                    "TODO_ACTIVITY [{}] {} (created_at_ms={}) type={}",
+                    todo.status, todo.title, activity.created_at_ms, activity.activity_type
+                ),
+            },
+        };
+        lines.push(line);
+    }
+
+    for event in db::list_events_in_range(conn, key, time_start_ms, time_end_ms)? {
+        lines.push(format!(
+            "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
+            event.title, event.start_at_ms, event.end_at_ms, event.tz
+        ));
+    }
+
+    if lines.is_empty() {
+        return Ok(None);
+    }
+
+    let mut out = String::new();
+    out.push_str("Past actions (from local todos/events):\n");
+    for line in lines.into_iter().take(40) {
+        out.push_str("- ");
+        out.push_str(&line);
+        out.push('\n');
+    }
+    Ok(Some(out))
+}
+
 fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -> Result<String> {
     let todo = db::get_todo(conn, key, todo_id)?;
     let activities = db::list_todo_activities(conn, key, todo_id)?;
 
+    build_todo_thread_context_from_activities(&todo, activities)
+}
+
+fn build_todo_thread_context_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    time_start_ms: i64,
+    time_end_ms: i64,
+) -> Result<String> {
+    let todo = db::get_todo(conn, key, todo_id)?;
+    let activities = db::list_todo_activities(conn, key, todo_id)?
+        .into_iter()
+        .filter(|activity| {
+            activity.created_at_ms >= time_start_ms && activity.created_at_ms < time_end_ms
+        })
+        .collect::<Vec<_>>();
+
+    build_todo_thread_context_from_activities(&todo, activities)
+}
+
+fn build_todo_thread_context_from_activities(
+    todo: &db::Todo,
+    activities: Vec<db::TodoActivity>,
+) -> Result<String> {
     let mut out = String::new();
     out.push_str(&format!("TODO_THREAD todo_id={}\n", todo.id));
 

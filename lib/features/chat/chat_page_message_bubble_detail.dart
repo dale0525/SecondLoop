@@ -43,6 +43,12 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
       return true;
     }
 
+    final eventLink = parseEventDeepLink(href);
+    if (eventLink != null) {
+      await _openEventById(eventLink.eventId);
+      return true;
+    }
+
     final attachmentLink = parseAttachmentDeepLink(href);
     if (attachmentLink != null) {
       await AttachmentViewerPage.openBySha(

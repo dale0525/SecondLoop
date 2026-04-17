@@ -1263,6 +1263,37 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     await _openLinkedTodo(todo);
   }
 
+  Future<void> _openEventById(String eventId) async {
+    final normalizedEventId = eventId.trim();
+    if (normalizedEventId.isEmpty) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    Event? event;
+    try {
+      final events = await backend.listEvents(sessionKey);
+      for (final item in events) {
+        if (item.id == normalizedEventId) {
+          event = item;
+          break;
+        }
+      }
+    } catch (_) {
+      event = null;
+    }
+
+    if (!mounted || event == null) return;
+    await _pushRouteFromChat(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          EventViewerPage(event: event!),
+        ),
+      ),
+    );
+  }
+
   String? _extractCloudDetachedRequestIdFromPayloadJson(String? payloadJson) {
     final raw = payloadJson?.trim() ?? '';
     if (raw.isEmpty) return null;

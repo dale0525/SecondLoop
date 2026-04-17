@@ -1,3 +1,4 @@
+import '../actions/calendar/event_deeplink.dart';
 import '../actions/todo/todo_deeplink.dart';
 import '../attachments/attachment_deeplink.dart';
 import 'message_deeplink.dart';
@@ -20,6 +21,7 @@ bool canOpenChatMarkdownHref(String? href) {
   }
 
   return parseTodoDeepLink(target) != null ||
+      parseEventDeepLink(target) != null ||
       parseAttachmentDeepLink(target) != null ||
       parseMessageDeepLink(target) != null;
 }

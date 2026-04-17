@@ -21,8 +21,9 @@ use super::evidence::{
 };
 use super::{
     ask_ai_stream_and_persist, build_recent_conversation_history,
-    build_recent_conversation_history_in_range, build_todo_thread_context, AnswerProvider,
-    AskAiResult, ContextItem, ContextSource, ContextWithEvidence, Focus,
+    build_recent_conversation_history_in_range, build_todo_thread_context,
+    build_todo_thread_context_in_range, AnswerProvider, AskAiResult, ContextItem, ContextSource,
+    ContextWithEvidence, Focus,
 };
 
 const TIME_WINDOW_MESSAGE_LIMIT: usize = 800;
@@ -139,6 +140,7 @@ fn collect_time_window_candidates(
 
     for activity in db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)?
         .into_iter()
+        .rev()
         .take(TIME_WINDOW_TODO_ACTIVITY_LIMIT)
     {
         let text = build_time_window_todo_activity_text(&activity);
@@ -154,6 +156,7 @@ fn collect_time_window_candidates(
 
     for event in db::list_events_in_range(conn, key, time_start_ms, time_end_ms)?
         .into_iter()
+        .rev()
         .take(TIME_WINDOW_EVENT_LIMIT)
     {
         let text = build_time_window_event_text(&event);
@@ -182,7 +185,8 @@ fn collect_time_window_candidates(
             continue;
         }
 
-        let text = build_todo_thread_context(conn, key, &todo.id)?;
+        let text =
+            build_todo_thread_context_in_range(conn, key, &todo.id, time_start_ms, time_end_ms)?;
         candidates.push(ContextItem {
             source: ContextSource::TodoThread,
             id: todo.id,
