@@ -1,6 +1,28 @@
+import '../actions/todo/todo_deeplink.dart';
+import '../attachments/attachment_deeplink.dart';
+import 'message_deeplink.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 typedef ChatMarkdownInAppLinkHandler = Future<bool> Function(String href);
+
+bool canOpenChatMarkdownHref(String? href) {
+  final target = href?.trim();
+  if (target == null || target.isEmpty) {
+    return false;
+  }
+
+  final uri = Uri.tryParse(target);
+  if (uri == null) {
+    return false;
+  }
+  if (uri.scheme.toLowerCase() != 'secondloop') {
+    return true;
+  }
+
+  return parseTodoDeepLink(target) != null ||
+      parseAttachmentDeepLink(target) != null ||
+      parseMessageDeepLink(target) != null;
+}
 
 Future<void> handleChatMarkdownTapLink(
   String? href, {

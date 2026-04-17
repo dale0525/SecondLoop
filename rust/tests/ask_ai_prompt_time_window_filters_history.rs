@@ -745,3 +745,218 @@ fn ask_ai_time_window_prompt_includes_events_for_non_agenda_queries() {
         "expected out-of-range event to stay out of prompt: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_time_window_persists_todo_activity_evidence_for_matches() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 80_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:activity-evidence",
+        "Fundraising follow-up",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+
+    let activity = db::append_todo_note(
+        &conn,
+        &key,
+        "todo:activity-evidence",
+        "Investor feedback requires a revised deck",
+        None,
+    )
+    .expect("activity");
+    conn.execute(
+        "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+        params![activity.id, time_start_ms + 100],
+    )
+    .expect("update activity ts");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Which task mentioned investor feedback?",
+        4,
+        rag::Focus::AllMemories,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let messages = db::list_messages(&conn, &key, &conversation.id).expect("list messages");
+    let assistant = messages.last().expect("assistant message");
+    let raw = assistant
+        .citations_json
+        .as_deref()
+        .expect("citations json should be stored");
+    let value: serde_json::Value = serde_json::from_str(raw).expect("valid json");
+    let direct_sources = value["direct_sources"]
+        .as_array()
+        .expect("direct_sources array");
+
+    assert!(
+        direct_sources.iter().any(|source| {
+            source["href"].as_str() == Some("secondloop://todo/todo:activity-evidence")
+        }),
+        "expected todo activity match to persist parent todo evidence: {value}"
+    );
+}
+
+#[test]
+fn ask_ai_time_window_persists_event_evidence_for_matches() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 120_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    db::upsert_event(
+        &conn,
+        &key,
+        "event:budget-review",
+        "Budget review with Alice",
+        time_start_ms + 1_000,
+        time_start_ms + 2_000,
+        "UTC",
+        None,
+    )
+    .expect("in-range event");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "What happened in the budget review?",
+        4,
+        rag::Focus::AllMemories,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let messages = db::list_messages(&conn, &key, &conversation.id).expect("list messages");
+    let assistant = messages.last().expect("assistant message");
+    let raw = assistant
+        .citations_json
+        .as_deref()
+        .expect("citations json should be stored");
+    let value: serde_json::Value = serde_json::from_str(raw).expect("valid json");
+    let direct_sources = value["direct_sources"]
+        .as_array()
+        .expect("direct_sources array");
+
+    assert!(
+        direct_sources.iter().any(|source| {
+            source["href"].as_str() == Some("secondloop://event/event:budget-review")
+        }),
+        "expected event match to persist event evidence: {value}"
+    );
+}
+
+#[test]
+fn ask_ai_time_window_prompt_includes_done_items_for_past_agenda_queries() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 160_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:done-in-window",
+        "Ship launch recap",
+        Some(time_start_ms + 500),
+        "done",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("done todo");
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:done-outside-window",
+        "Old completed item",
+        Some(time_start_ms - 86_400_000),
+        "done",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("old done todo");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "昨天我做了哪些事？",
+        0,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+
+    assert!(
+        prompt.contains("Ship launch recap"),
+        "expected completed in-range todo in past actions context: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Old completed item"),
+        "expected out-of-range completed todo to stay out of prompt: {prompt}"
+    );
+}

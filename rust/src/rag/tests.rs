@@ -1,4 +1,7 @@
-use super::{build_message_direct_source, format_history_line, should_include_actions_context};
+use super::{
+    build_message_direct_source, format_history_line, should_include_actions_context,
+    should_include_actions_context_in_range,
+};
 use super::{ContextItem, ContextSource};
 use crate::auth;
 use crate::crypto::KdfParams;
@@ -55,6 +58,26 @@ fn generic_today_query_does_not_trigger_actions_context() {
 fn today_task_query_triggers_actions_context() {
     assert!(should_include_actions_context("今天有哪些事要做？"));
     assert!(should_include_actions_context("What should I do today?"));
+}
+
+#[test]
+fn yesterday_task_query_triggers_actions_context_in_range() {
+    assert!(should_include_actions_context_in_range(
+        "昨天我做了哪些事？"
+    ));
+    assert!(should_include_actions_context_in_range(
+        "What did I do yesterday?"
+    ));
+}
+
+#[test]
+fn generic_yesterday_query_does_not_trigger_actions_context_in_range() {
+    assert!(!should_include_actions_context_in_range(
+        "分析一下我昨天拍的视频开头台词"
+    ));
+    assert!(!should_include_actions_context_in_range(
+        "Summarize yesterday's video intro"
+    ));
 }
 
 #[test]

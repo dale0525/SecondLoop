@@ -359,6 +359,7 @@ class MessageViewerPage extends StatelessWidget {
                   onOpenSources: () => unawaited(
                     citationController.openEvidence(
                       context,
+                      canOpenDirectSource: canOpenChatMarkdownHref,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
                     ),
@@ -366,6 +367,7 @@ class MessageViewerPage extends StatelessWidget {
                   onOpenEvidence: () => unawaited(
                     citationController.openEvidence(
                       context,
+                      canOpenDirectSource: canOpenChatMarkdownHref,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
                     ),

@@ -1,4 +1,4 @@
-fn get_event_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Event> {
+pub fn get_event_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Event> {
     let (title_blob, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms): (
         Vec<u8>,
         i64,

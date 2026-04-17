@@ -85,6 +85,33 @@ pub(super) fn build_todo_direct_source(
     }
 }
 
+pub(super) fn build_event_direct_source(event: &db::Event) -> AnswerEvidenceDirectSource {
+    let snippet = compact_snippet(
+        &format!(
+            "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
+            event.title, event.start_at_ms, event.end_at_ms, event.tz
+        ),
+        180,
+    );
+    AnswerEvidenceDirectSource {
+        id: format!("event:{}", event.id),
+        href: format!("secondloop://event/{}", event.id),
+        source_type: "item".to_string(),
+        label: "Item".to_string(),
+        source_type_label: Some("item".to_string()),
+        scope_label: None,
+        confidence_label: None,
+        title: Some(event.title.clone()),
+        snippet,
+        highlighted_text: None,
+        created_at_ms: Some(event.start_at_ms),
+        updated_at_ms: Some(event.updated_at_ms),
+        anchors: None,
+        document_id: None,
+        unit_id: None,
+    }
+}
+
 pub(super) fn build_attachment_direct_source(
     attachment_sha256: &str,
     kind: &str,
@@ -289,7 +316,30 @@ pub(super) fn build_direct_sources_for_context_candidate(
             )],
             Err(_) => Vec::new(),
         },
-        ContextSource::TodoActivity | ContextSource::Event => Vec::new(),
+        ContextSource::TodoActivity => {
+            match db::get_todo_activity_by_id(conn, key, &candidate.id) {
+                Ok(activity) => match db::get_todo(conn, key, &activity.todo_id) {
+                    Ok(todo) => {
+                        let snippet_source = activity
+                            .content
+                            .as_deref()
+                            .filter(|value| !value.trim().is_empty())
+                            .unwrap_or(candidate.text.as_str());
+                        vec![build_todo_direct_source(
+                            &todo,
+                            snippet_source,
+                            activity.created_at_ms,
+                        )]
+                    }
+                    Err(_) => Vec::new(),
+                },
+                Err(_) => Vec::new(),
+            }
+        }
+        ContextSource::Event => match db::get_event_by_id(conn, key, &candidate.id) {
+            Ok(event) => vec![build_event_direct_source(&event)],
+            Err(_) => Vec::new(),
+        },
         ContextSource::AttachmentChunk => {
             let mut parts = candidate.id.splitn(3, ':');
             let attachment_sha256 = parts.next().unwrap_or_default();

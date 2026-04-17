@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/attachments_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/chat/chat_markdown_link_handler.dart';
 import 'package:secondloop/features/chat/chat_markdown_preview.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/features/chat/message_deeplink.dart';
@@ -36,6 +37,17 @@ void main() {
 
     expect(parsed, isNotNull);
     expect(parsed!.messageId, 'history-1');
+  });
+
+  test('canOpenChatMarkdownHref rejects unsupported event deeplinks', () {
+    expect(
+      canOpenChatMarkdownHref('secondloop://event/event:budget-review'),
+      isFalse,
+    );
+    expect(
+      canOpenChatMarkdownHref('secondloop://message/history-1'),
+      isTrue,
+    );
   });
 
   test(

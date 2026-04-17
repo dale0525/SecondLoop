@@ -122,37 +122,78 @@ fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
         return None;
     }
 
-    let is_today = q.contains("today")
+    let is_today = has_today_timeframe(question);
+    let is_this_week = has_this_week_timeframe(question);
+    let is_agenda = has_agenda_keywords(question);
+    let has_timeframe = has_future_actions_timeframe(question);
+    if !(has_agenda_request(question) && has_timeframe) {
+        return None;
+    }
+    if is_today {
+        return Some(now_ms.saturating_add(36 * 60 * 60 * 1000));
+    }
+    if is_this_week {
+        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
+    }
+    if is_agenda {
+        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
+    }
+
+    None
+}
+
+fn has_today_timeframe(question: &str) -> bool {
+    let q = question.trim().to_lowercase();
+    q.contains("today")
         || q.contains("tonight")
         || q.contains("today's")
         || question.contains("今天")
-        || question.contains("今日");
+        || question.contains("今日")
+}
 
-    let is_this_week = q.contains("this week")
+fn has_this_week_timeframe(question: &str) -> bool {
+    let q = question.trim().to_lowercase();
+    q.contains("this week")
         || q.contains("week agenda")
         || q.contains("weekly agenda")
         || q.contains("this week's")
         || question.contains("本周")
         || question.contains("这周")
-        || question.contains("這週");
+        || question.contains("這週")
+}
 
-    let is_agenda = q.contains("agenda")
+fn has_future_actions_timeframe(question: &str) -> bool {
+    let q = question.trim().to_lowercase();
+    has_today_timeframe(question)
+        || has_this_week_timeframe(question)
+        || q.contains("tomorrow")
+        || q.contains("next week")
+        || question.contains("明天")
+}
+
+fn has_past_actions_timeframe(question: &str) -> bool {
+    let q = question.trim().to_lowercase();
+    q.contains("yesterday")
+        || q.contains("last week")
+        || question.contains("昨天")
+        || question.contains("昨日")
+        || question.contains("上周")
+        || question.contains("上週")
+}
+
+fn has_agenda_keywords(question: &str) -> bool {
+    let q = question.trim().to_lowercase();
+    q.contains("agenda")
         || q.contains("schedule")
         || q.contains("calendar")
         || question.contains("日程")
         || question.contains("行程")
-        || question.contains("安排");
-    let has_timeframe = is_today
-        || is_this_week
-        || q.contains("tomorrow")
-        || q.contains("next week")
-        || question.contains("明天")
-        || question.contains("本周")
-        || question.contains("这周")
-        || question.contains("這週")
-        || question.contains("今天")
-        || question.contains("今日");
-    let has_explicit_agenda_intent = q.contains("agenda")
+        || question.contains("安排")
+}
+
+fn has_explicit_agenda_intent(question: &str) -> bool {
+    let q = question.trim().to_lowercase();
+    q.contains("agenda")
         || q.contains("schedule")
         || q.contains("calendar")
         || q.contains("todo")
@@ -175,31 +216,46 @@ fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
         || question.contains("优先级")
         || question.contains("優先級")
         || question.contains("要做")
-        || question.contains("有哪些事");
-    let has_generic_task_words = q.contains("task")
+        || question.contains("有哪些事")
+}
+
+fn has_generic_task_words(question: &str) -> bool {
+    let q = question.trim().to_lowercase();
+    q.contains("task")
         || q.contains("tasks")
         || question.contains("任务")
         || question.contains("任務")
         || question.contains("计划")
-        || question.contains("計劃");
-    if !(has_explicit_agenda_intent || (has_generic_task_words && has_timeframe)) {
-        return None;
-    }
-    if is_today {
-        return Some(now_ms.saturating_add(36 * 60 * 60 * 1000));
-    }
-    if is_this_week {
-        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
-    }
-    if is_agenda {
-        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
-    }
+        || question.contains("計劃")
+}
 
-    None
+fn has_past_actions_intent(question: &str) -> bool {
+    let q = question.trim().to_lowercase();
+    q.contains("what did i do")
+        || q.contains("what have i done")
+        || q.contains("what did i finish")
+        || q.contains("what have i finished")
+        || question.contains("做了什么")
+        || question.contains("做了哪些事")
+        || question.contains("完成了什么")
+}
+
+fn has_agenda_request(question: &str) -> bool {
+    has_explicit_agenda_intent(question)
+        || (has_generic_task_words(question) && has_future_actions_timeframe(question))
 }
 
 fn should_include_actions_context(question: &str) -> bool {
     agenda_horizon_ms(question, 0).is_some()
+}
+
+fn should_include_actions_context_in_range(question: &str) -> bool {
+    let has_timeframe =
+        has_future_actions_timeframe(question) || has_past_actions_timeframe(question);
+    has_timeframe
+        && (has_explicit_agenda_intent(question)
+            || (has_generic_task_words(question) && has_timeframe)
+            || (has_past_actions_timeframe(question) && has_past_actions_intent(question)))
 }
 
 fn build_actions_context(
@@ -272,14 +328,15 @@ fn build_actions_context_in_range(
     time_start_ms: i64,
     time_end_ms: i64,
 ) -> Result<Option<String>> {
-    if !should_include_actions_context(question) {
+    if !should_include_actions_context_in_range(question) {
         return Ok(None);
     }
 
     let mut lines: Vec<String> = Vec::new();
+    let include_completed = has_past_actions_timeframe(question);
 
     for todo in db::list_todos(conn, key)? {
-        if todo.status == "done" || todo.status == "dismissed" {
+        if todo.status == "dismissed" || (todo.status == "done" && !include_completed) {
             continue;
         }
 

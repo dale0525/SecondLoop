@@ -569,6 +569,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                               onOpenSources: () => unawaited(
                                 citationController.openEvidence(
                                   context,
+                                  canOpenDirectSource: canOpenChatMarkdownHref,
                                   onOpenDirectSource: (href) async {
                                     await _handleMarkdownInAppLink(href);
                                   },
@@ -577,6 +578,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                               onOpenEvidence: () => unawaited(
                                 citationController.openEvidence(
                                   context,
+                                  canOpenDirectSource: canOpenChatMarkdownHref,
                                   onOpenDirectSource: (href) async {
                                     await _handleMarkdownInAppLink(href);
                                   },
