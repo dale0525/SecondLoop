@@ -142,7 +142,7 @@ List<String> _splitTranscriptSentences(String raw) {
   for (var i = 0; i < normalized.length; i += 1) {
     final char = normalized[i];
     buffer.write(char);
-    if (!_isSentenceTerminal(char)) {
+    if (!_isSentenceTerminalAt(normalized, i)) {
       continue;
     }
     while (i + 1 < normalized.length && _isSentenceCloser(normalized[i + 1])) {
@@ -161,6 +161,14 @@ List<String> _splitTranscriptSentences(String raw) {
     sentences.add(trailing);
   }
   return sentences;
+}
+
+bool _isSentenceTerminalAt(String text, int index) {
+  final char = text[index];
+  if (char == '.') {
+    return _looksLikePeriodSentenceBoundary(text, index);
+  }
+  return _isSentenceTerminal(char);
 }
 
 bool _isSentenceTerminal(String char) {
@@ -184,6 +192,21 @@ bool _isSentenceCloser(String char) {
       char == '】' ||
       char == '』' ||
       char == '」';
+}
+
+bool _looksLikePeriodSentenceBoundary(String text, int index) {
+  if (index < 0 || index >= text.length || text[index] != '.') {
+    return false;
+  }
+  if (index == text.length - 1) {
+    return true;
+  }
+
+  final nextChar = text[index + 1];
+  if (_isSentenceCloser(nextChar)) {
+    return true;
+  }
+  return _isWhitespaceChar(nextChar);
 }
 
 bool _looksLikeStructuredTranscriptLine(String line) {

@@ -291,6 +291,96 @@ void main() {
     );
   });
 
+  test(
+      'audio detail full keeps decimals and version numbers intact when paragraphized',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'We shipped v2.1 yesterday. '
+            'Revenue was 3.5 million. '
+            'Another update followed. '
+            'Final review is tomorrow.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'We shipped v2.1 yesterday.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'Revenue was 3.5 million.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Another update followed.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Final review is tomorrow.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      'We shipped v2.1 yesterday. Revenue was 3.5 million.\n\n'
+      'Another update followed. Final review is tomorrow.',
+    );
+  });
+
+  test('audio detail full keeps urls intact when paragraphized', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Read the rollout notes. '
+            'See example.com/docs for details. '
+            'Another update followed. '
+            'Final review is tomorrow.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Read the rollout notes.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'See example.com/docs for details.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Another update followed.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Final review is tomorrow.',
+          },
+        ],
+      },
+    );
+
+    expect(content.full, contains('example.com/docs for details.'));
+    expect(content.full, isNot(contains('example. com/docs')));
+  });
+
+  test(
+      'audio detail full keeps decimals intact when line-broken transcript is paragraphized',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'We shipped v2.1 yesterday.\n'
+            'Revenue was 3.5 million.\n'
+            'Another update followed.\n'
+            'Final review is tomorrow.',
+      },
+    );
+
+    expect(content.full, contains('v2.1 yesterday.'));
+    expect(content.full, contains('3.5 million.'));
+    expect(content.full, isNot(contains('v2. 1')));
+    expect(content.full, isNot(contains('3. 5')));
+  });
+
   test('audio detail full upgrades existing single newlines into paragraphs',
       () {
     final content = resolveAttachmentDetailTextContent(
