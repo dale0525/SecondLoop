@@ -1,7 +1,4 @@
 use anyhow::{anyhow, Result};
-use lopdf::Document;
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 #[path = "ocr_model_config.rs"]
@@ -32,20 +29,14 @@ use paddle_ocr_rs::ocr_lite::OcrLite;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use std::collections::HashMap;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use std::path::PathBuf;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use std::time::{Duration, Instant};
 
 const MAX_FULL_TEXT_BYTES: usize = 256 * 1024;
 const MAX_EXCERPT_TEXT_BYTES: usize = 8 * 1024;
-const OCR_MODEL_DIR_ENV: &str = "SECONDLOOP_OCR_MODEL_DIR";
-
-const DET_MODEL_ALIASES: [&str; 3] = [
-    "ch_PP-OCRv5_mobile_det.onnx",
-    "ch_PP-OCRv4_det_infer.onnx",
-    "ch_PP-OCRv3_det_infer.onnx",
-];
-const CLS_MODEL_ALIASES: [&str; 1] = ["ch_ppocr_mobile_v2.0_cls_infer.onnx"];
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 const OCR_PADDING: u32 = 50;

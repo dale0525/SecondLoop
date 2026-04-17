@@ -1,7 +1,7 @@
 pub fn process_pending_message_embeddings_active(
     conn: &Connection,
     key: &[u8; 32],
-    app_dir: &Path,
+    _app_dir: &Path,
     limit: usize,
 ) -> Result<usize> {
     let desired = desired_embedding_model_name(conn)?;
@@ -17,7 +17,7 @@ pub fn process_pending_message_embeddings_active(
             not(frb_expand)
         ))]
         {
-            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+            match crate::embedding::FastEmbedder::get_or_try_init(_app_dir) {
                 Ok(embedder) => {
                     set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
                     return process_pending_message_embeddings(conn, key, &embedder, limit);
@@ -43,7 +43,7 @@ pub fn process_pending_message_embeddings_active(
 pub fn process_pending_todo_embeddings_active(
     conn: &Connection,
     key: &[u8; 32],
-    app_dir: &Path,
+    _app_dir: &Path,
     limit: usize,
 ) -> Result<usize> {
     let desired = desired_embedding_model_name(conn)?;
@@ -59,7 +59,7 @@ pub fn process_pending_todo_embeddings_active(
             not(frb_expand)
         ))]
         {
-            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+            match crate::embedding::FastEmbedder::get_or_try_init(_app_dir) {
                 Ok(embedder) => {
                     set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
                     return process_pending_todo_embeddings(conn, key, &embedder, limit);
@@ -85,7 +85,7 @@ pub fn process_pending_todo_embeddings_active(
 pub fn process_pending_todo_activity_embeddings_active(
     conn: &Connection,
     key: &[u8; 32],
-    app_dir: &Path,
+    _app_dir: &Path,
     limit: usize,
 ) -> Result<usize> {
     let desired = desired_embedding_model_name(conn)?;
@@ -101,7 +101,7 @@ pub fn process_pending_todo_activity_embeddings_active(
             not(frb_expand)
         ))]
         {
-            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+            match crate::embedding::FastEmbedder::get_or_try_init(_app_dir) {
                 Ok(embedder) => {
                     set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
                     return process_pending_todo_activity_embeddings(conn, key, &embedder, limit);
@@ -127,7 +127,7 @@ pub fn process_pending_todo_activity_embeddings_active(
 pub fn rebuild_message_embeddings_active(
     conn: &Connection,
     key: &[u8; 32],
-    app_dir: &Path,
+    _app_dir: &Path,
     batch_limit: usize,
 ) -> Result<usize> {
     let desired = desired_embedding_model_name(conn)?;
@@ -143,7 +143,7 @@ pub fn rebuild_message_embeddings_active(
             not(frb_expand)
         ))]
         {
-            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+            match crate::embedding::FastEmbedder::get_or_try_init(_app_dir) {
                 Ok(embedder) => {
                     set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
                     return rebuild_message_embeddings(conn, key, &embedder, batch_limit);
@@ -169,7 +169,7 @@ pub fn rebuild_message_embeddings_active(
 pub fn search_similar_messages_active(
     conn: &Connection,
     key: &[u8; 32],
-    app_dir: &Path,
+    _app_dir: &Path,
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarMessage>> {
@@ -186,7 +186,7 @@ pub fn search_similar_messages_active(
             not(frb_expand)
         ))]
         {
-            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+            match crate::embedding::FastEmbedder::get_or_try_init(_app_dir) {
                 Ok(embedder) => {
                     set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
                     return search_similar_messages(conn, key, &embedder, query, top_k);
@@ -212,7 +212,7 @@ pub fn search_similar_messages_active(
 pub fn search_similar_messages_in_conversation_active(
     conn: &Connection,
     key: &[u8; 32],
-    app_dir: &Path,
+    _app_dir: &Path,
     conversation_id: &str,
     query: &str,
     top_k: usize,
@@ -236,7 +236,7 @@ pub fn search_similar_messages_in_conversation_active(
             not(frb_expand)
         ))]
         {
-            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+            match crate::embedding::FastEmbedder::get_or_try_init(_app_dir) {
                 Ok(embedder) => {
                     set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
                     return search_similar_messages_in_conversation(
@@ -275,7 +275,7 @@ pub fn search_similar_messages_in_conversation_active(
 pub fn search_similar_todo_threads_active(
     conn: &Connection,
     key: &[u8; 32],
-    app_dir: &Path,
+    _app_dir: &Path,
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarTodoThread>> {
@@ -292,7 +292,7 @@ pub fn search_similar_todo_threads_active(
             not(frb_expand)
         ))]
         {
-            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+            match crate::embedding::FastEmbedder::get_or_try_init(_app_dir) {
                 Ok(embedder) => {
                     set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
                     return search_similar_todo_threads(conn, key, &embedder, query, top_k);
@@ -409,4 +409,3 @@ fn read_attachment_place_display_name_optional(
 
     Ok(Some(parts.join(", ")))
 }
-
