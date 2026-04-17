@@ -209,3 +209,52 @@ fn active_embeddings_refreshes_todo_activity_index_before_search() {
         "expected ask-ai active embeddings to refresh todo activity index"
     );
 }
+
+#[test]
+fn ask_ai_active_embeddings_includes_events_for_non_agenda_questions() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    db::upsert_event(
+        &conn,
+        &key,
+        "event:budget-review",
+        "Budget review with Alice",
+        1_700_000_000_000,
+        1_700_000_360_000,
+        "UTC",
+        None,
+    )
+    .expect("event");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "When is the budget review with Alice?",
+        8,
+        rag::Focus::AllMemories,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+    assert!(
+        prompt.contains("Budget review with Alice"),
+        "expected ordinary event question to include event context: {prompt}"
+    );
+}

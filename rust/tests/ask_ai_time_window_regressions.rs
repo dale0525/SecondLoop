@@ -454,6 +454,73 @@ fn ask_ai_time_window_candidate_limits_keep_recent_event_matches() {
 }
 
 #[test]
+fn ask_ai_time_window_candidate_limits_keep_recent_message_matches() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let archive = db::create_conversation(&conn, &key, "Archive").expect("archive");
+    let time_start_ms: i64 = 650_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    for index in 0..805 {
+        let message = db::insert_message(
+            &conn,
+            &key,
+            &archive.id,
+            "user",
+            &format!("background message {index}"),
+        )
+        .expect("message");
+        conn.execute(
+            "UPDATE messages SET created_at = ?2, updated_at = ?2 WHERE id = ?1",
+            params![message.id, time_start_ms + index as i64],
+        )
+        .expect("update message ts");
+    }
+
+    let latest_message = db::insert_message(
+        &conn,
+        &key,
+        &archive.id,
+        "user",
+        "latest needle from the end of the time window",
+    )
+    .expect("latest message");
+    conn.execute(
+        "UPDATE messages SET created_at = ?2, updated_at = ?2 WHERE id = ?1",
+        params![latest_message.id, time_end_ms - 10],
+    )
+    .expect("update latest message ts");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Where is the latest needle?",
+        4,
+        rag::Focus::AllMemories,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = capture_prompt(&provider);
+    assert!(
+        prompt.contains("latest needle from the end of the time window"),
+        "expected newest matching message to survive time-window candidate limit: {prompt}"
+    );
+}
+
+#[test]
 fn ask_ai_time_window_upcoming_actions_keep_in_range_events_when_truncated() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");

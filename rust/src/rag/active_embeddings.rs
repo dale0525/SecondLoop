@@ -4,10 +4,7 @@ use std::path::Path;
 
 use crate::db;
 use crate::llm::ChatDelta;
-use crate::message_citations::{
-    append_message_citation_if_missing as append_message_citation, message_citation_link,
-    AnswerEvidenceDirectSource,
-};
+use crate::message_citations::{message_citation_link, AnswerEvidenceDirectSource};
 
 use super::attachment_resources::{
     collect_attachment_resources_active, collect_attachment_resources_for_attachment_shas,
@@ -15,9 +12,7 @@ use super::attachment_resources::{
 use super::citations_prompt::build_prompt_with_actions_and_history;
 use super::context_selection::{build_contexts_v2, render_context_item_for_prompt};
 use super::evidence::{
-    build_attachment_direct_source, build_attachment_resource_direct_source,
-    build_direct_sources_for_context_candidate, build_message_direct_source,
-    build_todo_direct_source,
+    build_attachment_resource_direct_source, build_direct_sources_for_context_candidate,
 };
 use super::{
     ask_ai_stream_and_persist, build_recent_conversation_history,
@@ -29,6 +24,7 @@ use super::{
 const TIME_WINDOW_MESSAGE_LIMIT: usize = 800;
 const TIME_WINDOW_TODO_ACTIVITY_LIMIT: usize = 300;
 const TIME_WINDOW_EVENT_LIMIT: usize = 200;
+const ACTIVE_EMBEDDINGS_EVENT_LIMIT: usize = 200;
 
 fn collect_time_window_attachment_resources(
     conn: &Connection,
@@ -117,7 +113,7 @@ fn collect_time_window_candidates(
 ) -> Result<Vec<ContextItem>> {
     let mut candidates = Vec::<ContextItem>::new();
 
-    for message in db::list_memory_messages_in_range(
+    for message in db::list_memory_messages_in_range_recent(
         conn,
         key,
         conversation_filter,
@@ -264,6 +260,115 @@ fn collect_time_window_candidates(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn collect_active_embedding_candidates(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    conversation_id: &str,
+    question: &str,
+    top_k: usize,
+    focus: Focus,
+) -> Result<(
+    Vec<ContextItem>,
+    super::attachment_resources::AttachmentResourcesBundle,
+)> {
+    let mut candidates = Vec::<ContextItem>::new();
+
+    let similar_messages = match focus {
+        Focus::AllMemories => {
+            db::search_similar_messages_active(conn, key, app_dir, question, top_k)?
+        }
+        Focus::ThisThread => db::search_similar_messages_in_conversation_active(
+            conn,
+            key,
+            app_dir,
+            conversation_id,
+            question,
+            top_k,
+        )?,
+    };
+    for sm in similar_messages {
+        let context = db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
+            .unwrap_or_else(|_| sm.message.content.clone());
+        let citation_suffix = message_citation_link(&sm.message.id);
+        candidates.push(ContextItem {
+            source: ContextSource::Message,
+            id: sm.message.id,
+            created_at_ms: sm.message.created_at_ms,
+            distance: Some(sm.distance),
+            text: context,
+            citation_suffix,
+        });
+    }
+
+    let mut seen_todos = std::collections::HashSet::new();
+    for st in db::search_similar_todo_threads_active(conn, key, app_dir, question, top_k)? {
+        if !seen_todos.insert(st.todo_id.clone()) {
+            continue;
+        }
+        let todo = match db::get_todo(conn, key, &st.todo_id) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        candidates.push(ContextItem {
+            source: ContextSource::TodoThread,
+            id: st.todo_id,
+            created_at_ms: todo.created_at_ms,
+            distance: Some(st.distance),
+            text: ctx,
+            citation_suffix: None,
+        });
+    }
+
+    for event in db::list_events(conn, key)?
+        .into_iter()
+        .rev()
+        .take(ACTIVE_EMBEDDINGS_EVENT_LIMIT)
+    {
+        let text = build_time_window_event_text(&event);
+        candidates.push(ContextItem {
+            source: ContextSource::Event,
+            id: event.id,
+            created_at_ms: event.start_at_ms,
+            distance: None,
+            text,
+            citation_suffix: None,
+        });
+    }
+
+    let attachment_resources =
+        collect_attachment_resources_active(conn, key, app_dir, question, top_k)
+            .unwrap_or_default();
+    for chunk in &attachment_resources.chunks {
+        let citation = format!(
+            "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
+            chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+        );
+        let context = format!(
+            "ATTACHMENT_CHUNK {} {}#{}\n{}\n{}",
+            chunk.attachment_sha256, chunk.kind, chunk.chunk_index, chunk.text, citation
+        );
+        candidates.push(ContextItem {
+            source: ContextSource::AttachmentChunk,
+            id: format!(
+                "{}:{}:{}",
+                chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+            ),
+            created_at_ms: chunk.created_at_ms,
+            distance: Some(chunk.distance),
+            text: context,
+            citation_suffix: None,
+        });
+    }
+
+    Ok((candidates, attachment_resources))
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(super) fn ask_ai_with_provider_using_active_embeddings(
     conn: &Connection,
     key: &[u8; 32],
@@ -283,24 +388,15 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings(
         refresh_active_embedding_indexes(conn, key, app_dir)?;
 
         let top_k = top_k.max(1);
-        let similar_messages = match focus {
-            Focus::AllMemories => {
-                db::search_similar_messages_active(conn, key, app_dir, question, top_k)?
-            }
-            Focus::ThisThread => db::search_similar_messages_in_conversation_active(
-                conn,
-                key,
-                app_dir,
-                conversation_id,
-                question,
-                top_k,
-            )?,
-        };
-        let similar_todos =
-            db::search_similar_todo_threads_active(conn, key, app_dir, question, top_k)?;
-        let attachment_resources =
-            collect_attachment_resources_active(conn, key, app_dir, question, top_k)
-                .unwrap_or_default();
+        let (candidates, attachment_resources) = collect_active_embedding_candidates(
+            conn,
+            key,
+            app_dir,
+            conversation_id,
+            question,
+            top_k,
+            focus,
+        )?;
         attachment_direct_sources = attachment_resources
             .resources
             .iter()
@@ -312,78 +408,23 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings(
                 )
             })
             .collect();
-
-        let mut contexts_with_distance: Vec<(f64, ContextWithEvidence)> = Vec::new();
-        for sm in similar_messages {
-            let context =
-                db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
-                    .unwrap_or_else(|_| sm.message.content.clone());
-            let context = append_message_citation(context, &sm.message.id);
-            let direct_sources = build_message_direct_source(&sm.message)
-                .into_iter()
-                .collect::<Vec<_>>();
-            contexts_with_distance.push((
-                sm.distance,
+        let selected = build_contexts_v2(question, candidates.clone(), top_k);
+        let mut context_by_text = std::collections::HashMap::<String, ContextWithEvidence>::new();
+        for candidate in candidates {
+            let rendered_text = render_context_item_for_prompt(question, &candidate)
+                .unwrap_or_else(|| candidate.text.clone());
+            let direct_sources = build_direct_sources_for_context_candidate(conn, key, &candidate);
+            context_by_text.insert(
+                rendered_text.clone(),
                 ContextWithEvidence {
-                    text: context,
+                    text: rendered_text,
                     direct_sources,
                 },
-            ));
-        }
-
-        let mut seen_todos = std::collections::HashSet::new();
-        for st in similar_todos {
-            if !seen_todos.insert(st.todo_id.clone()) {
-                continue;
-            }
-            let todo = match db::get_todo(conn, key, &st.todo_id) {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
-            let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
-            let direct_source = build_todo_direct_source(&todo, &ctx, todo.created_at_ms);
-            contexts_with_distance.push((
-                st.distance,
-                ContextWithEvidence {
-                    text: ctx,
-                    direct_sources: vec![direct_source],
-                },
-            ));
-        }
-
-        for chunk in attachment_resources.chunks {
-            let citation = format!(
-                "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
-                chunk.attachment_sha256, chunk.kind, chunk.chunk_index
             );
-            let context = format!(
-                "ATTACHMENT_CHUNK {} {}#{}\n{}\n{}",
-                chunk.attachment_sha256, chunk.kind, chunk.chunk_index, chunk.text, citation
-            );
-            contexts_with_distance.push((
-                chunk.distance,
-                ContextWithEvidence {
-                    text: context,
-                    direct_sources: vec![build_attachment_direct_source(
-                        &chunk.attachment_sha256,
-                        &chunk.kind,
-                        chunk.chunk_index,
-                        &chunk.text,
-                        chunk.created_at_ms,
-                    )],
-                },
-            ));
         }
-
-        contexts_with_distance
-            .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-        contexts_with_distance.truncate(top_k);
-        contexts = contexts_with_distance
+        contexts = selected
             .into_iter()
-            .map(|(_, ctx)| ctx)
+            .filter_map(|text| context_by_text.remove(&text))
             .collect();
         resources_catalog = attachment_resources.catalog_markdown;
     }
