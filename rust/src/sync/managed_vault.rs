@@ -170,6 +170,53 @@ fn v2_route_unavailable(error: &anyhow::Error) -> bool {
         || message.contains("managed-vault v2 push route unavailable")
 }
 
+fn has_local_attachments(conn: &Connection) -> Result<bool> {
+    conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM attachments LIMIT 1)"#,
+        [],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+fn has_ready_embedding_artifact_blobs(conn: &Connection) -> Result<bool> {
+    conn.query_row(
+        r#"SELECT EXISTS(
+               SELECT 1
+               FROM embedding_artifact_manifests
+               WHERE status = 'ready'
+               LIMIT 1
+           )"#,
+        [],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+fn full_push_requires_legacy_media_sync(
+    conn: &Connection,
+    base_url: &str,
+    vault_id: &str,
+) -> Result<bool> {
+    let scope_id = runtime::scope_id(base_url, vault_id);
+    let attachment_backfill_key = format!("managed_vault.attachments.bytes_backfilled:{scope_id}");
+    if super::kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0
+        && has_local_attachments(conn)?
+    {
+        return Ok(true);
+    }
+
+    let artifact_backfill_key =
+        format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}");
+    if super::kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0
+        && has_ready_embedding_artifact_blobs(conn)?
+    {
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
 pub fn push(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -178,6 +225,10 @@ pub fn push(
     vault_id: &str,
     id_token: &str,
 ) -> Result<u64> {
+    if full_push_requires_legacy_media_sync(conn, base_url, vault_id)? {
+        return push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true);
+    }
+
     match global_log_client::push_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None) {
         Ok(pushed) => Ok(pushed),
         Err(error) if v2_route_unavailable(&error) => {
