@@ -13,6 +13,17 @@ fn native_filesystem_keeps_wal_defaults() {
 }
 
 #[test]
+fn opfs_sahpool_keeps_wal_defaults() {
+    assert_eq!(
+        sqlite_open_pragmas_for_mode(SqlitePersistenceMode::OpfsSAHPool),
+        SqliteOpenPragmas {
+            journal_mode: "WAL",
+            synchronous: None,
+        },
+    );
+}
+
+#[test]
 fn relaxed_idb_uses_delete_journal_and_synchronous_off() {
     assert_eq!(
         sqlite_open_pragmas_for_mode(SqlitePersistenceMode::RelaxedIdb),
