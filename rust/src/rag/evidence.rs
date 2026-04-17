@@ -289,6 +289,7 @@ pub(super) fn build_direct_sources_for_context_candidate(
             )],
             Err(_) => Vec::new(),
         },
+        ContextSource::TodoActivity | ContextSource::Event => Vec::new(),
         ContextSource::AttachmentChunk => {
             let mut parts = candidate.id.splitn(3, ':');
             let attachment_sha256 = parts.next().unwrap_or_default();

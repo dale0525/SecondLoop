@@ -585,3 +585,163 @@ fn ask_ai_time_window_prompt_filters_actions_by_range_instead_of_now() {
         "expected out-of-range event to stay out of prompt: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_time_window_prompt_includes_todo_activity_matches_for_non_agenda_queries() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:activity-window",
+        "Fundraising follow-up",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+
+    let time_start_ms: i64 = 20_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    let in_range = db::append_todo_note(
+        &conn,
+        &key,
+        "todo:activity-window",
+        "Investor feedback requires a revised deck",
+        None,
+    )
+    .expect("in range activity");
+    conn.execute(
+        "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+        params![in_range.id, time_start_ms + 100],
+    )
+    .expect("update in range activity ts");
+
+    let out_of_range = db::append_todo_note(
+        &conn,
+        &key,
+        "todo:activity-window",
+        "Legacy note that should stay outside the window",
+        None,
+    )
+    .expect("out of range activity");
+    conn.execute(
+        "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+        params![out_of_range.id, time_start_ms - 100],
+    )
+    .expect("update out of range activity ts");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Which task mentioned investor feedback?",
+        4,
+        rag::Focus::AllMemories,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+
+    assert!(
+        prompt.contains("Investor feedback requires a revised deck"),
+        "expected in-range todo activity in prompt: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Legacy note that should stay outside the window"),
+        "expected out-of-range todo activity to stay out of prompt: {prompt}"
+    );
+}
+
+#[test]
+fn ask_ai_time_window_prompt_includes_events_for_non_agenda_queries() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 50_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    db::upsert_event(
+        &conn,
+        &key,
+        "event:budget-review",
+        "Budget review with Alice",
+        time_start_ms + 1_000,
+        time_start_ms + 2_000,
+        "UTC",
+        None,
+    )
+    .expect("in-range event");
+    db::upsert_event(
+        &conn,
+        &key,
+        "event:outside-window",
+        "Roadmap sync",
+        time_end_ms + 1_000,
+        time_end_ms + 2_000,
+        "UTC",
+        None,
+    )
+    .expect("out-of-range event");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "What happened in the budget review?",
+        4,
+        rag::Focus::AllMemories,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+
+    assert!(
+        prompt.contains("Budget review with Alice"),
+        "expected in-range event in prompt: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Roadmap sync"),
+        "expected out-of-range event to stay out of prompt: {prompt}"
+    );
+}

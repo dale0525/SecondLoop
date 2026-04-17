@@ -10,6 +10,8 @@ const DEFAULT_MAX_DISTANCE_WITHOUT_LEXICAL_MATCH: f64 = 0.35;
 pub(crate) enum ContextSource {
     Message,
     TodoThread,
+    TodoActivity,
+    Event,
     AttachmentChunk,
 }
 
@@ -418,6 +420,8 @@ pub(crate) fn render_context_item_for_prompt(question: &str, item: &ContextItem)
     let prefix = match item.source {
         ContextSource::Message => None,
         ContextSource::TodoThread => Some(format!("TODO_THREAD id={}\n", item.id)),
+        ContextSource::TodoActivity => Some(format!("TODO_ACTIVITY id={}\n", item.id)),
+        ContextSource::Event => Some(format!("EVENT id={}\n", item.id)),
         ContextSource::AttachmentChunk => Some(format!("ATTACHMENT_CHUNK id={}\n", item.id)),
     };
     if let Some(prefix) = prefix {

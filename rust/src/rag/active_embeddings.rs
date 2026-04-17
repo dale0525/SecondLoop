@@ -25,6 +25,10 @@ use super::{
     AskAiResult, ContextItem, ContextSource, ContextWithEvidence, Focus,
 };
 
+const TIME_WINDOW_MESSAGE_LIMIT: usize = 800;
+const TIME_WINDOW_TODO_ACTIVITY_LIMIT: usize = 300;
+const TIME_WINDOW_EVENT_LIMIT: usize = 200;
+
 fn collect_time_window_attachment_resources(
     conn: &Connection,
     key: &[u8; 32],
@@ -56,13 +60,203 @@ fn list_attachment_shas_in_time_window(
         conversation_id,
         time_start_ms,
         time_end_ms,
-        800,
+        TIME_WINDOW_MESSAGE_LIMIT as i64,
     )? {
         for attachment in db::list_message_attachments(conn, key, &message.id)? {
             attachment_shas.push(attachment.sha256);
         }
     }
     Ok(attachment_shas)
+}
+
+fn refresh_active_embedding_indexes(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+) -> Result<()> {
+    db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
+    db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
+    db::process_pending_todo_activity_embeddings_active(conn, key, app_dir, 1024)?;
+    Ok(())
+}
+
+fn build_time_window_todo_activity_text(activity: &db::TodoActivity) -> String {
+    let mut text = format!(
+        "todo_id={} type={} created_at_ms={}",
+        activity.todo_id, activity.activity_type, activity.created_at_ms
+    );
+    if let Some(from) = activity.from_status.as_deref() {
+        text.push_str(&format!(" from={from}"));
+    }
+    if let Some(to) = activity.to_status.as_deref() {
+        text.push_str(&format!(" to={to}"));
+    }
+    if let Some(content) = activity.content.as_deref() {
+        text.push_str(&format!(" content={content}"));
+    }
+    text
+}
+
+fn build_time_window_event_text(event: &db::Event) -> String {
+    format!(
+        "{} (start_at_ms={}, end_at_ms={}, tz={})",
+        event.title, event.start_at_ms, event.end_at_ms, event.tz
+    )
+}
+
+fn collect_time_window_candidates(
+    conn: &Connection,
+    key: &[u8; 32],
+    app_dir: &Path,
+    question: &str,
+    conversation_filter: Option<&str>,
+    time_start_ms: i64,
+    time_end_ms: i64,
+    top_k: usize,
+) -> Result<Vec<ContextItem>> {
+    let mut candidates = Vec::<ContextItem>::new();
+
+    for message in db::list_memory_messages_in_range(
+        conn,
+        key,
+        conversation_filter,
+        time_start_ms,
+        time_end_ms,
+        TIME_WINDOW_MESSAGE_LIMIT as i64,
+    )? {
+        let context = db::build_message_rag_context(conn, key, &message.id, &message.content)
+            .unwrap_or(message.content);
+        let citation_suffix = message_citation_link(&message.id);
+        candidates.push(ContextItem {
+            source: ContextSource::Message,
+            id: message.id,
+            created_at_ms: message.created_at_ms,
+            distance: None,
+            text: context,
+            citation_suffix,
+        });
+    }
+
+    for activity in db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)?
+        .into_iter()
+        .take(TIME_WINDOW_TODO_ACTIVITY_LIMIT)
+    {
+        let text = build_time_window_todo_activity_text(&activity);
+        candidates.push(ContextItem {
+            source: ContextSource::TodoActivity,
+            id: activity.id,
+            created_at_ms: activity.created_at_ms,
+            distance: None,
+            text,
+            citation_suffix: None,
+        });
+    }
+
+    for event in db::list_events_in_range(conn, key, time_start_ms, time_end_ms)?
+        .into_iter()
+        .take(TIME_WINDOW_EVENT_LIMIT)
+    {
+        let text = build_time_window_event_text(&event);
+        candidates.push(ContextItem {
+            source: ContextSource::Event,
+            id: event.id,
+            created_at_ms: event.start_at_ms,
+            distance: None,
+            text,
+            citation_suffix: None,
+        });
+    }
+
+    let mut seen_todos = std::collections::HashSet::<String>::new();
+    for todo in db::list_todos(conn, key)?.into_iter() {
+        if !seen_todos.insert(todo.id.clone()) {
+            continue;
+        }
+        let due_in_range = todo
+            .due_at_ms
+            .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
+        let review_in_range = todo
+            .next_review_at_ms
+            .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
+        if !due_in_range && !review_in_range {
+            continue;
+        }
+
+        let text = build_todo_thread_context(conn, key, &todo.id)?;
+        candidates.push(ContextItem {
+            source: ContextSource::TodoThread,
+            id: todo.id,
+            created_at_ms: todo.created_at_ms,
+            distance: None,
+            text,
+            citation_suffix: None,
+        });
+    }
+
+    let attachment_shas = list_attachment_shas_in_time_window(
+        conn,
+        key,
+        conversation_filter,
+        time_start_ms,
+        time_end_ms,
+    )?;
+    if attachment_shas.is_empty() {
+        return Ok(candidates);
+    }
+
+    let allowed_attachment_shas = attachment_shas
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+    db::process_attachment_text_chunks(conn, key, 256)?;
+    db::process_pending_attachment_chunk_embeddings_active(conn, key, app_dir, 2048)?;
+    for chunk in db::search_similar_attachment_chunks_active(
+        conn,
+        key,
+        app_dir,
+        question,
+        top_k.saturating_mul(2).max(top_k),
+    )?
+    .into_iter()
+    .filter(|chunk| allowed_attachment_shas.contains(&chunk.attachment_sha256))
+    .take(top_k)
+    {
+        let text = match db::read_attachment_chunk_text(
+            conn,
+            key,
+            &chunk.attachment_sha256,
+            &chunk.kind,
+            chunk.chunk_index,
+        ) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let created_at_ms = db::read_attachment_by_sha256(conn, &chunk.attachment_sha256)
+            .ok()
+            .flatten()
+            .map(|attachment| attachment.created_at_ms)
+            .unwrap_or_default();
+        let citation = format!(
+            "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
+            chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+        );
+        let context = format!(
+            "ATTACHMENT_CHUNK {} {}#{}\n{}\n{}",
+            chunk.attachment_sha256, chunk.kind, chunk.chunk_index, text, citation
+        );
+        candidates.push(ContextItem {
+            source: ContextSource::AttachmentChunk,
+            id: format!(
+                "{}:{}:{}",
+                chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+            ),
+            created_at_ms,
+            distance: Some(chunk.distance),
+            text: context,
+            citation_suffix: None,
+        });
+    }
+
+    Ok(candidates)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -82,8 +276,7 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings(
     let mut attachment_direct_sources = Vec::<AnswerEvidenceDirectSource>::new();
 
     if top_k > 0 {
-        db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
-        db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
+        refresh_active_embedding_indexes(conn, key, app_dir)?;
 
         let top_k = top_k.max(1);
         let similar_messages = match focus {
@@ -239,115 +432,16 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings_time_window(
 
     if top_k > 0 {
         let top_k = top_k.max(1);
-        let mut candidates: Vec<ContextItem> = Vec::new();
-
-        for message in db::list_memory_messages_in_range(
+        let candidates = collect_time_window_candidates(
             conn,
             key,
+            app_dir,
+            question,
             conversation_filter,
             time_start_ms,
             time_end_ms,
-            800,
-        )? {
-            let context = db::build_message_rag_context(conn, key, &message.id, &message.content)
-                .unwrap_or(message.content);
-            let citation_suffix = message_citation_link(&message.id);
-            candidates.push(ContextItem {
-                source: ContextSource::Message,
-                id: message.id,
-                created_at_ms: message.created_at_ms,
-                distance: None,
-                text: context,
-                citation_suffix,
-            });
-        }
-
-        let mut seen_todos = std::collections::HashSet::<String>::new();
-        for todo in db::list_todos(conn, key)?.into_iter() {
-            if !seen_todos.insert(todo.id.clone()) {
-                continue;
-            }
-            let due_in_range = todo
-                .due_at_ms
-                .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
-            let review_in_range = todo
-                .next_review_at_ms
-                .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
-            if !due_in_range && !review_in_range {
-                continue;
-            }
-
-            let ctx = build_todo_thread_context(conn, key, &todo.id)?;
-            candidates.push(ContextItem {
-                source: ContextSource::TodoThread,
-                id: todo.id,
-                created_at_ms: todo.created_at_ms,
-                distance: None,
-                text: ctx,
-                citation_suffix: None,
-            });
-        }
-
-        let attachment_shas = list_attachment_shas_in_time_window(
-            conn,
-            key,
-            conversation_filter,
-            time_start_ms,
-            time_end_ms,
+            top_k,
         )?;
-        if !attachment_shas.is_empty() {
-            let allowed_attachment_shas = attachment_shas
-                .into_iter()
-                .collect::<std::collections::HashSet<_>>();
-            db::process_attachment_text_chunks(conn, key, 256)?;
-            db::process_pending_attachment_chunk_embeddings_active(conn, key, app_dir, 2048)?;
-            for chunk in db::search_similar_attachment_chunks_active(
-                conn,
-                key,
-                app_dir,
-                question,
-                top_k.saturating_mul(2).max(top_k),
-            )?
-            .into_iter()
-            .filter(|chunk| allowed_attachment_shas.contains(&chunk.attachment_sha256))
-            .take(top_k)
-            {
-                let text = match db::read_attachment_chunk_text(
-                    conn,
-                    key,
-                    &chunk.attachment_sha256,
-                    &chunk.kind,
-                    chunk.chunk_index,
-                ) {
-                    Ok(value) => value,
-                    Err(_) => continue,
-                };
-                let created_at_ms = db::read_attachment_by_sha256(conn, &chunk.attachment_sha256)
-                    .ok()
-                    .flatten()
-                    .map(|attachment| attachment.created_at_ms)
-                    .unwrap_or_default();
-                let citation = format!(
-                    "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
-                    chunk.attachment_sha256, chunk.kind, chunk.chunk_index
-                );
-                let context = format!(
-                    "ATTACHMENT_CHUNK {} {}#{}\n{}\n{}",
-                    chunk.attachment_sha256, chunk.kind, chunk.chunk_index, text, citation
-                );
-                candidates.push(ContextItem {
-                    source: ContextSource::AttachmentChunk,
-                    id: format!(
-                        "{}:{}:{}",
-                        chunk.attachment_sha256, chunk.kind, chunk.chunk_index
-                    ),
-                    created_at_ms,
-                    distance: Some(chunk.distance),
-                    text: context,
-                    citation_suffix: None,
-                });
-            }
-        }
 
         let selected = build_contexts_v2(question, candidates.clone(), top_k);
         let mut context_by_text = std::collections::HashMap::<String, ContextWithEvidence>::new();
