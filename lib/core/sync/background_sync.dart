@@ -244,13 +244,13 @@ final class BackgroundSync {
         }
       }
 
-      final pullResult = await _pullOnce(
+      final pushResult = await _pushOnce(
         backend: backend,
         sessionKey: sessionKey,
         config: config,
         managedVaultIdToken: idToken,
       );
-      final pushResult = await _pushOnce(
+      final pullResult = await _pullOnce(
         backend: backend,
         sessionKey: sessionKey,
         config: config,
@@ -258,11 +258,11 @@ final class BackgroundSync {
       );
 
       final retryableFailure = switch ((
-        pullResult.retryable,
         pushResult.retryable,
+        pullResult.retryable,
       )) {
-        (true, _) => pullResult,
-        (_, true) => pushResult,
+        (true, _) => pushResult,
+        (_, true) => pullResult,
         _ => null,
       };
 

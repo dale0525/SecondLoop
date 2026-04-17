@@ -242,7 +242,8 @@ void main() {
     );
   });
 
-  testWidgets('Switching to Cloud runs sync and shows progress first',
+  testWidgets(
+      'Switching to Cloud runs push before pull and shows progress first',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       // Consent should still be prompted after the sync completes.
@@ -308,13 +309,15 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, contains('syncManagedVaultPull'));
-    expect(backend.calls, contains('syncManagedVaultPushOpsOnly'));
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
+    );
     expect(find.text('More AI features are now available'), findsOneWidget);
   });
 
   testWidgets(
-      'Switching to Cloud falls back to engine pull/push when progress sync fails',
+      'Switching to Cloud falls back to engine push/pull when progress sync fails',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': false,

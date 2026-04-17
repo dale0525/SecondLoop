@@ -339,7 +339,9 @@ final class SyncEngine {
     if (!_pushQueued && !_pullQueued) return;
 
     _busy = true;
-    unawaited(_runQueue().whenComplete(() => _busy = false));
+    Future<void>.microtask(
+      () => _runQueue().whenComplete(() => _busy = false),
+    );
   }
 
   Future<void> _runQueue() async {
@@ -354,14 +356,15 @@ final class SyncEngine {
             return;
           }
         }
+        final prioritizePush = await _shouldPrioritizePushOverPull();
+        if (_pushQueued && (!_pullQueued || prioritizePush)) {
+          _pushQueued = false;
+          await _pushOnce();
+          continue;
+        }
         if (_pullQueued) {
           _pullQueued = false;
           await _pullOnce();
-          continue;
-        }
-        if (_pushQueued) {
-          _pushQueued = false;
-          await _pushOnce();
         }
       }
     } finally {
@@ -369,6 +372,12 @@ final class SyncEngine {
         _finishStop(preserveQueuedPush: preserveQueuedPushOnStop);
       }
     }
+  }
+
+  Future<bool> _shouldPrioritizePushOverPull() async {
+    if (!_pushQueued || !_pullQueued) return false;
+    final config = await loadConfig();
+    return config?.backendType == SyncBackendType.managedVault;
   }
 
   Future<void> _pushOnce() async {

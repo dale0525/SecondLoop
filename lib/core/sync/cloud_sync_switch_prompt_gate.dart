@@ -359,11 +359,12 @@ final class _CloudSyncSwitchPromptGateState
               try {
                 var stageProgress = _makeSmoothStageProgressReporter(progress);
 
-                // Pull
-                stage.value = t.sync.progressDialog.pulling;
+                // Push local changes first so the next pull converges to the
+                // authoritative remote head for this vault generation.
+                stage.value = t.sync.progressDialog.pushing;
                 progress.value = 0.0;
                 await _consumeRustProgressStream(
-                  backend.syncManagedVaultPullProgress(
+                  backend.syncManagedVaultPushOpsOnlyProgress(
                     sessionKey,
                     syncKey,
                     baseUrl: baseUrl,
@@ -373,12 +374,12 @@ final class _CloudSyncSwitchPromptGateState
                   onProgress: stageProgress.onProgress,
                 );
 
-                // Push
+                // Pull after push to converge to the latest remote log head.
                 stageProgress = _makeSmoothStageProgressReporter(progress);
-                stage.value = t.sync.progressDialog.pushing;
+                stage.value = t.sync.progressDialog.pulling;
                 progress.value = 0.0;
                 await _consumeRustProgressStream(
-                  backend.syncManagedVaultPushOpsOnlyProgress(
+                  backend.syncManagedVaultPullProgress(
                     sessionKey,
                     syncKey,
                     baseUrl: baseUrl,
@@ -571,8 +572,8 @@ final class _CloudSyncSwitchPromptGateState
     final engine = SyncEngineScope.maybeOf(context);
     engine?.notifyExternalChange();
     if (!didSync) {
-      engine?.triggerPullNow();
       engine?.triggerPushNow();
+      engine?.triggerPullNow();
     }
   }
 

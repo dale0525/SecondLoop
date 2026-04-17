@@ -607,10 +607,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     run: (stage, progress) async {
                       var stageProgress =
                           _makeSmoothStageProgressReporter(progress);
-                      stage.value = t.sync.progressDialog.pulling;
+                      stage.value = t.sync.progressDialog.pushing;
                       progress.value = 0.0;
                       await _consumeRustProgressStream(
-                        backend.syncManagedVaultPullProgress(
+                        backend.syncManagedVaultPushOpsOnlyProgress(
                           sessionKey,
                           activeSyncKey,
                           baseUrl: baseUrlTrimmed,
@@ -622,10 +622,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
                       stageProgress =
                           _makeSmoothStageProgressReporter(progress);
-                      stage.value = t.sync.progressDialog.pushing;
+                      stage.value = t.sync.progressDialog.pulling;
                       progress.value = 0.0;
                       await _consumeRustProgressStream(
-                        backend.syncManagedVaultPushOpsOnlyProgress(
+                        backend.syncManagedVaultPullProgress(
                           sessionKey,
                           activeSyncKey,
                           baseUrl: baseUrlTrimmed,
@@ -691,8 +691,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         engine?.start();
         engine?.notifyExternalChange();
         if (!didSync) {
-          engine?.triggerPullNow();
           engine?.triggerPushNow();
+          engine?.triggerPullNow();
         }
       } catch (e) {
         if (!mounted) return;

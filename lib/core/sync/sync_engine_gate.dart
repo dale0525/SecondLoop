@@ -51,8 +51,8 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     switch (state) {
       case AppLifecycleState.resumed:
         engine.start();
-        engine.triggerPullNow();
         engine.triggerPushNow();
+        engine.triggerPullNow();
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -102,8 +102,8 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
       pullOnStart: true,
     );
     engine.start();
-    engine.triggerPullNow();
     engine.triggerPushNow();
+    engine.triggerPullNow();
 
     _backendIdentity = backend;
     _sessionKey = Uint8List.fromList(sessionKey);

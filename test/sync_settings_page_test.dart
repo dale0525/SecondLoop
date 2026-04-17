@@ -197,9 +197,9 @@ void main() {
     expect(find.byKey(const ValueKey('sync_save_progress_percent')),
         findsOneWidget);
 
-    pullCompleter.complete(0);
-    await tester.pumpAndSettle();
     pushCompleter.complete(0);
+    await tester.pumpAndSettle();
+    pullCompleter.complete(0);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
@@ -326,9 +326,16 @@ void main() {
     expect(find.byKey(const ValueKey('sync_save_progress_percent')),
         findsOneWidget);
 
-    pullCompleter.complete(0);
-    await tester.pumpAndSettle();
+    expect(backend.calls, <String>['syncManagedVaultPushOpsOnly']);
+
     pushCompleter.complete(0);
+    await tester.pumpAndSettle();
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
+    );
+
+    pullCompleter.complete(0);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
@@ -1479,6 +1486,7 @@ final class _DelayedManagedVaultSyncBackend extends _SyncSettingsBackend {
 
   final Completer<int> pullCompleter;
   final Completer<int> pushCompleter;
+  final List<String> calls = <String>[];
 
   @override
   Future<int> syncManagedVaultPull(
@@ -1487,8 +1495,10 @@ final class _DelayedManagedVaultSyncBackend extends _SyncSettingsBackend {
     required String baseUrl,
     required String vaultId,
     required String idToken,
-  }) async =>
-      pullCompleter.future;
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return pullCompleter.future;
+  }
 
   @override
   Future<int> syncManagedVaultPushOpsOnly(
@@ -1497,8 +1507,10 @@ final class _DelayedManagedVaultSyncBackend extends _SyncSettingsBackend {
     required String baseUrl,
     required String vaultId,
     required String idToken,
-  }) async =>
-      pushCompleter.future;
+  }) async {
+    calls.add('syncManagedVaultPushOpsOnly');
+    return pushCompleter.future;
+  }
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {

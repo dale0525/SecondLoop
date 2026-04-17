@@ -349,6 +349,29 @@ void main() {
     });
   });
 
+  test('managed vault prioritizes queued push before queued pull', () {
+    fakeAsync((async) {
+      final runner = _OrderedRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPullNow();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
     fakeAsync((async) {
       final runner = _HintPullRunner(
@@ -387,6 +410,12 @@ SyncConfig _webdavConfig() => SyncConfig.webdav(
       baseUrl: 'https://example.com/dav',
       username: 'u',
       password: 'p',
+    );
+
+SyncConfig _managedVaultConfig() => SyncConfig.managedVault(
+      syncKey: Uint8List.fromList(List<int>.filled(32, 2)),
+      vaultId: 'vault-1',
+      baseUrl: 'https://vault.example.com',
     );
 
 final class _FakeRunner implements SyncRunner {
@@ -459,5 +488,21 @@ final class _HintPullRunner implements SyncRunner, SyncPullResultRunner {
     if (_results.isEmpty) return const SyncPullResult(applied: 0);
     if (index >= _results.length) return _results.last;
     return _results[index];
+  }
+}
+
+final class _OrderedRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    return 0;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    return 0;
   }
 }
