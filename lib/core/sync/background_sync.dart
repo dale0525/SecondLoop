@@ -298,7 +298,14 @@ final class BackgroundSync {
         );
       }
 
-      if (mediaUploadsEnabled) {
+      final allowManagedVaultMediaUploads =
+          config.backendType != SyncBackendType.managedVault ||
+              !shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+                statusCode: pushResult.statusCode,
+                errorCode: pushResult.errorCode,
+              );
+
+      if (mediaUploadsEnabled && allowManagedVaultMediaUploads) {
         final wifiOnly = await store.readCloudMediaBackupWifiOnly();
         switch (config.backendType) {
           case SyncBackendType.webdav:
@@ -603,6 +610,16 @@ final class BackgroundSync {
       return 'Server is temporarily unavailable. Retrying later.';
     }
     return 'Sync failed. Retrying automatically when possible.';
+  }
+
+  @visibleForTesting
+  static bool shouldSkipManagedVaultMediaUploadsAfterPushFailure({
+    int? statusCode,
+    String? errorCode,
+  }) {
+    return statusCode == 403 &&
+        (errorCode == 'grace_readonly' ||
+            errorCode == 'storage_quota_exceeded');
   }
 
   static Future<int?> _updateBackoffState({

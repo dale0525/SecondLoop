@@ -93,4 +93,36 @@ void main() {
       contains('Retrying later'),
     );
   });
+
+  test('managed-vault media uploads stop after write-blocking push failures',
+      () {
+    expect(
+      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+        statusCode: 403,
+        errorCode: 'grace_readonly',
+      ),
+      isTrue,
+    );
+    expect(
+      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+        statusCode: 403,
+        errorCode: 'storage_quota_exceeded',
+      ),
+      isTrue,
+    );
+    expect(
+      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+        statusCode: 503,
+        errorCode: null,
+      ),
+      isFalse,
+    );
+    expect(
+      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+        statusCode: null,
+        errorCode: null,
+      ),
+      isFalse,
+    );
+  });
 }

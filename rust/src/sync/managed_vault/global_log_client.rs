@@ -23,6 +23,7 @@ pub(super) enum GlobalLogPushRouteResult {
     Parsed(GlobalLogPushResponse),
     Unsupported,
     GenerationMismatch(GlobalLogPushErrorResponse),
+    GenerationRequired(GlobalLogPushErrorResponse),
 }
 
 fn unsupported_status(status_code: u16) -> bool {
@@ -49,6 +50,9 @@ fn fetch_push(
         let parsed: GlobalLogPushErrorResponse = serde_json::from_str(&text)?;
         if parsed.error == "generation_mismatch" {
             return Ok(GlobalLogPushRouteResult::GenerationMismatch(parsed));
+        }
+        if parsed.error == "generation_required" {
+            return Ok(GlobalLogPushRouteResult::GenerationRequired(parsed));
         }
         return Err(anyhow!(
             "managed-vault v2 push failed: HTTP {status} {text}"
@@ -232,6 +236,17 @@ fn apply_v2_pull_ops(
     Ok(batch_applied)
 }
 
+fn pull_page_is_contiguous(ops: &[GlobalLogPullOp], after_global_seq: i64) -> bool {
+    let mut expected = after_global_seq + 1;
+    for op in ops {
+        if op.global_seq != expected {
+            return false;
+        }
+        expected += 1;
+    }
+    true
+}
+
 pub(super) fn push_v2(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -285,6 +300,20 @@ pub(super) fn push_v2(
                 }
                 return Err(anyhow!(
                     "managed-vault v2 push failed: generation mismatch remote_generation_id={:?} remote_latest_global_seq={:?}",
+                    error.remote_generation_id,
+                    error.remote_latest_global_seq
+                ));
+            }
+            GlobalLogPushRouteResult::GenerationRequired(error) => {
+                if local_generation.is_none() {
+                    super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                    if let Some(progress_fn) = progress.as_deref_mut() {
+                        progress_fn(0, 0);
+                    }
+                    return Ok(0);
+                }
+                return Err(anyhow!(
+                    "managed-vault v2 push failed: generation required remote_generation_id={:?} remote_latest_global_seq={:?}",
                     error.remote_generation_id,
                     error.remote_latest_global_seq
                 ));
@@ -361,6 +390,21 @@ pub(super) fn pull_v2(
                 progress_fn(total_applied, total_target);
             }
             return Ok(total_applied);
+        }
+
+        if !pull_page_is_contiguous(&response.ops, last_applied) {
+            if local_generation.is_some() || last_applied > 0 {
+                super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                total_applied = 0;
+                last_applied = 0;
+                if let Some(progress_fn) = progress.as_deref_mut() {
+                    progress_fn(0, total_target);
+                }
+                continue;
+            }
+            return Err(anyhow!(
+                "managed-vault v2 pull returned non-contiguous global_seq page after_global_seq={last_applied}"
+            ));
         }
 
         total_applied += apply_v2_pull_ops(conn, db_key, sync_key, &scope_id, &response.ops)?;
