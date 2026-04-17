@@ -116,6 +116,6 @@ void main() {
     expect(find.text('Kickoff notes'), findsOneWidget);
     expect(find.text('Inspect page'), findsNothing);
     expect(find.text('Stop using in answers'), findsNothing);
-    expect(find.text('View original'), findsNothing);
+    expect(find.text('View original'), findsOneWidget);
   });
 }
