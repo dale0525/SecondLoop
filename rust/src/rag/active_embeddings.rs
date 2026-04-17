@@ -390,13 +390,16 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings(
 
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
     let actions = super::build_actions_context(conn, key, question)?;
+    if let Some(action_context) = actions.as_ref() {
+        attachment_direct_sources.extend(action_context.direct_sources.iter().cloned());
+    }
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        actions.as_deref(),
+        actions.as_ref().map(|bundle| bundle.text.as_str()),
         history.as_deref(),
         resources_catalog.as_deref(),
     );
@@ -483,7 +486,7 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings_time_window(
     )?;
     let actions =
         super::build_actions_context_in_range(conn, key, question, time_start_ms, time_end_ms)?;
-    let attachment_direct_sources = attachment_resources
+    let mut attachment_direct_sources = attachment_resources
         .resources
         .iter()
         .map(|resource| {
@@ -494,13 +497,16 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings_time_window(
             )
         })
         .collect::<Vec<_>>();
+    if let Some(action_context) = actions.as_ref() {
+        attachment_direct_sources.extend(action_context.direct_sources.iter().cloned());
+    }
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        actions.as_deref(),
+        actions.as_ref().map(|bundle| bundle.text.as_str()),
         history.as_deref(),
         attachment_resources.catalog_markdown.as_deref(),
     );

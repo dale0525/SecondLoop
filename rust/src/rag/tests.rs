@@ -61,6 +61,21 @@ fn today_task_query_triggers_actions_context() {
 }
 
 #[test]
+fn explicit_agenda_query_without_timeframe_triggers_actions_context() {
+    assert!(should_include_actions_context("What is on my schedule?"));
+    assert!(should_include_actions_context("我的日程是什么？"));
+}
+
+#[test]
+fn future_task_queries_trigger_actions_context() {
+    assert!(should_include_actions_context("What should I do tomorrow?"));
+    assert!(should_include_actions_context(
+        "What should I do next week?"
+    ));
+    assert!(should_include_actions_context("明天我该做什么？"));
+}
+
+#[test]
 fn yesterday_task_query_triggers_actions_context_in_range() {
     assert!(should_include_actions_context_in_range(
         "昨天我做了哪些事？"

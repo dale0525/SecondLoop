@@ -9,6 +9,7 @@ use crate::message_citations::{
     append_message_citation_if_missing as append_message_citation, AnswerEvidenceDirectSource,
 };
 
+mod actions_context;
 mod active_embeddings;
 mod attachment_resources;
 mod citations_prompt;
@@ -31,6 +32,7 @@ mod knowledge_contexts_tests;
 #[cfg(test)]
 mod tests;
 
+use actions_context::{build_actions_context, build_actions_context_in_range};
 use attachment_resources::{
     collect_attachment_resources_by_embedding, collect_attachment_resources_default,
 };
@@ -42,6 +44,10 @@ use evidence::{
     encode_context_evidence_json_for_question,
 };
 use history::{build_recent_conversation_history, build_recent_conversation_history_in_range};
+
+#[cfg(test)]
+use actions_context::{should_include_actions_context, should_include_actions_context_in_range};
+
 const DETACHED_ASK_REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
 
 #[cfg(test)]
@@ -110,417 +116,6 @@ pub trait AnswerProvider {
 struct ContextWithEvidence {
     text: String,
     direct_sources: Vec<AnswerEvidenceDirectSource>,
-}
-
-fn now_ms() -> i64 {
-    crate::platform::time::now_ms()
-}
-
-fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
-    let q = question.trim().to_lowercase();
-    if q.is_empty() {
-        return None;
-    }
-
-    let is_today = has_today_timeframe(question);
-    let is_this_week = has_this_week_timeframe(question);
-    let is_agenda = has_agenda_keywords(question);
-    let has_timeframe = has_future_actions_timeframe(question);
-    if !(has_agenda_request(question) && has_timeframe) {
-        return None;
-    }
-    if is_today {
-        return Some(now_ms.saturating_add(36 * 60 * 60 * 1000));
-    }
-    if is_this_week {
-        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
-    }
-    if is_agenda {
-        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
-    }
-
-    None
-}
-
-fn has_today_timeframe(question: &str) -> bool {
-    let q = question.trim().to_lowercase();
-    q.contains("today")
-        || q.contains("tonight")
-        || q.contains("today's")
-        || question.contains("今天")
-        || question.contains("今日")
-}
-
-fn has_this_week_timeframe(question: &str) -> bool {
-    let q = question.trim().to_lowercase();
-    q.contains("this week")
-        || q.contains("week agenda")
-        || q.contains("weekly agenda")
-        || q.contains("this week's")
-        || question.contains("本周")
-        || question.contains("这周")
-        || question.contains("這週")
-}
-
-fn has_future_actions_timeframe(question: &str) -> bool {
-    let q = question.trim().to_lowercase();
-    has_today_timeframe(question)
-        || has_this_week_timeframe(question)
-        || q.contains("tomorrow")
-        || q.contains("next week")
-        || question.contains("明天")
-}
-
-fn has_agenda_keywords(question: &str) -> bool {
-    let q = question.trim().to_lowercase();
-    q.contains("agenda")
-        || q.contains("schedule")
-        || q.contains("calendar")
-        || question.contains("日程")
-        || question.contains("行程")
-        || question.contains("安排")
-}
-
-fn has_explicit_agenda_intent(question: &str) -> bool {
-    let q = question.trim().to_lowercase();
-    q.contains("agenda")
-        || q.contains("schedule")
-        || q.contains("calendar")
-        || q.contains("todo")
-        || q.contains("to-do")
-        || q.contains("priority")
-        || q.contains("priorities")
-        || q.contains("what should i do")
-        || q.contains("what do i need to do")
-        || q.contains("what's on my schedule")
-        || q.contains("what is on my schedule")
-        || q.contains("what's on my calendar")
-        || q.contains("what is on my calendar")
-        || q.contains("upcoming")
-        || q.contains("due today")
-        || question.contains("待办")
-        || question.contains("待辦")
-        || question.contains("日程")
-        || question.contains("行程")
-        || question.contains("提醒")
-        || question.contains("优先级")
-        || question.contains("優先級")
-        || question.contains("要做")
-        || question.contains("有哪些事")
-}
-
-fn has_generic_task_words(question: &str) -> bool {
-    let q = question.trim().to_lowercase();
-    q.contains("task")
-        || q.contains("tasks")
-        || question.contains("任务")
-        || question.contains("任務")
-        || question.contains("计划")
-        || question.contains("計劃")
-}
-
-fn has_past_actions_intent(question: &str) -> bool {
-    let q = question.trim().to_lowercase();
-    q.contains("what did i do")
-        || q.contains("what have i done")
-        || q.contains("what did i finish")
-        || q.contains("what have i finished")
-        || question.contains("做了什么")
-        || question.contains("做了哪些事")
-        || question.contains("完成了什么")
-}
-
-fn has_agenda_request(question: &str) -> bool {
-    has_explicit_agenda_intent(question)
-        || (has_generic_task_words(question) && has_future_actions_timeframe(question))
-}
-
-fn should_include_actions_context(question: &str) -> bool {
-    agenda_horizon_ms(question, 0).is_some()
-}
-
-fn should_include_actions_context_in_range(question: &str) -> bool {
-    has_explicit_agenda_intent(question)
-        || has_generic_task_words(question)
-        || has_past_actions_intent(question)
-}
-
-fn build_actions_context(
-    conn: &Connection,
-    key: &[u8; 32],
-    question: &str,
-) -> Result<Option<String>> {
-    if !should_include_actions_context(question) {
-        return Ok(None);
-    }
-
-    let now = now_ms();
-    let horizon = agenda_horizon_ms(question, now).unwrap_or(now);
-    let mut lines: Vec<String> = Vec::new();
-
-    for todo in db::list_todos(conn, key)? {
-        if todo.status == "done" || todo.status == "dismissed" {
-            continue;
-        }
-
-        let due = todo.due_at_ms;
-        let review = todo.next_review_at_ms;
-        let is_due = due.is_some_and(|ms| ms <= horizon);
-        let is_review_due = review.is_some_and(|ms| ms <= horizon);
-        if !is_due && !is_review_due {
-            continue;
-        }
-
-        let mut item = format!("TODO [{}] {}", todo.status, todo.title);
-        if let Some(ms) = due {
-            item.push_str(&format!(" (due_at_ms={ms})"));
-        }
-        if let Some(ms) = review {
-            item.push_str(&format!(" (next_review_at_ms={ms})"));
-        }
-        lines.push(item);
-    }
-
-    for event in db::list_events(conn, key)? {
-        if event.end_at_ms < now {
-            continue;
-        }
-        if event.start_at_ms > horizon {
-            continue;
-        }
-        lines.push(format!(
-            "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
-            event.title, event.start_at_ms, event.end_at_ms, event.tz
-        ));
-    }
-
-    if lines.is_empty() {
-        return Ok(None);
-    }
-
-    let mut out = String::new();
-    out.push_str("Upcoming actions (from local todos/events):\n");
-    for line in lines.into_iter().take(40) {
-        out.push_str("- ");
-        out.push_str(&line);
-        out.push('\n');
-    }
-    Ok(Some(out))
-}
-
-fn build_actions_context_in_range(
-    conn: &Connection,
-    key: &[u8; 32],
-    question: &str,
-    time_start_ms: i64,
-    time_end_ms: i64,
-) -> Result<Option<String>> {
-    if !should_include_actions_context_in_range(question) {
-        return Ok(None);
-    }
-
-    if has_past_actions_intent(question) {
-        return build_past_actions_context_in_range(conn, key, time_start_ms, time_end_ms);
-    }
-
-    build_upcoming_actions_context_in_range(conn, key, time_start_ms, time_end_ms)
-}
-
-struct ActionContextLine {
-    sort_at_ms: i64,
-    stable_key: String,
-    text: String,
-}
-
-fn should_prefer_past_action_activity(
-    candidate: &db::TodoActivity,
-    current: &db::TodoActivity,
-) -> bool {
-    let candidate_is_done = candidate.to_status.as_deref() == Some("done");
-    let current_is_done = current.to_status.as_deref() == Some("done");
-    if candidate_is_done != current_is_done {
-        return candidate_is_done;
-    }
-
-    if candidate.created_at_ms != current.created_at_ms {
-        return candidate.created_at_ms > current.created_at_ms;
-    }
-
-    candidate.id > current.id
-}
-
-fn render_action_context(
-    header: &str,
-    mut lines: Vec<ActionContextLine>,
-    newest_first: bool,
-) -> Option<String> {
-    if lines.is_empty() {
-        return None;
-    }
-
-    lines.sort_by(|left, right| {
-        if left.sort_at_ms != right.sort_at_ms {
-            let ordering = left.sort_at_ms.cmp(&right.sort_at_ms);
-            return if newest_first {
-                ordering.reverse()
-            } else {
-                ordering
-            };
-        }
-
-        left.stable_key.cmp(&right.stable_key)
-    });
-
-    let mut out = String::new();
-    out.push_str(header);
-    out.push('\n');
-    for line in lines.into_iter().take(40) {
-        out.push_str("- ");
-        out.push_str(&line.text);
-        out.push('\n');
-    }
-    Some(out)
-}
-
-fn build_upcoming_actions_context_in_range(
-    conn: &Connection,
-    key: &[u8; 32],
-    time_start_ms: i64,
-    time_end_ms: i64,
-) -> Result<Option<String>> {
-    let mut lines: Vec<ActionContextLine> = Vec::new();
-
-    for todo in db::list_todos(conn, key)? {
-        if todo.status == "dismissed" || todo.status == "done" {
-            continue;
-        }
-
-        let due_in_range = todo
-            .due_at_ms
-            .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
-        let review_in_range = todo
-            .next_review_at_ms
-            .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
-        if !due_in_range && !review_in_range {
-            continue;
-        }
-
-        let mut item = format!("TODO [{}] {}", todo.status, todo.title);
-        if let Some(ms) = todo.due_at_ms {
-            item.push_str(&format!(" (due_at_ms={ms})"));
-        }
-        if let Some(ms) = todo.next_review_at_ms {
-            item.push_str(&format!(" (next_review_at_ms={ms})"));
-        }
-        let sort_at_ms = match (todo.due_at_ms, todo.next_review_at_ms) {
-            (Some(due), Some(review)) => due.min(review),
-            (Some(due), None) => due,
-            (None, Some(review)) => review,
-            (None, None) => continue,
-        };
-        lines.push(ActionContextLine {
-            sort_at_ms,
-            stable_key: format!("todo:{}", todo.id),
-            text: item,
-        });
-    }
-
-    for event in db::list_events(conn, key)? {
-        let overlaps_range = event.end_at_ms > time_start_ms && event.start_at_ms < time_end_ms;
-        if !overlaps_range {
-            continue;
-        }
-        lines.push(ActionContextLine {
-            sort_at_ms: event.start_at_ms.max(time_start_ms),
-            stable_key: format!("event:{}", event.id),
-            text: format!(
-                "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
-                event.title, event.start_at_ms, event.end_at_ms, event.tz
-            ),
-        });
-    }
-
-    Ok(render_action_context(
-        "Upcoming actions (from local todos/events):",
-        lines,
-        false,
-    ))
-}
-
-fn build_past_actions_context_in_range(
-    conn: &Connection,
-    key: &[u8; 32],
-    time_start_ms: i64,
-    time_end_ms: i64,
-) -> Result<Option<String>> {
-    let mut lines: Vec<ActionContextLine> = Vec::new();
-    let mut selected_activity_by_todo =
-        std::collections::HashMap::<String, db::TodoActivity>::new();
-
-    for activity in db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)? {
-        let should_replace = selected_activity_by_todo
-            .get(&activity.todo_id)
-            .map(|current| should_prefer_past_action_activity(&activity, current))
-            .unwrap_or(true);
-        if should_replace {
-            selected_activity_by_todo.insert(activity.todo_id.clone(), activity);
-        }
-    }
-
-    for activity in selected_activity_by_todo.into_values() {
-        let todo = match db::get_todo(conn, key, &activity.todo_id) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-
-        let line = match activity.to_status.as_deref() {
-            Some("done") => format!(
-                "TODO [done] {} (completed_at_ms={})",
-                todo.title, activity.created_at_ms
-            ),
-            _ => {
-                let activity_status = activity
-                    .to_status
-                    .as_deref()
-                    .or(activity.from_status.as_deref());
-                let activity_prefix = activity_status
-                    .map(|status| format!("TODO_ACTIVITY [{status}] {}", todo.title))
-                    .unwrap_or_else(|| format!("TODO_ACTIVITY {}", todo.title));
-                match activity.content.as_deref() {
-                    Some(content) if !content.trim().is_empty() => format!(
-                        "{activity_prefix} (created_at_ms={}) content={}",
-                        activity.created_at_ms, content
-                    ),
-                    _ => format!(
-                        "{activity_prefix} (created_at_ms={}) type={}",
-                        activity.created_at_ms, activity.activity_type
-                    ),
-                }
-            }
-        };
-        lines.push(ActionContextLine {
-            sort_at_ms: activity.created_at_ms,
-            stable_key: format!("todo:{}", todo.id),
-            text: line,
-        });
-    }
-
-    for event in db::list_events_in_range(conn, key, time_start_ms, time_end_ms)? {
-        lines.push(ActionContextLine {
-            sort_at_ms: event.end_at_ms.min(time_end_ms.saturating_sub(1)),
-            stable_key: format!("event:{}", event.id),
-            text: format!(
-                "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
-                event.title, event.start_at_ms, event.end_at_ms, event.tz
-            ),
-        });
-    }
-
-    Ok(render_action_context(
-        "Past actions (from local todos/events):",
-        lines,
-        true,
-    ))
 }
 
 fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -> Result<String> {
@@ -801,7 +396,7 @@ pub fn ask_ai_with_provider(
         .collect();
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
     let actions = build_actions_context(conn, key, question)?;
-    let attachment_direct_sources = attachment_resources
+    let mut attachment_direct_sources = attachment_resources
         .resources
         .iter()
         .map(|resource| {
@@ -812,13 +407,16 @@ pub fn ask_ai_with_provider(
             )
         })
         .collect::<Vec<_>>();
+    if let Some(action_context) = actions.as_ref() {
+        attachment_direct_sources.extend(action_context.direct_sources.iter().cloned());
+    }
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        actions.as_deref(),
+        actions.as_ref().map(|bundle| bundle.text.as_str()),
         history.as_deref(),
         attachment_resources.catalog_markdown.as_deref(),
     );
@@ -990,13 +588,16 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     }
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
     let actions = build_actions_context(conn, key, question)?;
+    if let Some(action_context) = actions.as_ref() {
+        attachment_direct_sources.extend(action_context.direct_sources.iter().cloned());
+    }
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        actions.as_deref(),
+        actions.as_ref().map(|bundle| bundle.text.as_str()),
         history.as_deref(),
         resources_catalog.as_deref(),
     );
