@@ -432,7 +432,11 @@ pub(super) fn pull_v2(
         if let Some(existing_generation) = &local_generation {
             if existing_generation != response_generation {
                 super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                total_applied = 0;
                 last_applied = 0;
+                if let Some(progress_fn) = progress.as_deref_mut() {
+                    progress_fn(0, total_target);
+                }
                 continue;
             }
         }

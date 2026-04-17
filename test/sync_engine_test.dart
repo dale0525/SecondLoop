@@ -372,6 +372,30 @@ void main() {
     });
   });
 
+  test('managed vault local mutation converges with pull after push', () {
+    fakeAsync((async) {
+      final runner = _OrderedRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(milliseconds: 100),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.notifyLocalMutation();
+
+      async.elapse(const Duration(milliseconds: 100));
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
     fakeAsync((async) {
       final runner = _HintPullRunner(

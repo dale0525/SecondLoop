@@ -22,6 +22,11 @@ struct V2ServerState {
     require_generation_for_push_without_id: bool,
     gap_pull_once_after_global_seq: Option<i64>,
     reset_required_once_after_global_seq: Option<i64>,
+    pull_page_size: Option<usize>,
+    switch_generation_once_after_global_seq: Option<i64>,
+    switch_generation_id: Option<String>,
+    switch_generation_latest_global_seq: Option<i64>,
+    switch_generation_ops: Vec<serde_json::Value>,
 }
 
 fn read_request(stream: &mut TcpStream) -> (String, String, String, Vec<u8>) {
@@ -201,6 +206,7 @@ fn start_mock_v2_server() -> (
                         let decoded: serde_json::Value =
                             serde_json::from_slice(&body).expect("pull json");
                         let after = decoded["after_global_seq"].as_i64().unwrap_or(0);
+                        let limit = decoded["limit"].as_u64().unwrap_or(100) as usize;
                         let mut state = state_clone.lock().expect("lock");
                         if state.reset_required_once_after_global_seq == Some(after) {
                             state.reset_required_once_after_global_seq = None;
@@ -241,19 +247,33 @@ fn start_mock_v2_server() -> (
                             );
                             continue;
                         }
-                        let ops: Vec<serde_json::Value> = state
+                        if state.switch_generation_once_after_global_seq == Some(after) {
+                            state.switch_generation_once_after_global_seq = None;
+                            state.generation_id =
+                                state.switch_generation_id.take().unwrap_or_default();
+                            state.latest_global_seq = state
+                                .switch_generation_latest_global_seq
+                                .take()
+                                .unwrap_or(0);
+                            state.ops = std::mem::take(&mut state.switch_generation_ops);
+                        }
+                        let page_size = state.pull_page_size.unwrap_or(limit).max(1);
+                        let all_ops: Vec<serde_json::Value> = state
                             .ops
                             .iter()
                             .filter(|item| item["global_seq"].as_i64().unwrap_or(0) > after)
                             .cloned()
                             .collect();
+                        let has_more = all_ops.len() > page_size;
+                        let ops: Vec<serde_json::Value> =
+                            all_ops.into_iter().take(page_size).collect();
                         write_json_response(
                             &mut stream,
                             200,
                             serde_json::json!({
                                 "generation_id": state.generation_id,
                                 "remote_latest_global_seq": state.latest_global_seq,
-                                "has_more": false,
+                                "has_more": has_more,
                                 "ops": ops,
                             }),
                         );
@@ -553,6 +573,106 @@ fn managed_vault_v2_pull_rebuilds_after_non_contiguous_page() {
         last_applied.as_deref(),
         Some(expected_last_applied_text.as_str()),
     );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_generation_switch_resets_applied_count() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "old generation")
+        .expect("insert msg A");
+    let pushed_old =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push old generation");
+    assert!(pushed_old > 0);
+
+    let (old_generation_id, old_latest_global_seq, old_ops) = {
+        let server = state.lock().expect("lock");
+        (
+            server.generation_id.clone(),
+            server.latest_global_seq,
+            server.ops.clone(),
+        )
+    };
+    assert!(old_latest_global_seq > 0);
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.generation_id = "generation-b".to_string();
+        server.latest_global_seq = 0;
+        server.ops.clear();
+    }
+
+    let temp_c = tempfile::tempdir().expect("tempdir C");
+    let app_dir_c = temp_c.path().join("secondloop_c");
+    let key_c =
+        auth::init_master_password(&app_dir_c, "pw-c", KdfParams::for_test()).expect("init C");
+    let conn_c = db::open(&app_dir_c).expect("open C db");
+    let conv_c = db::create_conversation(&conn_c, &key_c, "Inbox").expect("create convo C");
+    db::insert_message(&conn_c, &key_c, &conv_c.id, "user", "new generation")
+        .expect("insert msg C");
+    let pushed_new =
+        sync::managed_vault::push(&conn_c, &key_c, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push new generation");
+    assert!(pushed_new > 0);
+
+    let (new_generation_id, new_latest_global_seq, new_ops) = {
+        let server = state.lock().expect("lock");
+        (
+            server.generation_id.clone(),
+            server.latest_global_seq,
+            server.ops.clone(),
+        )
+    };
+    assert_ne!(new_generation_id, old_generation_id);
+    assert!(new_latest_global_seq > 0);
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.generation_id = old_generation_id;
+        server.latest_global_seq = old_latest_global_seq;
+        server.ops = old_ops;
+        server.pull_page_size = Some(1);
+        server.switch_generation_once_after_global_seq = Some(1);
+        server.switch_generation_id = Some(new_generation_id);
+        server.switch_generation_latest_global_seq = Some(new_latest_global_seq);
+        server.switch_generation_ops = new_ops;
+    }
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull after generation switch");
+    assert_eq!(pulled, new_latest_global_seq as u64);
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
+    assert_eq!(msgs_b.len(), 1);
+    assert_eq!(msgs_b[0].content, "new generation");
 
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");

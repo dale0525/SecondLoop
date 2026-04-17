@@ -740,6 +740,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final backendType = _effectiveBackendType;
+      final engine = SyncEngineScope.maybeOf(context);
 
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
@@ -756,72 +757,60 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         progressPercentKey:
             _SyncSettingsPageState._kManualSyncProgressPercentKey,
         run: (stage, progress) async {
-          var hasTotal = false;
+          final hasTotal = ValueNotifier(false);
           var runCompleted = false;
-          final progressReporter = _makeSmoothStageProgressReporter(
-            progress,
-            onHasTotal: () => hasTotal = true,
-          );
           stage.value = t.sync.progressDialog.pushing;
           progress.value = 0.0;
           unawaited(() async {
             await Future<void>.delayed(const Duration(milliseconds: 200));
             if (runCompleted) return;
-            if (hasTotal) return;
+            if (hasTotal.value) return;
             if (progress.value != 0.0) return;
             progress.value = null;
           }());
 
           try {
-            pushed = await (switch (backendType) {
-              SyncBackendType.webdav => _consumeRustProgressStream(
-                  backend.syncWebdavPushOpsOnlyProgress(
-                    sessionKey,
-                    syncKey,
-                    baseUrl: _requiredTrimmed(_baseUrlController),
-                    username: _optionalTrimmed(_usernameController),
-                    password: _optionalTrimmed(_passwordController),
-                    remoteRoot: _requiredTrimmed(_remoteRootController),
-                  ),
-                  onProgress: progressReporter.onProgress,
-                ),
-              SyncBackendType.localDir => _consumeRustProgressStream(
-                  backend.syncLocaldirPushProgress(
-                    sessionKey,
-                    syncKey,
-                    localDir: _requiredTrimmed(_localDirController),
-                    remoteRoot: _requiredTrimmed(_remoteRootController),
-                  ),
-                  onProgress: progressReporter.onProgress,
-                ),
-              SyncBackendType.managedVault => () async {
-                  final cloudAuth = CloudAuthScope.of(context).controller;
-                  final idToken = await readCloudAuthIdToken(
-                    cloudAuth,
-                    mode: CloudAuthAccessMode.interactive,
-                  );
-                  if (idToken == null || idToken.trim().isEmpty) {
-                    throw StateError('missing_id_token');
-                  }
-                  final vaultId = cloudAuth.uid ?? '';
-                  final baseUrl = await _store.resolveManagedVaultBaseUrl();
-                  if (baseUrl == null || baseUrl.trim().isEmpty) {
-                    throw StateError('missing_managed_vault_base_url');
-                  }
-                  return _consumeRustProgressStream(
-                    backend.syncManagedVaultPushOpsOnlyProgress(
+            if (backendType == SyncBackendType.managedVault) {
+              pushed = await _runManagedVaultManualPushWithProgress(
+                backend: backend,
+                sessionKey: sessionKey,
+                syncKey: syncKey,
+                engine: engine,
+                stage: stage,
+                progress: progress,
+                hasTotal: hasTotal,
+              );
+            } else {
+              final progressReporter = _makeSmoothStageProgressReporter(
+                progress,
+                onHasTotal: () => hasTotal.value = true,
+              );
+              pushed = await (switch (backendType) {
+                SyncBackendType.webdav => _consumeRustProgressStream(
+                    backend.syncWebdavPushOpsOnlyProgress(
                       sessionKey,
                       syncKey,
-                      baseUrl: baseUrl,
-                      vaultId: vaultId,
-                      idToken: idToken,
+                      baseUrl: _requiredTrimmed(_baseUrlController),
+                      username: _optionalTrimmed(_usernameController),
+                      password: _optionalTrimmed(_passwordController),
+                      remoteRoot: _requiredTrimmed(_remoteRootController),
                     ),
                     onProgress: progressReporter.onProgress,
-                  );
-                }(),
-            });
-            stage.value = t.sync.progressDialog.finalizing;
-            progressReporter.complete();
+                  ),
+                SyncBackendType.localDir => _consumeRustProgressStream(
+                    backend.syncLocaldirPushProgress(
+                      sessionKey,
+                      syncKey,
+                      localDir: _requiredTrimmed(_localDirController),
+                      remoteRoot: _requiredTrimmed(_remoteRootController),
+                    ),
+                    onProgress: progressReporter.onProgress,
+                  ),
+                SyncBackendType.managedVault => throw UnimplementedError(),
+              });
+              stage.value = t.sync.progressDialog.finalizing;
+              progressReporter.complete();
+            }
           } finally {
             runCompleted = true;
           }

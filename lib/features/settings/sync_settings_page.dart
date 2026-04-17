@@ -27,6 +27,7 @@ import '../../web_app/web_formal_settings_scope.dart';
 import '../media_backup/cloud_media_backup_runner.dart';
 
 part 'sync_settings_page_media_actions.dart';
+part 'sync_settings_page_managed_vault_sync.dart';
 part 'sync_settings_page_sync_actions.dart';
 
 int _coerceTimestampMs(Object value) {

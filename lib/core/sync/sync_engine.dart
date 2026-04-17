@@ -395,6 +395,9 @@ final class SyncEngine {
 
       await syncRunner.push(config);
       if (backendType == SyncBackendType.managedVault) {
+        if (_acceptsNewWork) {
+          _pullQueued = true;
+        }
         _setWriteGate(const SyncWriteGateState.open());
       }
     } catch (e) {

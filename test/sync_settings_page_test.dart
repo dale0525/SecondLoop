@@ -1076,6 +1076,73 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
   });
+
+  testWidgets(
+      'managed vault manual upload converges with pull before finishing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final pushCompleter = Completer<int>();
+    final pullCompleter = Completer<int>();
+    final backend = _DelayedManagedVaultSyncBackend(
+      pullCompleter: pullCompleter,
+      pushCompleter: pushCompleter,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pump();
+
+    expect(backend.calls, <String>['syncManagedVaultPushOpsOnly']);
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
+
+    pushCompleter.complete(0);
+    await tester.pump();
+
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
+    );
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
+
+    pullCompleter.complete(0);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
+  });
 }
 
 Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
