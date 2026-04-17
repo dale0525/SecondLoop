@@ -52,24 +52,25 @@ AudioTranscriptTurnView? resolveAudioTranscriptTurnView(
     return null;
   }
 
+  final turnsRaw = payload['transcript_turns_v1'];
+  final segmentsRaw = payload['transcript_segments'];
+  final signature = _fingerprintTurnViewInputs(turnsRaw, segmentsRaw);
   final cached = _audioTranscriptTurnViewCache[payload];
-  if (cached != null) {
+  if (cached != null && cached.signature == signature) {
     return cached.view;
   }
 
-  final persisted = AudioTranscriptTurnView.fromJson(
-    payload['transcript_turns_v1'],
-  );
+  final persisted = AudioTranscriptTurnView.fromJson(turnsRaw);
   if (persisted != null &&
       persisted.status == AudioTranscriptTurnViewStatus.ok &&
       persisted.turns.isNotEmpty) {
     _audioTranscriptTurnViewCache[payload] =
-        _AudioTranscriptTurnViewCacheEntry(persisted);
+        _AudioTranscriptTurnViewCacheEntry(signature, persisted);
     return persisted;
   }
 
   final legacySegments = audioTranscriptTurnSourceSegmentsFromJson(
-    payload['transcript_segments'],
+    segmentsRaw,
   );
   if (legacySegments.isEmpty) {
     return null;
@@ -80,13 +81,53 @@ AudioTranscriptTurnView? resolveAudioTranscriptTurnView(
     return null;
   }
   _audioTranscriptTurnViewCache[payload] = _AudioTranscriptTurnViewCacheEntry(
+    signature,
     built,
   );
   return built;
 }
 
-final class _AudioTranscriptTurnViewCacheEntry {
-  const _AudioTranscriptTurnViewCacheEntry(this.view);
+int _fingerprintTurnViewInputs(Object? turnsRaw, Object? segmentsRaw) {
+  return Object.hash(
+    _fingerprintJsonLike(turnsRaw),
+    _fingerprintJsonLike(segmentsRaw),
+  );
+}
 
+int _fingerprintJsonLike(Object? value) {
+  if (value == null) return 0;
+  if (value is String || value is num || value is bool) {
+    return value.hashCode;
+  }
+  if (value is List) {
+    return Object.hash(
+      value.length,
+      Object.hashAll(value.map(_fingerprintJsonLike)),
+    );
+  }
+  if (value is Map) {
+    final entries = value.entries
+        .map(
+          (entry) => (
+            key: entry.key.toString(),
+            value: _fingerprintJsonLike(entry.value),
+          ),
+        )
+        .toList(growable: false)
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return Object.hash(
+      entries.length,
+      Object.hashAll(
+        entries.map((entry) => Object.hash(entry.key, entry.value)),
+      ),
+    );
+  }
+  return value.hashCode;
+}
+
+final class _AudioTranscriptTurnViewCacheEntry {
+  const _AudioTranscriptTurnViewCacheEntry(this.signature, this.view);
+
+  final int signature;
   final AudioTranscriptTurnView? view;
 }

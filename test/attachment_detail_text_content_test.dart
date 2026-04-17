@@ -196,7 +196,7 @@ void main() {
     expect(content.full, 'raw transcript body');
   });
 
-  test('audio detail resolves persisted turn view only once', () {
+  test('audio detail reuses persisted turn view after initial resolution', () {
     final payload = _TranscriptTurnPayloadReadTrackingMap(
       <String, Object?>{
         'mime_type': 'audio/mp4',
@@ -223,7 +223,7 @@ void main() {
 
     expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
     expect(content.full, 'raw transcript body');
-    expect(payload.transcriptTurnViewReadCount, 1);
+    expect(payload.transcriptTurnViewReadCount, 2);
   });
 
   test('audio detail full prefers transcript_full over turn view', () {
@@ -304,6 +304,74 @@ void main() {
     expect(
       content.full,
       'Speaker A: Hello.\n\nSpeaker B: Hi.\n\nSpeaker A: Great.',
+    );
+  });
+
+  test(
+      'audio detail full does not treat chunk newlines as paragraph boundaries when segments exist',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full':
+            'First sentence.\nSecond sentence.\nThird sentence.\nFourth sentence.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'First sentence.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'Second sentence.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Third sentence.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Fourth sentence.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      'First sentence. Second sentence.\n\n'
+      'Third sentence. Fourth sentence.',
+    );
+  });
+
+  test('audio detail full keeps cjk sentences compact when paragraphized', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': '你好。谢谢。再见。明天聊。',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': '你好。',
+          },
+          {
+            't_ms': 2400,
+            'text': '谢谢。',
+          },
+          {
+            't_ms': 5200,
+            'text': '再见。',
+          },
+          {
+            't_ms': 7600,
+            'text': '明天聊。',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      '你好。谢谢。\n\n再见。明天聊。',
     );
   });
 
@@ -395,6 +463,52 @@ void main() {
 
     expect(turnView, isNotNull);
     expect(turnView!.turns.single.text, 'Hello everyone.');
+  });
+
+  test(
+      'audio turn view refreshes cached value after persisted turn data changes',
+      () {
+    final payload = <String, Object?>{
+      'mime_type': 'audio/mp4',
+      'transcript_full': 'raw transcript body',
+      'transcript_turns_v1': const <String, Object?>{
+        'builder_version': 'turns_v1',
+        'status': 'ok',
+        'turns': [
+          {
+            'start_ms': 12000,
+            'end_ms': 18000,
+            'text': 'Hello everyone.',
+            'segment_count': 1,
+            'source_segment_start_index': 0,
+            'source_segment_end_index': 0,
+          },
+        ],
+      },
+    };
+
+    final first = resolveAudioTranscriptTurnView(payload);
+    expect(first, isNotNull);
+    expect(first!.turns.single.text, 'Hello everyone.');
+
+    payload['transcript_turns_v1'] = const <String, Object?>{
+      'builder_version': 'turns_v1',
+      'status': 'ok',
+      'turns': [
+        {
+          'start_ms': 12000,
+          'end_ms': 24000,
+          'text': 'Updated speaker text.',
+          'segment_count': 1,
+          'source_segment_start_index': 0,
+          'source_segment_end_index': 0,
+        },
+      ],
+    };
+
+    final second = resolveAudioTranscriptTurnView(payload);
+    expect(second, isNotNull);
+    expect(second!.turns.single.text, 'Updated speaker text.');
   });
 }
 

@@ -12,40 +12,28 @@ String resolveAudioTranscriptReadableFullText(Map<String, Object?>? payload) {
     return paragraphPreserving;
   }
 
-  final upgradedSingleNewlines = _upgradeSingleNewlinesToParagraphs(raw);
+  final upgradedSingleNewlines = _upgradeStructuredSingleNewlinesToParagraphs(
+    raw,
+  );
   if (upgradedSingleNewlines.isNotEmpty) {
     return upgradedSingleNewlines;
   }
 
   final view = resolveAudioTranscriptTurnView(payload);
-  if (view == null ||
-      view.status != AudioTranscriptTurnViewStatus.ok ||
-      view.turns.length < 2) {
-    return raw;
+  if (view != null &&
+      view.status == AudioTranscriptTurnViewStatus.ok &&
+      view.turns.length >= 2) {
+    final paragraphized = _paragraphizeTranscriptWithTurnHints(
+      raw,
+      turnCount: view.turns.length,
+    );
+    if (paragraphized.isNotEmpty) {
+      return paragraphized;
+    }
   }
 
-  final sentences = _splitTranscriptSentences(raw);
-  if (sentences.length < 2) {
-    return raw;
-  }
-
-  final paragraphCount = _targetParagraphCount(
-    text: raw,
-    sentenceCount: sentences.length,
-    turnCount: view.turns.length,
-  );
-  if (paragraphCount < 2) {
-    return raw;
-  }
-
-  final paragraphs = _distributeSentencesIntoParagraphs(
-    sentences,
-    paragraphCount,
-  );
-  if (paragraphs.length < 2) {
-    return raw;
-  }
-  return paragraphs.join('\n\n');
+  final lineBrokenParagraphized = _paragraphizeLineBrokenTranscript(raw);
+  return lineBrokenParagraphized.isNotEmpty ? lineBrokenParagraphized : raw;
 }
 
 String _normalizeTranscriptText(String raw) {
@@ -63,7 +51,7 @@ String _normalizeExistingParagraphs(String raw) {
   return paragraphs.join('\n\n');
 }
 
-String _upgradeSingleNewlinesToParagraphs(String raw) {
+String _upgradeStructuredSingleNewlinesToParagraphs(String raw) {
   if (raw.contains('\n\n')) return '';
   if (!raw.contains('\n')) return '';
   final lines = raw
@@ -72,11 +60,77 @@ String _upgradeSingleNewlinesToParagraphs(String raw) {
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
   if (lines.length < 2) return '';
+  final structuredLineCount =
+      lines.where(_looksLikeStructuredTranscriptLine).length;
+  if (structuredLineCount < 2) return '';
+  if (structuredLineCount * 2 < lines.length) return '';
   return lines.join('\n\n');
 }
 
 String _compactInlineWhitespace(String raw) {
   return raw.replaceAll(RegExp(r'[ \t]+'), ' ').trim();
+}
+
+String _paragraphizeTranscriptWithTurnHints(String raw,
+    {required int turnCount}) {
+  final sentences = _splitTranscriptSentences(raw);
+  if (sentences.length < 2) {
+    return '';
+  }
+
+  final paragraphCount = _targetParagraphCount(
+    text: raw,
+    sentenceCount: sentences.length,
+    turnCount: turnCount,
+  );
+  if (paragraphCount < 2) {
+    return '';
+  }
+
+  final paragraphs = _distributeSentencesIntoParagraphs(
+    sentences,
+    paragraphCount,
+  );
+  if (paragraphs.length < 2) {
+    return '';
+  }
+  return paragraphs.join('\n\n');
+}
+
+String _paragraphizeLineBrokenTranscript(String raw) {
+  if (raw.contains('\n\n') || !raw.contains('\n')) {
+    return '';
+  }
+
+  final lines = raw
+      .split('\n')
+      .map(_compactInlineWhitespace)
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+  if (lines.length < 4) {
+    return '';
+  }
+
+  final sentenceLikeLineCount = lines.where(_looksLikeSentenceLine).length;
+  if (sentenceLikeLineCount * 4 < lines.length * 3) {
+    return '';
+  }
+
+  final sentences = _splitTranscriptSentences(raw);
+  if (sentences.length < 2) {
+    return '';
+  }
+
+  final paragraphCount =
+      ((lines.length + 3) / 4).ceil().clamp(2, sentences.length);
+  final paragraphs = _distributeSentencesIntoParagraphs(
+    sentences,
+    paragraphCount,
+  );
+  if (paragraphs.length < 2) {
+    return '';
+  }
+  return paragraphs.join('\n\n');
 }
 
 List<String> _splitTranscriptSentences(String raw) {
@@ -130,6 +184,40 @@ bool _isSentenceCloser(String char) {
       char == '】' ||
       char == '』' ||
       char == '」';
+}
+
+bool _looksLikeStructuredTranscriptLine(String line) {
+  if (_looksLikeTimestampedTranscriptLine(line)) {
+    return true;
+  }
+
+  final colonMatch = RegExp(r'[:：]').firstMatch(line);
+  if (colonMatch == null) return false;
+
+  final prefix = line.substring(0, colonMatch.start).trim();
+  if (prefix.isEmpty || prefix.length > 24) return false;
+  if (prefix.contains(RegExp(r'[.!?。！？]'))) return false;
+  if (prefix.split(RegExp(r'\s+')).length > 4) return false;
+  return true;
+}
+
+bool _looksLikeTimestampedTranscriptLine(String line) {
+  return RegExp(
+    r'^\[?\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?(?:\s*[-–]\s*\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?)?\]?(?:\s+|$)',
+  ).hasMatch(line);
+}
+
+bool _looksLikeSentenceLine(String line) {
+  final normalized = line.trim();
+  if (normalized.isEmpty) {
+    return false;
+  }
+
+  final lastChar = _lastSemanticChar(normalized);
+  if (lastChar == null) {
+    return false;
+  }
+  return _isSentenceTerminal(lastChar) || _isSentenceCloser(lastChar);
 }
 
 int _targetParagraphCount({
@@ -202,13 +290,84 @@ List<String> _distributeSentencesIntoParagraphs(
     if (parts.isEmpty) {
       break;
     }
-    paragraphs.add(parts.join(' '));
+    paragraphs.add(_joinSentences(parts));
     consumedLength += paragraphLength;
   }
 
   if (nextSentenceIndex < sentences.length && paragraphs.isNotEmpty) {
-    final tail = sentences.sublist(nextSentenceIndex).join(' ');
-    paragraphs[paragraphs.length - 1] = '${paragraphs.last} $tail'.trim();
+    final tail = _joinSentences(sentences.sublist(nextSentenceIndex));
+    paragraphs[paragraphs.length - 1] = _joinSentences(<String>[
+      paragraphs.last,
+      tail,
+    ]);
   }
   return paragraphs;
+}
+
+String _joinSentences(List<String> sentences) {
+  if (sentences.isEmpty) return '';
+  final buffer = StringBuffer(sentences.first);
+  for (final sentence in sentences.skip(1)) {
+    if (_shouldOmitInterSentenceSpace(buffer.toString(), sentence)) {
+      buffer.write(sentence);
+      continue;
+    }
+    buffer
+      ..write(' ')
+      ..write(sentence);
+  }
+  return buffer.toString();
+}
+
+bool _shouldOmitInterSentenceSpace(String previous, String next) {
+  final previousChar = _lastSemanticChar(previous);
+  final nextChar = _firstSemanticChar(next);
+  if (previousChar == null || nextChar == null) return false;
+  return _isCjkChar(previousChar) || _isCjkChar(nextChar);
+}
+
+String? _firstSemanticChar(String value) {
+  for (var i = 0; i < value.length; i += 1) {
+    final char = value[i];
+    if (_isWhitespaceChar(char) || _isOpeningQuoteOrBracket(char)) {
+      continue;
+    }
+    return char;
+  }
+  return null;
+}
+
+String? _lastSemanticChar(String value) {
+  for (var i = value.length - 1; i >= 0; i -= 1) {
+    final char = value[i];
+    if (_isWhitespaceChar(char) || _isSentenceCloser(char)) {
+      continue;
+    }
+    return char;
+  }
+  return null;
+}
+
+bool _isWhitespaceChar(String char) {
+  return char.trim().isEmpty;
+}
+
+bool _isOpeningQuoteOrBracket(String char) {
+  return char == '"' ||
+      char == '\'' ||
+      char == '(' ||
+      char == '[' ||
+      char == '{' ||
+      char == '“' ||
+      char == '‘' ||
+      char == '（' ||
+      char == '【' ||
+      char == '『' ||
+      char == '「';
+}
+
+bool _isCjkChar(String char) {
+  return RegExp(
+    r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]',
+  ).hasMatch(char);
 }
