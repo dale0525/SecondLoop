@@ -22,6 +22,7 @@ import 'sync_engine.dart';
 import 'sync_engine_gate.dart';
 import 'background_sync.dart';
 import 'sync_key_manager.dart';
+import 'sync_http_error.dart';
 
 final class CloudSyncSwitchPromptGate extends StatefulWidget {
   const CloudSyncSwitchPromptGate({
@@ -358,21 +359,27 @@ final class _CloudSyncSwitchPromptGateState
             unawaited(() async {
               try {
                 var stageProgress = _makeSmoothStageProgressReporter(progress);
+                var allowMediaUploads = true;
 
                 // Push local changes first so the next pull converges to the
                 // authoritative remote head for this vault generation.
                 stage.value = t.sync.progressDialog.pushing;
                 progress.value = 0.0;
-                await _consumeRustProgressStream(
-                  backend.syncManagedVaultPushOpsOnlyProgress(
-                    sessionKey,
-                    syncKey,
-                    baseUrl: baseUrl,
-                    vaultId: vaultId,
-                    idToken: idToken,
-                  ),
-                  onProgress: stageProgress.onProgress,
-                );
+                try {
+                  await _consumeRustProgressStream(
+                    backend.syncManagedVaultPushOpsOnlyProgress(
+                      sessionKey,
+                      syncKey,
+                      baseUrl: baseUrl,
+                      vaultId: vaultId,
+                      idToken: idToken,
+                    ),
+                    onProgress: stageProgress.onProgress,
+                  );
+                } catch (error) {
+                  if (!managedVaultPushFailureAllowsPull(error)) rethrow;
+                  allowMediaUploads = false;
+                }
 
                 // Pull after push to converge to the latest remote log head.
                 stageProgress = _makeSmoothStageProgressReporter(progress);
@@ -390,7 +397,8 @@ final class _CloudSyncSwitchPromptGateState
                 );
 
                 // Media uploads (optional)
-                final mediaEnabled = await _store.readCloudMediaBackupEnabled();
+                final mediaEnabled = allowMediaUploads &&
+                    await _store.readCloudMediaBackupEnabled();
                 if (mediaEnabled) {
                   final wifiOnly = await _store.readCloudMediaBackupWifiOnly();
                   stage.value = t.sync.progressDialog.uploadingMedia;

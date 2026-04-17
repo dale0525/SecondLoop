@@ -607,18 +607,24 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     run: (stage, progress) async {
                       var stageProgress =
                           _makeSmoothStageProgressReporter(progress);
+                      var allowMediaUploads = true;
                       stage.value = t.sync.progressDialog.pushing;
                       progress.value = 0.0;
-                      await _consumeRustProgressStream(
-                        backend.syncManagedVaultPushOpsOnlyProgress(
-                          sessionKey,
-                          activeSyncKey,
-                          baseUrl: baseUrlTrimmed,
-                          vaultId: vaultId,
-                          idToken: idTokenTrimmed,
-                        ),
-                        onProgress: stageProgress.onProgress,
-                      );
+                      try {
+                        await _consumeRustProgressStream(
+                          backend.syncManagedVaultPushOpsOnlyProgress(
+                            sessionKey,
+                            activeSyncKey,
+                            baseUrl: baseUrlTrimmed,
+                            vaultId: vaultId,
+                            idToken: idTokenTrimmed,
+                          ),
+                          onProgress: stageProgress.onProgress,
+                        );
+                      } catch (error) {
+                        if (!managedVaultPushFailureAllowsPull(error)) rethrow;
+                        allowMediaUploads = false;
+                      }
 
                       stageProgress =
                           _makeSmoothStageProgressReporter(progress);
@@ -635,7 +641,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         onProgress: stageProgress.onProgress,
                       );
 
-                      if (_cloudMediaBackupEnabled) {
+                      if (allowMediaUploads && _cloudMediaBackupEnabled) {
                         stage.value = t.sync.progressDialog.uploadingMedia;
                         progress.value = null;
 

@@ -18,6 +18,7 @@ import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_diagnostics.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../core/sync/sync_http_error.dart';
 import '../../core/sync/sync_key_manager.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';

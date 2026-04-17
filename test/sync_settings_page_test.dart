@@ -381,6 +381,60 @@ void main() {
     expect(syncKey!.length, 32);
   });
 
+  testWidgets('Managed Vault save still pulls when push is read-only blocked',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    final backend = _GraceReadOnlyManagedVaultSyncBackend();
+    final cloudAuth = _FakeCloudAuthController();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: SyncEngineScope(
+                  engine: null,
+                  child: Scaffold(
+                    body: SyncSettingsPage(configStore: store),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(DropdownButtonFormField<SyncBackendType>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SecondLoop Cloud').last);
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
+    );
+    expect(find.textContaining('HTTP 403'), findsNothing);
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
+  });
+
   testWidgets('Save auto-generates sync key when missing (SecondLoop Cloud)',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -1510,6 +1564,38 @@ final class _DelayedManagedVaultSyncBackend extends _SyncSettingsBackend {
   }) async {
     calls.add('syncManagedVaultPushOpsOnly');
     return pushCompleter.future;
+  }
+}
+
+final class _GraceReadOnlyManagedVaultSyncBackend extends _SyncSettingsBackend {
+  _GraceReadOnlyManagedVaultSyncBackend() : super(managedVaultPullResult: 0);
+
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPushOpsOnly');
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
   }
 }
 

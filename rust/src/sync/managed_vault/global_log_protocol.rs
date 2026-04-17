@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize)]
 pub(super) struct GlobalLogPushRequest<'a> {
     pub(super) base_global_seq: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) generation_id: Option<&'a str>,
     pub(super) batch_id: &'a str,
     pub(super) ops: Vec<GlobalLogPushOp>,
 }
@@ -23,6 +25,13 @@ pub(super) struct GlobalLogPushResponse {
     pub(super) committed_from_seq: Option<i64>,
     pub(super) committed_to_seq: Option<i64>,
     pub(super) remote_latest_global_seq: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct GlobalLogPushErrorResponse {
+    pub(super) error: String,
+    pub(super) remote_generation_id: Option<String>,
+    pub(super) remote_latest_global_seq: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]

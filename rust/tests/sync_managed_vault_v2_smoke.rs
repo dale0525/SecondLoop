@@ -124,6 +124,24 @@ fn start_mock_v2_server() -> (
                             serde_json::from_slice(&body).expect("push json");
                         let incoming = decoded["ops"].as_array().cloned().expect("ops array");
                         let mut state = state_clone.lock().expect("lock");
+                        let client_generation = decoded["generation_id"]
+                            .as_str()
+                            .unwrap_or("")
+                            .trim()
+                            .to_string();
+                        if !client_generation.is_empty() && client_generation != state.generation_id
+                        {
+                            write_json_response(
+                                &mut stream,
+                                409,
+                                serde_json::json!({
+                                    "error": "generation_mismatch",
+                                    "remote_generation_id": state.generation_id,
+                                    "remote_latest_global_seq": state.latest_global_seq,
+                                }),
+                            );
+                            continue;
+                        }
                         let from_seq = state.latest_global_seq + 1;
                         for op in incoming {
                             state.latest_global_seq += 1;
@@ -140,6 +158,22 @@ fn start_mock_v2_server() -> (
                                 "committed_from_seq": from_seq,
                                 "committed_to_seq": state.latest_global_seq,
                                 "remote_latest_global_seq": state.latest_global_seq,
+                            }),
+                        );
+                    }
+                    ("POST", "/v2/vaults/v1/sync/reset") => {
+                        let mut state = state_clone.lock().expect("lock");
+                        state.generation_id = "generation-reset".to_string();
+                        state.latest_global_seq = 0;
+                        state.ops.clear();
+                        write_json_response(
+                            &mut stream,
+                            200,
+                            serde_json::json!({
+                                "generation_id": state.generation_id,
+                                "remote_latest_global_seq": 0,
+                                "deleted_meta": 0,
+                                "deleted_blobs": 0,
                             }),
                         );
                     }
@@ -229,6 +263,60 @@ fn managed_vault_v2_push_and_pull_roundtrip() {
     assert!(requests.contains("/v2/vaults/v1/sync/push"));
     assert!(requests.contains("/v2/vaults/v1/sync/pull"));
     assert!(requests.contains("/v2/vaults/v1/sync/head"));
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_generation_mismatch_does_not_reupload_stale_local_data() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("create convo");
+    db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert msg");
+
+    let first_push =
+        sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("first push");
+    assert!(first_push > 0);
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.generation_id = "generation-reset".to_string();
+        server.latest_global_seq = 0;
+        server.ops.clear();
+    }
+
+    let second_push =
+        sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("second push");
+    assert_eq!(second_push, 0);
+
+    let recovery_pull =
+        sync::managed_vault::pull(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("recovery pull");
+    assert_eq!(recovery_pull, 0);
+
+    let convs = db::list_conversations(&conn, &key).expect("list convs");
+    assert_eq!(convs.len(), 0);
+
+    let state = state.lock().expect("lock");
+    assert_eq!(state.latest_global_seq, 0);
+    assert_eq!(state.ops.len(), 0);
 
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");

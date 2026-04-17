@@ -5,7 +5,8 @@ use rusqlite::{params, Connection};
 
 use super::global_log_protocol::{
     GlobalLogHeadResponse, GlobalLogPullOp, GlobalLogPullRequest, GlobalLogPullResponse,
-    GlobalLogPushOp, GlobalLogPushRequest, GlobalLogPushResponse, GlobalLogResetResponse,
+    GlobalLogPushErrorResponse, GlobalLogPushOp, GlobalLogPushRequest, GlobalLogPushResponse,
+    GlobalLogResetResponse,
 };
 use super::runtime::Client;
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
@@ -18,6 +19,12 @@ pub(super) enum GlobalLogRouteResult<T> {
     Unsupported,
 }
 
+pub(super) enum GlobalLogPushRouteResult {
+    Parsed(GlobalLogPushResponse),
+    Unsupported,
+    GenerationMismatch(GlobalLogPushErrorResponse),
+}
+
 fn unsupported_status(status_code: u16) -> bool {
     matches!(status_code, 404 | 405)
 }
@@ -27,7 +34,7 @@ fn fetch_push(
     endpoint: &str,
     id_token: &str,
     request: &GlobalLogPushRequest<'_>,
-) -> Result<GlobalLogRouteResult<GlobalLogPushResponse>> {
+) -> Result<GlobalLogPushRouteResult> {
     let resp = http
         .post(endpoint)
         .bearer_auth(id_token)
@@ -35,7 +42,17 @@ fn fetch_push(
         .send()?;
     let status = resp.status();
     if unsupported_status(status.as_u16()) {
-        return Ok(GlobalLogRouteResult::Unsupported);
+        return Ok(GlobalLogPushRouteResult::Unsupported);
+    }
+    if status.as_u16() == 409 {
+        let text = resp.text().unwrap_or_default();
+        let parsed: GlobalLogPushErrorResponse = serde_json::from_str(&text)?;
+        if parsed.error == "generation_mismatch" {
+            return Ok(GlobalLogPushRouteResult::GenerationMismatch(parsed));
+        }
+        return Err(anyhow!(
+            "managed-vault v2 push failed: HTTP {status} {text}"
+        ));
     }
     if !status.is_success() {
         let text = resp.text().unwrap_or_default();
@@ -43,7 +60,7 @@ fn fetch_push(
             "managed-vault v2 push failed: HTTP {status} {text}"
         ));
     }
-    Ok(GlobalLogRouteResult::Parsed(resp.json()?))
+    Ok(GlobalLogPushRouteResult::Parsed(resp.json()?))
 }
 
 fn fetch_pull(
@@ -242,10 +259,12 @@ pub(super) fn push_v2(
             return Ok(total_pushed);
         }
 
+        let local_generation = super::global_log_state::read_generation_id(conn, &scope_id)?;
         let mut request = GlobalLogPushRequest {
             base_global_seq: super::global_log_state::read_last_applied_global_seq(
                 conn, &scope_id,
             )?,
+            generation_id: local_generation.as_deref(),
             batch_id: "",
             ops,
         };
@@ -253,10 +272,24 @@ pub(super) fn push_v2(
         request.batch_id = batch_id.as_str();
 
         match fetch_push(&http, &endpoint, id_token, &request)? {
-            GlobalLogRouteResult::Unsupported => {
+            GlobalLogPushRouteResult::Unsupported => {
                 return Err(anyhow!("managed-vault v2 push route unavailable"));
             }
-            GlobalLogRouteResult::Parsed(response) => {
+            GlobalLogPushRouteResult::GenerationMismatch(error) => {
+                if local_generation.is_some() {
+                    super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                    if let Some(progress_fn) = progress.as_deref_mut() {
+                        progress_fn(0, 0);
+                    }
+                    return Ok(0);
+                }
+                return Err(anyhow!(
+                    "managed-vault v2 push failed: generation mismatch remote_generation_id={:?} remote_latest_global_seq={:?}",
+                    error.remote_generation_id,
+                    error.remote_latest_global_seq
+                ));
+            }
+            GlobalLogPushRouteResult::Parsed(response) => {
                 super::global_log_state::write_generation_id(
                     conn,
                     &scope_id,
@@ -315,7 +348,7 @@ pub(super) fn pull_v2(
 
         let local_generation = super::global_log_state::read_generation_id(conn, &scope_id)?;
         if let Some(existing_generation) = &local_generation {
-            if existing_generation != &response.generation_id && last_applied > 0 {
+            if existing_generation != &response.generation_id {
                 super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
                 last_applied = 0;
                 continue;
