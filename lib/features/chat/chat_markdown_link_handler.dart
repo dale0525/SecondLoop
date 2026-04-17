@@ -20,5 +20,8 @@ Future<void> handleChatMarkdownTapLink(
   if (uri == null) {
     return;
   }
+  if (uri.scheme.toLowerCase() == 'secondloop') {
+    return;
+  }
   await launchUrl(uri, mode: LaunchMode.externalApplication);
 }

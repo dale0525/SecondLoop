@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
@@ -63,6 +62,18 @@ void main() {
 
   testWidgets('message viewer ignores knowledge-document links after removal',
       (tester) async {
+    final launchedUrls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'launch') {
+        launchedUrls.add((call.arguments as Map)['url'] as String);
+      }
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
@@ -88,6 +99,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('message_viewer_page')), findsOneWidget);
     expect(find.byType(AttachmentViewerPage), findsNothing);
+    expect(launchedUrls, isEmpty);
   });
 }
 

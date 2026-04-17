@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
@@ -232,6 +231,18 @@ secondloop://message/history-1
 
   testWidgets('chat ignores knowledge-document deeplinks after removal',
       (tester) async {
+    final launchedUrls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'launch') {
+        launchedUrls.add((call.arguments as Map)['url'] as String);
+      }
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
     final backend = _Backend(
       initialMessages: const [
         Message(
@@ -277,6 +288,7 @@ secondloop://message/history-1
 
     expect(find.byType(ChatPage), findsOneWidget);
     expect(find.textContaining('budget note', findRichText: true), findsOne);
+    expect(launchedUrls, isEmpty);
   });
 }
 
