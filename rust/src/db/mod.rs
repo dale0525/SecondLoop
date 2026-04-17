@@ -4,7 +4,9 @@
 include!("parts/01_prelude.rs");
 include!("parts/01_kv_and_oplog.rs");
 include!("parts/02_migrate.rs");
+include!("parts/02_migrate_mid.rs");
 include!("parts/02_migrate_tail.rs");
+include!("parts/02_migrate_recent.rs");
 include!("parts/13_content_enrichment_kv.rs");
 include!("parts/03_conversations_messages.rs");
 include!("parts/04_profiles_llm_usage.rs");
@@ -84,3 +86,6 @@ mod migration_archive_tests;
 
 #[cfg(test)]
 mod checklist_schema_tests;
+
+#[cfg(test)]
+mod sqlite_open_pragmas_tests;

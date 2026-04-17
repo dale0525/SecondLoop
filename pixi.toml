@@ -73,6 +73,7 @@ build-android-apk-cn = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondlo
 # Code/resource generation helpers.
 # - frb-generate: regenerate Rust <-> Flutter bridge code
 # - frb-build-web: build Rust wasm package into rust/web/pkg for Flutter web
+# - frb-build-web-preview: build Rust wasm package without shared-memory atomics for local preview flows
 # - sync-web-rust-pkg: mirror rust/web/pkg into build/web/pkg after flutter build
 # - prepare-desktop-runtime-payload: materialize OCR models for runtime release packaging
 # - prepare-desktop-runtime: fetch + install desktop OCR runtime assets from release
@@ -81,6 +82,7 @@ build-android-apk-cn = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondlo
 # - icons-update: regenerate app icons (including macOS round-corner pre-processing)
 frb-generate = "env RUST_LOG=info PATH=\"$PWD/.fvm/flutter_sdk/bin:$HOME/.cargo/bin:$PATH\" flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml"
 frb-build-web = "bash scripts/setup_web_rust_toolchain.sh && env RUST_LOG=info CC_wasm32_unknown_unknown=\"$PWD/.tool/bin/clang\" AR_wasm32_unknown_unknown=\"$PWD/.tool/bin/llvm-ar\" RANLIB_wasm32_unknown_unknown=\"$PWD/.tool/bin/llvm-ranlib\" CARGO_HOME=\"$PWD/.tool/cargo-home\" RUSTUP_HOME=\"$PWD/.tool/rustup-home\" PATH=\"$PWD/.tool/bin:$PWD/.tool/cargo-home/bin:$HOME/.cargo/bin:$PWD/.fvm/flutter_sdk/bin:$PATH\" flutter pub run flutter_rust_bridge build-web --dart-root . -c rust -o web --release --wasm-pack-rustflags \"-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base -C link-arg=--max-memory=1073741824\""
+frb-build-web-preview = "bash scripts/setup_web_rust_toolchain.sh && env RUST_LOG=info CC_wasm32_unknown_unknown=\"$PWD/.tool/bin/clang\" AR_wasm32_unknown_unknown=\"$PWD/.tool/bin/llvm-ar\" RANLIB_wasm32_unknown_unknown=\"$PWD/.tool/bin/llvm-ranlib\" CARGO_HOME=\"$PWD/.tool/cargo-home\" RUSTUP_HOME=\"$PWD/.tool/rustup-home\" PATH=\"$PWD/.tool/bin:$PWD/.tool/cargo-home/bin:$HOME/.cargo/bin:$PWD/.fvm/flutter_sdk/bin:$PATH\" flutter pub run flutter_rust_bridge build-web --dart-root . -c rust -o web --release --wasm-pack-rustflags \"-Aunstable-features -C target-feature=+bulk-memory,+mutable-globals\""
 sync-web-rust-pkg = "dart pub global run fvm:main dart run tools/sync_web_build_rust_pkg.dart"
 preview-local-web-app = { cmd = "bash scripts/preview_local_web_app.sh", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "frb-build-web"] }
 prepare-desktop-runtime-payload = "bash scripts/prepare_desktop_runtime_payload.sh --output-dir assets/ocr/desktop_runtime"
