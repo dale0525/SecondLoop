@@ -8,8 +8,12 @@ struct ClearDeviceRequest<'a> {
 
 pub fn clear_vault(base_url: &str, vault_id: &str, id_token: &str) -> Result<()> {
     let http = super::runtime::client()?;
-    let endpoint = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:clear"))?;
-    let resp = http.post(endpoint).bearer_auth(id_token).send()?;
+    let endpoint = super::runtime::url(base_url, &format!("/v2/vaults/{vault_id}/sync/reset"))?;
+    let resp = http
+        .post(endpoint)
+        .bearer_auth(id_token)
+        .json(&serde_json::json!({}))
+        .send()?;
 
     let status = resp.status();
     let text = resp.text().unwrap_or_default();
