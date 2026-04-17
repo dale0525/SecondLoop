@@ -9,7 +9,6 @@ class ChatAssistantMessageFooter extends StatelessWidget {
   const ChatAssistantMessageFooter({
     required this.evidence,
     required this.onOpenSources,
-    required this.onOpenEvidence,
     required this.actionSuggestions,
     required this.onTapActionSuggestion,
     super.key,
@@ -17,7 +16,6 @@ class ChatAssistantMessageFooter extends StatelessWidget {
 
   final ChatAnswerEvidence? evidence;
   final VoidCallback onOpenSources;
-  final VoidCallback onOpenEvidence;
   final List<ActionSuggestion> actionSuggestions;
   final void Function(ActionSuggestion suggestion, int index)
       onTapActionSuggestion;
@@ -43,7 +41,6 @@ class ChatAssistantMessageFooter extends StatelessWidget {
               child: ChatAnswerEvidenceSummaryBar(
                 evidence: currentEvidence,
                 onOpenSources: onOpenSources,
-                onOpenEvidence: onOpenEvidence,
               ),
             ),
           ),

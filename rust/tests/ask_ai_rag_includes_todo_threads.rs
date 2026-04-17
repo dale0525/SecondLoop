@@ -258,3 +258,59 @@ fn ask_ai_active_embeddings_includes_events_for_non_agenda_questions() {
         "expected ordinary event question to include event context: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_active_embeddings_keeps_older_relevant_event_matches() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    for index in 0..205 {
+        let title = if index == 0 {
+            "Needle event at the start of the archive"
+        } else {
+            "Background sync"
+        };
+        db::upsert_event(
+            &conn,
+            &key,
+            &format!("event:{index}"),
+            title,
+            1_700_000_000_000 + index as i64 * 10,
+            1_700_000_000_000 + index as i64 * 10 + 5,
+            "UTC",
+            None,
+        )
+        .expect("event");
+    }
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Tell me about the needle event",
+        8,
+        rag::Focus::AllMemories,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+    assert!(
+        prompt.contains("Needle event at the start of the archive"),
+        "expected older relevant event to survive active-embedding candidate limit: {prompt}"
+    );
+}

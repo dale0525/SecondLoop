@@ -55,13 +55,11 @@ class ChatAnswerEvidenceSummaryBar extends StatelessWidget {
   const ChatAnswerEvidenceSummaryBar({
     required this.evidence,
     required this.onOpenSources,
-    required this.onOpenEvidence,
     super.key,
   });
 
   final ChatAnswerEvidence evidence;
   final VoidCallback onOpenSources;
-  final VoidCallback onOpenEvidence;
 
   @override
   Widget build(BuildContext context) {
@@ -75,12 +73,8 @@ class ChatAnswerEvidenceSummaryBar extends StatelessWidget {
               count: evidence.directSources.length,
             ),
             onPressed: onOpenSources,
+            emphasized: true,
           ),
-        _SummaryActionChip(
-          label: context.t.chat.answerEvidence.summary.openEvidence,
-          onPressed: onOpenEvidence,
-          emphasized: true,
-        ),
       ],
     );
   }

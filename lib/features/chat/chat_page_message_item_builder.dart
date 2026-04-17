@@ -575,15 +575,6 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   },
                                 ),
                               ),
-                              onOpenEvidence: () => unawaited(
-                                citationController.openEvidence(
-                                  context,
-                                  canOpenDirectSource: canOpenChatMarkdownHref,
-                                  onOpenDirectSource: (href) async {
-                                    await _handleMarkdownInAppLink(href);
-                                  },
-                                ),
-                              ),
                               actionSuggestions: actionSuggestions,
                               onTapActionSuggestion: (suggestion, index) =>
                                   _handleAssistantSuggestion(

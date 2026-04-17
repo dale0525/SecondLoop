@@ -411,14 +411,6 @@ class MessageViewerPage extends StatelessWidget {
                           _openInAppLink(context, href),
                     ),
                   ),
-                  onOpenEvidence: () => unawaited(
-                    citationController.openEvidence(
-                      context,
-                      canOpenDirectSource: canOpenChatMarkdownHref,
-                      onOpenDirectSource: (href) =>
-                          _openInAppLink(context, href),
-                    ),
-                  ),
                 ),
               ),
             ),

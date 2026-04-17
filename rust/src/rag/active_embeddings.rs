@@ -10,7 +10,7 @@ use super::attachment_resources::{
     collect_attachment_resources_active, collect_attachment_resources_for_attachment_shas,
 };
 use super::citations_prompt::build_prompt_with_actions_and_history;
-use super::context_selection::{build_contexts_v2, render_context_item_for_prompt};
+use super::context_selection::{build_contexts_v2, lite_score, render_context_item_for_prompt};
 use super::evidence::{
     build_attachment_resource_direct_source, build_direct_sources_for_context_candidate,
 };
@@ -25,6 +25,7 @@ const TIME_WINDOW_MESSAGE_LIMIT: usize = 800;
 const TIME_WINDOW_TODO_ACTIVITY_LIMIT: usize = 300;
 const TIME_WINDOW_EVENT_LIMIT: usize = 200;
 const ACTIVE_EMBEDDINGS_EVENT_LIMIT: usize = 200;
+const TIME_WINDOW_ATTACHMENT_SEARCH_MAX_LIMIT: usize = 512;
 
 fn collect_time_window_attachment_resources(
     conn: &Connection,
@@ -101,6 +102,43 @@ fn build_time_window_event_text(event: &db::Event) -> String {
     )
 }
 
+fn retain_most_relevant_items(
+    question: &str,
+    items: Vec<(String, ContextItem)>,
+    limit: usize,
+) -> Vec<ContextItem> {
+    if limit == 0 || items.len() <= limit {
+        return items.into_iter().map(|(_, item)| item).collect::<Vec<_>>();
+    }
+
+    let mut ranked = items
+        .into_iter()
+        .enumerate()
+        .map(|(index, (score_text, item))| {
+            (
+                index,
+                lite_score(question, &score_text),
+                item.created_at_ms,
+                item,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    ranked.sort_by(|left, right| {
+        right
+            .1
+            .cmp(&left.1)
+            .then_with(|| right.2.cmp(&left.2))
+            .then_with(|| left.0.cmp(&right.0))
+    });
+    ranked.truncate(limit);
+    ranked.sort_by_key(|entry| entry.0);
+    ranked
+        .into_iter()
+        .map(|(_, _, _, item)| item)
+        .collect::<Vec<_>>()
+}
+
 fn collect_time_window_candidates(
     conn: &Connection,
     key: &[u8; 32],
@@ -134,37 +172,65 @@ fn collect_time_window_candidates(
         });
     }
 
-    for activity in db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)?
-        .into_iter()
-        .rev()
-        .take(TIME_WINDOW_TODO_ACTIVITY_LIMIT)
-    {
-        let text = build_time_window_todo_activity_text(&activity);
-        candidates.push(ContextItem {
-            source: ContextSource::TodoActivity,
-            id: activity.id,
-            created_at_ms: activity.created_at_ms,
-            distance: None,
-            text,
-            citation_suffix: None,
-        });
-    }
+    let activity_candidates =
+        db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)?
+            .into_iter()
+            .map(|activity| {
+                let text = build_time_window_todo_activity_text(&activity);
+                let score_text = activity
+                    .content
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| {
+                        format!(
+                            "{} {} {}",
+                            activity.activity_type,
+                            activity.from_status.as_deref().unwrap_or_default(),
+                            activity.to_status.as_deref().unwrap_or_default(),
+                        )
+                    });
+                (
+                    score_text,
+                    ContextItem {
+                        source: ContextSource::TodoActivity,
+                        id: activity.id,
+                        created_at_ms: activity.created_at_ms,
+                        distance: None,
+                        text,
+                        citation_suffix: None,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+    candidates.extend(retain_most_relevant_items(
+        question,
+        activity_candidates,
+        TIME_WINDOW_TODO_ACTIVITY_LIMIT,
+    ));
 
-    for event in db::list_events_in_range(conn, key, time_start_ms, time_end_ms)?
+    let event_candidates = db::list_events_in_range(conn, key, time_start_ms, time_end_ms)?
         .into_iter()
-        .rev()
-        .take(TIME_WINDOW_EVENT_LIMIT)
-    {
-        let text = build_time_window_event_text(&event);
-        candidates.push(ContextItem {
-            source: ContextSource::Event,
-            id: event.id,
-            created_at_ms: event.start_at_ms,
-            distance: None,
-            text,
-            citation_suffix: None,
-        });
-    }
+        .map(|event| {
+            let text = build_time_window_event_text(&event);
+            (
+                event.title.clone(),
+                ContextItem {
+                    source: ContextSource::Event,
+                    id: event.id,
+                    created_at_ms: event.start_at_ms,
+                    distance: None,
+                    text,
+                    citation_suffix: None,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    candidates.extend(retain_most_relevant_items(
+        question,
+        event_candidates,
+        TIME_WINDOW_EVENT_LIMIT,
+    ));
 
     let mut seen_todos = std::collections::HashSet::<String>::new();
     for todo in db::list_todos(conn, key)?.into_iter() {
@@ -209,17 +275,30 @@ fn collect_time_window_candidates(
         .collect::<std::collections::HashSet<_>>();
     db::process_attachment_text_chunks(conn, key, 256)?;
     db::process_pending_attachment_chunk_embeddings_active(conn, key, app_dir, 2048)?;
-    for chunk in db::search_similar_attachment_chunks_active(
-        conn,
-        key,
-        app_dir,
-        question,
-        top_k.saturating_mul(2).max(top_k),
-    )?
-    .into_iter()
-    .filter(|chunk| allowed_attachment_shas.contains(&chunk.attachment_sha256))
-    .take(top_k)
-    {
+    let mut search_limit = top_k.saturating_mul(2).max(top_k).max(1);
+    let max_search_limit = TIME_WINDOW_ATTACHMENT_SEARCH_MAX_LIMIT.max(search_limit);
+    let filtered_chunks = loop {
+        let filtered = db::search_similar_attachment_chunks_active(
+            conn,
+            key,
+            app_dir,
+            question,
+            search_limit,
+        )?
+        .into_iter()
+        .filter(|chunk| allowed_attachment_shas.contains(&chunk.attachment_sha256))
+        .collect::<Vec<_>>();
+        if filtered.len() >= top_k || search_limit >= max_search_limit {
+            break filtered;
+        }
+
+        let next_limit = search_limit.saturating_mul(2).min(max_search_limit);
+        if next_limit == search_limit {
+            break filtered;
+        }
+        search_limit = next_limit;
+    };
+    for chunk in filtered_chunks.into_iter().take(top_k) {
         let text = match db::read_attachment_chunk_text(
             conn,
             key,
@@ -324,21 +403,28 @@ fn collect_active_embedding_candidates(
         });
     }
 
-    for event in db::list_events(conn, key)?
+    let event_candidates = db::list_events(conn, key)?
         .into_iter()
-        .rev()
-        .take(ACTIVE_EMBEDDINGS_EVENT_LIMIT)
-    {
-        let text = build_time_window_event_text(&event);
-        candidates.push(ContextItem {
-            source: ContextSource::Event,
-            id: event.id,
-            created_at_ms: event.start_at_ms,
-            distance: None,
-            text,
-            citation_suffix: None,
-        });
-    }
+        .map(|event| {
+            let text = build_time_window_event_text(&event);
+            (
+                event.title.clone(),
+                ContextItem {
+                    source: ContextSource::Event,
+                    id: event.id,
+                    created_at_ms: event.start_at_ms,
+                    distance: None,
+                    text,
+                    citation_suffix: None,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    candidates.extend(retain_most_relevant_items(
+        question,
+        event_candidates,
+        ACTIVE_EMBEDDINGS_EVENT_LIMIT,
+    ));
 
     let attachment_resources =
         collect_attachment_resources_active(conn, key, app_dir, question, top_k)

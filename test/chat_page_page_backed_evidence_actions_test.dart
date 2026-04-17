@@ -60,7 +60,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('Open evidence'), findsNothing);
+      expect(find.text('1 sources'), findsNothing);
       expect(find.byType(ActionChip), findsNothing);
       expect(find.text('Inspect page'), findsNothing);
     },
@@ -128,7 +128,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Open evidence'));
+      await tester.tap(find.text('1 sources'));
       await tester.pumpAndSettle();
 
       expect(find.text('Reply in Chinese.'), findsOneWidget);

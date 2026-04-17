@@ -399,6 +399,73 @@ fn ask_ai_time_window_candidate_limits_keep_recent_todo_activity_matches() {
 }
 
 #[test]
+fn ask_ai_time_window_candidate_limits_keep_older_relevant_todo_activity_matches() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 590_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:older-needle",
+        "Backfill launch checklist",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+
+    for index in 0..305 {
+        let content = if index == 0 {
+            "older needle for time-window ranking"
+        } else {
+            "background note"
+        };
+        let activity =
+            db::append_todo_note(&conn, &key, "todo:older-needle", content, None).expect("note");
+        conn.execute(
+            "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+            params![activity.id, time_start_ms + index as i64],
+        )
+        .expect("set note ts");
+    }
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Where is the older needle?",
+        4,
+        rag::Focus::AllMemories,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = capture_prompt(&provider);
+    assert!(
+        prompt.contains("older needle for time-window ranking"),
+        "expected earlier matching todo activity to survive candidate limit: {prompt}"
+    );
+}
+
+#[test]
 fn ask_ai_time_window_candidate_limits_keep_recent_event_matches() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
@@ -450,6 +517,61 @@ fn ask_ai_time_window_candidate_limits_keep_recent_event_matches() {
     assert!(
         prompt.contains("Needle event at the end of the range"),
         "expected newest matching event to survive candidate limit: {prompt}"
+    );
+}
+
+#[test]
+fn ask_ai_time_window_candidate_limits_keep_older_relevant_event_matches() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 610_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    for index in 0..205 {
+        let title = if index == 0 {
+            "Needle event at the start of the range"
+        } else {
+            "Background sync"
+        };
+        db::upsert_event(
+            &conn,
+            &key,
+            &format!("event:{index}"),
+            title,
+            time_start_ms + index as i64 * 10,
+            time_start_ms + index as i64 * 10 + 5,
+            "UTC",
+            None,
+        )
+        .expect("event");
+    }
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Tell me about the needle event",
+        4,
+        rag::Focus::AllMemories,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = capture_prompt(&provider);
+    assert!(
+        prompt.contains("Needle event at the start of the range"),
+        "expected earlier matching event to survive candidate limit: {prompt}"
     );
 }
 

@@ -336,6 +336,135 @@ fn ask_ai_time_window_prompt_keeps_latest_in_range_attachment_when_window_is_lar
 }
 
 #[test]
+fn ask_ai_time_window_attachment_search_keeps_in_range_match_after_filtering() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let archive = db::create_conversation(&conn, &key, "Archive").expect("archive");
+    let time_start_ms: i64 = 3_500_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    let in_range_message = db::insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "Please inspect the in-range launch brief attachment.",
+    )
+    .expect("in range message");
+    conn.execute(
+        "UPDATE messages SET created_at = ?2, updated_at = ?2 WHERE id = ?1",
+        params![in_range_message.id, time_start_ms + 10],
+    )
+    .expect("update in range message ts");
+
+    let in_range_attachment = db::insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        b"in-range launch brief fallback detail",
+        "text/plain",
+    )
+    .expect("in range attachment");
+    db::link_attachment_to_message(
+        &conn,
+        &key,
+        &in_range_message.id,
+        &in_range_attachment.sha256,
+    )
+    .expect("link in range attachment");
+    db::upsert_attachment_metadata(
+        &conn,
+        &key,
+        &in_range_attachment.sha256,
+        Some("In-range launch brief"),
+        &["in-range.txt".to_string()],
+        &[],
+    )
+    .expect("in range metadata");
+
+    for index in 0..24 {
+        let out_of_range_message = db::insert_message(
+            &conn,
+            &key,
+            &archive.id,
+            "user",
+            &format!("Historical launch brief attachment {index}"),
+        )
+        .expect("out of range message");
+        conn.execute(
+            "UPDATE messages SET created_at = ?2, updated_at = ?2 WHERE id = ?1",
+            params![
+                out_of_range_message.id,
+                time_start_ms - 10_000 - index as i64
+            ],
+        )
+        .expect("update out of range message ts");
+
+        let out_of_range_attachment = db::insert_attachment(
+            &conn,
+            &key,
+            &app_dir,
+            format!("needle launch brief exact match {index}").as_bytes(),
+            "text/plain",
+        )
+        .expect("out of range attachment");
+        db::link_attachment_to_message(
+            &conn,
+            &key,
+            &out_of_range_message.id,
+            &out_of_range_attachment.sha256,
+        )
+        .expect("link out of range attachment");
+        db::upsert_attachment_metadata(
+            &conn,
+            &key,
+            &out_of_range_attachment.sha256,
+            Some(&format!("Historical launch brief {index}")),
+            &[format!("historical-{index}.txt")],
+            &[],
+        )
+        .expect("out of range metadata");
+    }
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Which launch brief attachment is in this time window?",
+        4,
+        rag::Focus::AllMemories,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+
+    assert!(
+        prompt.contains(&format!(
+            "secondloop://attachment/{}",
+            in_range_attachment.sha256
+        )),
+        "expected in-range attachment to survive global attachment filtering: {prompt}"
+    );
+}
+
+#[test]
 fn ask_ai_time_window_persists_attachment_evidence_for_catalog_resources() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
