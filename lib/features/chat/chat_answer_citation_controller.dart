@@ -19,7 +19,7 @@ class ChatAnswerCitationController {
   Future<bool> handleCitationTap(
     BuildContext context, {
     required String href,
-    required Future<void> Function(String href) onOpenDirectSource,
+    required Future<bool> Function(String href) onOpenDirectSource,
   }) async {
     if (!handlesHref(href) || evidence == null) {
       return false;
@@ -36,7 +36,7 @@ class ChatAnswerCitationController {
   Future<void> openEvidence(
     BuildContext context, {
     String? highlightedHref,
-    required Future<void> Function(String href) onOpenDirectSource,
+    required Future<bool> Function(String href) onOpenDirectSource,
     bool Function(String href)? canOpenDirectSource,
   }) async {
     final current = evidence;

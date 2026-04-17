@@ -570,9 +570,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                 citationController.openEvidence(
                                   context,
                                   canOpenDirectSource: canOpenChatMarkdownHref,
-                                  onOpenDirectSource: (href) async {
-                                    await _handleMarkdownInAppLink(href);
-                                  },
+                                  onOpenDirectSource: _handleMarkdownInAppLink,
                                 ),
                               ),
                               actionSuggestions: actionSuggestions,

@@ -449,9 +449,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         final handledCitation = await citationController.handleCitationTap(
           context,
           href: href,
-          onOpenDirectSource: (target) async {
-            await _handleMarkdownInAppLink(target);
-          },
+          onOpenDirectSource: _handleMarkdownInAppLink,
         );
         if (handledCitation) {
           return;

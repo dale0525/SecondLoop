@@ -35,7 +35,10 @@ void main() {
                 ),
               ],
             ),
-            onOpenDirectSource: (href) async => openedDirectSource = href,
+            onOpenDirectSource: (href) async {
+              openedDirectSource = href;
+              return true;
+            },
           ),
         ),
       ),
@@ -101,7 +104,10 @@ void main() {
                 ),
               ],
             ),
-            onOpenDirectSource: (href) async => openedDirectSource = href,
+            onOpenDirectSource: (href) async {
+              openedDirectSource = href;
+              return true;
+            },
           ),
         ),
       ),
@@ -119,4 +125,47 @@ void main() {
 
     expect(openedDirectSource, 'secondloop://todo/todo-budget-follow-up');
   });
+
+  testWidgets(
+      'ChatAnswerEvidencePanel shows unsupported snackbar when direct source cannot open',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: ChatAnswerEvidencePanel(
+            evidence: ChatAnswerEvidence(
+              directSources: [
+                ChatAnswerEvidenceDirectSource(
+                  id: 'todo:missing-follow-up',
+                  href: 'secondloop://todo/todo-missing-follow-up',
+                  sourceType: 'item',
+                  label: 'Item',
+                  sourceTypeLabel: 'item',
+                  scopeLabel: null,
+                  confidenceLabel: 'relevant',
+                  title: 'Missing follow-up',
+                  snippet: 'TODO [open] Missing follow-up',
+                  highlightedText: 'Missing follow-up',
+                  createdAtMs: 1,
+                  updatedAtMs: 2,
+                  documentId: null,
+                  unitId: null,
+                ),
+              ],
+            ),
+            onOpenDirectSource: _cannotOpenDirectSource,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View original'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Load failed: unsupported_secondloop_link'), findsOne);
+  });
 }
+
+Future<bool> _cannotOpenDirectSource(String href) async => false;

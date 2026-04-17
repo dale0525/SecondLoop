@@ -8,7 +8,7 @@ Future<void> showChatAnswerEvidenceSheet(
   BuildContext context, {
   required ChatAnswerEvidence evidence,
   String? highlightedHref,
-  required Future<void> Function(String href) onOpenDirectSource,
+  required Future<bool> Function(String href) onOpenDirectSource,
   bool Function(String href)? canOpenDirectSource,
 }) {
   final isWide = MediaQuery.sizeOf(context).width >= 960;
@@ -73,7 +73,7 @@ class ChatAnswerEvidencePanel extends StatelessWidget {
 
   final ChatAnswerEvidence evidence;
   final String? highlightedHref;
-  final Future<void> Function(String href) onOpenDirectSource;
+  final Future<bool> Function(String href) onOpenDirectSource;
   final bool Function(String href)? canOpenDirectSource;
 
   @override
@@ -103,7 +103,7 @@ class _DirectSourceList extends StatelessWidget {
 
   final ChatAnswerEvidence evidence;
   final String? highlightedHref;
-  final Future<void> Function(String href) onOpenDirectSource;
+  final Future<bool> Function(String href) onOpenDirectSource;
   final bool Function(String href)? canOpenDirectSource;
 
   @override
@@ -164,7 +164,31 @@ class _DirectSourceList extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () => onOpenDirectSource(item.href),
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.maybeOf(context);
+                      final loadFailed = context.t.errors.loadFailed;
+                      final unsupportedMessage = loadFailed(
+                        error: 'unsupported_secondloop_link',
+                      );
+                      try {
+                        final opened = await onOpenDirectSource(item.href);
+                        if (opened) return;
+                        messenger?.showSnackBar(
+                          SnackBar(
+                            content: Text(unsupportedMessage),
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                      } catch (error) {
+                        final errorMessage = loadFailed(error: '$error');
+                        messenger?.showSnackBar(
+                          SnackBar(
+                            content: Text(errorMessage),
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
                     child: Text(
                       context.t.chat.answerEvidence.actions.viewOriginal,
                     ),

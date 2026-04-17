@@ -33,7 +33,12 @@ void main() {
       find.byKey(const ValueKey('event_viewer_time_range')),
     );
     expect(rendered.data, isNot(contains('UTC')));
+    final originalRendered = tester.widget<SelectableText>(
+      find.byKey(const ValueKey('event_viewer_original_time_range')),
+    );
+    expect(originalRendered.data, contains(event.tz));
+    expect(originalRendered.data, isNot(equals(rendered.data)));
     expect(find.byKey(const ValueKey('event_viewer_timezone')), findsOneWidget);
-    expect(find.textContaining(event.tz), findsOneWidget);
+    expect(find.textContaining(event.tz), findsWidgets);
   });
 }

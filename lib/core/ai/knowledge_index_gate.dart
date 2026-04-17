@@ -115,10 +115,13 @@ class _KnowledgeIndexGateState extends State<KnowledgeIndexGate>
       final refreshedStatus =
           await knowledgeBackend.getKnowledgeIndexStatus(key);
       final shouldProcess = refreshedStatus.status == 'running' ||
-          refreshedStatus.status == 'failed' ||
-          refreshedStatus.status == 'requested';
+          refreshedStatus.status == 'failed';
       if (!shouldProcess) {
-        _schedule(_idleInterval);
+        _schedule(
+          refreshedStatus.status == 'requested'
+              ? _drainInterval
+              : _idleInterval,
+        );
         return;
       }
 

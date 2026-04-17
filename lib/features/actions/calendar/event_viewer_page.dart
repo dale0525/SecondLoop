@@ -10,10 +10,17 @@ class EventViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localizations = MaterialLocalizations.of(context);
-    final start =
+    final localStart =
         DateTime.fromMillisecondsSinceEpoch(event.startAtMs.toInt()).toLocal();
-    final end =
+    final localEnd =
         DateTime.fromMillisecondsSinceEpoch(event.endAtMs.toInt()).toLocal();
+    final originalOffset = _parseEventTimezoneOffset(event.tz);
+    final originalStart = originalOffset == null
+        ? null
+        : _formatEventTimeInOffset(event.startAtMs.toInt(), originalOffset);
+    final originalEnd = originalOffset == null
+        ? null
+        : _formatEventTimeInOffset(event.endAtMs.toInt(), originalOffset);
 
     return Scaffold(
       key: const ValueKey('event_viewer_page'),
@@ -29,9 +36,16 @@ class EventViewerPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           SelectableText(
-            _formatEventRange(localizations, start, end),
+            'Local: ${_formatEventRange(localizations, localStart, localEnd)}',
             key: const ValueKey('event_viewer_time_range'),
           ),
+          if (originalStart != null && originalEnd != null) ...[
+            const SizedBox(height: 12),
+            SelectableText(
+              '${event.tz}: ${_formatEventRange(localizations, originalStart, originalEnd)}',
+              key: const ValueKey('event_viewer_original_time_range'),
+            ),
+          ],
           if (event.tz.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
             SelectableText(
@@ -63,4 +77,31 @@ String _formatEventRange(
   }
 
   return '$startDate $startTime -> $endDate $endTime';
+}
+
+Duration? _parseEventTimezoneOffset(String raw) {
+  final trimmed = raw.trim().toUpperCase();
+  if (trimmed.isEmpty) return null;
+  if (trimmed == 'UTC' || trimmed == 'Z') {
+    return Duration.zero;
+  }
+
+  final normalized =
+      trimmed.startsWith('UTC') ? trimmed.substring(3).trim() : trimmed;
+  final match = RegExp(r'^([+-])(\d{2}):?(\d{2})$').firstMatch(normalized);
+  if (match == null) return null;
+
+  final sign = match.group(1) == '-' ? -1 : 1;
+  final hours = int.tryParse(match.group(2) ?? '');
+  final minutes = int.tryParse(match.group(3) ?? '');
+  if (hours == null || minutes == null) return null;
+
+  return Duration(minutes: sign * ((hours * 60) + minutes));
+}
+
+DateTime _formatEventTimeInOffset(int millisecondsSinceEpoch, Duration offset) {
+  return DateTime.fromMillisecondsSinceEpoch(
+    millisecondsSinceEpoch,
+    isUtc: true,
+  ).add(offset);
 }
