@@ -383,7 +383,8 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings_time_window(
         time_start_ms,
         time_end_ms,
     )?;
-    let actions = super::build_actions_context(conn, key, question)?;
+    let actions =
+        super::build_actions_context_in_range(conn, key, question, time_start_ms, time_end_ms)?;
     let attachment_direct_sources = attachment_resources
         .resources
         .iter()

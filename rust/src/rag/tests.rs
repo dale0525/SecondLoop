@@ -4,10 +4,8 @@ use crate::auth;
 use crate::crypto::KdfParams;
 use crate::db;
 use crate::message_citations::AnswerEvidenceDirectSource;
+use crate::rag::evidence::build_direct_sources_for_context_candidate;
 use crate::rag::evidence::filter_direct_sources_for_question;
-use crate::rag::evidence::{
-    build_direct_sources_for_context_candidate, build_external_document_direct_source,
-};
 use rusqlite::params;
 
 #[test]
@@ -260,39 +258,5 @@ fn todo_thread_candidates_build_item_direct_sources() {
         source.snippet.contains("Prepare budget freeze follow-up"),
         "expected todo snippet to contain the todo title: {}",
         source.snippet
-    );
-}
-
-#[test]
-fn external_document_direct_source_percent_encodes_deeplink_targets() {
-    let source = build_external_document_direct_source(
-        "doc/with slash",
-        7,
-        "Budget notes",
-        "Relevant chunk text",
-        1,
-    );
-
-    assert_eq!(
-        source.document_id.as_deref(),
-        Some("external:doc/with slash")
-    );
-    assert_eq!(
-        source.unit_id.as_deref(),
-        Some("external:doc/with slash:chunk:0007")
-    );
-    assert!(
-        source
-            .href
-            .contains("secondloop://knowledge-document/external%3Adoc%2Fwith%20slash"),
-        "expected encoded document id in href: {}",
-        source.href
-    );
-    assert!(
-        source
-            .href
-            .contains("unit=external%3Adoc%2Fwith%20slash%3Achunk%3A0007"),
-        "expected encoded unit id in href: {}",
-        source.href
     );
 }

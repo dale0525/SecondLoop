@@ -5,14 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/attachments_backend.dart';
-import 'package:secondloop/core/backend/knowledge_viewer_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_markdown_preview.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/features/chat/message_deeplink.dart';
-import 'package:secondloop/features/knowledge_viewer/knowledge_document_viewer_page.dart';
 import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/src/rust/knowledge/models.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -233,7 +230,7 @@ secondloop://message/history-1
     );
   });
 
-  testWidgets('chat deeplink preserves knowledge document unit targeting',
+  testWidgets('chat ignores knowledge-document deeplinks after removal',
       (tester) async {
     final backend = _Backend(
       initialMessages: const [
@@ -278,69 +275,14 @@ secondloop://message/history-1
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
-    final page = tester.widget<KnowledgeDocumentViewerPage>(
-      find.byType(KnowledgeDocumentViewerPage),
-    );
-    expect(page.documentId, 'external:doc-1');
-    expect(page.initialHighlightedUnitId, 'external:doc-1:chunk:0007');
+    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.textContaining('budget note', findRichText: true), findsOne);
   });
 }
 
-final class _Backend extends TestAppBackend
-    implements AttachmentsBackend, KnowledgeViewerBackend {
+final class _Backend extends TestAppBackend implements AttachmentsBackend {
   _Backend({required List<Message> initialMessages})
       : super(initialMessages: initialMessages);
-
-  final KnowledgeViewerDocument _viewerDocument = const KnowledgeViewerDocument(
-    document: ContentKnowledgeDocument(
-      documentId: 'external:doc-1',
-      originType: KnowledgeOriginType.importedExternal,
-      sourceKind: KnowledgeSourceKind.readableText,
-      role: KnowledgeRole.evidence,
-      language: 'en',
-      qualityScore: 0.9,
-      createdAtMs: 1,
-      updatedAtMs: 1,
-      versions: KnowledgeVersionSet(
-        schemaVersion: 1,
-        normalizationVersion: 1,
-        segmentationVersion: 1,
-        embeddingPolicyVersion: 1,
-        retrievalPolicyVersion: 1,
-      ),
-      anchors: KnowledgeAnchorSet(),
-      title: 'Budget note',
-      summary: 'Budget summary',
-      rawText: 'Budget note body',
-      normalizedText: 'budget note body',
-      memoryFeedback: KnowledgeMemoryFeedback(
-        useForAskAi: true,
-        isDeleted: false,
-        markedInaccurate: false,
-      ),
-    ),
-    totalUnits: 1,
-    sectionCount: 0,
-    chunkCount: 1,
-  );
-
-  final KnowledgeUnit _viewerUnit = const KnowledgeUnit(
-    unitId: 'external:doc-1:chunk:0007',
-    documentId: 'external:doc-1',
-    parentUnitId: null,
-    unitKind: KnowledgeUnitKind.chunk,
-    sourceKind: KnowledgeSourceKind.readableText,
-    role: KnowledgeRole.evidence,
-    ordinal: 7,
-    tokenCount: 4,
-    rawText: 'Budget note body',
-    normalizedText: 'budget note body',
-    anchors: KnowledgeAnchorSet(),
-    prevUnitId: null,
-    nextUnitId: null,
-    createdAtMs: 1,
-    updatedAtMs: 1,
-  );
 
   @override
   Future<Attachment?> readAttachmentBySha256(String attachmentSha256) async =>
@@ -394,64 +336,4 @@ final class _Backend extends TestAppBackend
     required String sha256,
   }) async =>
       null;
-
-  @override
-  Future<KnowledgeViewerDocument> getKnowledgeViewerDocument(
-    Uint8List key, {
-    required String documentId,
-  }) async {
-    if (documentId != _viewerDocument.document.documentId) {
-      throw StateError('unexpected document id: $documentId');
-    }
-    return _viewerDocument;
-  }
-
-  @override
-  Future<KnowledgeViewerPage> listKnowledgeViewerUnits(
-    Uint8List key, {
-    required String documentId,
-    KnowledgeUnitKind? unitKind,
-    int limit = 100,
-    int offset = 0,
-  }) async {
-    return KnowledgeViewerPage(
-      documentId: 'external:doc-1',
-      unitKind: KnowledgeUnitKind.chunk,
-      offset: 0,
-      limit: 100,
-      total: 1,
-      units: <KnowledgeUnit>[
-        _viewerUnit,
-      ],
-    );
-  }
-
-  @override
-  Future<List<KnowledgeUnit>> listKnowledgeUnitsAroundAnchor(
-    Uint8List key, {
-    required String documentId,
-    required KnowledgeAnchorSet anchor,
-    int before = 2,
-    int after = 3,
-  }) async =>
-      <KnowledgeUnit>[_viewerUnit];
-
-  @override
-  Future<List<KnowledgeSearchResult>> searchKnowledge(
-    Uint8List key, {
-    required String query,
-    String? conversationId,
-    String? documentId,
-    int limit = 20,
-  }) async =>
-      const <KnowledgeSearchResult>[];
-
-  @override
-  Future<List<KnowledgeSearchResult>> searchKnowledgeDocumentUnits(
-    Uint8List key, {
-    required String documentId,
-    required String query,
-    int limit = 20,
-  }) async =>
-      const <KnowledgeSearchResult>[];
 }

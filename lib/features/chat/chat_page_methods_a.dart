@@ -474,14 +474,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     );
   }
 
-  bool _canOpenKnowledgeHref(String href) {
-    if (parseKnowledgeDocumentDeepLink(href) != null) {
-      return maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) !=
-          null;
-    }
-    return true;
-  }
-
   Future<void> _openMessageViewer(
     Message message,
     String content,

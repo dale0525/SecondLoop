@@ -18,11 +18,9 @@ import '../actions/todo/todo_detail_page.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
-import '../knowledge_viewer/knowledge_document_viewer_page.dart';
 import 'chat_answer_citation_controller.dart';
 import 'chat_answer_evidence_parser.dart';
 import 'chat_markdown_link_handler.dart';
-import 'knowledge_document_deeplink.dart';
 import 'message_deeplink.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
@@ -169,35 +167,6 @@ class MessageViewerPage extends StatelessWidget {
     return true;
   }
 
-  Future<bool> _openInAppKnowledgeDocument(
-    BuildContext context,
-    String href,
-  ) async {
-    final parsed = parseKnowledgeDocumentDeepLink(href);
-    if (parsed == null) return false;
-    if (maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) == null) {
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      messenger?.showSnackBar(
-        SnackBar(
-          content: Text(
-            context.t.errors.loadFailed(
-              error: 'knowledge_viewer_backend_unavailable',
-            ),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return true;
-    }
-
-    await KnowledgeDocumentViewerPage.openDocumentId(
-      context,
-      documentId: parsed.documentId,
-      initialHighlightedUnitId: parsed.unitId,
-    );
-    return true;
-  }
-
   Future<bool> _openInAppLink(BuildContext context, String href) async {
     if (await _openInAppTodo(context, href)) {
       return true;
@@ -206,12 +175,6 @@ class MessageViewerPage extends StatelessWidget {
       return false;
     }
     if (await _openInAppAttachment(context, href)) {
-      return true;
-    }
-    if (!context.mounted) {
-      return false;
-    }
-    if (await _openInAppKnowledgeDocument(context, href)) {
       return true;
     }
     if (!context.mounted) {
@@ -398,8 +361,6 @@ class MessageViewerPage extends StatelessWidget {
                       context,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
-                      canOpenDirectSource: (href) =>
-                          _canOpenDirectSourceHref(context, href),
                     ),
                   ),
                   onOpenEvidence: () => unawaited(
@@ -407,8 +368,6 @@ class MessageViewerPage extends StatelessWidget {
                       context,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
-                      canOpenDirectSource: (href) =>
-                          _canOpenDirectSourceHref(context, href),
                     ),
                   ),
                 ),
@@ -435,11 +394,4 @@ final class _ResolvedMessageKnowledgeDocument {
 
   final String documentId;
   final KnowledgeViewerDocument document;
-}
-
-bool _canOpenDirectSourceHref(BuildContext context, String href) {
-  if (parseKnowledgeDocumentDeepLink(href) != null) {
-    return maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) != null;
-  }
-  return true;
 }

@@ -61,8 +61,7 @@ void main() {
     expect(page.initialChunkIndex, 1);
   });
 
-  testWidgets(
-      'message viewer knowledge-document link degrades gracefully without knowledge backend',
+  testWidgets('message viewer ignores knowledge-document links after removal',
       (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
@@ -88,8 +87,6 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const ValueKey('message_viewer_page')), findsOneWidget);
-    expect(find.textContaining('knowledge_viewer_backend_unavailable'),
-        findsOneWidget);
     expect(find.byType(AttachmentViewerPage), findsNothing);
   });
 }

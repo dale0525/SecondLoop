@@ -686,6 +686,7 @@ pub(super) fn try_build_knowledge_context_entries(
         .collect())
 }
 
+#[cfg(test)]
 pub(super) fn merge_knowledge_and_legacy_contexts(
     knowledge_contexts: Vec<String>,
     legacy_contexts: Vec<String>,

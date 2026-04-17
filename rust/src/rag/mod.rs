@@ -14,6 +14,7 @@ mod attachment_resources;
 mod citations_prompt;
 mod context_selection;
 mod evidence;
+#[cfg(test)]
 mod fallback;
 mod history;
 #[cfg(test)]
@@ -242,6 +243,69 @@ fn build_actions_context(
             continue;
         }
         if event.start_at_ms > horizon {
+            continue;
+        }
+        lines.push(format!(
+            "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
+            event.title, event.start_at_ms, event.end_at_ms, event.tz
+        ));
+    }
+
+    if lines.is_empty() {
+        return Ok(None);
+    }
+
+    let mut out = String::new();
+    out.push_str("Upcoming actions (from local todos/events):\n");
+    for line in lines.into_iter().take(40) {
+        out.push_str("- ");
+        out.push_str(&line);
+        out.push('\n');
+    }
+    Ok(Some(out))
+}
+
+fn build_actions_context_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    question: &str,
+    time_start_ms: i64,
+    time_end_ms: i64,
+) -> Result<Option<String>> {
+    if !should_include_actions_context(question) {
+        return Ok(None);
+    }
+
+    let mut lines: Vec<String> = Vec::new();
+
+    for todo in db::list_todos(conn, key)? {
+        if todo.status == "done" || todo.status == "dismissed" {
+            continue;
+        }
+
+        let due_in_range = todo
+            .due_at_ms
+            .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
+        let review_in_range = todo
+            .next_review_at_ms
+            .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
+        if !due_in_range && !review_in_range {
+            continue;
+        }
+
+        let mut item = format!("TODO [{}] {}", todo.status, todo.title);
+        if let Some(ms) = todo.due_at_ms {
+            item.push_str(&format!(" (due_at_ms={ms})"));
+        }
+        if let Some(ms) = todo.next_review_at_ms {
+            item.push_str(&format!(" (next_review_at_ms={ms})"));
+        }
+        lines.push(item);
+    }
+
+    for event in db::list_events(conn, key)? {
+        let overlaps_range = event.end_at_ms > time_start_ms && event.start_at_ms < time_end_ms;
+        if !overlaps_range {
             continue;
         }
         lines.push(format!(

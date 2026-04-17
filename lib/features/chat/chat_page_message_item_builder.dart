@@ -572,7 +572,6 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   onOpenDirectSource: (href) async {
                                     await _handleMarkdownInAppLink(href);
                                   },
-                                  canOpenDirectSource: _canOpenKnowledgeHref,
                                 ),
                               ),
                               onOpenEvidence: () => unawaited(
@@ -581,7 +580,6 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   onOpenDirectSource: (href) async {
                                     await _handleMarkdownInAppLink(href);
                                   },
-                                  canOpenDirectSource: _canOpenKnowledgeHref,
                                 ),
                               ),
                               actionSuggestions: actionSuggestions,

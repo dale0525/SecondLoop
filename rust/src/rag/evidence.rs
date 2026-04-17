@@ -150,80 +150,6 @@ pub(super) fn build_attachment_resource_direct_source(
     }
 }
 
-pub(super) fn build_external_document_direct_source(
-    doc_id: &str,
-    chunk_index: i64,
-    title: &str,
-    snippet: &str,
-    created_at_ms: i64,
-) -> AnswerEvidenceDirectSource {
-    let document_id = format!("external:{doc_id}");
-    let unit_id = format!("{document_id}:chunk:{chunk_index:04}");
-    let normalized_title = title.trim();
-    let normalized_snippet = compact_snippet(snippet, 180);
-    let encoded_document_id = encode_deeplink_component(&document_id);
-    let encoded_unit_id = encode_deeplink_component(&unit_id);
-    AnswerEvidenceDirectSource {
-        id: format!("external-document:{doc_id}:{chunk_index}"),
-        href: format!(
-            "secondloop://knowledge-document/{encoded_document_id}?chunk={chunk_index}&unit={encoded_unit_id}",
-        ),
-        source_type: "document".to_string(),
-        label: "Document".to_string(),
-        source_type_label: Some("document".to_string()),
-        scope_label: None,
-        confidence_label: None,
-        title: Some(normalized_title.to_string()).filter(|value| !value.is_empty()),
-        snippet: normalized_snippet.clone(),
-        highlighted_text: Some(normalized_snippet),
-        created_at_ms: Some(created_at_ms),
-        updated_at_ms: Some(created_at_ms),
-        anchors: None,
-        document_id: Some(document_id),
-        unit_id: Some(unit_id),
-    }
-}
-
-fn encode_deeplink_component(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        let is_unreserved =
-            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~');
-        if is_unreserved {
-            out.push(char::from(byte));
-        } else {
-            out.push('%');
-            out.push_str(&format!("{byte:02X}"));
-        }
-    }
-    out
-}
-
-fn build_external_document_direct_source_from_context(
-    doc_id: &str,
-    chunk_index: i64,
-    context: &str,
-    created_at_ms: i64,
-) -> AnswerEvidenceDirectSource {
-    let mut title = "";
-    let mut snippet = "";
-    for line in context.lines() {
-        let trimmed = line.trim();
-        if let Some(value) = trimmed.strip_prefix("title:") {
-            title = value.trim();
-            continue;
-        }
-        if let Some(value) = trimmed.strip_prefix("content:") {
-            snippet = value.trim();
-            break;
-        }
-    }
-    if snippet.is_empty() {
-        snippet = context.trim();
-    }
-    build_external_document_direct_source(doc_id, chunk_index, title, snippet, created_at_ms)
-}
-
 fn readable_attachment_label(kind: &str) -> String {
     match kind.trim().to_lowercase().as_str() {
         "ocr_text" => "attachment_ocr".to_string(),
@@ -384,20 +310,5 @@ pub(super) fn build_direct_sources_for_context_candidate(
                 candidate.created_at_ms,
             )]
         }
-        ContextSource::ExternalDocument => {
-            let mut parts = candidate.id.splitn(2, ':');
-            let doc_id = parts.next().unwrap_or_default();
-            let chunk_index = parts
-                .next()
-                .and_then(|value| value.parse::<i64>().ok())
-                .unwrap_or_default();
-            vec![build_external_document_direct_source_from_context(
-                doc_id,
-                chunk_index,
-                &candidate.text,
-                candidate.created_at_ms,
-            )]
-        }
-        _ => Vec::new(),
     }
 }

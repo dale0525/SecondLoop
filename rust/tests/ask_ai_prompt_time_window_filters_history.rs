@@ -473,3 +473,115 @@ fn ask_ai_time_window_prompt_excludes_external_documents() {
         "in-range external document should also stay out after external docs removal: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_time_window_prompt_filters_actions_by_range_instead_of_now() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    let time_start_ms: i64 = 10_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:inside-window",
+        "Window todo",
+        Some(time_start_ms + 100),
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("window todo");
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:outside-window",
+        "Future todo",
+        Some(time_end_ms + 86_400_000),
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("future todo");
+    db::upsert_event(
+        &conn,
+        &key,
+        "event:inside-window",
+        "Window event",
+        time_start_ms + 1_000,
+        time_start_ms + 2_000,
+        "UTC",
+        None,
+    )
+    .expect("window event");
+    db::upsert_event(
+        &conn,
+        &key,
+        "event:outside-window",
+        "Future event",
+        time_end_ms + 3_000,
+        time_end_ms + 4_000,
+        "UTC",
+        None,
+    )
+    .expect("future event");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "今天有哪些事要做？",
+        0,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+
+    assert!(
+        prompt.contains("Upcoming actions (from local todos/events):"),
+        "expected time-window actions context in prompt: {prompt}"
+    );
+    assert!(
+        prompt.contains("Window todo"),
+        "expected in-range todo in prompt: {prompt}"
+    );
+    assert!(
+        prompt.contains("Window event"),
+        "expected in-range event in prompt: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Future todo"),
+        "expected out-of-range todo to stay out of prompt: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Future event"),
+        "expected out-of-range event to stay out of prompt: {prompt}"
+    );
+}
