@@ -19,14 +19,10 @@ import '../../src/rust/api/embedding_lifecycle.dart'
     as rust_embedding_lifecycle;
 import '../../src/rust/api/external_import.dart' as rust_external_import;
 import '../../src/rust/api/migration_archive.dart' as rust_migration_archive;
-import '../../src/rust/api/knowledge.dart' as rust_knowledge;
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/api/detached_ask.dart' as rust_detached_ask;
 import '../../src/rust/api/todo_followup_generation.dart'
     as rust_todo_followup_generation;
-import '../../src/rust/knowledge/models.dart' as rust_knowledge_models;
-import '../../src/rust/knowledge/history.dart' as rust_knowledge_history;
-import '../../src/rust/knowledge/pages.dart' as rust_knowledge_pages;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
@@ -39,7 +35,6 @@ import 'semantic_parse_attempt_aware_backend.dart';
 import 'rust_external_library_resolver.dart';
 import 'serialized_rust_handler.dart';
 
-part 'native_backend_knowledge.dart';
 part 'native_backend_todo_followups.dart';
 part 'native_backend_todos.dart';
 part 'native_backend_attachment_io.dart';

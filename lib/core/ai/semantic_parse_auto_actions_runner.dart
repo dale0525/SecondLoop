@@ -18,8 +18,6 @@ import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart' as rust_semantic;
 import '../backend/app_backend.dart';
 import '../backend/attachments_backend.dart';
-import '../backend/knowledge_index_models.dart';
-import '../backend/knowledge_viewer_backend.dart';
 import '../backend/native_backend.dart';
 import '../backend/semantic_parse_attempt_aware_backend.dart';
 import 'semantic_parse.dart';

@@ -5,12 +5,10 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/backend/app_backend.dart';
-import '../../core/backend/knowledge_viewer_backend.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
-import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_markdown_style.dart';
 import '../actions/assistant_message_actions.dart';
 import '../actions/calendar/event_deeplink.dart';
@@ -19,7 +17,6 @@ import '../actions/todo/todo_deeplink.dart';
 import '../actions/todo/todo_detail_page.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
-import '../knowledge_viewer/knowledge_document_viewer.dart';
 import 'chat_answer_citation_controller.dart';
 import 'chat_answer_evidence_parser.dart';
 import 'chat_markdown_link_handler.dart';
@@ -27,17 +24,6 @@ import 'message_deeplink.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
-
-const _kMessageKnowledgeViewerCharThreshold = 3200;
-const _kMessageKnowledgeViewerLineThreshold = 120;
-
-bool _shouldUseMessageKnowledgeViewer(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return false;
-  if (trimmed.length >= _kMessageKnowledgeViewerCharThreshold) return true;
-  final lineCount = '\n'.allMatches(trimmed).length + 1;
-  return lineCount >= _kMessageKnowledgeViewerLineThreshold;
-}
 
 class MessageViewerPage extends StatelessWidget {
   const MessageViewerPage({
@@ -226,34 +212,6 @@ class MessageViewerPage extends StatelessWidget {
     return _openInAppMessage(context, href);
   }
 
-  Future<_ResolvedMessageKnowledgeDocument?> _resolveKnowledgeDocument(
-    BuildContext context,
-  ) async {
-    final normalizedMessageId = messageId?.trim() ?? '';
-    if (normalizedMessageId.isEmpty) return null;
-    if (!_shouldUseMessageKnowledgeViewer(content)) return null;
-
-    final backend = AppBackendScope.maybeOf(context);
-    final viewerBackend =
-        backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (viewerBackend == null || sessionKey == null) return null;
-
-    final documentId = 'message:$normalizedMessageId';
-    try {
-      final document = await viewerBackend.getKnowledgeViewerDocument(
-        sessionKey,
-        documentId: documentId,
-      );
-      return _ResolvedMessageKnowledgeDocument(
-        documentId: documentId,
-        document: document,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
   Widget _buildMarkdownBody(
     BuildContext context, {
     required String normalized,
@@ -300,61 +258,6 @@ class MessageViewerPage extends StatelessWidget {
             handleUnsupportedSecondLoopLink: (target) =>
                 _showUnsupportedSecondLoopLink(context, target),
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBody(
-    BuildContext context, {
-    required String normalized,
-    required ChatAnswerCitationController citationController,
-  }) {
-    if (!_shouldUseMessageKnowledgeViewer(content) ||
-        (messageId?.trim().isEmpty ?? true)) {
-      return _buildMarkdownBody(
-        context,
-        normalized: normalized,
-        citationController: citationController,
-      );
-    }
-
-    return FutureBuilder<_ResolvedMessageKnowledgeDocument?>(
-      future: _resolveKnowledgeDocument(context),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
-
-        final resolved = snapshot.data;
-        if (resolved == null) {
-          return _buildMarkdownBody(
-            context,
-            normalized: normalized,
-            citationController: citationController,
-          );
-        }
-
-        final backend = AppBackendScope.maybeOf(context);
-        final viewerBackend =
-            backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
-        final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-        if (viewerBackend == null || sessionKey == null) {
-          return _buildMarkdownBody(
-            context,
-            normalized: normalized,
-            citationController: citationController,
-          );
-        }
-
-        return KnowledgeDocumentViewer(
-          backend: viewerBackend,
-          sessionKey: sessionKey,
-          documentId: resolved.documentId,
-          initialDocument: resolved.document,
-          fallbackText: normalized,
         );
       },
     );
@@ -415,7 +318,7 @@ class MessageViewerPage extends StatelessWidget {
               ),
             ),
           Expanded(
-            child: _buildBody(
+            child: _buildMarkdownBody(
               context,
               normalized: normalized,
               citationController: citationController,
@@ -425,14 +328,4 @@ class MessageViewerPage extends StatelessWidget {
       ),
     );
   }
-}
-
-final class _ResolvedMessageKnowledgeDocument {
-  const _ResolvedMessageKnowledgeDocument({
-    required this.documentId,
-    required this.document,
-  });
-
-  final String documentId;
-  final KnowledgeViewerDocument document;
 }

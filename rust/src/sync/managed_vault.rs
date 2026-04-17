@@ -236,7 +236,6 @@ fn push_internal(
     }
 
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
-    crate::db::backfill_knowledge_memory_feedback_oplog_if_needed(conn, db_key)?;
 
     let local_pending_ops = conn
         .query_row(

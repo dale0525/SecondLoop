@@ -38,6 +38,6 @@ void main() {
       AppTheme.dark(palette: AppThemePalette.ocean).colorScheme.primary,
     );
     final appSource = File('lib/app/app.dart').readAsStringSync();
-    expect(appSource, contains('KnowledgeIndexGate('));
+    expect(appSource, isNot(contains('KnowledgeIndexGate(')));
   });
 }

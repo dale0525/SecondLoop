@@ -32,9 +32,6 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
             apply_embedding_artifact_upsert(conn, &op["payload"])
         }
         "event.upsert.v1" => apply_event_upsert(conn, db_key, &op["payload"]),
-        "knowledge.memory_feedback.upsert.v1" => {
-            apply_knowledge_memory_feedback_upsert(conn, op)
-        }
         other => Err(anyhow!("unsupported sync op type: {other}")),
     }
 }
