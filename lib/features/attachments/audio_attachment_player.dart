@@ -155,7 +155,7 @@ class _AudioTranscriptKnowledgeContentPaneState
           documentId: documentId,
         );
         if (_shouldPreferFallbackText(document)) {
-          return null;
+          continue;
         }
         return _ResolvedKnowledgeDocument(
           documentId: documentId,

@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/attachments/attachment_detail_text_content.dart';
+import 'package:secondloop/features/attachments/audio_transcript_turn_view_display.dart';
 
 void main() {
   test('resolveAttachmentDetailTextContent prefers knowledge video fields', () {
@@ -365,6 +366,35 @@ void main() {
       '[00:12–00:12] Hello everyone. Thanks for joining.',
     );
     expect(content.summary, contains('[00:12–00:12]'));
+  });
+
+  test('audio turn view rechecks payload after turn data is added', () {
+    final payload = <String, Object?>{
+      'mime_type': 'audio/mp4',
+      'transcript_full': 'raw transcript body',
+    };
+
+    expect(resolveAudioTranscriptTurnView(payload), isNull);
+
+    payload['transcript_turns_v1'] = const <String, Object?>{
+      'builder_version': 'turns_v1',
+      'status': 'ok',
+      'turns': [
+        {
+          'start_ms': 12000,
+          'end_ms': 18000,
+          'text': 'Hello everyone.',
+          'segment_count': 1,
+          'source_segment_start_index': 0,
+          'source_segment_end_index': 0,
+        },
+      ],
+    };
+
+    final turnView = resolveAudioTranscriptTurnView(payload);
+
+    expect(turnView, isNotNull);
+    expect(turnView!.turns.single.text, 'Hello everyone.');
   });
 }
 

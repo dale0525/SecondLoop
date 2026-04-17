@@ -281,6 +281,60 @@ void main() {
         findsOneWidget);
     expect(find.byType(KnowledgeDocumentViewer), findsNothing);
   });
+
+  testWidgets(
+      'AudioAttachmentPlayerView keeps trying later knowledge documents after skipping transcript',
+      (tester) async {
+    final backend = _AudioTranscriptFallbackToReadableBackend();
+    final rawTranscript = List<String>.generate(
+      130,
+      (index) =>
+          'Speaker line ${index + 1}. Another sentence for transcript readability.',
+    ).join('\n');
+    final formattedTranscript = rawTranscript.replaceAll('\n', '\n\n');
+    final attachment = Attachment(
+      sha256: 'audio-readable-fallback-sha',
+      mimeType: 'audio/mp4',
+      path: 'attachments/audio-readable-fallback-sha.bin',
+      byteLen: _tinyM4a.length,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 2)),
+              lock: () {},
+              child: Scaffold(
+                body: AudioAttachmentPlayerView(
+                  attachment: attachment,
+                  bytes: _tinyM4a,
+                  displayTitle: 'Audio attachment',
+                  initialAnnotationPayload: <String, Object?>{
+                    'transcript_full': rawTranscript,
+                    'duration_ms': 42000,
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('attachment_knowledge_viewer')),
+        findsOneWidget);
+    expect(find.byType(KnowledgeDocumentViewer), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('attachment_text_full_card')), findsNothing);
+    expect(find.textContaining(formattedTranscript.split('\n\n').first),
+        findsNothing);
+  });
 }
 
 final Uint8List _tinyM4a = Uint8List.fromList(const <int>[
@@ -372,6 +426,178 @@ final class _AudioTranscriptKnowledgeBackend extends TestAppBackend
       limit: 0,
       total: 0,
       units: <KnowledgeUnit>[],
+    );
+  }
+
+  @override
+  Future<List<KnowledgeUnit>> listKnowledgeUnitsAroundAnchor(
+    Uint8List key, {
+    required String documentId,
+    required KnowledgeAnchorSet anchor,
+    int before = 2,
+    int after = 3,
+  }) async =>
+      const <KnowledgeUnit>[];
+
+  @override
+  Future<List<KnowledgeSearchResult>> searchKnowledge(
+    Uint8List key, {
+    required String query,
+    String? conversationId,
+    String? documentId,
+    int limit = 20,
+  }) async =>
+      const <KnowledgeSearchResult>[];
+
+  @override
+  Future<List<KnowledgeSearchResult>> searchKnowledgeDocumentUnits(
+    Uint8List key, {
+    required String documentId,
+    required String query,
+    int limit = 20,
+  }) async =>
+      const <KnowledgeSearchResult>[];
+}
+
+final class _AudioTranscriptFallbackToReadableBackend extends TestAppBackend
+    implements KnowledgeViewerBackend {
+  static const String _transcriptDocumentId =
+      'attachment:audio-readable-fallback-sha:transcript';
+  static const String _readableDocumentId =
+      'attachment:audio-readable-fallback-sha:readable_text';
+
+  late final Map<String, KnowledgeViewerDocument> _documents =
+      <String, KnowledgeViewerDocument>{
+    _transcriptDocumentId: KnowledgeViewerDocument(
+      document: ContentKnowledgeDocument(
+        documentId: _transcriptDocumentId,
+        originType: KnowledgeOriginType.attachment,
+        sourceKind: KnowledgeSourceKind.transcript,
+        role: KnowledgeRole.evidence,
+        language: 'en',
+        qualityScore: 1,
+        createdAtMs: 1,
+        updatedAtMs: 2,
+        versions: const KnowledgeVersionSet(
+          schemaVersion: 1,
+          normalizationVersion: 1,
+          segmentationVersion: 1,
+          embeddingPolicyVersion: 1,
+          retrievalPolicyVersion: 1,
+        ),
+        anchors: const KnowledgeAnchorSet(
+          attachmentSha256: 'audio-readable-fallback-sha',
+          sourceFilename: 'call.m4a',
+        ),
+        title: 'Transcript',
+        summary: 'Transcript',
+        rawText: List<String>.generate(
+          130,
+          (index) =>
+              'Speaker line ${index + 1}. Another sentence for transcript readability.',
+        ).join('\n'),
+        normalizedText: 'transcript normalized',
+        memoryFeedback: const KnowledgeMemoryFeedback(
+          useForAskAi: true,
+          isDeleted: false,
+          markedInaccurate: false,
+        ),
+      ),
+      totalUnits: 1,
+      sectionCount: 1,
+      chunkCount: 1,
+    ),
+    _readableDocumentId: const KnowledgeViewerDocument(
+      document: ContentKnowledgeDocument(
+        documentId: _readableDocumentId,
+        originType: KnowledgeOriginType.attachment,
+        sourceKind: KnowledgeSourceKind.readableText,
+        role: KnowledgeRole.body,
+        language: 'en',
+        qualityScore: 1,
+        createdAtMs: 1,
+        updatedAtMs: 2,
+        versions: KnowledgeVersionSet(
+          schemaVersion: 1,
+          normalizationVersion: 1,
+          segmentationVersion: 1,
+          embeddingPolicyVersion: 1,
+          retrievalPolicyVersion: 1,
+        ),
+        anchors: KnowledgeAnchorSet(
+          attachmentSha256: 'audio-readable-fallback-sha',
+          sourceFilename: 'call.m4a',
+        ),
+        title: 'Readable transcript',
+        summary: 'Readable transcript',
+        rawText: 'Readable transcript from knowledge viewer.',
+        normalizedText: 'readable transcript normalized',
+        memoryFeedback: KnowledgeMemoryFeedback(
+          useForAskAi: true,
+          isDeleted: false,
+          markedInaccurate: false,
+        ),
+      ),
+      totalUnits: 1,
+      sectionCount: 1,
+      chunkCount: 1,
+    ),
+  };
+
+  static const KnowledgeAnchorSet _anchors = KnowledgeAnchorSet(
+    attachmentSha256: 'audio-readable-fallback-sha',
+    sourceFilename: 'call.m4a',
+  );
+
+  @override
+  Future<KnowledgeViewerDocument> getKnowledgeViewerDocument(
+    Uint8List key, {
+    required String documentId,
+  }) async {
+    final document = _documents[documentId];
+    if (document == null) {
+      throw StateError('unexpected document id: $documentId');
+    }
+    return document;
+  }
+
+  @override
+  Future<KnowledgeViewerPage> listKnowledgeViewerUnits(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeUnitKind? unitKind,
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    return KnowledgeViewerPage(
+      documentId: documentId,
+      unitKind: null,
+      offset: 0,
+      limit: 1,
+      total: 1,
+      units: <KnowledgeUnit>[
+        KnowledgeUnit(
+          unitId: '$documentId:chunk:0000',
+          documentId: documentId,
+          parentUnitId: null,
+          unitKind: KnowledgeUnitKind.chunk,
+          sourceKind: documentId == _transcriptDocumentId
+              ? KnowledgeSourceKind.transcript
+              : KnowledgeSourceKind.readableText,
+          role: documentId == _transcriptDocumentId
+              ? KnowledgeRole.evidence
+              : KnowledgeRole.body,
+          ordinal: 0,
+          tokenCount: 6,
+          rawText: 'Readable transcript from knowledge viewer.',
+          normalizedText: 'Readable transcript from knowledge viewer.',
+          anchors: _anchors,
+          prevUnitId: null,
+          nextUnitId: null,
+          createdAtMs: 1,
+          updatedAtMs: 2,
+        ),
+      ],
     );
   }
 

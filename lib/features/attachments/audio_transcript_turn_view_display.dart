@@ -72,15 +72,11 @@ AudioTranscriptTurnView? resolveAudioTranscriptTurnView(
     payload['transcript_segments'],
   );
   if (legacySegments.isEmpty) {
-    _audioTranscriptTurnViewCache[payload] =
-        const _AudioTranscriptTurnViewCacheEntry(null);
     return null;
   }
 
   final built = buildAudioTranscriptTurnView(legacySegments);
   if (built.status != AudioTranscriptTurnViewStatus.ok || built.turns.isEmpty) {
-    _audioTranscriptTurnViewCache[payload] =
-        const _AudioTranscriptTurnViewCacheEntry(null);
     return null;
   }
   _audioTranscriptTurnViewCache[payload] = _AudioTranscriptTurnViewCacheEntry(
