@@ -4,9 +4,9 @@ use base64::Engine as _;
 use rusqlite::{params, Connection};
 
 use super::global_log_protocol::{
-    GlobalLogHeadResponse, GlobalLogPullOp, GlobalLogPullRequest, GlobalLogPullResponse,
-    GlobalLogPushErrorResponse, GlobalLogPushOp, GlobalLogPushRequest, GlobalLogPushResponse,
-    GlobalLogResetResponse,
+    GlobalLogHeadResponse, GlobalLogPullErrorResponse, GlobalLogPullOp, GlobalLogPullRequest,
+    GlobalLogPullResponse, GlobalLogPushErrorResponse, GlobalLogPushOp, GlobalLogPushRequest,
+    GlobalLogPushResponse, GlobalLogResetResponse,
 };
 use super::runtime::Client;
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
@@ -24,6 +24,12 @@ pub(super) enum GlobalLogPushRouteResult {
     Unsupported,
     GenerationMismatch(GlobalLogPushErrorResponse),
     GenerationRequired(GlobalLogPushErrorResponse),
+}
+
+pub(super) enum GlobalLogPullRouteResult {
+    Parsed(GlobalLogPullResponse),
+    Unsupported,
+    ResetRequired(GlobalLogPullErrorResponse),
 }
 
 fn unsupported_status(status_code: u16) -> bool {
@@ -72,7 +78,7 @@ fn fetch_pull(
     endpoint: &str,
     id_token: &str,
     request: &GlobalLogPullRequest,
-) -> Result<GlobalLogRouteResult<GlobalLogPullResponse>> {
+) -> Result<GlobalLogPullRouteResult> {
     let resp = http
         .post(endpoint)
         .bearer_auth(id_token)
@@ -80,7 +86,17 @@ fn fetch_pull(
         .send()?;
     let status = resp.status();
     if unsupported_status(status.as_u16()) {
-        return Ok(GlobalLogRouteResult::Unsupported);
+        return Ok(GlobalLogPullRouteResult::Unsupported);
+    }
+    if status.as_u16() == 409 {
+        let text = resp.text().unwrap_or_default();
+        let parsed: GlobalLogPullErrorResponse = serde_json::from_str(&text)?;
+        if parsed.error == "reset_required" {
+            return Ok(GlobalLogPullRouteResult::ResetRequired(parsed));
+        }
+        return Err(anyhow!(
+            "managed-vault v2 pull failed: HTTP {status} {text}"
+        ));
     }
     if !status.is_success() {
         let text = resp.text().unwrap_or_default();
@@ -88,7 +104,7 @@ fn fetch_pull(
             "managed-vault v2 pull failed: HTTP {status} {text}"
         ));
     }
-    Ok(GlobalLogRouteResult::Parsed(resp.json()?))
+    Ok(GlobalLogPullRouteResult::Parsed(resp.json()?))
 }
 
 pub(super) fn fetch_head(
@@ -363,16 +379,35 @@ pub(super) fn pull_v2(
 
     let mut total_applied = 0u64;
     let mut last_applied = initial_last_applied;
+    let mut reset_recovered = false;
     loop {
         let request = GlobalLogPullRequest {
             after_global_seq: last_applied,
             limit: PULL_LIMIT,
         };
         let response = match fetch_pull(&http, &endpoint, id_token, &request)? {
-            GlobalLogRouteResult::Unsupported => {
+            GlobalLogPullRouteResult::Unsupported => {
                 return Err(anyhow!("managed-vault v2 pull route unavailable"));
             }
-            GlobalLogRouteResult::Parsed(response) => response,
+            GlobalLogPullRouteResult::ResetRequired(error) => {
+                if reset_recovered {
+                    return Err(anyhow!(
+                        "managed-vault v2 pull reset_required persisted after local rebuild: reason={:?} remote_generation_id={:?} remote_latest_global_seq={:?}",
+                        error.reason,
+                        error.remote_generation_id,
+                        error.remote_latest_global_seq
+                    ));
+                }
+                super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                total_applied = 0;
+                last_applied = 0;
+                reset_recovered = true;
+                if let Some(progress_fn) = progress.as_deref_mut() {
+                    progress_fn(0, total_target);
+                }
+                continue;
+            }
+            GlobalLogPullRouteResult::Parsed(response) => response,
         };
 
         let local_generation = super::global_log_state::read_generation_id(conn, &scope_id)?;
@@ -414,6 +449,7 @@ pub(super) fn pull_v2(
             .map(|item| item.global_seq)
             .unwrap_or(last_applied);
         super::global_log_state::write_last_applied_global_seq(conn, &scope_id, last_applied)?;
+        reset_recovered = false;
 
         if let Some(progress_fn) = progress.as_deref_mut() {
             let done = (last_applied - initial_last_applied).max(0) as u64;
