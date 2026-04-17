@@ -308,7 +308,7 @@ bool _looksLikeSentenceLine(String line) {
   if (lastChar == null) {
     return false;
   }
-  return _isSentenceTerminal(lastChar) || _isSentenceCloser(lastChar);
+  return _isSentenceTerminal(lastChar);
 }
 
 int _targetParagraphCount({
