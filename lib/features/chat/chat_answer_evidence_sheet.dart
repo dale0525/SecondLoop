@@ -4,38 +4,16 @@ import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import 'chat_answer_evidence_models.dart';
 
-enum ChatAnswerEvidenceTab {
-  directSources,
-  memoryCards,
-}
-
 Future<void> showChatAnswerEvidenceSheet(
   BuildContext context, {
   required ChatAnswerEvidence evidence,
-  ChatAnswerEvidenceTab initialTab = ChatAnswerEvidenceTab.directSources,
   String? highlightedHref,
   required Future<void> Function(String href) onOpenDirectSource,
-  Future<void> Function(String documentId)? onOpenMemoryCard,
-  bool Function(String documentId)? canOpenMemoryCard,
   bool Function(String href)? canOpenDirectSource,
-  Future<ChatAnswerEvidenceMemoryCard?> Function(
-    ChatAnswerEvidenceMemoryCard card,
-    String title,
-    String summary,
-  )? onCorrectMemoryCard,
-  bool Function(String documentId)? canCorrectMemoryCard,
-  Future<ChatAnswerEvidenceMemoryCard?> Function(
-    ChatAnswerEvidenceMemoryCard card,
-  )? onRefreshMemoryCard,
-  Future<void> Function(String documentId)? onDisableMemoryCard,
-  bool Function(String documentId)? canDisableMemoryCard,
-  Future<void> Function(String documentId)? onDeleteMemoryCard,
-  bool Function(String documentId)? canDeleteMemoryCard,
 }) {
   final isWide = MediaQuery.sizeOf(context).width >= 960;
   final child = ChatAnswerEvidencePanel(
     evidence: evidence,
-    initialTab: initialTab,
     highlightedHref: highlightedHref,
     onOpenDirectSource: onOpenDirectSource,
     canOpenDirectSource: canOpenDirectSource,
@@ -87,42 +65,16 @@ Future<void> showChatAnswerEvidenceSheet(
 class ChatAnswerEvidencePanel extends StatelessWidget {
   const ChatAnswerEvidencePanel({
     required this.evidence,
-    required this.initialTab,
     required this.onOpenDirectSource,
     this.canOpenDirectSource,
     this.highlightedHref,
-    this.onOpenMemoryCard,
-    this.canOpenMemoryCard,
-    this.onCorrectMemoryCard,
-    this.canCorrectMemoryCard,
-    this.onRefreshMemoryCard,
-    this.onDisableMemoryCard,
-    this.canDisableMemoryCard,
-    this.onDeleteMemoryCard,
-    this.canDeleteMemoryCard,
     super.key,
   });
 
   final ChatAnswerEvidence evidence;
-  final ChatAnswerEvidenceTab initialTab;
   final String? highlightedHref;
   final Future<void> Function(String href) onOpenDirectSource;
   final bool Function(String href)? canOpenDirectSource;
-  final Future<void> Function(String documentId)? onOpenMemoryCard;
-  final bool Function(String documentId)? canOpenMemoryCard;
-  final Future<ChatAnswerEvidenceMemoryCard?> Function(
-    ChatAnswerEvidenceMemoryCard card,
-    String title,
-    String summary,
-  )? onCorrectMemoryCard;
-  final bool Function(String documentId)? canCorrectMemoryCard;
-  final Future<ChatAnswerEvidenceMemoryCard?> Function(
-    ChatAnswerEvidenceMemoryCard card,
-  )? onRefreshMemoryCard;
-  final Future<void> Function(String documentId)? onDisableMemoryCard;
-  final bool Function(String documentId)? canDisableMemoryCard;
-  final Future<void> Function(String documentId)? onDeleteMemoryCard;
-  final bool Function(String documentId)? canDeleteMemoryCard;
 
   @override
   Widget build(BuildContext context) {

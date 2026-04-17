@@ -130,7 +130,6 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings(
                 ContextWithEvidence {
                     text: context,
                     direct_sources,
-                    memory_cards: Vec::new(),
                 },
             ));
         }
@@ -154,7 +153,6 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings(
                 ContextWithEvidence {
                     text: ctx,
                     direct_sources: vec![direct_source],
-                    memory_cards: Vec::new(),
                 },
             ));
         }
@@ -179,7 +177,6 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings(
                         &chunk.text,
                         chunk.created_at_ms,
                     )],
-                    memory_cards: Vec::new(),
                 },
             ));
         }
@@ -195,13 +192,14 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings(
     }
 
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let actions = super::build_actions_context(conn, key, question)?;
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        None,
+        actions.as_deref(),
         history.as_deref(),
         resources_catalog.as_deref(),
     );
@@ -362,7 +360,6 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings_time_window(
                 ContextWithEvidence {
                     text: rendered_text,
                     direct_sources,
-                    memory_cards: Vec::new(),
                 },
             );
         }
@@ -386,6 +383,7 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings_time_window(
         time_start_ms,
         time_end_ms,
     )?;
+    let actions = super::build_actions_context(conn, key, question)?;
     let attachment_direct_sources = attachment_resources
         .resources
         .iter()
@@ -403,7 +401,7 @@ pub(super) fn ask_ai_with_provider_using_active_embeddings_time_window(
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        None,
+        actions.as_deref(),
         history.as_deref(),
         attachment_resources.catalog_markdown.as_deref(),
     );

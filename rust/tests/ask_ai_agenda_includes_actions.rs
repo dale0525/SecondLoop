@@ -30,7 +30,7 @@ impl rag::AnswerProvider for FakeProvider {
 }
 
 #[test]
-fn ask_ai_agenda_query_does_not_inject_actions_context() {
+fn ask_ai_agenda_query_injects_actions_context() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
 
@@ -93,12 +93,16 @@ fn ask_ai_agenda_query_does_not_inject_actions_context() {
         .clone()
         .expect("prompt");
     assert!(
-        !prompt.contains("Upcoming actions (from local todos/events):"),
-        "agenda prompts should no longer inject synthetic actions context: {prompt}"
+        prompt.contains("Upcoming actions (from local todos/events):"),
+        "agenda prompts should inject synthetic actions context again: {prompt}"
     );
     assert!(
-        !prompt.contains("Lunch with Alice"),
-        "agenda prompts should not inject calendar events outside retrieved evidence: {prompt}"
+        prompt.contains("Lunch with Alice"),
+        "agenda prompts should include matching calendar events in synthetic context: {prompt}"
+    );
+    assert!(
+        prompt.contains("TODO [open] Buy milk"),
+        "agenda prompts should include open todos in synthetic context: {prompt}"
     );
 }
 

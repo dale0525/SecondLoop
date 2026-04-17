@@ -89,14 +89,14 @@ void main() {
         key,
         conversation.id,
         content: 'stored reply',
-        citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+        citationsJson: '{"direct_sources":[]}',
       );
 
       expect(inserted.role, 'assistant');
       expect(inserted.isMemory, isFalse);
       expect(
         inserted.citationsJson,
-        '{"direct_sources":[],"memory_cards":[]}',
+        '{"direct_sources":[]}',
       );
     });
 
@@ -113,7 +113,7 @@ void main() {
         conversationId: conversation.id,
         question: 'hello',
         answer: 'world',
-        citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+        citationsJson: '{"direct_sources":[]}',
       );
       final second = await backend.applyDetachedAskCompletionOnce(
         key,
@@ -121,7 +121,7 @@ void main() {
         conversationId: conversation.id,
         question: 'hello',
         answer: 'world',
-        citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+        citationsJson: '{"direct_sources":[]}',
       );
 
       final messages = await backend.listMessages(key, conversation.id);
@@ -135,7 +135,7 @@ void main() {
       expect(messages.every((message) => !message.isMemory), isTrue);
       expect(
         messages.last.citationsJson,
-        '{"direct_sources":[],"memory_cards":[]}',
+        '{"direct_sources":[]}',
       );
     });
 

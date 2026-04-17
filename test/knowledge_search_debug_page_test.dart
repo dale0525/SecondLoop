@@ -70,7 +70,7 @@ void main() {
           createdAtMs: 2,
           isMemory: false,
           citationsJson:
-              '{"direct_sources":[{"id":"message:history-1","href":"secondloop://message/history-1","source_type":"message","label":"History","snippet":"Budget freeze source"}],"memory_cards":[]}',
+              '{"direct_sources":[{"id":"message:history-1","href":"secondloop://message/history-1","source_type":"message","label":"History","snippet":"Budget freeze source"}]}',
         ),
       ],
       results: <KnowledgeSearchResult>[

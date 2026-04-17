@@ -242,62 +242,6 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
         parseChatAnswerEvidence(stableMsg.citationsJson),
       );
       final evidence = citationController.evidence;
-      final backend = AppBackendScope.of(context);
-      final viewerBackend = maybeKnowledgeViewerBackendFor(backend);
-      final knowledgeBackend = maybeKnowledgeBackendFor(backend);
-      final pagesBackend = maybeKnowledgePagesBackendFor(backend);
-      final hasPagesBackend = pagesBackend != null;
-      final hasViewerBackend = viewerBackend != null;
-      final hasKnowledgeBackend = knowledgeBackend != null;
-      Future<void> openMemoryCard(String documentId) {
-        return MemoryDetailPage.openDocumentId(
-          context,
-          documentId: documentId,
-        );
-      }
-
-      bool canOpenMemoryCard(String documentId) {
-        return canOpenEvidenceMemoryCard(
-          documentId,
-          hasPagesBackend: hasPagesBackend,
-          hasViewerBackend: hasViewerBackend,
-        );
-      }
-
-      Future<ChatAnswerEvidenceMemoryCard?> correctMemoryCard(
-        ChatAnswerEvidenceMemoryCard card,
-        String title,
-        String summary,
-      ) {
-        return _correctMemoryFromEvidence(
-          card,
-          title: title,
-          summary: summary,
-        );
-      }
-
-      bool canMutateMemoryCard(String documentId) {
-        return canMutateEvidenceMemoryCard(
-          documentId,
-          hasPagesBackend: hasPagesBackend,
-          hasKnowledgeBackend: hasKnowledgeBackend,
-          hasViewerBackend: hasViewerBackend,
-        );
-      }
-
-      Future<ChatAnswerEvidenceMemoryCard?> refreshMemoryCard(
-        ChatAnswerEvidenceMemoryCard card,
-      ) {
-        return _refreshMemoryFromEvidence(card);
-      }
-
-      Future<void> disableMemoryCard(String documentId) {
-        return _disableMemoryFromEvidence(documentId);
-      }
-
-      Future<void> deleteMemoryCard(String documentId) {
-        return _deleteMemoryFromEvidence(documentId);
-      }
 
       final todoBadgeMeta = _todoMessageBadgeMetaForMessage(
           message: stableMsg,
@@ -625,40 +569,10 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                               onOpenSources: () => unawaited(
                                 citationController.openEvidence(
                                   context,
-                                  initialTab:
-                                      ChatAnswerEvidenceTab.directSources,
                                   onOpenDirectSource: (href) async {
                                     await _handleMarkdownInAppLink(href);
                                   },
-                                  onOpenMemoryCard: openMemoryCard,
-                                  canOpenMemoryCard: canOpenMemoryCard,
                                   canOpenDirectSource: _canOpenKnowledgeHref,
-                                  onCorrectMemoryCard: correctMemoryCard,
-                                  canCorrectMemoryCard: canMutateMemoryCard,
-                                  onRefreshMemoryCard: refreshMemoryCard,
-                                  onDisableMemoryCard: disableMemoryCard,
-                                  canDisableMemoryCard: canMutateMemoryCard,
-                                  onDeleteMemoryCard: deleteMemoryCard,
-                                  canDeleteMemoryCard: canMutateMemoryCard,
-                                ),
-                              ),
-                              onOpenMemory: () => unawaited(
-                                citationController.openEvidence(
-                                  context,
-                                  initialTab: ChatAnswerEvidenceTab.memoryCards,
-                                  onOpenDirectSource: (href) async {
-                                    await _handleMarkdownInAppLink(href);
-                                  },
-                                  onOpenMemoryCard: openMemoryCard,
-                                  canOpenMemoryCard: canOpenMemoryCard,
-                                  canOpenDirectSource: _canOpenKnowledgeHref,
-                                  onCorrectMemoryCard: correctMemoryCard,
-                                  canCorrectMemoryCard: canMutateMemoryCard,
-                                  onRefreshMemoryCard: refreshMemoryCard,
-                                  onDisableMemoryCard: disableMemoryCard,
-                                  canDisableMemoryCard: canMutateMemoryCard,
-                                  onDeleteMemoryCard: deleteMemoryCard,
-                                  canDeleteMemoryCard: canMutateMemoryCard,
                                 ),
                               ),
                               onOpenEvidence: () => unawaited(
@@ -667,16 +581,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   onOpenDirectSource: (href) async {
                                     await _handleMarkdownInAppLink(href);
                                   },
-                                  onOpenMemoryCard: openMemoryCard,
-                                  canOpenMemoryCard: canOpenMemoryCard,
                                   canOpenDirectSource: _canOpenKnowledgeHref,
-                                  onCorrectMemoryCard: correctMemoryCard,
-                                  canCorrectMemoryCard: canMutateMemoryCard,
-                                  onRefreshMemoryCard: refreshMemoryCard,
-                                  onDisableMemoryCard: disableMemoryCard,
-                                  canDisableMemoryCard: canMutateMemoryCard,
-                                  onDeleteMemoryCard: deleteMemoryCard,
-                                  canDeleteMemoryCard: canMutateMemoryCard,
                                 ),
                               ),
                               actionSuggestions: actionSuggestions,

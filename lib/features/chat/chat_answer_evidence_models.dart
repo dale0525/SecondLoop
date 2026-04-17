@@ -1,11 +1,9 @@
 class ChatAnswerEvidence {
   const ChatAnswerEvidence({
     required this.directSources,
-    required this.memoryCards,
   });
 
   final List<ChatAnswerEvidenceDirectSource> directSources;
-  final List<ChatAnswerEvidenceMemoryCard> memoryCards;
 
   bool get hasEvidence => directSources.isNotEmpty;
 
@@ -104,103 +102,6 @@ class ChatAnswerEvidenceDirectSource {
   }
 }
 
-class ChatAnswerEvidenceMemoryCard {
-  const ChatAnswerEvidenceMemoryCard({
-    required this.documentId,
-    required this.title,
-    required this.summary,
-    this.body,
-    required this.sourceKind,
-    required this.role,
-    required this.createdAtMs,
-    required this.updatedAtMs,
-    required this.status,
-    required this.sourceCount,
-    required this.whyUsed,
-    this.useForAskAi = true,
-    this.isDeleted = false,
-    this.markedInaccurate = false,
-  });
-
-  final String documentId;
-  final String? title;
-  final String? summary;
-  final String? body;
-  final String sourceKind;
-  final String role;
-  final int createdAtMs;
-  final int updatedAtMs;
-  final String status;
-  final int sourceCount;
-  final String? whyUsed;
-  final bool useForAskAi;
-  final bool isDeleted;
-  final bool markedInaccurate;
-
-  ChatAnswerEvidenceMemoryCard copyWith({
-    Object? title = _copyWithUnset,
-    Object? summary = _copyWithUnset,
-    Object? body = _copyWithUnset,
-    Object? status = _copyWithUnset,
-    Object? sourceCount = _copyWithUnset,
-    Object? whyUsed = _copyWithUnset,
-    Object? updatedAtMs = _copyWithUnset,
-    Object? useForAskAi = _copyWithUnset,
-    Object? isDeleted = _copyWithUnset,
-    Object? markedInaccurate = _copyWithUnset,
-  }) {
-    return ChatAnswerEvidenceMemoryCard(
-      documentId: documentId,
-      title: identical(title, _copyWithUnset) ? this.title : title as String?,
-      summary: identical(summary, _copyWithUnset)
-          ? this.summary
-          : summary as String?,
-      body: identical(body, _copyWithUnset) ? this.body : body as String?,
-      sourceKind: sourceKind,
-      role: role,
-      createdAtMs: createdAtMs,
-      updatedAtMs: identical(updatedAtMs, _copyWithUnset)
-          ? this.updatedAtMs
-          : updatedAtMs as int,
-      status:
-          identical(status, _copyWithUnset) ? this.status : status as String,
-      sourceCount: identical(sourceCount, _copyWithUnset)
-          ? this.sourceCount
-          : sourceCount as int,
-      whyUsed: identical(whyUsed, _copyWithUnset)
-          ? this.whyUsed
-          : whyUsed as String?,
-      useForAskAi: identical(useForAskAi, _copyWithUnset)
-          ? this.useForAskAi
-          : useForAskAi as bool,
-      isDeleted: identical(isDeleted, _copyWithUnset)
-          ? this.isDeleted
-          : isDeleted as bool,
-      markedInaccurate: identical(markedInaccurate, _copyWithUnset)
-          ? this.markedInaccurate
-          : markedInaccurate as bool,
-    );
-  }
-
-  String get displayTitle {
-    final normalizedTitle = title?.trim();
-    if (normalizedTitle != null && normalizedTitle.isNotEmpty) {
-      return normalizedTitle;
-    }
-    return fallbackMemoryTitleFromDocumentId(documentId);
-  }
-
-  String get displaySummary {
-    final normalizedSummary = summary?.trim();
-    if (normalizedSummary != null && normalizedSummary.isNotEmpty) {
-      return normalizedSummary;
-    }
-    return documentId;
-  }
-}
-
-const Object _copyWithUnset = Object();
-
 String sourceTypeDisplayLabel(String rawType) {
   final normalized = rawType.trim().toLowerCase();
   return switch (normalized) {
@@ -213,16 +114,6 @@ String sourceTypeDisplayLabel(String rawType) {
     'summary' => 'Summary',
     _ => _titleCase(rawType),
   };
-}
-
-String fallbackMemoryTitleFromDocumentId(String documentId) {
-  final trimmed = documentId.trim();
-  if (trimmed.isEmpty) return 'Memory';
-  final segments = trimmed.split(':');
-  if (segments.length >= 3) {
-    return _titleCase(segments.sublist(2).join(' '));
-  }
-  return _titleCase(trimmed.replaceAll(':', ' '));
 }
 
 String _titleCase(String value) {

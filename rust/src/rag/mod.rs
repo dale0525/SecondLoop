@@ -7,7 +7,6 @@ use crate::embedding::Embedder;
 use crate::llm::ChatDelta;
 use crate::message_citations::{
     append_message_citation_if_missing as append_message_citation, AnswerEvidenceDirectSource,
-    AnswerEvidenceMemoryCard,
 };
 
 mod active_embeddings;
@@ -110,7 +109,6 @@ pub trait AnswerProvider {
 struct ContextWithEvidence {
     text: String,
     direct_sources: Vec<AnswerEvidenceDirectSource>,
-    memory_cards: Vec<AnswerEvidenceMemoryCard>,
 }
 
 fn now_ms() -> i64 {
@@ -462,7 +460,6 @@ pub fn ask_ai_with_provider(
             ContextWithEvidence {
                 text: context,
                 direct_sources,
-                memory_cards: Vec::new(),
             },
         ));
     }
@@ -485,7 +482,6 @@ pub fn ask_ai_with_provider(
             ContextWithEvidence {
                 text: ctx,
                 direct_sources: vec![direct_source],
-                memory_cards: Vec::new(),
             },
         ));
     }
@@ -509,7 +505,6 @@ pub fn ask_ai_with_provider(
                     &chunk.text,
                     chunk.created_at_ms,
                 )],
-                memory_cards: Vec::new(),
             },
         ));
     }
@@ -521,6 +516,7 @@ pub fn ask_ai_with_provider(
         .map(|(_, ctx)| ctx)
         .collect();
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let actions = build_actions_context(conn, key, question)?;
     let attachment_direct_sources = attachment_resources
         .resources
         .iter()
@@ -538,7 +534,7 @@ pub fn ask_ai_with_provider(
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        None,
+        actions.as_deref(),
         history.as_deref(),
         attachment_resources.catalog_markdown.as_deref(),
     );
@@ -650,7 +646,6 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                 ContextWithEvidence {
                     text: context,
                     direct_sources,
-                    memory_cards: Vec::new(),
                 },
             ));
         }
@@ -673,7 +668,6 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                 ContextWithEvidence {
                     text: ctx,
                     direct_sources: vec![direct_source],
-                    memory_cards: Vec::new(),
                 },
             ));
         }
@@ -697,7 +691,6 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                         &chunk.text,
                         chunk.created_at_ms,
                     )],
-                    memory_cards: Vec::new(),
                 },
             ));
         }
@@ -712,13 +705,14 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
         resources_catalog = attachment_resources.catalog_markdown;
     }
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let actions = build_actions_context(conn, key, question)?;
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        None,
+        actions.as_deref(),
         history.as_deref(),
         resources_catalog.as_deref(),
     );

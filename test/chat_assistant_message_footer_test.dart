@@ -35,10 +35,8 @@ void main() {
                     unitId: null,
                   ),
                 ],
-                memoryCards: [],
               ),
               onOpenSources: () {},
-              onOpenMemory: () {},
               onOpenEvidence: () {},
               actionSuggestions: const [
                 ActionSuggestion(type: 'todo', title: 'Draft outline'),

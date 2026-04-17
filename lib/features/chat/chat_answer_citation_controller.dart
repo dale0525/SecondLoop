@@ -20,21 +20,6 @@ class ChatAnswerCitationController {
     BuildContext context, {
     required String href,
     required Future<void> Function(String href) onOpenDirectSource,
-    Future<void> Function(String documentId)? onOpenMemoryCard,
-    bool Function(String documentId)? canOpenMemoryCard,
-    Future<ChatAnswerEvidenceMemoryCard?> Function(
-      ChatAnswerEvidenceMemoryCard card,
-      String title,
-      String summary,
-    )? onCorrectMemoryCard,
-    bool Function(String documentId)? canCorrectMemoryCard,
-    Future<ChatAnswerEvidenceMemoryCard?> Function(
-      ChatAnswerEvidenceMemoryCard card,
-    )? onRefreshMemoryCard,
-    Future<void> Function(String documentId)? onDisableMemoryCard,
-    bool Function(String documentId)? canDisableMemoryCard,
-    Future<void> Function(String documentId)? onDeleteMemoryCard,
-    bool Function(String documentId)? canDeleteMemoryCard,
   }) async {
     if (!handlesHref(href) || evidence == null) {
       return false;
@@ -44,59 +29,24 @@ class ChatAnswerCitationController {
       evidence: evidence!,
       highlightedHref: href,
       onOpenDirectSource: onOpenDirectSource,
-      onOpenMemoryCard: onOpenMemoryCard,
-      canOpenMemoryCard: canOpenMemoryCard,
-      onCorrectMemoryCard: onCorrectMemoryCard,
-      canCorrectMemoryCard: canCorrectMemoryCard,
-      onRefreshMemoryCard: onRefreshMemoryCard,
-      onDisableMemoryCard: onDisableMemoryCard,
-      canDisableMemoryCard: canDisableMemoryCard,
-      onDeleteMemoryCard: onDeleteMemoryCard,
-      canDeleteMemoryCard: canDeleteMemoryCard,
     );
     return true;
   }
 
   Future<void> openEvidence(
     BuildContext context, {
-    ChatAnswerEvidenceTab initialTab = ChatAnswerEvidenceTab.directSources,
     String? highlightedHref,
     required Future<void> Function(String href) onOpenDirectSource,
-    Future<void> Function(String documentId)? onOpenMemoryCard,
-    bool Function(String documentId)? canOpenMemoryCard,
     bool Function(String href)? canOpenDirectSource,
-    Future<ChatAnswerEvidenceMemoryCard?> Function(
-      ChatAnswerEvidenceMemoryCard card,
-      String title,
-      String summary,
-    )? onCorrectMemoryCard,
-    bool Function(String documentId)? canCorrectMemoryCard,
-    Future<ChatAnswerEvidenceMemoryCard?> Function(
-      ChatAnswerEvidenceMemoryCard card,
-    )? onRefreshMemoryCard,
-    Future<void> Function(String documentId)? onDisableMemoryCard,
-    bool Function(String documentId)? canDisableMemoryCard,
-    Future<void> Function(String documentId)? onDeleteMemoryCard,
-    bool Function(String documentId)? canDeleteMemoryCard,
   }) async {
     final current = evidence;
     if (current == null || !current.hasEvidence) return;
     await showChatAnswerEvidenceSheet(
       context,
       evidence: current,
-      initialTab: initialTab,
       highlightedHref: highlightedHref,
       onOpenDirectSource: onOpenDirectSource,
-      onOpenMemoryCard: onOpenMemoryCard,
-      canOpenMemoryCard: canOpenMemoryCard,
       canOpenDirectSource: canOpenDirectSource,
-      onCorrectMemoryCard: onCorrectMemoryCard,
-      canCorrectMemoryCard: canCorrectMemoryCard,
-      onRefreshMemoryCard: onRefreshMemoryCard,
-      onDisableMemoryCard: onDisableMemoryCard,
-      canDisableMemoryCard: canDisableMemoryCard,
-      onDeleteMemoryCard: onDeleteMemoryCard,
-      canDeleteMemoryCard: canDeleteMemoryCard,
     );
   }
 }
@@ -105,14 +55,12 @@ class ChatAnswerEvidenceSummaryBar extends StatelessWidget {
   const ChatAnswerEvidenceSummaryBar({
     required this.evidence,
     required this.onOpenSources,
-    required this.onOpenMemory,
     required this.onOpenEvidence,
     super.key,
   });
 
   final ChatAnswerEvidence evidence;
   final VoidCallback onOpenSources;
-  final VoidCallback onOpenMemory;
   final VoidCallback onOpenEvidence;
 
   @override

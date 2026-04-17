@@ -75,7 +75,7 @@ void main() {
       conversationId: 'loop_home',
       question: 'hello',
       answer: 'world',
-      citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+      citationsJson: '{"direct_sources":[]}',
       gatewayBaseUrl: 'https://gateway.example',
     );
 
@@ -89,8 +89,7 @@ void main() {
       'assistant',
     ]);
     expect(messages.every((message) => !message.isMemory), isTrue);
-    expect(
-        messages.last.citationsJson, '{"direct_sources":[],"memory_cards":[]}');
+    expect(messages.last.citationsJson, '{"direct_sources":[]}');
     expect(backend.insertMessageCalls, 0);
   });
 

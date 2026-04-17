@@ -15,7 +15,6 @@ ChatAnswerEvidence? parseChatAnswerEvidence(String? citationsJson) {
   if (decoded is! Map) return null;
 
   final directSources = <ChatAnswerEvidenceDirectSource>[];
-
   final directRaw = decoded['direct_sources'];
   if (directRaw is List) {
     for (final item in directRaw) {
@@ -26,11 +25,8 @@ ChatAnswerEvidence? parseChatAnswerEvidence(String? citationsJson) {
     }
   }
 
-  final evidence = ChatAnswerEvidence(
-    directSources: directSources,
-    memoryCards: const <ChatAnswerEvidenceMemoryCard>[],
-  );
-  return evidence.hasEvidence ? evidence : null;
+  if (directSources.isEmpty) return null;
+  return ChatAnswerEvidence(directSources: directSources);
 }
 
 ChatAnswerEvidenceDirectSource? _parseDirectSource(Object? raw) {

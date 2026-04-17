@@ -5,7 +5,6 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/backend/app_backend.dart';
-import '../../core/backend/knowledge_backend.dart';
 import '../../core/backend/knowledge_viewer_backend.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
@@ -20,16 +19,11 @@ import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
 import '../knowledge_viewer/knowledge_document_viewer_page.dart';
-import '../memory/memory_detail_page.dart';
 import 'chat_answer_citation_controller.dart';
-import 'chat_answer_evidence_models.dart';
 import 'chat_answer_evidence_parser.dart';
-import 'chat_answer_evidence_sheet.dart';
 import 'chat_markdown_link_handler.dart';
-import 'knowledge_page_memory_card_helpers.dart';
 import 'knowledge_document_deeplink.dart';
 import 'message_deeplink.dart';
-import 'page_backed_evidence_actions.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
@@ -136,7 +130,7 @@ class MessageViewerPage extends StatelessWidget {
 
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (sessionKey == null) return true;
+    if (sessionKey == null) return false;
 
     Todo? todo;
     try {
@@ -150,8 +144,7 @@ class MessageViewerPage extends StatelessWidget {
     } catch (_) {
       todo = null;
     }
-    if (todo == null) return true;
-    if (!context.mounted) return true;
+    if (todo == null || !context.mounted) return false;
 
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -174,179 +167,6 @@ class MessageViewerPage extends StatelessWidget {
       navigationTrail: _effectiveNavigationTrail,
     );
     return true;
-  }
-
-  Future<void> _disableMemoryFromEvidence(
-    BuildContext context,
-    String documentId,
-  ) async {
-    final pagesBackend =
-        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (documentId.startsWith('page:') &&
-        pagesBackend != null &&
-        sessionKey != null) {
-      await disablePageBackedEvidenceMemoryCard(
-        pagesBackend,
-        sessionKey,
-        pageId: documentId,
-      );
-      return;
-    }
-    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
-    final viewerBackend =
-        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    if (backend == null || viewerBackend == null || sessionKey == null) return;
-    final document = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: documentId,
-    );
-    final feedback = document.document.memoryFeedback;
-    await backend.upsertKnowledgeMemoryFeedback(
-      sessionKey,
-      documentId: documentId,
-      status: feedback.status,
-      useForAskAi: false,
-      isDeleted: feedback.isDeleted,
-      markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: feedback.correctedTitle,
-      correctedSummary: feedback.correctedSummary,
-    );
-  }
-
-  Future<void> _deleteMemoryFromEvidence(
-    BuildContext context,
-    String documentId,
-  ) async {
-    final pagesBackend =
-        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (documentId.startsWith('page:') &&
-        pagesBackend != null &&
-        sessionKey != null) {
-      await removePageBackedEvidenceMemoryCard(
-        pagesBackend,
-        sessionKey,
-        pageId: documentId,
-      );
-      return;
-    }
-    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
-    final viewerBackend =
-        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    if (backend == null || viewerBackend == null || sessionKey == null) return;
-    final document = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: documentId,
-    );
-    final feedback = document.document.memoryFeedback;
-    await backend.upsertKnowledgeMemoryFeedback(
-      sessionKey,
-      documentId: documentId,
-      status: feedback.status,
-      useForAskAi: feedback.useForAskAi,
-      isDeleted: true,
-      markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: feedback.correctedTitle,
-      correctedSummary: feedback.correctedSummary,
-    );
-  }
-
-  Future<ChatAnswerEvidenceMemoryCard?> _correctMemoryFromEvidence(
-    BuildContext context,
-    ChatAnswerEvidenceMemoryCard card, {
-    required String title,
-    required String summary,
-  }) async {
-    final pagesBackend =
-        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (card.documentId.startsWith('page:') &&
-        pagesBackend != null &&
-        sessionKey != null) {
-      return correctPageBackedEvidenceMemoryCard(
-        pagesBackend,
-        sessionKey,
-        card,
-        title: title,
-        summary: summary,
-      );
-    }
-    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
-    final viewerBackend =
-        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    if (backend == null || viewerBackend == null || sessionKey == null) {
-      return null;
-    }
-    final document = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: card.documentId,
-    );
-    final feedback = document.document.memoryFeedback;
-    await backend.upsertKnowledgeMemoryFeedback(
-      sessionKey,
-      documentId: card.documentId,
-      status: KnowledgeMemoryStatus.confirmed,
-      useForAskAi: feedback.useForAskAi,
-      isDeleted: false,
-      markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: title,
-      correctedSummary: summary,
-    );
-    final refreshed = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: card.documentId,
-    );
-    return _memoryCardFromViewerDocument(card, refreshed.document);
-  }
-
-  Future<ChatAnswerEvidenceMemoryCard?> _refreshMemoryFromEvidence(
-    BuildContext context,
-    ChatAnswerEvidenceMemoryCard card,
-  ) async {
-    final pagesBackend =
-        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (card.documentId.startsWith('page:') &&
-        pagesBackend != null &&
-        sessionKey != null) {
-      return refreshPageBackedEvidenceMemoryCard(
-        pagesBackend,
-        sessionKey,
-        card,
-      );
-    }
-    final viewerBackend =
-        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    if (viewerBackend == null || sessionKey == null) {
-      return card;
-    }
-    final refreshed = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: card.documentId,
-    );
-    return _memoryCardFromViewerDocument(card, refreshed.document);
-  }
-
-  ChatAnswerEvidenceMemoryCard _memoryCardFromViewerDocument(
-    ChatAnswerEvidenceMemoryCard card,
-    ContentKnowledgeDocument document,
-  ) {
-    final memoryDisplay = document.memoryDisplay;
-    return card.copyWith(
-      title: document.title,
-      summary: document.summary,
-      body: document.rawText,
-      status: (memoryDisplay?.status ??
-              document.memoryFeedback.status ??
-              KnowledgeMemoryStatus.confirmed)
-          .name,
-      sourceCount: memoryDisplay?.sourceCount.toInt() ?? card.sourceCount,
-      updatedAtMs: document.updatedAtMs.toInt(),
-      useForAskAi: document.memoryFeedback.useForAskAi,
-      isDeleted: document.memoryFeedback.isDeleted,
-      markedInaccurate: document.memoryFeedback.markedInaccurate,
-    );
   }
 
   Future<bool> _openInAppKnowledgeDocument(
@@ -400,10 +220,6 @@ class MessageViewerPage extends StatelessWidget {
     return _openInAppMessage(context, href);
   }
 
-  Future<void> _openMemoryCard(BuildContext context, String documentId) {
-    return MemoryDetailPage.openDocumentId(context, documentId: documentId);
-  }
-
   Future<_ResolvedMessageKnowledgeDocument?> _resolveKnowledgeDocument(
     BuildContext context,
   ) async {
@@ -437,64 +253,6 @@ class MessageViewerPage extends StatelessWidget {
     required String normalized,
     required ChatAnswerCitationController citationController,
   }) {
-    final backend = AppBackendScope.maybeOf(context);
-    final viewerBackend =
-        backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
-    final knowledgeBackend =
-        backend == null ? null : maybeKnowledgeBackendFor(backend);
-    final pagesBackend =
-        backend == null ? null : maybeKnowledgePagesBackendFor(backend);
-    final hasPagesBackend = pagesBackend != null;
-    final hasViewerBackend = viewerBackend != null;
-    final hasKnowledgeBackend = knowledgeBackend != null;
-    Future<void> openMemoryCard(String documentId) {
-      return _openMemoryCard(context, documentId);
-    }
-
-    bool canOpenMemoryCard(String documentId) {
-      return canOpenEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> correctMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-      String title,
-      String summary,
-    ) {
-      return _correctMemoryFromEvidence(
-        context,
-        card,
-        title: title,
-        summary: summary,
-      );
-    }
-
-    bool canMutateMemoryCard(String documentId) {
-      return canMutateEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasKnowledgeBackend: hasKnowledgeBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> refreshMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-    ) {
-      return _refreshMemoryFromEvidence(context, card);
-    }
-
-    Future<void> disableMemoryCard(String documentId) {
-      return _disableMemoryFromEvidence(context, documentId);
-    }
-
-    Future<void> deleteMemoryCard(String documentId) {
-      return _deleteMemoryFromEvidence(context, documentId);
-    }
-
     final previewTheme = resolveChatMarkdownTheme(
         ChatMarkdownThemePreset.studio, Theme.of(context));
     return Markdown(
@@ -516,15 +274,6 @@ class MessageViewerPage extends StatelessWidget {
             context,
             href: href,
             onOpenDirectSource: (target) => _openInAppLink(context, target),
-            onOpenMemoryCard: openMemoryCard,
-            canOpenMemoryCard: canOpenMemoryCard,
-            onCorrectMemoryCard: correctMemoryCard,
-            canCorrectMemoryCard: canMutateMemoryCard,
-            onRefreshMemoryCard: refreshMemoryCard,
-            onDisableMemoryCard: disableMemoryCard,
-            canDisableMemoryCard: canMutateMemoryCard,
-            onDeleteMemoryCard: deleteMemoryCard,
-            canDeleteMemoryCard: canMutateMemoryCard,
           );
           if (handledCitation) {
             return;
@@ -604,64 +353,6 @@ class MessageViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = sanitizeChatMarkdown(content);
-    final backend = AppBackendScope.maybeOf(context);
-    final viewerBackend =
-        backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
-    final knowledgeBackend =
-        backend == null ? null : maybeKnowledgeBackendFor(backend);
-    final pagesBackend =
-        backend == null ? null : maybeKnowledgePagesBackendFor(backend);
-    final hasPagesBackend = pagesBackend != null;
-    final hasViewerBackend = viewerBackend != null;
-    final hasKnowledgeBackend = knowledgeBackend != null;
-    Future<void> openMemoryCard(String documentId) {
-      return _openMemoryCard(context, documentId);
-    }
-
-    bool canOpenMemoryCard(String documentId) {
-      return canOpenEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> correctMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-      String title,
-      String summary,
-    ) {
-      return _correctMemoryFromEvidence(
-        context,
-        card,
-        title: title,
-        summary: summary,
-      );
-    }
-
-    bool canMutateMemoryCard(String documentId) {
-      return canMutateEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasKnowledgeBackend: hasKnowledgeBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> refreshMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-    ) {
-      return _refreshMemoryFromEvidence(context, card);
-    }
-
-    Future<void> disableMemoryCard(String documentId) {
-      return _disableMemoryFromEvidence(context, documentId);
-    }
-
-    Future<void> deleteMemoryCard(String documentId) {
-      return _deleteMemoryFromEvidence(context, documentId);
-    }
-
     final citationController = ChatAnswerCitationController(
       parseChatAnswerEvidence(citationsJson),
     );
@@ -705,39 +396,10 @@ class MessageViewerPage extends StatelessWidget {
                   onOpenSources: () => unawaited(
                     citationController.openEvidence(
                       context,
-                      initialTab: ChatAnswerEvidenceTab.directSources,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
-                      onOpenMemoryCard: openMemoryCard,
-                      canOpenMemoryCard: canOpenMemoryCard,
                       canOpenDirectSource: (href) =>
                           _canOpenDirectSourceHref(context, href),
-                      onCorrectMemoryCard: correctMemoryCard,
-                      canCorrectMemoryCard: canMutateMemoryCard,
-                      onRefreshMemoryCard: refreshMemoryCard,
-                      onDisableMemoryCard: disableMemoryCard,
-                      canDisableMemoryCard: canMutateMemoryCard,
-                      onDeleteMemoryCard: deleteMemoryCard,
-                      canDeleteMemoryCard: canMutateMemoryCard,
-                    ),
-                  ),
-                  onOpenMemory: () => unawaited(
-                    citationController.openEvidence(
-                      context,
-                      initialTab: ChatAnswerEvidenceTab.memoryCards,
-                      onOpenDirectSource: (href) =>
-                          _openInAppLink(context, href),
-                      onOpenMemoryCard: openMemoryCard,
-                      canOpenMemoryCard: canOpenMemoryCard,
-                      canOpenDirectSource: (href) =>
-                          _canOpenDirectSourceHref(context, href),
-                      onCorrectMemoryCard: correctMemoryCard,
-                      canCorrectMemoryCard: canMutateMemoryCard,
-                      onRefreshMemoryCard: refreshMemoryCard,
-                      onDisableMemoryCard: disableMemoryCard,
-                      canDisableMemoryCard: canMutateMemoryCard,
-                      onDeleteMemoryCard: deleteMemoryCard,
-                      canDeleteMemoryCard: canMutateMemoryCard,
                     ),
                   ),
                   onOpenEvidence: () => unawaited(
@@ -745,17 +407,8 @@ class MessageViewerPage extends StatelessWidget {
                       context,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
-                      onOpenMemoryCard: openMemoryCard,
-                      canOpenMemoryCard: canOpenMemoryCard,
                       canOpenDirectSource: (href) =>
                           _canOpenDirectSourceHref(context, href),
-                      onCorrectMemoryCard: correctMemoryCard,
-                      canCorrectMemoryCard: canMutateMemoryCard,
-                      onRefreshMemoryCard: refreshMemoryCard,
-                      onDisableMemoryCard: disableMemoryCard,
-                      canDisableMemoryCard: canMutateMemoryCard,
-                      onDeleteMemoryCard: deleteMemoryCard,
-                      canDeleteMemoryCard: canMutateMemoryCard,
                     ),
                   ),
                 ),
