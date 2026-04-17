@@ -14,7 +14,6 @@ class EventViewerPage extends StatelessWidget {
         DateTime.fromMillisecondsSinceEpoch(event.startAtMs.toInt()).toLocal();
     final end =
         DateTime.fromMillisecondsSinceEpoch(event.endAtMs.toInt()).toLocal();
-    final localTimezone = _formatTimeZoneOffset(start.timeZoneOffset);
 
     return Scaffold(
       key: const ValueKey('event_viewer_page'),
@@ -30,7 +29,7 @@ class EventViewerPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           SelectableText(
-            _formatEventRange(localizations, start, end, localTimezone),
+            _formatEventRange(localizations, start, end),
             key: const ValueKey('event_viewer_time_range'),
           ),
         ],
@@ -43,7 +42,6 @@ String _formatEventRange(
   MaterialLocalizations localizations,
   DateTime start,
   DateTime end,
-  String timezone,
 ) {
   final startDate = localizations.formatFullDate(start);
   final startTime =
@@ -54,17 +52,8 @@ String _formatEventRange(
   if (start.year == end.year &&
       start.month == end.month &&
       start.day == end.day) {
-    return '$startDate $startTime - $endTime ($timezone)';
+    return '$startDate $startTime - $endTime';
   }
 
-  return '$startDate $startTime -> $endDate $endTime ($timezone)';
-}
-
-String _formatTimeZoneOffset(Duration offset) {
-  final totalMinutes = offset.inMinutes;
-  final sign = totalMinutes >= 0 ? '+' : '-';
-  final absoluteMinutes = totalMinutes.abs();
-  final hours = absoluteMinutes ~/ 60;
-  final minutes = absoluteMinutes % 60;
-  return 'UTC$sign${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+  return '$startDate $startTime -> $endDate $endTime';
 }

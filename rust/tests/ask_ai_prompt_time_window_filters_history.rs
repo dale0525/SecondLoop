@@ -985,3 +985,93 @@ fn ask_ai_time_window_prompt_includes_done_items_for_past_agenda_queries() {
         "expected out-of-range completed todo to stay out of prompt: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_time_window_past_actions_keep_completion_semantics_after_later_note() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 220_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:done-then-noted",
+        "Finish investor update",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+    db::set_todo_status(&conn, &key, "todo:done-then-noted", "done", None).expect("set todo done");
+    let done_activity = db::list_todo_activities(&conn, &key, "todo:done-then-noted")
+        .expect("activities after done")
+        .into_iter()
+        .last()
+        .expect("done activity");
+    conn.execute(
+        "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+        params![done_activity.id, time_start_ms + 100],
+    )
+    .expect("set done activity ts");
+
+    let note_activity = db::append_todo_note(
+        &conn,
+        &key,
+        "todo:done-then-noted",
+        "Shared the final summary with Alice",
+        None,
+    )
+    .expect("append note");
+    conn.execute(
+        "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+        params![note_activity.id, time_start_ms + 200],
+    )
+    .expect("set note ts");
+
+    db::set_todo_status(&conn, &key, "todo:done-then-noted", "open", None)
+        .expect("reopen todo after window semantics changed");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "昨天我完成了什么？",
+        0,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+
+    assert!(
+        prompt.contains("TODO [done] Finish investor update"),
+        "expected completion entry to survive later note activity: {prompt}"
+    );
+    assert!(
+        !prompt.contains("TODO_ACTIVITY [open] Finish investor update"),
+        "expected current todo status to not rewrite past action semantics: {prompt}"
+    );
+}

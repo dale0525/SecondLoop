@@ -285,6 +285,37 @@ void main() {
       expect(todos.single.manualUrgencyNudgeScore, -1);
     });
 
+    test('supports direct todo and event lookup without list fallback',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Ship web task hub',
+        status: 'open',
+      );
+      await backend.upsertEvent(
+        key,
+        id: 'event:web',
+        title: 'Web planning review',
+        startAtMs: 123,
+        endAtMs: 456,
+        tz: 'UTC',
+      );
+
+      final todo = await backend.getTodoById(key, 'todo:web');
+      final event = await backend.getEventById(key, 'event:web');
+
+      expect(todo, isNotNull);
+      expect(todo!.title, 'Ship web task hub');
+      expect(event, isNotNull);
+      expect(event!.title, 'Web planning review');
+    });
+
     test('listTodos matches native due-date ordering', () async {
       var nowMs = 1000;
       final backend = CloudWebBackend(

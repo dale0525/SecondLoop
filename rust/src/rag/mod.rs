@@ -344,6 +344,23 @@ struct ActionContextLine {
     text: String,
 }
 
+fn should_prefer_past_action_activity(
+    candidate: &db::TodoActivity,
+    current: &db::TodoActivity,
+) -> bool {
+    let candidate_is_done = candidate.to_status.as_deref() == Some("done");
+    let current_is_done = current.to_status.as_deref() == Some("done");
+    if candidate_is_done != current_is_done {
+        return candidate_is_done;
+    }
+
+    if candidate.created_at_ms != current.created_at_ms {
+        return candidate.created_at_ms > current.created_at_ms;
+    }
+
+    candidate.id > current.id
+}
+
 fn render_action_context(
     header: &str,
     mut lines: Vec<ActionContextLine>,
@@ -443,19 +460,20 @@ fn build_past_actions_context_in_range(
     time_end_ms: i64,
 ) -> Result<Option<String>> {
     let mut lines: Vec<ActionContextLine> = Vec::new();
-    let mut latest_activity_by_todo = std::collections::HashMap::<String, db::TodoActivity>::new();
+    let mut selected_activity_by_todo =
+        std::collections::HashMap::<String, db::TodoActivity>::new();
 
     for activity in db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)? {
-        let should_replace = latest_activity_by_todo
+        let should_replace = selected_activity_by_todo
             .get(&activity.todo_id)
-            .map(|current| activity.created_at_ms >= current.created_at_ms)
+            .map(|current| should_prefer_past_action_activity(&activity, current))
             .unwrap_or(true);
         if should_replace {
-            latest_activity_by_todo.insert(activity.todo_id.clone(), activity);
+            selected_activity_by_todo.insert(activity.todo_id.clone(), activity);
         }
     }
 
-    for activity in latest_activity_by_todo.into_values() {
+    for activity in selected_activity_by_todo.into_values() {
         let todo = match db::get_todo(conn, key, &activity.todo_id) {
             Ok(value) => value,
             Err(_) => continue,
@@ -466,16 +484,25 @@ fn build_past_actions_context_in_range(
                 "TODO [done] {} (completed_at_ms={})",
                 todo.title, activity.created_at_ms
             ),
-            _ => match activity.content.as_deref() {
-                Some(content) if !content.trim().is_empty() => format!(
-                    "TODO_ACTIVITY [{}] {} (created_at_ms={}) content={}",
-                    todo.status, todo.title, activity.created_at_ms, content
-                ),
-                _ => format!(
-                    "TODO_ACTIVITY [{}] {} (created_at_ms={}) type={}",
-                    todo.status, todo.title, activity.created_at_ms, activity.activity_type
-                ),
-            },
+            _ => {
+                let activity_status = activity
+                    .to_status
+                    .as_deref()
+                    .or(activity.from_status.as_deref());
+                let activity_prefix = activity_status
+                    .map(|status| format!("TODO_ACTIVITY [{status}] {}", todo.title))
+                    .unwrap_or_else(|| format!("TODO_ACTIVITY {}", todo.title));
+                match activity.content.as_deref() {
+                    Some(content) if !content.trim().is_empty() => format!(
+                        "{activity_prefix} (created_at_ms={}) content={}",
+                        activity.created_at_ms, content
+                    ),
+                    _ => format!(
+                        "{activity_prefix} (created_at_ms={}) type={}",
+                        activity.created_at_ms, activity.activity_type
+                    ),
+                }
+            }
         };
         lines.push(ActionContextLine {
             sort_at_ms: activity.created_at_ms,
