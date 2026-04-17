@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../../src/rust/db.dart';
 
@@ -14,13 +16,10 @@ class EventViewerPage extends StatelessWidget {
         DateTime.fromMillisecondsSinceEpoch(event.startAtMs.toInt()).toLocal();
     final localEnd =
         DateTime.fromMillisecondsSinceEpoch(event.endAtMs.toInt()).toLocal();
-    final originalOffset = _parseEventTimezoneOffset(event.tz);
-    final originalStart = originalOffset == null
-        ? null
-        : _formatEventTimeInOffset(event.startAtMs.toInt(), originalOffset);
-    final originalEnd = originalOffset == null
-        ? null
-        : _formatEventTimeInOffset(event.endAtMs.toInt(), originalOffset);
+    final originalStart =
+        _resolveEventTimeInOriginalTimezone(event.startAtMs.toInt(), event.tz);
+    final originalEnd =
+        _resolveEventTimeInOriginalTimezone(event.endAtMs.toInt(), event.tz);
 
     return Scaffold(
       key: const ValueKey('event_viewer_page'),
@@ -59,6 +58,8 @@ class EventViewerPage extends StatelessWidget {
   }
 }
 
+bool _timezoneDatabaseInitialized = false;
+
 String _formatEventRange(
   MaterialLocalizations localizations,
   DateTime start,
@@ -80,14 +81,16 @@ String _formatEventRange(
 }
 
 Duration? _parseEventTimezoneOffset(String raw) {
-  final trimmed = raw.trim().toUpperCase();
+  final trimmed = raw.trim();
   if (trimmed.isEmpty) return null;
-  if (trimmed == 'UTC' || trimmed == 'Z') {
+
+  final uppercase = trimmed.toUpperCase();
+  if (uppercase == 'UTC' || uppercase == 'Z') {
     return Duration.zero;
   }
 
   final normalized =
-      trimmed.startsWith('UTC') ? trimmed.substring(3).trim() : trimmed;
+      uppercase.startsWith('UTC') ? trimmed.substring(3).trim() : trimmed;
   final match = RegExp(r'^([+-])(\d{2}):?(\d{2})$').firstMatch(normalized);
   if (match == null) return null;
 
@@ -97,6 +100,48 @@ Duration? _parseEventTimezoneOffset(String raw) {
   if (hours == null || minutes == null) return null;
 
   return Duration(minutes: sign * ((hours * 60) + minutes));
+}
+
+DateTime? _resolveEventTimeInOriginalTimezone(
+  int millisecondsSinceEpoch,
+  String rawTimezone,
+) {
+  final offset = _parseEventTimezoneOffset(rawTimezone);
+  if (offset != null) {
+    return _formatEventTimeInOffset(millisecondsSinceEpoch, offset);
+  }
+
+  final location = _resolveIanaTimezone(rawTimezone);
+  if (location == null) return null;
+
+  return tz.TZDateTime.fromMillisecondsSinceEpoch(
+    location,
+    millisecondsSinceEpoch,
+  );
+}
+
+tz.Location? _resolveIanaTimezone(String rawTimezone) {
+  final trimmed = rawTimezone.trim();
+  if (trimmed.isEmpty) return null;
+
+  _ensureTimezoneDatabaseInitialized();
+  if (!_timezoneDatabaseInitialized) return null;
+
+  try {
+    return tz.getLocation(trimmed);
+  } catch (_) {
+    return null;
+  }
+}
+
+void _ensureTimezoneDatabaseInitialized() {
+  if (_timezoneDatabaseInitialized) return;
+  try {
+    tz_data.initializeTimeZones();
+    _timezoneDatabaseInitialized = true;
+  } catch (_) {
+    // Ignore initialization failures and fall back to local-only rendering.
+  }
 }
 
 DateTime _formatEventTimeInOffset(int millisecondsSinceEpoch, Duration offset) {
