@@ -388,6 +388,19 @@ void main() {
     await store.writeManagedVaultBaseUrl('https://vault.example.com');
     final backend = _GraceReadOnlyManagedVaultSyncBackend();
     final cloudAuth = _FakeCloudAuthController();
+    final engine = SyncEngine(
+      syncRunner: _FakeRunner(),
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        vaultId: 'uid_1',
+        baseUrl: 'https://vault.example.com',
+      ),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+    engine.start();
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -400,7 +413,7 @@ void main() {
                 sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
                 lock: () {},
                 child: SyncEngineScope(
-                  engine: null,
+                  engine: engine,
                   child: Scaffold(
                     body: SyncSettingsPage(configStore: store),
                   ),
@@ -433,6 +446,8 @@ void main() {
     );
     expect(find.textContaining('HTTP 403'), findsNothing);
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    engine.stop();
   });
 
   testWidgets('Save auto-generates sync key when missing (SecondLoop Cloud)',

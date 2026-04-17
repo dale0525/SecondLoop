@@ -340,6 +340,7 @@ final class _CloudSyncSwitchPromptGateState
     required String idToken,
   }) async {
     final t = dialogContext.t;
+    final engine = SyncEngineScope.maybeOf(dialogContext);
     final stage = ValueNotifier<String>(t.sync.progressDialog.preparing);
     // Keep progress determinate: an indeterminate LinearProgressIndicator
     // (value: null) animates continuously and can make widget tests using
@@ -377,6 +378,11 @@ final class _CloudSyncSwitchPromptGateState
                     onProgress: stageProgress.onProgress,
                   );
                 } catch (error) {
+                  final nextWriteGate =
+                      managedVaultWriteGateStateForError(error);
+                  if (nextWriteGate != null) {
+                    engine?.writeGate.value = nextWriteGate;
+                  }
                   if (!managedVaultPushFailureAllowsPull(error)) rethrow;
                   allowMediaUploads = false;
                 }
@@ -395,6 +401,12 @@ final class _CloudSyncSwitchPromptGateState
                   ),
                   onProgress: stageProgress.onProgress,
                 );
+                if (engine != null &&
+                    managedVaultWriteGateShouldClearAfterPull(
+                      engine.writeGate.value,
+                    )) {
+                  engine.writeGate.value = const SyncWriteGateState.open();
+                }
 
                 // Media uploads (optional)
                 final mediaEnabled = allowMediaUploads &&

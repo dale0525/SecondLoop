@@ -448,6 +448,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             );
 
         var didSync = false;
+        final engine = SyncEngineScope.maybeOf(context);
         if (shouldSync) {
           final sessionScope =
               context.getInheritedWidgetOfExactType<SessionScope>();
@@ -622,6 +623,11 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           onProgress: stageProgress.onProgress,
                         );
                       } catch (error) {
+                        final nextWriteGate =
+                            managedVaultWriteGateStateForError(error);
+                        if (nextWriteGate != null) {
+                          engine?.writeGate.value = nextWriteGate;
+                        }
                         if (!managedVaultPushFailureAllowsPull(error)) rethrow;
                         allowMediaUploads = false;
                       }
@@ -640,6 +646,13 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         ),
                         onProgress: stageProgress.onProgress,
                       );
+                      if (engine != null &&
+                          managedVaultWriteGateShouldClearAfterPull(
+                            engine.writeGate.value,
+                          )) {
+                        engine.writeGate.value =
+                            const SyncWriteGateState.open();
+                      }
 
                       if (allowMediaUploads && _cloudMediaBackupEnabled) {
                         stage.value = t.sync.progressDialog.uploadingMedia;
@@ -693,7 +706,6 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
 
         if (!mounted) return;
-        final engine = SyncEngineScope.maybeOf(context);
         engine?.start();
         engine?.notifyExternalChange();
         if (!didSync) {

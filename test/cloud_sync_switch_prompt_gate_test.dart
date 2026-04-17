@@ -403,6 +403,19 @@ void main() {
     final cloudAuth = _FakeCloudAuthController();
     final subscription =
         _FakeSubscriptionController(SubscriptionStatus.entitled);
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        vaultId: 'uid_1',
+        baseUrl: 'https://vault.example.com',
+      ),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+    engine.start();
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -412,13 +425,16 @@ void main() {
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
               lock: () {},
-              child: CloudAuthScope(
-                controller: cloudAuth,
-                child: SubscriptionScope(
-                  controller: subscription,
-                  child: CloudSyncSwitchPromptGate(
-                    configStore: store,
-                    child: const Scaffold(body: Text('home')),
+              child: SyncEngineScope(
+                engine: engine,
+                child: CloudAuthScope(
+                  controller: cloudAuth,
+                  child: SubscriptionScope(
+                    controller: subscription,
+                    child: CloudSyncSwitchPromptGate(
+                      configStore: store,
+                      child: const Scaffold(body: Text('home')),
+                    ),
                   ),
                 ),
               ),
@@ -438,6 +454,8 @@ void main() {
       <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
     );
     expect(find.textContaining('managed-vault push failed'), findsNothing);
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    engine.stop();
   });
 }
 

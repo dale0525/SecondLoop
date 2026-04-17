@@ -431,6 +431,53 @@ fn managed_vault_v2_missing_local_generation_rebuilds_instead_of_reuploading() {
 }
 
 #[test]
+fn managed_vault_v2_empty_remote_pull_does_not_persist_generation_state() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.generation_id.clear();
+        server.latest_global_seq = 0;
+        server.ops.clear();
+    }
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pulled = sync::managed_vault::pull(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("pull");
+    assert_eq!(pulled, 0);
+
+    let generation_key = format!(
+        "managed_vault_v2.generation_id:{}",
+        managed_vault_v2_scope_id(&base_url, &vault_id)
+    );
+    let generation: Option<String> = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            rusqlite::params![generation_key],
+            |row| row.get(0),
+        )
+        .optional()
+        .expect("load generation");
+    assert_eq!(generation, None);
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_v2_pull_rebuilds_after_non_contiguous_page() {
     let (base_url, stop_tx, state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();

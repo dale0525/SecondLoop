@@ -411,14 +411,32 @@ pub(super) fn pull_v2(
         };
 
         let local_generation = super::global_log_state::read_generation_id(conn, &scope_id)?;
+        let response_generation = response.generation_id.trim();
+        if response_generation.is_empty() {
+            if response.remote_latest_global_seq == 0 && response.ops.is_empty() {
+                if local_generation.is_some() || last_applied > 0 {
+                    super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                    total_applied = 0;
+                }
+                if let Some(progress_fn) = progress.as_deref_mut() {
+                    progress_fn(total_applied, total_target);
+                }
+                return Ok(total_applied);
+            }
+            return Err(anyhow!(
+                "managed-vault v2 pull returned an empty generation_id with remote_latest_global_seq={} ops={}",
+                response.remote_latest_global_seq,
+                response.ops.len()
+            ));
+        }
         if let Some(existing_generation) = &local_generation {
-            if existing_generation != &response.generation_id {
+            if existing_generation != response_generation {
                 super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
                 last_applied = 0;
                 continue;
             }
         }
-        super::global_log_state::write_generation_id(conn, &scope_id, &response.generation_id)?;
+        super::global_log_state::write_generation_id(conn, &scope_id, response_generation)?;
 
         if response.ops.is_empty() {
             if let Some(progress_fn) = progress.as_deref_mut() {

@@ -18,7 +18,11 @@ pub(super) fn apply_scope_id(scope_id: &str) -> String {
 }
 
 pub(super) fn read_generation_id(conn: &Connection, scope_id: &str) -> Result<Option<String>> {
-    super::super::kv_get_string(conn, &generation_key(scope_id))
+    Ok(
+        super::super::kv_get_string(conn, &generation_key(scope_id))?
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+    )
 }
 
 pub(super) fn write_generation_id(
@@ -26,6 +30,15 @@ pub(super) fn write_generation_id(
     scope_id: &str,
     generation_id: &str,
 ) -> Result<()> {
+    if generation_id.trim().is_empty() {
+        return conn
+            .execute(
+                "DELETE FROM kv WHERE key = ?1",
+                params![generation_key(scope_id)],
+            )
+            .map(|_| ())
+            .map_err(Into::into);
+    }
     super::super::kv_set_string(conn, &generation_key(scope_id), generation_id)
 }
 
