@@ -96,10 +96,12 @@ void main() {
 
     await tester.tap(find.text('Open Knowledge', findRichText: true));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byKey(const ValueKey('message_viewer_page')), findsOneWidget);
     expect(find.byType(AttachmentViewerPage), findsNothing);
     expect(launchedUrls, isEmpty);
+    expect(find.text('Load failed: unsupported_secondloop_link'), findsOne);
   });
 }
 

@@ -5,6 +5,7 @@ import 'message_deeplink.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 typedef ChatMarkdownInAppLinkHandler = Future<bool> Function(String href);
+typedef ChatMarkdownUnsupportedLinkHandler = Future<void> Function(String href);
 
 bool canOpenChatMarkdownHref(String? href) {
   final target = href?.trim();
@@ -29,6 +30,7 @@ bool canOpenChatMarkdownHref(String? href) {
 Future<void> handleChatMarkdownTapLink(
   String? href, {
   required ChatMarkdownInAppLinkHandler handleInApp,
+  ChatMarkdownUnsupportedLinkHandler? handleUnsupportedSecondLoopLink,
 }) async {
   final target = href?.trim();
   if (target == null || target.isEmpty) {
@@ -45,6 +47,7 @@ Future<void> handleChatMarkdownTapLink(
     return;
   }
   if (uri.scheme.toLowerCase() == 'secondloop') {
+    await handleUnsupportedSecondLoopLink?.call(target);
     return;
   }
   await launchUrl(uri, mode: LaunchMode.externalApplication);

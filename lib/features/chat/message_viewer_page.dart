@@ -190,6 +190,20 @@ class MessageViewerPage extends StatelessWidget {
     return true;
   }
 
+  Future<void> _showUnsupportedSecondLoopLink(
+    BuildContext context,
+    String href,
+  ) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          context.t.errors.loadFailed(error: 'unsupported_secondloop_link'),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Future<bool> _openInAppLink(BuildContext context, String href) async {
     if (await _openInAppTodo(context, href)) {
       return true;
@@ -273,6 +287,8 @@ class MessageViewerPage extends StatelessWidget {
           await handleChatMarkdownTapLink(
             href,
             handleInApp: (target) => _openInAppLink(context, target),
+            handleUnsupportedSecondLoopLink: (target) =>
+                _showUnsupportedSecondLoopLink(context, target),
           );
         },
       ),
@@ -281,6 +297,8 @@ class MessageViewerPage extends StatelessWidget {
           handleChatMarkdownTapLink(
             href,
             handleInApp: (target) => _openInAppLink(context, target),
+            handleUnsupportedSecondLoopLink: (target) =>
+                _showUnsupportedSecondLoopLink(context, target),
           ),
         );
       },

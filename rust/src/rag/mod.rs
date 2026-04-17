@@ -341,6 +341,7 @@ fn build_actions_context_in_range(
 
 struct ActionContextLine {
     sort_at_ms: i64,
+    stable_key: String,
     text: String,
 }
 
@@ -371,12 +372,16 @@ fn render_action_context(
     }
 
     lines.sort_by(|left, right| {
-        let ordering = left.sort_at_ms.cmp(&right.sort_at_ms);
-        if newest_first {
-            ordering.reverse()
-        } else {
-            ordering
+        if left.sort_at_ms != right.sort_at_ms {
+            let ordering = left.sort_at_ms.cmp(&right.sort_at_ms);
+            return if newest_first {
+                ordering.reverse()
+            } else {
+                ordering
+            };
         }
+
+        left.stable_key.cmp(&right.stable_key)
     });
 
     let mut out = String::new();
@@ -428,6 +433,7 @@ fn build_upcoming_actions_context_in_range(
         };
         lines.push(ActionContextLine {
             sort_at_ms,
+            stable_key: format!("todo:{}", todo.id),
             text: item,
         });
     }
@@ -439,6 +445,7 @@ fn build_upcoming_actions_context_in_range(
         }
         lines.push(ActionContextLine {
             sort_at_ms: event.start_at_ms.max(time_start_ms),
+            stable_key: format!("event:{}", event.id),
             text: format!(
                 "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
                 event.title, event.start_at_ms, event.end_at_ms, event.tz
@@ -506,6 +513,7 @@ fn build_past_actions_context_in_range(
         };
         lines.push(ActionContextLine {
             sort_at_ms: activity.created_at_ms,
+            stable_key: format!("todo:{}", todo.id),
             text: line,
         });
     }
@@ -513,6 +521,7 @@ fn build_past_actions_context_in_range(
     for event in db::list_events_in_range(conn, key, time_start_ms, time_end_ms)? {
         lines.push(ActionContextLine {
             sort_at_ms: event.end_at_ms.min(time_end_ms.saturating_sub(1)),
+            stable_key: format!("event:{}", event.id),
             text: format!(
                 "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
                 event.title, event.start_at_ms, event.end_at_ms, event.tz

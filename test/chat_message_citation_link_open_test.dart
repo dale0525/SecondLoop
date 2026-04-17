@@ -502,6 +502,7 @@ secondloop://message/history-1
     expect(find.byType(ChatPage), findsOneWidget);
     expect(find.textContaining('budget note', findRichText: true), findsOne);
     expect(launchedUrls, isEmpty);
+    expect(find.text('Load failed: unsupported_secondloop_link'), findsOne);
   });
 }
 

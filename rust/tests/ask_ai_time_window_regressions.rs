@@ -476,3 +476,63 @@ fn ask_ai_time_window_past_actions_truncate_by_recency_not_todo_id() {
         "expected oldest action to be truncated first: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_time_window_past_actions_keep_stable_order_when_timestamps_match() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 900_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+    let shared_done_at_ms = time_start_ms + 1_000;
+
+    for (todo_id, title) in [
+        ("todo:beta", "Beta follow-up"),
+        ("todo:alpha", "Alpha follow-up"),
+    ] {
+        db::upsert_todo(
+            &conn, &key, todo_id, title, None, "open", None, None, None, None, None, None,
+        )
+        .expect("todo");
+        db::set_todo_status(&conn, &key, todo_id, "done", None).expect("set done");
+        let activity = db::list_todo_activities(&conn, &key, todo_id)
+            .expect("activities")
+            .into_iter()
+            .last()
+            .expect("done activity");
+        conn.execute(
+            "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+            params![activity.id, shared_done_at_ms],
+        )
+        .expect("set shared done ts");
+    }
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "昨天我做了哪些事？",
+        0,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = capture_prompt(&provider);
+    let alpha_index = prompt.find("Alpha follow-up").expect("alpha in prompt");
+    let beta_index = prompt.find("Beta follow-up").expect("beta in prompt");
+    assert!(
+        alpha_index < beta_index,
+        "expected stable tie-break ordering for matching timestamps: {prompt}"
+    );
+}

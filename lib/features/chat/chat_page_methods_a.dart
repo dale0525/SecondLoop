@@ -9,6 +9,17 @@ final RegExp _kCloudDetachedRequestIdPattern = RegExp(
 );
 
 extension _ChatPageStateMethodsA on _ChatPageState {
+  Future<void> _showUnsupportedSecondLoopLink(String href) async {
+    _scaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text(
+          context.t.errors.loadFailed(error: 'unsupported_secondloop_link'),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   void _attachSyncEngine() {
     final engine = SyncEngineScope.maybeOf(context);
     if (identical(engine, _syncEngine)) return;
@@ -448,6 +459,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         await handleChatMarkdownTapLink(
           href,
           handleInApp: _handleMarkdownInAppLink,
+          handleUnsupportedSecondLoopLink: _showUnsupportedSecondLoopLink,
         );
       },
       onTapLink: (text, href, title) {
@@ -455,6 +467,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
           handleChatMarkdownTapLink(
             href,
             handleInApp: _handleMarkdownInAppLink,
+            handleUnsupportedSecondLoopLink: _showUnsupportedSecondLoopLink,
           ),
         );
       },
