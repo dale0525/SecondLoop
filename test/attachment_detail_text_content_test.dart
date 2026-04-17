@@ -223,7 +223,7 @@ void main() {
 
     expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
     expect(content.full, 'raw transcript body');
-    expect(payload.transcriptTurnViewReadCount, 2);
+    expect(payload.transcriptTurnViewReadCount, 1);
   });
 
   test('audio detail full prefers transcript_full over turn view', () {
@@ -249,6 +249,22 @@ void main() {
       },
     );
 
+    expect(content.full, 'Speaker A: Hello.\n\nSpeaker B: Hi.');
+  });
+
+  test(
+      'audio preferred transcript content kind still uses readable transcript formatting',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'Speaker A: Hello.',
+        'transcript_full': 'Speaker A: Hello.\nSpeaker B: Hi.',
+        kPreferredAttachmentContentKindKey: 'transcript_full',
+      },
+    );
+
+    expect(content.summary, 'Speaker A: Hello.');
     expect(content.full, 'Speaker A: Hello.\n\nSpeaker B: Hi.');
   });
 
@@ -398,6 +414,53 @@ void main() {
   });
 
   test(
+      'audio detail full prefers segment-aware paragraphization over structured single-line upgrades',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Speaker A: Hello.\n'
+            'Speaker A: More detail.\n'
+            'Speaker B: Hi.\n'
+            'Speaker B: Sounds good.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Speaker A: Hello.',
+          },
+          {
+            't_ms': 800,
+            'text': 'Speaker A: More detail.',
+          },
+          {
+            't_ms': 2600,
+            'text': 'Speaker B: Hi.',
+          },
+          {
+            't_ms': 3200,
+            'text': 'Speaker B: Sounds good.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      'Speaker A: Hello.\n\n'
+      'Speaker A: More detail. Speaker B: Hi. Speaker B: Sounds good.',
+    );
+    expect(
+      content.full,
+      isNot(
+        'Speaker A: Hello.\n\n'
+        'Speaker A: More detail.\n\n'
+        'Speaker B: Hi.\n\n'
+        'Speaker B: Sounds good.',
+      ),
+    );
+  });
+
+  test(
       'audio detail full does not treat chunk newlines as paragraph boundaries when segments exist',
       () {
     final content = resolveAttachmentDetailTextContent(
@@ -463,6 +526,43 @@ void main() {
       content.full,
       '你好。谢谢。\n\n再见。明天聊。',
     );
+  });
+
+  test('audio detail full keeps common abbreviations intact when paragraphized',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Dr. Smith joined the U.S. team yesterday. '
+            'He shared the e.g. example with everyone. '
+            'Another update followed. '
+            'Final review is tomorrow.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Dr. Smith joined the U.S. team yesterday.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'He shared the e.g. example with everyone.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Another update followed.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Final review is tomorrow.',
+          },
+        ],
+      },
+    );
+
+    expect(content.full, contains('Dr. Smith joined the U.S. team yesterday.'));
+    expect(content.full, contains('He shared the e.g. example with everyone.'));
+    expect(content.full, isNot(contains('Dr.\n\nSmith')));
+    expect(content.full, isNot(contains('U.\n\nS.')));
+    expect(content.full, isNot(contains('e.\n\ng.')));
   });
 
   test('audio detail full prefers transcript_full over generic full_text', () {
@@ -599,6 +699,36 @@ void main() {
     final second = resolveAudioTranscriptTurnView(payload);
     expect(second, isNotNull);
     expect(second!.turns.single.text, 'Updated speaker text.');
+  });
+
+  test('audio detail resolves persisted turn view only once per payload read',
+      () {
+    final payload = _TranscriptTurnPayloadReadTrackingMap(
+      <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Speaker A: Hello.\nSpeaker B: Hi.',
+      },
+      transcriptTurnView: const <String, Object?>{
+        'builder_version': 'turns_v1',
+        'status': 'ok',
+        'turns': [
+          {
+            'start_ms': 12000,
+            'end_ms': 18000,
+            'text': 'Hello everyone.',
+            'segment_count': 1,
+            'source_segment_start_index': 0,
+            'source_segment_end_index': 0,
+          },
+        ],
+      },
+    );
+
+    final content = resolveAttachmentDetailTextContent(payload);
+
+    expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
+    expect(content.full, 'Speaker A: Hello.\n\nSpeaker B: Hi.');
+    expect(payload.transcriptTurnViewReadCount, 1);
   });
 }
 

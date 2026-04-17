@@ -2,7 +2,10 @@ import '../audio_transcribe/audio_transcribe_turn_view.dart';
 
 import 'audio_transcript_turn_view_display.dart';
 
-String resolveAudioTranscriptReadableFullText(Map<String, Object?>? payload) {
+String resolveAudioTranscriptReadableFullText(
+  Map<String, Object?>? payload, {
+  AudioTranscriptTurnView? turnView,
+}) {
   final raw =
       _normalizeTranscriptText((payload?['transcript_full'] ?? '').toString());
   if (raw.isEmpty) return '';
@@ -12,14 +15,7 @@ String resolveAudioTranscriptReadableFullText(Map<String, Object?>? payload) {
     return paragraphPreserving;
   }
 
-  final upgradedSingleNewlines = _upgradeStructuredSingleNewlinesToParagraphs(
-    raw,
-  );
-  if (upgradedSingleNewlines.isNotEmpty) {
-    return upgradedSingleNewlines;
-  }
-
-  final view = resolveAudioTranscriptTurnView(payload);
+  final view = turnView ?? resolveAudioTranscriptTurnView(payload);
   if (view != null &&
       view.status == AudioTranscriptTurnViewStatus.ok &&
       view.turns.length >= 2) {
@@ -30,6 +26,13 @@ String resolveAudioTranscriptReadableFullText(Map<String, Object?>? payload) {
     if (paragraphized.isNotEmpty) {
       return paragraphized;
     }
+  }
+
+  final upgradedSingleNewlines = _upgradeStructuredSingleNewlinesToParagraphs(
+    raw,
+  );
+  if (upgradedSingleNewlines.isNotEmpty) {
+    return upgradedSingleNewlines;
   }
 
   final lineBrokenParagraphized = _paragraphizeLineBrokenTranscript(raw);
@@ -206,7 +209,50 @@ bool _looksLikePeriodSentenceBoundary(String text, int index) {
   if (_isSentenceCloser(nextChar)) {
     return true;
   }
-  return _isWhitespaceChar(nextChar);
+  if (!_isWhitespaceChar(nextChar)) {
+    return false;
+  }
+  final token = _tokenEndingAtPeriod(text, index);
+  if (_looksLikeAbbreviation(token)) {
+    return false;
+  }
+  return true;
+}
+
+String _tokenEndingAtPeriod(String text, int index) {
+  var start = index;
+  while (start > 0) {
+    final previous = text[start - 1];
+    if (!_isAsciiLetter(previous) && previous != '.') {
+      break;
+    }
+    start -= 1;
+  }
+  return text.substring(start, index + 1);
+}
+
+bool _looksLikeAbbreviation(String token) {
+  final normalized = token.trim();
+  if (normalized.isEmpty) return false;
+  final lower = normalized.toLowerCase();
+  if (const <String>{
+    'dr.',
+    'mr.',
+    'mrs.',
+    'ms.',
+    'prof.',
+    'sr.',
+    'jr.',
+    'st.',
+    'vs.',
+    'etc.',
+    'no.',
+  }.contains(lower)) {
+    return true;
+  }
+  return RegExp(r'^(?:[a-z]\.){2,}$', caseSensitive: false).hasMatch(
+    normalized,
+  );
 }
 
 bool _looksLikeStructuredTranscriptLine(String line) {
@@ -373,6 +419,10 @@ String? _lastSemanticChar(String value) {
 
 bool _isWhitespaceChar(String char) {
   return char.trim().isEmpty;
+}
+
+bool _isAsciiLetter(String char) {
+  return RegExp(r'[A-Za-z]').hasMatch(char);
 }
 
 bool _isOpeningQuoteOrBracket(String char) {
