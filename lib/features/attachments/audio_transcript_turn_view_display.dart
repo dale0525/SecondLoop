@@ -92,6 +92,8 @@ AudioTranscriptTurnView? resolveAudioTranscriptTurnView(
 }
 
 int _fingerprintTurnViewInputs(Object? turnsRaw, Object? segmentsRaw) {
+  // This is a lightweight cache invalidation fingerprint, not a canonical
+  // identity. A rare hash collision is acceptable here to avoid deep compares.
   return Object.hash(
     _fingerprintJsonLike(turnsRaw),
     _fingerprintJsonLike(segmentsRaw),

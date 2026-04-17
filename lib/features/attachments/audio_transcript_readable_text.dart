@@ -236,10 +236,20 @@ bool _looksLikeAbbreviation(String token) {
   if (normalized.isEmpty) return false;
   final lower = normalized.toLowerCase();
   if (const <String>{
+    'approx.',
+    'co.',
+    'corp.',
+    'dept.',
     'dr.',
+    'est.',
+    'gov.',
+    'inc.',
+    'ltd.',
+    'mgr.',
     'mr.',
     'mrs.',
     'ms.',
+    'rev.',
     'prof.',
     'sr.',
     'jr.',
@@ -262,12 +272,24 @@ bool _looksLikeStructuredTranscriptLine(String line) {
 
   final colonMatch = RegExp(r'[:：]').firstMatch(line);
   if (colonMatch == null) return false;
+  if (_looksLikeUrlSchemeColon(line, colonMatch.start)) return false;
 
   final prefix = line.substring(0, colonMatch.start).trim();
   if (prefix.isEmpty || prefix.length > 24) return false;
   if (prefix.contains(RegExp(r'[.!?。！？]'))) return false;
   if (prefix.split(RegExp(r'\s+')).length > 4) return false;
   return true;
+}
+
+bool _looksLikeUrlSchemeColon(String line, int colonIndex) {
+  if (colonIndex < 0 || colonIndex + 2 >= line.length) return false;
+  if (line.substring(colonIndex, colonIndex + 3) != '://') return false;
+
+  final prefix = line.substring(0, colonIndex).trimRight();
+  if (prefix.isEmpty) return false;
+
+  final schemeToken = prefix.split(RegExp(r'\s+')).last.toLowerCase();
+  return const <String>{'http', 'https', 'ftp', 'ftps'}.contains(schemeToken);
 }
 
 bool _looksLikeTimestampedTranscriptLine(String line) {

@@ -413,6 +413,35 @@ void main() {
     );
   });
 
+  test('audio detail full does not treat url colons as speaker delimiters', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'See http://example.com for details.\n'
+            'Check https://status.example.com before launch.\n'
+            'Share the summary with the team.\n'
+            'Confirm the launch window tomorrow.',
+      },
+    );
+
+    expect(
+      content.full,
+      'See http://example.com for details.\n\n'
+      'Check https://status.example.com before launch. '
+      'Share the summary with the team. '
+      'Confirm the launch window tomorrow.',
+    );
+    expect(
+      content.full,
+      isNot(
+        'See http://example.com for details.\n\n'
+        'Check https://status.example.com before launch.\n\n'
+        'Share the summary with the team.\n\n'
+        'Confirm the launch window tomorrow.',
+      ),
+    );
+  });
+
   test(
       'audio detail full prefers segment-aware paragraphization over structured single-line upgrades',
       () {
@@ -563,6 +592,46 @@ void main() {
     expect(content.full, isNot(contains('Dr.\n\nSmith')));
     expect(content.full, isNot(contains('U.\n\nS.')));
     expect(content.full, isNot(contains('e.\n\ng.')));
+  });
+
+  test(
+      'audio detail full keeps business abbreviations intact when paragraphized',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Apple Inc. released version 2. '
+            'The update reached Acme Corp. teams this morning. '
+            'Another update followed. '
+            'Final review is tomorrow.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Apple Inc. released version 2.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'The update reached Acme Corp. teams this morning.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Another update followed.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Final review is tomorrow.',
+          },
+        ],
+      },
+    );
+
+    expect(content.full, contains('Apple Inc. released version 2.'));
+    expect(
+      content.full,
+      contains('The update reached Acme Corp. teams this morning.'),
+    );
+    expect(content.full, isNot(contains('Apple Inc.\n\nreleased')));
+    expect(content.full, isNot(contains('Acme Corp.\n\nteams')));
   });
 
   test('audio detail full prefers transcript_full over generic full_text', () {
