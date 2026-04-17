@@ -98,6 +98,13 @@ void main() {
       () {
     expect(
       BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+        statusCode: 402,
+        errorCode: 'payment_required',
+      ),
+      isTrue,
+    );
+    expect(
+      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
         statusCode: 403,
         errorCode: 'grace_readonly',
       ),

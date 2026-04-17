@@ -137,3 +137,60 @@ fn managed_vault_clear_vault_prefers_v2_reset_endpoint() {
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");
 }
+
+#[test]
+fn managed_vault_clear_vault_falls_back_to_v1_clear_when_v2_reset_unavailable() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    listener.set_nonblocking(true).expect("nonblocking");
+    let addr = listener.local_addr().expect("local addr");
+
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let requests = Arc::new(Mutex::new(Vec::<String>::new()));
+    let requests_clone = Arc::clone(&requests);
+
+    let handle = thread::spawn(move || loop {
+        if stop_rx.try_recv().is_ok() {
+            break;
+        }
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                stream.set_nonblocking(false).expect("blocking stream");
+                let (raw_headers, method, path, body) = read_request(&mut stream);
+                requests_clone
+                    .lock()
+                    .expect("lock")
+                    .push(format!("{raw_headers}{}", String::from_utf8_lossy(&body)));
+
+                match (method.as_str(), path.as_str()) {
+                    ("POST", "/v2/vaults/v1/sync/reset") => write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "not_found" }),
+                    ),
+                    ("POST", "/v1/vaults/v1/ops:clear") => {
+                        write_json_response(&mut stream, 200, serde_json::json!({ "ok": true }))
+                    }
+                    _ => write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "not_found" }),
+                    ),
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(5));
+            }
+            Err(error) => panic!("accept failed: {error}"),
+        }
+    });
+
+    let base_url = format!("http://{addr}");
+    sync::managed_vault::clear_vault(&base_url, "v1", "test_uid").expect("clear vault");
+
+    let joined = requests.lock().expect("lock").join("\n\n");
+    assert!(joined.contains("/v2/vaults/v1/sync/reset"));
+    assert!(joined.contains("/v1/vaults/v1/ops:clear"));
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}

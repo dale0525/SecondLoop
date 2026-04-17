@@ -617,6 +617,7 @@ final class BackgroundSync {
     int? statusCode,
     String? errorCode,
   }) {
+    if (statusCode == 402) return true;
     return statusCode == 403 &&
         (errorCode == 'grace_readonly' ||
             errorCode == 'storage_quota_exceeded');
