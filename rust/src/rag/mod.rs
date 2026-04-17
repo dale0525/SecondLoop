@@ -339,13 +339,47 @@ fn build_actions_context_in_range(
     build_upcoming_actions_context_in_range(conn, key, time_start_ms, time_end_ms)
 }
 
+struct ActionContextLine {
+    sort_at_ms: i64,
+    text: String,
+}
+
+fn render_action_context(
+    header: &str,
+    mut lines: Vec<ActionContextLine>,
+    newest_first: bool,
+) -> Option<String> {
+    if lines.is_empty() {
+        return None;
+    }
+
+    lines.sort_by(|left, right| {
+        let ordering = left.sort_at_ms.cmp(&right.sort_at_ms);
+        if newest_first {
+            ordering.reverse()
+        } else {
+            ordering
+        }
+    });
+
+    let mut out = String::new();
+    out.push_str(header);
+    out.push('\n');
+    for line in lines.into_iter().take(40) {
+        out.push_str("- ");
+        out.push_str(&line.text);
+        out.push('\n');
+    }
+    Some(out)
+}
+
 fn build_upcoming_actions_context_in_range(
     conn: &Connection,
     key: &[u8; 32],
     time_start_ms: i64,
     time_end_ms: i64,
 ) -> Result<Option<String>> {
-    let mut lines: Vec<String> = Vec::new();
+    let mut lines: Vec<ActionContextLine> = Vec::new();
 
     for todo in db::list_todos(conn, key)? {
         if todo.status == "dismissed" || todo.status == "done" {
@@ -369,7 +403,16 @@ fn build_upcoming_actions_context_in_range(
         if let Some(ms) = todo.next_review_at_ms {
             item.push_str(&format!(" (next_review_at_ms={ms})"));
         }
-        lines.push(item);
+        let sort_at_ms = match (todo.due_at_ms, todo.next_review_at_ms) {
+            (Some(due), Some(review)) => due.min(review),
+            (Some(due), None) => due,
+            (None, Some(review)) => review,
+            (None, None) => continue,
+        };
+        lines.push(ActionContextLine {
+            sort_at_ms,
+            text: item,
+        });
     }
 
     for event in db::list_events(conn, key)? {
@@ -377,24 +420,20 @@ fn build_upcoming_actions_context_in_range(
         if !overlaps_range {
             continue;
         }
-        lines.push(format!(
-            "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
-            event.title, event.start_at_ms, event.end_at_ms, event.tz
-        ));
+        lines.push(ActionContextLine {
+            sort_at_ms: event.start_at_ms.max(time_start_ms),
+            text: format!(
+                "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
+                event.title, event.start_at_ms, event.end_at_ms, event.tz
+            ),
+        });
     }
 
-    if lines.is_empty() {
-        return Ok(None);
-    }
-
-    let mut out = String::new();
-    out.push_str("Upcoming actions (from local todos/events):\n");
-    for line in lines.into_iter().take(40) {
-        out.push_str("- ");
-        out.push_str(&line);
-        out.push('\n');
-    }
-    Ok(Some(out))
+    Ok(render_action_context(
+        "Upcoming actions (from local todos/events):",
+        lines,
+        false,
+    ))
 }
 
 fn build_past_actions_context_in_range(
@@ -403,8 +442,8 @@ fn build_past_actions_context_in_range(
     time_start_ms: i64,
     time_end_ms: i64,
 ) -> Result<Option<String>> {
-    let mut lines: Vec<String> = Vec::new();
-    let mut latest_activity_by_todo = std::collections::BTreeMap::<String, db::TodoActivity>::new();
+    let mut lines: Vec<ActionContextLine> = Vec::new();
+    let mut latest_activity_by_todo = std::collections::HashMap::<String, db::TodoActivity>::new();
 
     for activity in db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)? {
         let should_replace = latest_activity_by_todo
@@ -438,28 +477,27 @@ fn build_past_actions_context_in_range(
                 ),
             },
         };
-        lines.push(line);
+        lines.push(ActionContextLine {
+            sort_at_ms: activity.created_at_ms,
+            text: line,
+        });
     }
 
     for event in db::list_events_in_range(conn, key, time_start_ms, time_end_ms)? {
-        lines.push(format!(
-            "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
-            event.title, event.start_at_ms, event.end_at_ms, event.tz
-        ));
+        lines.push(ActionContextLine {
+            sort_at_ms: event.end_at_ms.min(time_end_ms.saturating_sub(1)),
+            text: format!(
+                "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
+                event.title, event.start_at_ms, event.end_at_ms, event.tz
+            ),
+        });
     }
 
-    if lines.is_empty() {
-        return Ok(None);
-    }
-
-    let mut out = String::new();
-    out.push_str("Past actions (from local todos/events):\n");
-    for line in lines.into_iter().take(40) {
-        out.push_str("- ");
-        out.push_str(&line);
-        out.push('\n');
-    }
-    Ok(Some(out))
+    Ok(render_action_context(
+        "Past actions (from local todos/events):",
+        lines,
+        true,
+    ))
 }
 
 fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -> Result<String> {

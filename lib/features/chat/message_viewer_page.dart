@@ -134,13 +134,7 @@ class MessageViewerPage extends StatelessWidget {
 
     Todo? todo;
     try {
-      final todos = await backend.listTodos(sessionKey);
-      for (final item in todos) {
-        if (item.id == parsed.todoId) {
-          todo = item;
-          break;
-        }
-      }
+      todo = await backend.getTodoById(sessionKey, parsed.todoId);
     } catch (_) {
       todo = null;
     }
@@ -167,13 +161,7 @@ class MessageViewerPage extends StatelessWidget {
 
     Event? event;
     try {
-      final events = await backend.listEvents(sessionKey);
-      for (final item in events) {
-        if (item.id == parsed.eventId) {
-          event = item;
-          break;
-        }
-      }
+      event = await backend.getEventById(sessionKey, parsed.eventId);
     } catch (_) {
       event = null;
     }

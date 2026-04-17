@@ -1781,6 +1781,12 @@ class NativeAppBackend extends _NativeAppBackendAccess
   }
 
   @override
+  Future<Event?> getEventById(Uint8List key, String eventId) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbGetEventById(appDir: appDir, key: key, eventId: eventId);
+  }
+
+  @override
   Future<Event> upsertEvent(
     Uint8List key, {
     required String id,

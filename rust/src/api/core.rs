@@ -1033,6 +1033,17 @@ pub fn db_list_events(app_dir: String, key: Vec<u8>) -> Result<Vec<db::Event>> {
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_get_event_by_id(
+    app_dir: String,
+    key: Vec<u8>,
+    event_id: String,
+) -> Result<Option<db::Event>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::find_event(&conn, &key, &event_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_edit_message(
     app_dir: String,
     key: Vec<u8>,

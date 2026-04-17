@@ -90,6 +90,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  Event dco_decode_box_autoadd_event(dynamic raw);
+
+  @protected
   double dco_decode_box_autoadd_f_64(dynamic raw);
 
   @protected
@@ -447,6 +450,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  Event? dco_decode_opt_box_autoadd_event(dynamic raw);
+
+  @protected
   double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
 
   @protected
@@ -585,6 +591,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ContentEnrichmentConfig sse_decode_box_autoadd_content_enrichment_config(
       SseDeserializer deserializer);
+
+  @protected
+  Event sse_decode_box_autoadd_event(SseDeserializer deserializer);
 
   @protected
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
@@ -999,6 +1008,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  Event? sse_decode_opt_box_autoadd_event(SseDeserializer deserializer);
+
+  @protected
   double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
@@ -1149,6 +1161,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_content_enrichment_config(
       ContentEnrichmentConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_event(Event self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
@@ -1564,6 +1579,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_attachment_metadata(
       AttachmentMetadata? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_event(Event? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);

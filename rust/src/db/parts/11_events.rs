@@ -1,5 +1,6 @@
-pub fn get_event_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Event> {
-    let (title_blob, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms): (
+#[allow(clippy::type_complexity)]
+pub fn find_event(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Option<Event>> {
+    let row: Option<(
         Vec<u8>,
         i64,
         i64,
@@ -7,7 +8,7 @@ pub fn get_event_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Ev
         Option<String>,
         i64,
         i64,
-    ) = conn
+    )> = conn
         .query_row(
             r#"
 SELECT title, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms
@@ -27,13 +28,18 @@ WHERE id = ?1
                 ))
             },
         )
+        .optional()
         .map_err(|e| anyhow!("get event failed: {e}"))?;
+
+    let Some((title_blob, start_at_ms, end_at_ms, tz, source_entry_id, created_at_ms, updated_at_ms)) = row else {
+        return Ok(None);
+    };
 
     let title_bytes = decrypt_bytes(key, &title_blob, b"event.title")?;
     let title =
         String::from_utf8(title_bytes).map_err(|_| anyhow!("event title is not valid utf-8"))?;
 
-    Ok(Event {
+    Ok(Some(Event {
         id: id.to_string(),
         title,
         start_at_ms,
@@ -42,7 +48,11 @@ WHERE id = ?1
         source_entry_id,
         created_at_ms,
         updated_at_ms,
-    })
+    }))
+}
+
+pub fn get_event_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Event> {
+    find_event(conn, key, id)?.ok_or_else(|| anyhow!("get event failed: Query returned no rows"))
 }
 
 pub fn upsert_event(

@@ -329,3 +329,150 @@ fn ask_ai_time_window_candidate_limits_keep_recent_event_matches() {
         "expected newest matching event to survive candidate limit: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_time_window_upcoming_actions_keep_in_range_events_when_truncated() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 700_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    for index in 0..41 {
+        let due_at_ms = if index < 2 {
+            time_start_ms + 100 + index as i64
+        } else {
+            time_start_ms + 10_000 + index as i64
+        };
+        db::upsert_todo(
+            &conn,
+            &key,
+            &format!("todo:upcoming:{index:02}"),
+            &format!("Upcoming todo {index:02}"),
+            Some(due_at_ms),
+            "open",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("todo");
+    }
+
+    db::upsert_event(
+        &conn,
+        &key,
+        "event:critical-sync",
+        "Critical sync in the middle of the day",
+        time_start_ms + 500,
+        time_start_ms + 900,
+        "UTC",
+        None,
+    )
+    .expect("event");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "What's on my schedule today?",
+        0,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = capture_prompt(&provider);
+    assert!(
+        prompt.contains("Critical sync in the middle of the day"),
+        "expected in-range event to survive upcoming actions truncation: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Upcoming todo 40"),
+        "expected later todo to be truncated before in-range event: {prompt}"
+    );
+}
+
+#[test]
+fn ask_ai_time_window_past_actions_truncate_by_recency_not_todo_id() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 800_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    for index in 0..41 {
+        let todo_id = format!("todo:past:{index:02}");
+        db::upsert_todo(
+            &conn,
+            &key,
+            &todo_id,
+            &format!("Past action {index:02}"),
+            None,
+            "open",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("todo");
+        let activity = db::append_todo_note(
+            &conn,
+            &key,
+            &todo_id,
+            &format!("completed note {index:02}"),
+            None,
+        )
+        .expect("activity");
+        conn.execute(
+            "UPDATE todo_activities SET created_at_ms = ?2 WHERE id = ?1",
+            params![activity.id, time_start_ms + index as i64],
+        )
+        .expect("set activity ts");
+    }
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "昨天我做了哪些事？",
+        0,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = capture_prompt(&provider);
+    assert!(
+        prompt.contains("Past action 40"),
+        "expected latest action to survive truncation: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Past action 00"),
+        "expected oldest action to be truncated first: {prompt}"
+    );
+}

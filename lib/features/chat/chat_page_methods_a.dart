@@ -1249,13 +1249,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
 
     Todo? todo;
     try {
-      final todos = await backend.listTodos(sessionKey);
-      for (final item in todos) {
-        if (item.id == normalizedTodoId) {
-          todo = item;
-          break;
-        }
-      }
+      todo = await backend.getTodoById(sessionKey, normalizedTodoId);
     } catch (_) {
       todo = null;
     }
@@ -1272,13 +1266,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
 
     Event? event;
     try {
-      final events = await backend.listEvents(sessionKey);
-      for (final item in events) {
-        if (item.id == normalizedEventId) {
-          event = item;
-          break;
-        }
-      }
+      event = await backend.getEventById(sessionKey, normalizedEventId);
     } catch (_) {
       event = null;
     }
