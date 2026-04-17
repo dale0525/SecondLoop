@@ -7,11 +7,13 @@ const bool _kDisableWebNativeRuntime = bool.fromEnvironment(
 
 bool resolveWebNativeRuntimeSupport({
   required bool browserCapability,
+  required bool sharedMemoryCapability,
   bool disableOverride = _kDisableWebNativeRuntime,
 }) {
-  return !disableOverride && browserCapability;
+  return !disableOverride && browserCapability && sharedMemoryCapability;
 }
 
 bool browserSupportsWebNativeRuntime() => resolveWebNativeRuntimeSupport(
       browserCapability: impl.browserSupportsWebNativeRuntime(),
+      sharedMemoryCapability: impl.browserSupportsSharedMemoryRuntime(),
     );

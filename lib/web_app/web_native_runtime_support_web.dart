@@ -11,3 +11,19 @@ bool browserSupportsWebNativeRuntime() {
     return false;
   }
 }
+
+bool browserSupportsSharedMemoryRuntime() {
+  try {
+    final window = html.window;
+    final sharedArrayBufferAvailable =
+        js_util.hasProperty(window, 'SharedArrayBuffer');
+    final atomicsAvailable = js_util.hasProperty(window, 'Atomics');
+    final crossOriginIsolated =
+        js_util.getProperty<Object?>(window, 'crossOriginIsolated') == true;
+    return sharedArrayBufferAvailable &&
+        atomicsAvailable &&
+        crossOriginIsolated;
+  } catch (_) {
+    return false;
+  }
+}
