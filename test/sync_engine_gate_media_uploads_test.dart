@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
@@ -258,6 +260,83 @@ void main() {
       ConnectivityPlatform.instance = oldConnectivity;
     }
   });
+
+  testWidgets(
+      'Managed-vault auto sync uses full push and waits for pull before media uploads',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+    await store.writeCloudMediaBackupEnabled(true);
+    await store.writeCloudMediaBackupWifiOnly(true);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultRecordingBackend(
+        dueBackups: [
+          const CloudMediaBackup(
+            attachmentSha256: 'a',
+            desiredVariant: 'original',
+            byteLen: 0,
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            updatedAtMs: 0,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: const SyncEngineGate(child: SizedBox.shrink()),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultPushCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultPushCalls, 1);
+      expect(backend.managedVaultPushOpsOnlyCalls, 0);
+      expect(backend.managedVaultUploadAttachmentCalls, 0);
+
+      backend.completePull(applied: 0);
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultUploadAttachmentCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultPullCalls, 1);
+      expect(backend.managedVaultUploadAttachmentCalls, 1);
+      expect(backend.markUploadedCalls, 1);
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
 }
 
 final class _FakeConnectivityPlatform extends ConnectivityPlatform {
@@ -442,4 +521,106 @@ final class _RecordingBackend extends TestAppBackend {
     required String remoteRoot,
   }) async =>
       0;
+}
+
+final class _ManagedVaultRecordingBackend extends _RecordingBackend {
+  _ManagedVaultRecordingBackend({super.dueBackups});
+
+  int managedVaultPushCalls = 0;
+  int managedVaultPushOpsOnlyCalls = 0;
+  int managedVaultPullCalls = 0;
+  int managedVaultUploadAttachmentCalls = 0;
+
+  Completer<int>? _pullCompleter;
+
+  void completePull({required int applied}) {
+    final completer = _pullCompleter;
+    if (completer == null || completer.isCompleted) return;
+    completer.complete(applied);
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPushCalls++;
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPushOpsOnlyCalls++;
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) {
+    managedVaultPullCalls++;
+    _pullCompleter = Completer<int>();
+    return _pullCompleter!.future;
+  }
+
+  @override
+  Future<bool> syncManagedVaultUploadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required String sha256,
+  }) async {
+    managedVaultUploadAttachmentCalls++;
+    return true;
+  }
+}
+
+final class _FakeCloudAuthController implements CloudAuthController {
+  @override
+  Future<String?> getIdToken() async => 'test-id-token';
+
+  @override
+  String? get uid => 'uid-1';
+
+  @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
 }

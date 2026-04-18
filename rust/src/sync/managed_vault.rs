@@ -217,6 +217,44 @@ fn full_push_requires_legacy_media_sync(
     Ok(false)
 }
 
+fn finalize_v2_pull_blob_backfill(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+) -> Result<()> {
+    let scope_id = runtime::scope_id(base_url, vault_id);
+    let _ = state_machine::transition(
+        conn,
+        &scope_id,
+        state_machine::ManagedVaultSyncState::BlobBackfill,
+    );
+
+    let http = runtime::client()?;
+    let app_dir = super::app_dir_from_conn(conn)?;
+    let download_ctx = attachments::AttachmentUploadContext {
+        conn,
+        db_key,
+        sync_key,
+        http: &http,
+        base_url,
+        vault_id,
+        id_token,
+        app_dir: app_dir.as_path(),
+    };
+    let _ = artifacts::download_missing_embedding_artifact_blobs(&download_ctx)?;
+    let _ = blob_repair::process_pending_blob_repairs(&download_ctx, 8)?;
+
+    let _ = state_machine::transition(
+        conn,
+        &scope_id,
+        state_machine::ManagedVaultSyncState::Completed,
+    );
+    Ok(())
+}
+
 pub fn push(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -264,7 +302,10 @@ pub fn pull(
     id_token: &str,
 ) -> Result<u64> {
     match global_log_client::pull_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None) {
-        Ok(pulled) => Ok(pulled),
+        Ok(pulled) => {
+            finalize_v2_pull_blob_backfill(conn, db_key, sync_key, base_url, vault_id, id_token)?;
+            Ok(pulled)
+        }
         Err(error) if v2_route_unavailable(&error) => {
             pull_loop::pull(conn, db_key, sync_key, base_url, vault_id, id_token)
         }
@@ -290,7 +331,10 @@ pub fn pull_with_progress(
         id_token,
         Some(progress),
     ) {
-        Ok(pulled) => Ok(pulled),
+        Ok(pulled) => {
+            finalize_v2_pull_blob_backfill(conn, db_key, sync_key, base_url, vault_id, id_token)?;
+            Ok(pulled)
+        }
         Err(error) if v2_route_unavailable(&error) => progress::pull_with_progress(
             conn, db_key, sync_key, base_url, vault_id, id_token, progress,
         ),

@@ -330,15 +330,13 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
           if (getter == null) return 0;
           final idToken = await getter();
           if (idToken == null || idToken.trim().isEmpty) return 0;
-          final pushed = await backend.syncManagedVaultPushOpsOnly(
+          return backend.syncManagedVaultPush(
             _sessionKey,
             config.syncKey,
             baseUrl: config.baseUrl ?? '',
             vaultId: config.remoteRoot,
             idToken: idToken,
           );
-          await _runCloudMediaBackupIfEnabled(config);
-          return pushed;
         }(),
     };
   }

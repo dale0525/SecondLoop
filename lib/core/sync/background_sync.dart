@@ -524,7 +524,7 @@ final class BackgroundSync {
             if (idToken == null || idToken.trim().isEmpty) {
               return -1;
             }
-            return backend.syncManagedVaultPushOpsOnly(
+            return backend.syncManagedVaultPush(
               sessionKey,
               config.syncKey,
               baseUrl: config.baseUrl ?? '',

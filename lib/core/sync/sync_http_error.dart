@@ -39,8 +39,3 @@ SyncWriteGateState? managedVaultWriteGateStateForError(Object error) {
   }
   return null;
 }
-
-bool managedVaultWriteGateShouldClearAfterPull(SyncWriteGateState state) {
-  return state.kind == SyncWriteGateKind.paymentRequired ||
-      state.kind == SyncWriteGateKind.storageQuotaExceeded;
-}

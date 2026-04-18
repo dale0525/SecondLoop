@@ -311,7 +311,7 @@ void main() {
 
     expect(
       backend.calls,
-      <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
     );
     expect(find.text('More AI features are now available'), findsOneWidget);
   });
@@ -451,7 +451,7 @@ void main() {
 
     expect(
       backend.calls,
-      <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
     );
     expect(find.textContaining('managed-vault push failed'), findsNothing);
     expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
@@ -525,9 +525,9 @@ void main() {
     expect(
       backend.calls,
       <String>[
-        'syncManagedVaultPushOpsOnly',
+        'syncManagedVaultPush',
         'syncManagedVaultPull',
-        'syncManagedVaultPushOpsOnly',
+        'syncManagedVaultPush',
       ],
     );
     expect(find.textContaining('managed-vault push failed'), findsNothing);
@@ -808,14 +808,14 @@ final class _SyncingBackend extends _Backend {
   }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
   }) async {
-    calls.add('syncManagedVaultPushOpsOnly');
+    calls.add('syncManagedVaultPush');
     await Future<void>.delayed(const Duration(milliseconds: 500));
     return 1;
   }
@@ -837,14 +837,14 @@ final class _FailingPullBackend extends _Backend {
   }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
   }) async {
-    calls.add('syncManagedVaultPushOpsOnly');
+    calls.add('syncManagedVaultPush');
     return 0;
   }
 }
@@ -865,14 +865,14 @@ final class _GraceReadOnlyPushBackend extends _Backend {
   }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
   }) async {
-    calls.add('syncManagedVaultPushOpsOnly');
+    calls.add('syncManagedVaultPush');
     throw Exception(
       'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
     );
@@ -896,14 +896,14 @@ final class _GenerationMismatchRecoveryPushBackend extends _Backend {
   }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
   }) async {
-    calls.add('syncManagedVaultPushOpsOnly');
+    calls.add('syncManagedVaultPush');
     if (_firstPush) {
       _firstPush = false;
       throw Exception(

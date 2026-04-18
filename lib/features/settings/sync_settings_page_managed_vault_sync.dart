@@ -72,7 +72,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     String? recoveredMessage;
     try {
       pushed = await _consumeRustProgressStream(
-        backend.syncManagedVaultPushOpsOnlyProgress(
+        backend.syncManagedVaultPushProgress(
           sessionKey,
           syncKey,
           baseUrl: baseUrl,
@@ -116,10 +116,6 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
       ),
       onProgress: pullProgressReporter.onProgress,
     );
-    if (engine != null &&
-        managedVaultWriteGateShouldClearAfterPull(engine.writeGate.value)) {
-      engine.writeGate.value = const SyncWriteGateState.open();
-    }
     if (retryPushAfterPull) {
       stage.value = t.sync.progressDialog.pushing;
       progress.value = 0.0;
@@ -129,7 +125,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         onHasTotal: () => hasTotal.value = true,
       );
       pushed = await _consumeRustProgressStream(
-        backend.syncManagedVaultPushOpsOnlyProgress(
+        backend.syncManagedVaultPushProgress(
           sessionKey,
           syncKey,
           baseUrl: baseUrl,

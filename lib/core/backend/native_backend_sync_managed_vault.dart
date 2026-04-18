@@ -121,6 +121,25 @@ mixin _NativeAppBackendSyncManagedVault on _NativeAppBackendAccess {
   }
 
   @override
+  Stream<String> syncManagedVaultPushProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async* {
+    yield '{"type":"progress","done":0,"total":0}';
+    final pushed = await syncManagedVaultPush(
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+    );
+    yield '{"type":"result","count":$pushed}';
+  }
+
+  @override
   Future<bool> syncManagedVaultUploadAttachmentBytes(
     Uint8List key,
     Uint8List syncKey, {

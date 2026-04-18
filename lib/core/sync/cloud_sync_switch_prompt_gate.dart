@@ -369,7 +369,7 @@ final class _CloudSyncSwitchPromptGateState
                 progress.value = 0.0;
                 try {
                   await _consumeRustProgressStream(
-                    backend.syncManagedVaultPushOpsOnlyProgress(
+                    backend.syncManagedVaultPushProgress(
                       sessionKey,
                       syncKey,
                       baseUrl: baseUrl,
@@ -409,19 +409,12 @@ final class _CloudSyncSwitchPromptGateState
                   ),
                   onProgress: stageProgress.onProgress,
                 );
-                if (engine != null &&
-                    managedVaultWriteGateShouldClearAfterPull(
-                      engine.writeGate.value,
-                    )) {
-                  engine.writeGate.value = const SyncWriteGateState.open();
-                }
-
                 if (retryPushAfterPull) {
                   stageProgress = _makeSmoothStageProgressReporter(progress);
                   stage.value = t.sync.progressDialog.pushing;
                   progress.value = 0.0;
                   await _consumeRustProgressStream(
-                    backend.syncManagedVaultPushOpsOnlyProgress(
+                    backend.syncManagedVaultPushProgress(
                       sessionKey,
                       syncKey,
                       baseUrl: baseUrl,

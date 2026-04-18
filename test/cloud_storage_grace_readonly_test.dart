@@ -41,7 +41,7 @@ void main() {
       async.elapse(const Duration(milliseconds: 1));
       async.flushMicrotasks();
 
-      expect(runner.pullCalls, 1);
+      expect(runner.pullCalls, 2);
 
       engine.stop();
     });

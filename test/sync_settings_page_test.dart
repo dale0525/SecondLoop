@@ -326,13 +326,13 @@ void main() {
     expect(find.byKey(const ValueKey('sync_save_progress_percent')),
         findsOneWidget);
 
-    expect(backend.calls, <String>['syncManagedVaultPushOpsOnly']);
+    expect(backend.calls, <String>['syncManagedVaultPush']);
 
     pushCompleter.complete(0);
     await tester.pumpAndSettle();
     expect(
       backend.calls,
-      <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
     );
 
     pullCompleter.complete(0);
@@ -442,7 +442,7 @@ void main() {
 
     expect(
       backend.calls,
-      <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
     );
     expect(find.textContaining('HTTP 403'), findsNothing);
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
@@ -1126,7 +1126,7 @@ void main() {
     await tester.tap(uploadButton);
     await tester.pump();
 
-    expect(backend.calls, <String>['syncManagedVaultPushOpsOnly']);
+    expect(backend.calls, <String>['syncManagedVaultPush']);
     expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
 
     pushCompleter.complete(0);
@@ -1134,7 +1134,7 @@ void main() {
 
     expect(
       backend.calls,
-      <String>['syncManagedVaultPushOpsOnly', 'syncManagedVaultPull'],
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
     );
     expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
 
@@ -1191,9 +1191,9 @@ void main() {
     expect(
       backend.calls,
       <String>[
-        'syncManagedVaultPushOpsOnly',
+        'syncManagedVaultPush',
         'syncManagedVaultPull',
-        'syncManagedVaultPushOpsOnly',
+        'syncManagedVaultPush',
       ],
     );
     expect(find.text('Uploaded 1 changes'), findsOneWidget);
@@ -1693,14 +1693,14 @@ final class _DelayedManagedVaultSyncBackend extends _SyncSettingsBackend {
   }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
   }) async {
-    calls.add('syncManagedVaultPushOpsOnly');
+    calls.add('syncManagedVaultPush');
     return pushCompleter.future;
   }
 }
@@ -1723,14 +1723,14 @@ final class _GraceReadOnlyManagedVaultSyncBackend extends _SyncSettingsBackend {
   }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
   }) async {
-    calls.add('syncManagedVaultPushOpsOnly');
+    calls.add('syncManagedVaultPush');
     throw Exception(
       'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
     );
@@ -1758,14 +1758,14 @@ final class _GenerationMismatchRecoveryManagedVaultSyncBackend
   }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
   }) async {
-    calls.add('syncManagedVaultPushOpsOnly');
+    calls.add('syncManagedVaultPush');
     if (_firstPush) {
       _firstPush = false;
       throw Exception(

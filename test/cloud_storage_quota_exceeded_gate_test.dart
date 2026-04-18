@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('storage_quota_exceeded blocks pushes and clears after pull', () {
+  test('storage_quota_exceeded blocks pushes and stays blocked after pull', () {
     fakeAsync((async) {
       final runner = _QuotaExceededRunner();
       final engine = SyncEngine(
@@ -43,8 +43,11 @@ void main() {
       async.elapse(const Duration(milliseconds: 1));
       async.flushMicrotasks();
 
-      expect(runner.pullCalls, 1);
-      expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+      expect(runner.pullCalls, 2);
+      expect(
+          engine.writeGate.value.kind, SyncWriteGateKind.storageQuotaExceeded);
+      expect(engine.writeGate.value.quotaUsedBytes, 50);
+      expect(engine.writeGate.value.quotaLimitBytes, 50);
 
       engine.stop();
     });
