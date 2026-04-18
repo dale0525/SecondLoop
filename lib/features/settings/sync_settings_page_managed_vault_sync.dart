@@ -1,7 +1,48 @@
 part of 'sync_settings_page.dart';
 
+final class _ManagedVaultManualPushResult {
+  const _ManagedVaultManualPushResult({
+    required this.pushed,
+    required this.recoveredOnly,
+    required this.recoveredMessage,
+  });
+
+  final int pushed;
+  final bool recoveredOnly;
+  final String? recoveredMessage;
+}
+
 extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
-  Future<int> _runManagedVaultManualPushWithProgress({
+  String _managedVaultRecoveredMessageForGate(SyncWriteGateState gate) {
+    if (gate.kind == SyncWriteGateKind.paymentRequired) {
+      return context.t.sync.cloudManagedVault.paymentRequired;
+    }
+    if (gate.kind == SyncWriteGateKind.graceReadOnly) {
+      final untilMs = gate.graceUntilMs;
+      if (untilMs != null && DateTime.now().millisecondsSinceEpoch < untilMs) {
+        final dt = DateTime.fromMillisecondsSinceEpoch(untilMs).toLocal();
+        final until = MaterialLocalizations.of(context).formatShortDate(dt);
+        return context.t.sync.cloudManagedVault.graceReadonlyUntil(
+          until: until,
+        );
+      }
+      return context.t.sync.cloudManagedVault.serverUnavailable;
+    }
+    if (gate.kind == SyncWriteGateKind.storageQuotaExceeded) {
+      final used = gate.quotaUsedBytes;
+      final limit = gate.quotaLimitBytes;
+      if (used != null && limit != null && limit > 0) {
+        return context.t.sync.cloudManagedVault.storageQuotaExceededWithUsage(
+          used: _formatBytes(used),
+          limit: _formatBytes(limit),
+        );
+      }
+      return context.t.sync.cloudManagedVault.storageQuotaExceeded;
+    }
+    return context.t.sync.cloudManagedVault.serverUnavailable;
+  }
+
+  Future<_ManagedVaultManualPushResult> _runManagedVaultManualPushWithProgress({
     required AppBackend backend,
     required Uint8List sessionKey,
     required Uint8List syncKey,
@@ -26,6 +67,9 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     }
 
     var pushed = 0;
+    var recoveredOnly = false;
+    var retryPushAfterPull = false;
+    String? recoveredMessage;
     try {
       pushed = await _consumeRustProgressStream(
         backend.syncManagedVaultPushOpsOnlyProgress(
@@ -41,9 +85,18 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         ).onProgress,
       );
     } catch (error) {
+      final recoveryAction = managedVaultPushFailureRecoveryAction(error);
       final nextWriteGate = managedVaultWriteGateStateForError(error);
-      if (nextWriteGate != null) engine?.writeGate.value = nextWriteGate;
-      if (!managedVaultPushFailureAllowsPull(error)) rethrow;
+      if (nextWriteGate != null) {
+        engine?.writeGate.value = nextWriteGate;
+        recoveredMessage = _managedVaultRecoveredMessageForGate(nextWriteGate);
+      }
+      if (recoveryAction == ManagedVaultPushFailureRecoveryAction.none) {
+        rethrow;
+      }
+      retryPushAfterPull = recoveryAction ==
+          ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
+      recoveredOnly = !retryPushAfterPull;
     }
 
     stage.value = t.sync.progressDialog.pulling;
@@ -67,8 +120,33 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         managedVaultWriteGateShouldClearAfterPull(engine.writeGate.value)) {
       engine.writeGate.value = const SyncWriteGateState.open();
     }
+    if (retryPushAfterPull) {
+      stage.value = t.sync.progressDialog.pushing;
+      progress.value = 0.0;
+      hasTotal.value = false;
+      final retryProgressReporter = _makeSmoothStageProgressReporter(
+        progress,
+        onHasTotal: () => hasTotal.value = true,
+      );
+      pushed = await _consumeRustProgressStream(
+        backend.syncManagedVaultPushOpsOnlyProgress(
+          sessionKey,
+          syncKey,
+          baseUrl: baseUrl,
+          vaultId: vaultId,
+          idToken: idToken,
+        ),
+        onProgress: retryProgressReporter.onProgress,
+      );
+      retryProgressReporter.complete();
+      recoveredOnly = false;
+    }
     stage.value = t.sync.progressDialog.finalizing;
     pullProgressReporter.complete();
-    return pushed;
+    return _ManagedVaultManualPushResult(
+      pushed: pushed,
+      recoveredOnly: recoveredOnly,
+      recoveredMessage: recoveredMessage,
+    );
   }
 }

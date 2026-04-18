@@ -361,6 +361,7 @@ final class _CloudSyncSwitchPromptGateState
               try {
                 var stageProgress = _makeSmoothStageProgressReporter(progress);
                 var allowMediaUploads = true;
+                var retryPushAfterPull = false;
 
                 // Push local changes first so the next pull converges to the
                 // authoritative remote head for this vault generation.
@@ -378,13 +379,20 @@ final class _CloudSyncSwitchPromptGateState
                     onProgress: stageProgress.onProgress,
                   );
                 } catch (error) {
+                  final recoveryAction =
+                      managedVaultPushFailureRecoveryAction(error);
                   final nextWriteGate =
                       managedVaultWriteGateStateForError(error);
                   if (nextWriteGate != null) {
                     engine?.writeGate.value = nextWriteGate;
                   }
-                  if (!managedVaultPushFailureAllowsPull(error)) rethrow;
+                  if (recoveryAction ==
+                      ManagedVaultPushFailureRecoveryAction.none) {
+                    rethrow;
+                  }
                   allowMediaUploads = false;
+                  retryPushAfterPull = recoveryAction ==
+                      ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
                 }
 
                 // Pull after push to converge to the latest remote log head.
@@ -406,6 +414,24 @@ final class _CloudSyncSwitchPromptGateState
                       engine.writeGate.value,
                     )) {
                   engine.writeGate.value = const SyncWriteGateState.open();
+                }
+
+                if (retryPushAfterPull) {
+                  stageProgress = _makeSmoothStageProgressReporter(progress);
+                  stage.value = t.sync.progressDialog.pushing;
+                  progress.value = 0.0;
+                  await _consumeRustProgressStream(
+                    backend.syncManagedVaultPushOpsOnlyProgress(
+                      sessionKey,
+                      syncKey,
+                      baseUrl: baseUrl,
+                      vaultId: vaultId,
+                      idToken: idToken,
+                    ),
+                    onProgress: stageProgress.onProgress,
+                  );
+                  allowMediaUploads = true;
+                  retryPushAfterPull = false;
                 }
 
                 // Media uploads (optional)

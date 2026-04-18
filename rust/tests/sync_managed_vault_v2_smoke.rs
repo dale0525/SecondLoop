@@ -345,7 +345,7 @@ fn managed_vault_v2_push_and_pull_roundtrip() {
     let requests = state.lock().expect("lock").requests.join("\n\n");
     assert!(requests.contains("/v2/vaults/v1/sync/push"));
     assert!(requests.contains("/v2/vaults/v1/sync/pull"));
-    assert!(requests.contains("/v2/vaults/v1/sync/head"));
+    assert!(!requests.contains("/v2/vaults/v1/sync/head"));
 
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");

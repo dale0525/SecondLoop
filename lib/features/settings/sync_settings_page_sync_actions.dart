@@ -609,6 +609,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                       var stageProgress =
                           _makeSmoothStageProgressReporter(progress);
                       var allowMediaUploads = true;
+                      var retryPushAfterPull = false;
                       stage.value = t.sync.progressDialog.pushing;
                       progress.value = 0.0;
                       try {
@@ -623,13 +624,21 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           onProgress: stageProgress.onProgress,
                         );
                       } catch (error) {
+                        final recoveryAction =
+                            managedVaultPushFailureRecoveryAction(error);
                         final nextWriteGate =
                             managedVaultWriteGateStateForError(error);
                         if (nextWriteGate != null) {
                           engine?.writeGate.value = nextWriteGate;
                         }
-                        if (!managedVaultPushFailureAllowsPull(error)) rethrow;
+                        if (recoveryAction ==
+                            ManagedVaultPushFailureRecoveryAction.none) {
+                          rethrow;
+                        }
                         allowMediaUploads = false;
+                        retryPushAfterPull = recoveryAction ==
+                            ManagedVaultPushFailureRecoveryAction
+                                .pullThenRetryPush;
                       }
 
                       stageProgress =
@@ -652,6 +661,24 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           )) {
                         engine.writeGate.value =
                             const SyncWriteGateState.open();
+                      }
+
+                      if (retryPushAfterPull) {
+                        stageProgress =
+                            _makeSmoothStageProgressReporter(progress);
+                        stage.value = t.sync.progressDialog.pushing;
+                        progress.value = 0.0;
+                        await _consumeRustProgressStream(
+                          backend.syncManagedVaultPushOpsOnlyProgress(
+                            sessionKey,
+                            activeSyncKey,
+                            baseUrl: baseUrlTrimmed,
+                            vaultId: vaultId,
+                            idToken: idTokenTrimmed,
+                          ),
+                          onProgress: stageProgress.onProgress,
+                        );
+                        allowMediaUploads = true;
                       }
 
                       if (allowMediaUploads && _cloudMediaBackupEnabled) {
@@ -752,6 +779,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           : await _loadOrCreateSyncKey();
 
       var pushed = 0;
+      var recoveredOnly = false;
+      String? recoveredMessage;
       await _runSaveSyncWithProgress(
         progressKey: _SyncSettingsPageState._kManualSyncProgressKey,
         progressPercentKey:
@@ -771,7 +800,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
           try {
             if (backendType == SyncBackendType.managedVault) {
-              pushed = await _runManagedVaultManualPushWithProgress(
+              final result = await _runManagedVaultManualPushWithProgress(
                 backend: backend,
                 sessionKey: sessionKey,
                 syncKey: syncKey,
@@ -780,6 +809,9 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                 progress: progress,
                 hasTotal: hasTotal,
               );
+              pushed = result.pushed;
+              recoveredOnly = result.recoveredOnly;
+              recoveredMessage = result.recoveredMessage;
             } else {
               final progressReporter = _makeSmoothStageProgressReporter(
                 progress,
@@ -816,10 +848,14 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           }
         },
       );
-      final successMessage = t.sync.pushedOps(count: pushed);
+      final successMessage = recoveredOnly
+          ? (recoveredMessage ?? t.sync.cloudManagedVault.serverUnavailable)
+          : t.sync.pushedOps(count: pushed);
       await _writeLastSyncLog(
         direction: SyncBackgroundDirection.push,
-        status: SyncBackgroundResultStatus.success,
+        status: recoveredOnly
+            ? SyncBackgroundResultStatus.skipped
+            : SyncBackgroundResultStatus.success,
         durationMs: stopwatch.elapsedMilliseconds,
         userMessage: successMessage,
       );

@@ -62,18 +62,11 @@ async fn api_sync_managed_vault_pull_can_run_inside_async_context() {
     let addr = listener.local_addr().expect("local addr");
 
     let handle = thread::spawn(move || {
-        for step in 0..2 {
+        for step in 0..1 {
             let (mut stream, _) = listener.accept().expect("accept");
             let (method, path, _body) = read_http_request(&mut stream);
             match (step, method.as_str(), path.as_str()) {
-                (0, "GET", "/v2/vaults/v1/sync/head") => {
-                    respond_json(
-                        &mut stream,
-                        "HTTP/1.1 200 OK",
-                        r#"{"generation_id":"","remote_latest_global_seq":0}"#,
-                    );
-                }
-                (1, "POST", "/v2/vaults/v1/sync/pull") => {
+                (0, "POST", "/v2/vaults/v1/sync/pull") => {
                     respond_json(
                         &mut stream,
                         "HTTP/1.1 200 OK",
@@ -84,7 +77,7 @@ async fn api_sync_managed_vault_pull_can_run_inside_async_context() {
                 _ => panic!("unexpected request: step={step} method={method} path={path}"),
             }
         }
-        panic!("expected exactly 2 requests");
+        panic!("expected exactly 1 request");
     });
 
     let temp = tempfile::tempdir().expect("tempdir");

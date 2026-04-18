@@ -4,9 +4,9 @@ use base64::Engine as _;
 use rusqlite::{params, Connection};
 
 use super::global_log_protocol::{
-    GlobalLogHeadResponse, GlobalLogPullErrorResponse, GlobalLogPullOp, GlobalLogPullRequest,
-    GlobalLogPullResponse, GlobalLogPushErrorResponse, GlobalLogPushOp, GlobalLogPushRequest,
-    GlobalLogPushResponse, GlobalLogResetResponse,
+    GlobalLogPullErrorResponse, GlobalLogPullOp, GlobalLogPullRequest, GlobalLogPullResponse,
+    GlobalLogPushErrorResponse, GlobalLogPushOp, GlobalLogPushRequest, GlobalLogPushResponse,
+    GlobalLogResetResponse,
 };
 use super::runtime::Client;
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
@@ -105,25 +105,6 @@ fn fetch_pull(
         ));
     }
     Ok(GlobalLogPullRouteResult::Parsed(resp.json()?))
-}
-
-pub(super) fn fetch_head(
-    http: &Client,
-    endpoint: &str,
-    id_token: &str,
-) -> Result<GlobalLogRouteResult<GlobalLogHeadResponse>> {
-    let resp = http.get(endpoint).bearer_auth(id_token).send()?;
-    let status = resp.status();
-    if unsupported_status(status.as_u16()) {
-        return Ok(GlobalLogRouteResult::Unsupported);
-    }
-    if !status.is_success() {
-        let text = resp.text().unwrap_or_default();
-        return Err(anyhow!(
-            "managed-vault v2 head failed: HTTP {status} {text}"
-        ));
-    }
-    Ok(GlobalLogRouteResult::Parsed(resp.json()?))
 }
 
 pub(super) fn reset_remote_vault(
@@ -347,18 +328,10 @@ pub(super) fn pull_v2(
     let http = super::runtime::client()?;
     let scope_id = super::runtime::scope_id(base_url, vault_id);
     let endpoint = super::runtime::url(base_url, &format!("/v2/vaults/{vault_id}/sync/pull"))?;
-    let head_endpoint = super::runtime::url(base_url, &format!("/v2/vaults/{vault_id}/sync/head"))?;
 
     let initial_last_applied =
         super::global_log_state::read_last_applied_global_seq(conn, &scope_id)?;
-    let total_target = match fetch_head(&http, &head_endpoint, id_token)? {
-        GlobalLogRouteResult::Unsupported => {
-            return Err(anyhow!("managed-vault v2 head route unavailable"));
-        }
-        GlobalLogRouteResult::Parsed(head) => {
-            (head.remote_latest_global_seq - initial_last_applied).max(0) as u64
-        }
-    };
+    let mut total_target: Option<u64> = None;
 
     let mut total_applied = 0u64;
     let mut last_applied = initial_last_applied;
@@ -386,12 +359,16 @@ pub(super) fn pull_v2(
                 last_applied = 0;
                 reset_recovered = true;
                 if let Some(progress_fn) = progress.as_deref_mut() {
-                    progress_fn(0, total_target);
+                    progress_fn(0, total_target.unwrap_or(0));
                 }
                 continue;
             }
             GlobalLogPullRouteResult::Parsed(response) => response,
         };
+
+        let effective_total_target = *total_target.get_or_insert_with(|| {
+            (response.remote_latest_global_seq - initial_last_applied).max(0) as u64
+        });
 
         let local_generation = super::global_log_state::read_generation_id(conn, &scope_id)?;
         let response_generation = response.generation_id.trim();
@@ -402,7 +379,7 @@ pub(super) fn pull_v2(
                     total_applied = 0;
                 }
                 if let Some(progress_fn) = progress.as_deref_mut() {
-                    progress_fn(total_applied, total_target);
+                    progress_fn(total_applied, effective_total_target);
                 }
                 return Ok(total_applied);
             }
@@ -418,7 +395,7 @@ pub(super) fn pull_v2(
                 total_applied = 0;
                 last_applied = 0;
                 if let Some(progress_fn) = progress.as_deref_mut() {
-                    progress_fn(0, total_target);
+                    progress_fn(0, effective_total_target);
                 }
                 continue;
             }
@@ -427,7 +404,7 @@ pub(super) fn pull_v2(
 
         if response.ops.is_empty() {
             if let Some(progress_fn) = progress.as_deref_mut() {
-                progress_fn(total_applied, total_target);
+                progress_fn(total_applied, effective_total_target);
             }
             return Ok(total_applied);
         }
@@ -438,7 +415,7 @@ pub(super) fn pull_v2(
                 total_applied = 0;
                 last_applied = 0;
                 if let Some(progress_fn) = progress.as_deref_mut() {
-                    progress_fn(0, total_target);
+                    progress_fn(0, effective_total_target);
                 }
                 continue;
             }
@@ -458,7 +435,7 @@ pub(super) fn pull_v2(
 
         if let Some(progress_fn) = progress.as_deref_mut() {
             let done = (last_applied - initial_last_applied).max(0) as u64;
-            progress_fn(done.min(total_target), total_target);
+            progress_fn(done.min(effective_total_target), effective_total_target);
         }
 
         if !response.has_more {

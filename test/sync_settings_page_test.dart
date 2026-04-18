@@ -1143,6 +1143,62 @@ void main() {
 
     expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
   });
+
+  testWidgets(
+      'managed vault manual upload retries push after pull recovers generation mismatch',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _GenerationMismatchRecoveryManagedVaultSyncBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPushOpsOnly',
+        'syncManagedVaultPull',
+        'syncManagedVaultPushOpsOnly',
+      ],
+    );
+    expect(find.text('Uploaded 1 changes'), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
+  });
 }
 
 Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
@@ -1678,6 +1734,45 @@ final class _GraceReadOnlyManagedVaultSyncBackend extends _SyncSettingsBackend {
     throw Exception(
       'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
     );
+  }
+}
+
+final class _GenerationMismatchRecoveryManagedVaultSyncBackend
+    extends _SyncSettingsBackend {
+  _GenerationMismatchRecoveryManagedVaultSyncBackend()
+      : super(managedVaultPullResult: 0);
+
+  final List<String> calls = <String>[];
+  var _firstPush = true;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPushOpsOnly');
+    if (_firstPush) {
+      _firstPush = false;
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    return 1;
   }
 }
 

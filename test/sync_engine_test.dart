@@ -396,6 +396,29 @@ void main() {
     });
   });
 
+  test('managed vault retries push after pull recovers generation mismatch',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultRecoveryRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull', 'push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
     fakeAsync((async) {
       final runner = _HintPullRunner(
@@ -522,6 +545,30 @@ final class _OrderedRunner implements SyncRunner {
   Future<int> push(SyncConfig config) async {
     calls.add('push');
     return 0;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    return 0;
+  }
+}
+
+final class _ManagedVaultRecoveryRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  var _firstPush = true;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    if (_firstPush) {
+      _firstPush = false;
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    return 1;
   }
 
   @override

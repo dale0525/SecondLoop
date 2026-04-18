@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show Listenable, ValueNotifier;
 
+import 'managed_vault_sync_error_policy.dart';
 import 'sync_result.dart';
 
 enum SyncBackendType {
@@ -206,6 +207,7 @@ final class SyncEngine {
   Timer? _pushDebounceTimer;
   Timer? _pullTimer;
   int? _lastZeroApplyRefreshAtMs;
+  bool _retryPushAfterRecoveryPull = false;
 
   static int _defaultNowMs() => DateTime.now().millisecondsSinceEpoch;
 
@@ -259,6 +261,7 @@ final class SyncEngine {
       _pushQueued = false;
     }
     _pullQueued = false;
+    _retryPushAfterRecoveryPull = false;
     _running = false;
     _stopAfterDrain = false;
   }
@@ -407,33 +410,45 @@ final class SyncEngine {
         return;
       }
 
-      final message = e.toString();
-      final status =
-          RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message)?.group(1);
-      final code =
-          RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(message)?.group(1);
+      final statusCode = extractManagedVaultSyncHttpStatusCode(e);
+      final errorCode = extractManagedVaultSyncErrorCode(e);
       final graceUntilRaw =
-          RegExp(r'"grace_until_ms"\s*:\s*(\d+)').firstMatch(message)?.group(1);
+          RegExp(r'"grace_until_ms"\s*:\s*(\d+)').firstMatch('$e')?.group(1);
       final graceUntilMs =
           graceUntilRaw == null ? null : int.tryParse(graceUntilRaw);
       final usedRaw =
-          RegExp(r'"used_bytes"\s*:\s*(\d+)').firstMatch(message)?.group(1);
+          RegExp(r'"used_bytes"\s*:\s*(\d+)').firstMatch('$e')?.group(1);
       final usedBytes = usedRaw == null ? null : int.tryParse(usedRaw);
       final limitRaw =
-          RegExp(r'"limit_bytes"\s*:\s*(\d+)').firstMatch(message)?.group(1);
+          RegExp(r'"limit_bytes"\s*:\s*(\d+)').firstMatch('$e')?.group(1);
       final limitBytes = limitRaw == null ? null : int.tryParse(limitRaw);
 
-      if (status == '403' && code == 'grace_readonly' && graceUntilMs != null) {
+      if (statusCode == 403 &&
+          errorCode == 'grace_readonly' &&
+          graceUntilMs != null) {
         _setWriteGate(SyncWriteGateState.graceReadOnly(graceUntilMs));
-      } else if (status == '403' && code == 'storage_quota_exceeded') {
+      } else if (statusCode == 403 && errorCode == 'storage_quota_exceeded') {
         _setWriteGate(
           SyncWriteGateState.storageQuotaExceeded(
             usedBytes: usedBytes,
             limitBytes: limitBytes,
           ),
         );
-      } else if (status == '402') {
+      } else if (statusCode == 402) {
         _setWriteGate(const SyncWriteGateState.paymentRequired());
+      }
+
+      final recoveryAction = managedVaultPushFailureRecoveryActionForStatus(
+        statusCode: statusCode,
+        errorCode: errorCode,
+      );
+      if (_acceptsNewWork &&
+          recoveryAction != ManagedVaultPushFailureRecoveryAction.none) {
+        _pullQueued = true;
+        if (recoveryAction ==
+            ManagedVaultPushFailureRecoveryAction.pullThenRetryPush) {
+          _retryPushAfterRecoveryPull = true;
+        }
       }
 
       // Best-effort: avoid crashing the app on transient sync errors.
@@ -451,6 +466,13 @@ final class SyncEngine {
           (writeGate.value.kind == SyncWriteGateKind.paymentRequired ||
               writeGate.value.kind == SyncWriteGateKind.storageQuotaExceeded)) {
         _setWriteGate(const SyncWriteGateState.open());
+      }
+
+      if (config.backendType == SyncBackendType.managedVault &&
+          _retryPushAfterRecoveryPull &&
+          _acceptsNewWork) {
+        _retryPushAfterRecoveryPull = false;
+        _pushQueued = true;
       }
 
       if (pullResult.hasAppliedChanges) {
@@ -473,6 +495,7 @@ final class SyncEngine {
       if (status == '402') {
         _setWriteGate(const SyncWriteGateState.paymentRequired());
       }
+      _retryPushAfterRecoveryPull = false;
 
       // Best-effort: avoid crashing the app on transient sync errors.
     } finally {}

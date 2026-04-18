@@ -245,12 +245,18 @@ final class BackgroundSync {
         }
       }
 
-      final pushResult = await _pushOnce(
+      var pushResult = await _pushOnce(
         backend: backend,
         sessionKey: sessionKey,
         config: config,
         managedVaultIdToken: idToken,
       );
+      final recoveryAction = config.backendType == SyncBackendType.managedVault
+          ? managedVaultPushFailureRecoveryActionForStatus(
+              statusCode: pushResult.statusCode,
+              errorCode: pushResult.errorCode,
+            )
+          : ManagedVaultPushFailureRecoveryAction.none;
       final shouldRunPull =
           config.backendType != SyncBackendType.managedVault ||
               switch (pushResult.status) {
@@ -274,6 +280,18 @@ final class BackgroundSync {
               userMessage:
                   'Managed-vault pull skipped because push failed unrecoverably.',
             );
+
+      if (config.backendType == SyncBackendType.managedVault &&
+          recoveryAction ==
+              ManagedVaultPushFailureRecoveryAction.pullThenRetryPush &&
+          pullResult.status == _BackgroundOpStatus.success) {
+        pushResult = await _pushOnce(
+          backend: backend,
+          sessionKey: sessionKey,
+          config: config,
+          managedVaultIdToken: idToken,
+        );
+      }
 
       final retryableFailure = switch ((
         pushResult.retryable,
@@ -636,10 +654,11 @@ final class BackgroundSync {
     String? errorCode,
   }) {
     if (statusCode == 402) return true;
-    return shouldContinueManagedVaultPullAfterPushFailure(
-      statusCode: statusCode,
-      errorCode: errorCode,
-    );
+    return managedVaultPushFailureRecoveryActionForStatus(
+          statusCode: statusCode,
+          errorCode: errorCode,
+        ) ==
+        ManagedVaultPushFailureRecoveryAction.pullOnly;
   }
 
   @visibleForTesting

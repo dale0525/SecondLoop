@@ -89,7 +89,7 @@ fn managed_vault_pull_recovers_from_forbidden_v2_requester_device_by_rotating_lo
                 serde_json::from_slice(&body).expect("parse request body")
             };
             match (step, method.as_str(), path.as_str()) {
-                (0, "GET", "/v2/vaults/v1/sync/head") => {
+                (0, "POST", "/v2/vaults/v1/sync/pull") => {
                     respond_json(
                         &mut stream,
                         "HTTP/1.1 404 Not Found",

@@ -67,12 +67,6 @@ pub(super) struct GlobalLogPullErrorResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct GlobalLogHeadResponse {
-    pub(super) generation_id: String,
-    pub(super) remote_latest_global_seq: i64,
-}
-
-#[derive(Debug, Deserialize)]
 pub(super) struct GlobalLogResetResponse {
     pub(super) generation_id: String,
     pub(super) remote_latest_global_seq: i64,

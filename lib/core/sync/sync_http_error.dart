@@ -1,16 +1,14 @@
+export 'managed_vault_sync_error_policy.dart';
+
+import 'managed_vault_sync_error_policy.dart';
 import 'sync_engine.dart';
 
 int? extractSyncHttpStatusCode(Object error) {
-  final message = error.toString();
-  final statusText =
-      RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message)?.group(1);
-  if (statusText == null) return null;
-  return int.tryParse(statusText);
+  return extractManagedVaultSyncHttpStatusCode(error);
 }
 
 String? extractSyncErrorCode(Object error) {
-  final message = error.toString();
-  return RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(message)?.group(1);
+  return extractManagedVaultSyncErrorCode(error);
 }
 
 int? extractSyncErrorIntField(Object error, String fieldName) {
@@ -45,28 +43,4 @@ SyncWriteGateState? managedVaultWriteGateStateForError(Object error) {
 bool managedVaultWriteGateShouldClearAfterPull(SyncWriteGateState state) {
   return state.kind == SyncWriteGateKind.paymentRequired ||
       state.kind == SyncWriteGateKind.storageQuotaExceeded;
-}
-
-bool managedVaultPushFailureAllowsPullForStatus({
-  int? statusCode,
-  String? errorCode,
-}) {
-  if (statusCode == 403) {
-    return errorCode == 'grace_readonly' ||
-        errorCode == 'storage_quota_exceeded';
-  }
-  if (statusCode == 409) {
-    return errorCode == 'generation_mismatch' ||
-        errorCode == 'generation_required';
-  }
-  return false;
-}
-
-bool managedVaultPushFailureAllowsPull(Object error) {
-  final statusCode = extractSyncHttpStatusCode(error);
-  final errorCode = extractSyncErrorCode(error);
-  return managedVaultPushFailureAllowsPullForStatus(
-    statusCode: statusCode,
-    errorCode: errorCode,
-  );
 }
