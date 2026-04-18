@@ -3887,15 +3887,35 @@ pub async fn sync_managed_vault_pull(
 ) -> Result<u64> {
     let key = key_from_bytes(key)?;
     let sync_key = sync_key_from_bytes(sync_key)?;
-    let conn = db::open(Path::new(&app_dir))?;
-    sync::managed_vault::pull(
-        &conn,
-        &key,
-        &sync_key,
-        &base_url,
-        &vault_id,
-        &firebase_id_token,
-    )
+    #[cfg(not(target_family = "wasm"))]
+    {
+        return tokio::task::spawn_blocking(move || {
+            let conn = db::open(Path::new(&app_dir))?;
+            sync::managed_vault::pull(
+                &conn,
+                &key,
+                &sync_key,
+                &base_url,
+                &vault_id,
+                &firebase_id_token,
+            )
+        })
+        .await
+        .map_err(|error| anyhow!("sync_managed_vault_pull task failed: {error}"))?;
+    }
+
+    #[cfg(target_family = "wasm")]
+    {
+        let conn = db::open(Path::new(&app_dir))?;
+        sync::managed_vault::pull(
+            &conn,
+            &key,
+            &sync_key,
+            &base_url,
+            &vault_id,
+            &firebase_id_token,
+        )
+    }
 }
 
 #[flutter_rust_bridge::frb]

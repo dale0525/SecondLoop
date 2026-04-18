@@ -29,6 +29,7 @@ unicode-normalization = "0.1"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
 rusqlite = { version = "0.39", features = ["bundled"] }
 sqlite-vec = "0.1.7-alpha.2"
+tokio = { version = "1", features = ["rt"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 console_error_panic_hook = "0.1"
@@ -64,6 +65,7 @@ hound = "3.5"
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [patch.crates-io]
 # Work around cargo-expand failures on macOS/aarch64 during FRB generation
