@@ -302,6 +302,15 @@ fn start_mock_v2_server() -> (
                             );
                         }
                     }
+                    ("PUT", path) if path.starts_with("/v1/vaults/v1/attachments/") => {
+                        let artifact_id = path
+                            .strip_prefix("/v1/vaults/v1/attachments/")
+                            .unwrap_or_default()
+                            .to_string();
+                        let mut state = state_clone.lock().expect("lock");
+                        state.attachments.insert(artifact_id, body);
+                        write_json_response(&mut stream, 200, serde_json::json!({}));
+                    }
                     _ => write_json_response(
                         &mut stream,
                         404,
@@ -424,13 +433,22 @@ fn managed_vault_v2_generation_mismatch_preserves_local_data_until_pull_recovers
     let convs_before_pull = db::list_conversations(&conn, &key).expect("list convs before pull");
     assert_eq!(convs_before_pull.len(), 1);
 
-    let recovery_pull =
+    let recovery_pull_error =
         sync::managed_vault::pull(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
-            .expect("recovery pull");
-    assert_eq!(recovery_pull, 0);
+            .expect_err("recovery pull should protect local pending changes");
+    assert!(
+        recovery_pull_error
+            .to_string()
+            .contains("local_unpushed_changes"),
+        "unexpected error: {recovery_pull_error:#}"
+    );
 
     let convs_after_pull = db::list_conversations(&conn, &key).expect("list convs after pull");
-    assert_eq!(convs_after_pull.len(), 0);
+    assert_eq!(convs_after_pull.len(), 1);
+    let msgs_after_pull = db::list_messages(&conn, &key, &convs_after_pull[0].id)
+        .expect("list msgs after guarded pull");
+    assert_eq!(msgs_after_pull.len(), 2);
+    assert_eq!(msgs_after_pull[1].content, "after reset");
 
     let state = state.lock().expect("lock");
     assert_eq!(state.latest_global_seq, 0);
@@ -477,6 +495,13 @@ fn managed_vault_v2_missing_local_generation_preserves_local_data_until_pull_rec
     let convs_before_pull = db::list_conversations(&conn, &key).expect("list convs before pull");
     assert_eq!(convs_before_pull.len(), 1);
 
+    let recovery_pull =
+        sync::managed_vault::pull(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("recovery pull");
+    assert_eq!(recovery_pull, 0);
+    let convs_after_pull = db::list_conversations(&conn, &key).expect("list convs after pull");
+    assert_eq!(convs_after_pull.len(), 1);
+
     let requests = state.lock().expect("lock").requests.join("\n\n");
     assert!(
         requests.contains("\"error\":\"generation_required\"")
@@ -486,6 +511,62 @@ fn managed_vault_v2_missing_local_generation_preserves_local_data_until_pull_rec
 
     let state = state.lock().expect("lock");
     assert_eq!(state.ops.len(), 0);
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_push_uploads_new_attachment_bytes_after_initial_backfill() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    let _attachment =
+        db::insert_attachment(&conn, &key, &app_dir, b"fresh attachment", "image/png")
+            .expect("insert attachment");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn.execute(
+        "INSERT INTO kv(key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![
+            format!("managed_vault.attachments.bytes_backfilled:{scope_id}"),
+            "1"
+        ],
+    )
+    .expect("seed attachment backfill flag");
+    conn.execute(
+        "INSERT INTO kv(key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![
+            format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}"),
+            "1"
+        ],
+    )
+    .expect("seed artifact backfill flag");
+
+    let pushed = sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("push");
+    assert!(pushed > 0);
+
+    let requests = state.lock().expect("lock").requests.join("\n\n");
+    assert!(requests.contains("/v2/vaults/v1/sync/push"));
+    assert!(requests.contains("/v1/vaults/v1/attachments/"));
+
+    let attachment_count = state.lock().expect("lock").attachments.len();
+    assert_eq!(attachment_count, 1);
 
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");

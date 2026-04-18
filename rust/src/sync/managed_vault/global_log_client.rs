@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
 use rusqlite::{params, Connection};
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::global_log_protocol::{
     GlobalLogPullErrorResponse, GlobalLogPullOp, GlobalLogPullRequest, GlobalLogPullResponse,
@@ -30,6 +31,21 @@ pub(super) enum GlobalLogPullRouteResult {
     Parsed(GlobalLogPullResponse),
     Unsupported,
     ResetRequired(GlobalLogPullErrorResponse),
+}
+
+enum PendingAttachmentAction {
+    Upload {
+        mime_type: String,
+        created_at_ms: i64,
+    },
+    Delete,
+}
+
+struct LocalPushBatch {
+    ops: Vec<GlobalLogPushOp>,
+    max_seq: i64,
+    attachment_actions: BTreeMap<String, PendingAttachmentAction>,
+    artifact_blob_refs: BTreeSet<String>,
 }
 
 fn unsupported_status(status_code: u16) -> bool {
@@ -136,7 +152,7 @@ fn maybe_collect_local_push_ops(
     sync_key: &[u8; 32],
     device_id: &str,
     last_pushed_seq: i64,
-) -> Result<(Vec<GlobalLogPushOp>, i64)> {
+) -> Result<LocalPushBatch> {
     let mut stmt = conn.prepare(
         r#"SELECT op_id, seq, op_json
            FROM oplog
@@ -148,6 +164,8 @@ fn maybe_collect_local_push_ops(
 
     let mut ops = Vec::new();
     let mut max_seq = last_pushed_seq;
+    let mut attachment_actions = BTreeMap::new();
+    let mut artifact_blob_refs = BTreeSet::new();
     while let Some(row) = rows.next()? {
         let op_id: String = row.get(0)?;
         let seq: i64 = row.get(1)?;
@@ -157,6 +175,38 @@ fn maybe_collect_local_push_ops(
             &op_json_blob,
             format!("oplog.op_json:{op_id}").as_bytes(),
         )?;
+        if let Ok(op_json) = serde_json::from_slice::<serde_json::Value>(&plaintext) {
+            if op_json["type"].as_str() == Some("attachment.upsert.v1") {
+                if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
+                    let mime_type = op_json["payload"]["mime_type"]
+                        .as_str()
+                        .unwrap_or("application/octet-stream");
+                    let created_at_ms = op_json["payload"]["created_at_ms"].as_i64().unwrap_or(0);
+                    attachment_actions.insert(
+                        sha256.to_string(),
+                        PendingAttachmentAction::Upload {
+                            mime_type: mime_type.to_string(),
+                            created_at_ms,
+                        },
+                    );
+                }
+            }
+
+            if op_json["type"].as_str() == Some("attachment.delete.v1") {
+                if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
+                    attachment_actions.insert(sha256.to_string(), PendingAttachmentAction::Delete);
+                }
+            }
+
+            if op_json["type"].as_str() == Some("embedding.artifact.upsert.v1") {
+                if let Some(blob_ref) = op_json["payload"]["blob_ref"].as_str() {
+                    let blob_ref = blob_ref.trim();
+                    if !blob_ref.is_empty() {
+                        artifact_blob_refs.insert(blob_ref.to_string());
+                    }
+                }
+            }
+        }
         let ciphertext = encrypt_bytes(
             sync_key,
             &plaintext,
@@ -172,7 +222,12 @@ fn maybe_collect_local_push_ops(
         max_seq = max_seq.max(seq);
     }
 
-    Ok((ops, max_seq))
+    Ok(LocalPushBatch {
+        ops,
+        max_seq,
+        attachment_actions,
+        artifact_blob_refs,
+    })
 }
 
 fn apply_v2_pull_ops(
@@ -249,6 +304,32 @@ fn format_push_route_error(error: &GlobalLogPushErrorResponse) -> Result<anyhow:
     Ok(anyhow!("managed-vault v2 push failed: HTTP 409 {body}"))
 }
 
+fn has_local_unpushed_changes(conn: &Connection, scope_id: &str) -> Result<bool> {
+    let device_id = super::super::get_or_create_device_id(conn)?;
+    let last_pushed_seq =
+        super::global_log_state::read_last_pushed_local_seq(conn, scope_id, &device_id)?;
+    conn.query_row(
+        r#"SELECT EXISTS(
+               SELECT 1
+               FROM oplog
+               WHERE device_id = ?1 AND seq > ?2
+               LIMIT 1
+           )"#,
+        params![device_id, last_pushed_seq],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+fn rebuild_local_vault_if_safe(conn: &Connection, scope_id: &str) -> Result<()> {
+    if has_local_unpushed_changes(conn, scope_id)? {
+        return Err(anyhow!(
+            "managed-vault v2 recovery blocked: local_unpushed_changes"
+        ));
+    }
+    super::global_log_state::rebuild_local_vault(conn, scope_id)
+}
+
 pub(super) fn push_v2(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -256,6 +337,7 @@ pub(super) fn push_v2(
     base_url: &str,
     vault_id: &str,
     id_token: &str,
+    upload_attachment_bytes: bool,
     mut progress: Option<&mut dyn FnMut(u64, u64)>,
 ) -> Result<u64> {
     let http = super::runtime::client()?;
@@ -265,15 +347,83 @@ pub(super) fn push_v2(
 
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
     crate::db::backfill_knowledge_memory_feedback_oplog_if_needed(conn, db_key)?;
+    let app_dir = if upload_attachment_bytes {
+        Some(super::super::app_dir_from_conn(conn)?)
+    } else {
+        None
+    };
 
     let mut total_pushed = 0u64;
     loop {
         let last_pushed_seq =
             super::global_log_state::read_last_pushed_local_seq(conn, &scope_id, &device_id)?;
-        let (ops, max_seq) =
+        let batch =
             maybe_collect_local_push_ops(conn, db_key, sync_key, &device_id, last_pushed_seq)?;
-        if ops.is_empty() {
+        if batch.ops.is_empty() {
+            if upload_attachment_bytes {
+                let upload_ctx = super::attachments::AttachmentUploadContext {
+                    conn,
+                    db_key,
+                    sync_key,
+                    http: &http,
+                    base_url,
+                    vault_id,
+                    id_token,
+                    app_dir: app_dir.as_ref().expect("managed-vault app_dir").as_path(),
+                };
+                let _ = super::blob_repair::process_pending_blob_repairs(&upload_ctx, 8)?;
+            }
             return Ok(total_pushed);
+        }
+
+        if upload_attachment_bytes {
+            let upload_ctx = super::attachments::AttachmentUploadContext {
+                conn,
+                db_key,
+                sync_key,
+                http: &http,
+                base_url,
+                vault_id,
+                id_token,
+                app_dir: app_dir.as_ref().expect("managed-vault app_dir").as_path(),
+            };
+            if batch
+                .attachment_actions
+                .values()
+                .any(|action| matches!(action, PendingAttachmentAction::Upload { .. }))
+            {
+                let _ = crate::db::ensure_all_video_manifest_derivations(
+                    conn,
+                    db_key,
+                    upload_ctx.app_dir,
+                )?;
+            }
+
+            for (sha256, action) in &batch.attachment_actions {
+                match action {
+                    PendingAttachmentAction::Upload {
+                        mime_type,
+                        created_at_ms,
+                    } => {
+                        let _ = super::attachments::upload_attachment_bytes_if_present(
+                            &upload_ctx,
+                            sha256,
+                            mime_type,
+                            *created_at_ms,
+                        )?;
+                    }
+                    PendingAttachmentAction::Delete => {
+                        super::attachments::delete_remote_attachment_bytes(&upload_ctx, sha256)?;
+                    }
+                }
+            }
+
+            for blob_ref in &batch.artifact_blob_refs {
+                let _ = super::artifacts::upload_embedding_artifact_blob_if_present(
+                    &upload_ctx,
+                    blob_ref,
+                )?;
+            }
         }
 
         let local_generation = super::global_log_state::read_generation_id(conn, &scope_id)?;
@@ -283,7 +433,7 @@ pub(super) fn push_v2(
             )?,
             generation_id: local_generation.as_deref(),
             batch_id: "",
-            ops,
+            ops: batch.ops,
         };
         let batch_id = uuid::Uuid::new_v4().to_string();
         request.batch_id = batch_id.as_str();
@@ -305,9 +455,12 @@ pub(super) fn push_v2(
                     &response.generation_id,
                 )?;
                 super::global_log_state::write_last_pushed_local_seq(
-                    conn, &scope_id, &device_id, max_seq,
+                    conn,
+                    &scope_id,
+                    &device_id,
+                    batch.max_seq,
                 )?;
-                total_pushed += (max_seq - last_pushed_seq).max(0) as u64;
+                total_pushed += (batch.max_seq - last_pushed_seq).max(0) as u64;
                 if let Some(progress_fn) = progress.as_deref_mut() {
                     progress_fn(total_pushed, total_pushed);
                 }
@@ -356,7 +509,7 @@ pub(super) fn pull_v2(
                         error.remote_latest_global_seq
                     ));
                 }
-                super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                rebuild_local_vault_if_safe(conn, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
@@ -386,7 +539,7 @@ pub(super) fn pull_v2(
         if response_generation.is_empty() {
             if response.remote_latest_global_seq == 0 && response.ops.is_empty() {
                 if local_generation.is_some() || last_applied > 0 {
-                    super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                    rebuild_local_vault_if_safe(conn, &scope_id)?;
                     total_applied = 0;
                     total_target = None;
                 }
@@ -403,7 +556,7 @@ pub(super) fn pull_v2(
         }
         if let Some(existing_generation) = &local_generation {
             if existing_generation != response_generation {
-                super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                rebuild_local_vault_if_safe(conn, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
@@ -423,7 +576,7 @@ pub(super) fn pull_v2(
 
         if !pull_page_is_contiguous(&response.ops, last_applied) {
             if local_generation.is_some() || last_applied > 0 {
-                super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
+                rebuild_local_vault_if_safe(conn, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;

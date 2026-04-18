@@ -336,7 +336,8 @@ final class BackgroundSync {
 
       final allowManagedVaultMediaUploads =
           config.backendType != SyncBackendType.managedVault ||
-              !shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+              shouldRunManagedVaultMediaUploads(
+                pushSucceeded: pushResult.status == _BackgroundOpStatus.success,
                 statusCode: pushResult.statusCode,
                 errorCode: pushResult.errorCode,
               );
@@ -649,15 +650,17 @@ final class BackgroundSync {
   }
 
   @visibleForTesting
-  static bool shouldSkipManagedVaultMediaUploadsAfterPushFailure({
+  static bool shouldRunManagedVaultMediaUploads({
+    required bool pushSucceeded,
     int? statusCode,
     String? errorCode,
   }) {
-    if (statusCode == 402) return true;
+    if (!pushSucceeded) return false;
+    if (statusCode == 402) return false;
     return managedVaultPushFailureRecoveryActionForStatus(
           statusCode: statusCode,
           errorCode: errorCode,
-        ) ==
+        ) !=
         ManagedVaultPushFailureRecoveryAction.pullOnly;
   }
 

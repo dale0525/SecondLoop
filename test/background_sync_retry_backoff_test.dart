@@ -94,38 +94,43 @@ void main() {
     );
   });
 
-  test('managed-vault media uploads stop after write-blocking push failures',
+  test('managed-vault media uploads only run after a successful final push',
       () {
     expect(
-      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+      BackgroundSync.shouldRunManagedVaultMediaUploads(
+        pushSucceeded: true,
+        statusCode: null,
+        errorCode: null,
+      ),
+      isTrue,
+    );
+    expect(
+      BackgroundSync.shouldRunManagedVaultMediaUploads(
+        pushSucceeded: false,
         statusCode: 402,
         errorCode: 'payment_required',
       ),
-      isTrue,
+      isFalse,
     );
     expect(
-      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+      BackgroundSync.shouldRunManagedVaultMediaUploads(
+        pushSucceeded: false,
         statusCode: 403,
         errorCode: 'grace_readonly',
       ),
-      isTrue,
+      isFalse,
     );
     expect(
-      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
-        statusCode: 403,
-        errorCode: 'storage_quota_exceeded',
-      ),
-      isTrue,
-    );
-    expect(
-      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+      BackgroundSync.shouldRunManagedVaultMediaUploads(
+        pushSucceeded: false,
         statusCode: 503,
         errorCode: null,
       ),
       isFalse,
     );
     expect(
-      BackgroundSync.shouldSkipManagedVaultMediaUploadsAfterPushFailure(
+      BackgroundSync.shouldRunManagedVaultMediaUploads(
+        pushSucceeded: false,
         statusCode: null,
         errorCode: null,
       ),

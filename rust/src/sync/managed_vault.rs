@@ -267,7 +267,9 @@ pub fn push(
         return push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true);
     }
 
-    match global_log_client::push_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None) {
+    match global_log_client::push_v2(
+        conn, db_key, sync_key, base_url, vault_id, id_token, true, None,
+    ) {
         Ok(pushed) => Ok(pushed),
         Err(error) if v2_route_unavailable(&error) => {
             push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true)
@@ -284,7 +286,9 @@ pub fn push_ops_only(
     vault_id: &str,
     id_token: &str,
 ) -> Result<u64> {
-    match global_log_client::push_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None) {
+    match global_log_client::push_v2(
+        conn, db_key, sync_key, base_url, vault_id, id_token, false, None,
+    ) {
         Ok(pushed) => Ok(pushed),
         Err(error) if v2_route_unavailable(&error) => {
             push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, false)
@@ -358,6 +362,7 @@ pub fn push_ops_only_with_progress(
         base_url,
         vault_id,
         id_token,
+        false,
         Some(progress),
     ) {
         Ok(pushed) => Ok(pushed),
