@@ -92,6 +92,13 @@ void main() {
       BackgroundSync.userReadableSyncErrorMessage(statusCode: 429),
       contains('Retrying later'),
     );
+    expect(
+      BackgroundSync.userReadableSyncErrorMessage(
+        statusCode: 400,
+        errorCode: 'invalid_batch',
+      ),
+      contains('Local sync data'),
+    );
   });
 
   test('managed-vault media uploads only run after a successful final push',
@@ -182,6 +189,23 @@ void main() {
         errorCode: null,
       ),
       isFalse,
+    );
+  });
+
+  test('invalid managed-vault batches are non-retryable and user visible', () {
+    expect(
+      BackgroundSync.isRetryableBackgroundSyncFailure(
+        statusCode: 400,
+        errorCode: 'invalid_batch',
+      ),
+      isFalse,
+    );
+    expect(
+      BackgroundSync.userReadableSyncErrorMessage(
+        statusCode: 400,
+        errorCode: 'invalid_batch',
+      ),
+      contains('Local sync data'),
     );
   });
 }

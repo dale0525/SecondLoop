@@ -42,6 +42,21 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     return context.t.sync.cloudManagedVault.serverUnavailable;
   }
 
+  String managedVaultUserFacingErrorMessage(Object error) {
+    final status = extractSyncHttpStatusCode(error);
+    final code = extractSyncErrorCode(error);
+    if (status == 400 && code == 'invalid_batch') {
+      return context.t.sync.cloudManagedVault.localSyncDataRepairRequired;
+    }
+    if (status == 402) {
+      return context.t.sync.cloudManagedVault.paymentRequired;
+    }
+    if (status == 403 && code == 'storage_quota_exceeded') {
+      return context.t.sync.cloudManagedVault.storageQuotaExceeded;
+    }
+    return '$error';
+  }
+
   Future<_ManagedVaultManualPushResult> _runManagedVaultManualPushWithProgress({
     required AppBackend backend,
     required Uint8List sessionKey,

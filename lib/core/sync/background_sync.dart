@@ -628,6 +628,9 @@ final class BackgroundSync {
     int? statusCode,
     String? errorCode,
   }) {
+    if (statusCode == 400 && errorCode == 'invalid_batch') {
+      return 'Local sync data needs repair before cloud sync can continue.';
+    }
     if (statusCode == 401) {
       return 'Sign-in expired. Please sign in again.';
     }

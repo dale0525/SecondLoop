@@ -463,6 +463,7 @@ void main() {
       SyncEngine.shouldPrioritizePushOverPullForTest(
         pushQueued: true,
         pullQueued: true,
+        pendingPullAfterPush: false,
         retryPushAfterRecoveryPull: true,
         backendType: SyncBackendType.managedVault,
       ),
@@ -472,11 +473,42 @@ void main() {
       SyncEngine.shouldPrioritizePushOverPullForTest(
         pushQueued: true,
         pullQueued: true,
+        pendingPullAfterPush: false,
         retryPushAfterRecoveryPull: false,
         backendType: SyncBackendType.managedVault,
       ),
       isTrue,
     );
+  });
+
+  test(
+      'managed vault mandatory pull after push is not preempted by new push work',
+      () async {
+    final runner = _ManagedVaultPostPushPullOrderingRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => _managedVaultConfig(),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+
+    engine.start();
+    engine.triggerPushNow();
+
+    await runner.firstPushStarted.future;
+    engine.triggerPushNow();
+    runner.completeFirstPush(pushed: 1);
+
+    await runner.pullStarted.future;
+    expect(runner.calls.length, greaterThanOrEqualTo(2));
+    expect(runner.calls[0], 'push');
+    expect(runner.calls[1], 'pull');
+
+    runner.completePull(applied: 0);
+    await Future<void>.delayed(Duration.zero);
+    engine.stop();
   });
 
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
@@ -675,5 +707,55 @@ final class _ManagedVaultRecoveryOrderingRunner
       pullStarted.complete();
     }
     return _pullCompleter.future;
+  }
+}
+
+final class _ManagedVaultPostPushPullOrderingRunner
+    implements SyncRunner, SyncPullResultRunner {
+  final List<String> calls = <String>[];
+  final Completer<void> firstPushStarted = Completer<void>();
+  final Completer<void> pullStarted = Completer<void>();
+  Completer<int>? _firstPushCompleter;
+  Completer<SyncPullResult>? _pullCompleter;
+
+  void completeFirstPush({required int pushed}) {
+    final completer = _firstPushCompleter;
+    if (completer == null || completer.isCompleted) return;
+    completer.complete(pushed);
+  }
+
+  void completePull({required int applied}) {
+    final completer = _pullCompleter;
+    if (completer == null || completer.isCompleted) return;
+    completer.complete(SyncPullResult(applied: applied));
+  }
+
+  @override
+  Future<int> push(SyncConfig config) {
+    calls.add('push');
+    if (_firstPushCompleter == null) {
+      _firstPushCompleter = Completer<int>();
+      if (!firstPushStarted.isCompleted) {
+        firstPushStarted.complete();
+      }
+      return _firstPushCompleter!.future;
+    }
+    return Future<int>.value(1);
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    final result = await pullWithResult(config);
+    return result.applied;
+  }
+
+  @override
+  Future<SyncPullResult> pullWithResult(SyncConfig config) {
+    calls.add('pull');
+    _pullCompleter ??= Completer<SyncPullResult>();
+    if (!pullStarted.isCompleted) {
+      pullStarted.complete();
+    }
+    return _pullCompleter!.future;
   }
 }

@@ -208,6 +208,7 @@ final class SyncEngine {
   Timer? _pushDebounceTimer;
   Timer? _pullTimer;
   int? _lastZeroApplyRefreshAtMs;
+  bool _pendingPullAfterPush = false;
   bool _retryPushAfterRecoveryPull = false;
 
   static int _defaultNowMs() => DateTime.now().millisecondsSinceEpoch;
@@ -262,6 +263,7 @@ final class SyncEngine {
       _pushQueued = false;
     }
     _pullQueued = false;
+    _pendingPullAfterPush = false;
     _retryPushAfterRecoveryPull = false;
     _running = false;
     _stopAfterDrain = false;
@@ -368,6 +370,7 @@ final class SyncEngine {
         }
         if (_pullQueued) {
           _pullQueued = false;
+          _pendingPullAfterPush = false;
           await _pullOnce();
         }
       }
@@ -383,6 +386,7 @@ final class SyncEngine {
     return shouldPrioritizePushOverPullForTest(
       pushQueued: _pushQueued,
       pullQueued: _pullQueued,
+      pendingPullAfterPush: _pendingPullAfterPush,
       retryPushAfterRecoveryPull: _retryPushAfterRecoveryPull,
       backendType: config?.backendType,
     );
@@ -392,11 +396,13 @@ final class SyncEngine {
   static bool shouldPrioritizePushOverPullForTest({
     required bool pushQueued,
     required bool pullQueued,
+    required bool pendingPullAfterPush,
     required bool retryPushAfterRecoveryPull,
     required SyncBackendType? backendType,
   }) {
     if (!pushQueued || !pullQueued) return false;
     if (backendType != SyncBackendType.managedVault) return false;
+    if (pendingPullAfterPush) return false;
     if (retryPushAfterRecoveryPull) return false;
     return true;
   }
@@ -418,6 +424,7 @@ final class SyncEngine {
       if (backendType == SyncBackendType.managedVault) {
         if (_acceptsNewWork) {
           _pullQueued = true;
+          _pendingPullAfterPush = true;
         }
         _setWriteGate(const SyncWriteGateState.open());
       }

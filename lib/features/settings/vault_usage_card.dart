@@ -74,6 +74,9 @@ String _formatVaultUsageError(BuildContext context, Object error) {
   if (status == 402 || code == 'payment_required') {
     return context.t.sync.cloudManagedVault.paymentRequired;
   }
+  if (status == 400 && code == 'invalid_batch') {
+    return context.t.sync.cloudManagedVault.localSyncDataRepairRequired;
+  }
   if (status == 403 && code == 'email_not_verified') {
     return context.t.chat.cloudGateway.emailNotVerified;
   }

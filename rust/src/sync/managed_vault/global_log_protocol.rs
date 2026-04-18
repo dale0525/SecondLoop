@@ -30,6 +30,7 @@ pub(super) struct GlobalLogPushResponse {
 #[derive(Debug, Deserialize, Serialize)]
 pub(super) struct GlobalLogPushErrorResponse {
     pub(super) error: String,
+    pub(super) reason: Option<String>,
     pub(super) remote_generation_id: Option<String>,
     pub(super) remote_latest_global_seq: Option<i64>,
 }

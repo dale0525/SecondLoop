@@ -23,6 +23,7 @@ pub(super) enum GlobalLogRouteResult<T> {
 pub(super) enum GlobalLogPushRouteResult {
     Parsed(GlobalLogPushResponse),
     Unsupported,
+    InvalidBatch(GlobalLogPushErrorResponse),
     GenerationMismatch(GlobalLogPushErrorResponse),
     GenerationRequired(GlobalLogPushErrorResponse),
 }
@@ -75,6 +76,16 @@ fn fetch_push(
         }
         if parsed.error == "generation_required" {
             return Ok(GlobalLogPushRouteResult::GenerationRequired(parsed));
+        }
+        return Err(anyhow!(
+            "managed-vault v2 push failed: HTTP {status} {text}"
+        ));
+    }
+    if status.as_u16() == 400 {
+        let text = resp.text().unwrap_or_default();
+        let parsed: GlobalLogPushErrorResponse = serde_json::from_str(&text)?;
+        if parsed.error == "invalid_batch" {
+            return Ok(GlobalLogPushRouteResult::InvalidBatch(parsed));
         }
         return Err(anyhow!(
             "managed-vault v2 push failed: HTTP {status} {text}"
@@ -304,6 +315,13 @@ fn format_push_route_error(error: &GlobalLogPushErrorResponse) -> Result<anyhow:
     Ok(anyhow!("managed-vault v2 push failed: HTTP 409 {body}"))
 }
 
+fn format_invalid_batch_error(error: &GlobalLogPushErrorResponse) -> Result<anyhow::Error> {
+    let body = serde_json::to_string(error)?;
+    Ok(anyhow!(
+        "managed-vault v2 push rejected local batch: HTTP 400 {body}"
+    ))
+}
+
 fn has_local_unpushed_changes(conn: &Connection, scope_id: &str) -> Result<bool> {
     let device_id = super::super::get_or_create_device_id(conn)?;
     let last_pushed_seq =
@@ -321,7 +339,17 @@ fn has_local_unpushed_changes(conn: &Connection, scope_id: &str) -> Result<bool>
     .map_err(Into::into)
 }
 
-fn rebuild_local_vault_if_safe(conn: &Connection, scope_id: &str) -> Result<()> {
+fn rebuild_local_vault_if_safe(
+    conn: &Connection,
+    scope_id: &str,
+    base_url: &str,
+    vault_id: &str,
+) -> Result<()> {
+    if super::full_push_requires_legacy_media_sync(conn, base_url, vault_id)? {
+        return Err(anyhow!(
+            "managed-vault v2 recovery blocked: local_media_backfill_pending"
+        ));
+    }
     if has_local_unpushed_changes(conn, scope_id)? {
         return Err(anyhow!(
             "managed-vault v2 recovery blocked: local_unpushed_changes"
@@ -491,6 +519,9 @@ pub(super) fn push_v2(
             GlobalLogPushRouteResult::Unsupported => {
                 return Err(anyhow!("managed-vault v2 push route unavailable"));
             }
+            GlobalLogPushRouteResult::InvalidBatch(error) => {
+                return Err(format_invalid_batch_error(&error)?);
+            }
             GlobalLogPushRouteResult::GenerationMismatch(error) => {
                 return Err(format_push_route_error(&error)?);
             }
@@ -572,7 +603,7 @@ pub(super) fn pull_v2(
                         error.remote_latest_global_seq
                     ));
                 }
-                rebuild_local_vault_if_safe(conn, &scope_id)?;
+                rebuild_local_vault_if_safe(conn, &scope_id, base_url, vault_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
@@ -602,7 +633,7 @@ pub(super) fn pull_v2(
         if response_generation.is_empty() {
             if response.remote_latest_global_seq == 0 && response.ops.is_empty() {
                 if local_generation.is_some() || last_applied > 0 {
-                    rebuild_local_vault_if_safe(conn, &scope_id)?;
+                    rebuild_local_vault_if_safe(conn, &scope_id, base_url, vault_id)?;
                     total_applied = 0;
                     total_target = None;
                 }
@@ -619,7 +650,7 @@ pub(super) fn pull_v2(
         }
         if let Some(existing_generation) = &local_generation {
             if existing_generation != response_generation {
-                rebuild_local_vault_if_safe(conn, &scope_id)?;
+                rebuild_local_vault_if_safe(conn, &scope_id, base_url, vault_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
@@ -639,7 +670,7 @@ pub(super) fn pull_v2(
 
         if !pull_page_is_contiguous(&response.ops, last_applied) {
             if local_generation.is_some() || last_applied > 0 {
-                rebuild_local_vault_if_safe(conn, &scope_id)?;
+                rebuild_local_vault_if_safe(conn, &scope_id, base_url, vault_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;

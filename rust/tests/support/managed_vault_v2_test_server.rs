@@ -17,6 +17,7 @@ pub struct V2ServerState {
     pub attachments: BTreeMap<String, Vec<u8>>,
     pub requests: Vec<String>,
     pub require_generation_for_push_without_id: bool,
+    pub invalid_batch_once: bool,
     pub gap_pull_once_after_global_seq: Option<i64>,
     pub reset_required_once_after_global_seq: Option<i64>,
     pub pull_page_size: Option<usize>,
@@ -137,6 +138,18 @@ pub fn start_mock_v2_server() -> (
                             .unwrap_or("")
                             .trim()
                             .to_string();
+                        if state.invalid_batch_once {
+                            state.invalid_batch_once = false;
+                            write_json_response(
+                                &mut stream,
+                                400,
+                                serde_json::json!({
+                                    "error": "invalid_batch",
+                                    "reason": "malformed_op",
+                                }),
+                            );
+                            continue;
+                        }
                         if client_generation.is_empty()
                             && state.require_generation_for_push_without_id
                         {

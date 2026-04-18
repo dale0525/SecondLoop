@@ -71,6 +71,7 @@
     "paymentRequired": "Cloud sync is paused. Renew your subscription to continue syncing.",
     "graceReadonlyUntil": "Cloud sync is read-only until $until.",
     "storageQuotaExceeded": "Cloud storage is full. Uploads are paused.",
+    "localSyncDataRepairRequired": "Local sync data needs repair before cloud sync can continue.",
     "serverUnavailable": "Cloud sync is temporarily unavailable. Please try again later.",
     "storageQuotaExceededWithUsage": "Cloud storage is full ($used / $limit). Uploads are paused.",
     "switchDialog": {

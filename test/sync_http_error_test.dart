@@ -78,4 +78,18 @@ void main() {
       ManagedVaultPushFailureRecoveryAction.none,
     );
   });
+
+  test('managed-vault invalid batch errors are parsed explicitly', () {
+    final error = Exception(
+      'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"malformed_op"}',
+    );
+
+    expect(extractSyncHttpStatusCode(error), 400);
+    expect(extractSyncErrorCode(error), 'invalid_batch');
+    expect(managedVaultPushFailureAllowsPull(error), isFalse);
+    expect(
+      managedVaultPushFailureRecoveryAction(error),
+      ManagedVaultPushFailureRecoveryAction.none,
+    );
+  });
 }

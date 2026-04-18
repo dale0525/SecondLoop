@@ -855,7 +855,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       );
       _showSnack(successMessage);
     } catch (e) {
-      final errorMessage = '$e';
+      final errorMessage = managedVaultUserFacingErrorMessage(e);
       final failedMessage = t.sync.pushFailed(error: errorMessage);
       await _writeLastSyncLog(
         direction: SyncBackgroundDirection.push,
