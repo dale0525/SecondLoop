@@ -45,7 +45,8 @@ class EventViewerPage extends StatelessWidget {
               key: const ValueKey('event_viewer_original_time_range'),
             ),
           ],
-          if (event.tz.trim().isNotEmpty) ...[
+          if (event.tz.trim().isNotEmpty &&
+              (originalStart == null || originalEnd == null)) ...[
             const SizedBox(height: 12),
             SelectableText(
               event.tz,

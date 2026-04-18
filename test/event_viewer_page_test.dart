@@ -44,8 +44,7 @@ void main() {
     );
     expect(originalRendered.data, contains(event.tz));
     expect(originalRendered.data, isNot(equals(rendered.data)));
-    expect(find.byKey(const ValueKey('event_viewer_timezone')), findsOneWidget);
-    expect(find.textContaining(event.tz), findsWidgets);
+    expect(find.byKey(const ValueKey('event_viewer_timezone')), findsNothing);
   });
 
   testWidgets(
