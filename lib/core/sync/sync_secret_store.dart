@@ -134,6 +134,15 @@ final class SyncSecretStore {
     });
   }
 
+  Future<void> clearSyncKey() async {
+    await _serial(() async {
+      await _ensureLoaded();
+      await _reloadIfChanged();
+      if (_cache.remove(kSyncKeyB64) == null) return;
+      await _persistCache();
+    });
+  }
+
   Future<String?> readRecoveryEnvelopeJson() async {
     return _serial(() async {
       await _ensureLoaded();

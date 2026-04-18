@@ -348,6 +348,8 @@ final class _CloudSyncSwitchPromptGateState
     final progress = ValueNotifier<double>(0.0);
 
     var completed = true;
+    Object? runError;
+    StackTrace? runErrorStackTrace;
     bool started = false;
     _dialogShowing = true;
     try {
@@ -473,7 +475,11 @@ final class _CloudSyncSwitchPromptGateState
                 // Finalize
                 stage.value = t.sync.progressDialog.finalizing;
                 stageProgress.complete();
-              } catch (_) {
+              } catch (error, stackTrace) {
+                if (shouldRollbackManagedVaultBootstrapOnError(error)) {
+                  runError = error;
+                  runErrorStackTrace = stackTrace;
+                }
                 // Best-effort: avoid blocking the user on transient sync errors.
                 completed = false;
               } finally {
@@ -535,6 +541,14 @@ final class _CloudSyncSwitchPromptGateState
           );
         },
       );
+      if (runError != null) {
+        final error = runError!;
+        final stackTrace = runErrorStackTrace;
+        if (stackTrace != null) {
+          Error.throwWithStackTrace(error, stackTrace);
+        }
+        throw error;
+      }
     } finally {
       _dialogShowing = false;
       stage.dispose();
@@ -548,6 +562,10 @@ final class _CloudSyncSwitchPromptGateState
         context.getInheritedWidgetOfExactType<AppBackendScope>();
     if (backendScope == null) return;
     final backend = backendScope.backend;
+
+    final previousBackendType = await _store.readBackendType();
+    final previousRemoteRoot = await _store.readRemoteRoot();
+    final previousSyncKey = await _store.readSyncKey();
 
     final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
       vaultId: uid,
@@ -599,16 +617,34 @@ final class _CloudSyncSwitchPromptGateState
         idToken.trim().isNotEmpty &&
         effectiveContext.mounted &&
         canShowDialog) {
-      didSync = await _runManagedVaultSyncWithProgress(
-        dialogContext: effectiveContext,
-        engine: engine,
-        backend: backend,
-        sessionKey: sessionKey,
-        syncKey: syncKey,
-        baseUrl: baseUrl.trim(),
-        vaultId: uid,
-        idToken: idToken.trim(),
-      );
+      try {
+        didSync = await _runManagedVaultSyncWithProgress(
+          dialogContext: effectiveContext,
+          engine: engine,
+          backend: backend,
+          sessionKey: sessionKey,
+          syncKey: syncKey,
+          baseUrl: baseUrl.trim(),
+          vaultId: uid,
+          idToken: idToken.trim(),
+        );
+      } catch (_) {
+        await _store.writeBackendType(previousBackendType);
+        await _store.writeRemoteRoot(previousRemoteRoot ?? '');
+        if (previousSyncKey != null) {
+          await SyncKeyManager.save(
+            write: _store.writeSyncKey,
+            key: previousSyncKey,
+          );
+        } else {
+          await _store.clearSyncKey();
+        }
+        unawaited(BackgroundSync.refreshSchedule(
+          backend: backend,
+          configStore: _store,
+        ));
+        return;
+      }
     }
 
     if (!mounted) return;

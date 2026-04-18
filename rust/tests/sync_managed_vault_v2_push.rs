@@ -1,3 +1,4 @@
+use rusqlite::OptionalExtension;
 use secondloop_rust::auth;
 use secondloop_rust::crypto::{derive_root_key, KdfParams};
 use secondloop_rust::db;
@@ -274,6 +275,64 @@ fn managed_vault_v2_invalid_batch_is_reported_explicitly() {
         push_error.to_string().contains("invalid_batch"),
         "unexpected error: {push_error:#}"
     );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_partial_acceptance_does_not_advance_local_push_cursor() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.partial_accept_count_once = Some(1);
+    }
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("create convo");
+    db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert msg");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let push_error =
+        sync::managed_vault::push_ops_only(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect_err("push should fail on partial acceptance");
+    assert!(
+        push_error.to_string().contains("partial acceptance"),
+        "unexpected error: {push_error:#}"
+    );
+
+    let device_id: String = conn
+        .query_row("SELECT value FROM kv WHERE key = 'device_id'", [], |row| {
+            row.get(0)
+        })
+        .expect("device id");
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    let last_pushed: Option<String> = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            rusqlite::params![format!(
+                "managed_vault_v2.last_pushed_seq:{scope_id}:{device_id}"
+            )],
+            |row| row.get(0),
+        )
+        .optional()
+        .expect("load last pushed");
+    assert_eq!(last_pushed, None);
+
+    let state = state.lock().expect("lock");
+    assert_eq!(state.latest_global_seq, 1);
 
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");

@@ -49,6 +49,65 @@ struct LocalPushBatch {
     artifact_blob_refs: BTreeSet<String>,
 }
 
+fn ensure_complete_push_acceptance(
+    response: &GlobalLogPushResponse,
+    batch: &LocalPushBatch,
+) -> Result<()> {
+    let requested = batch.ops.len() as u64;
+    if response.accepted == 0 {
+        if response.committed_from_seq.is_some() || response.committed_to_seq.is_some() {
+            return Err(anyhow!(
+                "managed-vault v2 push returned inconsistent retry response: accepted=0 committed_from_seq={:?} committed_to_seq={:?}",
+                response.committed_from_seq,
+                response.committed_to_seq,
+            ));
+        }
+        return Ok(());
+    }
+
+    if response.accepted != requested {
+        return Err(anyhow!(
+            "managed-vault v2 push returned partial acceptance: accepted {} of {} ops",
+            response.accepted,
+            requested,
+        ));
+    }
+
+    let committed_from_seq = response.committed_from_seq.ok_or_else(|| {
+        anyhow!(
+            "managed-vault v2 push returned inconsistent response: missing committed_from_seq for {} accepted ops",
+            response.accepted,
+        )
+    })?;
+    let committed_to_seq = response.committed_to_seq.ok_or_else(|| {
+        anyhow!(
+            "managed-vault v2 push returned inconsistent response: missing committed_to_seq for {} accepted ops",
+            response.accepted,
+        )
+    })?;
+
+    if committed_to_seq < committed_from_seq {
+        return Err(anyhow!(
+            "managed-vault v2 push returned invalid committed range: {}..{}",
+            committed_from_seq,
+            committed_to_seq,
+        ));
+    }
+
+    let committed_count = (committed_to_seq - committed_from_seq + 1) as u64;
+    if committed_count != requested {
+        return Err(anyhow!(
+            "managed-vault v2 push returned inconsistent committed range: accepted {} of {} ops with committed range {}..{}",
+            response.accepted,
+            requested,
+            committed_from_seq,
+            committed_to_seq,
+        ));
+    }
+
+    Ok(())
+}
+
 fn unsupported_status(status_code: u16) -> bool {
     matches!(status_code, 404 | 405)
 }
@@ -529,6 +588,7 @@ pub(super) fn push_v2(
                 return Err(format_push_route_error(&error)?);
             }
             GlobalLogPushRouteResult::Parsed(response) => {
+                ensure_complete_push_acceptance(&response, &batch)?;
                 super::global_log_state::write_generation_id(
                     conn,
                     &scope_id,

@@ -18,6 +18,7 @@ pub struct V2ServerState {
     pub requests: Vec<String>,
     pub require_generation_for_push_without_id: bool,
     pub invalid_batch_once: bool,
+    pub partial_accept_count_once: Option<usize>,
     pub gap_pull_once_after_global_seq: Option<i64>,
     pub reset_required_once_after_global_seq: Option<i64>,
     pub pull_page_size: Option<usize>,
@@ -150,6 +151,10 @@ pub fn start_mock_v2_server() -> (
                             );
                             continue;
                         }
+                        let partial_accept_count = state
+                            .partial_accept_count_once
+                            .take()
+                            .map(|count| count.min(incoming.len()));
                         if client_generation.is_empty()
                             && state.require_generation_for_push_without_id
                         {
@@ -178,20 +183,26 @@ pub fn start_mock_v2_server() -> (
                             continue;
                         }
                         let from_seq = state.latest_global_seq + 1;
-                        for op in incoming {
+                        let accepted_ops = partial_accept_count.unwrap_or(incoming.len());
+                        for op in incoming.into_iter().take(accepted_ops) {
                             state.latest_global_seq += 1;
                             let mut value = op;
                             value["global_seq"] = serde_json::Value::from(state.latest_global_seq);
                             state.ops.push(value);
                         }
+                        let committed_to_seq = if accepted_ops > 0 {
+                            Some(state.latest_global_seq)
+                        } else {
+                            None
+                        };
                         write_json_response(
                             &mut stream,
                             200,
                             serde_json::json!({
                                 "generation_id": state.generation_id,
-                                "accepted": decoded["ops"].as_array().map(|ops| ops.len()).unwrap_or(0),
-                                "committed_from_seq": from_seq,
-                                "committed_to_seq": state.latest_global_seq,
+                                "accepted": accepted_ops,
+                                "committed_from_seq": if accepted_ops > 0 { Some(from_seq) } else { None },
+                                "committed_to_seq": committed_to_seq,
                                 "remote_latest_global_seq": state.latest_global_seq,
                             }),
                         );

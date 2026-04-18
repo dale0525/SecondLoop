@@ -43,3 +43,19 @@ SyncWriteGateState? managedVaultWriteGateStateForError(Object error) {
 void reopenManagedVaultWriteGateOnSuccess(SyncEngine? engine) {
   engine?.writeGate.value = const SyncWriteGateState.open();
 }
+
+bool shouldRollbackManagedVaultBootstrapOnError(Object error) {
+  final statusCode = extractSyncHttpStatusCode(error);
+  final errorCode = extractSyncErrorCode(error);
+
+  if (statusCode == 400 && errorCode == 'invalid_batch') {
+    return true;
+  }
+  if (statusCode == 402) {
+    return true;
+  }
+  if (statusCode == 403 && errorCode == 'storage_quota_exceeded') {
+    return true;
+  }
+  return false;
+}

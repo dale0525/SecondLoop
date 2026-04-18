@@ -198,6 +198,14 @@ final class SyncConfigStore {
     await _writeConfigUpdates({kSyncKeyB64: null});
   }
 
+  Future<void> clearSyncKey() async {
+    await _secretStore.clearSyncKey();
+    if (_scopeKey == null) {
+      SyncKeyManager.clearSyncKeyCache();
+    }
+    await _writeConfigUpdates({kSyncKeyB64: null});
+  }
+
   Future<String?> readWebdavBaseUrl() async =>
       (await _loadConfigMap())[kWebdavBaseUrl];
   Future<String?> readManagedVaultBaseUrl() async =>

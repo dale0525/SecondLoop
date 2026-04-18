@@ -92,4 +92,47 @@ void main() {
       ManagedVaultPushFailureRecoveryAction.none,
     );
   });
+
+  test('managed-vault bootstrap rollback only triggers for fatal setup errors',
+      () {
+    expect(
+      shouldRollbackManagedVaultBootstrapOnError(
+        Exception(
+          'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"malformed_op"}',
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRollbackManagedVaultBootstrapOnError(
+        Exception(
+          'managed-vault push failed: HTTP 402 {"error":"payment_required"}',
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRollbackManagedVaultBootstrapOnError(
+        Exception(
+          'managed-vault push failed: HTTP 403 {"error":"storage_quota_exceeded","used_bytes":10,"limit_bytes":9}',
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRollbackManagedVaultBootstrapOnError(
+        Exception(
+          'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      shouldRollbackManagedVaultBootstrapOnError(
+        Exception(
+            'managed-vault push failed: HTTP 503 {"error":"unavailable"}'),
+      ),
+      isFalse,
+    );
+  });
 }
