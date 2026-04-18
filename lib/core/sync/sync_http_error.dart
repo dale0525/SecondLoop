@@ -47,9 +47,26 @@ bool managedVaultWriteGateShouldClearAfterPull(SyncWriteGateState state) {
       state.kind == SyncWriteGateKind.storageQuotaExceeded;
 }
 
+bool managedVaultPushFailureAllowsPullForStatus({
+  int? statusCode,
+  String? errorCode,
+}) {
+  if (statusCode == 403) {
+    return errorCode == 'grace_readonly' ||
+        errorCode == 'storage_quota_exceeded';
+  }
+  if (statusCode == 409) {
+    return errorCode == 'generation_mismatch' ||
+        errorCode == 'generation_required';
+  }
+  return false;
+}
+
 bool managedVaultPushFailureAllowsPull(Object error) {
   final statusCode = extractSyncHttpStatusCode(error);
   final errorCode = extractSyncErrorCode(error);
-  return statusCode == 403 &&
-      (errorCode == 'grace_readonly' || errorCode == 'storage_quota_exceeded');
+  return managedVaultPushFailureAllowsPullForStatus(
+    statusCode: statusCode,
+    errorCode: errorCode,
+  );
 }

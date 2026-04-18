@@ -352,7 +352,7 @@ fn managed_vault_v2_push_and_pull_roundtrip() {
 }
 
 #[test]
-fn managed_vault_v2_generation_mismatch_does_not_reupload_stale_local_data() {
+fn managed_vault_v2_generation_mismatch_preserves_local_data_until_pull_recovers() {
     let (base_url, stop_tx, state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();
     let id_token = "test_uid".to_string();
@@ -373,7 +373,7 @@ fn managed_vault_v2_generation_mismatch_does_not_reupload_stale_local_data() {
     db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert msg");
 
     let first_push =
-        sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+        sync::managed_vault::push_ops_only(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
             .expect("first push");
     assert!(first_push > 0);
 
@@ -384,18 +384,29 @@ fn managed_vault_v2_generation_mismatch_does_not_reupload_stale_local_data() {
         server.ops.clear();
     }
 
-    let second_push =
-        sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
-            .expect("second push");
-    assert_eq!(second_push, 0);
+    db::insert_message(&conn, &key, &conv.id, "user", "after reset")
+        .expect("insert msg after reset");
+
+    let second_push_error =
+        sync::managed_vault::push_ops_only(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect_err("second push should fail");
+    assert!(
+        second_push_error
+            .to_string()
+            .contains("generation_mismatch"),
+        "unexpected error: {second_push_error:#}"
+    );
+
+    let convs_before_pull = db::list_conversations(&conn, &key).expect("list convs before pull");
+    assert_eq!(convs_before_pull.len(), 1);
 
     let recovery_pull =
         sync::managed_vault::pull(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
             .expect("recovery pull");
     assert_eq!(recovery_pull, 0);
 
-    let convs = db::list_conversations(&conn, &key).expect("list convs");
-    assert_eq!(convs.len(), 0);
+    let convs_after_pull = db::list_conversations(&conn, &key).expect("list convs after pull");
+    assert_eq!(convs_after_pull.len(), 0);
 
     let state = state.lock().expect("lock");
     assert_eq!(state.latest_global_seq, 0);
@@ -406,7 +417,7 @@ fn managed_vault_v2_generation_mismatch_does_not_reupload_stale_local_data() {
 }
 
 #[test]
-fn managed_vault_v2_missing_local_generation_rebuilds_instead_of_reuploading() {
+fn managed_vault_v2_missing_local_generation_preserves_local_data_until_pull_recovers() {
     let (base_url, stop_tx, state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();
     let id_token = "test_uid".to_string();
@@ -431,18 +442,24 @@ fn managed_vault_v2_missing_local_generation_rebuilds_instead_of_reuploading() {
     let conv = db::create_conversation(&conn, &key, "Inbox").expect("create convo");
     db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert msg");
 
-    let pushed = sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
-        .expect("push");
-    assert_eq!(pushed, 0);
+    let push_error =
+        sync::managed_vault::push_ops_only(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect_err("push should fail");
+    assert!(
+        push_error.to_string().contains("generation_required"),
+        "unexpected error: {push_error:#}"
+    );
 
-    let convs = db::list_conversations(&conn, &key).expect("list convs");
-    assert_eq!(convs.len(), 0);
+    let convs_before_pull = db::list_conversations(&conn, &key).expect("list convs before pull");
+    assert_eq!(convs_before_pull.len(), 1);
 
     let requests = state.lock().expect("lock").requests.join("\n\n");
     assert!(
         requests.contains("\"error\":\"generation_required\"")
             || requests.contains("/v2/vaults/v1/sync/push")
     );
+    drop(requests);
+
     let state = state.lock().expect("lock");
     assert_eq!(state.ops.len(), 0);
 

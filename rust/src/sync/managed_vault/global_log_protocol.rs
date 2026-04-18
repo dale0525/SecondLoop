@@ -27,7 +27,7 @@ pub(super) struct GlobalLogPushResponse {
     pub(super) remote_latest_global_seq: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub(super) struct GlobalLogPushErrorResponse {
     pub(super) error: String,
     pub(super) remote_generation_id: Option<String>,

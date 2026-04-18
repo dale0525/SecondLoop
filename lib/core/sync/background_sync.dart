@@ -17,6 +17,7 @@ import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
 import 'sync_diagnostics.dart';
 import 'sync_engine.dart';
+import 'sync_http_error.dart';
 import 'sync_key_manager.dart';
 
 const _kAppId = String.fromEnvironment(
@@ -250,12 +251,29 @@ final class BackgroundSync {
         config: config,
         managedVaultIdToken: idToken,
       );
-      final pullResult = await _pullOnce(
-        backend: backend,
-        sessionKey: sessionKey,
-        config: config,
-        managedVaultIdToken: idToken,
-      );
+      final shouldRunPull =
+          config.backendType != SyncBackendType.managedVault ||
+              switch (pushResult.status) {
+                _BackgroundOpStatus.success => true,
+                _BackgroundOpStatus.skipped => false,
+                _BackgroundOpStatus.failure =>
+                  shouldContinueManagedVaultPullAfterPushFailure(
+                    statusCode: pushResult.statusCode,
+                    errorCode: pushResult.errorCode,
+                  ),
+              };
+      final pullResult = shouldRunPull
+          ? await _pullOnce(
+              backend: backend,
+              sessionKey: sessionKey,
+              config: config,
+              managedVaultIdToken: idToken,
+            )
+          : _BackgroundSyncOpResult.skipped(
+              durationMs: 0,
+              userMessage:
+                  'Managed-vault pull skipped because push failed unrecoverably.',
+            );
 
       final retryableFailure = switch ((
         pushResult.retryable,
@@ -618,9 +636,21 @@ final class BackgroundSync {
     String? errorCode,
   }) {
     if (statusCode == 402) return true;
-    return statusCode == 403 &&
-        (errorCode == 'grace_readonly' ||
-            errorCode == 'storage_quota_exceeded');
+    return shouldContinueManagedVaultPullAfterPushFailure(
+      statusCode: statusCode,
+      errorCode: errorCode,
+    );
+  }
+
+  @visibleForTesting
+  static bool shouldContinueManagedVaultPullAfterPushFailure({
+    int? statusCode,
+    String? errorCode,
+  }) {
+    return managedVaultPushFailureAllowsPullForStatus(
+      statusCode: statusCode,
+      errorCode: errorCode,
+    );
   }
 
   static Future<int?> _updateBackoffState({

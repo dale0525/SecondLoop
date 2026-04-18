@@ -263,6 +263,11 @@ fn pull_page_is_contiguous(ops: &[GlobalLogPullOp], after_global_seq: i64) -> bo
     true
 }
 
+fn format_push_route_error(error: &GlobalLogPushErrorResponse) -> Result<anyhow::Error> {
+    let body = serde_json::to_string(error)?;
+    Ok(anyhow!("managed-vault v2 push failed: HTTP 409 {body}"))
+}
+
 pub(super) fn push_v2(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -307,32 +312,10 @@ pub(super) fn push_v2(
                 return Err(anyhow!("managed-vault v2 push route unavailable"));
             }
             GlobalLogPushRouteResult::GenerationMismatch(error) => {
-                if local_generation.is_some() {
-                    super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
-                    if let Some(progress_fn) = progress.as_deref_mut() {
-                        progress_fn(0, 0);
-                    }
-                    return Ok(0);
-                }
-                return Err(anyhow!(
-                    "managed-vault v2 push failed: generation mismatch remote_generation_id={:?} remote_latest_global_seq={:?}",
-                    error.remote_generation_id,
-                    error.remote_latest_global_seq
-                ));
+                return Err(format_push_route_error(&error)?);
             }
             GlobalLogPushRouteResult::GenerationRequired(error) => {
-                if local_generation.is_none() {
-                    super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
-                    if let Some(progress_fn) = progress.as_deref_mut() {
-                        progress_fn(0, 0);
-                    }
-                    return Ok(0);
-                }
-                return Err(anyhow!(
-                    "managed-vault v2 push failed: generation required remote_generation_id={:?} remote_latest_global_seq={:?}",
-                    error.remote_generation_id,
-                    error.remote_latest_global_seq
-                ));
+                return Err(format_push_route_error(&error)?);
             }
             GlobalLogPushRouteResult::Parsed(response) => {
                 super::global_log_state::write_generation_id(

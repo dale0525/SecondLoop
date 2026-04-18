@@ -132,4 +132,51 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+      'managed-vault background pull-after-push policy matches interactive flows',
+      () {
+    expect(
+      BackgroundSync.shouldContinueManagedVaultPullAfterPushFailure(
+        statusCode: 403,
+        errorCode: 'grace_readonly',
+      ),
+      isTrue,
+    );
+    expect(
+      BackgroundSync.shouldContinueManagedVaultPullAfterPushFailure(
+        statusCode: 403,
+        errorCode: 'storage_quota_exceeded',
+      ),
+      isTrue,
+    );
+    expect(
+      BackgroundSync.shouldContinueManagedVaultPullAfterPushFailure(
+        statusCode: 409,
+        errorCode: 'generation_mismatch',
+      ),
+      isTrue,
+    );
+    expect(
+      BackgroundSync.shouldContinueManagedVaultPullAfterPushFailure(
+        statusCode: 409,
+        errorCode: 'generation_required',
+      ),
+      isTrue,
+    );
+    expect(
+      BackgroundSync.shouldContinueManagedVaultPullAfterPushFailure(
+        statusCode: 402,
+        errorCode: 'payment_required',
+      ),
+      isFalse,
+    );
+    expect(
+      BackgroundSync.shouldContinueManagedVaultPullAfterPushFailure(
+        statusCode: 503,
+        errorCode: null,
+      ),
+      isFalse,
+    );
+  });
 }
