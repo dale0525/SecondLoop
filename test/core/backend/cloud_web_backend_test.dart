@@ -89,14 +89,14 @@ void main() {
         key,
         conversation.id,
         content: 'stored reply',
-        citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+        citationsJson: '{"direct_sources":[]}',
       );
 
       expect(inserted.role, 'assistant');
       expect(inserted.isMemory, isFalse);
       expect(
         inserted.citationsJson,
-        '{"direct_sources":[],"memory_cards":[]}',
+        '{"direct_sources":[]}',
       );
     });
 
@@ -113,7 +113,7 @@ void main() {
         conversationId: conversation.id,
         question: 'hello',
         answer: 'world',
-        citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+        citationsJson: '{"direct_sources":[]}',
       );
       final second = await backend.applyDetachedAskCompletionOnce(
         key,
@@ -121,7 +121,7 @@ void main() {
         conversationId: conversation.id,
         question: 'hello',
         answer: 'world',
-        citationsJson: '{"direct_sources":[],"memory_cards":[]}',
+        citationsJson: '{"direct_sources":[]}',
       );
 
       final messages = await backend.listMessages(key, conversation.id);
@@ -135,7 +135,7 @@ void main() {
       expect(messages.every((message) => !message.isMemory), isTrue);
       expect(
         messages.last.citationsJson,
-        '{"direct_sources":[],"memory_cards":[]}',
+        '{"direct_sources":[]}',
       );
     });
 
@@ -283,6 +283,37 @@ void main() {
       expect(todos.single.nextReviewAtMs, 456);
       expect(todos.single.manualImportanceNudgeScore, 1);
       expect(todos.single.manualUrgencyNudgeScore, -1);
+    });
+
+    test('supports direct todo and event lookup without list fallback',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Ship web task hub',
+        status: 'open',
+      );
+      await backend.upsertEvent(
+        key,
+        id: 'event:web',
+        title: 'Web planning review',
+        startAtMs: 123,
+        endAtMs: 456,
+        tz: 'UTC',
+      );
+
+      final todo = await backend.getTodoById(key, 'todo:web');
+      final event = await backend.getEventById(key, 'event:web');
+
+      expect(todo, isNotNull);
+      expect(todo!.title, 'Ship web task hub');
+      expect(event, isNotNull);
+      expect(event!.title, 'Web planning review');
     });
 
     test('listTodos matches native due-date ordering', () async {

@@ -1,9 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::knowledge::{
-    KnowledgeAnchorSet, KnowledgeMemoryStatus, KnowledgeRole, KnowledgeSourceKind,
-};
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnswerEvidenceDirectSource {
     pub id: String,
@@ -18,34 +14,14 @@ pub struct AnswerEvidenceDirectSource {
     pub highlighted_text: Option<String>,
     pub created_at_ms: Option<i64>,
     pub updated_at_ms: Option<i64>,
-    pub anchors: Option<KnowledgeAnchorSet>,
     pub document_id: Option<String>,
     pub unit_id: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AnswerEvidenceMemoryCard {
-    pub document_id: String,
-    pub title: Option<String>,
-    pub summary: Option<String>,
-    pub body: Option<String>,
-    pub source_kind: KnowledgeSourceKind,
-    pub role: KnowledgeRole,
-    pub created_at_ms: i64,
-    pub updated_at_ms: i64,
-    pub status: KnowledgeMemoryStatus,
-    pub source_count: i64,
-    pub why_used: Option<String>,
-    pub use_for_ask_ai: bool,
-    pub is_deleted: bool,
-    pub marked_inaccurate: bool,
-    pub anchors: KnowledgeAnchorSet,
-}
-
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnswerEvidencePayload {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub direct_sources: Vec<AnswerEvidenceDirectSource>,
-    pub memory_cards: Vec<AnswerEvidenceMemoryCard>,
 }
 
 pub(crate) fn message_citation_href(message_id: &str) -> Option<String> {
@@ -76,15 +52,13 @@ pub(crate) fn append_message_citation_if_missing(mut context: String, message_id
 
 pub(crate) fn encode_answer_evidence_json(
     direct_sources: Vec<AnswerEvidenceDirectSource>,
-    memory_cards: Vec<AnswerEvidenceMemoryCard>,
 ) -> Option<String> {
-    if direct_sources.is_empty() && memory_cards.is_empty() {
+    if direct_sources.is_empty() {
         return None;
     }
 
     let payload = AnswerEvidencePayload {
         direct_sources: dedupe_direct_sources(direct_sources),
-        memory_cards: dedupe_memory_cards(memory_cards),
     };
     serde_json::to_string(&payload).ok()
 }
@@ -108,28 +82,11 @@ fn dedupe_direct_sources(
     out
 }
 
-fn dedupe_memory_cards(
-    memory_cards: Vec<AnswerEvidenceMemoryCard>,
-) -> Vec<AnswerEvidenceMemoryCard> {
-    let mut seen = std::collections::HashSet::<String>::new();
-    let mut out = Vec::<AnswerEvidenceMemoryCard>::new();
-    for item in memory_cards {
-        if !seen.insert(item.document_id.clone()) {
-            continue;
-        }
-        out.push(item);
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         append_message_citation_if_missing, encode_answer_evidence_json, message_citation_href,
-        message_citation_link, AnswerEvidenceDirectSource, AnswerEvidenceMemoryCard,
-    };
-    use crate::knowledge::{
-        KnowledgeAnchorSet, KnowledgeMemoryStatus, KnowledgeRole, KnowledgeSourceKind,
+        message_citation_link, AnswerEvidenceDirectSource,
     };
 
     #[test]
@@ -176,65 +133,17 @@ mod tests {
             highlighted_text: Some("hello".to_string()),
             created_at_ms: Some(1),
             updated_at_ms: Some(1),
-            anchors: None,
             document_id: None,
             unit_id: None,
         };
-        let memory = AnswerEvidenceMemoryCard {
-            document_id: "generated:preference:response-language".to_string(),
-            title: Some("Response language preference".to_string()),
-            summary: Some("User prefers Chinese.".to_string()),
-            body: Some("User prefers Chinese.".to_string()),
-            source_kind: KnowledgeSourceKind::Summary,
-            role: KnowledgeRole::Summary,
-            created_at_ms: 1,
-            updated_at_ms: 1,
-            status: KnowledgeMemoryStatus::Inferred,
-            source_count: 1,
-            why_used: Some("What style should I use?".to_string()),
-            use_for_ask_ai: true,
-            is_deleted: false,
-            marked_inaccurate: false,
-            anchors: KnowledgeAnchorSet::default(),
-        };
 
-        let raw =
-            encode_answer_evidence_json(vec![direct.clone(), direct], vec![memory.clone(), memory])
-                .expect("json");
+        let raw = encode_answer_evidence_json(vec![direct.clone(), direct]).expect("json");
         let parsed: serde_json::Value = serde_json::from_str(&raw).expect("valid json");
         assert_eq!(parsed["direct_sources"].as_array().map(Vec::len), Some(1));
-        assert_eq!(parsed["memory_cards"].as_array().map(Vec::len), Some(1));
     }
 
     #[test]
-    fn encode_answer_evidence_json_preserves_memory_card_feedback_flags() {
-        let raw = encode_answer_evidence_json(
-            Vec::new(),
-            vec![AnswerEvidenceMemoryCard {
-                document_id: "generated:preference:response-language".to_string(),
-                title: Some("Response language preference".to_string()),
-                summary: Some("User prefers Chinese.".to_string()),
-                body: Some("User prefers Chinese.".to_string()),
-                source_kind: KnowledgeSourceKind::Summary,
-                role: KnowledgeRole::Summary,
-                created_at_ms: 1,
-                updated_at_ms: 2,
-                status: KnowledgeMemoryStatus::Confirmed,
-                source_count: 3,
-                why_used: Some("How should you answer me?".to_string()),
-                use_for_ask_ai: false,
-                is_deleted: true,
-                marked_inaccurate: true,
-                anchors: KnowledgeAnchorSet::default(),
-            }],
-        )
-        .expect("json");
-
-        let parsed: serde_json::Value = serde_json::from_str(&raw).expect("valid json");
-        let memory = parsed["memory_cards"][0].clone();
-
-        assert_eq!(memory["use_for_ask_ai"].as_bool(), Some(false));
-        assert_eq!(memory["is_deleted"].as_bool(), Some(true));
-        assert_eq!(memory["marked_inaccurate"].as_bool(), Some(true));
+    fn encode_answer_evidence_json_omits_empty_payloads() {
+        assert!(encode_answer_evidence_json(Vec::new()).is_none());
     }
 }

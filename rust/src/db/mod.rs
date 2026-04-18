@@ -39,7 +39,6 @@ include!("parts/24_external_readonly_import_parser.rs");
 include!("parts/24_external_readonly_import.rs");
 include!("parts/25_external_readonly_search.rs");
 include!("parts/26_external_readonly_phase_b.rs");
-include!("parts/27_knowledge_index.rs");
 include!("parts/28_migration_archive.rs");
 include!("parts/29_migration_archive_runtime.rs");
 include!("parts/30_todo_followup_suggestions.rs");
@@ -71,12 +70,6 @@ mod external_import_tests;
 
 #[cfg(test)]
 mod external_import_phase_b_tests;
-
-#[cfg(test)]
-mod knowledge_index_tests;
-
-#[cfg(test)]
-mod knowledge_compat_tests;
 
 #[cfg(test)]
 mod embedding_artifact_tests;

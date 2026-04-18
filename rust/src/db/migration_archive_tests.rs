@@ -548,11 +548,6 @@ fn migration_archive_rebuild_derived_indexes_handles_more_than_256_batches() {
 
     migration_archive_rebuild_derived_indexes(&conn, &key)
         .expect("rebuild should finish without hitting an artificial batch limit");
-
-    let status = crate::knowledge::read_knowledge_index_status(&conn, &key).expect("status");
-    assert_eq!(status.status, "complete");
-    assert!(status.total_documents > 6553);
-    assert_eq!(status.documents_indexed, status.total_documents);
 }
 
 #[test]
@@ -656,14 +651,10 @@ fn migration_archive_end_to_end_import_into_clean_app_rebuilds_indexes_and_persi
     let imported_messages = list_messages(&target_conn, &key, &conversation.id).expect("messages");
     let imported_attachments =
         list_message_attachments(&target_conn, &key, &message.id).expect("attachments");
-    let knowledge_status = crate::knowledge::read_knowledge_index_status(&target_conn, &key)
-        .expect("knowledge status");
 
     assert_eq!(imported_conversations.len(), 1);
     assert_eq!(imported_messages.len(), 1);
     assert_eq!(imported_attachments.len(), 1);
-    assert_eq!(knowledge_status.status, "complete");
-    assert!(knowledge_status.last_rebuild_completed_at_ms.is_some());
 
     let state_json = fs::read_to_string(target_app_dir.join("migration_archive/state/import.json"))
         .expect("read import state");

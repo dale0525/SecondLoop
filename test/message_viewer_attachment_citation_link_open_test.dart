@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
@@ -61,9 +60,20 @@ void main() {
     expect(page.initialChunkIndex, 1);
   });
 
-  testWidgets(
-      'message viewer knowledge-document link degrades gracefully without knowledge backend',
+  testWidgets('message viewer ignores knowledge-document links after removal',
       (tester) async {
+    final launchedUrls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'launch') {
+        launchedUrls.add((call.arguments as Map)['url'] as String);
+      }
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
@@ -86,11 +96,12 @@ void main() {
 
     await tester.tap(find.text('Open Knowledge', findRichText: true));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byKey(const ValueKey('message_viewer_page')), findsOneWidget);
-    expect(find.textContaining('knowledge_viewer_backend_unavailable'),
-        findsOneWidget);
     expect(find.byType(AttachmentViewerPage), findsNothing);
+    expect(launchedUrls, isEmpty);
+    expect(find.text('Load failed: unsupported_secondloop_link'), findsOne);
   });
 }
 

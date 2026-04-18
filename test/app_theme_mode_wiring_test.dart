@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,6 +25,7 @@ void main() {
     await AppThemePalettePrefs.ensureInitialized();
 
     await tester.pumpWidget(SecondLoopApp(backend: TestAppBackend()));
+    await tester.pumpAndSettle();
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.dark);
@@ -34,5 +37,7 @@ void main() {
       app.darkTheme?.colorScheme.primary,
       AppTheme.dark(palette: AppThemePalette.ocean).colorScheme.primary,
     );
+    final appSource = File('lib/app/app.dart').readAsStringSync();
+    expect(appSource, isNot(contains('KnowledgeIndexGate(')));
   });
 }

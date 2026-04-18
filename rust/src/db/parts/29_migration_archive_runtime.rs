@@ -587,45 +587,8 @@ fn migration_archive_with_immediate_transaction<T>(
     }
 }
 
-const MIGRATION_ARCHIVE_REBUILD_BATCH_SIZE: usize = 512;
-const MIGRATION_ARCHIVE_REBUILD_STALL_ROUNDS: usize = 3;
-
-fn migration_archive_rebuild_derived_indexes(conn: &Connection, key: &[u8; 32]) -> Result<()> {
-    crate::knowledge::ensure_knowledge_rebuild_requested(conn)?;
-
-    let mut stall_rounds = 0usize;
-    loop {
-        let processed = crate::knowledge::process_pending_knowledge_index_jobs_active(
-            conn,
-            key,
-            MIGRATION_ARCHIVE_REBUILD_BATCH_SIZE,
-        )?;
-        let status = crate::knowledge::read_knowledge_index_status(conn, key)?;
-        match status.status.as_str() {
-            "complete" | "completed" | "empty" => return Ok(()),
-            "failed" | "cancelled" => {
-                return Err(anyhow!(
-                    "knowledge rebuild did not complete: {}{}",
-                    status.status,
-                    status
-                        .last_error
-                        .as_deref()
-                        .map(|e| format!(" ({e})"))
-                        .unwrap_or_default()
-                ));
-            }
-            _ => {}
-        }
-
-        if processed == 0 {
-            stall_rounds += 1;
-            if stall_rounds >= MIGRATION_ARCHIVE_REBUILD_STALL_ROUNDS {
-                return Err(anyhow!("knowledge rebuild stalled with status {}", status.status));
-            }
-        } else {
-            stall_rounds = 0;
-        }
-    }
+fn migration_archive_rebuild_derived_indexes(_conn: &Connection, _key: &[u8; 32]) -> Result<()> {
+    Ok(())
 }
 
 pub fn migration_archive_export_estimate(

@@ -59,6 +59,36 @@ void main() {
     expect(find.byKey(const ValueKey('diagnostics_page')), findsOneWidget);
   });
 
+  testWidgets('Settings debug section hides knowledge debug entries',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: TestAppBackend(),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('settings_debug_run_oplog_maintenance')),
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('settings_debug_knowledge_index')),
+        findsNothing);
+    expect(find.text('Semantic Search (Debug)'), findsNothing);
+  });
+
   testWidgets('Diagnostics JSON does not expose cloud gateway URL', (
     tester,
   ) async {

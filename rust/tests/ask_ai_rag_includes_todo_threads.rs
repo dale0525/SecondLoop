@@ -1,11 +1,20 @@
 use anyhow::Result;
 use secondloop_rust::crypto::KdfParams;
+use secondloop_rust::embedding;
 use secondloop_rust::llm::ChatDelta;
 use secondloop_rust::{auth, db, rag};
 
 #[derive(Default)]
 struct FakeProvider {
     last_prompt: std::sync::Mutex<Option<String>>,
+}
+
+fn default_todo_activity_embeddings_table() -> String {
+    format!(
+        "todo_activity_embeddings__s_{}_{}",
+        embedding::DEFAULT_MODEL_NAME.replace('-', "_"),
+        embedding::DEFAULT_EMBED_DIM
+    )
 }
 
 impl rag::AnswerProvider for FakeProvider {
@@ -130,4 +139,178 @@ fn ask_ai_rag_dedups_todo_thread_when_todo_and_activity_both_match() {
         .clone()
         .expect("prompt");
     assert_eq!(prompt.matches("TODO_THREAD todo_id=todo:1").count(), 1);
+}
+
+#[test]
+fn active_embeddings_refreshes_todo_activity_index_before_search() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:1",
+        "Quarterly planning",
+        None,
+        "inbox",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+
+    db::append_todo_note(
+        &conn,
+        &key,
+        "todo:1",
+        "Investor feedback needs a follow-up",
+        None,
+    )
+    .expect("note");
+
+    let table = default_todo_activity_embeddings_table();
+    let before_count: i64 = conn
+        .query_row(&format!("SELECT count(*) FROM \"{table}\""), [], |row| {
+            row.get(0)
+        })
+        .expect("count before");
+    assert_eq!(before_count, 0, "expected pristine todo activity index");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Investor feedback",
+        8,
+        rag::Focus::AllMemories,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let after_count: i64 = conn
+        .query_row(&format!("SELECT count(*) FROM \"{table}\""), [], |row| {
+            row.get(0)
+        })
+        .expect("count after");
+    assert!(
+        after_count > 0,
+        "expected ask-ai active embeddings to refresh todo activity index"
+    );
+}
+
+#[test]
+fn ask_ai_active_embeddings_includes_events_for_non_agenda_questions() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    db::upsert_event(
+        &conn,
+        &key,
+        "event:budget-review",
+        "Budget review with Alice",
+        1_700_000_000_000,
+        1_700_000_360_000,
+        "UTC",
+        None,
+    )
+    .expect("event");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "When is the budget review with Alice?",
+        8,
+        rag::Focus::AllMemories,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+    assert!(
+        prompt.contains("Budget review with Alice"),
+        "expected ordinary event question to include event context: {prompt}"
+    );
+}
+
+#[test]
+fn ask_ai_active_embeddings_keeps_older_relevant_event_matches() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    for index in 0..205 {
+        let title = if index == 0 {
+            "Needle event at the start of the archive"
+        } else {
+            "Background sync"
+        };
+        db::upsert_event(
+            &conn,
+            &key,
+            &format!("event:{index}"),
+            title,
+            1_700_000_000_000 + index as i64 * 10,
+            1_700_000_000_000 + index as i64 * 10 + 5,
+            "UTC",
+            None,
+        )
+        .expect("event");
+    }
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Tell me about the needle event",
+        8,
+        rag::Focus::AllMemories,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+    assert!(
+        prompt.contains("Needle event at the start of the archive"),
+        "expected older relevant event to survive active-embedding candidate limit: {prompt}"
+    );
 }

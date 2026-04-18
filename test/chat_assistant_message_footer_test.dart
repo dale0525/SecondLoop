@@ -35,11 +35,8 @@ void main() {
                     unitId: null,
                   ),
                 ],
-                memoryCards: [],
               ),
               onOpenSources: () {},
-              onOpenMemory: () {},
-              onOpenEvidence: () {},
               actionSuggestions: const [
                 ActionSuggestion(type: 'todo', title: 'Draft outline'),
               ],
@@ -60,7 +57,8 @@ void main() {
     );
 
     expect(evidenceRect.bottom, lessThanOrEqualTo(suggestionRect.top));
-    expect(find.text('Open evidence'), findsOneWidget);
+    expect(find.text('1 sources'), findsOneWidget);
+    expect(find.text('Open evidence'), findsNothing);
     expect(find.text('Draft outline'), findsOneWidget);
   });
 }

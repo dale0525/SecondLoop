@@ -1,21 +1,14 @@
 use super::{
-    build_external_document_direct_source, build_message_direct_source, format_history_line,
-    should_include_actions_context, ContextItem, ContextSource,
+    build_message_direct_source, format_history_line, should_include_actions_context,
+    should_include_actions_context_in_range,
 };
+use super::{ContextItem, ContextSource};
 use crate::auth;
 use crate::crypto::KdfParams;
 use crate::db;
-use crate::knowledge::{
-    KnowledgeAnchorSet, KnowledgeContextBlock, KnowledgeRole, KnowledgeSourceKind,
-    KnowledgeUnitKind,
-};
 use crate::message_citations::AnswerEvidenceDirectSource;
+use crate::rag::evidence::build_direct_sources_for_context_candidate;
 use crate::rag::evidence::filter_direct_sources_for_question;
-use crate::rag::evidence::{
-    build_direct_sources_for_context_candidate, build_direct_sources_from_knowledge_entry,
-    build_memory_card_from_document,
-};
-use crate::rag::knowledge_contexts::KnowledgeRenderedContextEntry;
 use rusqlite::params;
 
 #[test]
@@ -68,6 +61,41 @@ fn today_task_query_triggers_actions_context() {
 }
 
 #[test]
+fn explicit_agenda_query_without_timeframe_triggers_actions_context() {
+    assert!(should_include_actions_context("What is on my schedule?"));
+    assert!(should_include_actions_context("我的日程是什么？"));
+}
+
+#[test]
+fn future_task_queries_trigger_actions_context() {
+    assert!(should_include_actions_context("What should I do tomorrow?"));
+    assert!(should_include_actions_context(
+        "What should I do next week?"
+    ));
+    assert!(should_include_actions_context("明天我该做什么？"));
+}
+
+#[test]
+fn yesterday_task_query_triggers_actions_context_in_range() {
+    assert!(should_include_actions_context_in_range(
+        "昨天我做了哪些事？"
+    ));
+    assert!(should_include_actions_context_in_range(
+        "What did I do yesterday?"
+    ));
+}
+
+#[test]
+fn generic_yesterday_query_does_not_trigger_actions_context_in_range() {
+    assert!(!should_include_actions_context_in_range(
+        "分析一下我昨天拍的视频开头台词"
+    ));
+    assert!(!should_include_actions_context_in_range(
+        "Summarize yesterday's video intro"
+    ));
+}
+
+#[test]
 fn project_planning_queries_do_not_trigger_actions_context() {
     assert!(!should_include_actions_context("帮我写项目计划"));
     assert!(!should_include_actions_context(
@@ -91,7 +119,6 @@ fn filter_direct_sources_prefers_question_matching_messages() {
             highlighted_text: Some(text.to_string()),
             created_at_ms: Some(1),
             updated_at_ms: Some(1),
-            anchors: None,
             document_id: None,
             unit_id: None,
         }
@@ -225,203 +252,48 @@ fn attachment_direct_sources_strip_internal_markup_when_chunk_text_is_unavailabl
 }
 
 #[test]
-fn knowledge_attachment_direct_sources_preserve_kind_and_chunk_target() {
+fn todo_thread_candidates_build_item_direct_sources() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
     let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
     let conn = db::open(&app_dir).expect("open db");
 
-    let entry = KnowledgeRenderedContextEntry {
-        block: KnowledgeContextBlock {
-            document_id: "attachment:sha-doc:readable_text".to_string(),
-            unit_id: Some("attachment:sha-doc:readable_text:chunk:0004".to_string()),
-            unit_kind: Some(KnowledgeUnitKind::Chunk),
-            source_kind: KnowledgeSourceKind::ReadableText,
-            role: KnowledgeRole::Evidence,
-            anchors: KnowledgeAnchorSet {
-                attachment_sha256: Some("sha-doc".to_string()),
-                source_filename: Some("notes.txt".to_string()),
-                ..KnowledgeAnchorSet::default()
-            },
-            score: 0.9,
-            rendered_text: "Relevant launch notes".to_string(),
-        },
-        rendered_text: "Relevant launch notes".to_string(),
+    let todo = db::upsert_todo(
+        &conn,
+        &key,
+        "todo:budget-follow-up",
+        "Prepare budget freeze follow-up",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+    let candidate = ContextItem {
+        source: ContextSource::TodoThread,
+        id: todo.id.clone(),
+        created_at_ms: todo.created_at_ms,
+        distance: Some(0.1),
+        text: "TODO_THREAD todo_id=todo-1\nTODO [open] Prepare budget freeze follow-up".to_string(),
+        citation_suffix: None,
     };
 
-    let direct_sources = build_direct_sources_from_knowledge_entry(&conn, &key, &entry);
-    let source = direct_sources
-        .first()
-        .expect("attachment direct source from knowledge entry");
+    let direct_sources = build_direct_sources_for_context_candidate(&conn, &key, &candidate);
+    let source = direct_sources.first().expect("todo direct source");
 
+    assert_eq!(source.source_type, "item");
+    assert_eq!(source.href, format!("secondloop://todo/{}", todo.id));
     assert_eq!(
-        source.href,
-        "secondloop://attachment/sha-doc?kind=readable_text_full&chunk=4"
-    );
-    assert_eq!(
-        source.document_id.as_deref(),
-        Some("attachment:sha-doc:readable_text")
-    );
-    assert_eq!(
-        source.unit_id.as_deref(),
-        Some("attachment:sha-doc:readable_text:chunk:0004")
-    );
-}
-
-#[test]
-fn generated_memory_cards_use_corrected_feedback_fields() {
-    let temp_dir = tempfile::tempdir().expect("tempdir");
-    let app_dir = temp_dir.path().join("secondloop");
-    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
-    let conn = db::open(&app_dir).expect("open db");
-    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
-
-    db::insert_message(
-        &conn,
-        &key,
-        &conversation.id,
-        "user",
-        "Please answer in Chinese and keep responses short and practical.",
-    )
-    .expect("preference");
-
-    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
-    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
-        .expect("process jobs");
-
-    crate::db::upsert_knowledge_memory_feedback(
-        &conn,
-        &key,
-        "generated:preference:response-language",
-        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
-        true,
-        false,
-        false,
-        Some("Preferred reply language".to_string()),
-        Some("Always reply in Chinese unless I ask for another language.".to_string()),
-    )
-    .expect("update generated memory");
-
-    let card = build_memory_card_from_document(
-        &conn,
-        &key,
-        "generated:preference:response-language",
-        "How should you answer me?",
-    )
-    .expect("generated memory card");
-
-    assert_eq!(card.title.as_deref(), Some("Preferred reply language"));
-    assert_eq!(
-        card.summary.as_deref(),
-        Some("Always reply in Chinese unless I ask for another language.")
-    );
-    assert_eq!(
-        card.body.as_deref(),
-        Some("Always reply in Chinese unless I ask for another language.")
-    );
-}
-
-#[test]
-fn page_backed_memory_cards_do_not_report_confirmed_when_page_needs_review() {
-    let temp_dir = tempfile::tempdir().expect("tempdir");
-    let app_dir = temp_dir.path().join("secondloop");
-    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
-    let conn = db::open(&app_dir).expect("open db");
-
-    let mut page = crate::knowledge::KnowledgePage::new(
-        "page:preferences",
-        crate::knowledge::KnowledgePageType::Preferences,
-        "Preferences",
-        1,
-    );
-    page.current_summary = "Reply in Chinese by default.".to_string();
-    page.current_body = "Reply in Chinese by default.\nKeep answers concise.".to_string();
-    page.state = crate::knowledge::KnowledgePageState::NeedsReview;
-    page.answer_policy = crate::knowledge::state_default_answer_policy(page.state);
-    page.human_corrected = true;
-    page.conflict_count = 1;
-    page.source_count = 3;
-
-    crate::db::upsert_compiled_knowledge_pages(
-        &conn,
-        &key,
-        &[crate::knowledge::compiler::CompiledKnowledgePageRecord {
-            page,
-            source_document_ids: vec!["doc:language".to_string()],
-            claim_ids: vec!["claim:language".to_string()],
-        }],
-    )
-    .expect("seed page");
-
-    crate::db::apply_knowledge_page_correction(
-        &conn,
-        &key,
-        "page:preferences",
-        Some("Preferences".to_string()),
-        Some("Reply in Chinese by default.".to_string()),
-        Some("Reply in Chinese by default.\nKeep answers concise.".to_string()),
-    )
-    .expect("correct page");
-    crate::db::mark_knowledge_page_wrong(
-        &conn,
-        &key,
-        "page:preferences",
-        crate::knowledge::KnowledgeWrongReason::StatementWrong,
-        Some("Needs review".to_string()),
-    )
-    .expect("mark page wrong");
-    let detail = crate::db::get_knowledge_page_detail(&conn, &key, "page:preferences")
-        .expect("load page detail")
-        .expect("page detail");
-    assert_eq!(
-        detail.page.state,
-        crate::knowledge::KnowledgePageState::NeedsReview
-    );
-
-    let card = build_memory_card_from_document(
-        &conn,
-        &key,
-        "page:preferences",
-        "How should you answer me?",
-    )
-    .expect("page-backed memory card");
-
-    assert_eq!(
-        card.status,
-        crate::knowledge::KnowledgeMemoryStatus::Inferred
-    );
-}
-
-#[test]
-fn external_document_direct_source_percent_encodes_deeplink_targets() {
-    let source = build_external_document_direct_source(
-        "doc/with slash",
-        7,
-        "Budget notes",
-        "Relevant chunk text",
-        1,
-    );
-
-    assert_eq!(
-        source.document_id.as_deref(),
-        Some("external:doc/with slash")
-    );
-    assert_eq!(
-        source.unit_id.as_deref(),
-        Some("external:doc/with slash:chunk:0007")
+        source.title.as_deref(),
+        Some("Prepare budget freeze follow-up")
     );
     assert!(
-        source
-            .href
-            .contains("secondloop://knowledge-document/external%3Adoc%2Fwith%20slash"),
-        "expected encoded document id in href: {}",
-        source.href
-    );
-    assert!(
-        source
-            .href
-            .contains("unit=external%3Adoc%2Fwith%20slash%3Achunk%3A0007"),
-        "expected encoded unit id in href: {}",
-        source.href
+        source.snippet.contains("Prepare budget freeze follow-up"),
+        "expected todo snippet to contain the todo title: {}",
+        source.snippet
     );
 }

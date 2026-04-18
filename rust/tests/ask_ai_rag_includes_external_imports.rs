@@ -30,7 +30,7 @@ impl rag::AnswerProvider for FakeProvider {
 }
 
 #[test]
-fn ask_ai_prompt_includes_external_import_context() {
+fn ask_ai_prompt_excludes_external_import_context() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
     let source_dir = temp_dir.path().join("obsidian-vault");
@@ -66,6 +66,12 @@ fn ask_ai_prompt_includes_external_import_context() {
         .unwrap()
         .clone()
         .expect("prompt");
-    assert!(prompt.contains("flight refund"));
-    assert!(prompt.contains("EXTERNAL_DOCUMENT"));
+    assert!(
+        !prompt.contains("Budget checklist and flight refund notes."),
+        "external import content should no longer enter ask-ai prompt: {prompt}"
+    );
+    assert!(
+        !prompt.contains("EXTERNAL_DOCUMENT"),
+        "legacy external-document marker should no longer appear in ask-ai prompt: {prompt}"
+    );
 }

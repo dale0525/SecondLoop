@@ -8,7 +8,6 @@ import 'app_shell_default_pages_stub.dart'
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
 import '../core/update/update_badge_prefs.dart';
-import '../features/memory/memory_center_page.dart';
 import '../i18n/strings.g.dart';
 import '../ui/sl_glass.dart';
 import '../ui/sl_surface.dart';
@@ -18,7 +17,6 @@ const _kDesktopShellMaxWidth = 1240.0;
 
 enum AppTab {
   chat(Icons.chat_bubble_outline, Icons.chat_bubble),
-  memory(Icons.auto_stories_outlined, Icons.auto_stories_rounded),
   settings(Icons.settings_outlined, Icons.settings);
 
   const AppTab(this.icon, this.selectedIcon);
@@ -28,7 +26,6 @@ enum AppTab {
 
   String label(BuildContext context) => switch (this) {
         AppTab.chat => context.t.app.tabs.main,
-        AppTab.memory => context.t.app.tabs.memory,
         AppTab.settings => context.t.app.tabs.settings,
       };
 }
@@ -114,7 +111,6 @@ class _AppShellState extends State<AppShell> {
     }
     return switch (tab) {
       AppTab.chat => _buildChatTab(context, isActive: isActive),
-      AppTab.memory => const MemoryCenterPage(),
       AppTab.settings => _buildSettingsTab(context, isActive: isActive),
     };
   }
@@ -162,11 +158,6 @@ class _AppShellState extends State<AppShell> {
                   ),
                   _buildWideShellTab(
                     context,
-                    AppTab.memory,
-                    isActive: _selectedIndex == AppTab.memory.index,
-                  ),
-                  _buildWideShellTab(
-                    context,
                     AppTab.settings,
                     isActive: _selectedIndex == AppTab.settings.index,
                   ),
@@ -174,7 +165,6 @@ class _AppShellState extends State<AppShell> {
               )
             : switch (AppTab.values[_selectedIndex]) {
                 AppTab.chat => _buildChatTab(context, isActive: true),
-                AppTab.memory => const MemoryCenterPage(),
                 AppTab.settings => _buildSettingsTab(context, isActive: true),
               };
 

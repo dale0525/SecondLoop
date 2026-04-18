@@ -78,11 +78,7 @@ void main() {
       () async {
     const sharedModules = <String>[
       'rust/src/db/parts/01_prelude.rs',
-      'rust/src/knowledge/chunk.rs',
-      'rust/src/knowledge/index_jobs.rs',
-      'rust/src/knowledge/usage.rs',
       'rust/src/rag/context_selection.rs',
-      'rust/src/rag/mod.rs',
       'rust/src/sync/parts/02_push.rs',
     ];
 

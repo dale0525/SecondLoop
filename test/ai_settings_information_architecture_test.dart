@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 
-import 'test_i18n.dart';
 import 'ai_settings_test_helpers.dart';
+import 'test_i18n.dart';
 
 void main() {
   testWidgets(
@@ -35,7 +35,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(advancedSettings, findsOneWidget);
-
     expect(
         find.byKey(const ValueKey('ai_settings_section_ask_ai')), findsNothing);
     expect(
@@ -84,5 +83,24 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(cloudEmbeddingsSwitch, findsOneWidget);
+  });
+
+  testWidgets(
+      'AI settings advanced section does not render removed knowledge controls',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: AiSettingsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
+
+    expect(find.byKey(const ValueKey('knowledge_index_status_label')),
+        findsNothing);
+    expect(find.textContaining('Knowledge Index'), findsNothing);
   });
 }

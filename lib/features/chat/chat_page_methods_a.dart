@@ -9,6 +9,17 @@ final RegExp _kCloudDetachedRequestIdPattern = RegExp(
 );
 
 extension _ChatPageStateMethodsA on _ChatPageState {
+  Future<void> _showUnsupportedSecondLoopLink(String href) async {
+    _scaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text(
+          context.t.errors.loadFailed(error: 'unsupported_secondloop_link'),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   void _attachSyncEngine() {
     final engine = SyncEngineScope.maybeOf(context);
     if (identical(engine, _syncEngine)) return;
@@ -426,63 +437,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     required bool isDesktopPlatform,
     String? citationsJson,
   }) {
-    final backend = AppBackendScope.of(context);
-    final viewerBackend = maybeKnowledgeViewerBackendFor(backend);
-    final knowledgeBackend = maybeKnowledgeBackendFor(backend);
-    final pagesBackend = maybeKnowledgePagesBackendFor(backend);
-    final hasPagesBackend = pagesBackend != null;
-    final hasViewerBackend = viewerBackend != null;
-    final hasKnowledgeBackend = knowledgeBackend != null;
-    Future<void> openMemoryCard(String documentId) {
-      return MemoryDetailPage.openDocumentId(
-        context,
-        documentId: documentId,
-      );
-    }
-
-    bool canOpenMemoryCard(String documentId) {
-      return canOpenEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> correctMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-      String title,
-      String summary,
-    ) {
-      return _correctMemoryFromEvidence(
-        card,
-        title: title,
-        summary: summary,
-      );
-    }
-
-    bool canMutateMemoryCard(String documentId) {
-      return canMutateEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasKnowledgeBackend: hasKnowledgeBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> refreshMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-    ) {
-      return _refreshMemoryFromEvidence(card);
-    }
-
-    Future<void> disableMemoryCard(String documentId) {
-      return _disableMemoryFromEvidence(documentId);
-    }
-
-    Future<void> deleteMemoryCard(String documentId) {
-      return _deleteMemoryFromEvidence(documentId);
-    }
-
     final citationController = ChatAnswerCitationController(
       parseChatAnswerEvidence(citationsJson),
     );
@@ -495,18 +449,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         final handledCitation = await citationController.handleCitationTap(
           context,
           href: href,
-          onOpenDirectSource: (target) async {
-            await _handleMarkdownInAppLink(target);
-          },
-          onOpenMemoryCard: openMemoryCard,
-          canOpenMemoryCard: canOpenMemoryCard,
-          onCorrectMemoryCard: correctMemoryCard,
-          canCorrectMemoryCard: canMutateMemoryCard,
-          onRefreshMemoryCard: refreshMemoryCard,
-          onDisableMemoryCard: disableMemoryCard,
-          canDisableMemoryCard: canMutateMemoryCard,
-          onDeleteMemoryCard: deleteMemoryCard,
-          canDeleteMemoryCard: canMutateMemoryCard,
+          onOpenDirectSource: _handleMarkdownInAppLink,
         );
         if (handledCitation) {
           return;
@@ -514,6 +457,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         await handleChatMarkdownTapLink(
           href,
           handleInApp: _handleMarkdownInAppLink,
+          handleUnsupportedSecondLoopLink: _showUnsupportedSecondLoopLink,
         );
       },
       onTapLink: (text, href, title) {
@@ -521,6 +465,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
           handleChatMarkdownTapLink(
             href,
             handleInApp: _handleMarkdownInAppLink,
+            handleUnsupportedSecondLoopLink: _showUnsupportedSecondLoopLink,
           ),
         );
       },
@@ -538,14 +483,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
           const SizedBox.shrink(),
       child: preview,
     );
-  }
-
-  bool _canOpenKnowledgeHref(String href) {
-    if (parseKnowledgeDocumentDeepLink(href) != null) {
-      return maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) !=
-          null;
-    }
-    return true;
   }
 
   Future<void> _openMessageViewer(
@@ -1312,6 +1249,54 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         ),
       ),
     );
+  }
+
+  Future<bool> _openTodoById(String todoId) async {
+    final normalizedTodoId = todoId.trim();
+    if (normalizedTodoId.isEmpty) return false;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    Todo? todo;
+    try {
+      todo = await backend.getTodoById(sessionKey, normalizedTodoId);
+    } catch (_) {
+      todo = null;
+    }
+
+    if (!mounted || todo == null) {
+      return false;
+    }
+
+    await _openLinkedTodo(todo);
+    return true;
+  }
+
+  Future<bool> _openEventById(String eventId) async {
+    final normalizedEventId = eventId.trim();
+    if (normalizedEventId.isEmpty) return false;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    Event? event;
+    try {
+      event = await backend.getEventById(sessionKey, normalizedEventId);
+    } catch (_) {
+      event = null;
+    }
+
+    if (!mounted || event == null) return false;
+    await _pushRouteFromChat(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          EventViewerPage(event: event!),
+        ),
+      ),
+    );
+    return true;
   }
 
   String? _extractCloudDetachedRequestIdFromPayloadJson(String? payloadJson) {

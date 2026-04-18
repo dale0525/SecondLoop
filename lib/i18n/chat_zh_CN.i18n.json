@@ -262,26 +262,16 @@
     "title": "证据",
     "summary": {
       "sourcesUsed": "$count 个来源",
-      "memoryCardsUsed": "$count 张知识页",
       "openEvidence": "打开证据"
     },
     "tabs": {
-      "directSources": "直接来源（$count）",
-      "memoryCards": "知识页（$count）"
+      "directSources": "直接来源（$count）"
     },
     "actions": {
-      "viewOriginal": "查看原文",
-      "inspectMemory": "查看知识页",
-      "correct": "纠正",
-      "dontUse": "不再用于回答",
-      "deleteMemory": "归档"
-    },
-    "labels": {
-      "whyUsed": "为何使用",
-      "whyUsedForQuery": "因与这个问题相关而被使用：$query",
-      "sourceCount": "$count 个来源"
+      "viewOriginal": "查看原文"
     },
     "sourceTypeLabels": {
+      "item": "事项",
       "chatMessage": "聊天消息",
       "attachment": "附件",
       "attachmentOcr": "附件 OCR",

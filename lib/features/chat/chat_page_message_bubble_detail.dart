@@ -37,6 +37,16 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
   }
 
   Future<bool> _handleMarkdownInAppLink(String href) async {
+    final todoLink = parseTodoDeepLink(href);
+    if (todoLink != null) {
+      return _openTodoById(todoLink.todoId);
+    }
+
+    final eventLink = parseEventDeepLink(href);
+    if (eventLink != null) {
+      return _openEventById(eventLink.eventId);
+    }
+
     final attachmentLink = parseAttachmentDeepLink(href);
     if (attachmentLink != null) {
       await AttachmentViewerPage.openBySha(
@@ -44,30 +54,6 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
         attachmentSha256: attachmentLink.attachmentSha256,
         initialContentKind: attachmentLink.kind,
         initialChunkIndex: attachmentLink.chunk,
-      );
-      return true;
-    }
-
-    final knowledgeDocumentLink = parseKnowledgeDocumentDeepLink(href);
-    if (knowledgeDocumentLink != null) {
-      if (maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) == null) {
-        final messenger = ScaffoldMessenger.maybeOf(context);
-        messenger?.showSnackBar(
-          SnackBar(
-            content: Text(
-              context.t.errors.loadFailed(
-                error: 'knowledge_viewer_backend_unavailable',
-              ),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        return true;
-      }
-      await KnowledgeDocumentViewerPage.openDocumentId(
-        context,
-        documentId: knowledgeDocumentLink.documentId,
-        initialHighlightedUnitId: knowledgeDocumentLink.unitId,
       );
       return true;
     }

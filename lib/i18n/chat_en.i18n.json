@@ -262,26 +262,16 @@
     "title": "Evidence",
     "summary": {
       "sourcesUsed": "$count sources",
-      "memoryCardsUsed": "$count knowledge pages",
       "openEvidence": "Open evidence"
     },
     "tabs": {
-      "directSources": "Direct sources ($count)",
-      "memoryCards": "Knowledge pages ($count)"
+      "directSources": "Direct sources ($count)"
     },
     "actions": {
-      "viewOriginal": "View original",
-      "inspectMemory": "Inspect page",
-      "correct": "Correct",
-      "dontUse": "Stop using in answers",
-      "deleteMemory": "Archive"
-    },
-    "labels": {
-      "whyUsed": "Why it was used",
-      "whyUsedForQuery": "Used because it was relevant to this question: $query",
-      "sourceCount": "$count sources"
+      "viewOriginal": "View original"
     },
     "sourceTypeLabels": {
+      "item": "Item",
       "chatMessage": "Chat message",
       "attachment": "Attachment",
       "attachmentOcr": "Attachment OCR",
