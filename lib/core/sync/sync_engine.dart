@@ -514,7 +514,6 @@ final class SyncEngine {
       if (status == '402') {
         _setWriteGate(const SyncWriteGateState.paymentRequired());
       }
-      _retryPushAfterRecoveryPull = false;
 
       // Best-effort: avoid crashing the app on transient sync errors.
     } finally {}

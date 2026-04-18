@@ -414,7 +414,7 @@ fn run_post_commit_blob_side_effects(
         .values()
         .any(|action| matches!(action, PendingAttachmentAction::Upload { .. }))
     {
-        let _ = crate::db::ensure_all_video_manifest_derivations(conn, db_key, app_dir)?;
+        super::attachments::prepare_local_attachment_uploads(&upload_ctx)?;
     }
 
     for (sha256, action) in &batch.attachment_actions {

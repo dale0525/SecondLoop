@@ -2,6 +2,7 @@ use secondloop_rust::auth;
 use secondloop_rust::crypto::{derive_root_key, KdfParams};
 use secondloop_rust::db;
 use secondloop_rust::sync;
+use std::fs;
 
 #[path = "support/managed_vault_v2_test_server.rs"]
 mod managed_vault_v2_test_server;
@@ -477,6 +478,108 @@ fn managed_vault_v2_push_does_not_delete_remote_attachment_bytes_before_commit()
         !requests.contains("DELETE /v1/vaults/v1/attachments/"),
         "unexpected pre-commit attachment delete: {requests}"
     );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_post_commit_missing_video_manifest_is_queued_for_repair_and_recovers() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let manifest = db::insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        br#"{"schema":"secondloop.video_manifest.v3"}"#,
+        "application/x.secondloop.video+json",
+    )
+    .expect("insert video manifest");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn.execute(
+        "INSERT INTO kv(key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![
+            format!("managed_vault.attachments.bytes_backfilled:{scope_id}"),
+            "1"
+        ],
+    )
+    .expect("seed attachment backfill flag");
+    conn.execute(
+        "INSERT INTO kv(key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![
+            format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}"),
+            "1"
+        ],
+    )
+    .expect("seed artifact backfill flag");
+
+    fs::remove_file(app_dir.join(&manifest.path)).expect("remove local manifest before push");
+
+    let pushed = sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("push should succeed and queue repair");
+    assert!(pushed > 0);
+
+    let diagnostics = sync::blob_repair::load_blob_repair_diagnostics(&conn, &scope_id)
+        .expect("blob repair diagnostics after queued repair");
+    assert_eq!(diagnostics.queued_count, 1);
+    assert!(
+        diagnostics
+            .last_error
+            .as_deref()
+            .is_some_and(|error| error.contains("No such file") || error.contains("not found")),
+        "expected local manifest read failure to be recorded, got {:?}",
+        diagnostics.last_error
+    );
+
+    let requests_after_first_push = state.lock().expect("lock").requests.join("\n\n");
+    assert!(requests_after_first_push.contains("/v2/vaults/v1/sync/push"));
+    assert!(
+        !requests_after_first_push.contains("/v1/vaults/v1/attachments/"),
+        "unexpected attachment upload before repairable local file exists: {requests_after_first_push}"
+    );
+    drop(requests_after_first_push);
+
+    let restored_manifest = db::insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        br#"{"schema":"secondloop.video_manifest.v3"}"#,
+        "application/x.secondloop.video+json",
+    )
+    .expect("restore manifest bytes");
+    assert_eq!(restored_manifest.sha256, manifest.sha256);
+
+    let second_push =
+        sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("second push should drain repair queue");
+    assert_eq!(second_push, 0);
+
+    let diagnostics_after_repair =
+        sync::blob_repair::load_blob_repair_diagnostics(&conn, &scope_id)
+            .expect("blob repair diagnostics after draining repair");
+    assert_eq!(diagnostics_after_repair.queued_count, 0);
+
+    let state = state.lock().expect("lock");
+    assert!(state.attachments.contains_key(&manifest.sha256));
+    let requests = state.requests.join("\n\n");
+    assert!(requests.contains("/v1/vaults/v1/attachments/"));
 
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");

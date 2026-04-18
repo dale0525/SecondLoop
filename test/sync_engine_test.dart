@@ -482,6 +482,33 @@ void main() {
   });
 
   test(
+      'managed vault keeps retry-after-recovery intent across transient pull failures',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultRecoveryPullFailureRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+      expect(runner.calls, <String>['push', 'pull']);
+
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+      expect(runner.calls, <String>['push', 'pull', 'pull', 'push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test(
       'managed vault mandatory pull after push is not preempted by new push work',
       () async {
     final runner = _ManagedVaultPostPushPullOrderingRunner();
@@ -707,6 +734,36 @@ final class _ManagedVaultRecoveryOrderingRunner
       pullStarted.complete();
     }
     return _pullCompleter.future;
+  }
+}
+
+final class _ManagedVaultRecoveryPullFailureRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  var _pushCount = 0;
+  var _pullCount = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    _pushCount += 1;
+    if (_pushCount == 1) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    return 1;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    _pullCount += 1;
+    if (_pullCount == 1) {
+      throw Exception(
+          'managed-vault v2 pull failed: HTTP 503 {"error":"temporary"}');
+    }
+    return 0;
   }
 }
 
