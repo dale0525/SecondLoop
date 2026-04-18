@@ -79,6 +79,7 @@ pub(crate) fn snapshot() -> LocalModelLifecycleSnapshot {
     }
 }
 
+#[cfg_attr(target_family = "wasm", allow(dead_code))]
 pub(crate) fn mark_local_whisper_used() {
     let mut guard = match local_whisper_usage_state().lock() {
         Ok(g) => g,

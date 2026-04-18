@@ -117,7 +117,8 @@ class _DirectSourceList extends StatelessWidget {
         final isHighlighted =
             highlightedHref != null && item.href == highlightedHref;
         final isMessage = item.sourceType.trim().toLowerCase() == 'message';
-        final canOpen = canOpenDirectSource?.call(item.href) ?? true;
+        final canOpen =
+            !isMessage && (canOpenDirectSource?.call(item.href) ?? true);
         return SlSurface(
           color: isHighlighted
               ? theme.colorScheme.secondaryContainer.withOpacity(0.65)

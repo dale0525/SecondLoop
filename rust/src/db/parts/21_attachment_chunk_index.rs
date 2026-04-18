@@ -718,7 +718,7 @@ WHERE attachment_sha256 = ?1
 pub fn process_pending_attachment_chunk_embeddings_active(
     conn: &Connection,
     key: &[u8; 32],
-    app_dir: &Path,
+    _app_dir: &Path,
     limit: usize,
 ) -> Result<usize> {
     let desired = desired_embedding_model_name(conn)?;
@@ -734,7 +734,7 @@ pub fn process_pending_attachment_chunk_embeddings_active(
             not(frb_expand)
         ))]
         {
-            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+            match crate::embedding::FastEmbedder::get_or_try_init(_app_dir) {
                 Ok(embedder) => {
                     set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
                     return process_pending_attachment_chunk_embeddings(conn, key, &embedder, limit);
@@ -784,7 +784,7 @@ pub fn search_similar_attachment_chunks<E: Embedder + ?Sized>(
 pub fn search_similar_attachment_chunks_active(
     conn: &Connection,
     key: &[u8; 32],
-    app_dir: &Path,
+    _app_dir: &Path,
     query: &str,
     top_k: usize,
 ) -> Result<Vec<SimilarAttachmentChunk>> {
@@ -801,7 +801,7 @@ pub fn search_similar_attachment_chunks_active(
             not(frb_expand)
         ))]
         {
-            match crate::embedding::FastEmbedder::get_or_try_init(app_dir) {
+            match crate::embedding::FastEmbedder::get_or_try_init(_app_dir) {
                 Ok(embedder) => {
                     set_active_embedding_model_name(conn, crate::embedding::PRODUCTION_MODEL_NAME)?;
                     return search_similar_attachment_chunks(conn, key, &embedder, query, top_k);

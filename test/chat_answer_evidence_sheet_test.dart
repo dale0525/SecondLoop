@@ -7,7 +7,7 @@ import 'package:secondloop/features/chat/chat_answer_evidence_sheet.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('ChatAnswerEvidencePanel keeps pure message evidence clickable',
+  testWidgets('ChatAnswerEvidencePanel keeps pure message evidence read-only',
       (tester) async {
     var openedDirectSource = '';
 
@@ -50,12 +50,11 @@ void main() {
     expect(find.text('Chat message'), findsOneWidget);
     expect(find.text('This thread'), findsOneWidget);
     expect(find.text('High relevance'), findsOneWidget);
-    expect(find.text('View original'), findsOneWidget);
+    expect(find.text('View original'), findsNothing);
 
-    await tester.tap(find.text('View original'));
     await tester.pumpAndSettle();
 
-    expect(openedDirectSource, 'secondloop://message/history-1');
+    expect(openedDirectSource, isEmpty);
   });
 
   testWidgets(

@@ -1,7 +1,9 @@
 import 'package:flutter/widgets.dart';
 
 import '../../i18n/strings.g.dart';
+import '../audio_transcribe/audio_transcribe_turn_view.dart';
 
+import 'audio_transcript_readable_text.dart';
 import 'audio_transcript_turn_view_display.dart';
 import 'attachment_ocr_text_normalizer.dart';
 import 'attachment_text_source_policy.dart';
@@ -46,6 +48,23 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     return '';
   }
 
+  final normalizedMime = firstNonEmpty(<String?>[
+    mimeTypeOverride,
+    read('mime_type'),
+  ]).toLowerCase();
+  final isAudioPayload = normalizedMime.startsWith('audio/');
+
+  var audioTurnViewResolved = false;
+  AudioTranscriptTurnView? cachedAudioTurnView;
+
+  AudioTranscriptTurnView? resolveAudioTurnViewOnce() {
+    if (!isAudioPayload) return null;
+    if (audioTurnViewResolved) return cachedAudioTurnView;
+    audioTurnViewResolved = true;
+    cachedAudioTurnView = resolveAudioTranscriptTurnView(payload);
+    return cachedAudioTurnView;
+  }
+
   AttachmentDetailTextContent? resolvePreferredContent(String rawKind) {
     final normalizedKind = rawKind.trim().toLowerCase();
     if (normalizedKind.isEmpty) return null;
@@ -63,8 +82,15 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
           read('transcript_excerpt'),
           read('transcript_full'),
         ]);
-        final full =
-            content(read('transcript_excerpt'), read('transcript_full'));
+        final full = isAudioPayload
+            ? firstNonEmpty(<String?>[
+                resolveAudioTranscriptReadableFullText(
+                  payload,
+                  turnView: resolveAudioTurnViewOnce(),
+                ),
+                content(read('transcript_excerpt'), read('transcript_full')),
+              ])
+            : content(read('transcript_excerpt'), read('transcript_full'));
         if (excerpt.isEmpty && full.isEmpty) return null;
         return AttachmentDetailTextContent(summary: excerpt, full: full);
       case 'ocr_text':
@@ -152,11 +178,6 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('extracted_text_excerpt'),
   ]);
 
-  final normalizedMime = firstNonEmpty(<String?>[
-    mimeTypeOverride,
-    read('mime_type'),
-  ]).toLowerCase();
-  final isAudioPayload = normalizedMime.startsWith('audio/');
   final isImagePayload = normalizedMime.startsWith('image/');
   final isUrlPayload = normalizedMime == 'application/x.secondloop.url+json';
   final hasVideoPayloadSignal = payload != null &&
@@ -210,11 +231,21 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     ocrFull,
   ]);
 
-  final audioTurnText = isAudioPayload
-      ? resolveAudioTranscriptTurnViewDisplayText(payload)
-      : const AudioTranscriptTurnViewDisplayText(excerpt: '', full: '');
+  final audioTurnView = resolveAudioTurnViewOnce();
+  final audioTurnText = audioTurnView == null
+      ? const AudioTranscriptTurnViewDisplayText(excerpt: '', full: '')
+      : AudioTranscriptTurnViewDisplayText(
+          excerpt: excerptAudioTranscriptTurnView(audioTurnView).trim(),
+          full: formatAudioTranscriptTurnViewFull(audioTurnView).trim(),
+        );
   final audioTurnSummary = audioTurnText.excerpt;
   final audioTurnFull = audioTurnText.full;
+  final audioReadableFull = isAudioPayload
+      ? resolveAudioTranscriptReadableFullText(
+          payload,
+          turnView: audioTurnView,
+        )
+      : '';
 
   final audioSummary = firstNonEmpty(<String?>[
     read('manual_summary'),
@@ -230,6 +261,7 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
 
   final audioFull = firstNonEmpty(<String?>[
     read('manual_full_text'),
+    audioReadableFull,
     audioTurnFull,
     read('transcript_full'),
     read('full_text'),

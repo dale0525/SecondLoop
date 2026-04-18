@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
@@ -545,5 +546,43 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.byType(Placeholder), findsOneWidget);
+  });
+
+  testWidgets(
+      'cloud fallback backend skips managed-vault bootstrap sync requirements',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: CloudWebBackend(
+              chatClient: const UnsupportedCloudWebChatClient(),
+            ),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: WebInitialSyncGate(
+                authController: _FakeCloudAuthController(
+                  initialUid: 'uid-1',
+                  initialEmail: 'user@example.com',
+                  initialEmailVerified: true,
+                ),
+                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(Placeholder), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.textContaining('not available in web'), findsNothing);
   });
 }

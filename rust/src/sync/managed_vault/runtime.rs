@@ -38,6 +38,7 @@ impl StatusCode {
         (200..300).contains(&self.0)
     }
 
+    #[cfg_attr(target_family = "wasm", allow(dead_code))]
     pub(super) fn is_server_error(self) -> bool {
         (500..600).contains(&self.0)
     }

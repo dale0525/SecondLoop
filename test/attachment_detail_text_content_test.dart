@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/attachments/attachment_detail_text_content.dart';
+import 'package:secondloop/features/attachments/audio_transcript_turn_view_display.dart';
 
 void main() {
   test('resolveAttachmentDetailTextContent prefers knowledge video fields', () {
@@ -167,7 +168,8 @@ void main() {
     expect(content.full, 'Local extracted full text.');
   });
 
-  test('audio detail prefers turn view for display text', () {
+  test('audio detail summary prefers turn view while full keeps transcript',
+      () {
     final content = resolveAttachmentDetailTextContent(
       const <String, Object?>{
         'mime_type': 'audio/mp4',
@@ -191,10 +193,10 @@ void main() {
     );
 
     expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
-    expect(content.full, '[00:12–00:18] Hello everyone.');
+    expect(content.full, 'raw transcript body');
   });
 
-  test('audio detail resolves persisted turn view only once', () {
+  test('audio detail reuses persisted turn view after initial resolution', () {
     final payload = _TranscriptTurnPayloadReadTrackingMap(
       <String, Object?>{
         'mime_type': 'audio/mp4',
@@ -220,16 +222,16 @@ void main() {
     final content = resolveAttachmentDetailTextContent(payload);
 
     expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
-    expect(content.full, '[00:12–00:18] Hello everyone.');
+    expect(content.full, 'raw transcript body');
     expect(payload.transcriptTurnViewReadCount, 1);
   });
 
-  test('audio detail full prefers turn view over generic full_text', () {
+  test('audio detail full prefers transcript_full over turn view', () {
     final content = resolveAttachmentDetailTextContent(
       const <String, Object?>{
         'mime_type': 'audio/mp4',
         'full_text': 'generic enrichment full text',
-        'transcript_full': 'raw transcript body',
+        'transcript_full': 'Speaker A: Hello.\nSpeaker B: Hi.',
         'transcript_turns_v1': {
           'builder_version': 'turns_v1',
           'status': 'ok',
@@ -247,7 +249,389 @@ void main() {
       },
     );
 
-    expect(content.full, '[00:12–00:18] Hello everyone.');
+    expect(content.full, 'Speaker A: Hello.\n\nSpeaker B: Hi.');
+  });
+
+  test(
+      'audio preferred transcript content kind still uses readable transcript formatting',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'Speaker A: Hello.',
+        'transcript_full': 'Speaker A: Hello.\nSpeaker B: Hi.',
+        kPreferredAttachmentContentKindKey: 'transcript_full',
+      },
+    );
+
+    expect(content.summary, 'Speaker A: Hello.');
+    expect(content.full, 'Speaker A: Hello.\n\nSpeaker B: Hi.');
+  });
+
+  test('audio detail full lightly paragraphizes long transcript using segments',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Alice said we should keep the current draft. '
+            'Bob said the deadline felt too tight. '
+            'Alice proposed moving the launch to Friday. '
+            'Bob agreed and asked for one more review.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Alice said we should keep the current draft.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'Bob said the deadline felt too tight.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Alice proposed moving the launch to Friday.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Bob agreed and asked for one more review.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      'Alice said we should keep the current draft. '
+      'Bob said the deadline felt too tight.\n\n'
+      'Alice proposed moving the launch to Friday. '
+      'Bob agreed and asked for one more review.',
+    );
+  });
+
+  test(
+      'audio detail full keeps decimals and version numbers intact when paragraphized',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'We shipped v2.1 yesterday. '
+            'Revenue was 3.5 million. '
+            'Another update followed. '
+            'Final review is tomorrow.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'We shipped v2.1 yesterday.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'Revenue was 3.5 million.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Another update followed.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Final review is tomorrow.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      'We shipped v2.1 yesterday. Revenue was 3.5 million.\n\n'
+      'Another update followed. Final review is tomorrow.',
+    );
+  });
+
+  test('audio detail full keeps urls intact when paragraphized', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Read the rollout notes. '
+            'See example.com/docs for details. '
+            'Another update followed. '
+            'Final review is tomorrow.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Read the rollout notes.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'See example.com/docs for details.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Another update followed.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Final review is tomorrow.',
+          },
+        ],
+      },
+    );
+
+    expect(content.full, contains('example.com/docs for details.'));
+    expect(content.full, isNot(contains('example. com/docs')));
+  });
+
+  test(
+      'audio detail full keeps decimals intact when line-broken transcript is paragraphized',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'We shipped v2.1 yesterday.\n'
+            'Revenue was 3.5 million.\n'
+            'Another update followed.\n'
+            'Final review is tomorrow.',
+      },
+    );
+
+    expect(content.full, contains('v2.1 yesterday.'));
+    expect(content.full, contains('3.5 million.'));
+    expect(content.full, isNot(contains('v2. 1')));
+    expect(content.full, isNot(contains('3. 5')));
+  });
+
+  test('audio detail full upgrades existing single newlines into paragraphs',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full':
+            'Speaker A: Hello.\nSpeaker B: Hi.\nSpeaker A: Great.',
+      },
+    );
+
+    expect(
+      content.full,
+      'Speaker A: Hello.\n\nSpeaker B: Hi.\n\nSpeaker A: Great.',
+    );
+  });
+
+  test('audio detail full does not treat url colons as speaker delimiters', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'See http://example.com for details.\n'
+            'Check https://status.example.com before launch.\n'
+            'Share the summary with the team.\n'
+            'Confirm the launch window tomorrow.',
+      },
+    );
+
+    expect(
+      content.full,
+      'See http://example.com for details.\n\n'
+      'Check https://status.example.com before launch. '
+      'Share the summary with the team. '
+      'Confirm the launch window tomorrow.',
+    );
+    expect(
+      content.full,
+      isNot(
+        'See http://example.com for details.\n\n'
+        'Check https://status.example.com before launch.\n\n'
+        'Share the summary with the team.\n\n'
+        'Confirm the launch window tomorrow.',
+      ),
+    );
+  });
+
+  test(
+      'audio detail full prefers segment-aware paragraphization over structured single-line upgrades',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Speaker A: Hello.\n'
+            'Speaker A: More detail.\n'
+            'Speaker B: Hi.\n'
+            'Speaker B: Sounds good.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Speaker A: Hello.',
+          },
+          {
+            't_ms': 800,
+            'text': 'Speaker A: More detail.',
+          },
+          {
+            't_ms': 2600,
+            'text': 'Speaker B: Hi.',
+          },
+          {
+            't_ms': 3200,
+            'text': 'Speaker B: Sounds good.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      'Speaker A: Hello.\n\n'
+      'Speaker A: More detail. Speaker B: Hi. Speaker B: Sounds good.',
+    );
+    expect(
+      content.full,
+      isNot(
+        'Speaker A: Hello.\n\n'
+        'Speaker A: More detail.\n\n'
+        'Speaker B: Hi.\n\n'
+        'Speaker B: Sounds good.',
+      ),
+    );
+  });
+
+  test(
+      'audio detail full does not treat chunk newlines as paragraph boundaries when segments exist',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full':
+            'First sentence.\nSecond sentence.\nThird sentence.\nFourth sentence.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'First sentence.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'Second sentence.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Third sentence.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Fourth sentence.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      'First sentence. Second sentence.\n\n'
+      'Third sentence. Fourth sentence.',
+    );
+  });
+
+  test('audio detail full keeps cjk sentences compact when paragraphized', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': '你好。谢谢。再见。明天聊。',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': '你好。',
+          },
+          {
+            't_ms': 2400,
+            'text': '谢谢。',
+          },
+          {
+            't_ms': 5200,
+            'text': '再见。',
+          },
+          {
+            't_ms': 7600,
+            'text': '明天聊。',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      '你好。谢谢。\n\n再见。明天聊。',
+    );
+  });
+
+  test('audio detail full keeps common abbreviations intact when paragraphized',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Dr. Smith joined the U.S. team yesterday. '
+            'He shared the e.g. example with everyone. '
+            'Another update followed. '
+            'Final review is tomorrow.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Dr. Smith joined the U.S. team yesterday.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'He shared the e.g. example with everyone.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Another update followed.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Final review is tomorrow.',
+          },
+        ],
+      },
+    );
+
+    expect(content.full, contains('Dr. Smith joined the U.S. team yesterday.'));
+    expect(content.full, contains('He shared the e.g. example with everyone.'));
+    expect(content.full, isNot(contains('Dr.\n\nSmith')));
+    expect(content.full, isNot(contains('U.\n\nS.')));
+    expect(content.full, isNot(contains('e.\n\ng.')));
+  });
+
+  test(
+      'audio detail full keeps business abbreviations intact when paragraphized',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Apple Inc. released version 2. '
+            'The update reached Acme Corp. teams this morning. '
+            'Another update followed. '
+            'Final review is tomorrow.',
+        'transcript_segments': [
+          {
+            't_ms': 0,
+            'text': 'Apple Inc. released version 2.',
+          },
+          {
+            't_ms': 2400,
+            'text': 'The update reached Acme Corp. teams this morning.',
+          },
+          {
+            't_ms': 5200,
+            'text': 'Another update followed.',
+          },
+          {
+            't_ms': 7600,
+            'text': 'Final review is tomorrow.',
+          },
+        ],
+      },
+    );
+
+    expect(content.full, contains('Apple Inc. released version 2.'));
+    expect(
+      content.full,
+      contains('The update reached Acme Corp. teams this morning.'),
+    );
+    expect(content.full, isNot(contains('Apple Inc.\n\nreleased')));
+    expect(content.full, isNot(contains('Acme Corp.\n\nteams')));
   });
 
   test('audio detail full prefers transcript_full over generic full_text', () {
@@ -291,7 +675,6 @@ void main() {
       const <String, Object?>{
         'mime_type': 'audio/mp4',
         'transcript_excerpt': 'raw excerpt',
-        'transcript_full': 'raw transcript body',
         'transcript_segments': [
           {
             't_ms': 12000,
@@ -310,6 +693,111 @@ void main() {
       '[00:12–00:12] Hello everyone. Thanks for joining.',
     );
     expect(content.summary, contains('[00:12–00:12]'));
+  });
+
+  test('audio turn view rechecks payload after turn data is added', () {
+    final payload = <String, Object?>{
+      'mime_type': 'audio/mp4',
+      'transcript_full': 'raw transcript body',
+    };
+
+    expect(resolveAudioTranscriptTurnView(payload), isNull);
+
+    payload['transcript_turns_v1'] = const <String, Object?>{
+      'builder_version': 'turns_v1',
+      'status': 'ok',
+      'turns': [
+        {
+          'start_ms': 12000,
+          'end_ms': 18000,
+          'text': 'Hello everyone.',
+          'segment_count': 1,
+          'source_segment_start_index': 0,
+          'source_segment_end_index': 0,
+        },
+      ],
+    };
+
+    final turnView = resolveAudioTranscriptTurnView(payload);
+
+    expect(turnView, isNotNull);
+    expect(turnView!.turns.single.text, 'Hello everyone.');
+  });
+
+  test(
+      'audio turn view refreshes cached value after persisted turn data changes',
+      () {
+    final payload = <String, Object?>{
+      'mime_type': 'audio/mp4',
+      'transcript_full': 'raw transcript body',
+      'transcript_turns_v1': const <String, Object?>{
+        'builder_version': 'turns_v1',
+        'status': 'ok',
+        'turns': [
+          {
+            'start_ms': 12000,
+            'end_ms': 18000,
+            'text': 'Hello everyone.',
+            'segment_count': 1,
+            'source_segment_start_index': 0,
+            'source_segment_end_index': 0,
+          },
+        ],
+      },
+    };
+
+    final first = resolveAudioTranscriptTurnView(payload);
+    expect(first, isNotNull);
+    expect(first!.turns.single.text, 'Hello everyone.');
+
+    payload['transcript_turns_v1'] = const <String, Object?>{
+      'builder_version': 'turns_v1',
+      'status': 'ok',
+      'turns': [
+        {
+          'start_ms': 12000,
+          'end_ms': 24000,
+          'text': 'Updated speaker text.',
+          'segment_count': 1,
+          'source_segment_start_index': 0,
+          'source_segment_end_index': 0,
+        },
+      ],
+    };
+
+    final second = resolveAudioTranscriptTurnView(payload);
+    expect(second, isNotNull);
+    expect(second!.turns.single.text, 'Updated speaker text.');
+  });
+
+  test('audio detail resolves persisted turn view only once per payload read',
+      () {
+    final payload = _TranscriptTurnPayloadReadTrackingMap(
+      <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_full': 'Speaker A: Hello.\nSpeaker B: Hi.',
+      },
+      transcriptTurnView: const <String, Object?>{
+        'builder_version': 'turns_v1',
+        'status': 'ok',
+        'turns': [
+          {
+            'start_ms': 12000,
+            'end_ms': 18000,
+            'text': 'Hello everyone.',
+            'segment_count': 1,
+            'source_segment_start_index': 0,
+            'source_segment_end_index': 0,
+          },
+        ],
+      },
+    );
+
+    final content = resolveAttachmentDetailTextContent(payload);
+
+    expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
+    expect(content.full, 'Speaker A: Hello.\n\nSpeaker B: Hi.');
+    expect(payload.transcriptTurnViewReadCount, 1);
   });
 }
 

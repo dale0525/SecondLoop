@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/i18n/locale_prefs.dart';
 import 'package:secondloop/i18n/strings.g.dart';
@@ -105,26 +107,65 @@ void main() {
 
     expect(service.closeCount, 1);
   });
+
+  testWidgets(
+      'web app falls back to cloud backend when native web runtime is unsupported',
+      (tester) async {
+    await tester.pumpWidget(
+      SecondLoopWebApp(
+        configLoader: () async =>
+            const WebAppConfig(firebaseWebApiKey: 'firebase-key'),
+        serviceFactory: (config) => _FakeWebAppService(
+          subscription: WebSubscriptionState.entitled,
+        ),
+        authControllerFactory: (config) => _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        webNativeRuntimeSupported: () => false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final backendScope =
+        tester.widget<AppBackendScope>(find.byType(AppBackendScope).first);
+    expect(backendScope.backend, isA<CloudWebBackend>());
+    expect(find.byType(CloudAccountPanel), findsNothing);
+  });
 }
 
 final class _FakeCloudAuthController extends ChangeNotifier
     implements ObservableCloudAuthController, CloudPasswordRecoveryController {
-  _FakeCloudAuthController({this.refreshError});
+  _FakeCloudAuthController({
+    this.refreshError,
+    this.initialUid,
+    this.initialEmail,
+    this.initialEmailVerified,
+  })  : _uid = initialUid,
+        _email = initialEmail,
+        _emailVerified = initialEmailVerified;
 
   final Object? refreshError;
+  final String? initialUid;
+  final String? initialEmail;
+  final bool? initialEmailVerified;
   int disposeCount = 0;
+  final String? _uid;
+  final String? _email;
+  final bool? _emailVerified;
 
   @override
-  String? get uid => null;
+  String? get uid => _uid;
 
   @override
-  String? get email => null;
+  String? get email => _email;
 
   @override
-  bool? get emailVerified => null;
+  bool? get emailVerified => _emailVerified;
 
   @override
-  Future<String?> getIdToken() async => null;
+  Future<String?> getIdToken() async => _uid == null ? null : 'token';
 
   @override
   Future<void> refreshUserInfo() async {
@@ -160,12 +201,19 @@ final class _FakeCloudAuthController extends ChangeNotifier
 }
 
 class _FakeWebAppService extends WebAppService {
+  _FakeWebAppService({
+    this.subscription = WebSubscriptionState.unknown,
+  });
+
+  final WebSubscriptionState subscription;
+
   @override
   Future<WebSubscriptionSnapshot> fetchSubscription(
           {required String idToken}) async =>
-      const WebSubscriptionSnapshot(
-        state: WebSubscriptionState.unknown,
-        canManageSubscription: null,
+      WebSubscriptionSnapshot(
+        state: subscription,
+        canManageSubscription:
+            subscription == WebSubscriptionState.entitled ? true : null,
       );
 }
 

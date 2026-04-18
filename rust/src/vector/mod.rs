@@ -1,11 +1,12 @@
-use std::sync::OnceLock;
-
 use anyhow::Result;
 #[cfg(not(target_family = "wasm"))]
 use rusqlite::ffi::sqlite3_auto_extension;
 #[cfg(not(target_family = "wasm"))]
 use sqlite_vec::sqlite3_vec_init;
+#[cfg(not(target_family = "wasm"))]
+use std::sync::OnceLock;
 
+#[cfg(not(target_family = "wasm"))]
 static SQLITE_VEC_REGISTERED: OnceLock<()> = OnceLock::new();
 
 pub const fn is_available() -> bool {
