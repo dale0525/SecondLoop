@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show Listenable, ValueNotifier;
+import 'package:flutter/foundation.dart'
+    show Listenable, ValueNotifier, visibleForTesting;
 
 import 'managed_vault_sync_error_policy.dart';
 import 'sync_result.dart';
@@ -378,9 +379,26 @@ final class SyncEngine {
   }
 
   Future<bool> _shouldPrioritizePushOverPull() async {
-    if (!_pushQueued || !_pullQueued) return false;
     final config = await loadConfig();
-    return config?.backendType == SyncBackendType.managedVault;
+    return shouldPrioritizePushOverPullForTest(
+      pushQueued: _pushQueued,
+      pullQueued: _pullQueued,
+      retryPushAfterRecoveryPull: _retryPushAfterRecoveryPull,
+      backendType: config?.backendType,
+    );
+  }
+
+  @visibleForTesting
+  static bool shouldPrioritizePushOverPullForTest({
+    required bool pushQueued,
+    required bool pullQueued,
+    required bool retryPushAfterRecoveryPull,
+    required SyncBackendType? backendType,
+  }) {
+    if (!pushQueued || !pullQueued) return false;
+    if (backendType != SyncBackendType.managedVault) return false;
+    if (retryPushAfterRecoveryPull) return false;
+    return true;
   }
 
   Future<void> _pushOnce() async {

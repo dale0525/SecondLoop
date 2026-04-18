@@ -330,6 +330,105 @@ fn rebuild_local_vault_if_safe(conn: &Connection, scope_id: &str) -> Result<()> 
     super::global_log_state::rebuild_local_vault(conn, scope_id)
 }
 
+fn enqueue_attachment_upload_repair(conn: &Connection, scope_id: &str, sha256: &str) -> Result<()> {
+    super::super::blob_repair::enqueue_blob_repair(
+        conn,
+        scope_id,
+        super::super::blob_repair::BlobRepairKind::UploadAttachment {
+            sha256: sha256.to_string(),
+        },
+    )
+}
+
+fn enqueue_artifact_upload_repair(conn: &Connection, scope_id: &str, blob_ref: &str) -> Result<()> {
+    super::super::blob_repair::enqueue_blob_repair(
+        conn,
+        scope_id,
+        super::super::blob_repair::BlobRepairKind::UploadArtifact {
+            blob_ref: blob_ref.to_string(),
+        },
+    )
+}
+
+fn record_blob_side_effect_error(
+    conn: &Connection,
+    scope_id: &str,
+    error: &anyhow::Error,
+) -> Result<()> {
+    super::super::blob_repair::record_blob_repair_error(conn, scope_id, &error.to_string())
+}
+
+fn run_post_commit_blob_side_effects(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    http: &Client,
+    app_dir: &std::path::Path,
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+    scope_id: &str,
+    batch: &LocalPushBatch,
+) -> Result<()> {
+    let upload_ctx = super::attachments::AttachmentUploadContext {
+        conn,
+        db_key,
+        sync_key,
+        http,
+        base_url,
+        vault_id,
+        id_token,
+        app_dir,
+    };
+
+    if batch
+        .attachment_actions
+        .values()
+        .any(|action| matches!(action, PendingAttachmentAction::Upload { .. }))
+    {
+        let _ = crate::db::ensure_all_video_manifest_derivations(conn, db_key, app_dir)?;
+    }
+
+    for (sha256, action) in &batch.attachment_actions {
+        match action {
+            PendingAttachmentAction::Upload {
+                mime_type,
+                created_at_ms,
+            } => match super::attachments::upload_attachment_bytes_if_present(
+                &upload_ctx,
+                sha256,
+                mime_type,
+                *created_at_ms,
+            ) {
+                Ok(_) => {}
+                Err(error) => {
+                    enqueue_attachment_upload_repair(conn, scope_id, sha256)?;
+                    record_blob_side_effect_error(conn, scope_id, &error)?;
+                }
+            },
+            PendingAttachmentAction::Delete => {
+                if let Err(error) =
+                    super::attachments::delete_remote_attachment_bytes(&upload_ctx, sha256)
+                {
+                    record_blob_side_effect_error(conn, scope_id, &error)?;
+                }
+            }
+        }
+    }
+
+    for blob_ref in &batch.artifact_blob_refs {
+        match super::artifacts::upload_embedding_artifact_blob_if_present(&upload_ctx, blob_ref) {
+            Ok(_) => {}
+            Err(error) => {
+                enqueue_artifact_upload_repair(conn, scope_id, blob_ref)?;
+                record_blob_side_effect_error(conn, scope_id, &error)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub(super) fn push_v2(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -376,56 +475,6 @@ pub(super) fn push_v2(
             return Ok(total_pushed);
         }
 
-        if upload_attachment_bytes {
-            let upload_ctx = super::attachments::AttachmentUploadContext {
-                conn,
-                db_key,
-                sync_key,
-                http: &http,
-                base_url,
-                vault_id,
-                id_token,
-                app_dir: app_dir.as_ref().expect("managed-vault app_dir").as_path(),
-            };
-            if batch
-                .attachment_actions
-                .values()
-                .any(|action| matches!(action, PendingAttachmentAction::Upload { .. }))
-            {
-                let _ = crate::db::ensure_all_video_manifest_derivations(
-                    conn,
-                    db_key,
-                    upload_ctx.app_dir,
-                )?;
-            }
-
-            for (sha256, action) in &batch.attachment_actions {
-                match action {
-                    PendingAttachmentAction::Upload {
-                        mime_type,
-                        created_at_ms,
-                    } => {
-                        let _ = super::attachments::upload_attachment_bytes_if_present(
-                            &upload_ctx,
-                            sha256,
-                            mime_type,
-                            *created_at_ms,
-                        )?;
-                    }
-                    PendingAttachmentAction::Delete => {
-                        super::attachments::delete_remote_attachment_bytes(&upload_ctx, sha256)?;
-                    }
-                }
-            }
-
-            for blob_ref in &batch.artifact_blob_refs {
-                let _ = super::artifacts::upload_embedding_artifact_blob_if_present(
-                    &upload_ctx,
-                    blob_ref,
-                )?;
-            }
-        }
-
         let local_generation = super::global_log_state::read_generation_id(conn, &scope_id)?;
         let mut request = GlobalLogPushRequest {
             base_global_seq: super::global_log_state::read_last_applied_global_seq(
@@ -433,7 +482,7 @@ pub(super) fn push_v2(
             )?,
             generation_id: local_generation.as_deref(),
             batch_id: "",
-            ops: batch.ops,
+            ops: batch.ops.clone(),
         };
         let batch_id = uuid::Uuid::new_v4().to_string();
         request.batch_id = batch_id.as_str();
@@ -460,6 +509,20 @@ pub(super) fn push_v2(
                     &device_id,
                     batch.max_seq,
                 )?;
+                if upload_attachment_bytes {
+                    run_post_commit_blob_side_effects(
+                        conn,
+                        db_key,
+                        sync_key,
+                        &http,
+                        app_dir.as_ref().expect("managed-vault app_dir").as_path(),
+                        base_url,
+                        vault_id,
+                        id_token,
+                        &scope_id,
+                        &batch,
+                    )?;
+                }
                 total_pushed += (batch.max_seq - last_pushed_seq).max(0) as u64;
                 if let Some(progress_fn) = progress.as_deref_mut() {
                     progress_fn(total_pushed, total_pushed);

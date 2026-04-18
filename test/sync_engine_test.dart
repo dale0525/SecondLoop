@@ -419,6 +419,66 @@ void main() {
     });
   });
 
+  test('managed vault recovery pull is not preempted by newly queued push work',
+      () async {
+    final recoveryDecisionStarted = Completer<void>();
+    final releaseRecoveryDecision = Completer<SyncConfig?>();
+    final runner = _ManagedVaultRecoveryOrderingRunner();
+    var loadConfigCalls = 0;
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () {
+        loadConfigCalls += 1;
+        if (loadConfigCalls == 2) {
+          recoveryDecisionStarted.complete();
+          return releaseRecoveryDecision.future;
+        }
+        return Future<SyncConfig?>.value(_managedVaultConfig());
+      },
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+
+    engine.start();
+    engine.triggerPushNow();
+
+    await recoveryDecisionStarted.future;
+    engine.notifyLocalMutation();
+    releaseRecoveryDecision.complete(_managedVaultConfig());
+
+    await runner.pullStarted.future;
+    expect(runner.calls.length, greaterThanOrEqualTo(2));
+    expect(runner.calls[0], 'push');
+    expect(runner.calls[1], 'pull');
+
+    runner.completePull(applied: 0);
+    await Future<void>.delayed(Duration.zero);
+    engine.stop();
+  });
+
+  test('managed vault recovery policy does not prioritize push over pull', () {
+    expect(
+      SyncEngine.shouldPrioritizePushOverPullForTest(
+        pushQueued: true,
+        pullQueued: true,
+        retryPushAfterRecoveryPull: true,
+        backendType: SyncBackendType.managedVault,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncEngine.shouldPrioritizePushOverPullForTest(
+        pushQueued: true,
+        pullQueued: true,
+        retryPushAfterRecoveryPull: false,
+        backendType: SyncBackendType.managedVault,
+      ),
+      isTrue,
+    );
+  });
+
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
     fakeAsync((async) {
       final runner = _HintPullRunner(
@@ -575,5 +635,45 @@ final class _ManagedVaultRecoveryRunner implements SyncRunner {
   Future<int> pull(SyncConfig config) async {
     calls.add('pull');
     return 0;
+  }
+}
+
+final class _ManagedVaultRecoveryOrderingRunner
+    implements SyncRunner, SyncPullResultRunner {
+  final List<String> calls = <String>[];
+  final Completer<void> pullStarted = Completer<void>();
+  final Completer<SyncPullResult> _pullCompleter = Completer<SyncPullResult>();
+  var _firstPush = true;
+
+  void completePull({required int applied}) {
+    if (_pullCompleter.isCompleted) return;
+    _pullCompleter.complete(SyncPullResult(applied: applied));
+  }
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    if (_firstPush) {
+      _firstPush = false;
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    return 1;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    final result = await pullWithResult(config);
+    return result.applied;
+  }
+
+  @override
+  Future<SyncPullResult> pullWithResult(SyncConfig config) {
+    calls.add('pull');
+    if (!pullStarted.isCompleted) {
+      pullStarted.complete();
+    }
+    return _pullCompleter.future;
   }
 }

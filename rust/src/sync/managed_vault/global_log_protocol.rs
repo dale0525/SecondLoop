@@ -9,7 +9,7 @@ pub(super) struct GlobalLogPushRequest<'a> {
     pub(super) ops: Vec<GlobalLogPushOp>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub(super) struct GlobalLogPushOp {
     pub(super) device_id: String,
     pub(super) seq: i64,
