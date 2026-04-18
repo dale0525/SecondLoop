@@ -331,11 +331,13 @@ pub(super) fn pull_v2(
 
     let initial_last_applied =
         super::global_log_state::read_last_applied_global_seq(conn, &scope_id)?;
+    let mut progress_baseline = initial_last_applied;
     let mut total_target: Option<u64> = None;
 
     let mut total_applied = 0u64;
     let mut last_applied = initial_last_applied;
     let mut reset_recovered = false;
+    let mut progress_reset_pending = false;
     loop {
         let request = GlobalLogPullRequest {
             after_global_seq: last_applied,
@@ -357,7 +359,10 @@ pub(super) fn pull_v2(
                 super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
+                progress_baseline = 0;
+                total_target = None;
                 reset_recovered = true;
+                progress_reset_pending = true;
                 if let Some(progress_fn) = progress.as_deref_mut() {
                     progress_fn(0, total_target.unwrap_or(0));
                 }
@@ -367,8 +372,14 @@ pub(super) fn pull_v2(
         };
 
         let effective_total_target = *total_target.get_or_insert_with(|| {
-            (response.remote_latest_global_seq - initial_last_applied).max(0) as u64
+            (response.remote_latest_global_seq - progress_baseline).max(0) as u64
         });
+        if progress_reset_pending {
+            if let Some(progress_fn) = progress.as_deref_mut() {
+                progress_fn(0, effective_total_target);
+            }
+            progress_reset_pending = false;
+        }
 
         let local_generation = super::global_log_state::read_generation_id(conn, &scope_id)?;
         let response_generation = response.generation_id.trim();
@@ -377,9 +388,10 @@ pub(super) fn pull_v2(
                 if local_generation.is_some() || last_applied > 0 {
                     super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
                     total_applied = 0;
+                    total_target = None;
                 }
                 if let Some(progress_fn) = progress.as_deref_mut() {
-                    progress_fn(total_applied, effective_total_target);
+                    progress_fn(total_applied, total_target.unwrap_or(0));
                 }
                 return Ok(total_applied);
             }
@@ -394,9 +406,9 @@ pub(super) fn pull_v2(
                 super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
-                if let Some(progress_fn) = progress.as_deref_mut() {
-                    progress_fn(0, effective_total_target);
-                }
+                progress_baseline = 0;
+                total_target = None;
+                progress_reset_pending = true;
                 continue;
             }
         }
@@ -414,9 +426,9 @@ pub(super) fn pull_v2(
                 super::global_log_state::rebuild_local_vault(conn, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
-                if let Some(progress_fn) = progress.as_deref_mut() {
-                    progress_fn(0, effective_total_target);
-                }
+                progress_baseline = 0;
+                total_target = None;
+                progress_reset_pending = true;
                 continue;
             }
             return Err(anyhow!(
@@ -434,7 +446,7 @@ pub(super) fn pull_v2(
         reset_recovered = false;
 
         if let Some(progress_fn) = progress.as_deref_mut() {
-            let done = (last_applied - initial_last_applied).max(0) as u64;
+            let done = (last_applied - progress_baseline).max(0) as u64;
             progress_fn(done.min(effective_total_target), effective_total_target);
         }
 
