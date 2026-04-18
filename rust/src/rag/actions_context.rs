@@ -159,8 +159,8 @@ fn detect_agenda_timeframe(question: &str) -> Option<AgendaTimeframe> {
     }
 
     let has_explicit_intent = has_explicit_agenda_intent(question);
-    if !has_explicit_intent
-        && !(has_generic_task_words(question) && has_future_actions_timeframe(question))
+    if !(has_explicit_intent
+        || (has_generic_task_words(question) && has_future_actions_timeframe(question)))
     {
         return None;
     }

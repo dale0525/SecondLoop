@@ -25,7 +25,18 @@ const TIME_WINDOW_MESSAGE_LIMIT: usize = 800;
 const TIME_WINDOW_TODO_ACTIVITY_LIMIT: usize = 300;
 const TIME_WINDOW_EVENT_LIMIT: usize = 200;
 const ACTIVE_EMBEDDINGS_EVENT_LIMIT: usize = 200;
+const ACTIVE_EMBEDDINGS_CANDIDATE_LIMIT_CAP: usize = 128;
 const TIME_WINDOW_ATTACHMENT_SEARCH_MAX_LIMIT: usize = 512;
+
+fn active_embedding_candidate_limit(top_k: usize) -> usize {
+    if top_k == 0 {
+        8
+    } else {
+        (top_k.saturating_mul(8))
+            .min(ACTIVE_EMBEDDINGS_CANDIDATE_LIMIT_CAP)
+            .max(top_k)
+    }
+}
 
 fn collect_time_window_attachment_resources(
     conn: &Connection,
@@ -352,10 +363,11 @@ fn collect_active_embedding_candidates(
     super::attachment_resources::AttachmentResourcesBundle,
 )> {
     let mut candidates = Vec::<ContextItem>::new();
+    let candidate_limit = active_embedding_candidate_limit(top_k);
 
     let similar_messages = match focus {
         Focus::AllMemories => {
-            db::search_similar_messages_active(conn, key, app_dir, question, top_k)?
+            db::search_similar_messages_active(conn, key, app_dir, question, candidate_limit)?
         }
         Focus::ThisThread => db::search_similar_messages_in_conversation_active(
             conn,
@@ -363,7 +375,7 @@ fn collect_active_embedding_candidates(
             app_dir,
             conversation_id,
             question,
-            top_k,
+            candidate_limit,
         )?,
     };
     for sm in similar_messages {
@@ -381,7 +393,8 @@ fn collect_active_embedding_candidates(
     }
 
     let mut seen_todos = std::collections::HashSet::new();
-    for st in db::search_similar_todo_threads_active(conn, key, app_dir, question, top_k)? {
+    for st in db::search_similar_todo_threads_active(conn, key, app_dir, question, candidate_limit)?
+    {
         if !seen_todos.insert(st.todo_id.clone()) {
             continue;
         }
