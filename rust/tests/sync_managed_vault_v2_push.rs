@@ -61,6 +61,51 @@ fn managed_vault_v2_push_and_pull_roundtrip() {
 }
 
 #[test]
+fn managed_vault_v2_push_with_progress_reports_completed_work() {
+    let (base_url, stop_tx, _state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("create convo");
+    db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert msg");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let mut seen_progress = Vec::new();
+    let pushed = sync::managed_vault::push_with_progress(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| seen_progress.push((done, total)),
+    )
+    .expect("push with progress");
+
+    assert!(pushed > 0);
+    assert!(
+        seen_progress
+            .iter()
+            .any(|(done, total)| *done > 0 && *done == *total),
+        "expected push progress callback to report completed work, got {seen_progress:?}"
+    );
+    assert_eq!(seen_progress.last().copied(), Some((pushed, pushed)));
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_v2_generation_mismatch_preserves_local_data_until_pull_recovers() {
     let (base_url, stop_tx, state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();

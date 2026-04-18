@@ -98,3 +98,18 @@ Stream<String> syncManagedVaultPushOpsOnlyProgress(
             baseUrl: baseUrl,
             vaultId: vaultId,
             idToken: idToken);
+
+Stream<String> syncManagedVaultPushProgress(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        required String vaultId,
+        required String idToken}) =>
+    RustLib.instance.api.crateApiSyncProgressSyncManagedVaultPushProgress(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken);

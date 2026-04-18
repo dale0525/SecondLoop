@@ -623,6 +623,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           ),
                           onProgress: stageProgress.onProgress,
                         );
+                        reopenManagedVaultWriteGateOnSuccess(engine);
                       } catch (error) {
                         final recoveryAction =
                             managedVaultPushFailureRecoveryAction(error);
@@ -670,6 +671,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           ),
                           onProgress: stageProgress.onProgress,
                         );
+                        reopenManagedVaultWriteGateOnSuccess(engine);
                         allowMediaUploads = true;
                       }
 

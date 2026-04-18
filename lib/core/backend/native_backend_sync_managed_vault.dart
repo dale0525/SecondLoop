@@ -128,15 +128,15 @@ mixin _NativeAppBackendSyncManagedVault on _NativeAppBackendAccess {
     required String vaultId,
     required String idToken,
   }) async* {
-    yield '{"type":"progress","done":0,"total":0}';
-    final pushed = await syncManagedVaultPush(
-      key,
-      syncKey,
+    final appDir = await _getAppDir();
+    yield* rust_sync_progress.syncManagedVaultPushProgress(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
       baseUrl: baseUrl,
       vaultId: vaultId,
       idToken: idToken,
     );
-    yield '{"type":"result","count":$pushed}';
   }
 
   @override

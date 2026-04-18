@@ -278,6 +278,41 @@ pub fn push(
     }
 }
 
+pub fn push_with_progress(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<u64> {
+    if full_push_requires_legacy_media_sync(conn, base_url, vault_id)? {
+        let pushed = push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true)?;
+        progress(pushed, pushed);
+        return Ok(pushed);
+    }
+
+    match global_log_client::push_v2(
+        conn,
+        db_key,
+        sync_key,
+        base_url,
+        vault_id,
+        id_token,
+        true,
+        Some(progress),
+    ) {
+        Ok(pushed) => Ok(pushed),
+        Err(error) if v2_route_unavailable(&error) => {
+            let pushed = push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true)?;
+            progress(pushed, pushed);
+            Ok(pushed)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 pub fn push_ops_only(
     conn: &Connection,
     db_key: &[u8; 32],

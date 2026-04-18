@@ -39,3 +39,7 @@ SyncWriteGateState? managedVaultWriteGateStateForError(Object error) {
   }
   return null;
 }
+
+void reopenManagedVaultWriteGateOnSuccess(SyncEngine? engine) {
+  engine?.writeGate.value = const SyncWriteGateState.open();
+}

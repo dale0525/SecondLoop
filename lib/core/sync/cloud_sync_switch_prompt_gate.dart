@@ -332,6 +332,7 @@ final class _CloudSyncSwitchPromptGateState
 
   Future<bool> _runManagedVaultSyncWithProgress({
     required BuildContext dialogContext,
+    required SyncEngine? engine,
     required AppBackend backend,
     required Uint8List sessionKey,
     required Uint8List syncKey,
@@ -340,7 +341,6 @@ final class _CloudSyncSwitchPromptGateState
     required String idToken,
   }) async {
     final t = dialogContext.t;
-    final engine = SyncEngineScope.maybeOf(dialogContext);
     final stage = ValueNotifier<String>(t.sync.progressDialog.preparing);
     // Keep progress determinate: an indeterminate LinearProgressIndicator
     // (value: null) animates continuously and can make widget tests using
@@ -378,6 +378,7 @@ final class _CloudSyncSwitchPromptGateState
                     ),
                     onProgress: stageProgress.onProgress,
                   );
+                  reopenManagedVaultWriteGateOnSuccess(engine);
                 } catch (error) {
                   final recoveryAction =
                       managedVaultPushFailureRecoveryAction(error);
@@ -423,6 +424,7 @@ final class _CloudSyncSwitchPromptGateState
                     ),
                     onProgress: stageProgress.onProgress,
                   );
+                  reopenManagedVaultWriteGateOnSuccess(engine);
                   allowMediaUploads = true;
                   retryPushAfterPull = false;
                 }
@@ -589,6 +591,7 @@ final class _CloudSyncSwitchPromptGateState
         Navigator.maybeOf(effectiveContext, rootNavigator: true) != null;
 
     var didSync = false;
+    final engine = SyncEngineScope.maybeOf(context);
     if (sessionKey != null &&
         baseUrl != null &&
         baseUrl.trim().isNotEmpty &&
@@ -598,6 +601,7 @@ final class _CloudSyncSwitchPromptGateState
         canShowDialog) {
       didSync = await _runManagedVaultSyncWithProgress(
         dialogContext: effectiveContext,
+        engine: engine,
         backend: backend,
         sessionKey: sessionKey,
         syncKey: syncKey,
@@ -608,7 +612,6 @@ final class _CloudSyncSwitchPromptGateState
     }
 
     if (!mounted) return;
-    final engine = SyncEngineScope.maybeOf(context);
     engine?.notifyExternalChange();
     if (!didSync) {
       engine?.triggerPushNow();

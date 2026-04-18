@@ -84,6 +84,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
           onHasTotal: () => hasTotal.value = true,
         ).onProgress,
       );
+      reopenManagedVaultWriteGateOnSuccess(engine);
     } catch (error) {
       final recoveryAction = managedVaultPushFailureRecoveryAction(error);
       final nextWriteGate = managedVaultWriteGateStateForError(error);
@@ -135,6 +136,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         onProgress: retryProgressReporter.onProgress,
       );
       retryProgressReporter.complete();
+      reopenManagedVaultWriteGateOnSuccess(engine);
       recoveredOnly = false;
     }
     stage.value = t.sync.progressDialog.finalizing;
