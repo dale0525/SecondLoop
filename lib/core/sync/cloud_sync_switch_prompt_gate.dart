@@ -148,6 +148,14 @@ final class _CloudSyncSwitchPromptGateState
     );
   }
 
+  Future<void> _persistManagedVaultBackgroundRepairBlock(Object error) {
+    final gate = managedVaultWriteGateStateForError(error);
+    return _store.writeBackgroundSyncRepairRequired(
+      gate?.kind == SyncWriteGateKind.localRepairRequired,
+      backendType: SyncBackendType.managedVault,
+    );
+  }
+
   Future<ManagedVaultPushFailureRecoveryAction>
       _runManagedVaultPushStageWithProgress({
     required SyncEngine? engine,
@@ -181,6 +189,7 @@ final class _CloudSyncSwitchPromptGateState
       return ManagedVaultPushFailureRecoveryAction.none;
     } catch (error) {
       final details = _applyManagedVaultPushFailure(error, engine: engine);
+      await _persistManagedVaultBackgroundRepairBlock(error);
       if (!allowRecovery ||
           details.recoveryAction ==
               ManagedVaultPushFailureRecoveryAction.none) {

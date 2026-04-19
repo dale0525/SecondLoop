@@ -6,6 +6,7 @@ use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
@@ -193,21 +194,80 @@ fn has_ready_embedding_artifact_blobs(conn: &Connection) -> Result<bool> {
     .map_err(Into::into)
 }
 
+fn attachment_backfill_key(scope_id: &str) -> String {
+    format!("managed_vault.attachments.bytes_backfilled:{scope_id}")
+}
+
+fn artifact_backfill_key(scope_id: &str) -> String {
+    format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}")
+}
+
+fn is_not_found_io_error(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<std::io::Error>()
+        .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
+}
+
+fn has_missing_local_attachment_bytes(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    app_dir: &Path,
+) -> Result<bool> {
+    let mut stmt = conn.prepare(r#"SELECT sha256 FROM attachments ORDER BY sha256 ASC"#)?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let sha256: String = row.get(0)?;
+        match crate::db::read_attachment_bytes(conn, db_key, app_dir, &sha256) {
+            Ok(_) => {}
+            Err(error) if is_not_found_io_error(&error) => return Ok(true),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(false)
+}
+
+fn has_missing_embedding_artifact_blobs(conn: &Connection, app_dir: &Path) -> Result<bool> {
+    for blob_ref in crate::db::list_distinct_embedding_artifact_blob_refs(conn)? {
+        if !crate::db::has_embedding_artifact_blob(app_dir, &blob_ref) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn update_v2_pull_backfill_markers(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    app_dir: &Path,
+    scope_id: &str,
+) -> Result<()> {
+    if has_local_attachments(conn)? && !has_missing_local_attachment_bytes(conn, db_key, app_dir)? {
+        super::kv_set_i64(conn, &attachment_backfill_key(scope_id), 1)?;
+    }
+
+    if has_ready_embedding_artifact_blobs(conn)?
+        && !has_missing_embedding_artifact_blobs(conn, app_dir)?
+    {
+        super::kv_set_i64(conn, &artifact_backfill_key(scope_id), 1)?;
+    }
+
+    Ok(())
+}
+
 fn full_push_requires_legacy_media_sync(
     conn: &Connection,
     base_url: &str,
     vault_id: &str,
 ) -> Result<bool> {
     let scope_id = runtime::scope_id(base_url, vault_id);
-    let attachment_backfill_key = format!("managed_vault.attachments.bytes_backfilled:{scope_id}");
+    let attachment_backfill_key = attachment_backfill_key(&scope_id);
     if super::kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0
         && has_local_attachments(conn)?
     {
         return Ok(true);
     }
 
-    let artifact_backfill_key =
-        format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}");
+    let artifact_backfill_key = artifact_backfill_key(&scope_id);
     if super::kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0
         && has_ready_embedding_artifact_blobs(conn)?
     {
@@ -244,8 +304,21 @@ fn finalize_v2_pull_blob_backfill(
         id_token,
         app_dir: app_dir.as_path(),
     };
-    let _ = artifacts::download_missing_embedding_artifact_blobs(&download_ctx)?;
-    let _ = blob_repair::process_pending_blob_repairs(&download_ctx, 8)?;
+    loop {
+        let downloaded_artifacts =
+            artifacts::download_missing_embedding_artifact_blobs(&download_ctx)?;
+        let repair_stats = blob_repair::process_pending_blob_repairs(&download_ctx, 8)?;
+        let missing_attachments =
+            has_missing_local_attachment_bytes(conn, db_key, app_dir.as_path())?;
+        let missing_artifacts = has_missing_embedding_artifact_blobs(conn, app_dir.as_path())?;
+        if !missing_attachments && !missing_artifacts {
+            break;
+        }
+        if downloaded_artifacts == 0 && repair_stats.repaired == 0 {
+            break;
+        }
+    }
+    update_v2_pull_backfill_markers(conn, db_key, app_dir.as_path(), &scope_id)?;
 
     let _ = state_machine::transition(
         conn,
@@ -498,15 +571,13 @@ fn push_internal(
     };
 
     if upload_attachment_bytes {
-        let attachment_backfill_key =
-            format!("managed_vault.attachments.bytes_backfilled:{scope_id}");
+        let attachment_backfill_key = attachment_backfill_key(&scope_id);
         if super::kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0 {
             attachments::upload_all_local_attachment_bytes(&upload_ctx)?;
             super::kv_set_i64(conn, &attachment_backfill_key, 1)?;
         }
 
-        let artifact_backfill_key =
-            format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}");
+        let artifact_backfill_key = artifact_backfill_key(&scope_id);
         if super::kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0 {
             artifacts::upload_all_local_embedding_artifact_blobs(&upload_ctx)?;
             super::kv_set_i64(conn, &artifact_backfill_key, 1)?;

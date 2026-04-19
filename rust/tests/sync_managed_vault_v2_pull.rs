@@ -598,6 +598,31 @@ fn managed_vault_v2_pull_downloads_missing_embedding_artifact_blobs() {
         &manifests_b[0].blob_ref
     ));
 
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    let artifact_backfill_key =
+        format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}");
+    let artifact_backfill: Option<String> = conn_b
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            rusqlite::params![artifact_backfill_key],
+            |row| row.get(0),
+        )
+        .optional()
+        .expect("load artifact backfill flag");
+    assert_eq!(artifact_backfill.as_deref(), Some("1"));
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.generation_id = "generation-b".to_string();
+        server.latest_global_seq = 0;
+        server.ops.clear();
+    }
+
+    let recovered =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull after generation switch");
+    assert_eq!(recovered, 0);
+
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");
 }

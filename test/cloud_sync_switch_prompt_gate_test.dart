@@ -445,6 +445,12 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('Switching to Cloud still pulls when push is read-only blocked',

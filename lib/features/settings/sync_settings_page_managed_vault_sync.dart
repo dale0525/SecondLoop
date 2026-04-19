@@ -39,6 +39,14 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     );
   }
 
+  Future<void> _persistManagedVaultBackgroundRepairBlock(Object error) {
+    final gate = managedVaultWriteGateStateForError(error);
+    return _store.writeBackgroundSyncRepairRequired(
+      gate?.kind == SyncWriteGateKind.localRepairRequired,
+      backendType: SyncBackendType.managedVault,
+    );
+  }
+
   String _managedVaultRecoveredMessageForGate(SyncWriteGateState gate) {
     if (gate.kind == SyncWriteGateKind.localRepairRequired) {
       return context.t.sync.cloudManagedVault.localSyncDataRepairRequired;
@@ -142,6 +150,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
       return _ManagedVaultPushStageResult.success(pushed);
     } catch (error) {
       final details = _applyManagedVaultPushFailure(error, engine: engine);
+      await _persistManagedVaultBackgroundRepairBlock(error);
       if (!allowRecovery ||
           details.recoveryAction ==
               ManagedVaultPushFailureRecoveryAction.none) {

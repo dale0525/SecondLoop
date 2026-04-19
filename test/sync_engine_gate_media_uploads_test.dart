@@ -405,6 +405,70 @@ void main() {
   });
 
   testWidgets(
+      'Managed-vault invalid batches persist the background repair block',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultInvalidBatchBackend();
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultPushCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultPushCalls, 1);
+      expect(engine, isNotNull);
+      expect(
+          engine!.writeGate.value.kind, SyncWriteGateKind.localRepairRequired);
+      expect(
+        await store.readBackgroundSyncRepairRequired(
+          backendType: SyncBackendType.managedVault,
+        ),
+        isTrue,
+      );
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
+  testWidgets(
       'Managed-vault media uploads stay pending across pulls until the queue is clear',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -1017,6 +1081,35 @@ final class _ManagedVaultRetryingUploadBackend
       failed: failedCount,
       uploaded: _uploaded.length,
     );
+  }
+}
+
+final class _ManagedVaultInvalidBatchBackend
+    extends _ManagedVaultRecordingBackend {
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPushCalls++;
+    throw Exception(
+      'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"duplicate_client_op_id"}',
+    );
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPullCalls++;
+    return 0;
   }
 }
 

@@ -11,6 +11,7 @@ import '../subscription/subscription_scope.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
+import 'sync_http_error.dart';
 import 'sync_result.dart';
 
 final class SyncEngineGate extends StatefulWidget {
@@ -377,19 +378,28 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
           if (getter == null) return 0;
           final idToken = await getter();
           if (idToken == null || idToken.trim().isEmpty) return 0;
-          final pushed = await backend.syncManagedVaultPush(
-            _sessionKey,
-            config.syncKey,
-            baseUrl: config.baseUrl ?? '',
-            vaultId: config.remoteRoot,
-            idToken: idToken,
-          );
-          await _configStore.writeBackgroundSyncRepairRequired(
-            false,
-            backendType: SyncBackendType.managedVault,
-          );
-          await _writeManagedVaultMediaUploadPending(config, true);
-          return pushed;
+          try {
+            final pushed = await backend.syncManagedVaultPush(
+              _sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              vaultId: config.remoteRoot,
+              idToken: idToken,
+            );
+            await _configStore.writeBackgroundSyncRepairRequired(
+              false,
+              backendType: SyncBackendType.managedVault,
+            );
+            await _writeManagedVaultMediaUploadPending(config, true);
+            return pushed;
+          } catch (error) {
+            await _configStore.writeBackgroundSyncRepairRequired(
+              extractSyncHttpStatusCode(error) == 400 &&
+                  extractSyncErrorCode(error) == 'invalid_batch',
+              backendType: SyncBackendType.managedVault,
+            );
+            rethrow;
+          }
         }(),
     };
   }
