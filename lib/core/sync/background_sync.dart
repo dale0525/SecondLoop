@@ -475,6 +475,27 @@ final class BackgroundSync {
     }
   }
 
+  @visibleForTesting
+  static Future<({int? statusCode, String? errorCode, bool retryable})>
+      pushOnceForTest({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required SyncConfig config,
+    required String? managedVaultIdToken,
+  }) async {
+    final result = await _pushOnce(
+      backend: backend,
+      sessionKey: sessionKey,
+      config: config,
+      managedVaultIdToken: managedVaultIdToken,
+    );
+    return (
+      statusCode: result.statusCode,
+      errorCode: result.errorCode,
+      retryable: result.retryable,
+    );
+  }
+
   static Future<_BackgroundSyncOpResult> _pullOnce({
     required AppBackend backend,
     required Uint8List sessionKey,
@@ -559,7 +580,7 @@ final class BackgroundSync {
             if (idToken == null || idToken.trim().isEmpty) {
               return -1;
             }
-            return backend.syncManagedVaultPushOpsOnly(
+            return backend.syncManagedVaultPush(
               sessionKey,
               config.syncKey,
               baseUrl: config.baseUrl ?? '',

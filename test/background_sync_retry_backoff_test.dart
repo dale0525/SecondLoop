@@ -1,7 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/sync/background_sync.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
+
+import 'test_backend.dart';
 
 void main() {
   test('retryBackoffDelayForFailureCount grows exponentially and caps', () {
@@ -237,4 +241,52 @@ void main() {
       isFalse,
     );
   });
+
+  test('managed-vault background push uses full sync path instead of ops-only',
+      () async {
+    final backend = _BackgroundManagedVaultPushBackend();
+    final result = await BackgroundSync.pushOnceForTest(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      config: SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 2)),
+        vaultId: 'vault-1',
+        baseUrl: 'https://vault.example.com',
+      ),
+      managedVaultIdToken: 'token',
+    );
+
+    expect(result.statusCode, isNull);
+    expect(backend.managedVaultPushCalls, 1);
+    expect(backend.managedVaultPushOpsOnlyCalls, 0);
+  });
+}
+
+final class _BackgroundManagedVaultPushBackend extends TestAppBackend {
+  int managedVaultPushCalls = 0;
+  int managedVaultPushOpsOnlyCalls = 0;
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPushCalls++;
+    return 1;
+  }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPushOpsOnlyCalls++;
+    return 1;
+  }
 }

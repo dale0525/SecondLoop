@@ -241,14 +241,20 @@ fn update_v2_pull_backfill_markers(
     app_dir: &Path,
     scope_id: &str,
 ) -> Result<()> {
+    let attachment_key = attachment_backfill_key(scope_id);
     if has_local_attachments(conn)? && !has_missing_local_attachment_bytes(conn, db_key, app_dir)? {
         super::kv_set_i64(conn, &attachment_backfill_key(scope_id), 1)?;
+    } else {
+        let _ = conn.execute("DELETE FROM kv WHERE key = ?1", params![attachment_key])?;
     }
 
+    let artifact_key = artifact_backfill_key(scope_id);
     if has_ready_embedding_artifact_blobs(conn)?
         && !has_missing_embedding_artifact_blobs(conn, app_dir)?
     {
         super::kv_set_i64(conn, &artifact_backfill_key(scope_id), 1)?;
+    } else {
+        let _ = conn.execute("DELETE FROM kv WHERE key = ?1", params![artifact_key])?;
     }
 
     Ok(())
