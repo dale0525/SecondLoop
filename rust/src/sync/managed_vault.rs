@@ -235,14 +235,73 @@ fn has_missing_embedding_artifact_blobs(conn: &Connection, app_dir: &Path) -> Re
     Ok(false)
 }
 
+#[derive(Default)]
+struct PendingLocalMediaUploadRepairs {
+    attachments: bool,
+    artifacts: bool,
+}
+
+fn has_attachment_record(conn: &Connection, sha256: &str) -> Result<bool> {
+    conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM attachments WHERE sha256 = ?1 LIMIT 1)"#,
+        params![sha256],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+fn has_ready_embedding_artifact_ref(conn: &Connection, blob_ref: &str) -> Result<bool> {
+    conn.query_row(
+        r#"SELECT EXISTS(
+               SELECT 1
+               FROM embedding_artifact_manifests
+               WHERE status = 'ready' AND blob_ref = ?1
+               LIMIT 1
+           )"#,
+        params![blob_ref],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+fn pending_local_media_upload_repairs(
+    conn: &Connection,
+    scope_id: &str,
+) -> Result<PendingLocalMediaUploadRepairs> {
+    let mut repairs = PendingLocalMediaUploadRepairs::default();
+    for item in crate::sync::blob_repair::load_blob_repair_items(conn, scope_id)? {
+        match item.kind {
+            crate::sync::blob_repair::BlobRepairKind::UploadAttachment { sha256 } => {
+                if has_attachment_record(conn, &sha256)? {
+                    repairs.attachments = true;
+                }
+            }
+            crate::sync::blob_repair::BlobRepairKind::UploadArtifact { blob_ref } => {
+                if has_ready_embedding_artifact_ref(conn, &blob_ref)? {
+                    repairs.artifacts = true;
+                }
+            }
+            _ => {}
+        }
+        if repairs.attachments && repairs.artifacts {
+            break;
+        }
+    }
+    Ok(repairs)
+}
+
 fn update_v2_pull_backfill_markers(
     conn: &Connection,
     db_key: &[u8; 32],
     app_dir: &Path,
     scope_id: &str,
 ) -> Result<()> {
+    let pending_repairs = pending_local_media_upload_repairs(conn, scope_id)?;
     let attachment_key = attachment_backfill_key(scope_id);
-    if has_local_attachments(conn)? && !has_missing_local_attachment_bytes(conn, db_key, app_dir)? {
+    if has_local_attachments(conn)?
+        && !has_missing_local_attachment_bytes(conn, db_key, app_dir)?
+        && !pending_repairs.attachments
+    {
         super::kv_set_i64(conn, &attachment_backfill_key(scope_id), 1)?;
     } else {
         let _ = conn.execute("DELETE FROM kv WHERE key = ?1", params![attachment_key])?;
@@ -251,6 +310,7 @@ fn update_v2_pull_backfill_markers(
     let artifact_key = artifact_backfill_key(scope_id);
     if has_ready_embedding_artifact_blobs(conn)?
         && !has_missing_embedding_artifact_blobs(conn, app_dir)?
+        && !pending_repairs.artifacts
     {
         super::kv_set_i64(conn, &artifact_backfill_key(scope_id), 1)?;
     } else {
@@ -262,22 +322,33 @@ fn update_v2_pull_backfill_markers(
 
 fn full_push_requires_legacy_media_sync(
     conn: &Connection,
+    db_key: &[u8; 32],
     base_url: &str,
     vault_id: &str,
 ) -> Result<bool> {
     let scope_id = runtime::scope_id(base_url, vault_id);
+    let app_dir = super::app_dir_from_conn(conn)?;
+    let pending_repairs = pending_local_media_upload_repairs(conn, &scope_id)?;
     let attachment_backfill_key = attachment_backfill_key(&scope_id);
     if super::kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0
-        && has_local_attachments(conn)?
+        || (has_local_attachments(conn)?
+            && (has_missing_local_attachment_bytes(conn, db_key, app_dir.as_path())?
+                || pending_repairs.attachments))
     {
-        return Ok(true);
+        if has_local_attachments(conn)? {
+            return Ok(true);
+        }
     }
 
     let artifact_backfill_key = artifact_backfill_key(&scope_id);
     if super::kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0
-        && has_ready_embedding_artifact_blobs(conn)?
+        || (has_ready_embedding_artifact_blobs(conn)?
+            && (has_missing_embedding_artifact_blobs(conn, app_dir.as_path())?
+                || pending_repairs.artifacts))
     {
-        return Ok(true);
+        if has_ready_embedding_artifact_blobs(conn)? {
+            return Ok(true);
+        }
     }
 
     Ok(false)
@@ -342,7 +413,7 @@ pub fn push(
     vault_id: &str,
     id_token: &str,
 ) -> Result<u64> {
-    if full_push_requires_legacy_media_sync(conn, base_url, vault_id)? {
+    if full_push_requires_legacy_media_sync(conn, db_key, base_url, vault_id)? {
         return push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true);
     }
 
@@ -366,7 +437,7 @@ pub fn push_with_progress(
     id_token: &str,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<u64> {
-    if full_push_requires_legacy_media_sync(conn, base_url, vault_id)? {
+    if full_push_requires_legacy_media_sync(conn, db_key, base_url, vault_id)? {
         let pushed = push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true)?;
         progress(pushed, pushed);
         return Ok(pushed);
@@ -578,16 +649,14 @@ fn push_internal(
 
     if upload_attachment_bytes {
         let attachment_backfill_key = attachment_backfill_key(&scope_id);
+        let artifact_backfill_key = artifact_backfill_key(&scope_id);
         if super::kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0 {
             attachments::upload_all_local_attachment_bytes(&upload_ctx)?;
-            super::kv_set_i64(conn, &attachment_backfill_key, 1)?;
         }
-
-        let artifact_backfill_key = artifact_backfill_key(&scope_id);
         if super::kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0 {
             artifacts::upload_all_local_embedding_artifact_blobs(&upload_ctx)?;
-            super::kv_set_i64(conn, &artifact_backfill_key, 1)?;
         }
+        update_v2_pull_backfill_markers(conn, db_key, app_dir_path, &scope_id)?;
     }
 
     // Rare recovery path: if the remote has seqs this device doesn't agree with (e.g. device-id reuse),

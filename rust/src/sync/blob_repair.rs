@@ -9,6 +9,7 @@ pub enum BlobRepairKind {
     DownloadArtifact { blob_ref: String },
     UploadAttachment { sha256: String },
     UploadArtifact { blob_ref: String },
+    DeleteAttachmentRemote { sha256: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -63,6 +64,12 @@ fn queue_key(scope_id: &str, kind: &BlobRepairKind) -> String {
         }
         BlobRepairKind::UploadArtifact { blob_ref } => {
             format!("{}upload_artifact:{blob_ref}", queue_prefix(scope_id))
+        }
+        BlobRepairKind::DeleteAttachmentRemote { sha256 } => {
+            format!(
+                "{}delete_attachment_remote:{sha256}",
+                queue_prefix(scope_id)
+            )
         }
     }
 }
@@ -158,6 +165,13 @@ fn load_queue_items(conn: &Connection, scope_id: &str) -> Result<Vec<(String, Bl
         items.push((key, item));
     }
     Ok(items)
+}
+
+pub fn load_blob_repair_items(conn: &Connection, scope_id: &str) -> Result<Vec<BlobRepairItem>> {
+    Ok(load_queue_items(conn, scope_id)?
+        .into_iter()
+        .map(|(_, item)| item)
+        .collect())
 }
 
 pub fn process_blob_repairs(

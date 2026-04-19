@@ -15,6 +15,7 @@ pub struct V2ServerState {
     pub latest_global_seq: i64,
     pub ops: Vec<serde_json::Value>,
     pub attachments: BTreeMap<String, Vec<u8>>,
+    pub delete_attachment_failures: BTreeMap<String, usize>,
     pub requests: Vec<String>,
     pub require_generation_for_push_without_id: bool,
     pub invalid_batch_once: bool,
@@ -125,6 +126,41 @@ pub fn start_mock_v2_server() -> (
                     .push(format!("{raw_headers}{}", String::from_utf8_lossy(&body)));
 
                 match (method.as_str(), path.as_str()) {
+                    ("POST", "/v1/vaults/v1/devices") => {
+                        let decoded: serde_json::Value =
+                            serde_json::from_slice(&body).expect("device json");
+                        let requested = decoded["device_id"].as_str().unwrap_or("").trim();
+                        let device_id = if requested.is_empty() {
+                            "test-device".to_string()
+                        } else {
+                            requested.to_string()
+                        };
+                        write_json_response(
+                            &mut stream,
+                            200,
+                            serde_json::json!({
+                                "device_id": device_id,
+                            }),
+                        );
+                    }
+                    ("POST", "/v1/vaults/v1/ops:push") => {
+                        let decoded: serde_json::Value =
+                            serde_json::from_slice(&body).expect("legacy push json");
+                        let max_seq = decoded["ops"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|op| op["seq"].as_i64())
+                            .max()
+                            .unwrap_or(0);
+                        write_json_response(
+                            &mut stream,
+                            200,
+                            serde_json::json!({
+                                "max_seq": max_seq,
+                            }),
+                        );
+                    }
                     ("GET", "/v2/vaults/v1/sync/head") => {
                         let state = state_clone.lock().expect("lock");
                         write_json_response(
@@ -434,6 +470,33 @@ pub fn start_mock_v2_server() -> (
                             .unwrap_or_default()
                             .to_string();
                         let mut state = state_clone.lock().expect("lock");
+                        if state
+                            .delete_attachment_failures
+                            .get(&artifact_id)
+                            .copied()
+                            .unwrap_or(0)
+                            > 0
+                        {
+                            let remaining = state
+                                .delete_attachment_failures
+                                .get(&artifact_id)
+                                .copied()
+                                .unwrap_or(0)
+                                .saturating_sub(1);
+                            if remaining == 0 {
+                                state.delete_attachment_failures.remove(&artifact_id);
+                            } else {
+                                state
+                                    .delete_attachment_failures
+                                    .insert(artifact_id.clone(), remaining);
+                            }
+                            write_json_response(
+                                &mut stream,
+                                500,
+                                serde_json::json!({ "error": "delete_failed" }),
+                            );
+                            continue;
+                        }
                         state.attachments.remove(&artifact_id);
                         write_json_response(&mut stream, 200, serde_json::json!({}));
                     }

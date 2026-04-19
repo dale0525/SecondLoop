@@ -76,6 +76,19 @@ pub(super) fn process_pending_blob_repairs(
                     crate::sync::blob_repair::RepairAttemptOutcome::RetryLater
                 }
             }
+            crate::sync::blob_repair::BlobRepairKind::DeleteAttachmentRemote { sha256 } => {
+                match super::attachments::delete_remote_attachment_bytes(ctx, sha256) {
+                    Ok(()) => crate::sync::blob_repair::RepairAttemptOutcome::Done,
+                    Err(error) => {
+                        crate::sync::blob_repair::record_blob_repair_error(
+                            ctx.conn,
+                            &scope_id,
+                            &error.to_string(),
+                        )?;
+                        crate::sync::blob_repair::RepairAttemptOutcome::StopProcessing
+                    }
+                }
+            }
         };
         if matches!(
             outcome,

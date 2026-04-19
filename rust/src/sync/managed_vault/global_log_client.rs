@@ -450,11 +450,12 @@ fn has_local_unpushed_changes(conn: &Connection, scope_id: &str) -> Result<bool>
 
 fn rebuild_local_vault_if_safe(
     conn: &Connection,
+    db_key: &[u8; 32],
     scope_id: &str,
     base_url: &str,
     vault_id: &str,
 ) -> Result<()> {
-    if super::full_push_requires_legacy_media_sync(conn, base_url, vault_id)? {
+    if super::full_push_requires_legacy_media_sync(conn, db_key, base_url, vault_id)? {
         return Err(anyhow!(
             "managed-vault v2 recovery blocked: local_media_backfill_pending"
         ));
@@ -483,6 +484,16 @@ fn enqueue_artifact_upload_repair(conn: &Connection, scope_id: &str, blob_ref: &
         scope_id,
         super::super::blob_repair::BlobRepairKind::UploadArtifact {
             blob_ref: blob_ref.to_string(),
+        },
+    )
+}
+
+fn enqueue_attachment_delete_repair(conn: &Connection, scope_id: &str, sha256: &str) -> Result<()> {
+    super::super::blob_repair::enqueue_blob_repair(
+        conn,
+        scope_id,
+        super::super::blob_repair::BlobRepairKind::DeleteAttachmentRemote {
+            sha256: sha256.to_string(),
         },
     )
 }
@@ -547,6 +558,7 @@ fn run_post_commit_blob_side_effects(
                 if let Err(error) =
                     super::attachments::delete_remote_attachment_bytes(&upload_ctx, sha256)
                 {
+                    enqueue_attachment_delete_repair(conn, scope_id, sha256)?;
                     record_blob_side_effect_error(conn, scope_id, &error)?;
                 }
             }
@@ -716,7 +728,7 @@ pub(super) fn pull_v2(
                         error.remote_latest_global_seq
                     ));
                 }
-                rebuild_local_vault_if_safe(conn, &scope_id, base_url, vault_id)?;
+                rebuild_local_vault_if_safe(conn, db_key, &scope_id, base_url, vault_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
@@ -746,7 +758,7 @@ pub(super) fn pull_v2(
         if response_generation.is_empty() {
             if response.remote_latest_global_seq == 0 && response.ops.is_empty() {
                 if local_generation.is_some() || last_applied > 0 {
-                    rebuild_local_vault_if_safe(conn, &scope_id, base_url, vault_id)?;
+                    rebuild_local_vault_if_safe(conn, db_key, &scope_id, base_url, vault_id)?;
                     total_applied = 0;
                     total_target = None;
                 }
@@ -763,7 +775,7 @@ pub(super) fn pull_v2(
         }
         if let Some(existing_generation) = &local_generation {
             if existing_generation != response_generation {
-                rebuild_local_vault_if_safe(conn, &scope_id, base_url, vault_id)?;
+                rebuild_local_vault_if_safe(conn, db_key, &scope_id, base_url, vault_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
@@ -783,7 +795,7 @@ pub(super) fn pull_v2(
 
         if !pull_page_is_contiguous(&response.ops, last_applied) {
             if local_generation.is_some() || last_applied > 0 {
-                rebuild_local_vault_if_safe(conn, &scope_id, base_url, vault_id)?;
+                rebuild_local_vault_if_safe(conn, db_key, &scope_id, base_url, vault_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;

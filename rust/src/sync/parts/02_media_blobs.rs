@@ -368,6 +368,14 @@ fn process_pending_blob_repairs_for_scope(
                     blob_repair::RepairAttemptOutcome::RetryLater
                 }
             }
+            blob_repair::BlobRepairKind::DeleteAttachmentRemote { .. } => {
+                blob_repair::record_blob_repair_error(
+                    conn,
+                    &scope_id,
+                    "delete_attachment_remote repair is unsupported for this backend",
+                )?;
+                blob_repair::RepairAttemptOutcome::StopProcessing
+            }
         };
         if matches!(outcome, blob_repair::RepairAttemptOutcome::Done) {
             blob_repair::clear_blob_repair_error(conn, &scope_id)?;
