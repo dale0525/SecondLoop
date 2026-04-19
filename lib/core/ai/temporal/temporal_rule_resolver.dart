@@ -21,38 +21,64 @@ final class TemporalRuleResolver {
   );
 
   static final List<MapEntry<String, int>> _relativeDayTokens =
-      <MapEntry<String, int>>[
+      _sortStringIntEntriesByLength(<MapEntry<String, int>>[
     const MapEntry<String, int>('day after tomorrow', 2),
     const MapEntry<String, int>('after tomorrow', 2),
+    const MapEntry<String, int>('pasado mañana', 2),
+    const MapEntry<String, int>('après-demain', 2),
+    const MapEntry<String, int>('übermorgen', 2),
+    const MapEntry<String, int>('明後日', 2),
+    const MapEntry<String, int>('모레', 2),
+    const MapEntry<String, int>('大后天', 3),
+    const MapEntry<String, int>('大後天', 3),
+    const MapEntry<String, int>('tomorrow morning', 1),
+    const MapEntry<String, int>('mañana por la mañana', 1),
+    const MapEntry<String, int>('demain matin', 1),
+    const MapEntry<String, int>('morgen früh', 1),
+    const MapEntry<String, int>('明日の朝', 1),
+    const MapEntry<String, int>('내일 아침', 1),
+    const MapEntry<String, int>('明早', 1),
+    const MapEntry<String, int>('明晨', 1),
     const MapEntry<String, int>('tomorrow', 1),
     const MapEntry<String, int>('today', 0),
     const MapEntry<String, int>('yesterday', -1),
-    const MapEntry<String, int>('morgen', 1),
-    const MapEntry<String, int>('heute', 0),
-    const MapEntry<String, int>('gestern', -1),
-    const MapEntry<String, int>('demain', 1),
-    const MapEntry<String, int>("aujourd'hui", 0),
-    const MapEntry<String, int>('hier', -1),
     const MapEntry<String, int>('mañana', 1),
     const MapEntry<String, int>('hoy', 0),
     const MapEntry<String, int>('ayer', -1),
-    const MapEntry<String, int>('明天', 1),
+    const MapEntry<String, int>('demain', 1),
+    const MapEntry<String, int>("aujourd'hui", 0),
+    const MapEntry<String, int>('hier', -1),
+    const MapEntry<String, int>('morgen', 1),
+    const MapEntry<String, int>('heute abend', 0),
+    const MapEntry<String, int>('heute', 0),
+    const MapEntry<String, int>('gestern', -1),
+    const MapEntry<String, int>('ce soir', 0),
+    const MapEntry<String, int>('esta noche', 0),
+    const MapEntry<String, int>('tonight', 0),
     const MapEntry<String, int>('今天', 0),
+    const MapEntry<String, int>('今晚', 0),
+    const MapEntry<String, int>('明天', 1),
     const MapEntry<String, int>('昨天', -1),
     const MapEntry<String, int>('后天', 2),
     const MapEntry<String, int>('後天', 2),
-    const MapEntry<String, int>('明日', 1),
     const MapEntry<String, int>('今日', 0),
+    const MapEntry<String, int>('今夜', 0),
+    const MapEntry<String, int>('明日', 1),
     const MapEntry<String, int>('昨日', -1),
-    const MapEntry<String, int>('내일', 1),
+    const MapEntry<String, int>('今日の夜', 0),
+    const MapEntry<String, int>('오늘 밤', 0),
     const MapEntry<String, int>('오늘', 0),
+    const MapEntry<String, int>('내일', 1),
     const MapEntry<String, int>('어제', -1),
-  ];
+  ]);
 
   static final List<
           ({String token, int offsetWeeks, TemporalSemantics semantics})>
-      _weekTokens =
-      <({String token, int offsetWeeks, TemporalSemantics semantics})>[
+      _weekTokens = _sortWeekTokensByLength(<({
+    String token,
+    int offsetWeeks,
+    TemporalSemantics semantics
+  })>[
     (
       token: '上周',
       offsetWeeks: -1,
@@ -69,19 +95,89 @@ final class TemporalRuleResolver {
       semantics: TemporalSemantics.rangePast,
     ),
     (
+      token: '上星期',
+      offsetWeeks: -1,
+      semantics: TemporalSemantics.rangePast,
+    ),
+    (
+      token: '先週',
+      offsetWeeks: -1,
+      semantics: TemporalSemantics.rangePast,
+    ),
+    (
+      token: '지난주',
+      offsetWeeks: -1,
+      semantics: TemporalSemantics.rangePast,
+    ),
+    (
+      token: 'la semaine dernière',
+      offsetWeeks: -1,
+      semantics: TemporalSemantics.rangePast,
+    ),
+    (
+      token: 'letzte woche',
+      offsetWeeks: -1,
+      semantics: TemporalSemantics.rangePast,
+    ),
+    (
       token: '本周',
       offsetWeeks: 0,
-      semantics: TemporalSemantics.rangeFuture,
+      semantics: TemporalSemantics.rangeBoth,
     ),
     (
       token: '本週',
       offsetWeeks: 0,
-      semantics: TemporalSemantics.rangeFuture,
+      semantics: TemporalSemantics.rangeBoth,
     ),
     (
       token: 'this week',
       offsetWeeks: 0,
-      semantics: TemporalSemantics.rangeFuture,
+      semantics: TemporalSemantics.rangeBoth,
+    ),
+    (
+      token: '这周',
+      offsetWeeks: 0,
+      semantics: TemporalSemantics.rangeBoth,
+    ),
+    (
+      token: '這週',
+      offsetWeeks: 0,
+      semantics: TemporalSemantics.rangeBoth,
+    ),
+    (
+      token: '这星期',
+      offsetWeeks: 0,
+      semantics: TemporalSemantics.rangeBoth,
+    ),
+    (
+      token: '這星期',
+      offsetWeeks: 0,
+      semantics: TemporalSemantics.rangeBoth,
+    ),
+    (
+      token: '今週',
+      offsetWeeks: 0,
+      semantics: TemporalSemantics.rangeBoth,
+    ),
+    (
+      token: '이번 주',
+      offsetWeeks: 0,
+      semantics: TemporalSemantics.rangeBoth,
+    ),
+    (
+      token: 'esta semana',
+      offsetWeeks: 0,
+      semantics: TemporalSemantics.rangeBoth,
+    ),
+    (
+      token: 'cette semaine',
+      offsetWeeks: 0,
+      semantics: TemporalSemantics.rangeBoth,
+    ),
+    (
+      token: 'diese woche',
+      offsetWeeks: 0,
+      semantics: TemporalSemantics.rangeBoth,
     ),
     (
       token: '下周',
@@ -98,36 +194,165 @@ final class TemporalRuleResolver {
       offsetWeeks: 1,
       semantics: TemporalSemantics.rangeFuture,
     ),
-  ];
+    (
+      token: '下星期',
+      offsetWeeks: 1,
+      semantics: TemporalSemantics.rangeFuture,
+    ),
+    (
+      token: '来週',
+      offsetWeeks: 1,
+      semantics: TemporalSemantics.rangeFuture,
+    ),
+    (
+      token: '다음 주',
+      offsetWeeks: 1,
+      semantics: TemporalSemantics.rangeFuture,
+    ),
+    (
+      token: 'próxima semana',
+      offsetWeeks: 1,
+      semantics: TemporalSemantics.rangeFuture,
+    ),
+    (
+      token: 'la semaine prochaine',
+      offsetWeeks: 1,
+      semantics: TemporalSemantics.rangeFuture,
+    ),
+    (
+      token: 'nächste woche',
+      offsetWeeks: 1,
+      semantics: TemporalSemantics.rangeFuture,
+    ),
+  ]);
 
-  static final List<({int weekday, Set<String> tokens})> _weekdayTokens = [
+  static final List<({int weekday, List<String> tokens})> _weekdayTokens = [
     (
       weekday: DateTime.monday,
-      tokens: {'周一', '週一', '星期一', '礼拜一', 'monday'},
+      tokens: _sortStringsByLength(<String>[
+        '周一',
+        '週一',
+        '星期一',
+        '礼拜一',
+        '禮拜一',
+        'monday',
+        '月曜',
+        '月曜日',
+        '월요일',
+        'lunes',
+        'lundi',
+        'montag',
+      ]),
     ),
     (
       weekday: DateTime.tuesday,
-      tokens: {'周二', '週二', '星期二', '礼拜二', 'tuesday'},
+      tokens: _sortStringsByLength(<String>[
+        '周二',
+        '週二',
+        '星期二',
+        '礼拜二',
+        '禮拜二',
+        'tuesday',
+        '火曜',
+        '火曜日',
+        '화요일',
+        'martes',
+        'mardi',
+        'dienstag',
+      ]),
     ),
     (
       weekday: DateTime.wednesday,
-      tokens: {'周三', '週三', '星期三', '礼拜三', 'wednesday'},
+      tokens: _sortStringsByLength(<String>[
+        '周三',
+        '週三',
+        '星期三',
+        '礼拜三',
+        '禮拜三',
+        'wednesday',
+        '水曜',
+        '水曜日',
+        '수요일',
+        'miércoles',
+        'miercoles',
+        'mercredi',
+        'mittwoch',
+      ]),
     ),
     (
       weekday: DateTime.thursday,
-      tokens: {'周四', '週四', '星期四', '礼拜四', 'thursday'},
+      tokens: _sortStringsByLength(<String>[
+        '周四',
+        '週四',
+        '星期四',
+        '礼拜四',
+        '禮拜四',
+        'thursday',
+        '木曜',
+        '木曜日',
+        '목요일',
+        'jueves',
+        'jeudi',
+        'donnerstag',
+      ]),
     ),
     (
       weekday: DateTime.friday,
-      tokens: {'周五', '週五', '星期五', '礼拜五', 'friday'},
+      tokens: _sortStringsByLength(<String>[
+        '周五',
+        '週五',
+        '星期五',
+        '礼拜五',
+        '禮拜五',
+        'friday',
+        '金曜',
+        '金曜日',
+        '금요일',
+        'viernes',
+        'vendredi',
+        'freitag',
+      ]),
     ),
     (
       weekday: DateTime.saturday,
-      tokens: {'周六', '週六', '星期六', '礼拜六', 'saturday'},
+      tokens: _sortStringsByLength(<String>[
+        '周六',
+        '週六',
+        '星期六',
+        '礼拜六',
+        '禮拜六',
+        'saturday',
+        '土曜',
+        '土曜日',
+        '토요일',
+        'sábado',
+        'sabado',
+        'samedi',
+        'samstag',
+        'sonnabend',
+      ]),
     ),
     (
       weekday: DateTime.sunday,
-      tokens: {'周日', '週日', '周天', '星期日', '星期天', 'sunday'},
+      tokens: _sortStringsByLength(<String>[
+        '周日',
+        '週日',
+        '周天',
+        '週天',
+        '星期日',
+        '星期天',
+        '礼拜日',
+        '礼拜天',
+        '禮拜日',
+        '禮拜天',
+        'sunday',
+        '日曜',
+        '日曜日',
+        '일요일',
+        'domingo',
+        'dimanche',
+        'sonntag',
+      ]),
     ),
   ];
 
@@ -437,6 +662,32 @@ final class TemporalRuleResolver {
       );
     }
     return null;
+  }
+
+  static List<MapEntry<String, int>> _sortStringIntEntriesByLength(
+    List<MapEntry<String, int>> entries,
+  ) {
+    final sorted = List<MapEntry<String, int>>.from(entries);
+    sorted.sort((a, b) => b.key.length.compareTo(a.key.length));
+    return sorted;
+  }
+
+  static List<({String token, int offsetWeeks, TemporalSemantics semantics})>
+      _sortWeekTokensByLength(
+    List<({String token, int offsetWeeks, TemporalSemantics semantics})> tokens,
+  ) {
+    final sorted = List<
+        ({String token, int offsetWeeks, TemporalSemantics semantics})>.from(
+      tokens,
+    );
+    sorted.sort((a, b) => b.token.length.compareTo(a.token.length));
+    return sorted;
+  }
+
+  static List<String> _sortStringsByLength(List<String> tokens) {
+    final sorted = List<String>.from(tokens);
+    sorted.sort((a, b) => b.length.compareTo(a.length));
+    return sorted;
   }
 
   static MapEntry<String, int>? _matchRelativeDay(String normalizedText) {

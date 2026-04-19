@@ -91,6 +91,69 @@ void main() {
     expect(follow.dueAtLocal, isNotNull);
   });
 
+  test(
+      'followup keeps day-after-tomorrow semantics for localized relative days',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final cases = <({String text, Locale locale, DateTime expectedDueAt})>[
+      (
+        text: '把报销改到übermorgen',
+        locale: const Locale('de'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '把报销改到après-demain',
+        locale: const Locale('fr'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '把报销改到明後日',
+        locale: const Locale('ja'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '把报销改到모레',
+        locale: const Locale('ko'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '把报销改到mardi',
+        locale: const Locale('fr'),
+        expectedDueAt: DateTime(2026, 2, 10, 21, 0),
+      ),
+      (
+        text: '把报销改到금요일',
+        locale: const Locale('ko'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+    ];
+
+    for (final c in cases) {
+      final decision = MessageActionResolver.resolve(
+        c.text,
+        locale: c.locale,
+        nowLocal: now,
+        dayEndMinutes: 21 * 60,
+        openTodoTargets: const <TodoLinkTarget>[
+          TodoLinkTarget(id: 'todo:1', title: '报销', status: 'open'),
+        ],
+      );
+
+      expect(
+        decision,
+        isA<MessageActionFollowUpDecision>(),
+        reason: 'locale=${c.locale} text=${c.text}',
+      );
+      final follow = decision as MessageActionFollowUpDecision;
+      expect(follow.todoId, 'todo:1',
+          reason: 'locale=${c.locale} text=${c.text}');
+      expect(follow.newStatus, isNull,
+          reason: 'locale=${c.locale} text=${c.text}');
+      expect(follow.dueAtLocal, c.expectedDueAt,
+          reason: 'locale=${c.locale} text=${c.text}');
+    }
+  });
+
   test('does not create todo from long-form note with schedule text', () {
     final now = DateTime(2026, 1, 24, 12, 0);
     final decision = MessageActionResolver.resolve(

@@ -27,6 +27,19 @@ class AskAiIntentResolver {
   static String _normalize(String text) =>
       text.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
+  static AskAiIntentKind _mergeKinds(
+    AskAiIntentKind current,
+    AskAiIntentKind next,
+  ) {
+    if (current == AskAiIntentKind.none) return next;
+    if (next == AskAiIntentKind.none) return current;
+    if (current == next) return current;
+    if (current == AskAiIntentKind.both || next == AskAiIntentKind.both) {
+      return AskAiIntentKind.both;
+    }
+    return AskAiIntentKind.both;
+  }
+
   static bool _containsAny(String haystack, List<String> needles) {
     for (final n in needles) {
       if (n.isEmpty) continue;
@@ -95,7 +108,6 @@ class AskAiIntentResolver {
       '要做',
       '要干',
       '需要',
-      '答应',
       '明天',
       // ja
       '明日',
@@ -122,15 +134,14 @@ class AskAiIntentResolver {
       _ => AskAiIntentKind.none,
     };
 
-    if (kind == AskAiIntentKind.none && timeRange != null) {
-      kind = switch (temporal.semantics) {
-        TemporalSemantics.rangePast => AskAiIntentKind.past,
-        TemporalSemantics.rangeFuture => AskAiIntentKind.future,
-        TemporalSemantics.rangeBoth => AskAiIntentKind.both,
-        _ => timeRange.kind == 'this_week'
-            ? AskAiIntentKind.future
-            : AskAiIntentKind.none,
-      };
+    final temporalKind = switch (temporal.semantics) {
+      TemporalSemantics.rangePast => AskAiIntentKind.past,
+      TemporalSemantics.rangeFuture => AskAiIntentKind.future,
+      TemporalSemantics.rangeBoth => AskAiIntentKind.both,
+      _ => AskAiIntentKind.none,
+    };
+    if (timeRange != null) {
+      kind = _mergeKinds(kind, temporalKind);
     }
 
     final confidence = switch (kind) {
