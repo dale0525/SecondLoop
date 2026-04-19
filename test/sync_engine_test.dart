@@ -517,7 +517,8 @@ void main() {
     );
   });
 
-  test('managed vault successful pull reopens payment gate for later pushes',
+  test(
+      'managed vault successful pull keeps payment gate closed for later pushes',
       () {
     fakeAsync((async) {
       final runner = _ManagedVaultPaymentRecoveryRunner();
@@ -541,19 +542,19 @@ void main() {
       async.flushMicrotasks();
 
       expect(runner.calls, <String>['push', 'pull']);
-      expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+      expect(engine.writeGate.value.kind, SyncWriteGateKind.paymentRequired);
 
       engine.triggerPushNow();
       async.flushMicrotasks();
 
-      expect(runner.calls, <String>['push', 'pull', 'push', 'pull']);
+      expect(runner.calls, <String>['push', 'pull']);
 
       engine.stop();
     });
   });
 
   test(
-      'managed vault successful pull reopens storage quota gate for later pushes',
+      'managed vault successful pull keeps storage quota gate closed for later pushes',
       () {
     fakeAsync((async) {
       final runner = _ManagedVaultStorageQuotaRecoveryRunner();
@@ -580,12 +581,15 @@ void main() {
       async.flushMicrotasks();
 
       expect(runner.calls, <String>['push', 'pull']);
-      expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+      expect(
+        engine.writeGate.value.kind,
+        SyncWriteGateKind.storageQuotaExceeded,
+      );
 
       engine.triggerPushNow();
       async.flushMicrotasks();
 
-      expect(runner.calls, <String>['push', 'pull', 'push', 'pull']);
+      expect(runner.calls, <String>['push', 'pull']);
 
       engine.stop();
     });

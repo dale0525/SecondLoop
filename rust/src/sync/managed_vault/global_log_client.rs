@@ -55,6 +55,12 @@ fn ensure_complete_push_acceptance(
 ) -> Result<()> {
     let requested = batch.ops.len() as u64;
     if response.accepted == 0 {
+        if requested > 0 {
+            return Err(anyhow!(
+                "managed-vault v2 push returned inconsistent retry response: accepted=0 for {} requested ops",
+                requested,
+            ));
+        }
         if response.committed_from_seq.is_some() || response.committed_to_seq.is_some() {
             return Err(anyhow!(
                 "managed-vault v2 push returned inconsistent retry response: accepted=0 committed_from_seq={:?} committed_to_seq={:?}",
