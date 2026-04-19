@@ -1,18 +1,20 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -337,6 +339,219 @@ void main() {
       ConnectivityPlatform.instance = oldConnectivity;
     }
   });
+
+  testWidgets(
+      'Managed-vault pull-only recovery does not upload media when push failed before it',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+    await store.writeCloudMediaBackupEnabled(true);
+    await store.writeCloudMediaBackupWifiOnly(true);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultPullOnlyRecoveryBackend(
+        dueBackups: [
+          const CloudMediaBackup(
+            attachmentSha256: 'a',
+            desiredVariant: 'original',
+            byteLen: 0,
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            updatedAtMs: 0,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: const SyncEngineGate(child: SizedBox.shrink()),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultPullCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultPushCalls, 1);
+      expect(backend.managedVaultPullCalls, 1);
+      expect(backend.managedVaultUploadAttachmentCalls, 0);
+      expect(backend.markUploadedCalls, 0);
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
+  testWidgets('SyncEngineGate rebuild swaps managed-vault auth token source',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultTokenRecordingBackend();
+      final authA = _MutableCloudAuthController(
+        uidValue: 'uid-1',
+        tokenValue: 'token-a',
+      );
+      final authB = _MutableCloudAuthController(
+        uidValue: 'uid-1',
+        tokenValue: 'token-b',
+      );
+      SyncEngine? engine;
+
+      Widget buildApp(CloudAuthController controller) {
+        return MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: controller,
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildApp(authA));
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultPushTokens.isEmpty &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultPushTokens, contains('token-a'));
+
+      await tester.pumpWidget(buildApp(authB));
+      await tester.pump();
+
+      engine!.triggerPushNow();
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (!backend.managedVaultPushTokens.contains('token-b') &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultPushTokens.last, 'token-b');
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
+  testWidgets(
+      'Entitled subscription only reopens payment-required gate, not grace read-only',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultRecordingBackend();
+      final subscription = _FakeSubscriptionStatusController(
+        SubscriptionStatus.unknown,
+      );
+      SyncEngine? engine;
+
+      Widget buildApp() {
+        return MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: SyncEngineGate(
+                    child: Builder(
+                      builder: (context) {
+                        engine = SyncEngineScope.maybeOf(context);
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildApp());
+      await tester.pump();
+
+      engine!.writeGate.value =
+          const SyncWriteGateState.graceReadOnly(9999999999999);
+
+      subscription.status = SubscriptionStatus.entitled;
+      await tester.pump();
+
+      expect(engine!.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+
+      engine!.writeGate.value = const SyncWriteGateState.paymentRequired();
+      subscription.status = SubscriptionStatus.unknown;
+      await tester.pump();
+      subscription.status = SubscriptionStatus.entitled;
+      await tester.pump();
+
+      expect(engine!.writeGate.value.kind, SyncWriteGateKind.open);
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
 }
 
 final class _FakeConnectivityPlatform extends ConnectivityPlatform {
@@ -587,6 +802,122 @@ final class _ManagedVaultRecordingBackend extends _RecordingBackend {
   }) async {
     managedVaultUploadAttachmentCalls++;
     return true;
+  }
+}
+
+final class _ManagedVaultPullOnlyRecoveryBackend
+    extends _ManagedVaultRecordingBackend {
+  _ManagedVaultPullOnlyRecoveryBackend({super.dueBackups});
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPushCalls++;
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPullCalls++;
+    return 0;
+  }
+}
+
+final class _ManagedVaultTokenRecordingBackend extends TestAppBackend {
+  final List<String> managedVaultPushTokens = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPushTokens.add(idToken);
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async =>
+      0;
+}
+
+final class _MutableCloudAuthController implements CloudAuthController {
+  _MutableCloudAuthController({
+    required this.uidValue,
+    required this.tokenValue,
+  });
+
+  final String uidValue;
+  final String tokenValue;
+
+  @override
+  Future<String?> getIdToken() async => tokenValue;
+
+  @override
+  String? get uid => uidValue;
+
+  @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+}
+
+final class _FakeSubscriptionStatusController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  _FakeSubscriptionStatusController(this._status);
+
+  SubscriptionStatus _status;
+
+  @override
+  SubscriptionStatus get status => _status;
+
+  set status(SubscriptionStatus value) {
+    if (_status == value) return;
+    _status = value;
+    notifyListeners();
   }
 }
 

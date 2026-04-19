@@ -28,6 +28,7 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
   final Connectivity _connectivity = Connectivity();
   SyncEngine? _engine;
   Object? _backendIdentity;
+  Object? _cloudAuthIdentity;
   Uint8List? _sessionKey;
 
   @override
@@ -75,11 +76,13 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status;
 
     final shouldReuse = identical(_backendIdentity, backend) &&
+        identical(_cloudAuthIdentity, cloudAuth) &&
         _bytesEqual(_sessionKey, sessionKey);
     if (shouldReuse) {
-      if (subscriptionStatus == SubscriptionStatus.entitled) {
-        _engine?.writeGate.value = const SyncWriteGateState.open();
-      }
+      _maybeReopenWriteGateForEntitledSubscription(
+        engine: _engine,
+        subscriptionStatus: subscriptionStatus,
+      );
       return;
     }
 
@@ -106,10 +109,24 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     engine.triggerPullNow();
 
     _backendIdentity = backend;
+    _cloudAuthIdentity = cloudAuth;
     _sessionKey = Uint8List.fromList(sessionKey);
     _engine = engine;
 
-    if (subscriptionStatus == SubscriptionStatus.entitled) {
+    _maybeReopenWriteGateForEntitledSubscription(
+      engine: engine,
+      subscriptionStatus: subscriptionStatus,
+    );
+  }
+
+  void _maybeReopenWriteGateForEntitledSubscription({
+    required SyncEngine? engine,
+    required SubscriptionStatus? subscriptionStatus,
+  }) {
+    if (engine == null || subscriptionStatus != SubscriptionStatus.entitled) {
+      return;
+    }
+    if (engine.writeGate.value.kind == SyncWriteGateKind.paymentRequired) {
       engine.writeGate.value = const SyncWriteGateState.open();
     }
   }
@@ -189,6 +206,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   final SyncConfigStore _configStore;
   final Uint8List _sessionKey;
   final Future<String?> Function()? _idTokenGetter;
+  bool _managedVaultMediaUploadPending = false;
 
   Future<CloudMediaBackupNetwork> _safeGetCloudMediaBackupNetwork({
     required bool wifiOnly,
@@ -330,13 +348,15 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
           if (getter == null) return 0;
           final idToken = await getter();
           if (idToken == null || idToken.trim().isEmpty) return 0;
-          return backend.syncManagedVaultPush(
+          final pushed = await backend.syncManagedVaultPush(
             _sessionKey,
             config.syncKey,
             baseUrl: config.baseUrl ?? '',
             vaultId: config.remoteRoot,
             idToken: idToken,
           );
+          _managedVaultMediaUploadPending = true;
+          return pushed;
         }(),
     };
   }
@@ -372,7 +392,19 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
           );
         }(),
     };
-    await _runCloudMediaBackupIfEnabled(config);
+    switch (config.backendType) {
+      case SyncBackendType.webdav:
+        await _runCloudMediaBackupIfEnabled(config);
+        break;
+      case SyncBackendType.managedVault:
+        if (_managedVaultMediaUploadPending) {
+          await _runCloudMediaBackupIfEnabled(config);
+          _managedVaultMediaUploadPending = false;
+        }
+        break;
+      case SyncBackendType.localDir:
+        break;
+    }
     return applied;
   }
 
