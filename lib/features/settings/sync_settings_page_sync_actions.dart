@@ -606,43 +606,30 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                 try {
                   await _runSaveSyncWithProgress(
                     run: (stage, progress) async {
-                      var stageProgress =
-                          _makeSmoothStageProgressReporter(progress);
                       var allowMediaUploads = true;
                       var retryPushAfterPull = false;
-                      stage.value = t.sync.progressDialog.pushing;
-                      progress.value = 0.0;
-                      try {
-                        await _consumeRustProgressStream(
-                          backend.syncManagedVaultPushProgress(
-                            sessionKey,
-                            activeSyncKey,
-                            baseUrl: baseUrlTrimmed,
-                            vaultId: vaultId,
-                            idToken: idTokenTrimmed,
-                          ),
-                          onProgress: stageProgress.onProgress,
-                        );
-                        reopenManagedVaultWriteGateOnSuccess(engine);
-                      } catch (error) {
-                        final recoveryAction =
-                            managedVaultPushFailureRecoveryAction(error);
-                        final nextWriteGate =
-                            managedVaultWriteGateStateForError(error);
-                        if (nextWriteGate != null) {
-                          engine?.writeGate.value = nextWriteGate;
-                        }
-                        if (recoveryAction ==
-                            ManagedVaultPushFailureRecoveryAction.none) {
-                          rethrow;
-                        }
-                        allowMediaUploads = false;
-                        retryPushAfterPull = recoveryAction ==
-                            ManagedVaultPushFailureRecoveryAction
-                                .pullThenRetryPush;
-                      }
+                      final hasTotal = ValueNotifier(false);
+                      final initialPush =
+                          await _runManagedVaultPushStageWithProgress(
+                        backend: backend,
+                        sessionKey: sessionKey,
+                        syncKey: activeSyncKey,
+                        engine: engine,
+                        baseUrl: baseUrlTrimmed,
+                        vaultId: vaultId,
+                        idToken: idTokenTrimmed,
+                        stage: stage,
+                        progress: progress,
+                        hasTotal: hasTotal,
+                        allowRecovery: true,
+                      );
+                      allowMediaUploads = initialPush.recoveryAction ==
+                          ManagedVaultPushFailureRecoveryAction.none;
+                      retryPushAfterPull = initialPush.recoveryAction ==
+                          ManagedVaultPushFailureRecoveryAction
+                              .pullThenRetryPush;
 
-                      stageProgress =
+                      final stageProgress =
                           _makeSmoothStageProgressReporter(progress);
                       stage.value = t.sync.progressDialog.pulling;
                       progress.value = 0.0;
@@ -657,21 +644,19 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         onProgress: stageProgress.onProgress,
                       );
                       if (retryPushAfterPull) {
-                        stageProgress =
-                            _makeSmoothStageProgressReporter(progress);
-                        stage.value = t.sync.progressDialog.pushing;
-                        progress.value = 0.0;
-                        await _consumeRustProgressStream(
-                          backend.syncManagedVaultPushProgress(
-                            sessionKey,
-                            activeSyncKey,
-                            baseUrl: baseUrlTrimmed,
-                            vaultId: vaultId,
-                            idToken: idTokenTrimmed,
-                          ),
-                          onProgress: stageProgress.onProgress,
+                        await _runManagedVaultPushStageWithProgress(
+                          backend: backend,
+                          sessionKey: sessionKey,
+                          syncKey: activeSyncKey,
+                          engine: engine,
+                          baseUrl: baseUrlTrimmed,
+                          vaultId: vaultId,
+                          idToken: idTokenTrimmed,
+                          stage: stage,
+                          progress: progress,
+                          hasTotal: hasTotal,
+                          allowRecovery: false,
                         );
-                        reopenManagedVaultWriteGateOnSuccess(engine);
                         allowMediaUploads = true;
                       }
 
@@ -735,6 +720,18 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
       } catch (e) {
         if (!mounted) return;
+        if (backendType == SyncBackendType.managedVault) {
+          final details = inspectManagedVaultPushFailure(e);
+          if (details.writeGateState != null) {
+            return;
+          }
+          _showSnack(
+            t.sync.connectionFailed(
+              error: managedVaultUserFacingErrorMessage(e),
+            ),
+          );
+          return;
+        }
         _showSnack(t.sync.connectionFailed(error: '$e'));
       }
     } catch (e) {

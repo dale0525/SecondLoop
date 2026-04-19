@@ -141,6 +141,75 @@ void main() {
   });
 
   testWidgets(
+      'Save updates write gate when retry push fails after recovery pull',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeRemoteRoot('SecondLoop');
+
+    final backend = _RetryPushGraceReadOnlyManagedVaultSyncBackend();
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: SyncEngineScope(
+                  engine: engine,
+                  child: Scaffold(
+                    body: SyncSettingsPage(configStore: store),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final backendDropdown =
+        tester.widget<DropdownButtonFormField<SyncBackendType>>(
+      find.byType(DropdownButtonFormField<SyncBackendType>),
+    );
+    backendDropdown.onChanged?.call(SyncBackendType.managedVault);
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+        'syncManagedVaultPush',
+      ],
+    );
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
+    engine.stop();
+  });
+
+  testWidgets(
       'Manual upload stays disabled while stale managed-vault write gate is active',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -199,6 +268,75 @@ void main() {
     expect(button.onPressed, isNull);
     expect(backend.calls, isEmpty);
     expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    engine.stop();
+  });
+
+  testWidgets(
+      'Manual upload updates write gate and shows readable error when retry push fails',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _RetryPushGraceReadOnlyManagedVaultSyncBackend();
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: SyncEngineScope(
+                  engine: engine,
+                  child: Scaffold(
+                    body: SyncSettingsPage(configStore: store),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(uploadButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+        'syncManagedVaultPush',
+      ],
+    );
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
     engine.stop();
   });
 }
@@ -273,6 +411,44 @@ final class _SuccessfulManagedVaultSyncBackend extends TestAppBackend {
   }) async {
     calls.add('syncManagedVaultPush');
     return 1;
+  }
+}
+
+final class _RetryPushGraceReadOnlyManagedVaultSyncBackend
+    extends TestAppBackend {
+  final List<String> calls = <String>[];
+  var _pushCount = 0;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    _pushCount += 1;
+    if (_pushCount == 1) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
   }
 }
 

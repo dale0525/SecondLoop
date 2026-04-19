@@ -12,6 +12,25 @@ final class _ManagedVaultManualPushResult {
   final String? recoveredMessage;
 }
 
+final class _ManagedVaultPushStageResult {
+  const _ManagedVaultPushStageResult({
+    required this.pushed,
+    required this.recoveryAction,
+    required this.recoveredMessage,
+  });
+
+  const _ManagedVaultPushStageResult.success(int pushed)
+      : this(
+          pushed: pushed,
+          recoveryAction: ManagedVaultPushFailureRecoveryAction.none,
+          recoveredMessage: null,
+        );
+
+  final int pushed;
+  final ManagedVaultPushFailureRecoveryAction recoveryAction;
+  final String? recoveredMessage;
+}
+
 extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
   String _managedVaultRecoveredMessageForGate(SyncWriteGateState gate) {
     if (gate.kind == SyncWriteGateKind.paymentRequired) {
@@ -48,13 +67,75 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     if (status == 400 && code == 'invalid_batch') {
       return context.t.sync.cloudManagedVault.localSyncDataRepairRequired;
     }
-    if (status == 402) {
-      return context.t.sync.cloudManagedVault.paymentRequired;
-    }
-    if (status == 403 && code == 'storage_quota_exceeded') {
-      return context.t.sync.cloudManagedVault.storageQuotaExceeded;
+    final details = inspectManagedVaultPushFailure(error);
+    final gate = details.writeGateState;
+    if (gate != null) {
+      return _managedVaultRecoveredMessageForGate(gate);
     }
     return '$error';
+  }
+
+  ManagedVaultPushFailureDetails _applyManagedVaultPushFailure(
+    Object error, {
+    required SyncEngine? engine,
+  }) {
+    final details = inspectManagedVaultPushFailure(error);
+    final nextWriteGate = details.writeGateState;
+    if (nextWriteGate != null) {
+      engine?.writeGate.value = nextWriteGate;
+    }
+    return details;
+  }
+
+  Future<_ManagedVaultPushStageResult> _runManagedVaultPushStageWithProgress({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required Uint8List syncKey,
+    required SyncEngine? engine,
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required ValueNotifier<String> stage,
+    required ValueNotifier<double?> progress,
+    required ValueNotifier<bool> hasTotal,
+    required bool allowRecovery,
+  }) async {
+    final reporter = _makeSmoothStageProgressReporter(
+      progress,
+      onHasTotal: () => hasTotal.value = true,
+    );
+    stage.value = context.t.sync.progressDialog.pushing;
+    progress.value = 0.0;
+    hasTotal.value = false;
+    try {
+      final pushed = await _consumeRustProgressStream(
+        backend.syncManagedVaultPushProgress(
+          sessionKey,
+          syncKey,
+          baseUrl: baseUrl,
+          vaultId: vaultId,
+          idToken: idToken,
+        ),
+        onProgress: reporter.onProgress,
+      );
+      reporter.complete();
+      reopenManagedVaultWriteGateOnSuccess(engine);
+      return _ManagedVaultPushStageResult.success(pushed);
+    } catch (error) {
+      final details = _applyManagedVaultPushFailure(error, engine: engine);
+      if (!allowRecovery ||
+          details.recoveryAction ==
+              ManagedVaultPushFailureRecoveryAction.none) {
+        rethrow;
+      }
+      return _ManagedVaultPushStageResult(
+        pushed: 0,
+        recoveryAction: details.recoveryAction,
+        recoveredMessage: details.writeGateState == null
+            ? null
+            : _managedVaultRecoveredMessageForGate(details.writeGateState!),
+      );
+    }
   }
 
   Future<_ManagedVaultManualPushResult> _runManagedVaultManualPushWithProgress({
@@ -85,35 +166,25 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     var recoveredOnly = false;
     var retryPushAfterPull = false;
     String? recoveredMessage;
-    try {
-      pushed = await _consumeRustProgressStream(
-        backend.syncManagedVaultPushProgress(
-          sessionKey,
-          syncKey,
-          baseUrl: baseUrl,
-          vaultId: vaultId,
-          idToken: idToken,
-        ),
-        onProgress: _makeSmoothStageProgressReporter(
-          progress,
-          onHasTotal: () => hasTotal.value = true,
-        ).onProgress,
-      );
-      reopenManagedVaultWriteGateOnSuccess(engine);
-    } catch (error) {
-      final recoveryAction = managedVaultPushFailureRecoveryAction(error);
-      final nextWriteGate = managedVaultWriteGateStateForError(error);
-      if (nextWriteGate != null) {
-        engine?.writeGate.value = nextWriteGate;
-        recoveredMessage = _managedVaultRecoveredMessageForGate(nextWriteGate);
-      }
-      if (recoveryAction == ManagedVaultPushFailureRecoveryAction.none) {
-        rethrow;
-      }
-      retryPushAfterPull = recoveryAction ==
-          ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
-      recoveredOnly = !retryPushAfterPull;
-    }
+    final initialPush = await _runManagedVaultPushStageWithProgress(
+      backend: backend,
+      sessionKey: sessionKey,
+      syncKey: syncKey,
+      engine: engine,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+      stage: stage,
+      progress: progress,
+      hasTotal: hasTotal,
+      allowRecovery: true,
+    );
+    pushed = initialPush.pushed;
+    retryPushAfterPull = initialPush.recoveryAction ==
+        ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
+    recoveredOnly = initialPush.recoveryAction ==
+        ManagedVaultPushFailureRecoveryAction.pullOnly;
+    recoveredMessage = initialPush.recoveredMessage;
 
     stage.value = t.sync.progressDialog.pulling;
     progress.value = 0.0;
@@ -133,25 +204,20 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
       onProgress: pullProgressReporter.onProgress,
     );
     if (retryPushAfterPull) {
-      stage.value = t.sync.progressDialog.pushing;
-      progress.value = 0.0;
-      hasTotal.value = false;
-      final retryProgressReporter = _makeSmoothStageProgressReporter(
-        progress,
-        onHasTotal: () => hasTotal.value = true,
+      final retryPush = await _runManagedVaultPushStageWithProgress(
+        backend: backend,
+        sessionKey: sessionKey,
+        syncKey: syncKey,
+        engine: engine,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken,
+        stage: stage,
+        progress: progress,
+        hasTotal: hasTotal,
+        allowRecovery: false,
       );
-      pushed = await _consumeRustProgressStream(
-        backend.syncManagedVaultPushProgress(
-          sessionKey,
-          syncKey,
-          baseUrl: baseUrl,
-          vaultId: vaultId,
-          idToken: idToken,
-        ),
-        onProgress: retryProgressReporter.onProgress,
-      );
-      retryProgressReporter.complete();
-      reopenManagedVaultWriteGateOnSuccess(engine);
+      pushed = retryPush.pushed;
       recoveredOnly = false;
     }
     stage.value = t.sync.progressDialog.finalizing;

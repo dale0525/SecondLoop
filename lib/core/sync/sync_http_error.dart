@@ -3,6 +3,16 @@ export 'managed_vault_sync_error_policy.dart';
 import 'managed_vault_sync_error_policy.dart';
 import 'sync_engine.dart';
 
+final class ManagedVaultPushFailureDetails {
+  const ManagedVaultPushFailureDetails({
+    required this.recoveryAction,
+    required this.writeGateState,
+  });
+
+  final ManagedVaultPushFailureRecoveryAction recoveryAction;
+  final SyncWriteGateState? writeGateState;
+}
+
 int? extractSyncHttpStatusCode(Object error) {
   return extractManagedVaultSyncHttpStatusCode(error);
 }
@@ -38,6 +48,13 @@ SyncWriteGateState? managedVaultWriteGateStateForError(Object error) {
     return const SyncWriteGateState.paymentRequired();
   }
   return null;
+}
+
+ManagedVaultPushFailureDetails inspectManagedVaultPushFailure(Object error) {
+  return ManagedVaultPushFailureDetails(
+    recoveryAction: managedVaultPushFailureRecoveryAction(error),
+    writeGateState: managedVaultWriteGateStateForError(error),
+  );
 }
 
 void reopenManagedVaultWriteGateOnSuccess(SyncEngine? engine) {

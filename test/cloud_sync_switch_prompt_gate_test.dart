@@ -439,6 +439,12 @@ void main() {
     expect(await store.readBackendType(), SyncBackendType.webdav);
     expect(await store.readRemoteRoot(), 'SecondLoop');
     expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(
+      find.textContaining(
+        'Local sync data needs repair before cloud sync can continue.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Switching to Cloud still pulls when push is read-only blocked',
@@ -585,6 +591,83 @@ void main() {
       ],
     );
     expect(find.textContaining('managed-vault push failed'), findsNothing);
+    engine.stop();
+  });
+
+  testWidgets(
+      'Switching to Cloud updates write gate when retry push fails after recovery pull',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final backend = _GenerationMismatchThenGraceReadOnlyPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        vaultId: 'uid_1',
+        baseUrl: 'https://vault.example.com',
+      ),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+    engine.start();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: SyncEngineScope(
+                engine: engine,
+                child: CloudAuthScope(
+                  controller: cloudAuth,
+                  child: SubscriptionScope(
+                    controller: subscription,
+                    child: CloudSyncSwitchPromptGate(
+                      configStore: store,
+                      child: const Scaffold(body: Text('home')),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+        'syncManagedVaultPush',
+      ],
+    );
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
     engine.stop();
   });
 
@@ -1047,6 +1130,43 @@ final class _GenerationMismatchRecoveryPushBackend extends _Backend {
       );
     }
     return 1;
+  }
+}
+
+final class _GenerationMismatchThenGraceReadOnlyPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+  var _pushCount = 0;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    _pushCount += 1;
+    if (_pushCount == 1) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
   }
 }
 
