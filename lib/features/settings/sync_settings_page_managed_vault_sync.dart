@@ -67,6 +67,14 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     if (status == 400 && code == 'invalid_batch') {
       return context.t.sync.cloudManagedVault.localSyncDataRepairRequired;
     }
+    final recoveryBlockedReason =
+        extractManagedVaultRecoveryBlockedReason(error);
+    if (recoveryBlockedReason == 'local_unpushed_changes') {
+      return context.t.sync.cloudManagedVault.localChangesUploadRequired;
+    }
+    if (recoveryBlockedReason == 'local_media_backfill_pending') {
+      return context.t.sync.cloudManagedVault.localMediaBackfillRequired;
+    }
     final details = inspectManagedVaultPushFailure(error);
     final gate = details.writeGateState;
     if (gate != null) {

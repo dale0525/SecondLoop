@@ -35,6 +35,14 @@ void main() {
     expect(
       managedVaultPushFailureAllowsPull(
         Exception(
+          'managed-vault push failed: HTTP 403 {"error":"storage_quota_exceeded","used_bytes":10,"limit_bytes":9}',
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      managedVaultPushFailureAllowsPull(
+        Exception(
             'managed-vault push failed: HTTP 503 {"error":"unavailable"}'),
       ),
       isFalse,
@@ -68,6 +76,14 @@ void main() {
         ),
       ),
       ManagedVaultPushFailureRecoveryAction.pullOnly,
+    );
+    expect(
+      managedVaultPushFailureRecoveryAction(
+        Exception(
+          'managed-vault push failed: HTTP 403 {"error":"storage_quota_exceeded","used_bytes":10,"limit_bytes":9}',
+        ),
+      ),
+      ManagedVaultPushFailureRecoveryAction.none,
     );
     expect(
       managedVaultPushFailureRecoveryAction(

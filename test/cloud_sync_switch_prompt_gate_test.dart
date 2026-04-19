@@ -519,6 +519,60 @@ void main() {
   });
 
   testWidgets(
+      'Switching to Cloud rolls back config when initial sync hits storage quota',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _StorageQuotaExceededPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(find.textContaining('Cloud storage is full'), findsOneWidget);
+  });
+
+  testWidgets(
       'Switching to Cloud retries push after pull recovers generation mismatch',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -1076,6 +1130,24 @@ final class _GraceReadOnlyPushBackend extends _Backend {
     calls.add('syncManagedVaultPush');
     throw Exception(
       'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
+  }
+}
+
+final class _StorageQuotaExceededPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"storage_quota_exceeded","used_bytes":10,"limit_bytes":9}',
     );
   }
 }

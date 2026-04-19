@@ -23,8 +23,7 @@ ManagedVaultPushFailureRecoveryAction
   String? errorCode,
 }) {
   if (statusCode == 403) {
-    if (errorCode == 'grace_readonly' ||
-        errorCode == 'storage_quota_exceeded') {
+    if (errorCode == 'grace_readonly') {
       return ManagedVaultPushFailureRecoveryAction.pullOnly;
     }
     return ManagedVaultPushFailureRecoveryAction.none;

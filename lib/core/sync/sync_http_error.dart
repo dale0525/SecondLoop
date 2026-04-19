@@ -29,6 +29,12 @@ int? extractSyncErrorIntField(Object error, String fieldName) {
   return int.tryParse(valueText);
 }
 
+String? extractManagedVaultRecoveryBlockedReason(Object error) {
+  return RegExp(
+    r'managed-vault v2 recovery blocked:\s*([a-z_]+)',
+  ).firstMatch(error.toString())?.group(1);
+}
+
 SyncWriteGateState? managedVaultWriteGateStateForError(Object error) {
   final statusCode = extractSyncHttpStatusCode(error);
   final errorCode = extractSyncErrorCode(error);

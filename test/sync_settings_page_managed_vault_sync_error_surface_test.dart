@@ -210,6 +210,120 @@ void main() {
   });
 
   testWidgets(
+      'Save shows a readable error when recovery is blocked by local unpushed changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeRemoteRoot('SecondLoop');
+
+    final backend = _LocalUnpushedChangesRecoveryBlockedBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final backendDropdown =
+        tester.widget<DropdownButtonFormField<SyncBackendType>>(
+      find.byType(DropdownButtonFormField<SyncBackendType>),
+    );
+    backendDropdown.onChanged?.call(SyncBackendType.managedVault);
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Connection failed:'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Local changes still need to upload before cloud recovery can continue.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'Save shows a readable error when recovery is blocked by local media backfill',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeRemoteRoot('SecondLoop');
+
+    final backend = _LocalMediaBackfillRecoveryBlockedBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final backendDropdown =
+        tester.widget<DropdownButtonFormField<SyncBackendType>>(
+      find.byType(DropdownButtonFormField<SyncBackendType>),
+    );
+    backendDropdown.onChanged?.call(SyncBackendType.managedVault);
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Connection failed:'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Local media still needs cloud backfill before recovery can continue.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
       'Manual upload stays disabled while stale managed-vault write gate is active',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -448,6 +562,35 @@ final class _RetryPushGraceReadOnlyManagedVaultSyncBackend
     }
     throw Exception(
       'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
+  }
+}
+
+final class _LocalUnpushedChangesRecoveryBlockedBackend extends TestAppBackend {
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    throw StateError(
+        'managed-vault v2 recovery blocked: local_unpushed_changes');
+  }
+}
+
+final class _LocalMediaBackfillRecoveryBlockedBackend extends TestAppBackend {
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    throw StateError(
+      'managed-vault v2 recovery blocked: local_media_backfill_pending',
     );
   }
 }

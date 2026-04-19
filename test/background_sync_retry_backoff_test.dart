@@ -160,7 +160,7 @@ void main() {
         statusCode: 403,
         errorCode: 'storage_quota_exceeded',
       ),
-      isTrue,
+      isFalse,
     );
     expect(
       BackgroundSync.shouldContinueManagedVaultPullAfterPushFailure(
