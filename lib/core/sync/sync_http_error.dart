@@ -70,6 +70,7 @@ void reopenManagedVaultWriteGateOnSuccess(SyncEngine? engine) {
 bool shouldRollbackManagedVaultBootstrapOnError(Object error) {
   final statusCode = extractSyncHttpStatusCode(error);
   final errorCode = extractSyncErrorCode(error);
+  final recoveryBlockedReason = extractManagedVaultRecoveryBlockedReason(error);
 
   if (statusCode == 400 && errorCode == 'invalid_batch') {
     return true;
@@ -78,6 +79,10 @@ bool shouldRollbackManagedVaultBootstrapOnError(Object error) {
     return true;
   }
   if (statusCode == 403 && errorCode == 'storage_quota_exceeded') {
+    return true;
+  }
+  if (recoveryBlockedReason == 'local_unpushed_changes' ||
+      recoveryBlockedReason == 'local_media_backfill_pending') {
     return true;
   }
   return false;

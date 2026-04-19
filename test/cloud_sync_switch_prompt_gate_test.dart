@@ -573,6 +573,124 @@ void main() {
   });
 
   testWidgets(
+      'Switching to Cloud rolls back config when recovery is blocked by local unpushed changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _LocalUnpushedChangesRecoveryBlockedPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(
+      find.textContaining(
+        'Local changes still need to upload before cloud recovery can continue.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'Switching to Cloud rolls back config when recovery is blocked by local media backfill',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _LocalMediaBackfillRecoveryBlockedPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(
+      find.textContaining(
+        'Local media still needs cloud backfill before recovery can continue.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
       'Switching to Cloud retries push after pull recovers generation mismatch',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -1166,6 +1284,41 @@ final class _InvalidBatchPushBackend extends _Backend {
     calls.add('syncManagedVaultPush');
     throw Exception(
       'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"duplicate_client_op_id"}',
+    );
+  }
+}
+
+final class _LocalUnpushedChangesRecoveryBlockedPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw StateError(
+        'managed-vault v2 recovery blocked: local_unpushed_changes');
+  }
+}
+
+final class _LocalMediaBackfillRecoveryBlockedPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw StateError(
+      'managed-vault v2 recovery blocked: local_media_backfill_pending',
     );
   }
 }
