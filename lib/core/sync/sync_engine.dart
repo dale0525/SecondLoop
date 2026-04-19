@@ -283,6 +283,11 @@ final class SyncEngine {
     return true;
   }
 
+  bool _shouldReopenWriteGateAfterSuccessfulPull(SyncWriteGateState gate) {
+    return gate.kind == SyncWriteGateKind.paymentRequired ||
+        gate.kind == SyncWriteGateKind.storageQuotaExceeded;
+  }
+
   void _setWriteGate(SyncWriteGateState next) {
     if (writeGate.value == next) return;
     writeGate.value = next;
@@ -488,7 +493,7 @@ final class SyncEngine {
       final pullResult = await _pullWithResult(config);
 
       if (config.backendType == SyncBackendType.managedVault &&
-          writeGate.value.kind == SyncWriteGateKind.paymentRequired) {
+          _shouldReopenWriteGateAfterSuccessfulPull(writeGate.value)) {
         _setWriteGate(const SyncWriteGateState.open());
       }
 

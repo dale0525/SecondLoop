@@ -485,7 +485,7 @@ void main() {
   });
 
   testWidgets(
-      'Entitled subscription only reopens payment-required gate, not grace read-only',
+      'Entitled subscription reopens payment and storage-quota gates, not grace read-only',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -542,6 +542,17 @@ void main() {
       expect(engine!.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
 
       engine!.writeGate.value = const SyncWriteGateState.paymentRequired();
+      subscription.status = SubscriptionStatus.unknown;
+      await tester.pump();
+      subscription.status = SubscriptionStatus.entitled;
+      await tester.pump();
+
+      expect(engine!.writeGate.value.kind, SyncWriteGateKind.open);
+
+      engine!.writeGate.value = const SyncWriteGateState.storageQuotaExceeded(
+        usedBytes: 50,
+        limitBytes: 50,
+      );
       subscription.status = SubscriptionStatus.unknown;
       await tester.pump();
       subscription.status = SubscriptionStatus.entitled;

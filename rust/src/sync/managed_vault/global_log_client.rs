@@ -559,6 +559,9 @@ pub(super) fn push_v2(
                 };
                 let _ = super::blob_repair::process_pending_blob_repairs(&upload_ctx, 8)?;
             }
+            if total_pushed > 0 {
+                super::maybe_run_managed_vault_retention(conn, &scope_id)?;
+            }
             return Ok(total_pushed);
         }
 

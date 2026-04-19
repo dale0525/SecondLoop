@@ -118,14 +118,21 @@ fn backend_ack_seq(
         )?
         .unwrap_or(0),
         OplogRetentionBackend::ManagedVault => {
-            let device_key = format!("managed_vault.last_pushed_seq:{scope_id}:{device_id}");
-            if let Some(value) = kv_get_i64(conn, &device_key)? {
+            let v2_device_key = format!("managed_vault_v2.last_pushed_seq:{scope_id}:{device_id}");
+            let legacy_device_key = format!("managed_vault.last_pushed_seq:{scope_id}:{device_id}");
+            if let Some(value) = kv_get_i64(conn, &v2_device_key)? {
+                value
+            } else if let Some(value) = kv_get_i64(conn, &legacy_device_key)? {
                 value
             } else {
                 kv_get_i64(
                     conn,
-                    format!("managed_vault.last_pushed_seq:{scope_id}").as_str(),
+                    format!("managed_vault_v2.last_pushed_seq:{scope_id}").as_str(),
                 )?
+                .or(kv_get_i64(
+                    conn,
+                    format!("managed_vault.last_pushed_seq:{scope_id}").as_str(),
+                )?)
                 .unwrap_or(0)
             }
         }
@@ -143,7 +150,8 @@ fn ack_seq_floor_across_scopes(conn: &Connection, device_id: &str, current: i64)
         r#"SELECT key, value
            FROM kv
            WHERE key LIKE 'sync.last_pushed_seq:%'
-              OR key LIKE 'managed_vault.last_pushed_seq:%'"#,
+              OR key LIKE 'managed_vault.last_pushed_seq:%'
+              OR key LIKE 'managed_vault_v2.last_pushed_seq:%'"#,
     )?;
     let mut rows = stmt.query([])?;
 
@@ -162,7 +170,10 @@ fn ack_seq_floor_across_scopes(conn: &Connection, device_id: &str, current: i64)
             continue;
         }
 
-        if let Some(suffix) = key.strip_prefix("managed_vault.last_pushed_seq:") {
+        let managed_suffix = key
+            .strip_prefix("managed_vault.last_pushed_seq:")
+            .or_else(|| key.strip_prefix("managed_vault_v2.last_pushed_seq:"));
+        if let Some(suffix) = managed_suffix {
             let is_legacy = !suffix.contains(':');
             let is_device_scoped = suffix.ends_with(format!(":{device_id}").as_str());
             if is_legacy || is_device_scoped {
@@ -518,4 +529,3 @@ ORDER BY updated_at ASC, attachment_sha256 ASC
 
     Ok(ops_inserted)
 }
-

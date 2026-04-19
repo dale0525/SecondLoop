@@ -126,7 +126,9 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     if (engine == null || subscriptionStatus != SubscriptionStatus.entitled) {
       return;
     }
-    if (engine.writeGate.value.kind == SyncWriteGateKind.paymentRequired) {
+    final gateKind = engine.writeGate.value.kind;
+    if (gateKind == SyncWriteGateKind.paymentRequired ||
+        gateKind == SyncWriteGateKind.storageQuotaExceeded) {
       engine.writeGate.value = const SyncWriteGateState.open();
     }
   }

@@ -517,6 +517,45 @@ void main() {
   });
 
   test(
+      'managed vault successful pull reopens storage quota gate for later pushes',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultStorageQuotaRecoveryRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push']);
+      expect(
+        engine.writeGate.value.kind,
+        SyncWriteGateKind.storageQuotaExceeded,
+      );
+
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull']);
+      expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull', 'push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test(
       'managed vault keeps retry-after-recovery intent across transient pull failures',
       () {
     fakeAsync((async) {
@@ -814,6 +853,30 @@ final class _ManagedVaultPaymentRecoveryRunner implements SyncRunner {
     if (_pushCount == 1) {
       throw Exception(
         'managed-vault v2 push failed: HTTP 402 {"error":"payment_required"}',
+      );
+    }
+    return 1;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    return 0;
+  }
+}
+
+final class _ManagedVaultStorageQuotaRecoveryRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  var _pushCount = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    _pushCount += 1;
+    if (_pushCount == 1) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 403 {"error":"storage_quota_exceeded","used_bytes":100,"limit_bytes":100}',
       );
     }
     return 1;
