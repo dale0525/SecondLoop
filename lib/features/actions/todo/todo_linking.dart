@@ -175,6 +175,40 @@ TodoUpdateIntent inferTodoUpdateIntent(String text) {
   return const TodoUpdateIntent(newStatus: 'in_progress', isExplicit: false);
 }
 
+bool looksLikeTodoFollowupEdit(String text) {
+  final normalized = text.trim().toLowerCase();
+  if (normalized.isEmpty) return false;
+
+  const editCues = <String>[
+    '改到',
+    '改成',
+    '改为',
+    '改下',
+    '改一下',
+    '延期',
+    '延后',
+    '推迟',
+    '推后',
+    '顺延',
+    '挪到',
+    'move ',
+    'move it',
+    'move this',
+    'change ',
+    'change it',
+    'change this',
+    'reschedule',
+    'postpone',
+    'push to',
+    'push it',
+    'push this',
+  ];
+
+  return editCues.any(
+    (cue) => cue.isNotEmpty && normalized.contains(cue),
+  );
+}
+
 List<TodoLinkCandidate> rankTodoCandidates(
   String message,
   List<TodoLinkTarget> todos, {

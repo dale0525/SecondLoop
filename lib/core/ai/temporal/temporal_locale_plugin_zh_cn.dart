@@ -5,12 +5,13 @@ import 'temporal_resolution.dart';
 
 final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
   static final Map<int, DateTime> _lunarNewYearDay = <int, DateTime>{
+    2024: DateTime(2024, 2, 10),
+    2025: DateTime(2025, 1, 29),
     2026: DateTime(2026, 2, 17),
-  };
-
-  static final Map<int, DateTime> _firstWorkingDayAfterFestival =
-      <int, DateTime>{
-    2026: DateTime(2026, 2, 24),
+    2027: DateTime(2027, 2, 6),
+    2028: DateTime(2028, 1, 26),
+    2029: DateTime(2029, 2, 13),
+    2030: DateTime(2030, 2, 3),
   };
 
   @override
@@ -21,13 +22,6 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
   @override
   TemporalCandidate? resolve(TemporalPluginRequest request) {
     final text = request.normalizedText;
-    final year = request.nowLocal.year;
-    final newYearDay = _lunarNewYearDay[year];
-    final firstWorkingDay = _firstWorkingDayAfterFestival[year];
-    if (newYearDay == null || firstWorkingDay == null) {
-      return null;
-    }
-
     final metadata = TemporalMetadata(
       inferredCalendarSystem: 'chinese_lunar',
       normalizedExpression: request.normalizedText,
@@ -36,6 +30,11 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     if (text.contains('年初一之后第一个工作日') ||
         text.contains('年初一后第一个工作日') ||
         text.contains('节后第一个工作日')) {
+      final firstWorkingDay = _resolveNextFestivalBoundary(
+        request.nowLocal,
+        useFirstWorkingDay: true,
+      );
+      if (firstWorkingDay == null) return null;
       return TemporalCandidate(
         resolver: TemporalResolver.localePlugin,
         confidence: 0.94,
@@ -46,6 +45,11 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     }
 
     if (text.contains('年初一')) {
+      final newYearDay = _resolveNextFestivalBoundary(
+        request.nowLocal,
+        useFirstWorkingDay: false,
+      );
+      if (newYearDay == null) return null;
       return TemporalCandidate(
         resolver: TemporalResolver.localePlugin,
         confidence: 0.92,
@@ -56,6 +60,11 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     }
 
     if (text.contains('春节后')) {
+      final firstWorkingDay = _resolveNextFestivalBoundary(
+        request.nowLocal,
+        useFirstWorkingDay: true,
+      );
+      if (firstWorkingDay == null) return null;
       return TemporalCandidate(
         resolver: TemporalResolver.localePlugin,
         confidence: 0.82,
@@ -67,5 +76,33 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     }
 
     return null;
+  }
+
+  static DateTime? _resolveNextFestivalBoundary(
+    DateTime nowLocal, {
+    required bool useFirstWorkingDay,
+  }) {
+    final today = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+    final years = _lunarNewYearDay.keys.toList()..sort();
+    for (final year in years) {
+      final newYearDay = _lunarNewYearDay[year];
+      if (newYearDay == null) continue;
+      final candidate = useFirstWorkingDay
+          ? _firstWorkingDayAfterFestival(newYearDay)
+          : newYearDay;
+      if (!candidate.isBefore(today)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  static DateTime _firstWorkingDayAfterFestival(DateTime newYearDay) {
+    var candidate = newYearDay.add(const Duration(days: 7));
+    while (candidate.weekday == DateTime.saturday ||
+        candidate.weekday == DateTime.sunday) {
+      candidate = candidate.add(const Duration(days: 1));
+    }
+    return candidate;
   }
 }

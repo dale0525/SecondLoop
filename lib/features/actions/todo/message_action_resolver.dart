@@ -409,6 +409,7 @@ class MessageActionResolver {
 
     final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
     final updateIntent = inferTodoUpdateIntent(raw);
+    final followupEditCue = looksLikeTodoFollowupEdit(raw);
     final followupTemporal = TemporalEngine.resolve(
       text: raw,
       nowLocal: nowLocal,
@@ -440,7 +441,8 @@ class MessageActionResolver {
                 (top.score - secondScore) >= 500);
 
         if (highConfidence &&
-            (updateIntent.isExplicit || followupTemporal.dueAtLocal != null)) {
+            (updateIntent.isExplicit ||
+                (followupTemporal.dueAtLocal != null && followupEditCue))) {
           return MessageActionFollowUpDecision(
             todoId: top.target.id,
             newStatus: updateIntent.isExplicit ? updateIntent.newStatus : null,

@@ -191,4 +191,54 @@ void main() {
           reason: 'text=${c.text} locale=${c.locale}');
     }
   });
+
+  test('retrieval_window treats yesterday as a past-only range', () {
+    final result = TemporalEngine.resolve(
+      text: 'yesterday',
+      nowLocal: now,
+      locale: const Locale('en'),
+      timezone: '',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.retrievalWindow,
+      allowEnhancement: false,
+    );
+
+    expect(result.semantics, TemporalSemantics.rangePast);
+    expect(result.startLocal, DateTime(2026, 2, 3));
+    expect(result.endLocal, DateTime(2026, 2, 4));
+  });
+
+  test('todo_due keeps same-day weekday on today when no explicit time', () {
+    final result = TemporalEngine.resolve(
+      text: '周三',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      timezone: '',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.dueAtLocal, DateTime(2026, 2, 4, 21, 0));
+    expect(result.metadata.normalizedExpression, '周三');
+  });
+
+  test('todo_followup_due keeps zh-CN holiday expressions working after 2026',
+      () {
+    final result = TemporalEngine.resolve(
+      text: '把报销改到节后第一个工作日',
+      nowLocal: DateTime(2027, 2, 1, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoFollowupDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.resolver, TemporalResolver.localePlugin);
+    expect(result.dueAtLocal, DateTime(2027, 2, 15, 21, 0));
+    expect(result.metadata.inferredCalendarSystem, 'chinese_lunar');
+  });
 }

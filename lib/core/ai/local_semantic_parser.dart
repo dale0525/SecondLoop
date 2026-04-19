@@ -94,10 +94,7 @@ final class LocalSemanticParser {
           allowEnhancement: false,
           dayEndMinutes: dayEndMinutes,
         );
-        final looksLikeFollowupEdit = raw.contains('改到') ||
-            raw.contains('改成') ||
-            raw.contains('改为') ||
-            raw.toLowerCase().contains('move ');
+        final looksLikeFollowupEdit = looksLikeTodoFollowupEdit(raw);
         final hasAutomationSignal = updateIntent.isExplicit ||
             dueForFollowup.dueAtLocal != null ||
             dueForCreate.dueAtLocal != null ||

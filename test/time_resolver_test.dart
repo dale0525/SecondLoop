@@ -104,6 +104,20 @@ void main() {
     expect(res.candidates.single.dueAtLocal, DateTime(2026, 1, 26, 21, 0));
   });
 
+  test('resolves same-day weekday (zh) to today at day end', () {
+    final now = DateTime(2026, 2, 4, 10, 0); // Wednesday
+    final res = LocalTimeResolver.resolve(
+      '周三报销',
+      now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(res, isNotNull);
+    expect(res!.kind, 'weekday');
+    expect(res.candidates.single.dueAtLocal, DateTime(2026, 2, 4, 21, 0));
+  });
+
   test('resolves time-only (zh) into today/tomorrow candidates', () {
     final now = DateTime(2026, 1, 24, 12, 0);
     final res = LocalTimeResolver.resolve(

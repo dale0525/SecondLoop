@@ -97,7 +97,7 @@ final class TemporalEngine {
         final end = start.add(const Duration(days: 1));
         final todayStart =
             DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-        final semantics = end.isBefore(todayStart)
+        final semantics = !end.isAfter(todayStart)
             ? TemporalSemantics.rangePast
             : start.isAfter(todayStart)
                 ? TemporalSemantics.rangeFuture

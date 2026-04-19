@@ -91,6 +91,24 @@ void main() {
     expect(follow.dueAtLocal, isNotNull);
   });
 
+  test('time plus matching title does not force followup without edit cue', () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      '周五报销',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: '报销', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, '报销');
+    expect(create.dueAtLocal, DateTime(2026, 2, 6, 21, 0));
+  });
+
   test(
       'followup keeps day-after-tomorrow semantics for localized relative days',
       () {

@@ -475,7 +475,7 @@ final class TemporalRuleResolver {
           timeOfDay.minute,
         );
       }
-      if (point.isBefore(nowLocal)) {
+      if (timeOfDay != null && point.isBefore(nowLocal)) {
         point = point.add(const Duration(days: 7));
       }
       return TemporalCandidate(
