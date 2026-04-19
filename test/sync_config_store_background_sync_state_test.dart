@@ -78,4 +78,34 @@ void main() {
     );
     expect(cleared, isNull);
   });
+
+  test('SyncConfigStore persists background sync local repair block state',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+
+    await store.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+    );
+
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+      ),
+      isTrue,
+    );
+
+    await store.writeBackgroundSyncRepairRequired(
+      false,
+      backendType: SyncBackendType.managedVault,
+    );
+
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+      ),
+      isFalse,
+    );
+  });
 }

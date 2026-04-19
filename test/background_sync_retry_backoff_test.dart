@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/sync/background_sync.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
   test('retryBackoffDelayForFailureCount grows exponentially and caps', () {
@@ -206,6 +207,34 @@ void main() {
         errorCode: 'invalid_batch',
       ),
       contains('Local sync data'),
+    );
+  });
+
+  test('invalid managed-vault batches enter a persistent local-repair block',
+      () {
+    expect(
+      BackgroundSync.shouldBlockBackgroundSyncForFailure(
+        backendType: SyncBackendType.managedVault,
+        statusCode: 400,
+        errorCode: 'invalid_batch',
+      ),
+      isTrue,
+    );
+    expect(
+      BackgroundSync.shouldBlockBackgroundSyncForFailure(
+        backendType: SyncBackendType.managedVault,
+        statusCode: 503,
+        errorCode: null,
+      ),
+      isFalse,
+    );
+    expect(
+      BackgroundSync.shouldBlockBackgroundSyncForFailure(
+        backendType: SyncBackendType.webdav,
+        statusCode: 400,
+        errorCode: 'invalid_batch',
+      ),
+      isFalse,
     );
   });
 }

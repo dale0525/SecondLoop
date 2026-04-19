@@ -75,6 +75,8 @@ final class SyncConfigStore {
       'cloud_media_backup_backfill_done:';
   static const _kBackgroundSyncResultPrefix = 'sync_background_result:';
   static const _kBackgroundSyncBackoffPrefix = 'sync_background_backoff:';
+  static const _kBackgroundSyncRepairRequiredPrefix =
+      'sync_background_repair_required:';
   static const _kSyncRefreshV2Enabled = 'sync_refresh_v2_enabled'; // 1|0
   static const _kSyncBackgroundDiagV1Enabled =
       'sync_background_diag_v1_enabled'; // 1|0
@@ -398,6 +400,24 @@ final class SyncConfigStore {
       return;
     }
     await _writeConfigUpdates({key: jsonEncode(state.toJson())});
+  }
+
+  Future<bool> readBackgroundSyncRepairRequired({
+    required SyncBackendType backendType,
+  }) async {
+    final key =
+        '$_kBackgroundSyncRepairRequiredPrefix${_backendTypeToken(backendType)}';
+    final raw = (await _loadConfigMap())[key];
+    return raw == '1';
+  }
+
+  Future<void> writeBackgroundSyncRepairRequired(
+    bool required, {
+    required SyncBackendType backendType,
+  }) async {
+    final key =
+        '$_kBackgroundSyncRepairRequiredPrefix${_backendTypeToken(backendType)}';
+    await _writeConfigUpdates({key: required ? '1' : null});
   }
 
   String cloudMediaBackupBackfillScopeId(SyncConfig config) {

@@ -377,7 +377,20 @@ final class SyncEngine {
             return;
           }
         }
-        final prioritizePush = await _shouldPrioritizePushOverPull();
+        final config = await loadConfig();
+        final backendType = config?.backendType;
+        if (backendType == SyncBackendType.managedVault &&
+            _pendingPullAfterPush &&
+            !_pullQueued) {
+          _pullQueued = true;
+        }
+        final prioritizePush = shouldPrioritizePushOverPullForTest(
+          pushQueued: _pushQueued,
+          pullQueued: _pullQueued,
+          pendingPullAfterPush: _pendingPullAfterPush,
+          retryPushAfterRecoveryPull: _retryPushAfterRecoveryPull,
+          backendType: backendType,
+        );
         if (_pushQueued && (!_pullQueued || prioritizePush)) {
           _pushQueued = false;
           await _pushOnce();
@@ -385,8 +398,11 @@ final class SyncEngine {
         }
         if (_pullQueued) {
           _pullQueued = false;
-          _pendingPullAfterPush = false;
-          await _pullOnce();
+          final requiredPull = _pendingPullAfterPush;
+          final succeeded = await _pullOnce();
+          if (requiredPull && !succeeded) {
+            return;
+          }
         }
       }
     } finally {
@@ -394,17 +410,6 @@ final class SyncEngine {
         _finishStop(preserveQueuedPush: preserveQueuedPushOnStop);
       }
     }
-  }
-
-  Future<bool> _shouldPrioritizePushOverPull() async {
-    final config = await loadConfig();
-    return shouldPrioritizePushOverPullForTest(
-      pushQueued: _pushQueued,
-      pullQueued: _pullQueued,
-      pendingPullAfterPush: _pendingPullAfterPush,
-      retryPushAfterRecoveryPull: _retryPushAfterRecoveryPull,
-      backendType: config?.backendType,
-    );
   }
 
   @visibleForTesting
@@ -495,13 +500,14 @@ final class SyncEngine {
     }
   }
 
-  Future<void> _pullOnce() async {
+  Future<bool> _pullOnce() async {
     SyncConfig? config;
     try {
       config = await loadConfig();
-      if (!_running || config == null) return;
+      if (!_running || config == null) return true;
       final pullResult = await _pullWithResult(config);
 
+      _pendingPullAfterPush = false;
       if (config.backendType == SyncBackendType.managedVault &&
           _shouldReopenWriteGateAfterSuccessfulPull(writeGate.value)) {
         _setWriteGate(const SyncWriteGateState.open());
@@ -522,10 +528,11 @@ final class SyncEngine {
           _notifyChange();
         }
       }
+      return true;
     } catch (e) {
       if (config?.backendType != SyncBackendType.managedVault) {
         // Best-effort: avoid crashing the app on transient sync errors.
-        return;
+        return false;
       }
 
       final message = e.toString();
@@ -536,6 +543,7 @@ final class SyncEngine {
       }
 
       // Best-effort: avoid crashing the app on transient sync errors.
+      return false;
     } finally {}
   }
 

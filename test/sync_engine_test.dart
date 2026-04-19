@@ -619,6 +619,33 @@ void main() {
   });
 
   test(
+      'managed vault keeps mandatory post-push pull queued across transient pull failures',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultPostPushPullFailureRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+      expect(runner.calls, <String>['push', 'pull']);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+      expect(runner.calls, <String>['push', 'pull', 'pull', 'push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test(
       'managed vault mandatory pull after push is not preempted by new push work',
       () async {
     final runner = _ManagedVaultPostPushPullOrderingRunner();
@@ -887,6 +914,32 @@ final class _ManagedVaultRecoveryPullFailureRunner implements SyncRunner {
     if (_pullCount == 1) {
       throw Exception(
           'managed-vault v2 pull failed: HTTP 503 {"error":"temporary"}');
+    }
+    return 0;
+  }
+}
+
+final class _ManagedVaultPostPushPullFailureRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  var _pushCount = 0;
+  var _pullCount = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    _pushCount += 1;
+    return _pushCount;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    _pullCount += 1;
+    if (_pullCount == 1) {
+      throw Exception(
+        'managed-vault v2 pull failed: HTTP 503 {"error":"temporary"}',
+      );
     }
     return 0;
   }

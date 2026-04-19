@@ -186,6 +186,26 @@ final class BackgroundSync {
 
     final backgroundDiagEnabled = await store.readSyncBackgroundDiagV1Enabled();
     final backoffEnabled = await store.readSyncBackoffV1Enabled();
+    final repairRequired = await store.readBackgroundSyncRepairRequired(
+      backendType: config.backendType,
+    );
+    if (repairRequired) {
+      if (backgroundDiagEnabled) {
+        await _writeBackgroundResult(
+          store: store,
+          backendType: config.backendType,
+          direction: SyncBackgroundDirection.push,
+          result: _BackgroundSyncOpResult.skipped(
+            durationMs: 0,
+            userMessage:
+                'Local sync data needs repair before cloud sync can continue.',
+          ),
+          retryCount: null,
+        );
+      }
+      await rescheduleIfNeeded();
+      return true;
+    }
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     if (backoffEnabled) {
@@ -292,6 +312,14 @@ final class BackgroundSync {
           managedVaultIdToken: idToken,
         );
       }
+      await store.writeBackgroundSyncRepairRequired(
+        shouldBlockBackgroundSyncForFailure(
+          backendType: config.backendType,
+          statusCode: pushResult.statusCode,
+          errorCode: pushResult.errorCode,
+        ),
+        backendType: config.backendType,
+      );
 
       final retryableFailure = switch ((
         pushResult.retryable,
@@ -621,6 +649,17 @@ final class BackgroundSync {
       return true;
     }
     return false;
+  }
+
+  @visibleForTesting
+  static bool shouldBlockBackgroundSyncForFailure({
+    required SyncBackendType backendType,
+    int? statusCode,
+    String? errorCode,
+  }) {
+    return backendType == SyncBackendType.managedVault &&
+        statusCode == 400 &&
+        errorCode == 'invalid_batch';
   }
 
   @visibleForTesting

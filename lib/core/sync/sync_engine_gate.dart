@@ -357,6 +357,10 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
             vaultId: config.remoteRoot,
             idToken: idToken,
           );
+          await _configStore.writeBackgroundSyncRepairRequired(
+            false,
+            backendType: SyncBackendType.managedVault,
+          );
           _managedVaultMediaUploadPending = true;
           return pushed;
         }(),
