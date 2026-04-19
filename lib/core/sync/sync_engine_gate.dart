@@ -208,7 +208,27 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   final SyncConfigStore _configStore;
   final Uint8List _sessionKey;
   final Future<String?> Function()? _idTokenGetter;
-  bool _managedVaultMediaUploadPending = false;
+
+  String _managedVaultMediaUploadScopeId(SyncConfig config) {
+    if (config.backendType != SyncBackendType.managedVault) return '';
+    return _configStore.cloudMediaBackupBackfillScopeId(config);
+  }
+
+  Future<bool> _readManagedVaultMediaUploadPending(SyncConfig config) {
+    return _configStore.readManagedVaultMediaUploadPending(
+      scopeId: _managedVaultMediaUploadScopeId(config),
+    );
+  }
+
+  Future<void> _writeManagedVaultMediaUploadPending(
+    SyncConfig config,
+    bool pending,
+  ) {
+    return _configStore.writeManagedVaultMediaUploadPending(
+      scopeId: _managedVaultMediaUploadScopeId(config),
+      pending: pending,
+    );
+  }
 
   Future<CloudMediaBackupNetwork> _safeGetCloudMediaBackupNetwork({
     required bool wifiOnly,
@@ -246,11 +266,11 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
     );
   }
 
-  Future<void> _runCloudMediaBackupIfEnabled(SyncConfig config) async {
-    if (config.backendType == SyncBackendType.localDir) return;
+  Future<bool> _runCloudMediaBackupIfEnabled(SyncConfig config) async {
+    if (config.backendType == SyncBackendType.localDir) return false;
 
     final enabled = await _configStore.readCloudMediaBackupEnabled();
-    if (!enabled) return;
+    if (!enabled) return false;
 
     final wifiOnly = await _configStore.readCloudMediaBackupWifiOnly();
 
@@ -269,7 +289,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
     switch (config.backendType) {
       case SyncBackendType.webdav:
         final baseUrl = config.baseUrl;
-        if (baseUrl == null || baseUrl.trim().isEmpty) return;
+        if (baseUrl == null || baseUrl.trim().isEmpty) return false;
         runner = CloudMediaBackupRunner(
           store: mediaStore,
           client: WebDavCloudMediaBackupClient(
@@ -290,11 +310,11 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
         break;
       case SyncBackendType.managedVault:
         final getter = _idTokenGetter;
-        if (getter == null) return;
+        if (getter == null) return true;
         final idToken = await getter();
-        if (idToken == null || idToken.trim().isEmpty) return;
+        if (idToken == null || idToken.trim().isEmpty) return true;
         final baseUrl = config.baseUrl;
-        if (baseUrl == null || baseUrl.trim().isEmpty) return;
+        if (baseUrl == null || baseUrl.trim().isEmpty) return true;
         runner = CloudMediaBackupRunner(
           store: mediaStore,
           client: ManagedVaultCloudMediaBackupClient(
@@ -313,14 +333,21 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
         );
         break;
       case SyncBackendType.localDir:
-        return;
+        return false;
     }
 
     try {
       await runner.runOnce(allowCellular: false);
     } catch (_) {
       // Best-effort: media uploads should not block normal sync.
-      return;
+      return config.backendType == SyncBackendType.managedVault;
+    }
+    if (config.backendType != SyncBackendType.managedVault) return false;
+    try {
+      final summary = await backend.cloudMediaBackupSummary(_sessionKey);
+      return summary.pending.toInt() > 0 || summary.failed.toInt() > 0;
+    } catch (_) {
+      return true;
     }
   }
 
@@ -361,7 +388,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
             false,
             backendType: SyncBackendType.managedVault,
           );
-          _managedVaultMediaUploadPending = true;
+          await _writeManagedVaultMediaUploadPending(config, true);
           return pushed;
         }(),
     };
@@ -403,9 +430,9 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
         await _runCloudMediaBackupIfEnabled(config);
         break;
       case SyncBackendType.managedVault:
-        if (_managedVaultMediaUploadPending) {
-          await _runCloudMediaBackupIfEnabled(config);
-          _managedVaultMediaUploadPending = false;
+        if (await _readManagedVaultMediaUploadPending(config)) {
+          final hasPendingUploads = await _runCloudMediaBackupIfEnabled(config);
+          await _writeManagedVaultMediaUploadPending(config, hasPendingUploads);
         }
         break;
       case SyncBackendType.localDir:

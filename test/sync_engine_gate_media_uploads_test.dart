@@ -404,6 +404,107 @@ void main() {
     }
   });
 
+  testWidgets(
+      'Managed-vault media uploads stay pending across pulls until the queue is clear',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(syncKey);
+    await store.writeCloudMediaBackupEnabled(true);
+    await store.writeCloudMediaBackupWifiOnly(true);
+    final pendingScopeId = store.cloudMediaBackupBackfillScopeId(
+      SyncConfig.managedVault(
+        syncKey: syncKey,
+        vaultId: 'vault-1',
+        baseUrl: 'https://vault.example.com',
+      ),
+    );
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultRetryingUploadBackend(
+        dueBackups: [
+          const CloudMediaBackup(
+            attachmentSha256: 'a',
+            desiredVariant: 'original',
+            byteLen: 0,
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            updatedAtMs: 0,
+          ),
+        ],
+      );
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultUploadAttachmentCalls < 1 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultUploadAttachmentCalls, 1);
+      expect(backend.markUploadedCalls, 0);
+      expect(
+        await store.readManagedVaultMediaUploadPending(scopeId: pendingScopeId),
+        isTrue,
+      );
+
+      engine!.triggerPullNow();
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultUploadAttachmentCalls < 2 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultPullCalls, greaterThanOrEqualTo(2));
+      expect(backend.managedVaultUploadAttachmentCalls, 2);
+      expect(backend.markUploadedCalls, 1);
+      expect(
+        await store.readManagedVaultMediaUploadPending(scopeId: pendingScopeId),
+        isFalse,
+      );
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
   testWidgets('SyncEngineGate rebuild swaps managed-vault auth token source',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -724,6 +825,18 @@ final class _RecordingBackend extends TestAppBackend {
   }
 
   @override
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+    final pendingCount = _dueBackups
+        .where((b) => !_uploaded.contains(b.attachmentSha256))
+        .length;
+    return CloudMediaBackupSummary(
+      pending: pendingCount,
+      failed: 0,
+      uploaded: _uploaded.length,
+    );
+  }
+
+  @override
   Future<bool> syncWebdavUploadAttachmentBytes(
     Uint8List key,
     Uint8List syncKey, {
@@ -844,6 +957,66 @@ final class _ManagedVaultPullOnlyRecoveryBackend
   }) async {
     managedVaultPullCalls++;
     return 0;
+  }
+}
+
+final class _ManagedVaultRetryingUploadBackend
+    extends _ManagedVaultRecordingBackend {
+  _ManagedVaultRetryingUploadBackend({super.dueBackups});
+
+  final Set<String> _failedUploads = <String>{};
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPullCalls++;
+    return 0;
+  }
+
+  @override
+  Future<bool> syncManagedVaultUploadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required String sha256,
+  }) async {
+    managedVaultUploadAttachmentCalls++;
+    if (!_failedUploads.contains(sha256)) {
+      _failedUploads.add(sha256);
+      throw Exception('transient managed-vault media upload failure');
+    }
+    return true;
+  }
+
+  @override
+  Future<void> markCloudMediaBackupFailed(
+    Uint8List key, {
+    required String attachmentSha256,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {}
+
+  @override
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+    final pendingCount = _dueBackups
+        .where((b) => !_uploaded.contains(b.attachmentSha256))
+        .length;
+    final failedCount =
+        _failedUploads.where((sha256) => !_uploaded.contains(sha256)).length;
+    return CloudMediaBackupSummary(
+      pending: pendingCount,
+      failed: failedCount,
+      uploaded: _uploaded.length,
+    );
   }
 }
 

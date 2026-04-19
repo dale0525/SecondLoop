@@ -73,6 +73,8 @@ final class SyncConfigStore {
       'cloud_media_backup_wifi_only'; // 1|0
   static const _kCloudMediaBackupBackfillDonePrefix =
       'cloud_media_backup_backfill_done:';
+  static const _kManagedVaultMediaUploadPendingPrefix =
+      'managed_vault_media_upload_pending:';
   static const _kBackgroundSyncResultPrefix = 'sync_background_result:';
   static const _kBackgroundSyncBackoffPrefix = 'sync_background_backoff:';
   static const _kBackgroundSyncRepairRequiredPrefix =
@@ -342,6 +344,26 @@ final class SyncConfigStore {
     if (trimmedScope.isEmpty) return;
     final key = '$_kCloudMediaBackupBackfillDonePrefix$trimmedScope';
     await _writeConfigUpdates({key: done ? '1' : null});
+  }
+
+  Future<bool> readManagedVaultMediaUploadPending({
+    required String scopeId,
+  }) async {
+    final trimmedScope = scopeId.trim();
+    if (trimmedScope.isEmpty) return false;
+    final key = '$_kManagedVaultMediaUploadPendingPrefix$trimmedScope';
+    final raw = (await _loadConfigMap())[key];
+    return raw == '1';
+  }
+
+  Future<void> writeManagedVaultMediaUploadPending({
+    required String scopeId,
+    required bool pending,
+  }) async {
+    final trimmedScope = scopeId.trim();
+    if (trimmedScope.isEmpty) return;
+    final key = '$_kManagedVaultMediaUploadPendingPrefix$trimmedScope';
+    await _writeConfigUpdates({key: pending ? '1' : null});
   }
 
   Future<SyncBackgroundResult?> readBackgroundSyncResult({
