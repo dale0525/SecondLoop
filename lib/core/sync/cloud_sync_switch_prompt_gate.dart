@@ -83,6 +83,9 @@ final class _CloudSyncSwitchPromptGateState
 
   String _managedVaultRecoveredMessageForGate(SyncWriteGateState gate) {
     final t = context.t;
+    if (gate.kind == SyncWriteGateKind.localRepairRequired) {
+      return t.sync.cloudManagedVault.localSyncDataRepairRequired;
+    }
     if (gate.kind == SyncWriteGateKind.paymentRequired) {
       return t.sync.cloudManagedVault.paymentRequired;
     }

@@ -38,11 +38,12 @@ String? extractManagedVaultRecoveryBlockedReason(Object error) {
 SyncWriteGateState? managedVaultWriteGateStateForError(Object error) {
   final statusCode = extractSyncHttpStatusCode(error);
   final errorCode = extractSyncErrorCode(error);
+  if (statusCode == 400 && errorCode == 'invalid_batch') {
+    return const SyncWriteGateState.localRepairRequired();
+  }
   if (statusCode == 403 && errorCode == 'grace_readonly') {
     final graceUntilMs = extractSyncErrorIntField(error, 'grace_until_ms');
-    if (graceUntilMs != null) {
-      return SyncWriteGateState.graceReadOnly(graceUntilMs);
-    }
+    return SyncWriteGateState.graceReadOnly(graceUntilMs);
   }
   if (statusCode == 403 && errorCode == 'storage_quota_exceeded') {
     return SyncWriteGateState.storageQuotaExceeded(

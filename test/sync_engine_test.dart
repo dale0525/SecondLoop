@@ -419,6 +419,42 @@ void main() {
     });
   });
 
+  test('managed vault invalid_batch stops subsequent automatic pushes', () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultInvalidBatchRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(milliseconds: 10),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.notifyLocalMutation();
+      async.flushMicrotasks();
+      async.elapse(const Duration(milliseconds: 10));
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.notifyLocalMutation();
+      async.flushMicrotasks();
+      async.elapse(const Duration(milliseconds: 10));
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.stop();
+    });
+  });
+
   test('managed vault recovery pull is not preempted by newly queued push work',
       () async {
     final recoveryDecisionStarted = Completer<void>();
@@ -769,6 +805,21 @@ final class _ManagedVaultRecoveryRunner implements SyncRunner {
     calls.add('pull');
     return 0;
   }
+}
+
+final class _ManagedVaultInvalidBatchRunner implements SyncRunner {
+  int pushCalls = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    pushCalls += 1;
+    throw Exception(
+      'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"duplicate_client_op_id"}',
+    );
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async => 0;
 }
 
 final class _ManagedVaultRecoveryOrderingRunner

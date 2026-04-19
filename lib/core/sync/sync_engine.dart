@@ -97,6 +97,7 @@ enum SyncWriteGateKind {
   graceReadOnly,
   paymentRequired,
   storageQuotaExceeded,
+  localRepairRequired,
 }
 
 final class SyncWriteGateState {
@@ -115,7 +116,7 @@ final class SyncWriteGateState {
           quotaLimitBytes: null,
         );
 
-  const SyncWriteGateState.graceReadOnly(int graceUntilMs)
+  const SyncWriteGateState.graceReadOnly([int? graceUntilMs])
       : this._(
           kind: SyncWriteGateKind.graceReadOnly,
           graceUntilMs: graceUntilMs,
@@ -139,6 +140,14 @@ final class SyncWriteGateState {
           graceUntilMs: null,
           quotaUsedBytes: usedBytes,
           quotaLimitBytes: limitBytes,
+        );
+
+  const SyncWriteGateState.localRepairRequired()
+      : this._(
+          kind: SyncWriteGateKind.localRepairRequired,
+          graceUntilMs: null,
+          quotaUsedBytes: null,
+          quotaLimitBytes: null,
         );
 
   final SyncWriteGateKind kind;
@@ -274,6 +283,7 @@ final class SyncEngine {
     if (gate.kind == SyncWriteGateKind.open) return false;
     if (gate.kind == SyncWriteGateKind.paymentRequired) return true;
     if (gate.kind == SyncWriteGateKind.storageQuotaExceeded) return true;
+    if (gate.kind == SyncWriteGateKind.localRepairRequired) return true;
     final untilMs = gate.graceUntilMs;
     if (untilMs == null) return true;
     if (nowMs >= untilMs) {
@@ -453,9 +463,9 @@ final class SyncEngine {
           RegExp(r'"limit_bytes"\s*:\s*(\d+)').firstMatch('$e')?.group(1);
       final limitBytes = limitRaw == null ? null : int.tryParse(limitRaw);
 
-      if (statusCode == 403 &&
-          errorCode == 'grace_readonly' &&
-          graceUntilMs != null) {
+      if (statusCode == 400 && errorCode == 'invalid_batch') {
+        _setWriteGate(const SyncWriteGateState.localRepairRequired());
+      } else if (statusCode == 403 && errorCode == 'grace_readonly') {
         _setWriteGate(SyncWriteGateState.graceReadOnly(graceUntilMs));
       } else if (statusCode == 403 && errorCode == 'storage_quota_exceeded') {
         _setWriteGate(

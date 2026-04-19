@@ -33,6 +33,9 @@ final class _ManagedVaultPushStageResult {
 
 extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
   String _managedVaultRecoveredMessageForGate(SyncWriteGateState gate) {
+    if (gate.kind == SyncWriteGateKind.localRepairRequired) {
+      return context.t.sync.cloudManagedVault.localSyncDataRepairRequired;
+    }
     if (gate.kind == SyncWriteGateKind.paymentRequired) {
       return context.t.sync.cloudManagedVault.paymentRequired;
     }

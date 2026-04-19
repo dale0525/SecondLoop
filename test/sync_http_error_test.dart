@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_http_error.dart';
 
 void main() {
@@ -107,6 +108,19 @@ void main() {
       managedVaultPushFailureRecoveryAction(error),
       ManagedVaultPushFailureRecoveryAction.none,
     );
+  });
+
+  test('grace_readonly without grace_until_ms still maps to a blocking gate',
+      () {
+    final gate = managedVaultWriteGateStateForError(
+      Exception(
+        'managed-vault push failed: HTTP 403 {"error":"grace_readonly"}',
+      ),
+    );
+
+    expect(gate, isNotNull);
+    expect(gate!.kind, SyncWriteGateKind.graceReadOnly);
+    expect(gate.graceUntilMs, isNull);
   });
 
   test('managed-vault bootstrap rollback only triggers for fatal setup errors',

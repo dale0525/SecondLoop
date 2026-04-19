@@ -46,6 +46,40 @@ void main() {
       engine.stop();
     });
   });
+
+  test('grace_readonly without grace_until_ms still blocks further pushes', () {
+    fakeAsync((async) {
+      final runner = _GraceReadOnlyWithoutDeadlineRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(milliseconds: 10),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+
+      engine.notifyLocalMutation();
+      async.flushMicrotasks();
+      async.elapse(const Duration(milliseconds: 10));
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+      expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+      expect(engine.writeGate.value.graceUntilMs, isNull);
+
+      engine.notifyLocalMutation();
+      async.flushMicrotasks();
+      async.elapse(const Duration(milliseconds: 10));
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.stop();
+    });
+  });
 }
 
 SyncConfig _managedVaultConfig() => SyncConfig.managedVault(
@@ -71,4 +105,19 @@ final class _GraceReadOnlyRunner implements SyncRunner {
     pullCalls += 1;
     return 0;
   }
+}
+
+final class _GraceReadOnlyWithoutDeadlineRunner implements SyncRunner {
+  int pushCalls = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    pushCalls += 1;
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"grace_readonly"}',
+    );
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async => 0;
 }

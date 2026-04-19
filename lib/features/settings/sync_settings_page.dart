@@ -458,6 +458,21 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                         );
                       }
 
+                      if (gate.kind == SyncWriteGateKind.localRepairRequired) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            context.t.sync.cloudManagedVault
+                                .localSyncDataRepairRequired,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error),
+                          ),
+                        );
+                      }
+
                       if (gate.kind == SyncWriteGateKind.storageQuotaExceeded) {
                         final used = gate.quotaUsedBytes;
                         final limit = gate.quotaLimitBytes;
