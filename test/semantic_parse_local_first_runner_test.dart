@@ -124,6 +124,56 @@ void main() {
     expect(store.updatedStatusByTodoId['todo:2'], 'done');
   });
 
+  test(
+      'runner treats multiple retrieved semantic candidate ids as ambiguous order-only hints',
+      () async {
+    final store = _FakeStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:semantic_ambiguous',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{'msg:semantic_ambiguous': '把这个完成'},
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(id: 'todo:1', title: '报销', status: 'open'),
+        SemanticParseTodoCandidate(id: 'todo:2', title: '回访客户', status: 'open'),
+      ],
+    );
+    final client = _FakeClient(
+      retrievedTodoCandidateIds: const <String>['todo:1', 'todo:2'],
+      responseJson:
+          '{"kind":"followup","confidence":0.91,"todo_id":"todo:2","new_status":"done","due_local_iso":null}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 4, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.parseRequests, 1);
+    expect(client.lastLocalResultJson,
+        contains('"local_intent":"ambiguous_followup"'));
+    expect(client.lastUnresolvedFields, contains('todo_id'));
+    expect(client.lastUnresolvedFields, contains('new_status'));
+    expect(store.updatedStatusByTodoId['todo:2'], 'done');
+  });
+
   test('runner requests enhancement when local parse is ambiguous', () async {
     final store = _FakeStore(
       jobs: const <SemanticParseAutoActionJob>[

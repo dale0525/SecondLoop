@@ -9,6 +9,7 @@ import 'embeddings_source_prefs.dart';
 import 'semantic_parse_edit_policy.dart';
 import 'local_semantic_parse_result.dart';
 import 'local_semantic_parser.dart';
+import 'todo_followup_task_classifier.dart';
 import 'todo_checklist_suggestions_ai.dart';
 import '../../features/actions/review/review_backoff.dart';
 import '../../features/actions/settings/actions_settings_store.dart';
@@ -464,7 +465,11 @@ final class SemanticParseAutoActionsRunner {
             if (remoteParsed == null) {
               throw StateError('invalid_json');
             }
-            parsed = remoteParsed;
+            parsed = _mergeEnhancedDecision(
+              localResult: localParsedResult,
+              remoteParsed: remoteParsed,
+              unresolvedFields: unresolvedFields,
+            );
           }
         } catch (error) {
           if (_shouldRetryRemoteParseError(error)) {
@@ -801,6 +806,8 @@ final class SemanticParseAutoActionsRunner {
       case LocalSemanticParseKind.create:
         if ((result.title ?? '').trim().isEmpty) add('title');
         if ((result.status ?? '').trim().isEmpty) add('status');
+        if (_isTaskTypeMissing(result.taskType)) add('task_type');
+        if (result.suggestedTags.isEmpty) add('suggested_tags');
         break;
       case LocalSemanticParseKind.followup:
         if ((result.todoId ?? '').trim().isEmpty) add('todo_id');
@@ -847,6 +854,11 @@ final class SemanticParseAutoActionsRunner {
     LocalSemanticParseResult result, {
     required double minAutoConfidence,
   }) {
+    if (result.kind == LocalSemanticParseKind.create &&
+        _createNeedsMetadataEnhancement(result)) {
+      return true;
+    }
+
     if (result.confidence < minAutoConfidence) {
       return true;
     }
@@ -861,19 +873,87 @@ final class SemanticParseAutoActionsRunner {
   static List<TodoThreadMatch> _semanticMatchesFromPreferredTodoIds(
     List<String> preferredTodoIds,
   ) {
-    final matches = <TodoThreadMatch>[];
     final seen = <String>{};
+    String? topTodoId;
     for (var i = 0; i < preferredTodoIds.length; i++) {
       final todoId = preferredTodoIds[i].trim();
       if (todoId.isEmpty || !seen.add(todoId)) continue;
-      matches.add(
-        TodoThreadMatch(
-          todoId: todoId,
-          distance: 0.12 + (i * 0.08),
-        ),
-      );
+      topTodoId ??= todoId;
+      if (seen.length > 1) {
+        return const <TodoThreadMatch>[];
+      }
     }
-    return matches;
+    if (topTodoId == null) {
+      return const <TodoThreadMatch>[];
+    }
+    return <TodoThreadMatch>[
+      TodoThreadMatch(todoId: topTodoId, distance: 0.12),
+    ];
+  }
+
+  static bool _isTaskTypeMissing(String? taskType) {
+    final normalized = taskType?.trim().toLowerCase();
+    return normalized == null || normalized.isEmpty || normalized == 'unknown';
+  }
+
+  static bool _createNeedsMetadataEnhancement(LocalSemanticParseResult result) {
+    if (result.kind != LocalSemanticParseKind.create) {
+      return false;
+    }
+    final inferredTaskType =
+        classifyTodoFollowupTaskType(result.title ?? '').wireValue;
+    return inferredTaskType == TodoFollowupTaskType.research.wireValue ||
+        inferredTaskType == TodoFollowupTaskType.comparison.wireValue ||
+        inferredTaskType == TodoFollowupTaskType.liveInfoLookup.wireValue ||
+        inferredTaskType == TodoFollowupTaskType.referenceCollection.wireValue;
+  }
+
+  static bool _isMetadataOnlyEnhancement(List<String> unresolvedFields) {
+    const actionFields = <String>{
+      'kind',
+      'title',
+      'status',
+      'todo_id',
+      'new_status',
+      'due_local_iso',
+    };
+    for (final field in unresolvedFields) {
+      if (actionFields.contains(field)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static AiSemanticDecision _mergeEnhancedDecision({
+    required LocalSemanticParseResult localResult,
+    required AiSemanticDecision remoteParsed,
+    required List<String> unresolvedFields,
+  }) {
+    if (!_isMetadataOnlyEnhancement(unresolvedFields)) {
+      return remoteParsed;
+    }
+
+    final localParsed = AiSemanticParse.fromLocalResult(localResult);
+    final mergedTags = remoteParsed.suggestedTags.isNotEmpty
+        ? remoteParsed.suggestedTags
+        : localParsed.suggestedTags;
+    final mergedTagConfidence = remoteParsed.suggestedTags.isNotEmpty
+        ? remoteParsed.tagConfidence
+        : localParsed.tagConfidence;
+    final mergedTaskType = _isTaskTypeMissing(remoteParsed.taskType)
+        ? localParsed.taskType
+        : remoteParsed.taskType;
+
+    return AiSemanticDecision(
+      decision: localParsed.decision,
+      confidence: remoteParsed.confidence > localParsed.confidence
+          ? remoteParsed.confidence
+          : localParsed.confidence,
+      taskType: mergedTaskType,
+      suggestedTags: mergedTags,
+      tagConfidence: mergedTagConfidence,
+    );
   }
 
   static int _retryBackoffMs(int attempts) {

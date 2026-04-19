@@ -312,6 +312,80 @@ class MessageActionResolver {
     return out;
   }
 
+  static String _stripFollowupEditDecorations(String text) {
+    var out = text.trim();
+    if (out.isEmpty) return out;
+
+    out = out.replaceAll(
+      RegExp(
+        r'^(?:change|move|push|postpone|reschedule)\s+',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    out = out.replaceAll(
+      RegExp(r'^(?:把|將|将)\s*', caseSensitive: false),
+      '',
+    );
+    out = out.replaceAll(
+      RegExp(
+        r'\s*(?:改到|改成|改为|改為|改下|改一下|延期|延后|延後|推迟|推遲|推后|推後|顺延|順延|挪到|to|until|for|on)\s*$',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    out = out.replaceAll(RegExp(r'^[,，:：\-–—\s]+'), '').trim();
+    out = out.replaceAll(RegExp(r'[，,。.!！?？]+$'), '').trim();
+    return out;
+  }
+
+  static bool _looksLikeDeicticOnlyTitle(String text) {
+    final normalized = text.trim().toLowerCase();
+    if (normalized.isEmpty) return true;
+
+    const deicticTitles = <String>{
+      'this',
+      'that',
+      'it',
+      'this one',
+      'that one',
+      'the task',
+      'task',
+      'todo',
+      '这个',
+      '這個',
+      '这个事',
+      '這個事',
+      '这件事',
+      '這件事',
+      '这个任务',
+      '這個任務',
+      '这个待办',
+      '這個待辦',
+      '它',
+      '此项',
+      '此項',
+      '该项',
+      '該項',
+    };
+
+    return deicticTitles.contains(normalized);
+  }
+
+  static bool _canTreatEditPhraseAsCreate(
+    String raw, {
+    required LocalTimeResolution? time,
+    required MessageActionRecurrenceRule? recurrenceRule,
+  }) {
+    var title = _stripTimeDecorations(raw, time);
+    title = _stripRecurrenceDecorations(title);
+    title = _stripFollowupEditDecorations(title);
+    if (recurrenceRule != null) {
+      title = _cleanupRecurringTitleArtifacts(title);
+    }
+    return title.isNotEmpty && !_looksLikeDeicticOnlyTitle(title);
+  }
+
   static int _firstWeekdayFromIndex(int firstDayOfWeekIndex) {
     if (firstDayOfWeekIndex == 0) return DateTime.sunday;
     return firstDayOfWeekIndex.clamp(DateTime.monday, DateTime.saturday);
@@ -452,18 +526,10 @@ class MessageActionResolver {
       }
     }
 
-    if (openTodoTargets.isNotEmpty &&
-        (followupEditCue ||
-            updateIntent.isExplicit ||
-            followupDueAtLocal != null)) {
-      return const MessageActionNoneDecision();
-    }
-
     if (isLongTextForTodoAutomation(raw)) {
       return const MessageActionNoneDecision();
     }
 
-    // Create (new todo)
     final recurrenceRule = _detectRecurrenceRule(raw);
     final dueResolution = TemporalEngine.resolve(
       text: raw,
@@ -482,6 +548,18 @@ class MessageActionResolver {
       dayEndMinutes: dayEndMinutes,
       firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
+
+    if (openTodoTargets.isNotEmpty &&
+        (followupEditCue ||
+            updateIntent.isExplicit ||
+            followupDueAtLocal != null) &&
+        !_canTreatEditPhraseAsCreate(
+          raw,
+          time: time,
+          recurrenceRule: recurrenceRule,
+        )) {
+      return const MessageActionNoneDecision();
+    }
 
     final structuredTitle = _extractStructuredTitle(raw);
     if (structuredTitle != null) {
@@ -542,6 +620,7 @@ class MessageActionResolver {
 
     var title = _stripTimeDecorations(raw, time);
     title = _stripRecurrenceDecorations(title);
+    title = _stripFollowupEditDecorations(title);
     if (recurrenceRule != null) {
       title = _cleanupRecurringTitleArtifacts(title);
     }

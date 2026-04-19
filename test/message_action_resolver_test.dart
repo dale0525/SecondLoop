@@ -200,6 +200,27 @@ void main() {
     expect(create.dueAtLocal, DateTime(2026, 2, 6, 21, 0));
   });
 
+  test(
+      'generic english change phrasing still allows create when no todo matches',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      'change travel booking to Friday',
+      locale: const Locale('en', 'US'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: 'expense report', status: 'open'),
+        TodoLinkTarget(id: 'todo:2', title: 'call Alice', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, 'travel booking');
+    expect(create.dueAtLocal, DateTime(2026, 2, 6, 21, 0));
+  });
+
   test('next-week weekday create keeps correct due date and clean title', () {
     final now = DateTime(2026, 2, 2, 10, 0); // Monday
     final decision = MessageActionResolver.resolve(
