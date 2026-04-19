@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/ai/embeddings_source_prefs.dart';
 import 'package:secondloop/core/ai/semantic_parse_auto_actions_runner.dart';
+import 'package:secondloop/core/backend/semantic_parse_enhancement_backend.dart';
 import 'package:secondloop/features/actions/todo/todo_thread_match.dart';
 import 'package:secondloop/src/rust/semantic_parse.dart' as rust_semantic;
 
@@ -159,17 +160,57 @@ void main() {
       localeTag: 'zh-CN',
       dayEndMinutes: 21 * 60,
       candidates: const <SemanticParseTodoCandidate>[],
+      localResultJson:
+          '{"kind":"none","confidence":0.55,"resolver":"local","diagnostics":{"local_intent":"needs_enhancement"}}',
+      unresolvedFields: const <String>['kind'],
       timeout: const Duration(seconds: 1),
     );
 
-    expect(backend.parseCloudCalls, 1);
+    expect(backend.enhanceCloudCalls, 1);
     expect(backend.parseLocalCalls, 0);
+  });
+
+  test('parse prefers enhancement contract over legacy parse contract',
+      () async {
+    final backend = _RoutingBackend();
+
+    final client = BackendSemanticParseAutoActionsClient(
+      backend: backend,
+      sessionKey: _sessionKey,
+      askAiRoute: AskAiRouteKind.byok,
+      embeddingsRoute: EmbeddingsSourceRouteKind.local,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token',
+      modelName: 'gpt-4o-mini',
+    );
+
+    await client.parseMessageActionJson(
+      text: '把这个改到节后第一个工作日',
+      nowLocalIso: '2026-02-04T10:00:00',
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+      candidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(id: 'todo:1', title: '报销', status: 'open'),
+      ],
+      localResultJson:
+          '{"kind":"none","confidence":0.45,"resolver":"local","diagnostics":{"local_intent":"ambiguous_followup"}}',
+      unresolvedFields: const <String>['todo_id', 'due_local_iso'],
+      timeout: const Duration(seconds: 1),
+    );
+
+    expect(backend.enhanceLocalCalls, 1);
+    expect(backend.parseLocalCalls, 0);
+    expect(backend.lastEnhancementLocalResultJson,
+        contains('"local_intent":"ambiguous_followup"'));
+    expect(backend.lastEnhancementUnresolvedFields,
+        const <String>['todo_id', 'due_local_iso']);
   });
 }
 
 final _sessionKey = Uint8List.fromList(List<int>.filled(32, 7));
 
-final class _RoutingBackend extends TestAppBackend {
+final class _RoutingBackend extends TestAppBackend
+    implements SemanticParseEnhancementBackend {
   _RoutingBackend({
     this.cloudMatches = const <TodoThreadMatch>[],
     this.byokMatches = const <TodoThreadMatch>[],
@@ -194,6 +235,10 @@ final class _RoutingBackend extends TestAppBackend {
 
   int parseCloudCalls = 0;
   int parseLocalCalls = 0;
+  int enhanceCloudCalls = 0;
+  int enhanceLocalCalls = 0;
+  String? lastEnhancementLocalResultJson;
+  List<String>? lastEnhancementUnresolvedFields;
 
   @override
   Future<int> processPendingTodoThreadEmbeddingsCloudGateway(
@@ -293,6 +338,43 @@ final class _RoutingBackend extends TestAppBackend {
     required String modelName,
   }) async {
     parseCloudCalls += 1;
+    return '{"kind":"none","confidence":1.0}';
+  }
+
+  @override
+  Future<String> semanticParseMessageActionEnhancement(
+    Uint8List key, {
+    required String text,
+    required String nowLocalIso,
+    required Locale locale,
+    required int dayEndMinutes,
+    required String localResultJson,
+    required List<String> unresolvedFields,
+    required List<rust_semantic.TodoCandidate> candidates,
+  }) async {
+    enhanceLocalCalls += 1;
+    lastEnhancementLocalResultJson = localResultJson;
+    lastEnhancementUnresolvedFields = unresolvedFields;
+    return '{"kind":"none","confidence":1.0}';
+  }
+
+  @override
+  Future<String> semanticParseMessageActionEnhancementCloudGateway(
+    Uint8List key, {
+    required String text,
+    required String nowLocalIso,
+    required Locale locale,
+    required int dayEndMinutes,
+    required String localResultJson,
+    required List<String> unresolvedFields,
+    required List<rust_semantic.TodoCandidate> candidates,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    enhanceCloudCalls += 1;
+    lastEnhancementLocalResultJson = localResultJson;
+    lastEnhancementUnresolvedFields = unresolvedFields;
     return '{"kind":"none","confidence":1.0}';
   }
 }

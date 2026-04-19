@@ -836,6 +836,72 @@ fn semantic_parse_create_with_unknown_hint_falls_back_to_title_classification() 
 }
 
 #[test]
+fn semantic_parse_followup_can_apply_due_without_status_change_atomically() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [7u8; 32];
+
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
+    let message = insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "把这个改到节后第一个工作日",
+    )
+    .expect("insert message");
+    enqueue_semantic_parse_job(&conn, &message.id, 16_000).expect("enqueue");
+    let attempt_id = mark_semantic_parse_job_running(&conn, &message.id, 16_001).expect("running");
+
+    let seeded = upsert_todo(
+        &conn,
+        &key,
+        "todo:followup-due-only",
+        "报销",
+        None,
+        "open",
+        Some(&message.id),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("seed todo");
+
+    let applied = complete_semantic_parse_followup_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        attempt_id,
+        &seeded.id,
+        Some("报销"),
+        None,
+        Some(16_500),
+        None,
+        None,
+        None,
+        16_010,
+    )
+    .expect("followup applied");
+    assert!(applied);
+
+    let updated = get_todo(&conn, &key, &seeded.id).expect("updated todo");
+    assert_eq!(updated.status, "open");
+    assert_eq!(updated.due_at_ms, Some(16_500));
+
+    let jobs =
+        list_semantic_parse_jobs_by_message_ids(&conn, &key, &[message.id.clone()]).expect("jobs");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].status, "succeeded");
+    assert_eq!(jobs[0].applied_prev_todo_status.as_deref(), None);
+    assert_eq!(
+        jobs[0].applied_todo_id.as_deref(),
+        Some("todo:followup-due-only")
+    );
+}
+
+#[test]
 fn upsert_todo_with_unknown_hint_falls_back_to_title_classification() {
     let dir = tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");

@@ -457,14 +457,16 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required int expectedAttemptId,
     required String todoId,
     String? todoTitle,
-    required String newStatus,
+    String? newStatus,
+    int? dueAtMs,
     List<String>? pendingSuggestedTags,
     List<String>? autoApplySuggestedTags,
     double? suggestedTagConfidence,
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbCompleteSemanticParseFollowupIfCurrentAttempt(
+    return rust_semantic_parse_jobs
+        .dbCompleteSemanticParseFollowupIfCurrentAttempt(
       appDir: appDir,
       key: key,
       messageId: messageId,
@@ -472,6 +474,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
       todoId: todoId,
       todoTitle: todoTitle,
       newStatus: newStatus,
+      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
       pendingSuggestedTags: pendingSuggestedTags,
       autoApplySuggestedTags: autoApplySuggestedTags,
       suggestedTagConfidence: suggestedTagConfidence,

@@ -158,6 +158,8 @@ final class BackendSemanticParseAutoActionsClient
     required String localeTag,
     required int dayEndMinutes,
     required List<SemanticParseTodoCandidate> candidates,
+    required String localResultJson,
+    required List<String> unresolvedFields,
     required Duration timeout,
   }) async {
     final locale = SemanticParseAutoActionsRunner._localeFromTag(localeTag);
@@ -173,26 +175,59 @@ final class BackendSemanticParseAutoActionsClient
         )
         .toList(growable: false);
 
-    final future = askAiRoute == AskAiRouteKind.cloudGateway
-        ? _backend.semanticParseMessageActionCloudGateway(
-            _sessionKey,
-            text: text,
-            nowLocalIso: nowLocalIso,
-            locale: locale,
-            dayEndMinutes: dayEndMinutes,
-            candidates: rustCandidates,
-            gatewayBaseUrl: gatewayBaseUrl,
-            idToken: idToken,
-            modelName: modelName,
-          )
-        : _backend.semanticParseMessageAction(
-            _sessionKey,
-            text: text,
-            nowLocalIso: nowLocalIso,
-            locale: locale,
-            dayEndMinutes: dayEndMinutes,
-            candidates: rustCandidates,
-          );
+    final future = switch ((_backend, askAiRoute)) {
+      (
+        final SemanticParseEnhancementBackend enhancementBackend,
+        AskAiRouteKind.cloudGateway,
+      ) =>
+        enhancementBackend.semanticParseMessageActionEnhancementCloudGateway(
+          _sessionKey,
+          text: text,
+          nowLocalIso: nowLocalIso,
+          locale: locale,
+          dayEndMinutes: dayEndMinutes,
+          localResultJson: localResultJson,
+          unresolvedFields: unresolvedFields,
+          candidates: rustCandidates,
+          gatewayBaseUrl: gatewayBaseUrl,
+          idToken: idToken,
+          modelName: modelName,
+        ),
+      (
+        final SemanticParseEnhancementBackend enhancementBackend,
+        _,
+      ) =>
+        enhancementBackend.semanticParseMessageActionEnhancement(
+          _sessionKey,
+          text: text,
+          nowLocalIso: nowLocalIso,
+          locale: locale,
+          dayEndMinutes: dayEndMinutes,
+          localResultJson: localResultJson,
+          unresolvedFields: unresolvedFields,
+          candidates: rustCandidates,
+        ),
+      (_, AskAiRouteKind.cloudGateway) =>
+        _backend.semanticParseMessageActionCloudGateway(
+          _sessionKey,
+          text: text,
+          nowLocalIso: nowLocalIso,
+          locale: locale,
+          dayEndMinutes: dayEndMinutes,
+          candidates: rustCandidates,
+          gatewayBaseUrl: gatewayBaseUrl,
+          idToken: idToken,
+          modelName: modelName,
+        ),
+      _ => _backend.semanticParseMessageAction(
+          _sessionKey,
+          text: text,
+          nowLocalIso: nowLocalIso,
+          locale: locale,
+          dayEndMinutes: dayEndMinutes,
+          candidates: rustCandidates,
+        ),
+    };
 
     return future.timeout(timeout);
   }

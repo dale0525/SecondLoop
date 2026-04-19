@@ -131,6 +131,52 @@ void main() {
     expect(client.lastChecklistDueAtMs, isNull);
   });
 
+  test('runner sends local result and unresolved fields to enhancement path',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:enhance',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:enhance': '把这个改到节后第一个工作日'},
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(id: 'todo:1', title: '报销', status: 'open'),
+        SemanticParseTodoCandidate(id: 'todo:2', title: '回访', status: 'open'),
+      ],
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"followup","confidence":1.0,"todo_id":"todo:1","new_status":null,"due_local_iso":"2026-02-24T21:00:00"}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 4, 10, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.lastLocalResultJson,
+        contains('"local_intent":"ambiguous_followup"'));
+    expect(client.lastUnresolvedFields, contains('todo_id'));
+    expect(client.lastUnresolvedFields, contains('due_local_iso'));
+  });
+
   test('runner cancels when message is deleted during remote parse', () async {
     final store = _FakeStore(
       jobs: [
@@ -1490,6 +1536,8 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
   final Future<void> Function()? onParseMessageAction;
   String? lastChecklistStatus;
   int? lastChecklistDueAtMs;
+  String? lastLocalResultJson;
+  List<String> lastUnresolvedFields = const <String>[];
 
   @override
   Future<List<String>> retrieveTodoCandidateIds({
@@ -1507,12 +1555,16 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
     required String localeTag,
     required int dayEndMinutes,
     required List<SemanticParseTodoCandidate> candidates,
+    required String localResultJson,
+    required List<String> unresolvedFields,
     required Duration timeout,
   }) async {
     if (onParseMessageAction != null) {
       await onParseMessageAction!();
     }
     if (error != null) throw error!;
+    lastLocalResultJson = localResultJson;
+    lastUnresolvedFields = List<String>.from(unresolvedFields);
     return responseJson ?? '{"kind":"none","confidence":0.0}';
   }
 

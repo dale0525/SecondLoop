@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'ai_routing.dart';
 import 'embeddings_source_prefs.dart';
 import 'semantic_parse_edit_policy.dart';
+import 'local_semantic_parse_result.dart';
 import 'local_semantic_parser.dart';
 import 'todo_checklist_suggestions_ai.dart';
 import '../../features/actions/review/review_backoff.dart';
@@ -21,6 +22,7 @@ import '../backend/app_backend.dart';
 import '../backend/attachments_backend.dart';
 import '../backend/native_backend.dart';
 import '../backend/semantic_parse_attempt_aware_backend.dart';
+import '../backend/semantic_parse_enhancement_backend.dart';
 import 'semantic_parse.dart';
 
 part 'semantic_parse_auto_actions_runner_store.dart';
@@ -248,6 +250,8 @@ abstract class SemanticParseAutoActionsClient {
     required String localeTag,
     required int dayEndMinutes,
     required List<SemanticParseTodoCandidate> candidates,
+    required String localResultJson,
+    required List<String> unresolvedFields,
     required Duration timeout,
   });
 
@@ -417,17 +421,16 @@ final class SemanticParseAutoActionsRunner {
               ),
             )
             .toList(growable: false);
-        var parsed = AiSemanticParse.fromLocalResult(
-          LocalSemanticParser.parse(
-            text: analysisText,
-            nowLocal: nowLocal,
-            locale: locale,
-            openTodoTargets: localTargets,
-            dayEndMinutes: dayEndMinutes,
-            morningMinutes: resolvedMorningMinutes,
-            firstDayOfWeekIndex: firstDayOfWeekIndex,
-          ),
+        final localParsedResult = LocalSemanticParser.parse(
+          text: analysisText,
+          nowLocal: nowLocal,
+          locale: locale,
+          openTodoTargets: localTargets,
+          dayEndMinutes: dayEndMinutes,
+          morningMinutes: resolvedMorningMinutes,
+          firstDayOfWeekIndex: firstDayOfWeekIndex,
         );
+        var parsed = AiSemanticParse.fromLocalResult(localParsedResult);
         try {
           if (parsed.confidence < settings.minAutoConfidence) {
             final json = await client
@@ -437,6 +440,8 @@ final class SemanticParseAutoActionsRunner {
                   localeTag: localeTag,
                   dayEndMinutes: dayEndMinutes,
                   candidates: candidates,
+                  localResultJson: _localResultJson(localParsedResult),
+                  unresolvedFields: _unresolvedFields(localParsedResult),
                   timeout: settings.hardTimeout,
                 )
                 .timeout(settings.hardTimeout);
@@ -722,6 +727,77 @@ final class SemanticParseAutoActionsRunner {
     }
 
     return false;
+  }
+
+  static String _localResultJson(LocalSemanticParseResult result) {
+    return jsonEncode(<String, Object?>{
+      'kind': switch (result.kind) {
+        LocalSemanticParseKind.none => 'none',
+        LocalSemanticParseKind.create => 'create',
+        LocalSemanticParseKind.followup => 'followup',
+      },
+      'confidence': result.confidence,
+      'resolver': switch (result.resolver) {
+        SemanticResolver.local => 'local',
+        SemanticResolver.llm => 'llm',
+        SemanticResolver.hybrid => 'hybrid',
+      },
+      'title': result.title,
+      'status': result.status,
+      'todo_id': result.todoId,
+      'due_local_iso': result.dueAtLocal?.toIso8601String(),
+      'recurrence': result.recurrenceRule?.toJsonMap(),
+      'task_type': result.taskType,
+      'suggested_tags': result.suggestedTags,
+      'tag_confidence': result.tagConfidence,
+      'diagnostics': <String, Object?>{
+        'local_intent': result.diagnostics.localIntent,
+      },
+    });
+  }
+
+  static List<String> _unresolvedFields(LocalSemanticParseResult result) {
+    final fields = <String>[];
+
+    void add(String value) {
+      if (!fields.contains(value)) {
+        fields.add(value);
+      }
+    }
+
+    switch (result.kind) {
+      case LocalSemanticParseKind.create:
+        if ((result.title ?? '').trim().isEmpty) add('title');
+        if ((result.status ?? '').trim().isEmpty) add('status');
+        if (result.dueAtLocal == null) add('due_local_iso');
+        break;
+      case LocalSemanticParseKind.followup:
+        if ((result.todoId ?? '').trim().isEmpty) add('todo_id');
+        if ((result.status ?? '').trim().isEmpty) add('new_status');
+        if (result.dueAtLocal == null) add('due_local_iso');
+        break;
+      case LocalSemanticParseKind.none:
+        switch (result.diagnostics.localIntent) {
+          case 'ambiguous_followup':
+            add('todo_id');
+            add('new_status');
+            add('due_local_iso');
+            break;
+          case 'needs_enhancement':
+            add('kind');
+            add('title');
+            add('status');
+            add('todo_id');
+            add('new_status');
+            add('due_local_iso');
+            break;
+          default:
+            add('kind');
+        }
+        break;
+    }
+
+    return fields;
   }
 
   static int _retryBackoffMs(int attempts) {

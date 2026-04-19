@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 391803416;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -238819800;
 
 // Section: executor
 
@@ -9238,6 +9238,82 @@ fn wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(
         },
     )
 }
+fn wire__crate__api__semantic_parse_enhancement__ai_semantic_parse_message_action_enhancement_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "ai_semantic_parse_message_action_enhancement", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+let api_text = <String>::sse_decode(&mut deserializer);
+let api_now_local_iso = <String>::sse_decode(&mut deserializer);
+let api_locale = <String>::sse_decode(&mut deserializer);
+let api_day_end_minutes = <i32>::sse_decode(&mut deserializer);
+let api_local_result_json = <String>::sse_decode(&mut deserializer);
+let api_unresolved_fields = <Vec<String>>::sse_decode(&mut deserializer);
+let api_candidates = <Vec<crate::semantic_parse::TodoCandidate>>::sse_decode(&mut deserializer);
+let api_local_day = <String>::sse_decode(&mut deserializer);deserializer.end(); move |context|  {
+                    transform_result_sse((move ||  {
+                         crate::api::semantic_parse_enhancement::ai_semantic_parse_message_action_enhancement(api_app_dir, api_key, api_text, api_now_local_iso, api_locale, api_day_end_minutes, api_local_result_json, api_unresolved_fields, api_candidates, api_local_day)
+                    })())
+                } })
+}
+fn wire__crate__api__semantic_parse_enhancement__ai_semantic_parse_message_action_enhancement_cloud_gateway_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "ai_semantic_parse_message_action_enhancement_cloud_gateway", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+let api_text = <String>::sse_decode(&mut deserializer);
+let api_now_local_iso = <String>::sse_decode(&mut deserializer);
+let api_locale = <String>::sse_decode(&mut deserializer);
+let api_day_end_minutes = <i32>::sse_decode(&mut deserializer);
+let api_local_result_json = <String>::sse_decode(&mut deserializer);
+let api_unresolved_fields = <Vec<String>>::sse_decode(&mut deserializer);
+let api_candidates = <Vec<crate::semantic_parse::TodoCandidate>>::sse_decode(&mut deserializer);
+let api_gateway_base_url = <String>::sse_decode(&mut deserializer);
+let api_firebase_id_token = <String>::sse_decode(&mut deserializer);
+let api_model_name = <String>::sse_decode(&mut deserializer);deserializer.end(); move |context|  {
+                    transform_result_sse((move ||  {
+                         crate::api::semantic_parse_enhancement::ai_semantic_parse_message_action_enhancement_cloud_gateway(api_app_dir, api_key, api_text, api_now_local_iso, api_locale, api_day_end_minutes, api_local_result_json, api_unresolved_fields, api_candidates, api_gateway_base_url, api_firebase_id_token, api_model_name)
+                    })())
+                } })
+}
+fn wire__crate__api__semantic_parse_jobs__db_complete_semantic_parse_followup_if_current_attempt_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "db_complete_semantic_parse_followup_if_current_attempt", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+let api_message_id = <String>::sse_decode(&mut deserializer);
+let api_expected_attempt_id = <i64>::sse_decode(&mut deserializer);
+let api_todo_id = <String>::sse_decode(&mut deserializer);
+let api_todo_title = <Option<String>>::sse_decode(&mut deserializer);
+let api_new_status = <Option<String>>::sse_decode(&mut deserializer);
+let api_due_at_ms = <Option<i64>>::sse_decode(&mut deserializer);
+let api_pending_suggested_tags = <Option<Vec<String>>>::sse_decode(&mut deserializer);
+let api_auto_apply_suggested_tags = <Option<Vec<String>>>::sse_decode(&mut deserializer);
+let api_suggested_tag_confidence = <Option<f64>>::sse_decode(&mut deserializer);
+let api_now_ms = <i64>::sse_decode(&mut deserializer);deserializer.end(); move |context|  {
+                    transform_result_sse((move ||  {
+                         crate::api::semantic_parse_jobs::db_complete_semantic_parse_followup_if_current_attempt(api_app_dir, api_key, api_message_id, api_expected_attempt_id, api_todo_id, api_todo_title, api_new_status, api_due_at_ms, api_pending_suggested_tags, api_auto_apply_suggested_tags, api_suggested_tag_confidence, api_now_ms)
+                    })())
+                } })
+}
 fn wire__crate__api__simple__greet_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -11853,28 +11929,31 @@ fn pde_ffi_dispatcher_primary_impl(
 220 => wire__crate__api__migration_archive__migration_archive_parse_manifest_json_impl(port, ptr, rust_vec_len, data_len),
 221 => wire__crate__api__migration_archive__migration_archive_wikilink_for_item_impl(port, ptr, rust_vec_len, data_len),
 222 => wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(port, ptr, rust_vec_len, data_len),
-224 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-225 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(port, ptr, rust_vec_len, data_len),
-226 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(port, ptr, rust_vec_len, data_len),
-227 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(port, ptr, rust_vec_len, data_len),
-228 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(port, ptr, rust_vec_len, data_len),
-229 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
-230 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(port, ptr, rust_vec_len, data_len),
-231 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
-232 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
-233 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
-234 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
-235 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(port, ptr, rust_vec_len, data_len),
-236 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(port, ptr, rust_vec_len, data_len),
-237 => wire__crate__api__tags__db_list_message_suggested_tags_impl(port, ptr, rust_vec_len, data_len),
-238 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
-239 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
-240 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
-241 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
-242 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
-243 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
-244 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
-245 => wire__crate__api__todo_followup_generation__db_list_due_auto_todo_followup_generation_jobs_impl(port, ptr, rust_vec_len, data_len),
+223 => wire__crate__api__semantic_parse_enhancement__ai_semantic_parse_message_action_enhancement_impl(port, ptr, rust_vec_len, data_len),
+224 => wire__crate__api__semantic_parse_enhancement__ai_semantic_parse_message_action_enhancement_cloud_gateway_impl(port, ptr, rust_vec_len, data_len),
+225 => wire__crate__api__semantic_parse_jobs__db_complete_semantic_parse_followup_if_current_attempt_impl(port, ptr, rust_vec_len, data_len),
+227 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+228 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(port, ptr, rust_vec_len, data_len),
+229 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(port, ptr, rust_vec_len, data_len),
+230 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(port, ptr, rust_vec_len, data_len),
+231 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(port, ptr, rust_vec_len, data_len),
+232 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
+233 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(port, ptr, rust_vec_len, data_len),
+234 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
+235 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
+236 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
+237 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
+238 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(port, ptr, rust_vec_len, data_len),
+239 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(port, ptr, rust_vec_len, data_len),
+240 => wire__crate__api__tags__db_list_message_suggested_tags_impl(port, ptr, rust_vec_len, data_len),
+241 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
+242 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
+243 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
+244 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
+245 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
+246 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
+247 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
+248 => wire__crate__api__todo_followup_generation__db_list_due_auto_todo_followup_generation_jobs_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -11887,7 +11966,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        223 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        226 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

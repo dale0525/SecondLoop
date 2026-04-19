@@ -207,6 +207,8 @@ final class _UnusedClient implements SemanticParseAutoActionsClient {
     required String localeTag,
     required int dayEndMinutes,
     required List<SemanticParseTodoCandidate> candidates,
+    required String localResultJson,
+    required List<String> unresolvedFields,
     required Duration timeout,
   }) async =>
       throw UnimplementedError();

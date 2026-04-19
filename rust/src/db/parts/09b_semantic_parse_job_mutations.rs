@@ -455,6 +455,30 @@ pub fn set_semantic_parse_todo_status_if_current_attempt(
     })
 }
 
+fn set_semantic_parse_todo_due_in_existing_txn(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    due_at_ms: i64,
+) -> Result<()> {
+    let current = get_todo(conn, key, todo_id)?;
+    let _ = upsert_todo(
+        conn,
+        key,
+        &current.id,
+        &current.title,
+        Some(due_at_ms),
+        &current.status,
+        current.source_entry_id.as_deref(),
+        current.review_stage,
+        current.next_review_at_ms,
+        current.last_review_at_ms,
+        current.manual_importance_nudge_score,
+        current.manual_urgency_nudge_score,
+    )?;
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn complete_semantic_parse_no_action_if_current_attempt(
     conn: &Connection,
@@ -631,7 +655,8 @@ pub fn complete_semantic_parse_followup_if_current_attempt(
     expected_attempt_id: i64,
     todo_id: &str,
     todo_title: Option<&str>,
-    new_status: &str,
+    new_status: Option<&str>,
+    due_at_ms: Option<i64>,
     pending_suggested_tags: Option<&[String]>,
     auto_apply_suggested_tags: Option<&[String]>,
     suggested_tag_confidence: Option<f64>,
@@ -665,13 +690,17 @@ pub fn complete_semantic_parse_followup_if_current_attempt(
             }
         }
 
-        let previous_status = set_semantic_parse_todo_status_in_existing_txn(
-            conn,
-            key,
-            todo_id,
-            new_status,
-            message_id,
-        )?;
+        let previous_status = match new_status {
+            Some(status) if !status.trim().is_empty() => Some(
+                set_semantic_parse_todo_status_in_existing_txn(
+                    conn, key, todo_id, status, message_id,
+                )?,
+            ),
+            _ => None,
+        };
+        if let Some(next_due_at_ms) = due_at_ms {
+            set_semantic_parse_todo_due_in_existing_txn(conn, key, todo_id, next_due_at_ms)?;
+        }
 
         let finalized = mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
             conn,
@@ -681,7 +710,7 @@ pub fn complete_semantic_parse_followup_if_current_attempt(
             "followup",
             Some(todo_id),
             todo_title,
-            Some(previous_status.as_str()),
+            previous_status.as_deref(),
             stored_suggested_tags,
             stored_tag_confidence,
             stored_tag_state,

@@ -606,68 +606,36 @@ final class BackendSemanticParseAutoActionsStore
     double? suggestedTagConfidence,
     required int nowMs,
   }) async {
-    if (!await _hasCurrentRunningAttempt(
+    if (_backend is! SemanticParseAttemptAwareBackend) {
+      if (!await _hasCurrentRunningAttempt(
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+      )) {
+        return false;
+      }
+      _throwNonAtomicAttemptAwareMutation(
+        'completeFollowupIfCurrentAttempt',
+      );
+    }
+
+    final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+    final normalizedStatus = switch (newStatus?.trim()) {
+      final String value when value.isNotEmpty => value,
+      _ => null,
+    };
+
+    return awareBackend.completeSemanticParseFollowupIfCurrentAttempt(
+      _sessionKey,
       messageId: messageId,
       expectedAttemptId: expectedAttemptId,
-    )) {
-      return false;
-    }
-
-    String? previousStatus;
-    if (dueAtMs != null) {
-      await _backend.updateTodoDueWithScope(
-        _sessionKey,
-        todoId: todoId,
-        dueAtMs: dueAtMs,
-        scope: TodoRecurrenceEditScope.thisOnly,
-      );
-    }
-    if (newStatus != null && newStatus.trim().isNotEmpty) {
-      previousStatus = await setTodoStatusFromMessage(
-        messageId: messageId,
-        todoId: todoId,
-        newStatus: newStatus,
-        expectedAttemptId: expectedAttemptId,
-      );
-    }
-
-    List<String> appliedTagIds = const <String>[];
-    List<String>? suggestedTags;
-    double? tagConfidence;
-    String tagSuggestionState = 'none';
-    if (autoApplySuggestedTags != null && autoApplySuggestedTags.isNotEmpty) {
-      final result = await applySemanticTags(
-        messageId: messageId,
-        suggestedTags: autoApplySuggestedTags,
-        expectedAttemptId: expectedAttemptId,
-      );
-      if (result.appliedTagIds.isNotEmpty) {
-        appliedTagIds = result.appliedTagIds;
-        suggestedTags = autoApplySuggestedTags;
-        tagConfidence = suggestedTagConfidence;
-        tagSuggestionState = 'applied';
-      }
-    } else if (pendingSuggestedTags != null &&
-        pendingSuggestedTags.isNotEmpty) {
-      suggestedTags = pendingSuggestedTags;
-      tagConfidence = suggestedTagConfidence;
-      tagSuggestionState = 'pending';
-    }
-
-    return markJobSucceededIfCurrentAttempt(
-      SemanticParseJobSucceededArgs(
-        messageId: messageId,
-        appliedActionKind: 'followup',
-        appliedTodoId: todoId,
-        appliedTodoTitle: todoTitle,
-        appliedPrevTodoStatus: previousStatus,
-        suggestedTags: suggestedTags,
-        suggestedTagConfidence: tagConfidence,
-        tagSuggestionState: tagSuggestionState,
-        appliedTagIds: appliedTagIds.isEmpty ? null : appliedTagIds,
-        nowMs: nowMs,
-      ),
-      expectedAttemptId: expectedAttemptId,
+      todoId: todoId,
+      todoTitle: todoTitle,
+      newStatus: normalizedStatus,
+      dueAtMs: dueAtMs,
+      pendingSuggestedTags: pendingSuggestedTags,
+      autoApplySuggestedTags: autoApplySuggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      nowMs: nowMs,
     );
   }
 

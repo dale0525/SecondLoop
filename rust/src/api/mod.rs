@@ -20,6 +20,8 @@ pub mod media_annotation;
 pub mod migration_archive;
 pub mod oplog_maintenance;
 pub mod remote_embedding_bootstrap;
+pub mod semantic_parse_enhancement;
+pub mod semantic_parse_jobs;
 pub mod simple;
 #[cfg(not(target_family = "wasm"))]
 pub mod sync_diagnostics;

@@ -81,6 +81,10 @@ void main() {
 
     expect(result.processed, 1);
     expect(client.parseRequests, 1);
+    expect(client.lastLocalResultJson,
+        contains('"local_intent":"ambiguous_followup"'));
+    expect(client.lastUnresolvedFields, contains('todo_id'));
+    expect(client.lastUnresolvedFields, contains('due_local_iso'));
     expect(store.updatedDueByTodoId['todo:1'], isNotNull);
   });
 }
@@ -415,6 +419,8 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
 
   final String? responseJson;
   int parseRequests = 0;
+  String? lastLocalResultJson;
+  List<String> lastUnresolvedFields = const <String>[];
 
   @override
   Future<List<String>> retrieveTodoCandidateIds({
@@ -431,9 +437,13 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
     required String localeTag,
     required int dayEndMinutes,
     required List<SemanticParseTodoCandidate> candidates,
+    required String localResultJson,
+    required List<String> unresolvedFields,
     required Duration timeout,
   }) async {
     parseRequests += 1;
+    lastLocalResultJson = localResultJson;
+    lastUnresolvedFields = List<String>.from(unresolvedFields);
     return responseJson ?? '{"kind":"none","confidence":0.0}';
   }
 
