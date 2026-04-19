@@ -54,8 +54,10 @@ final class LocalSemanticParser {
           status: status,
           dueAtLocal: dueAtLocal,
           recurrenceRule: recurrenceRule,
-          diagnostics:
-              const LocalSemanticParseDiagnostics(localIntent: 'create'),
+          diagnostics: LocalSemanticParseDiagnostics(
+            localIntent: 'create',
+            hasDueSignal: dueAtLocal != null,
+          ),
         );
       case MessageActionFollowUpDecision(
           :final todoId,
@@ -69,8 +71,11 @@ final class LocalSemanticParser {
           todoId: todoId,
           status: newStatus,
           dueAtLocal: dueAtLocal,
-          diagnostics:
-              const LocalSemanticParseDiagnostics(localIntent: 'followup'),
+          diagnostics: LocalSemanticParseDiagnostics(
+            localIntent: 'followup',
+            hasExplicitStatusUpdate: newStatus != null,
+            hasDueSignal: dueAtLocal != null,
+          ),
         );
       case MessageActionNoneDecision():
         final updateIntent = inferTodoUpdateIntent(raw);
@@ -98,13 +103,14 @@ final class LocalSemanticParser {
         final temporalNeedsEnhancement =
             dueForFollowup.metadata.needsEnhancement ||
                 dueForCreate.metadata.needsEnhancement;
-        final hasAutomationSignal = updateIntent.isExplicit ||
-            dueForFollowup.dueAtLocal != null ||
-            dueForCreate.dueAtLocal != null ||
-            looksLikeFollowupEdit;
-        final needsEnhancement = temporalNeedsEnhancement ||
-            (!hasAutomationSignal &&
-                looksLikeTodoRelevantForSemanticParse(raw));
+        final hasDueSignal = dueForFollowup.dueAtLocal != null ||
+            dueForCreate.dueAtLocal != null;
+        final hasAutomationSignal =
+            updateIntent.isExplicit || hasDueSignal || looksLikeFollowupEdit;
+        final semanticNeedsEnhancement =
+            !hasAutomationSignal && looksLikeTodoRelevantForSemanticParse(raw);
+        final needsEnhancement =
+            temporalNeedsEnhancement || semanticNeedsEnhancement;
         final ambiguousFollowup = !temporalNeedsEnhancement &&
             hasAutomationSignal &&
             openTodoTargets.length > 1;
@@ -124,6 +130,10 @@ final class LocalSemanticParser {
                 : needsEnhancement
                     ? 'needs_enhancement'
                     : 'none',
+            hasExplicitStatusUpdate: updateIntent.isExplicit,
+            hasDueSignal: hasDueSignal,
+            temporalNeedsEnhancement: temporalNeedsEnhancement,
+            semanticNeedsEnhancement: semanticNeedsEnhancement,
           ),
         );
     }

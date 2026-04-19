@@ -41,6 +41,46 @@ void main() {
     expect(store.createdTodoIds, contains('todo:msg:1'));
   });
 
+  test('runner skips enhancement for unambiguous local followup', () async {
+    final store = _FakeStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:local_followup',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{'msg:local_followup': '把报销改到明天'},
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(id: 'todo:1', title: '报销', status: 'open'),
+      ],
+    );
+    final client = _FakeClient();
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 4, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.parseRequests, 0);
+    expect(store.updatedStatusByTodoId, isEmpty);
+    expect(store.updatedDueByTodoId['todo:1'], isNotNull);
+  });
+
   test('runner requests enhancement when local parse is ambiguous', () async {
     final store = _FakeStore(
       jobs: const <SemanticParseAutoActionJob>[
@@ -86,6 +126,53 @@ void main() {
     expect(client.lastUnresolvedFields, contains('todo_id'));
     expect(client.lastUnresolvedFields, contains('due_local_iso'));
     expect(store.updatedDueByTodoId['todo:1'], isNotNull);
+  });
+
+  test(
+      'runner does not mark optional due field unresolved for status-only ambiguity',
+      () async {
+    final store = _FakeStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:status_only_ambiguity',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{'msg:status_only_ambiguity': '把这个完成'},
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(id: 'todo:1', title: '报销', status: 'open'),
+        SemanticParseTodoCandidate(id: 'todo:2', title: '回访', status: 'open'),
+      ],
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"followup","confidence":0.91,"todo_id":"todo:1","new_status":"done","due_local_iso":null}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 4, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.parseRequests, 1);
+    expect(client.lastUnresolvedFields, contains('todo_id'));
+    expect(client.lastUnresolvedFields, contains('new_status'));
+    expect(client.lastUnresolvedFields, isNot(contains('due_local_iso')));
   });
 
   test('runner marks out-of-range zh-CN holiday phrases as enhancement-needed',

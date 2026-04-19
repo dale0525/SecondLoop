@@ -7,9 +7,17 @@ enum SemanticResolver { local, llm, hybrid }
 final class LocalSemanticParseDiagnostics {
   const LocalSemanticParseDiagnostics({
     this.localIntent = 'none',
+    this.hasExplicitStatusUpdate = false,
+    this.hasDueSignal = false,
+    this.temporalNeedsEnhancement = false,
+    this.semanticNeedsEnhancement = false,
   });
 
   final String localIntent;
+  final bool hasExplicitStatusUpdate;
+  final bool hasDueSignal;
+  final bool temporalNeedsEnhancement;
+  final bool semanticNeedsEnhancement;
 }
 
 final class LocalSemanticParseResult {

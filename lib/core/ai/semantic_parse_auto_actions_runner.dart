@@ -774,6 +774,13 @@ final class SemanticParseAutoActionsRunner {
       'tag_confidence': result.tagConfidence,
       'diagnostics': <String, Object?>{
         'local_intent': result.diagnostics.localIntent,
+        'has_explicit_status_update':
+            result.diagnostics.hasExplicitStatusUpdate,
+        'has_due_signal': result.diagnostics.hasDueSignal,
+        'temporal_needs_enhancement':
+            result.diagnostics.temporalNeedsEnhancement,
+        'semantic_needs_enhancement':
+            result.diagnostics.semanticNeedsEnhancement,
       },
     });
   }
@@ -791,30 +798,38 @@ final class SemanticParseAutoActionsRunner {
       case LocalSemanticParseKind.create:
         if ((result.title ?? '').trim().isEmpty) add('title');
         if ((result.status ?? '').trim().isEmpty) add('status');
-        if (result.dueAtLocal == null) add('due_local_iso');
-        if ((result.taskType ?? '').trim().isEmpty) add('task_type');
-        if (result.suggestedTags.isEmpty) add('suggested_tags');
         break;
       case LocalSemanticParseKind.followup:
         if ((result.todoId ?? '').trim().isEmpty) add('todo_id');
-        if ((result.status ?? '').trim().isEmpty) add('new_status');
-        if (result.dueAtLocal == null) add('due_local_iso');
-        if (result.suggestedTags.isEmpty) add('suggested_tags');
+        if ((result.status ?? '').trim().isEmpty && result.dueAtLocal == null) {
+          add('new_status');
+        }
         break;
       case LocalSemanticParseKind.none:
         switch (result.diagnostics.localIntent) {
           case 'ambiguous_followup':
             add('todo_id');
-            add('new_status');
-            add('due_local_iso');
+            if (result.diagnostics.hasExplicitStatusUpdate) {
+              add('new_status');
+            }
+            if (result.diagnostics.hasDueSignal) {
+              add('due_local_iso');
+            }
             break;
           case 'needs_enhancement':
             add('kind');
-            add('title');
-            add('status');
-            add('todo_id');
-            add('new_status');
-            add('due_local_iso');
+            if (result.diagnostics.semanticNeedsEnhancement) {
+              add('title');
+              add('status');
+              add('todo_id');
+            }
+            if (result.diagnostics.hasExplicitStatusUpdate) {
+              add('new_status');
+            }
+            if (result.diagnostics.hasDueSignal ||
+                result.diagnostics.temporalNeedsEnhancement) {
+              add('due_local_iso');
+            }
             break;
           default:
             add('kind');
@@ -834,10 +849,9 @@ final class SemanticParseAutoActionsRunner {
     }
 
     return switch (result.kind) {
-      LocalSemanticParseKind.create =>
-        (result.taskType ?? '').trim().isEmpty || result.suggestedTags.isEmpty,
-      LocalSemanticParseKind.followup => result.suggestedTags.isEmpty,
-      LocalSemanticParseKind.none => false,
+      LocalSemanticParseKind.create => false,
+      LocalSemanticParseKind.followup => false,
+      LocalSemanticParseKind.none => result.diagnostics.localIntent != 'none',
     };
   }
 

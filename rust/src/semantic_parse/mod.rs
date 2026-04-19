@@ -94,7 +94,6 @@ fn build_message_action_prompt(
     out.push_str("  \"title\": string, // only when kind=create\n");
     out.push_str("  \"status\": \"open\" | \"inbox\", // only when kind=create\n");
     out.push_str("  \"task_type\": \"execution\" | \"research\" | \"comparison\" | \"live_info_lookup\" | \"reference_collection\" | \"coordination\" | \"planning\" | \"unknown\", // use a fixed enum; for non-create use unknown\n");
-    out.push_str("  \"due_local_iso\": string | null, // only when kind=create\n");
     out.push_str("  \"recurrence\": { // only when kind=create\n");
     out.push_str("    \"freq\": \"daily\" | \"weekly\" | \"monthly\" | \"yearly\",\n");
     out.push_str("    \"interval\": number // >=1\n");
@@ -489,6 +488,19 @@ mod tests {
             &[],
         );
         assert!(prompt.contains("even if no candidates match"));
+    }
+
+    #[test]
+    fn prompt_declares_due_local_iso_only_once() {
+        let prompt = build_message_action_prompt(
+            "reschedule taxes",
+            "2026-02-03T12:00:00",
+            "en",
+            21 * 60,
+            &[],
+            &[],
+        );
+        assert_eq!(prompt.matches("\"due_local_iso\"").count(), 1);
     }
 
     #[test]
