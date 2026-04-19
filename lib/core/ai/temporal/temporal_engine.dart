@@ -80,6 +80,15 @@ final class TemporalEngine {
   }) {
     switch (mode) {
       case TemporalMode.retrievalWindow:
+        final specialWindow = _projectBoundaryExpressionWindow(
+          candidate,
+          mode: mode,
+          nowLocal: nowLocal,
+          normalizedText: normalizedText,
+        );
+        if (specialWindow != null) {
+          return specialWindow;
+        }
         if (candidate.startLocal != null && candidate.endLocal != null) {
           return TemporalResolution(
             mode: mode,
@@ -146,6 +155,46 @@ final class TemporalEngine {
           ),
         );
     }
+  }
+
+  static TemporalResolution? _projectBoundaryExpressionWindow(
+    TemporalCandidate candidate, {
+    required TemporalMode mode,
+    required DateTime nowLocal,
+    required String normalizedText,
+  }) {
+    final expression =
+        candidate.metadata.normalizedExpression ?? normalizedText;
+    if (!expression.contains('春节后') || candidate.pointLocal == null) {
+      return null;
+    }
+
+    final boundary = candidate.pointLocal!;
+    if (!boundary.isAfter(nowLocal)) {
+      return TemporalResolution(
+        mode: mode,
+        confidence: candidate.confidence,
+        resolver: candidate.resolver,
+        semantics: TemporalSemantics.rangePast,
+        startLocal: boundary,
+        endLocal: nowLocal,
+        metadata: candidate.metadata.copyWith(
+          normalizedExpression: expression,
+        ),
+      );
+    }
+
+    return TemporalResolution(
+      mode: mode,
+      confidence: candidate.confidence,
+      resolver: candidate.resolver,
+      semantics: TemporalSemantics.rangeFuture,
+      startLocal: boundary,
+      endLocal: boundary.add(const Duration(days: 7)),
+      metadata: candidate.metadata.copyWith(
+        normalizedExpression: expression,
+      ),
+    );
   }
 
   static TemporalResolution _none(

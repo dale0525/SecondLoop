@@ -241,4 +241,43 @@ void main() {
     expect(result.dueAtLocal, DateTime(2027, 2, 15, 21, 0));
     expect(result.metadata.inferredCalendarSystem, 'chinese_lunar');
   });
+
+  test('retrieval_window treats 春节后 as a past-open window after the holiday',
+      () {
+    final now = DateTime(2026, 3, 1, 10, 0);
+    final result = TemporalEngine.resolve(
+      text: '春节后聊过什么',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.retrievalWindow,
+      allowEnhancement: false,
+    );
+
+    expect(result.resolver, TemporalResolver.localePlugin);
+    expect(result.semantics, TemporalSemantics.rangePast);
+    expect(result.startLocal, DateTime(2026, 2, 24));
+    expect(result.endLocal, now);
+  });
+
+  test(
+      'retrieval_window uses the most recent Spring Festival boundary instead of next year',
+      () {
+    final now = DateTime(2027, 3, 1, 10, 0);
+    final result = TemporalEngine.resolve(
+      text: '春节后都处理了哪些报销',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.retrievalWindow,
+      allowEnhancement: false,
+    );
+
+    expect(result.resolver, TemporalResolver.localePlugin);
+    expect(result.semantics, TemporalSemantics.rangePast);
+    expect(result.startLocal, DateTime(2027, 2, 15));
+    expect(result.endLocal, now);
+  });
 }

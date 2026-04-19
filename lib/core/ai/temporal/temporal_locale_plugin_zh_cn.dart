@@ -30,7 +30,7 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     if (text.contains('年初一之后第一个工作日') ||
         text.contains('年初一后第一个工作日') ||
         text.contains('节后第一个工作日')) {
-      final firstWorkingDay = _resolveNextFestivalBoundary(
+      final firstWorkingDay = _resolveFestivalBoundary(
         request.nowLocal,
         useFirstWorkingDay: true,
       );
@@ -45,7 +45,7 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     }
 
     if (text.contains('年初一')) {
-      final newYearDay = _resolveNextFestivalBoundary(
+      final newYearDay = _resolveFestivalBoundary(
         request.nowLocal,
         useFirstWorkingDay: false,
       );
@@ -60,17 +60,17 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     }
 
     if (text.contains('春节后')) {
-      final firstWorkingDay = _resolveNextFestivalBoundary(
+      final firstWorkingDay = _resolveFestivalBoundary(
         request.nowLocal,
         useFirstWorkingDay: true,
+        preferPastIfAvailable: true,
       );
       if (firstWorkingDay == null) return null;
       return TemporalCandidate(
         resolver: TemporalResolver.localePlugin,
         confidence: 0.82,
         semantics: TemporalSemantics.rangeFuture,
-        startLocal: firstWorkingDay,
-        endLocal: firstWorkingDay.add(const Duration(days: 7)),
+        pointLocal: firstWorkingDay,
         metadata: metadata,
       );
     }
@@ -88,33 +88,42 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
         text.contains('春节后'))) {
       return false;
     }
-    return _resolveNextFestivalBoundary(
+    return _resolveFestivalBoundary(
           request.nowLocal,
           useFirstWorkingDay: text.contains('年初一之后第一个工作日') ||
               text.contains('年初一后第一个工作日') ||
-              text.contains('节后第一个工作日') ||
-              text.contains('春节后'),
+              text.contains('节后第一个工作日'),
+          preferPastIfAvailable: text.contains('春节后'),
         ) ==
         null;
   }
 
-  static DateTime? _resolveNextFestivalBoundary(
+  static DateTime? _resolveFestivalBoundary(
     DateTime nowLocal, {
     required bool useFirstWorkingDay,
+    bool preferPastIfAvailable = false,
   }) {
     final today = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
     final years = _lunarNewYearDay.keys.toList()..sort();
+    DateTime? mostRecent;
+    DateTime? upcoming;
     for (final year in years) {
       final newYearDay = _lunarNewYearDay[year];
       if (newYearDay == null) continue;
       final candidate = useFirstWorkingDay
           ? _firstWorkingDayAfterFestival(newYearDay)
           : newYearDay;
-      if (!candidate.isBefore(today)) {
-        return candidate;
+      if (!candidate.isAfter(today)) {
+        mostRecent = candidate;
+      }
+      if (upcoming == null && !candidate.isBefore(today)) {
+        upcoming = candidate;
+        if (!preferPastIfAvailable) {
+          return upcoming;
+        }
       }
     }
-    return null;
+    return preferPastIfAvailable ? (mostRecent ?? upcoming) : upcoming;
   }
 
   static DateTime _firstWorkingDayAfterFestival(DateTime newYearDay) {

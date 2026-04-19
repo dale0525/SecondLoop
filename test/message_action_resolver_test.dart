@@ -92,6 +92,26 @@ void main() {
     expect(follow.dueAtLocal, isNotNull);
   });
 
+  test('followup can combine explicit status and due update in one decision',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      '把报销完成并改到明天',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: '报销', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionFollowUpDecision>());
+    final follow = decision as MessageActionFollowUpDecision;
+    expect(follow.todoId, 'todo:1');
+    expect(follow.newStatus, 'done');
+    expect(follow.dueAtLocal, DateTime(2026, 2, 5, 21, 0));
+  });
+
   test('time plus matching title does not force followup without edit cue', () {
     final now = DateTime(2026, 2, 4, 10, 0);
     final decision = MessageActionResolver.resolve(

@@ -160,22 +160,13 @@ extension _ChatPageStateMethodsC on _ChatPageState {
         final didUpdateDue = dueAtLocal != null;
         final didUpdateStatus = newStatus != null;
         try {
-          if (dueAtLocal != null) {
-            await backend.updateTodoDueWithScope(
-              sessionKey,
-              todoId: selected.id,
-              dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
-              scope: TodoRecurrenceEditScope.thisOnly,
-            );
-          }
-          if (newStatus != null) {
-            await backend.setTodoStatus(
-              sessionKey,
-              todoId: selected.id,
-              newStatus: newStatus,
-              sourceMessageId: message.id,
-            );
-          }
+          await backend.transitionTodo(
+            sessionKey,
+            todoId: selected.id,
+            newStatus: newStatus,
+            dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
+            sourceMessageId: message.id,
+          );
           syncEngine?.notifyLocalMutation();
         } catch (_) {
           return;
