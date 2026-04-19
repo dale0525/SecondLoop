@@ -41,6 +41,7 @@ final class TemporalEngine {
           nowLocal: nowLocal,
           locale: locale,
           firstDayOfWeek: firstDayOfWeek,
+          mode: mode,
         ) ??
         TemporalLocalePluginRegistry.resolve(request);
     final needsEnhancementHint =

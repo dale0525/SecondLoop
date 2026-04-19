@@ -112,6 +112,58 @@ void main() {
     expect(follow.dueAtLocal, DateTime(2026, 2, 5, 21, 0));
   });
 
+  test('localized followup reschedule cues do not regress to create', () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final cases = <({String text, Locale locale, DateTime expectedDueAt})>[
+      (
+        text: 'déplacer remboursement à mardi',
+        locale: const Locale('fr'),
+        expectedDueAt: DateTime(2026, 2, 10, 21, 0),
+      ),
+      (
+        text: 'verschieben erstattung auf freitag',
+        locale: const Locale('de'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '経費精算を金曜日に変更',
+        locale: const Locale('ja'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '환급을 금요일로 변경',
+        locale: const Locale('ko'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+    ];
+
+    for (final c in cases) {
+      final decision = MessageActionResolver.resolve(
+        c.text,
+        locale: c.locale,
+        nowLocal: now,
+        dayEndMinutes: 21 * 60,
+        openTodoTargets: const <TodoLinkTarget>[
+          TodoLinkTarget(id: 'todo:1', title: 'remboursement', status: 'open'),
+          TodoLinkTarget(id: 'todo:2', title: 'erstattung', status: 'open'),
+          TodoLinkTarget(id: 'todo:3', title: '経費精算', status: 'open'),
+          TodoLinkTarget(id: 'todo:4', title: '환급', status: 'open'),
+        ],
+      );
+
+      expect(
+        decision,
+        isA<MessageActionFollowUpDecision>(),
+        reason: 'locale=${c.locale} text=${c.text}',
+      );
+      final follow = decision as MessageActionFollowUpDecision;
+      expect(follow.newStatus, isNull,
+          reason: 'locale=${c.locale} text=${c.text}');
+      expect(follow.dueAtLocal, c.expectedDueAt,
+          reason: 'locale=${c.locale} text=${c.text}');
+    }
+  });
+
   test('time plus matching title does not force followup without edit cue', () {
     final now = DateTime(2026, 2, 4, 10, 0);
     final decision = MessageActionResolver.resolve(

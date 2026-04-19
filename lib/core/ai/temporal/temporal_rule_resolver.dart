@@ -412,6 +412,7 @@ final class TemporalRuleResolver {
     required DateTime nowLocal,
     required Locale locale,
     required int firstDayOfWeek,
+    required TemporalMode mode,
   }) {
     if (normalizedText.isEmpty) return null;
 
@@ -422,6 +423,7 @@ final class TemporalRuleResolver {
       normalizedText: normalizedText,
       nowLocal: nowLocal,
       timeOfDay: timeOfDay,
+      preferFuture: mode != TemporalMode.retrievalWindow,
     );
     if (explicitDateCandidate != null) {
       return explicitDateCandidate;
@@ -617,6 +619,7 @@ final class TemporalRuleResolver {
     required String normalizedText,
     required DateTime nowLocal,
     required _TemporalTimeOfDay? timeOfDay,
+    required bool preferFuture,
   }) {
     final isoMatch = _isoDate.firstMatch(normalizedText);
     if (isoMatch != null) {
@@ -646,7 +649,12 @@ final class TemporalRuleResolver {
       final rawYear = slashMatch.group(3);
       if (month != null && day != null) {
         final year = rawYear == null
-            ? _resolveYearForMonthDay(nowLocal, month, day)
+            ? _resolveYearForMonthDay(
+                nowLocal,
+                month,
+                day,
+                preferFuture: preferFuture,
+              )
             : rawYear.length == 2
                 ? 2000 + int.parse(rawYear)
                 : int.parse(rawYear);
@@ -671,7 +679,12 @@ final class TemporalRuleResolver {
       final month = int.tryParse(cjkMatch.group(1)!);
       final day = int.tryParse(cjkMatch.group(2)!);
       if (month != null && day != null) {
-        final year = _resolveYearForMonthDay(nowLocal, month, day);
+        final year = _resolveYearForMonthDay(
+          nowLocal,
+          month,
+          day,
+          preferFuture: preferFuture,
+        );
         if (_isValidDate(year, month, day)) {
           return TemporalCandidate(
             resolver: TemporalResolver.rule,
@@ -873,13 +886,24 @@ final class TemporalRuleResolver {
     return day <= endOfMonth;
   }
 
-  static int _resolveYearForMonthDay(DateTime nowLocal, int month, int day) {
+  static int _resolveYearForMonthDay(
+    DateTime nowLocal,
+    int month,
+    int day, {
+    required bool preferFuture,
+  }) {
+    final startOfToday = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
     final currentYear = DateTime(nowLocal.year, month, day);
-    if (!currentYear
-        .isBefore(DateTime(nowLocal.year, nowLocal.month, nowLocal.day))) {
+    if (preferFuture) {
+      if (!currentYear.isBefore(startOfToday)) {
+        return nowLocal.year;
+      }
+      return nowLocal.year + 1;
+    }
+    if (!currentYear.isAfter(startOfToday)) {
       return nowLocal.year;
     }
-    return nowLocal.year + 1;
+    return nowLocal.year - 1;
   }
 
   static DateTime _lastDayOfMonth(int year, int month) {

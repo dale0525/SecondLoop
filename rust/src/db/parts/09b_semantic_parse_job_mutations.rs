@@ -236,8 +236,14 @@ SET status = 'succeeded',
     applied_todo_id = ?3,
     applied_todo_title = ?4,
     applied_prev_todo_status = ?5,
-    applied_prev_todo_due_at_ms = ?6,
-    applied_due_changed = ?7,
+    applied_prev_todo_due_at_ms = CASE
+      WHEN status = 'succeeded' AND ?6 IS NULL THEN applied_prev_todo_due_at_ms
+      ELSE ?6
+    END,
+    applied_due_changed = CASE
+      WHEN status = 'succeeded' AND ?7 = 0 THEN applied_due_changed
+      ELSE ?7
+    END,
     suggested_tags_json = ?8,
     suggested_tag_confidence = ?9,
     tag_suggestion_state = ?10,

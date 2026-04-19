@@ -208,6 +208,24 @@ void main() {
     expect(result.endLocal, DateTime(2026, 2, 4));
   });
 
+  test('retrieval_window uses the most recent past year for month-day queries',
+      () {
+    final result = TemporalEngine.resolve(
+      text: '2月1号都聊过什么',
+      nowLocal: DateTime(2026, 3, 1, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      timezone: '',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.retrievalWindow,
+      allowEnhancement: false,
+    );
+
+    expect(result.semantics, TemporalSemantics.rangePast);
+    expect(result.startLocal, DateTime(2026, 2, 1));
+    expect(result.endLocal, DateTime(2026, 2, 2));
+    expect(result.metadata.normalizedExpression, '2月1号');
+  });
+
   test('todo_due keeps same-day weekday on today when no explicit time', () {
     final result = TemporalEngine.resolve(
       text: '周三',

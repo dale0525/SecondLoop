@@ -513,6 +513,79 @@ fn semantic_parse_jobs_succeeded_job_allows_metadata_refresh() {
     assert_eq!(jobs[0].status, "succeeded");
     assert_eq!(jobs[0].tag_suggestion_state.as_deref(), Some("dismissed"));
     assert_eq!(jobs[0].suggested_tags, Some(vec!["work".to_string()]));
+    assert_eq!(jobs[0].applied_prev_todo_due_at_ms, None);
+    assert!(!jobs[0].applied_due_changed);
+}
+
+#[test]
+fn semantic_parse_jobs_succeeded_refresh_preserves_followup_due_undo_metadata() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [6u8; 32];
+
+    let now_ms = 8_000i64;
+    enqueue_semantic_parse_job(&conn, "msg:refresh-due-meta", now_ms).expect("enqueue");
+    let attempt_id =
+        mark_semantic_parse_job_running(&conn, "msg:refresh-due-meta", now_ms + 1).expect("run");
+
+    let seeded = upsert_todo(
+        &conn,
+        &key,
+        "todo:refresh-due-meta",
+        "报销",
+        Some(16_200),
+        "open",
+        Some("msg:refresh-due-meta"),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("seed todo");
+
+    let applied = complete_semantic_parse_followup_if_current_attempt(
+        &conn,
+        &key,
+        "msg:refresh-due-meta",
+        attempt_id,
+        &seeded.id,
+        Some("报销"),
+        None,
+        Some(16_500),
+        Some(&["work".to_string()]),
+        None,
+        Some(0.72),
+        now_ms + 2,
+    )
+    .expect("complete followup");
+    assert!(applied);
+
+    mark_semantic_parse_job_succeeded_with_tag_metadata(
+        &conn,
+        &key,
+        "msg:refresh-due-meta",
+        "followup",
+        Some(&seeded.id),
+        Some("报销"),
+        None,
+        Some(&["work".to_string()]),
+        Some(0.72),
+        Some("dismissed"),
+        None,
+        now_ms + 3,
+    )
+    .expect("refresh metadata");
+
+    let jobs =
+        list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:refresh-due-meta".to_string()])
+            .expect("list jobs");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].status, "succeeded");
+    assert_eq!(jobs[0].tag_suggestion_state.as_deref(), Some("dismissed"));
+    assert_eq!(jobs[0].applied_prev_todo_status.as_deref(), None);
+    assert_eq!(jobs[0].applied_prev_todo_due_at_ms, Some(16_200));
+    assert!(jobs[0].applied_due_changed);
 }
 
 #[test]
