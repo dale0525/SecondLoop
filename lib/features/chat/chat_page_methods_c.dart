@@ -226,22 +226,33 @@ extension _ChatPageStateMethodsC on _ChatPageState {
                   if (!didUpdateDue && !didUpdateStatus) {
                     return;
                   }
+                  final todos = await backend.listTodos(sessionKey);
+                  Todo? current;
+                  for (final todo in todos) {
+                    if (todo.id == selected.id) {
+                      current = todo;
+                      break;
+                    }
+                  }
+                  if (current == null) {
+                    return;
+                  }
                   await backend.upsertTodo(
                     sessionKey,
-                    id: selected.id,
-                    title: selected.title,
+                    id: current.id,
+                    title: current.title,
                     dueAtMs: didUpdateDue
                         ? previousDueAtMs
-                        : selected.dueAtMs?.toInt(),
-                    status: didUpdateStatus ? previousStatus : selected.status,
-                    sourceEntryId: selected.sourceEntryId,
-                    reviewStage: selected.reviewStage?.toInt(),
-                    nextReviewAtMs: selected.nextReviewAtMs?.toInt(),
-                    lastReviewAtMs: selected.lastReviewAtMs?.toInt(),
+                        : current.dueAtMs?.toInt(),
+                    status: didUpdateStatus ? previousStatus : current.status,
+                    sourceEntryId: current.sourceEntryId,
+                    reviewStage: current.reviewStage?.toInt(),
+                    nextReviewAtMs: current.nextReviewAtMs?.toInt(),
+                    lastReviewAtMs: current.lastReviewAtMs?.toInt(),
                     manualImportanceNudgeScore:
-                        selected.manualImportanceNudgeScore?.toInt(),
+                        current.manualImportanceNudgeScore?.toInt(),
                     manualUrgencyNudgeScore:
-                        selected.manualUrgencyNudgeScore?.toInt(),
+                        current.manualUrgencyNudgeScore?.toInt(),
                   );
                   syncEngine?.notifyLocalMutation();
                 } catch (_) {

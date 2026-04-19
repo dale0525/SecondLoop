@@ -420,6 +420,8 @@ class MessageActionResolver {
       allowEnhancement: false,
       dayEndMinutes: dayEndMinutes,
     );
+    final followupDueAtLocal =
+        followupEditCue ? followupTemporal.dueAtLocal : null;
 
     // Follow-up (existing todo)
     if (openTodoTargets.isNotEmpty) {
@@ -441,12 +443,11 @@ class MessageActionResolver {
                 (top.score - secondScore) >= 500);
 
         if (highConfidence &&
-            (updateIntent.isExplicit ||
-                (followupTemporal.dueAtLocal != null && followupEditCue))) {
+            (updateIntent.isExplicit || followupDueAtLocal != null)) {
           return MessageActionFollowUpDecision(
             todoId: top.target.id,
             newStatus: updateIntent.isExplicit ? updateIntent.newStatus : null,
-            dueAtLocal: followupTemporal.dueAtLocal,
+            dueAtLocal: followupDueAtLocal,
           );
         }
       }

@@ -133,6 +133,49 @@ void main() {
     expect(client.lastUnresolvedFields, contains('due_local_iso'));
     expect(store.updatedDueByTodoId['todo:1'], isNotNull);
   });
+
+  test('runner ignores enhancement followup ids outside candidate set',
+      () async {
+    final store = _FakeStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:4',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{'msg:4': '把这个改到节后第一个工作日'},
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(id: 'todo:1', title: '报销', status: 'open'),
+      ],
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"followup","confidence":0.91,"todo_id":"todo:missing","new_status":null,"due_local_iso":"2026-02-24T21:00:00"}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 4, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(store.updatedStatusByTodoId, isEmpty);
+    expect(store.updatedDueByTodoId, isEmpty);
+  });
 }
 
 final class _FakeStore implements SemanticParseAutoActionsStore {

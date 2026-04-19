@@ -623,6 +623,24 @@ final class SemanticParseAutoActionsRunner {
                 .map((c) => c.title)
                 .cast<String?>()
                 .firstWhere((_) => true, orElse: () => null);
+            if (candidateTitle == null) {
+              final appliedTagIds =
+                  await store.completeNoActionIfCurrentAttempt(
+                messageId: job.messageId,
+                expectedAttemptId: attemptId,
+                pendingSuggestedTags: pendingSuggestedTags,
+                autoApplySuggestedTags: autoApplySuggestedTags,
+                suggestedTagConfidence: suggestedTagConfidence,
+                nowMs: nowMs,
+              );
+              if (appliedTagIds == null) {
+                continue;
+              }
+              if (appliedTagIds.isNotEmpty) {
+                didMutateAny = true;
+              }
+              continue;
+            }
 
             final didFinalize = await store.completeFollowupIfCurrentAttempt(
               messageId: job.messageId,

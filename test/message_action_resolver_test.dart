@@ -23,6 +23,7 @@ void main() {
     final follow = decision as MessageActionFollowUpDecision;
     expect(follow.todoId, 'todo:1');
     expect(follow.newStatus, 'done');
+    expect(follow.dueAtLocal, isNull);
   });
 
   test('does not treat "今天把 X 做完了" as create just because of today', () {
