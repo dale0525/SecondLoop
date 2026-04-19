@@ -240,6 +240,67 @@ void main() {
     expect(find.text('AI analysis canceled'), findsNothing);
     expect(find.text('Retry'), findsNothing);
   });
+
+  testWidgets('undo restores due-only followup updates',
+      (WidgetTester tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _RecordingBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'todo:1',
+          title: '报销',
+          dueAtMs: PlatformInt64Util.from(1730),
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: PlatformInt64Util.from(0),
+          updatedAtMs: PlatformInt64Util.from(0),
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualImportanceNudgeScore: null,
+          manualUrgencyNudgeScore: null,
+        ),
+      ],
+    );
+    final job = SemanticParseJob(
+      messageId: message.id,
+      status: 'succeeded',
+      attemptId: PlatformInt64Util.from(0),
+      attempts: PlatformInt64Util.from(0),
+      nextRetryAtMs: null,
+      lastError: null,
+      appliedActionKind: 'followup',
+      appliedTodoId: 'todo:1',
+      appliedTodoTitle: '报销',
+      appliedPrevTodoStatus: null,
+      appliedPrevTodoDueAtMs: PlatformInt64Util.from(1200),
+      appliedDueChanged: true,
+      suggestedTags: null,
+      suggestedTagConfidence: null,
+      tagSuggestionState: null,
+      appliedTagIds: null,
+      undoneAtMs: null,
+      createdAtMs: PlatformInt64Util.from(nowMs),
+      updatedAtMs: PlatformInt64Util.from(nowMs),
+    );
+
+    await tester.pumpWidget(
+      _buildHost(
+        message: message,
+        job: job,
+        backend: backend,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Undo'));
+    await tester.pump();
+
+    expect(backend.lastUpsertTodoId, 'todo:1');
+    expect(backend.lastUpsertTodoDueAtMs, 1200);
+    expect(backend.lastUpsertTodoStatus, 'open');
+    expect(backend.lastUndoneMessageId, 'm1');
+  });
 }
 
 Widget _buildHost({
@@ -269,9 +330,18 @@ Widget _buildHost({
 }
 
 final class _RecordingBackend extends TestAppBackend {
+  _RecordingBackend({
+    List<Todo> todos = const <Todo>[],
+  }) : _todos = List<Todo>.from(todos);
+
+  final List<Todo> _todos;
   String? lastTagSuggestionState;
   List<String>? lastSuggestedTags;
   String? lastCanceledMessageId;
+  String? lastUndoneMessageId;
+  String? lastUpsertTodoId;
+  int? lastUpsertTodoDueAtMs;
+  String? lastUpsertTodoStatus;
 
   @override
   Future<void> markSemanticParseJobCanceled(
@@ -298,5 +368,59 @@ final class _RecordingBackend extends TestAppBackend {
   }) async {
     lastTagSuggestionState = tagSuggestionState;
     lastSuggestedTags = suggestedTags;
+  }
+
+  @override
+  Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
+
+  @override
+  Future<Todo> upsertTodo(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
+  }) async {
+    lastUpsertTodoId = id;
+    lastUpsertTodoDueAtMs = dueAtMs;
+    lastUpsertTodoStatus = status;
+    return Todo(
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
+      status: status,
+      sourceEntryId: sourceEntryId,
+      createdAtMs: PlatformInt64Util.from(0),
+      updatedAtMs: PlatformInt64Util.from(0),
+      reviewStage:
+          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
+      nextReviewAtMs: nextReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(nextReviewAtMs),
+      lastReviewAtMs: lastReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(lastReviewAtMs),
+      manualImportanceNudgeScore: manualImportanceNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualImportanceNudgeScore),
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualUrgencyNudgeScore),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobUndone(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    lastUndoneMessageId = messageId;
   }
 }

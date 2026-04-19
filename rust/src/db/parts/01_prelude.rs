@@ -377,6 +377,8 @@ pub struct SemanticParseJob {
     pub applied_todo_id: Option<String>,
     pub applied_todo_title: Option<String>,
     pub applied_prev_todo_status: Option<String>,
+    pub applied_prev_todo_due_at_ms: Option<i64>,
+    pub applied_due_changed: bool,
     pub suggested_tags: Option<Vec<String>>,
     pub suggested_tag_confidence: Option<f64>,
     pub tag_suggestion_state: Option<String>,

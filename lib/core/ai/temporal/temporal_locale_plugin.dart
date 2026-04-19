@@ -7,6 +7,8 @@ abstract interface class TemporalLocalePlugin {
   bool supports(Locale locale);
 
   TemporalCandidate? resolve(TemporalPluginRequest request);
+
+  bool needsEnhancement(TemporalPluginRequest request);
 }
 
 final class TemporalLocalePluginRegistry {
@@ -23,5 +25,15 @@ final class TemporalLocalePluginRegistry {
       }
     }
     return null;
+  }
+
+  static bool needsEnhancement(TemporalPluginRequest request) {
+    for (final plugin in _plugins) {
+      if (!plugin.supports(request.locale)) continue;
+      if (plugin.needsEnhancement(request)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

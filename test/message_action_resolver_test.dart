@@ -109,6 +109,22 @@ void main() {
     expect(create.dueAtLocal, DateTime(2026, 2, 6, 21, 0));
   });
 
+  test('next-week weekday create keeps correct due date and clean title', () {
+    final now = DateTime(2026, 2, 2, 10, 0); // Monday
+    final decision = MessageActionResolver.resolve(
+      '下周二报销',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, '报销');
+    expect(create.dueAtLocal, DateTime(2026, 2, 10, 21, 0));
+  });
+
   test(
       'followup keeps day-after-tomorrow semantics for localized relative days',
       () {

@@ -11345,6 +11345,8 @@ impl SseDecode for crate::db::SemanticParseJob {
         let mut var_appliedTodoId = <Option<String>>::sse_decode(deserializer);
         let mut var_appliedTodoTitle = <Option<String>>::sse_decode(deserializer);
         let mut var_appliedPrevTodoStatus = <Option<String>>::sse_decode(deserializer);
+        let mut var_appliedPrevTodoDueAtMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_appliedDueChanged = <bool>::sse_decode(deserializer);
         let mut var_suggestedTags = <Option<Vec<String>>>::sse_decode(deserializer);
         let mut var_suggestedTagConfidence = <Option<f64>>::sse_decode(deserializer);
         let mut var_tagSuggestionState = <Option<String>>::sse_decode(deserializer);
@@ -11363,6 +11365,8 @@ impl SseDecode for crate::db::SemanticParseJob {
             applied_todo_id: var_appliedTodoId,
             applied_todo_title: var_appliedTodoTitle,
             applied_prev_todo_status: var_appliedPrevTodoStatus,
+            applied_prev_todo_due_at_ms: var_appliedPrevTodoDueAtMs,
+            applied_due_changed: var_appliedDueChanged,
             suggested_tags: var_suggestedTags,
             suggested_tag_confidence: var_suggestedTagConfidence,
             tag_suggestion_state: var_tagSuggestionState,
@@ -12622,6 +12626,10 @@ impl flutter_rust_bridge::IntoDart for crate::db::SemanticParseJob {
             self.applied_todo_id.into_into_dart().into_dart(),
             self.applied_todo_title.into_into_dart().into_dart(),
             self.applied_prev_todo_status.into_into_dart().into_dart(),
+            self.applied_prev_todo_due_at_ms
+                .into_into_dart()
+                .into_dart(),
+            self.applied_due_changed.into_into_dart().into_dart(),
             self.suggested_tags.into_into_dart().into_dart(),
             self.suggested_tag_confidence.into_into_dart().into_dart(),
             self.tag_suggestion_state.into_into_dart().into_dart(),
@@ -13790,6 +13798,8 @@ impl SseEncode for crate::db::SemanticParseJob {
         <Option<String>>::sse_encode(self.applied_todo_id, serializer);
         <Option<String>>::sse_encode(self.applied_todo_title, serializer);
         <Option<String>>::sse_encode(self.applied_prev_todo_status, serializer);
+        <Option<i64>>::sse_encode(self.applied_prev_todo_due_at_ms, serializer);
+        <bool>::sse_encode(self.applied_due_changed, serializer);
         <Option<Vec<String>>>::sse_encode(self.suggested_tags, serializer);
         <Option<f64>>::sse_encode(self.suggested_tag_confidence, serializer);
         <Option<String>>::sse_encode(self.tag_suggestion_state, serializer);

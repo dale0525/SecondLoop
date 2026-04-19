@@ -621,6 +621,37 @@ class LocalTimeResolver {
     }
 
     // 4) Weekday anchor (Mon..Sun)
+    final scopedWeekday = _matchWeekScopedWeekdayToken(normalized, lower);
+    if (scopedWeekday != null) {
+      final thisWeekStart = _startOfWeek(nowLocal, 1);
+      final weekStart = thisWeekStart.add(
+        Duration(days: scopedWeekday.offsetWeeks * 7),
+      );
+      final weekdayOffset = (scopedWeekday.weekday - DateTime.monday + 7) % 7;
+      final day = weekStart.add(Duration(days: weekdayOffset));
+      final due = timeOfDay == null
+          ? _atDayEnd(day, dayEndMinutes)
+          : DateTime(
+              day.year,
+              day.month,
+              day.day,
+              timeOfDay.hour,
+              timeOfDay.minute,
+            );
+      return LocalTimeResolution(
+        kind: 'weekday',
+        matchedText: scopedWeekday.token,
+        candidates: [
+          DueCandidate(
+            dueAtLocal: due,
+            label: timeOfDay == null
+                ? _formatWeekdayLabel(due, locale)
+                : _formatDateTimeLabel(due, locale),
+          ),
+        ],
+      );
+    }
+
     final weekdayMatch = _matchWeekdayToken(normalized, lower);
     if (weekdayMatch != null) {
       final next = _nextWeekdayOnOrAfter(nowLocal, weekdayMatch.weekday);
@@ -808,6 +839,43 @@ class LocalTimeResolver {
     return null;
   }
 
+  static ({String token, int weekday, int offsetWeeks})?
+      _matchWeekScopedWeekdayToken(String original, String lower) {
+    const weekTokens = <({String token, int offsetWeeks})>[
+      (token: '本周', offsetWeeks: 0),
+      (token: '本週', offsetWeeks: 0),
+      (token: '这周', offsetWeeks: 0),
+      (token: '這週', offsetWeeks: 0),
+      (token: '这星期', offsetWeeks: 0),
+      (token: '這星期', offsetWeeks: 0),
+      (token: '下周', offsetWeeks: 1),
+      (token: '下週', offsetWeeks: 1),
+      (token: '下星期', offsetWeeks: 1),
+      (token: '上周', offsetWeeks: -1),
+      (token: '上週', offsetWeeks: -1),
+      (token: '上星期', offsetWeeks: -1),
+    ];
+
+    for (final week in weekTokens) {
+      final weekIndex = original.indexOf(week.token);
+      if (weekIndex == -1 && !lower.contains(week.token.toLowerCase())) {
+        continue;
+      }
+      for (final entry in _weekdayTokens) {
+        final token = _matchToken(original, lower, entry.tokens);
+        if (token == null) continue;
+        final tokenIndex = original.indexOf(token);
+        if (tokenIndex == -1 || tokenIndex <= weekIndex) continue;
+        return (
+          token: original.substring(weekIndex, tokenIndex + token.length),
+          weekday: entry.weekday,
+          offsetWeeks: week.offsetWeeks,
+        );
+      }
+    }
+    return null;
+  }
+
   static bool looksLikeReviewIntent(String text) {
     final normalized = text.trim();
     if (normalized.isEmpty) return false;
@@ -861,6 +929,18 @@ class LocalTimeResolver {
       return (token: token, weekday: entry.weekday);
     }
     return null;
+  }
+
+  static DateTime _startOfWeek(DateTime nowLocal, int firstDayOfWeekIndex) {
+    final firstWeekday = _firstWeekdayFromIndex(firstDayOfWeekIndex);
+    final base = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+    final delta = (base.weekday - firstWeekday + 7) % 7;
+    return base.subtract(Duration(days: delta));
+  }
+
+  static int _firstWeekdayFromIndex(int firstDayOfWeekIndex) {
+    if (firstDayOfWeekIndex == 0) return DateTime.sunday;
+    return firstDayOfWeekIndex.clamp(DateTime.monday, DateTime.saturday);
   }
 
   static ({int hour, int minute, String matchedText})? _parseTimeOfDay(

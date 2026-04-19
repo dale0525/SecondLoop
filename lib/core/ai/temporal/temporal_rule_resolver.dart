@@ -427,6 +427,16 @@ final class TemporalRuleResolver {
       return explicitDateCandidate;
     }
 
+    final weekScopedWeekday = _resolveWeekScopedWeekday(
+      normalizedText: normalizedText,
+      nowLocal: nowLocal,
+      firstDayOfWeek: firstDayOfWeek,
+      timeOfDay: timeOfDay,
+    );
+    if (weekScopedWeekday != null) {
+      return weekScopedWeekday;
+    }
+
     final weekCandidate = _resolveWeekRange(
       normalizedText: normalizedText,
       nowLocal: nowLocal,
@@ -561,6 +571,44 @@ final class TemporalRuleResolver {
     }
 
     return null;
+  }
+
+  static TemporalCandidate? _resolveWeekScopedWeekday({
+    required String normalizedText,
+    required DateTime nowLocal,
+    required int firstDayOfWeek,
+    required _TemporalTimeOfDay? timeOfDay,
+  }) {
+    final scopedWeekday = _matchWeekScopedWeekday(normalizedText);
+    if (scopedWeekday == null) return null;
+
+    final thisWeekStart = _startOfWeek(nowLocal, firstDayOfWeek);
+    final weekStart = thisWeekStart.add(
+      Duration(days: scopedWeekday.offsetWeeks * 7),
+    );
+    final firstWeekday = _firstWeekdayFromIndex(firstDayOfWeek);
+    final weekdayOffset = (scopedWeekday.weekday - firstWeekday + 7) % 7;
+    final day = weekStart.add(Duration(days: weekdayOffset));
+    final point = timeOfDay == null
+        ? day
+        : DateTime(
+            day.year,
+            day.month,
+            day.day,
+            timeOfDay.hour,
+            timeOfDay.minute,
+          );
+    return TemporalCandidate(
+      resolver: TemporalResolver.rule,
+      confidence: 0.93,
+      semantics: TemporalSemantics.pointInTime,
+      pointLocal: point,
+      hasExplicitTime: timeOfDay != null,
+      metadata: TemporalMetadata(
+        inferredTimeOfDay: timeOfDay?.label,
+        normalizedExpression: scopedWeekday.token,
+      ),
+    );
   }
 
   static TemporalCandidate? _resolveExplicitDate({
@@ -704,6 +752,32 @@ final class TemporalRuleResolver {
       for (final token in entry.tokens) {
         if (normalizedText.contains(token.toLowerCase())) {
           return (token: token, weekday: entry.weekday);
+        }
+      }
+    }
+    return null;
+  }
+
+  static ({String token, int weekday, int offsetWeeks})?
+      _matchWeekScopedWeekday(String normalizedText) {
+    for (final week in _weekTokens) {
+      final weekIndex = normalizedText.indexOf(week.token.toLowerCase());
+      if (weekIndex == -1) continue;
+      for (final weekdayEntry in _weekdayTokens) {
+        for (final token in weekdayEntry.tokens) {
+          final tokenIndex = normalizedText.indexOf(
+            token.toLowerCase(),
+            weekIndex + week.token.length,
+          );
+          if (tokenIndex == -1) continue;
+          return (
+            token: normalizedText.substring(
+              weekIndex,
+              tokenIndex + token.length,
+            ),
+            weekday: weekdayEntry.weekday,
+            offsetWeeks: week.offsetWeeks,
+          );
         }
       }
     }

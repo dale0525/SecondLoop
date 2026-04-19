@@ -95,14 +95,19 @@ final class LocalSemanticParser {
           dayEndMinutes: dayEndMinutes,
         );
         final looksLikeFollowupEdit = looksLikeTodoFollowupEdit(raw);
+        final temporalNeedsEnhancement =
+            dueForFollowup.metadata.needsEnhancement ||
+                dueForCreate.metadata.needsEnhancement;
         final hasAutomationSignal = updateIntent.isExplicit ||
             dueForFollowup.dueAtLocal != null ||
             dueForCreate.dueAtLocal != null ||
             looksLikeFollowupEdit;
-        final needsEnhancement =
-            !hasAutomationSignal && looksLikeTodoRelevantForSemanticParse(raw);
-        final ambiguousFollowup =
-            hasAutomationSignal && openTodoTargets.length > 1;
+        final needsEnhancement = temporalNeedsEnhancement ||
+            (!hasAutomationSignal &&
+                looksLikeTodoRelevantForSemanticParse(raw));
+        final ambiguousFollowup = !temporalNeedsEnhancement &&
+            hasAutomationSignal &&
+            openTodoTargets.length > 1;
         return LocalSemanticParseResult(
           kind: LocalSemanticParseKind.none,
           confidence: ambiguousFollowup

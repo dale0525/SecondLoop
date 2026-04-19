@@ -11,18 +11,21 @@ final class TemporalMetadata {
     this.inferredTimeOfDay,
     this.inferredCalendarSystem,
     this.ambiguous = false,
+    this.needsEnhancement = false,
     this.normalizedExpression,
   });
 
   final String? inferredTimeOfDay;
   final String? inferredCalendarSystem;
   final bool ambiguous;
+  final bool needsEnhancement;
   final String? normalizedExpression;
 
   TemporalMetadata copyWith({
     String? inferredTimeOfDay,
     String? inferredCalendarSystem,
     bool? ambiguous,
+    bool? needsEnhancement,
     String? normalizedExpression,
   }) {
     return TemporalMetadata(
@@ -30,6 +33,7 @@ final class TemporalMetadata {
       inferredCalendarSystem:
           inferredCalendarSystem ?? this.inferredCalendarSystem,
       ambiguous: ambiguous ?? this.ambiguous,
+      needsEnhancement: needsEnhancement ?? this.needsEnhancement,
       normalizedExpression: normalizedExpression ?? this.normalizedExpression,
     );
   }

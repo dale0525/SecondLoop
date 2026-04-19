@@ -43,6 +43,8 @@ final class TemporalEngine {
           firstDayOfWeek: firstDayOfWeek,
         ) ??
         TemporalLocalePluginRegistry.resolve(request);
+    final needsEnhancementHint =
+        TemporalLocalePluginRegistry.needsEnhancement(request);
 
     if (candidate == null ||
         candidate.isAmbiguous ||
@@ -52,8 +54,11 @@ final class TemporalEngine {
         confidence: candidate?.confidence ?? 0,
         resolver: TemporalResolver.none,
         semantics: TemporalSemantics.none,
-        metadata: (candidate?.metadata ?? const TemporalMetadata())
-            .copyWith(normalizedExpression: normalizedText),
+        metadata: (candidate?.metadata ?? const TemporalMetadata()).copyWith(
+          normalizedExpression: normalizedText,
+          needsEnhancement:
+              candidate?.metadata.needsEnhancement ?? needsEnhancementHint,
+        ),
       );
     }
 

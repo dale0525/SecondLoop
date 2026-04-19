@@ -858,7 +858,7 @@ fn semantic_parse_followup_can_apply_due_without_status_change_atomically() {
         &key,
         "todo:followup-due-only",
         "报销",
-        None,
+        Some(16_200),
         "open",
         Some(&message.id),
         None,
@@ -899,6 +899,20 @@ fn semantic_parse_followup_can_apply_due_without_status_change_atomically() {
         jobs[0].applied_todo_id.as_deref(),
         Some("todo:followup-due-only")
     );
+    let (stored_prev_due_at_ms, stored_due_changed): (Option<i64>, i64) = conn
+        .query_row(
+            r#"
+SELECT applied_prev_todo_due_at_ms,
+       applied_due_changed
+FROM semantic_parse_jobs
+WHERE message_id = ?1
+"#,
+            params![&message.id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("load stored due undo metadata");
+    assert_eq!(stored_prev_due_at_ms, Some(16_200));
+    assert_eq!(stored_due_changed, 1);
 }
 
 #[test]

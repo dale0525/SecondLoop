@@ -156,6 +156,9 @@ extension _ChatPageStateMethodsC on _ChatPageState {
         if (selected == null) return;
 
         final previousStatus = selected.status;
+        final previousDueAtMs = selected.dueAtMs?.toInt();
+        final didUpdateDue = dueAtLocal != null;
+        final didUpdateStatus = newStatus != null;
         try {
           if (dueAtLocal != null) {
             await backend.updateTodoDueWithScope(
@@ -220,10 +223,25 @@ extension _ChatPageStateMethodsC on _ChatPageState {
               label: context.t.common.actions.undo,
               onPressed: () async {
                 try {
-                  await backend.setTodoStatus(
+                  if (!didUpdateDue && !didUpdateStatus) {
+                    return;
+                  }
+                  await backend.upsertTodo(
                     sessionKey,
-                    todoId: selected.id,
-                    newStatus: previousStatus,
+                    id: selected.id,
+                    title: selected.title,
+                    dueAtMs: didUpdateDue
+                        ? previousDueAtMs
+                        : selected.dueAtMs?.toInt(),
+                    status: didUpdateStatus ? previousStatus : selected.status,
+                    sourceEntryId: selected.sourceEntryId,
+                    reviewStage: selected.reviewStage?.toInt(),
+                    nextReviewAtMs: selected.nextReviewAtMs?.toInt(),
+                    lastReviewAtMs: selected.lastReviewAtMs?.toInt(),
+                    manualImportanceNudgeScore:
+                        selected.manualImportanceNudgeScore?.toInt(),
+                    manualUrgencyNudgeScore:
+                        selected.manualUrgencyNudgeScore?.toInt(),
                   );
                   syncEngine?.notifyLocalMutation();
                 } catch (_) {

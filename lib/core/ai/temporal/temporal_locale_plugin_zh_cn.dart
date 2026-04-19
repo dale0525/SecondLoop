@@ -78,6 +78,26 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     return null;
   }
 
+  @override
+  bool needsEnhancement(TemporalPluginRequest request) {
+    final text = request.normalizedText;
+    if (!(text.contains('年初一之后第一个工作日') ||
+        text.contains('年初一后第一个工作日') ||
+        text.contains('节后第一个工作日') ||
+        text.contains('年初一') ||
+        text.contains('春节后'))) {
+      return false;
+    }
+    return _resolveNextFestivalBoundary(
+          request.nowLocal,
+          useFirstWorkingDay: text.contains('年初一之后第一个工作日') ||
+              text.contains('年初一后第一个工作日') ||
+              text.contains('节后第一个工作日') ||
+              text.contains('春节后'),
+        ) ==
+        null;
+  }
+
   static DateTime? _resolveNextFestivalBoundary(
     DateTime nowLocal, {
     required bool useFirstWorkingDay,
