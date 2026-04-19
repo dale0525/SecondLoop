@@ -286,17 +286,6 @@ pub fn start_mock_v2_server() -> (
                                 .iter()
                                 .enumerate()
                                 .all(|(index, seq)| *seq == expected_from_seq + index as i64);
-                        if !requested_global_seqs.is_empty() && !is_contiguous {
-                            write_json_response(
-                                &mut stream,
-                                400,
-                                serde_json::json!({
-                                    "error": "invalid_batch",
-                                    "reason": "non_contiguous_retry",
-                                }),
-                            );
-                            continue;
-                        }
 
                         write_json_response(
                             &mut stream,
@@ -304,8 +293,13 @@ pub fn start_mock_v2_server() -> (
                             serde_json::json!({
                                 "generation_id": state.generation_id,
                                 "accepted": requested_global_seqs.len(),
-                                "committed_from_seq": requested_global_seqs.first().copied(),
-                                "committed_to_seq": requested_global_seqs.last().copied(),
+                                "committed_from_seq": if is_contiguous { requested_global_seqs.first().copied() } else { None },
+                                "committed_to_seq": if is_contiguous { requested_global_seqs.last().copied() } else { None },
+                                "committed_global_seqs": if !requested_global_seqs.is_empty() && !is_contiguous {
+                                    Some(requested_global_seqs.clone())
+                                } else {
+                                    None::<Vec<i64>>
+                                },
                                 "remote_latest_global_seq": state.latest_global_seq,
                             }),
                         );

@@ -24,6 +24,7 @@ pub(super) struct GlobalLogPushResponse {
     pub(super) accepted: u64,
     pub(super) committed_from_seq: Option<i64>,
     pub(super) committed_to_seq: Option<i64>,
+    pub(super) committed_global_seqs: Option<Vec<i64>>,
     pub(super) remote_latest_global_seq: i64,
 }
 

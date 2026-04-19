@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
 use rusqlite::{params, Connection};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use super::global_log_protocol::{
     GlobalLogPullErrorResponse, GlobalLogPullOp, GlobalLogPullRequest, GlobalLogPullResponse,
@@ -49,6 +49,32 @@ struct LocalPushBatch {
     artifact_blob_refs: BTreeSet<String>,
 }
 
+fn ensure_complete_push_acceptance_from_explicit_seqs(
+    response: &GlobalLogPushResponse,
+    requested: u64,
+    committed_global_seqs: &[i64],
+) -> Result<()> {
+    if committed_global_seqs.len() as u64 != requested {
+        return Err(anyhow!(
+            "managed-vault v2 push returned inconsistent explicit seq list: accepted {} of {} ops with {} committed seqs",
+            response.accepted,
+            requested,
+            committed_global_seqs.len(),
+        ));
+    }
+
+    let mut seen = HashSet::with_capacity(committed_global_seqs.len());
+    for seq in committed_global_seqs {
+        if *seq <= 0 || !seen.insert(*seq) {
+            return Err(anyhow!(
+                "managed-vault v2 push returned invalid committed_global_seqs: {:?}",
+                committed_global_seqs,
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn ensure_complete_push_acceptance(
     response: &GlobalLogPushResponse,
     batch: &LocalPushBatch,
@@ -68,6 +94,16 @@ fn ensure_complete_push_acceptance(
                 response.committed_to_seq,
             ));
         }
+        if response
+            .committed_global_seqs
+            .as_ref()
+            .is_some_and(|seqs| !seqs.is_empty())
+        {
+            return Err(anyhow!(
+                "managed-vault v2 push returned inconsistent retry response: accepted=0 committed_global_seqs={:?}",
+                response.committed_global_seqs,
+            ));
+        }
         return Ok(());
     }
 
@@ -77,6 +113,14 @@ fn ensure_complete_push_acceptance(
             response.accepted,
             requested,
         ));
+    }
+
+    if let Some(committed_global_seqs) = response.committed_global_seqs.as_ref() {
+        return ensure_complete_push_acceptance_from_explicit_seqs(
+            response,
+            requested,
+            committed_global_seqs,
+        );
     }
 
     let committed_from_seq = response.committed_from_seq.ok_or_else(|| {
