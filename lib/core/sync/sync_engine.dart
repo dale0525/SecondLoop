@@ -488,6 +488,12 @@ final class SyncEngine {
       final pullResult = await _pullWithResult(config);
 
       if (config.backendType == SyncBackendType.managedVault &&
+          (writeGate.value.kind == SyncWriteGateKind.paymentRequired ||
+              writeGate.value.kind == SyncWriteGateKind.storageQuotaExceeded)) {
+        _setWriteGate(const SyncWriteGateState.open());
+      }
+
+      if (config.backendType == SyncBackendType.managedVault &&
           _retryPushAfterRecoveryPull &&
           _acceptsNewWork) {
         _retryPushAfterRecoveryPull = false;
