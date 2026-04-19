@@ -32,18 +32,35 @@ final class _ManagedVaultPushStageResult {
 }
 
 extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
-  Future<void> _clearManagedVaultBackgroundRepairBlock() {
+  Future<void> _clearManagedVaultBackgroundRepairBlock({
+    required String baseUrl,
+    required String vaultId,
+  }) {
     return _store.writeBackgroundSyncRepairRequired(
       false,
       backendType: SyncBackendType.managedVault,
+      scopeId: _store.syncConfigScopeId(
+        backendType: SyncBackendType.managedVault,
+        baseUrl: baseUrl,
+        remoteRoot: vaultId,
+      ),
     );
   }
 
-  Future<void> _persistManagedVaultBackgroundRepairBlock(Object error) {
+  Future<void> _persistManagedVaultBackgroundRepairBlock(
+    Object error, {
+    required String baseUrl,
+    required String vaultId,
+  }) {
     final gate = managedVaultWriteGateStateForError(error);
     return _store.writeBackgroundSyncRepairRequired(
       gate?.kind == SyncWriteGateKind.localRepairRequired,
       backendType: SyncBackendType.managedVault,
+      scopeId: _store.syncConfigScopeId(
+        backendType: SyncBackendType.managedVault,
+        baseUrl: baseUrl,
+        remoteRoot: vaultId,
+      ),
     );
   }
 
@@ -145,12 +162,19 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         onProgress: reporter.onProgress,
       );
       reporter.complete();
-      await _clearManagedVaultBackgroundRepairBlock();
+      await _clearManagedVaultBackgroundRepairBlock(
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+      );
       reopenManagedVaultWriteGateOnSuccess(engine);
       return _ManagedVaultPushStageResult.success(pushed);
     } catch (error) {
       final details = _applyManagedVaultPushFailure(error, engine: engine);
-      await _persistManagedVaultBackgroundRepairBlock(error);
+      await _persistManagedVaultBackgroundRepairBlock(
+        error,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+      );
       if (!allowRecovery ||
           details.recoveryAction ==
               ManagedVaultPushFailureRecoveryAction.none) {

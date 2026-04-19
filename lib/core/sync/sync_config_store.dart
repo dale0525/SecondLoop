@@ -397,9 +397,13 @@ final class SyncConfigStore {
 
   Future<SyncBackgroundBackoffState?> readBackgroundSyncBackoffState({
     required SyncBackendType backendType,
+    String? scopeId,
   }) async {
-    final key =
-        '$_kBackgroundSyncBackoffPrefix${_backendTypeToken(backendType)}';
+    final key = _backgroundSyncScopedKey(
+      _kBackgroundSyncBackoffPrefix,
+      backendType,
+      scopeId: scopeId,
+    );
     final raw = (await _loadConfigMap())[key];
     if (raw == null || raw.trim().isEmpty) return null;
     try {
@@ -414,9 +418,13 @@ final class SyncConfigStore {
   Future<void> writeBackgroundSyncBackoffState(
     SyncBackgroundBackoffState? state, {
     required SyncBackendType backendType,
+    String? scopeId,
   }) async {
-    final key =
-        '$_kBackgroundSyncBackoffPrefix${_backendTypeToken(backendType)}';
+    final key = _backgroundSyncScopedKey(
+      _kBackgroundSyncBackoffPrefix,
+      backendType,
+      scopeId: scopeId,
+    );
     if (state == null) {
       await _writeConfigUpdates({key: null});
       return;
@@ -426,9 +434,13 @@ final class SyncConfigStore {
 
   Future<bool> readBackgroundSyncRepairRequired({
     required SyncBackendType backendType,
+    String? scopeId,
   }) async {
-    final key =
-        '$_kBackgroundSyncRepairRequiredPrefix${_backendTypeToken(backendType)}';
+    final key = _backgroundSyncScopedKey(
+      _kBackgroundSyncRepairRequiredPrefix,
+      backendType,
+      scopeId: scopeId,
+    );
     final raw = (await _loadConfigMap())[key];
     return raw == '1';
   }
@@ -436,14 +448,32 @@ final class SyncConfigStore {
   Future<void> writeBackgroundSyncRepairRequired(
     bool required, {
     required SyncBackendType backendType,
+    String? scopeId,
   }) async {
-    final key =
-        '$_kBackgroundSyncRepairRequiredPrefix${_backendTypeToken(backendType)}';
+    final key = _backgroundSyncScopedKey(
+      _kBackgroundSyncRepairRequiredPrefix,
+      backendType,
+      scopeId: scopeId,
+    );
     await _writeConfigUpdates({key: required ? '1' : null});
   }
 
-  String cloudMediaBackupBackfillScopeId(SyncConfig config) {
-    final backend = switch (config.backendType) {
+  String backgroundSyncScopeId(SyncConfig config) {
+    return syncConfigScopeId(
+      backendType: config.backendType,
+      baseUrl: config.baseUrl,
+      localDir: config.localDir,
+      remoteRoot: config.remoteRoot,
+    );
+  }
+
+  String syncConfigScopeId({
+    required SyncBackendType backendType,
+    String? baseUrl,
+    String? localDir,
+    required String remoteRoot,
+  }) {
+    final backend = switch (backendType) {
       SyncBackendType.webdav => 'webdav',
       SyncBackendType.localDir => 'localdir',
       SyncBackendType.managedVault => 'managedvault',
@@ -451,11 +481,15 @@ final class SyncConfigStore {
 
     final raw = [
       backend,
-      config.baseUrl?.trim() ?? '',
-      config.localDir?.trim() ?? '',
-      config.remoteRoot.trim(),
+      baseUrl?.trim() ?? '',
+      localDir?.trim() ?? '',
+      remoteRoot.trim(),
     ].join('|');
     return base64Url.encode(utf8.encode(raw));
+  }
+
+  String cloudMediaBackupBackfillScopeId(SyncConfig config) {
+    return backgroundSyncScopeId(config);
   }
 
   static String _backendTypeToken(SyncBackendType backendType) {
@@ -464,6 +498,19 @@ final class SyncConfigStore {
       SyncBackendType.localDir => 'localdir',
       SyncBackendType.managedVault => 'managedvault',
     };
+  }
+
+  String _backgroundSyncScopedKey(
+    String prefix,
+    SyncBackendType backendType, {
+    String? scopeId,
+  }) {
+    final normalizedScope = scopeId?.trim();
+    final backendKey = '$prefix${_backendTypeToken(backendType)}';
+    if (normalizedScope == null || normalizedScope.isEmpty) {
+      return backendKey;
+    }
+    return '$backendKey:$normalizedScope';
   }
 
   Future<SyncConfig?> loadConfiguredSync() async {

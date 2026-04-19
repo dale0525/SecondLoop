@@ -378,6 +378,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
           if (getter == null) return 0;
           final idToken = await getter();
           if (idToken == null || idToken.trim().isEmpty) return 0;
+          final scopeId = _configStore.backgroundSyncScopeId(config);
           try {
             final pushed = await backend.syncManagedVaultPush(
               _sessionKey,
@@ -389,6 +390,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
             await _configStore.writeBackgroundSyncRepairRequired(
               false,
               backendType: SyncBackendType.managedVault,
+              scopeId: scopeId,
             );
             await _writeManagedVaultMediaUploadPending(config, true);
             return pushed;
@@ -397,6 +399,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
               extractSyncHttpStatusCode(error) == 400 &&
                   extractSyncErrorCode(error) == 'invalid_batch',
               backendType: SyncBackendType.managedVault,
+              scopeId: scopeId,
             );
             rethrow;
           }

@@ -460,6 +460,11 @@ void main() {
       expect(
         await store.readBackgroundSyncRepairRequired(
           backendType: SyncBackendType.managedVault,
+          scopeId: store.syncConfigScopeId(
+            backendType: SyncBackendType.managedVault,
+            baseUrl: 'https://vault.example.com',
+            remoteRoot: 'vault-1',
+          ),
         ),
         isTrue,
       );

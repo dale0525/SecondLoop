@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -104,6 +106,73 @@ void main() {
     expect(
       await store.readBackgroundSyncRepairRequired(
         backendType: SyncBackendType.managedVault,
+      ),
+      isFalse,
+    );
+  });
+
+  test(
+      'SyncConfigStore scopes background sync backoff and repair state by config',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    final configA = SyncConfig.managedVault(
+      syncKey: syncKey,
+      vaultId: 'vault-a',
+      baseUrl: 'https://vault-a.example.com',
+    );
+    final configB = SyncConfig.managedVault(
+      syncKey: syncKey,
+      vaultId: 'vault-b',
+      baseUrl: 'https://vault-b.example.com',
+    );
+    final scopeA = store.backgroundSyncScopeId(configA);
+    final scopeB = store.backgroundSyncScopeId(configB);
+
+    await store.writeBackgroundSyncBackoffState(
+      const SyncBackgroundBackoffState(
+        backendType: SyncBackendType.managedVault,
+        retryCount: 2,
+        nextAllowedAtMs: 1234,
+        updatedAtMs: 1200,
+        lastStatusCode: 503,
+        lastErrorCode: 'server_error',
+      ),
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeA,
+    );
+    await store.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeA,
+    );
+
+    expect(
+      await store.readBackgroundSyncBackoffState(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeA,
+      ),
+      isNotNull,
+    );
+    expect(
+      await store.readBackgroundSyncBackoffState(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeB,
+      ),
+      isNull,
+    );
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeA,
+      ),
+      isTrue,
+    );
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeB,
       ),
       isFalse,
     );

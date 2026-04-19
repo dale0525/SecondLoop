@@ -183,11 +183,13 @@ final class BackgroundSync {
       await rescheduleIfNeeded();
       return true;
     }
+    final backgroundScopeId = store.backgroundSyncScopeId(config);
 
     final backgroundDiagEnabled = await store.readSyncBackgroundDiagV1Enabled();
     final backoffEnabled = await store.readSyncBackoffV1Enabled();
     final repairRequired = await store.readBackgroundSyncRepairRequired(
       backendType: config.backendType,
+      scopeId: backgroundScopeId,
     );
     if (repairRequired) {
       if (backgroundDiagEnabled) {
@@ -211,6 +213,7 @@ final class BackgroundSync {
     if (backoffEnabled) {
       final backoffState = await store.readBackgroundSyncBackoffState(
         backendType: config.backendType,
+        scopeId: backgroundScopeId,
       );
       if (backoffState != null && nowMs < backoffState.nextAllowedAtMs) {
         await rescheduleIfNeeded();
@@ -319,6 +322,7 @@ final class BackgroundSync {
           errorCode: pushResult.errorCode,
         ),
         backendType: config.backendType,
+        scopeId: backgroundScopeId,
       );
 
       final retryableFailure = switch ((
@@ -334,6 +338,7 @@ final class BackgroundSync {
           ? await _updateBackoffState(
               store: store,
               backendType: config.backendType,
+              scopeId: backgroundScopeId,
               nowMs: DateTime.now().millisecondsSinceEpoch,
               retryableFailure: retryableFailure,
             )
@@ -342,6 +347,7 @@ final class BackgroundSync {
         await store.writeBackgroundSyncBackoffState(
           null,
           backendType: config.backendType,
+          scopeId: backgroundScopeId,
         );
       }
 
@@ -720,6 +726,7 @@ final class BackgroundSync {
   static Future<int?> _updateBackoffState({
     required SyncConfigStore store,
     required SyncBackendType backendType,
+    required String scopeId,
     required int nowMs,
     required _BackgroundSyncOpResult? retryableFailure,
   }) async {
@@ -727,11 +734,13 @@ final class BackgroundSync {
       await store.writeBackgroundSyncBackoffState(
         null,
         backendType: backendType,
+        scopeId: scopeId,
       );
       return null;
     }
     final previous = await store.readBackgroundSyncBackoffState(
       backendType: backendType,
+      scopeId: scopeId,
     );
     final retryCount = (previous?.retryCount ?? 0) + 1;
     final delay = retryBackoffDelayForFailureCount(retryCount);
@@ -745,6 +754,7 @@ final class BackgroundSync {
         lastErrorCode: retryableFailure.errorCode,
       ),
       backendType: backendType,
+      scopeId: scopeId,
     );
     return retryCount;
   }

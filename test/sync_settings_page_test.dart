@@ -1212,6 +1212,11 @@ void main() {
     await store.writeBackgroundSyncRepairRequired(
       true,
       backendType: SyncBackendType.managedVault,
+      scopeId: store.syncConfigScopeId(
+        backendType: SyncBackendType.managedVault,
+        baseUrl: 'https://vault.example.com',
+        remoteRoot: 'uid_1',
+      ),
     );
 
     final backend = _GenerationMismatchRecoveryManagedVaultSyncBackend();
@@ -1259,6 +1264,11 @@ void main() {
     expect(
       await store.readBackgroundSyncRepairRequired(
         backendType: SyncBackendType.managedVault,
+        scopeId: store.syncConfigScopeId(
+          backendType: SyncBackendType.managedVault,
+          baseUrl: 'https://vault.example.com',
+          remoteRoot: 'uid_1',
+        ),
       ),
       isFalse,
     );
