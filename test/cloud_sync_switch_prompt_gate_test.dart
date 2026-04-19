@@ -518,6 +518,69 @@ void main() {
     engine.stop();
   });
 
+  testWidgets('Switching to Cloud clears background repair block after success',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+    await store.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+    );
+
+    final backend = _SuccessfulManagedVaultBootstrapBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
+    );
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+      ),
+      isFalse,
+    );
+  });
+
   testWidgets(
       'Switching to Cloud rolls back config when initial sync hits storage quota',
       (tester) async {
@@ -1285,6 +1348,34 @@ final class _InvalidBatchPushBackend extends _Backend {
     throw Exception(
       'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"duplicate_client_op_id"}',
     );
+  }
+}
+
+final class _SuccessfulManagedVaultBootstrapBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
   }
 }
 

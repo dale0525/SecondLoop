@@ -403,6 +403,71 @@ fn managed_vault_v2_zero_acceptance_does_not_advance_local_push_cursor() {
 }
 
 #[test]
+fn managed_vault_v2_identical_replay_advances_local_push_cursor() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("create convo");
+    db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert msg");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let initial_pushed =
+        sync::managed_vault::push_ops_only(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("initial push");
+    assert!(initial_pushed > 0);
+
+    let device_id: String = conn
+        .query_row("SELECT value FROM kv WHERE key = 'device_id'", [], |row| {
+            row.get(0)
+        })
+        .expect("device id");
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn.execute(
+        "DELETE FROM kv WHERE key = ?1",
+        rusqlite::params![format!(
+            "managed_vault_v2.last_pushed_seq:{scope_id}:{device_id}"
+        )],
+    )
+    .expect("clear local push cursor");
+
+    let pushed =
+        sync::managed_vault::push_ops_only(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push should treat replay as success");
+    assert_eq!(pushed, initial_pushed);
+
+    let last_pushed: Option<String> = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            rusqlite::params![format!(
+                "managed_vault_v2.last_pushed_seq:{scope_id}:{device_id}"
+            )],
+            |row| row.get(0),
+        )
+        .optional()
+        .expect("load last pushed");
+    let expected_last_pushed = initial_pushed.to_string();
+    assert_eq!(last_pushed.as_deref(), Some(expected_last_pushed.as_str()));
+    assert_eq!(
+        state.lock().expect("lock").latest_global_seq,
+        initial_pushed as i64
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_v2_push_uploads_new_attachment_bytes_after_initial_backfill() {
     let (base_url, stop_tx, state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();

@@ -32,6 +32,13 @@ final class _ManagedVaultPushStageResult {
 }
 
 extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
+  Future<void> _clearManagedVaultBackgroundRepairBlock() {
+    return _store.writeBackgroundSyncRepairRequired(
+      false,
+      backendType: SyncBackendType.managedVault,
+    );
+  }
+
   String _managedVaultRecoveredMessageForGate(SyncWriteGateState gate) {
     if (gate.kind == SyncWriteGateKind.localRepairRequired) {
       return context.t.sync.cloudManagedVault.localSyncDataRepairRequired;
@@ -130,6 +137,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         onProgress: reporter.onProgress,
       );
       reporter.complete();
+      await _clearManagedVaultBackgroundRepairBlock();
       reopenManagedVaultWriteGateOnSuccess(engine);
       return _ManagedVaultPushStageResult.success(pushed);
     } catch (error) {

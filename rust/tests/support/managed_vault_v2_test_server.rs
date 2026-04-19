@@ -86,6 +86,13 @@ fn write_json_response(stream: &mut TcpStream, status: u16, body: serde_json::Va
         .expect("write response");
 }
 
+fn same_push_payload(existing: &serde_json::Value, incoming: &serde_json::Value) -> bool {
+    existing["device_id"] == incoming["device_id"]
+        && existing["seq"] == incoming["seq"]
+        && existing["op_id"] == incoming["op_id"]
+        && existing["client_op_id"] == incoming["client_op_id"]
+}
+
 pub fn start_mock_v2_server() -> (
     String,
     mpsc::Sender<()>,
@@ -182,27 +189,123 @@ pub fn start_mock_v2_server() -> (
                             );
                             continue;
                         }
-                        let from_seq = state.latest_global_seq + 1;
-                        let accepted_ops = partial_accept_count.unwrap_or(incoming.len());
-                        for op in incoming.into_iter().take(accepted_ops) {
-                            state.latest_global_seq += 1;
-                            let mut value = op;
-                            value["global_seq"] = serde_json::Value::from(state.latest_global_seq);
-                            state.ops.push(value);
+                        if let Some(accepted_ops) = partial_accept_count {
+                            let from_seq = state.latest_global_seq + 1;
+                            for op in incoming.into_iter().take(accepted_ops) {
+                                state.latest_global_seq += 1;
+                                let mut value = op;
+                                value["global_seq"] =
+                                    serde_json::Value::from(state.latest_global_seq);
+                                state.ops.push(value);
+                            }
+                            let committed_to_seq = if accepted_ops > 0 {
+                                Some(state.latest_global_seq)
+                            } else {
+                                None
+                            };
+                            write_json_response(
+                                &mut stream,
+                                200,
+                                serde_json::json!({
+                                    "generation_id": state.generation_id,
+                                    "accepted": accepted_ops,
+                                    "committed_from_seq": if accepted_ops > 0 { Some(from_seq) } else { None },
+                                    "committed_to_seq": committed_to_seq,
+                                    "remote_latest_global_seq": state.latest_global_seq,
+                                }),
+                            );
+                            continue;
                         }
-                        let committed_to_seq = if accepted_ops > 0 {
-                            Some(state.latest_global_seq)
-                        } else {
-                            None
-                        };
+
+                        let mut requested_global_seqs = Vec::with_capacity(incoming.len());
+                        let mut new_ops = Vec::new();
+                        let mut batch_error: Option<&'static str> = None;
+                        for (index, op) in incoming.into_iter().enumerate() {
+                            let client_op_id =
+                                op["client_op_id"].as_str().unwrap_or("").trim().to_string();
+                            if let Some(existing) = state.ops.iter().find(|value| {
+                                value["client_op_id"].as_str().unwrap_or("").trim()
+                                    == client_op_id.as_str()
+                            }) {
+                                if !same_push_payload(existing, &op) {
+                                    batch_error = Some("conflicting_client_op_id");
+                                    break;
+                                }
+                                requested_global_seqs
+                                    .push(existing["global_seq"].as_i64().unwrap_or_default());
+                                continue;
+                            }
+
+                            let op_id = op["op_id"].as_str().unwrap_or("").trim();
+                            if state
+                                .ops
+                                .iter()
+                                .any(|value| value["op_id"].as_str().unwrap_or("").trim() == op_id)
+                            {
+                                batch_error = Some("duplicate_op_id");
+                                break;
+                            }
+
+                            let device_id = op["device_id"].as_str().unwrap_or("").trim();
+                            let seq = op["seq"].as_i64().unwrap_or_default();
+                            if state.ops.iter().any(|value| {
+                                value["device_id"].as_str().unwrap_or("").trim() == device_id
+                                    && value["seq"].as_i64().unwrap_or_default() == seq
+                            }) {
+                                batch_error = Some("duplicate_device_seq");
+                                break;
+                            }
+
+                            new_ops.push((index, op));
+                            requested_global_seqs.push(0);
+                        }
+
+                        if let Some(reason) = batch_error {
+                            write_json_response(
+                                &mut stream,
+                                400,
+                                serde_json::json!({
+                                    "error": "invalid_batch",
+                                    "reason": reason,
+                                }),
+                            );
+                            continue;
+                        }
+
+                        for (index, mut op) in new_ops {
+                            state.latest_global_seq += 1;
+                            op["global_seq"] = serde_json::Value::from(state.latest_global_seq);
+                            requested_global_seqs[index] = state.latest_global_seq;
+                            state.ops.push(op);
+                        }
+
+                        let expected_from_seq =
+                            requested_global_seqs.first().copied().unwrap_or_default();
+                        let is_contiguous = expected_from_seq > 0
+                            && requested_global_seqs
+                                .iter()
+                                .enumerate()
+                                .all(|(index, seq)| *seq == expected_from_seq + index as i64);
+                        if !requested_global_seqs.is_empty() && !is_contiguous {
+                            write_json_response(
+                                &mut stream,
+                                400,
+                                serde_json::json!({
+                                    "error": "invalid_batch",
+                                    "reason": "non_contiguous_retry",
+                                }),
+                            );
+                            continue;
+                        }
+
                         write_json_response(
                             &mut stream,
                             200,
                             serde_json::json!({
                                 "generation_id": state.generation_id,
-                                "accepted": accepted_ops,
-                                "committed_from_seq": if accepted_ops > 0 { Some(from_seq) } else { None },
-                                "committed_to_seq": committed_to_seq,
+                                "accepted": requested_global_seqs.len(),
+                                "committed_from_seq": requested_global_seqs.first().copied(),
+                                "committed_to_seq": requested_global_seqs.last().copied(),
                                 "remote_latest_global_seq": state.latest_global_seq,
                             }),
                         );

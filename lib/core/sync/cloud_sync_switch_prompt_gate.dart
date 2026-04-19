@@ -141,6 +141,13 @@ final class _CloudSyncSwitchPromptGateState
     return _managedVaultUserFacingErrorMessage(error);
   }
 
+  Future<void> _clearManagedVaultBackgroundRepairBlock() {
+    return _store.writeBackgroundSyncRepairRequired(
+      false,
+      backendType: SyncBackendType.managedVault,
+    );
+  }
+
   Future<ManagedVaultPushFailureRecoveryAction>
       _runManagedVaultPushStageWithProgress({
     required SyncEngine? engine,
@@ -169,6 +176,7 @@ final class _CloudSyncSwitchPromptGateState
         onProgress: stageProgress.onProgress,
       );
       stageProgress.complete();
+      await _clearManagedVaultBackgroundRepairBlock();
       reopenManagedVaultWriteGateOnSuccess(engine);
       return ManagedVaultPushFailureRecoveryAction.none;
     } catch (error) {
