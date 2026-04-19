@@ -27,15 +27,15 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
   @override
   TemporalCandidate? resolve(TemporalPluginRequest request) {
     final text = request.normalizedText;
-    final metadata = TemporalMetadata(
+    const metadata = TemporalMetadata(
       inferredCalendarSystem: 'chinese_lunar',
-      normalizedExpression: request.normalizedText,
     );
     final isFirstWorkingDayExpression = text.contains('年初一之后第一个工作日') ||
         text.contains('年初一后第一个工作日') ||
         text.contains('节后第一个工作日');
 
     if (isFirstWorkingDayExpression) {
+      final matchedExpression = _matchedExpression(text);
       final firstWorkingDay = _resolveFestivalBoundary(
         request.nowLocal,
         useFirstWorkingDay: true,
@@ -45,7 +45,10 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
           resolver: TemporalResolver.localePlugin,
           confidence: 0,
           semantics: TemporalSemantics.none,
-          metadata: metadata.copyWith(needsEnhancement: true),
+          metadata: metadata.copyWith(
+            needsEnhancement: true,
+            normalizedExpression: matchedExpression,
+          ),
         );
       }
       return TemporalCandidate(
@@ -53,11 +56,12 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
         confidence: 0.94,
         semantics: TemporalSemantics.pointInTime,
         pointLocal: firstWorkingDay,
-        metadata: metadata,
+        metadata: metadata.copyWith(normalizedExpression: matchedExpression),
       );
     }
 
     if (text.contains('年初一')) {
+      const matchedExpression = '年初一';
       final newYearDay = _resolveFestivalBoundary(
         request.nowLocal,
         useFirstWorkingDay: false,
@@ -67,7 +71,10 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
           resolver: TemporalResolver.localePlugin,
           confidence: 0,
           semantics: TemporalSemantics.none,
-          metadata: metadata.copyWith(needsEnhancement: true),
+          metadata: metadata.copyWith(
+            needsEnhancement: true,
+            normalizedExpression: matchedExpression,
+          ),
         );
       }
       return TemporalCandidate(
@@ -75,11 +82,23 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
         confidence: 0.92,
         semantics: TemporalSemantics.pointInTime,
         pointLocal: newYearDay,
-        metadata: metadata,
+        metadata: metadata.copyWith(normalizedExpression: matchedExpression),
       );
     }
 
     if (text.contains('春节后')) {
+      const matchedExpression = '春节后';
+      if (request.mode != TemporalMode.retrievalWindow) {
+        return TemporalCandidate(
+          resolver: TemporalResolver.localePlugin,
+          confidence: 0,
+          semantics: TemporalSemantics.none,
+          metadata: metadata.copyWith(
+            normalizedExpression: matchedExpression,
+            needsEnhancement: true,
+          ),
+        );
+      }
       final firstWorkingDay = _resolveFestivalBoundary(
         request.nowLocal,
         useFirstWorkingDay: true,
@@ -90,7 +109,10 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
           resolver: TemporalResolver.localePlugin,
           confidence: 0,
           semantics: TemporalSemantics.none,
-          metadata: metadata.copyWith(needsEnhancement: true),
+          metadata: metadata.copyWith(
+            needsEnhancement: true,
+            normalizedExpression: matchedExpression,
+          ),
         );
       }
       return TemporalCandidate(
@@ -98,7 +120,7 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
         confidence: 0.82,
         semantics: TemporalSemantics.rangeFuture,
         pointLocal: firstWorkingDay,
-        metadata: metadata,
+        metadata: metadata.copyWith(normalizedExpression: matchedExpression),
       );
     }
 
@@ -114,6 +136,9 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
         text.contains('年初一') ||
         text.contains('春节后'))) {
       return false;
+    }
+    if (text.contains('春节后') && request.mode != TemporalMode.retrievalWindow) {
+      return true;
     }
     return _resolveFestivalBoundary(
           request.nowLocal,
@@ -157,5 +182,24 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
       }
     }
     return preferPastIfAvailable ? (mostRecent ?? upcoming) : upcoming;
+  }
+
+  static String _matchedExpression(String text) {
+    if (text.contains('年初一之后第一个工作日')) {
+      return '年初一之后第一个工作日';
+    }
+    if (text.contains('年初一后第一个工作日')) {
+      return '年初一后第一个工作日';
+    }
+    if (text.contains('节后第一个工作日')) {
+      return '节后第一个工作日';
+    }
+    if (text.contains('年初一')) {
+      return '年初一';
+    }
+    if (text.contains('春节后')) {
+      return '春节后';
+    }
+    return text;
   }
 }

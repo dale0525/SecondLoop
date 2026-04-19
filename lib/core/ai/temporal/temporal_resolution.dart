@@ -109,6 +109,7 @@ final class TemporalPluginRequest {
     required this.locale,
     required this.timezone,
     required this.firstDayOfWeek,
+    required this.mode,
   });
 
   final String text;
@@ -117,4 +118,5 @@ final class TemporalPluginRequest {
   final Locale locale;
   final String timezone;
   final int firstDayOfWeek;
+  final TemporalMode mode;
 }

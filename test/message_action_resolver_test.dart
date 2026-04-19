@@ -112,6 +112,24 @@ void main() {
     expect(follow.dueAtLocal, DateTime(2026, 2, 5, 21, 0));
   });
 
+  test(
+      'holiday due phrases keep the task title instead of stripping the whole message',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      '节后第一个工作日处理报销',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, '处理报销');
+    expect(create.dueAtLocal, DateTime(2026, 2, 24, 21, 0));
+  });
+
   test('localized followup reschedule cues do not regress to create', () {
     final now = DateTime(2026, 2, 4, 10, 0);
     final cases = <({String text, Locale locale, DateTime expectedDueAt})>[

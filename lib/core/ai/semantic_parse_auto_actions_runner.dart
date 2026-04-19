@@ -408,6 +408,8 @@ final class SemanticParseAutoActionsRunner {
 
         final locale = _localeFromTag(localeTag);
         final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
+        final semanticMatches =
+            _semanticMatchesFromPreferredTodoIds(preferredTodoIds);
 
         final localTargets = candidates
             .map(
@@ -429,6 +431,7 @@ final class SemanticParseAutoActionsRunner {
           dayEndMinutes: dayEndMinutes,
           morningMinutes: resolvedMorningMinutes,
           firstDayOfWeekIndex: firstDayOfWeekIndex,
+          semanticMatches: semanticMatches,
         );
         final unresolvedFields = _unresolvedFields(localParsedResult);
         var parsed = AiSemanticParse.fromLocalResult(localParsedResult);
@@ -853,6 +856,24 @@ final class SemanticParseAutoActionsRunner {
       LocalSemanticParseKind.followup => false,
       LocalSemanticParseKind.none => result.diagnostics.localIntent != 'none',
     };
+  }
+
+  static List<TodoThreadMatch> _semanticMatchesFromPreferredTodoIds(
+    List<String> preferredTodoIds,
+  ) {
+    final matches = <TodoThreadMatch>[];
+    final seen = <String>{};
+    for (var i = 0; i < preferredTodoIds.length; i++) {
+      final todoId = preferredTodoIds[i].trim();
+      if (todoId.isEmpty || !seen.add(todoId)) continue;
+      matches.add(
+        TodoThreadMatch(
+          todoId: todoId,
+          distance: 0.12 + (i * 0.08),
+        ),
+      );
+    }
+    return matches;
   }
 
   static int _retryBackoffMs(int attempts) {

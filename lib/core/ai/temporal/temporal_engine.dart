@@ -33,6 +33,7 @@ final class TemporalEngine {
       locale: locale,
       timezone: timezone,
       firstDayOfWeek: firstDayOfWeek,
+      mode: mode,
     );
 
     final candidate = TemporalRuleResolver.resolve(

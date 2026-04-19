@@ -311,6 +311,24 @@ void main() {
   });
 
   test(
+      'todo_followup_due degrades 春节后 after the holiday instead of using a past boundary',
+      () {
+    final result = TemporalEngine.resolve(
+      text: '把报销改到春节后',
+      nowLocal: DateTime(2026, 3, 1, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoFollowupDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.resolver, TemporalResolver.none);
+    expect(result.dueAtLocal, isNull);
+  });
+
+  test(
       'retrieval_window uses the most recent Spring Festival boundary instead of next year',
       () {
     final now = DateTime(2027, 3, 1, 10, 0);

@@ -81,6 +81,49 @@ void main() {
     expect(store.updatedDueByTodoId['todo:1'], isNotNull);
   });
 
+  test('runner uses retrieved semantic candidates to resolve followup locally',
+      () async {
+    final store = _FakeStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:semantic_followup',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{'msg:semantic_followup': '把这个完成'},
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(id: 'todo:1', title: '报销', status: 'open'),
+        SemanticParseTodoCandidate(id: 'todo:2', title: '回访客户', status: 'open'),
+      ],
+    );
+    final client = _FakeClient(
+      retrievedTodoCandidateIds: const <String>['todo:2'],
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 4, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.parseRequests, 0);
+    expect(store.updatedStatusByTodoId['todo:2'], 'done');
+  });
+
   test('runner requests enhancement when local parse is ambiguous', () async {
     final store = _FakeStore(
       jobs: const <SemanticParseAutoActionJob>[
@@ -591,9 +634,13 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
 }
 
 final class _FakeClient implements SemanticParseAutoActionsClient {
-  _FakeClient({this.responseJson});
+  _FakeClient({
+    this.responseJson,
+    this.retrievedTodoCandidateIds = const <String>[],
+  });
 
   final String? responseJson;
+  final List<String> retrievedTodoCandidateIds;
   int parseRequests = 0;
   String? lastLocalResultJson;
   List<String> lastUnresolvedFields = const <String>[];
@@ -603,7 +650,7 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
     required String query,
     required int topK,
   }) async {
-    return const <String>[];
+    return List<String>.from(retrievedTodoCandidateIds);
   }
 
   @override

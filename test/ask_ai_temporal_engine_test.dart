@@ -42,6 +42,22 @@ void main() {
     expect(result.timeRange?.endLocal, DateTime(2026, 2, 9));
   });
 
+  test(
+      'Ask AI uses temporal engine for 春节后 history questions even without legacy range parsing',
+      () {
+    final now = DateTime(2026, 3, 1, 10, 0);
+    final result = AskAiIntentResolver.resolve(
+      '春节后聊过什么',
+      now,
+      locale: const Locale('zh', 'CN'),
+      firstDayOfWeekIndex: 1,
+    );
+
+    expect(result.kind, AskAiIntentKind.past);
+    expect(result.timeRange?.startLocal, DateTime(2026, 2, 24));
+    expect(result.timeRange?.endLocal, now);
+  });
+
   test('Ask AI keeps explicit future intent for this week planning questions',
       () {
     final result = AskAiIntentResolver.resolve(

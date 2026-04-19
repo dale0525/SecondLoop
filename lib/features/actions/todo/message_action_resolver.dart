@@ -249,7 +249,6 @@ class MessageActionResolver {
   }) {
     final ranked =
         rankTodoCandidates(query, targets, nowLocal: nowLocal, limit: limit);
-    if (ranked.isEmpty) return ranked;
 
     final targetsById = <String, TodoLinkTarget>{};
     for (final t in targets) {
@@ -451,6 +450,13 @@ class MessageActionResolver {
           );
         }
       }
+    }
+
+    if (openTodoTargets.isNotEmpty &&
+        (followupEditCue ||
+            updateIntent.isExplicit ||
+            followupDueAtLocal != null)) {
+      return const MessageActionNoneDecision();
     }
 
     if (isLongTextForTodoAutomation(raw)) {
