@@ -494,6 +494,7 @@ final class TemporalRuleResolver {
         semantics: TemporalSemantics.pointInTime,
         pointLocal: point,
         hasExplicitTime: timeOfDay != null,
+        projectedRollForwardDays: timeOfDay == null ? 7 : 0,
         metadata: TemporalMetadata(
           inferredTimeOfDay: timeOfDay?.label,
           normalizedExpression: weekday.token,

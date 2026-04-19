@@ -143,12 +143,19 @@ final class TemporalEngine {
                 dayEndMinutes ~/ 60,
                 dayEndMinutes % 60,
               );
+        final adjustedDueAtLocal = !candidate.hasExplicitTime &&
+                candidate.projectedRollForwardDays > 0 &&
+                dueAtLocal.isBefore(nowLocal)
+            ? dueAtLocal.add(
+                Duration(days: candidate.projectedRollForwardDays),
+              )
+            : dueAtLocal;
         return TemporalResolution(
           mode: mode,
           confidence: candidate.confidence,
           resolver: candidate.resolver,
           semantics: TemporalSemantics.pointInTime,
-          dueAtLocal: dueAtLocal,
+          dueAtLocal: adjustedDueAtLocal,
           metadata: candidate.metadata.copyWith(
             normalizedExpression:
                 candidate.metadata.normalizedExpression ?? normalizedText,

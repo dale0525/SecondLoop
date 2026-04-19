@@ -13,6 +13,11 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     2029: DateTime(2029, 2, 13),
     2030: DateTime(2030, 2, 3),
   };
+  static final Map<int, DateTime> _springFestivalFirstWorkingDay =
+      <int, DateTime>{
+    2026: DateTime(2026, 2, 24),
+    2027: DateTime(2027, 2, 15),
+  };
 
   @override
   bool supports(Locale locale) =>
@@ -26,15 +31,23 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
       inferredCalendarSystem: 'chinese_lunar',
       normalizedExpression: request.normalizedText,
     );
-
-    if (text.contains('年初一之后第一个工作日') ||
+    final isFirstWorkingDayExpression = text.contains('年初一之后第一个工作日') ||
         text.contains('年初一后第一个工作日') ||
-        text.contains('节后第一个工作日')) {
+        text.contains('节后第一个工作日');
+
+    if (isFirstWorkingDayExpression) {
       final firstWorkingDay = _resolveFestivalBoundary(
         request.nowLocal,
         useFirstWorkingDay: true,
       );
-      if (firstWorkingDay == null) return null;
+      if (firstWorkingDay == null) {
+        return TemporalCandidate(
+          resolver: TemporalResolver.localePlugin,
+          confidence: 0,
+          semantics: TemporalSemantics.none,
+          metadata: metadata.copyWith(needsEnhancement: true),
+        );
+      }
       return TemporalCandidate(
         resolver: TemporalResolver.localePlugin,
         confidence: 0.94,
@@ -49,7 +62,14 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
         request.nowLocal,
         useFirstWorkingDay: false,
       );
-      if (newYearDay == null) return null;
+      if (newYearDay == null) {
+        return TemporalCandidate(
+          resolver: TemporalResolver.localePlugin,
+          confidence: 0,
+          semantics: TemporalSemantics.none,
+          metadata: metadata.copyWith(needsEnhancement: true),
+        );
+      }
       return TemporalCandidate(
         resolver: TemporalResolver.localePlugin,
         confidence: 0.92,
@@ -65,7 +85,14 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
         useFirstWorkingDay: true,
         preferPastIfAvailable: true,
       );
-      if (firstWorkingDay == null) return null;
+      if (firstWorkingDay == null) {
+        return TemporalCandidate(
+          resolver: TemporalResolver.localePlugin,
+          confidence: 0,
+          semantics: TemporalSemantics.none,
+          metadata: metadata.copyWith(needsEnhancement: true),
+        );
+      }
       return TemporalCandidate(
         resolver: TemporalResolver.localePlugin,
         confidence: 0.82,
@@ -104,15 +131,21 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     bool preferPastIfAvailable = false,
   }) {
     final today = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-    final years = _lunarNewYearDay.keys.toList()..sort();
+    final boundaries =
+        useFirstWorkingDay ? _springFestivalFirstWorkingDay : _lunarNewYearDay;
+    if (boundaries.isEmpty) return null;
+
+    final years = boundaries.keys.toList()..sort();
+    final minSupportedYear = years.first;
+    final maxSupportedYear = years.last;
+    if (today.year < minSupportedYear || today.year > maxSupportedYear) {
+      return null;
+    }
     DateTime? mostRecent;
     DateTime? upcoming;
     for (final year in years) {
-      final newYearDay = _lunarNewYearDay[year];
-      if (newYearDay == null) continue;
-      final candidate = useFirstWorkingDay
-          ? _firstWorkingDayAfterFestival(newYearDay)
-          : newYearDay;
+      final candidate = boundaries[year];
+      if (candidate == null) continue;
       if (!candidate.isAfter(today)) {
         mostRecent = candidate;
       }
@@ -124,14 +157,5 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
       }
     }
     return preferPastIfAvailable ? (mostRecent ?? upcoming) : upcoming;
-  }
-
-  static DateTime _firstWorkingDayAfterFestival(DateTime newYearDay) {
-    var candidate = newYearDay.add(const Duration(days: 7));
-    while (candidate.weekday == DateTime.saturday ||
-        candidate.weekday == DateTime.sunday) {
-      candidate = candidate.add(const Duration(days: 1));
-    }
-    return candidate;
   }
 }

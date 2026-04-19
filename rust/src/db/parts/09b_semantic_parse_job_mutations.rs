@@ -244,8 +244,10 @@ SET status = 'succeeded',
     applied_tag_ids_json = ?11,
     updated_at_ms = ?12
 WHERE message_id = ?1
-  AND status = 'running'
-  AND updated_at_ms = ?12
+  AND (
+    (status = 'running' AND updated_at_ms = ?12)
+    OR status = 'succeeded'
+  )
 "#,
         params![
             message_id,

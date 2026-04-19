@@ -224,6 +224,22 @@ void main() {
     expect(result.metadata.normalizedExpression, '周三');
   });
 
+  test('todo_due rolls same-day weekday to next week after day end', () {
+    final result = TemporalEngine.resolve(
+      text: '周一',
+      nowLocal: DateTime(2026, 4, 20, 22, 0),
+      locale: const Locale('zh', 'CN'),
+      timezone: '',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.dueAtLocal, DateTime(2026, 4, 27, 21, 0));
+    expect(result.metadata.normalizedExpression, '周一');
+  });
+
   test('todo_followup_due keeps zh-CN holiday expressions working after 2026',
       () {
     final result = TemporalEngine.resolve(
@@ -279,5 +295,24 @@ void main() {
     expect(result.semantics, TemporalSemantics.rangePast);
     expect(result.startLocal, DateTime(2027, 2, 15));
     expect(result.endLocal, now);
+  });
+
+  test('zh-CN holiday working-day expressions degrade outside supported years',
+      () {
+    final result = TemporalEngine.resolve(
+      text: '把报销改到节后第一个工作日',
+      nowLocal: DateTime(2031, 2, 10, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoFollowupDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.resolver, TemporalResolver.none);
+    expect(result.dueAtLocal, isNull);
+    expect(result.metadata.needsEnhancement, isTrue);
+    expect(result.metadata.inferredCalendarSystem, 'chinese_lunar');
   });
 }

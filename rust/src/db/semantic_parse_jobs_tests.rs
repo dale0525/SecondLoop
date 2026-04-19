@@ -464,6 +464,58 @@ fn semantic_parse_jobs_store_and_clear_tag_suggestion_metadata() {
 }
 
 #[test]
+fn semantic_parse_jobs_succeeded_job_allows_metadata_refresh() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    let now_ms = 7_500i64;
+    enqueue_semantic_parse_job(&conn, "msg:refresh-meta", now_ms).expect("enqueue");
+    let _ =
+        mark_semantic_parse_job_running(&conn, "msg:refresh-meta", now_ms + 1).expect("running");
+
+    let key = [8u8; 32];
+    mark_semantic_parse_job_succeeded_with_tag_metadata(
+        &conn,
+        &key,
+        "msg:refresh-meta",
+        "none",
+        None,
+        None,
+        None,
+        Some(&["work".to_string()]),
+        Some(0.72),
+        Some("pending"),
+        None,
+        now_ms + 1,
+    )
+    .expect("initial success");
+
+    mark_semantic_parse_job_succeeded_with_tag_metadata(
+        &conn,
+        &key,
+        "msg:refresh-meta",
+        "none",
+        None,
+        None,
+        None,
+        Some(&["work".to_string()]),
+        Some(0.72),
+        Some("dismissed"),
+        None,
+        now_ms + 2,
+    )
+    .expect("refresh succeeded metadata");
+
+    let jobs =
+        list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:refresh-meta".to_string()])
+            .expect("list jobs");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].status, "succeeded");
+    assert_eq!(jobs[0].tag_suggestion_state.as_deref(), Some("dismissed"));
+    assert_eq!(jobs[0].suggested_tags, Some(vec!["work".to_string()]));
+}
+
+#[test]
 fn semantic_parse_jobs_old_attempt_cannot_cancel_new_running_attempt() {
     let dir = tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");

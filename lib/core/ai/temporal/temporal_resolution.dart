@@ -70,6 +70,7 @@ final class TemporalCandidate {
     this.startLocal,
     this.endLocal,
     this.hasExplicitTime = false,
+    this.projectedRollForwardDays = 0,
     this.metadata = const TemporalMetadata(),
   });
 
@@ -80,6 +81,7 @@ final class TemporalCandidate {
   final DateTime? startLocal;
   final DateTime? endLocal;
   final bool hasExplicitTime;
+  final int projectedRollForwardDays;
   final TemporalMetadata metadata;
 
   bool get isAmbiguous => metadata.ambiguous;
@@ -93,6 +95,7 @@ final class TemporalCandidate {
       startLocal: startLocal,
       endLocal: endLocal,
       hasExplicitTime: hasExplicitTime,
+      projectedRollForwardDays: projectedRollForwardDays,
       metadata: metadata,
     );
   }
