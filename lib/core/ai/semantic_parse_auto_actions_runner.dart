@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'ai_routing.dart';
 import 'embeddings_source_prefs.dart';
 import 'semantic_parse_edit_policy.dart';
+import 'local_semantic_parser.dart';
 import 'todo_checklist_suggestions_ai.dart';
 import '../../features/actions/review/review_backoff.dart';
 import '../../features/actions/settings/actions_settings_store.dart';
@@ -193,7 +194,8 @@ abstract class SemanticParseAutoActionsStore {
     required int expectedAttemptId,
     required String todoId,
     String? todoTitle,
-    required String newStatus,
+    String? newStatus,
+    int? dueAtMs,
     List<String>? pendingSuggestedTags,
     List<String>? autoApplySuggestedTags,
     double? suggestedTagConfidence,
@@ -403,44 +405,59 @@ final class SemanticParseAutoActionsRunner {
         final locale = _localeFromTag(localeTag);
         final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
 
-        AiSemanticDecision? parsed;
-        try {
-          final json = await client
-              .parseMessageActionJson(
-                text: analysisText,
-                nowLocalIso: nowLocal.toIso8601String(),
-                localeTag: localeTag,
-                dayEndMinutes: dayEndMinutes,
-                candidates: candidates,
-                timeout: settings.hardTimeout,
-              )
-              .timeout(settings.hardTimeout);
-
-          parsed = AiSemanticParse.tryParseMessageAction(
-            json,
+        final localTargets = candidates
+            .map(
+              (c) => TodoLinkTarget(
+                id: c.id,
+                title: c.title,
+                status: c.status,
+                dueLocal: c.dueLocalIso == null
+                    ? null
+                    : DateTime.tryParse(c.dueLocalIso!),
+              ),
+            )
+            .toList(growable: false);
+        var parsed = AiSemanticParse.fromLocalResult(
+          LocalSemanticParser.parse(
+            text: analysisText,
             nowLocal: nowLocal,
             locale: locale,
+            openTodoTargets: localTargets,
             dayEndMinutes: dayEndMinutes,
             morningMinutes: resolvedMorningMinutes,
             firstDayOfWeekIndex: firstDayOfWeekIndex,
-          );
-          if (parsed == null) {
-            throw StateError('invalid_json');
+          ),
+        );
+        try {
+          if (parsed.confidence < settings.minAutoConfidence) {
+            final json = await client
+                .parseMessageActionJson(
+                  text: analysisText,
+                  nowLocalIso: nowLocal.toIso8601String(),
+                  localeTag: localeTag,
+                  dayEndMinutes: dayEndMinutes,
+                  candidates: candidates,
+                  timeout: settings.hardTimeout,
+                )
+                .timeout(settings.hardTimeout);
+
+            final remoteParsed = AiSemanticParse.tryParseMessageAction(
+              json,
+              nowLocal: nowLocal,
+              locale: locale,
+              dayEndMinutes: dayEndMinutes,
+              morningMinutes: resolvedMorningMinutes,
+              firstDayOfWeekIndex: firstDayOfWeekIndex,
+            );
+            if (remoteParsed == null) {
+              throw StateError('invalid_json');
+            }
+            parsed = remoteParsed;
           }
         } catch (error) {
           if (_shouldRetryRemoteParseError(error)) {
             rethrow;
           }
-          final localDecision = _resolveLocallyWhenRemoteFails(
-            analysisText,
-            locale: locale,
-            nowLocal: nowLocal,
-            dayEndMinutes: dayEndMinutes,
-            morningMinutes: resolvedMorningMinutes,
-            firstDayOfWeekIndex: firstDayOfWeekIndex,
-            candidates: candidates,
-          );
-          parsed = AiSemanticDecision(decision: localDecision, confidence: 1.0);
         }
 
         final refreshedMessageInput =
@@ -588,6 +605,7 @@ final class SemanticParseAutoActionsRunner {
           case MessageActionFollowUpDecision(
               :final todoId,
               :final newStatus,
+              :final dueAtLocal,
             ):
             if (!await _isStillRunningAttempt(
               messageId: job.messageId,
@@ -607,6 +625,7 @@ final class SemanticParseAutoActionsRunner {
               todoId: todoId,
               todoTitle: candidateTitle,
               newStatus: newStatus,
+              dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
               pendingSuggestedTags: pendingSuggestedTags,
               autoApplySuggestedTags: autoApplySuggestedTags,
               suggestedTagConfidence: suggestedTagConfidence,
@@ -669,39 +688,6 @@ final class SemanticParseAutoActionsRunner {
     final language = parts.isNotEmpty ? parts[0] : 'en';
     final country = parts.length > 1 ? parts[1] : null;
     return Locale(language, country);
-  }
-
-  static MessageActionDecision _resolveLocallyWhenRemoteFails(
-    String text, {
-    required Locale locale,
-    required DateTime nowLocal,
-    required int dayEndMinutes,
-    required int morningMinutes,
-    required int firstDayOfWeekIndex,
-    required List<SemanticParseTodoCandidate> candidates,
-  }) {
-    final targets = candidates
-        .map(
-          (c) => TodoLinkTarget(
-            id: c.id,
-            title: c.title,
-            status: c.status,
-            dueLocal: c.dueLocalIso == null
-                ? null
-                : DateTime.tryParse(c.dueLocalIso!),
-          ),
-        )
-        .toList(growable: false);
-
-    return MessageActionResolver.resolve(
-      text,
-      locale: locale,
-      nowLocal: nowLocal,
-      dayEndMinutes: dayEndMinutes,
-      morningMinutes: morningMinutes,
-      firstDayOfWeekIndex: firstDayOfWeekIndex,
-      openTodoTargets: targets,
-    );
   }
 
   static bool _shouldRetryRemoteParseError(Object error) {

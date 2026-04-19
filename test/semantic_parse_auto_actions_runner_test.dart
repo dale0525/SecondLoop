@@ -71,7 +71,7 @@ void main() {
       client: client,
       settings: const SemanticParseAutoActionsRunnerSettings(
         hardTimeout: Duration(milliseconds: 200),
-        minAutoConfidence: 0.86,
+        minAutoConfidence: 0.95,
       ),
       nowMs: () => 1000,
       nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
@@ -613,7 +613,7 @@ void main() {
       client: client,
       settings: const SemanticParseAutoActionsRunnerSettings(
         hardTimeout: Duration(milliseconds: 200),
-        minAutoConfidence: 0.86,
+        minAutoConfidence: 0.95,
       ),
       nowMs: () => 1000,
       nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
@@ -1252,7 +1252,8 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required int expectedAttemptId,
     required String todoId,
     String? todoTitle,
-    required String newStatus,
+    String? newStatus,
+    int? dueAtMs,
     List<String>? pendingSuggestedTags,
     List<String>? autoApplySuggestedTags,
     double? suggestedTagConfidence,
@@ -1292,7 +1293,9 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     }
 
     final previousStatus = _previousStatusByTodoId[todoId];
-    updatedStatusByTodoId[todoId] = newStatus;
+    if (newStatus != null) {
+      updatedStatusByTodoId[todoId] = newStatus;
+    }
     lastSucceeded = SemanticParseJobSucceededArgs(
       messageId: messageId,
       appliedActionKind: 'followup',

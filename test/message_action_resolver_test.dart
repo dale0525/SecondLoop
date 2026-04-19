@@ -72,6 +72,25 @@ void main() {
     expect(create.dueAtLocal, DateTime(2026, 1, 25, 15, 0));
   });
 
+  test('followup can extract due update without forcing a status change', () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      '把报销改到年初一之后第一个工作日',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: '报销', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionFollowUpDecision>());
+    final follow = decision as MessageActionFollowUpDecision;
+    expect(follow.todoId, 'todo:1');
+    expect(follow.newStatus, isNull);
+    expect(follow.dueAtLocal, isNotNull);
+  });
+
   test('does not create todo from long-form note with schedule text', () {
     final now = DateTime(2026, 1, 24, 12, 0);
     final decision = MessageActionResolver.resolve(

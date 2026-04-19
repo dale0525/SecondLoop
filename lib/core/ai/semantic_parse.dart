@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 
 import '../../features/actions/todo/message_action_resolver.dart';
+import 'local_semantic_parse_result.dart';
 import 'todo_followup_task_classifier.dart';
 
 class AiSemanticDecision {
@@ -37,6 +38,45 @@ class AiSemanticTimeWindow {
 
 class AiSemanticParse {
   static const int _maxSuggestedTagsPerDecision = 3;
+
+  static AiSemanticDecision fromLocalResult(LocalSemanticParseResult result) {
+    switch (result.kind) {
+      case LocalSemanticParseKind.create:
+        return AiSemanticDecision(
+          decision: MessageActionCreateDecision(
+            title: result.title ?? '',
+            status:
+                result.status ?? (result.dueAtLocal == null ? 'inbox' : 'open'),
+            dueAtLocal: result.dueAtLocal,
+            recurrenceRule: result.recurrenceRule,
+          ),
+          confidence: result.confidence,
+          taskType: result.taskType,
+          suggestedTags: result.suggestedTags,
+          tagConfidence: result.tagConfidence,
+        );
+      case LocalSemanticParseKind.followup:
+        return AiSemanticDecision(
+          decision: MessageActionFollowUpDecision(
+            todoId: result.todoId ?? '',
+            newStatus: result.status,
+            dueAtLocal: result.dueAtLocal,
+          ),
+          confidence: result.confidence,
+          taskType: result.taskType,
+          suggestedTags: result.suggestedTags,
+          tagConfidence: result.tagConfidence,
+        );
+      case LocalSemanticParseKind.none:
+        return AiSemanticDecision(
+          decision: const MessageActionNoneDecision(),
+          confidence: result.confidence,
+          taskType: result.taskType,
+          suggestedTags: result.suggestedTags,
+          tagConfidence: result.tagConfidence,
+        );
+    }
+  }
 
   static String? _extractFirstJsonObject(String raw) {
     final start = raw.indexOf('{');
@@ -581,11 +621,23 @@ class AiSemanticParse {
         final newStatus = newStatusRaw == null
             ? null
             : _canonicalFollowupStatus(newStatusRaw);
+        DateTime? dueAtLocal;
+        final dueIso = _stringField(map, 'due_local_iso');
+        if (dueIso != null && dueIso.isNotEmpty) {
+          try {
+            dueAtLocal = DateTime.parse(dueIso);
+          } catch (_) {
+            dueAtLocal = null;
+          }
+        }
         if (todoId == null || todoId.isEmpty) return null;
-        if (newStatus == null) return null;
+        if (newStatus == null && dueAtLocal == null) return null;
         return AiSemanticDecision(
           decision: MessageActionFollowUpDecision(
-              todoId: todoId, newStatus: newStatus),
+            todoId: todoId,
+            newStatus: newStatus,
+            dueAtLocal: dueAtLocal,
+          ),
           confidence: confidence,
           taskType: taskType,
           suggestedTags: suggestedTags,

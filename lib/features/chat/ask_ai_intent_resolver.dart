@@ -1,5 +1,7 @@
 import 'package:flutter/widgets.dart';
 
+import '../../core/ai/temporal/temporal_engine.dart';
+import '../../core/ai/temporal/temporal_resolution.dart';
 import '../actions/time/time_range_resolver.dart';
 
 enum AskAiIntentKind {
@@ -45,6 +47,15 @@ class AskAiIntentResolver {
     }
 
     final norm = _normalize(raw);
+    final temporal = TemporalEngine.resolve(
+      text: raw,
+      nowLocal: nowLocal,
+      locale: locale,
+      timezone: '',
+      firstDayOfWeek: firstDayOfWeekIndex,
+      mode: TemporalMode.retrievalWindow,
+      allowEnhancement: false,
+    );
     final timeRange = LocalTimeRangeResolver.resolve(
       raw,
       nowLocal,
@@ -84,6 +95,7 @@ class AskAiIntentResolver {
       '要做',
       '要干',
       '需要',
+      '答应',
       '明天',
       // ja
       '明日',
@@ -103,12 +115,23 @@ class AskAiIntentResolver {
     final isFuture = _containsAny(norm, futureTokens) ||
         _containsAny(raw, const <String>['明天', '明日', '내일']);
 
-    final kind = switch ((isPast, isFuture)) {
+    var kind = switch ((isPast, isFuture)) {
       (true, true) => AskAiIntentKind.both,
       (true, false) => AskAiIntentKind.past,
       (false, true) => AskAiIntentKind.future,
       _ => AskAiIntentKind.none,
     };
+
+    if (kind == AskAiIntentKind.none && timeRange != null) {
+      kind = switch (temporal.semantics) {
+        TemporalSemantics.rangePast => AskAiIntentKind.past,
+        TemporalSemantics.rangeFuture => AskAiIntentKind.future,
+        TemporalSemantics.rangeBoth => AskAiIntentKind.both,
+        _ => timeRange.kind == 'this_week'
+            ? AskAiIntentKind.future
+            : AskAiIntentKind.none,
+      };
+    }
 
     final confidence = switch (kind) {
       AskAiIntentKind.none => timeRange == null ? 0.0 : 0.55,

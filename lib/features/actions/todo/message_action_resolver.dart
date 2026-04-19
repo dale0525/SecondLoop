@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 
 import '../../../core/ai/semantic_parse_edit_policy.dart';
+import '../../../core/ai/temporal/temporal_engine.dart';
+import '../../../core/ai/temporal/temporal_resolution.dart';
 import '../time/time_resolver.dart';
 import 'todo_linking.dart';
 import 'todo_thread_match.dart';
@@ -18,11 +20,13 @@ final class MessageActionNoneDecision extends MessageActionDecision {
 final class MessageActionFollowUpDecision extends MessageActionDecision {
   const MessageActionFollowUpDecision({
     required this.todoId,
-    required this.newStatus,
+    this.newStatus,
+    this.dueAtLocal,
   });
 
   final String todoId;
-  final String newStatus; // "in_progress" | "done" | "dismissed"
+  final String? newStatus; // "in_progress" | "done" | "dismissed"
+  final DateTime? dueAtLocal;
 }
 
 final class MessageActionRecurrenceRule {
@@ -405,6 +409,16 @@ class MessageActionResolver {
 
     final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
     final updateIntent = inferTodoUpdateIntent(raw);
+    final followupTemporal = TemporalEngine.resolve(
+      text: raw,
+      nowLocal: nowLocal,
+      locale: locale,
+      timezone: '',
+      firstDayOfWeek: firstDayOfWeekIndex,
+      mode: TemporalMode.todoFollowupDue,
+      allowEnhancement: false,
+      dayEndMinutes: dayEndMinutes,
+    );
 
     // Follow-up (existing todo)
     if (openTodoTargets.isNotEmpty) {
@@ -425,10 +439,12 @@ class MessageActionResolver {
                 top.score >= 1600 &&
                 (top.score - secondScore) >= 500);
 
-        if (highConfidence) {
+        if (highConfidence &&
+            (updateIntent.isExplicit || followupTemporal.dueAtLocal != null)) {
           return MessageActionFollowUpDecision(
             todoId: top.target.id,
-            newStatus: updateIntent.newStatus,
+            newStatus: updateIntent.isExplicit ? updateIntent.newStatus : null,
+            dueAtLocal: followupTemporal.dueAtLocal,
           );
         }
       }
@@ -440,6 +456,16 @@ class MessageActionResolver {
 
     // Create (new todo)
     final recurrenceRule = _detectRecurrenceRule(raw);
+    final dueResolution = TemporalEngine.resolve(
+      text: raw,
+      nowLocal: nowLocal,
+      locale: locale,
+      timezone: '',
+      firstDayOfWeek: firstDayOfWeekIndex,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: false,
+      dayEndMinutes: dayEndMinutes,
+    );
     final time = LocalTimeResolver.resolve(
       raw,
       nowLocal,
@@ -449,16 +475,18 @@ class MessageActionResolver {
 
     final structuredTitle = _extractStructuredTitle(raw);
     if (structuredTitle != null) {
-      final dueAtLocal = time?.candidates.length == 1
-          ? time!.candidates.single.dueAtLocal
-          : recurrenceRule == null
-              ? null
-              : _fallbackDueAtForRecurring(
-                  nowLocal,
-                  recurrenceRule,
-                  morningMinutes: resolvedMorningMinutes,
-                  firstDayOfWeekIndex: firstDayOfWeekIndex,
-                );
+      final dueAtLocal = dueResolution.dueAtLocal ??
+          ((time?.candidates.length == 1
+                  ? time!.candidates.single.dueAtLocal
+                  : null) ??
+              (recurrenceRule == null
+                  ? null
+                  : _fallbackDueAtForRecurring(
+                      nowLocal,
+                      recurrenceRule,
+                      morningMinutes: resolvedMorningMinutes,
+                      firstDayOfWeekIndex: firstDayOfWeekIndex,
+                    )));
       var title = _stripRecurrenceDecorations(structuredTitle);
       if (recurrenceRule != null) {
         title = _cleanupRecurringTitleArtifacts(title);
@@ -479,20 +507,26 @@ class MessageActionResolver {
     }
 
     if (time == null && recurrenceRule == null) {
-      return const MessageActionNoneDecision();
+      if (dueResolution.dueAtLocal == null) {
+        return const MessageActionNoneDecision();
+      }
     }
 
-    final dueAtLocal = time != null && time.candidates.length == 1
-        ? time.candidates.single.dueAtLocal
-        : recurrenceRule == null
-            ? null
-            : _fallbackDueAtForRecurring(
-                nowLocal,
-                recurrenceRule,
-                morningMinutes: resolvedMorningMinutes,
-                firstDayOfWeekIndex: firstDayOfWeekIndex,
-              );
-    if (time != null && time.candidates.length != 1 && recurrenceRule == null) {
+    final dueAtLocal = dueResolution.dueAtLocal ??
+        (time != null && time.candidates.length == 1
+            ? time.candidates.single.dueAtLocal
+            : recurrenceRule == null
+                ? null
+                : _fallbackDueAtForRecurring(
+                    nowLocal,
+                    recurrenceRule,
+                    morningMinutes: resolvedMorningMinutes,
+                    firstDayOfWeekIndex: firstDayOfWeekIndex,
+                  ));
+    if (dueResolution.dueAtLocal == null &&
+        time != null &&
+        time.candidates.length != 1 &&
+        recurrenceRule == null) {
       return const MessageActionNoneDecision();
     }
 

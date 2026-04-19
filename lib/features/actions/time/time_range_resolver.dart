@@ -1,5 +1,8 @@
 import 'package:flutter/widgets.dart';
 
+import '../../../core/ai/temporal/temporal_engine.dart';
+import '../../../core/ai/temporal/temporal_resolution.dart';
+
 class LocalTimeRangeResolution {
   const LocalTimeRangeResolution({
     required this.kind,
@@ -15,105 +18,6 @@ class LocalTimeRangeResolution {
 }
 
 class LocalTimeRangeResolver {
-  static final List<String> _todayTokens = <String>[
-    // en
-    'today',
-    // zh
-    '今天',
-    // ja
-    '今日',
-    // ko
-    '오늘',
-    // es
-    'hoy',
-    // fr
-    "aujourd'hui",
-    // de
-    'heute',
-  ];
-
-  static final List<String> _tomorrowTokens = <String>[
-    // en
-    'tomorrow',
-    // zh
-    '明天',
-    // ja
-    '明日',
-    // ko
-    '내일',
-    // es
-    'mañana',
-    // fr
-    'demain',
-    // de
-    'morgen',
-  ];
-
-  static final List<String> _yesterdayTokens = <String>[
-    // en
-    'yesterday',
-    // zh
-    '昨天',
-    // ja
-    '昨日',
-    // ko
-    '어제',
-    // es
-    'ayer',
-    // fr
-    'hier',
-    // de
-    'gestern',
-  ];
-
-  static final List<String> _lastWeekTokens = <String>[
-    // en
-    'last week',
-    // zh
-    '上周',
-    '上週',
-    '上星期',
-    '上週期',
-    // ja
-    '先週',
-    // ko
-    '지난주',
-    // es
-    'la semana pasada',
-    // fr
-    'la semaine dernière',
-    // de
-    'letzte woche',
-  ];
-
-  static String _normalize(String text) =>
-      text.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-
-  static bool _containsAny(String haystack, List<String> needles) {
-    for (final n in needles) {
-      if (n.isEmpty) continue;
-      if (haystack.contains(n)) return true;
-    }
-    return false;
-  }
-
-  static DateTime _startOfDay(DateTime local) =>
-      DateTime(local.year, local.month, local.day);
-
-  static int _firstWeekdayFromIndex(int firstDayOfWeekIndex) {
-    // `MaterialLocalizations.firstDayOfWeekIndex` uses 0..6 (Sun..Sat).
-    // `DateTime.weekday` uses 1..7 (Mon..Sun).
-    if (firstDayOfWeekIndex == 0) return DateTime.sunday;
-    return firstDayOfWeekIndex.clamp(DateTime.monday, DateTime.saturday);
-  }
-
-  static DateTime _startOfWeek(DateTime nowLocal, int firstDayOfWeekIndex) {
-    final firstWeekday = _firstWeekdayFromIndex(firstDayOfWeekIndex);
-    final diff = (nowLocal.weekday - firstWeekday + 7) % 7;
-    final start = nowLocal.subtract(Duration(days: diff));
-    return _startOfDay(start);
-  }
-
   static LocalTimeRangeResolution? resolve(
     String text,
     DateTime nowLocal, {
@@ -122,58 +26,36 @@ class LocalTimeRangeResolver {
   }) {
     final raw = text.trim();
     if (raw.isEmpty) return null;
-
-    final norm = _normalize(raw);
-
-    if (_containsAny(norm, _todayTokens) ||
-        _containsAny(raw, const <String>['今天', '今日', '오늘'])) {
-      final start = _startOfDay(nowLocal);
-      final end = start.add(const Duration(days: 1));
-      return LocalTimeRangeResolution(
-        kind: 'today',
-        matchedText: raw,
-        startLocal: start,
-        endLocal: end,
-      );
+    final resolution = TemporalEngine.resolve(
+      text: raw,
+      nowLocal: nowLocal,
+      locale: locale,
+      timezone: '',
+      firstDayOfWeek: firstDayOfWeekIndex,
+      mode: TemporalMode.retrievalWindow,
+      allowEnhancement: false,
+    );
+    if (resolution.startLocal == null || resolution.endLocal == null) {
+      return null;
     }
-
-    if (_containsAny(norm, _tomorrowTokens) ||
-        _containsAny(raw, const <String>['明天', '明日', '내일'])) {
-      final start = _startOfDay(nowLocal.add(const Duration(days: 1)));
-      final end = start.add(const Duration(days: 1));
-      return LocalTimeRangeResolution(
-        kind: 'tomorrow',
-        matchedText: raw,
-        startLocal: start,
-        endLocal: end,
-      );
-    }
-
-    if (_containsAny(norm, _yesterdayTokens) ||
-        _containsAny(raw, const <String>['昨天', '昨日', '어제'])) {
-      final start = _startOfDay(nowLocal.subtract(const Duration(days: 1)));
-      final end = _startOfDay(nowLocal);
-      return LocalTimeRangeResolution(
-        kind: 'yesterday',
-        matchedText: raw,
-        startLocal: start,
-        endLocal: end,
-      );
-    }
-
-    if (_containsAny(norm, _lastWeekTokens) ||
-        _containsAny(raw, const <String>['上周', '上週'])) {
-      final thisWeekStart = _startOfWeek(nowLocal, firstDayOfWeekIndex);
-      final start = thisWeekStart.subtract(const Duration(days: 7));
-      final end = thisWeekStart;
-      return LocalTimeRangeResolution(
-        kind: 'last_week',
-        matchedText: raw,
-        startLocal: start,
-        endLocal: end,
-      );
-    }
-
-    return null;
+    final kind = switch (resolution.metadata.normalizedExpression) {
+      final value? when value.contains('上周') || value.contains('last week') =>
+        'last_week',
+      final value? when value.contains('本周') || value.contains('this week') =>
+        'this_week',
+      final value? when value.contains('今天') || value.contains('today') =>
+        'today',
+      final value? when value.contains('明天') || value.contains('tomorrow') =>
+        'tomorrow',
+      final value? when value.contains('昨天') || value.contains('yesterday') =>
+        'yesterday',
+      _ => 'time_window',
+    };
+    return LocalTimeRangeResolution(
+      kind: kind,
+      matchedText: raw,
+      startLocal: resolution.startLocal!,
+      endLocal: resolution.endLocal!,
+    );
   }
 }

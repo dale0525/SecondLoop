@@ -1,5 +1,8 @@
 import 'package:flutter/widgets.dart';
 
+import '../../../core/ai/temporal/temporal_engine.dart';
+import '../../../core/ai/temporal/temporal_resolution.dart';
+
 class DueCandidate {
   const DueCandidate({
     required this.dueAtLocal,
@@ -433,6 +436,61 @@ class LocalTimeResolver {
   }) {
     final normalized = text.trim();
     if (normalized.isEmpty) return null;
+
+    final engineResolution = TemporalEngine.resolve(
+      text: normalized,
+      nowLocal: nowLocal,
+      locale: locale,
+      timezone: '',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: false,
+      dayEndMinutes: dayEndMinutes,
+    );
+    if (engineResolution.dueAtLocal != null) {
+      final normalizedExpression =
+          engineResolution.metadata.normalizedExpression ?? normalized;
+      final kind = switch (normalizedExpression) {
+        final value
+            when value.contains('明天') ||
+                value.contains('今天') ||
+                value.contains('today') ||
+                value.contains('tomorrow') ||
+                value.contains('昨天') ||
+                value.contains('yesterday') =>
+          'relative_day',
+        final value when value.contains('周') || value.contains('weekday') =>
+          'weekday',
+        final value
+            when value.contains('月初') || value.contains('month start') =>
+          'month_start',
+        final value when value.contains('月底') || value.contains('month end') =>
+          'month_end',
+        final value when value.contains('年底') || value.contains('year end') =>
+          'year_end',
+        final value when value.contains('圣诞节') || value.contains('christmas') =>
+          'holiday',
+        final value
+            when value.contains('-') ||
+                value.contains('/') ||
+                value.contains('月') =>
+          'date',
+        _ => 'temporal_engine',
+      };
+      return LocalTimeResolution(
+        kind: kind,
+        matchedText:
+            engineResolution.metadata.normalizedExpression ?? normalized,
+        candidates: <DueCandidate>[
+          DueCandidate(
+            dueAtLocal: engineResolution.dueAtLocal!,
+            label: engineResolution.metadata.inferredTimeOfDay == null
+                ? _formatDateLabel(engineResolution.dueAtLocal!, locale)
+                : _formatDateTimeLabel(engineResolution.dueAtLocal!, locale),
+          ),
+        ],
+      );
+    }
 
     final lower = normalized.toLowerCase();
     final dayEnd = _atDayEnd(nowLocal, dayEndMinutes);

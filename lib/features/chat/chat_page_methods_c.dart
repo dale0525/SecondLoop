@@ -147,18 +147,32 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     }
 
     switch (decision) {
-      case MessageActionFollowUpDecision(:final todoId, :final newStatus):
+      case MessageActionFollowUpDecision(
+          :final todoId,
+          :final newStatus,
+          :final dueAtLocal,
+        ):
         final selected = todosById[todoId];
         if (selected == null) return;
 
         final previousStatus = selected.status;
         try {
-          await backend.setTodoStatus(
-            sessionKey,
-            todoId: selected.id,
-            newStatus: newStatus,
-            sourceMessageId: message.id,
-          );
+          if (dueAtLocal != null) {
+            await backend.updateTodoDueWithScope(
+              sessionKey,
+              todoId: selected.id,
+              dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
+              scope: TodoRecurrenceEditScope.thisOnly,
+            );
+          }
+          if (newStatus != null) {
+            await backend.setTodoStatus(
+              sessionKey,
+              todoId: selected.id,
+              newStatus: newStatus,
+              sourceMessageId: message.id,
+            );
+          }
           syncEngine?.notifyLocalMutation();
         } catch (_) {
           return;
@@ -196,7 +210,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
 
         final snackText = context.t.actions.todoLink.updated(
           title: selected.title,
-          status: _todoStatusLabel(context, newStatus),
+          status: _todoStatusLabel(context, newStatus ?? selected.status),
         );
         _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(

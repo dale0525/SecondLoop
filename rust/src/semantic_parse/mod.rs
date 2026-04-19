@@ -87,8 +87,9 @@ fn build_message_action_prompt(
     out.push_str("  \"kind\": \"none\" | \"followup\" | \"create\",\n");
     out.push_str("  \"confidence\": number, // 0..1\n");
     out.push_str("  \"todo_id\": string, // only when kind=followup\n");
+    out.push_str("  \"new_status\": \"in_progress\" | \"done\" | \"dismissed\" | null, // only when kind=followup\n");
     out.push_str(
-        "  \"new_status\": \"in_progress\" | \"done\" | \"dismissed\", // only when kind=followup\n",
+        "  \"due_local_iso\": string | null, // optional for kind=followup or kind=create\n",
     );
     out.push_str("  \"title\": string, // only when kind=create\n");
     out.push_str("  \"status\": \"open\" | \"inbox\", // only when kind=create\n");
@@ -106,6 +107,9 @@ fn build_message_action_prompt(
     out.push_str("- If kind=followup, todo_id MUST be one of the candidate IDs.\n");
     out.push_str(
         "- Use kind=followup ONLY when the user clearly refers to a specific candidate.\n",
+    );
+    out.push_str(
+        "- If kind=followup, at least one of new_status or due_local_iso MUST be non-null.\n",
     );
     out.push_str(
         "- If the message describes a new task, use kind=create even if no candidates match.\n",

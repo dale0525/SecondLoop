@@ -22,6 +22,22 @@ void main() {
     expect(follow.newStatus, 'done');
   });
 
+  test('parses followup due update JSON without status mutation', () {
+    final now = DateTime(2026, 2, 3, 12, 0);
+    final parsed = AiSemanticParse.tryParseMessageAction(
+      '{"kind":"followup","confidence":0.9,"todo_id":"todo:1","new_status":null,"due_local_iso":"2026-02-24T21:00:00"}',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(parsed, isNotNull);
+    final follow = parsed!.decision as MessageActionFollowUpDecision;
+    expect(follow.todoId, 'todo:1');
+    expect(follow.newStatus, isNull);
+    expect(follow.dueAtLocal, DateTime(2026, 2, 24, 21, 0));
+  });
+
   test('parses create task_type enum', () {
     final now = DateTime(2026, 2, 3, 12, 0);
     final parsed = AiSemanticParse.tryParseMessageAction(
