@@ -474,6 +474,7 @@ class MessageActionResolver {
       nowLocal,
       locale: locale,
       dayEndMinutes: dayEndMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
 
     final structuredTitle = _extractStructuredTitle(raw);

@@ -432,6 +432,8 @@ extension _ChatPageStateMethodsD on _ChatPageState {
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
     final locale = Localizations.localeOf(context);
+    final firstDayOfWeekIndex =
+        MaterialLocalizations.of(context).firstDayOfWeekIndex;
 
     if (suggestion.type == 'event') {
       final settings = await ActionsSettingsStore.load();
@@ -443,6 +445,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
                   DateTime.now(),
                   locale: locale,
                   dayEndMinutes: settings.dayEndMinutes,
+                  firstDayOfWeekIndex: firstDayOfWeekIndex,
                 );
 
       if (!mounted) return;
@@ -499,6 +502,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
                 DateTime.now(),
                 locale: locale,
                 dayEndMinutes: settings.dayEndMinutes,
+                firstDayOfWeekIndex: firstDayOfWeekIndex,
               );
 
     if (!mounted) return;

@@ -430,9 +430,13 @@ final class SemanticParseAutoActionsRunner {
           morningMinutes: resolvedMorningMinutes,
           firstDayOfWeekIndex: firstDayOfWeekIndex,
         );
+        final unresolvedFields = _unresolvedFields(localParsedResult);
         var parsed = AiSemanticParse.fromLocalResult(localParsedResult);
         try {
-          if (parsed.confidence < settings.minAutoConfidence) {
+          if (_shouldRequestEnhancement(
+            localParsedResult,
+            minAutoConfidence: settings.minAutoConfidence,
+          )) {
             final json = await client
                 .parseMessageActionJson(
                   text: analysisText,
@@ -441,7 +445,7 @@ final class SemanticParseAutoActionsRunner {
                   dayEndMinutes: dayEndMinutes,
                   candidates: candidates,
                   localResultJson: _localResultJson(localParsedResult),
-                  unresolvedFields: _unresolvedFields(localParsedResult),
+                  unresolvedFields: unresolvedFields,
                   timeout: settings.hardTimeout,
                 )
                 .timeout(settings.hardTimeout);
@@ -788,11 +792,14 @@ final class SemanticParseAutoActionsRunner {
         if ((result.title ?? '').trim().isEmpty) add('title');
         if ((result.status ?? '').trim().isEmpty) add('status');
         if (result.dueAtLocal == null) add('due_local_iso');
+        if ((result.taskType ?? '').trim().isEmpty) add('task_type');
+        if (result.suggestedTags.isEmpty) add('suggested_tags');
         break;
       case LocalSemanticParseKind.followup:
         if ((result.todoId ?? '').trim().isEmpty) add('todo_id');
         if ((result.status ?? '').trim().isEmpty) add('new_status');
         if (result.dueAtLocal == null) add('due_local_iso');
+        if (result.suggestedTags.isEmpty) add('suggested_tags');
         break;
       case LocalSemanticParseKind.none:
         switch (result.diagnostics.localIntent) {
@@ -816,6 +823,22 @@ final class SemanticParseAutoActionsRunner {
     }
 
     return fields;
+  }
+
+  static bool _shouldRequestEnhancement(
+    LocalSemanticParseResult result, {
+    required double minAutoConfidence,
+  }) {
+    if (result.confidence < minAutoConfidence) {
+      return true;
+    }
+
+    return switch (result.kind) {
+      LocalSemanticParseKind.create =>
+        (result.taskType ?? '').trim().isEmpty || result.suggestedTags.isEmpty,
+      LocalSemanticParseKind.followup => result.suggestedTags.isEmpty,
+      LocalSemanticParseKind.none => false,
+    };
   }
 
   static int _retryBackoffMs(int attempts) {

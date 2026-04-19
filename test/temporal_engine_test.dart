@@ -240,6 +240,21 @@ void main() {
     expect(result.metadata.normalizedExpression, '周一');
   });
 
+  test('todo_due keeps 中午12点 at noon instead of midnight', () {
+    final result = TemporalEngine.resolve(
+      text: '明天中午12点提醒我吃药',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.dueAtLocal, DateTime(2026, 2, 5, 12, 0));
+  });
+
   test('todo_followup_due keeps zh-CN holiday expressions working after 2026',
       () {
     final result = TemporalEngine.resolve(

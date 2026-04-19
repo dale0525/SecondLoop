@@ -433,6 +433,7 @@ class LocalTimeResolver {
     DateTime nowLocal, {
     required Locale locale,
     required int dayEndMinutes,
+    int firstDayOfWeekIndex = 1,
   }) {
     final normalized = text.trim();
     if (normalized.isEmpty) return null;
@@ -442,7 +443,7 @@ class LocalTimeResolver {
       nowLocal: nowLocal,
       locale: locale,
       timezone: '',
-      firstDayOfWeek: 1,
+      firstDayOfWeek: firstDayOfWeekIndex,
       mode: TemporalMode.todoDue,
       allowEnhancement: false,
       dayEndMinutes: dayEndMinutes,
@@ -459,7 +460,10 @@ class LocalTimeResolver {
                 value.contains('昨天') ||
                 value.contains('yesterday') =>
           'relative_day',
-        final value when value.contains('周') || value.contains('weekday') =>
+        final value
+            when value.contains('周') ||
+                value.contains('weekday') ||
+                _looksLikeWeekdayExpression(value) =>
           'weekday',
         final value
             when value.contains('月初') || value.contains('month start') =>
@@ -623,11 +627,12 @@ class LocalTimeResolver {
     // 4) Weekday anchor (Mon..Sun)
     final scopedWeekday = _matchWeekScopedWeekdayToken(normalized, lower);
     if (scopedWeekday != null) {
-      final thisWeekStart = _startOfWeek(nowLocal, 1);
+      final thisWeekStart = _startOfWeek(nowLocal, firstDayOfWeekIndex);
       final weekStart = thisWeekStart.add(
         Duration(days: scopedWeekday.offsetWeeks * 7),
       );
-      final weekdayOffset = (scopedWeekday.weekday - DateTime.monday + 7) % 7;
+      final firstWeekday = _firstWeekdayFromIndex(firstDayOfWeekIndex);
+      final weekdayOffset = (scopedWeekday.weekday - firstWeekday + 7) % 7;
       final day = weekStart.add(Duration(days: weekdayOffset));
       final due = timeOfDay == null
           ? _atDayEnd(day, dayEndMinutes)
@@ -941,6 +946,67 @@ class LocalTimeResolver {
   static int _firstWeekdayFromIndex(int firstDayOfWeekIndex) {
     if (firstDayOfWeekIndex == 0) return DateTime.sunday;
     return firstDayOfWeekIndex.clamp(DateTime.monday, DateTime.saturday);
+  }
+
+  static bool _looksLikeWeekdayExpression(String value) {
+    const weekdayTokens = <String>{
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+      '月曜',
+      '月曜日',
+      '火曜',
+      '火曜日',
+      '水曜',
+      '水曜日',
+      '木曜',
+      '木曜日',
+      '金曜',
+      '金曜日',
+      '土曜',
+      '土曜日',
+      '日曜',
+      '日曜日',
+      '월요일',
+      '화요일',
+      '수요일',
+      '목요일',
+      '금요일',
+      '토요일',
+      '일요일',
+      'lunes',
+      'martes',
+      'miércoles',
+      'miercoles',
+      'jueves',
+      'viernes',
+      'sábado',
+      'sabado',
+      'domingo',
+      'lundi',
+      'mardi',
+      'mercredi',
+      'jeudi',
+      'vendredi',
+      'samedi',
+      'dimanche',
+      'montag',
+      'dienstag',
+      'mittwoch',
+      'donnerstag',
+      'freitag',
+      'samstag',
+      'sonntag',
+    };
+
+    for (final token in weekdayTokens) {
+      if (value.contains(token)) return true;
+    }
+    return false;
   }
 
   static ({int hour, int minute, String matchedText})? _parseTimeOfDay(

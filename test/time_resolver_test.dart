@@ -147,6 +147,21 @@ void main() {
     expect(res.candidates.single.dueAtLocal, DateTime(2026, 2, 10, 21, 0));
   });
 
+  test('resolves this-week weekday with Sunday-first locales', () {
+    final now = DateTime(2026, 2, 8, 10, 0); // Sunday
+    final res = LocalTimeResolver.resolve(
+      'this week monday',
+      now,
+      locale: const Locale('en', 'US'),
+      dayEndMinutes: 21 * 60,
+      firstDayOfWeekIndex: 0,
+    );
+
+    expect(res, isNotNull);
+    expect(res!.kind, 'weekday');
+    expect(res.candidates.single.dueAtLocal, DateTime(2026, 2, 9, 21, 0));
+  });
+
   test('resolves time-only (zh) into today/tomorrow candidates', () {
     final now = DateTime(2026, 1, 24, 12, 0);
     final res = LocalTimeResolver.resolve(

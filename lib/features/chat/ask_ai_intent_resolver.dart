@@ -28,12 +28,16 @@ class AskAiIntentResolver {
       text.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   static AskAiIntentKind _mergeKinds(
-    AskAiIntentKind current,
-    AskAiIntentKind next,
-  ) {
+      AskAiIntentKind current, AskAiIntentKind next,
+      {bool preferExplicitFuture = false}) {
     if (current == AskAiIntentKind.none) return next;
     if (next == AskAiIntentKind.none) return current;
     if (current == next) return current;
+    if (preferExplicitFuture &&
+        current == AskAiIntentKind.future &&
+        next == AskAiIntentKind.both) {
+      return current;
+    }
     if (current == AskAiIntentKind.both || next == AskAiIntentKind.both) {
       return AskAiIntentKind.both;
     }
@@ -141,7 +145,11 @@ class AskAiIntentResolver {
       _ => AskAiIntentKind.none,
     };
     if (timeRange != null) {
-      kind = _mergeKinds(kind, temporalKind);
+      kind = _mergeKinds(
+        kind,
+        temporalKind,
+        preferExplicitFuture: kind == AskAiIntentKind.future,
+      );
     }
 
     final confidence = switch (kind) {

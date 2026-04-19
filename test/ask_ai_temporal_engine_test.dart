@@ -41,4 +41,18 @@ void main() {
     expect(result.timeRange?.startLocal, DateTime(2026, 2, 2));
     expect(result.timeRange?.endLocal, DateTime(2026, 2, 9));
   });
+
+  test('Ask AI keeps explicit future intent for this week planning questions',
+      () {
+    final result = AskAiIntentResolver.resolve(
+      'what should I do this week',
+      DateTime(2026, 2, 4, 10, 0),
+      locale: const Locale('en'),
+      firstDayOfWeekIndex: 1,
+    );
+
+    expect(result.kind, AskAiIntentKind.future);
+    expect(result.timeRange?.startLocal, DateTime(2026, 2, 2));
+    expect(result.timeRange?.endLocal, DateTime(2026, 2, 9));
+  });
 }

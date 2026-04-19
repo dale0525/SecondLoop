@@ -167,6 +167,8 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       syncEngine?.notifyLocalMutation();
 
       final locale = Localizations.localeOf(context);
+      final firstDayOfWeekIndex =
+          MaterialLocalizations.of(context).firstDayOfWeekIndex;
       final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
           SubscriptionStatus.unknown;
       final cloudAuthScope = CloudAuthScope.maybeOf(context);
@@ -178,6 +180,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         DateTime.now(),
         locale: locale,
         dayEndMinutes: settings.dayEndMinutes,
+        firstDayOfWeekIndex: firstDayOfWeekIndex,
       );
       final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(text);
       final looksLikeLongFormNote = isLongTextForTodoAutomation(text);

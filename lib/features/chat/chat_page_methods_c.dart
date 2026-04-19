@@ -6,6 +6,8 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     if (!mounted) return;
 
     final locale = Localizations.localeOf(context);
+    final firstDayOfWeekIndex =
+        MaterialLocalizations.of(context).firstDayOfWeekIndex;
     final trimmedText = rawText.trim();
     final forceTodoSelectionPrompt =
         _looksLikeBareTodoStatusUpdate(trimmedText);
@@ -32,6 +34,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       nowLocal,
       locale: locale,
       dayEndMinutes: settings.dayEndMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
     final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(rawText);
     final targets = <TodoLinkTarget>[];
@@ -78,8 +81,6 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     }
 
     if (!mounted) return;
-    final firstDayOfWeekIndex =
-        MaterialLocalizations.of(context).firstDayOfWeekIndex;
     final looksLikeLongFormNote = isLongTextForTodoAutomation(trimmedText);
     final looksLikeTodoRelevant = _looksLikeTodoRelevantForAi(trimmedText);
 

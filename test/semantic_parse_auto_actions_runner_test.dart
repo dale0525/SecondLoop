@@ -557,6 +557,51 @@ void main() {
     expect(store.lastFollowupTaskTypeHint, 'research');
   });
 
+  test(
+      'runner still uses enhancement to fill metadata for high-confidence local create',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:local_metadata',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:local_metadata': '明天下午 3 点去浦东机场接 MU5101'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":0.93,"title":"去浦东机场接 MU5101","status":"open","task_type":"live_info_lookup","suggested_tags":["travel"],"tag_confidence":0.96,"due_local_iso":"2026-02-04T15:00:00"}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.lastLocalResultJson, isNotNull);
+    expect(client.lastUnresolvedFields, contains('task_type'));
+    expect(client.lastUnresolvedFields, contains('suggested_tags'));
+    expect(store.lastFollowupTaskTypeHint, 'live_info_lookup');
+    expect(store.appliedSemanticTagsByMessage['msg:local_metadata'],
+        equals(const <String>['travel']));
+  });
+
   test('runner records the actual applied todo id from store', () async {
     final store = _FakeStore(
       jobs: [
