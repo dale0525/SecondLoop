@@ -725,10 +725,36 @@ final class SemanticParseAutoActionsRunner {
   static Locale _localeFromTag(String tag) {
     final normalized = tag.trim();
     if (normalized.isEmpty) return const Locale('en');
-    final parts = normalized.split(RegExp(r'[-_]'));
-    final language = parts.isNotEmpty ? parts[0] : 'en';
-    final country = parts.length > 1 ? parts[1] : null;
-    return Locale(language, country);
+    final parts = normalized
+        .split(RegExp(r'[-_]'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) {
+      return const Locale('en');
+    }
+
+    String? scriptCode;
+    String? countryCode;
+    for (final part in parts.skip(1)) {
+      if (scriptCode == null && RegExp(r'^[A-Za-z]{4}$').hasMatch(part)) {
+        scriptCode =
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}';
+        continue;
+      }
+      if (countryCode == null &&
+          (RegExp(r'^[A-Za-z]{2}$').hasMatch(part) ||
+              RegExp(r'^\d{3}$').hasMatch(part))) {
+        countryCode = part.toUpperCase();
+        continue;
+      }
+    }
+
+    return Locale.fromSubtags(
+      languageCode: parts.first.toLowerCase(),
+      scriptCode: scriptCode,
+      countryCode: countryCode,
+    );
   }
 
   static bool _shouldRetryRemoteParseError(Object error) {

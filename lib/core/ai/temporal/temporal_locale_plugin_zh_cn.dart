@@ -4,6 +4,19 @@ import 'temporal_locale_plugin.dart';
 import 'temporal_resolution.dart';
 
 final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
+  static const Set<String> _nonSpringFestivalHolidayTokens = <String>{
+    '国庆',
+    '國慶',
+    '中秋',
+    '端午',
+    '劳动节',
+    '勞動節',
+    '五一',
+    '元旦',
+    '清明',
+    '圣诞',
+    '聖誕',
+  };
   static final Map<int, DateTime> _lunarNewYearDay = <int, DateTime>{
     2024: DateTime(2024, 2, 10),
     2025: DateTime(2025, 1, 29),
@@ -36,6 +49,17 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
 
     if (isFirstWorkingDayExpression) {
       final matchedExpression = _matchedExpression(text);
+      if (_containsExplicitNonSpringFestivalHoliday(text)) {
+        return TemporalCandidate(
+          resolver: TemporalResolver.localePlugin,
+          confidence: 0,
+          semantics: TemporalSemantics.none,
+          metadata: metadata.copyWith(
+            needsEnhancement: true,
+            normalizedExpression: matchedExpression,
+          ),
+        );
+      }
       final firstWorkingDay = _resolveFestivalBoundary(
         request.nowLocal,
         useFirstWorkingDay: true,
@@ -160,6 +184,9 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
         text.contains('春节后'))) {
       return false;
     }
+    if (_containsExplicitNonSpringFestivalHoliday(text)) {
+      return true;
+    }
     if (text.contains('春节后') && request.mode != TemporalMode.retrievalWindow) {
       return true;
     }
@@ -248,5 +275,17 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
       return '春节后';
     }
     return text;
+  }
+
+  static bool _containsExplicitNonSpringFestivalHoliday(String text) {
+    if (text.contains('春节') || text.contains('春節') || text.contains('年初一')) {
+      return false;
+    }
+    for (final token in _nonSpringFestivalHolidayTokens) {
+      if (text.contains(token)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -57,6 +57,21 @@ void main() {
     expect(result.metadata.inferredCalendarSystem, 'chinese_lunar');
   });
 
+  test('todo_followup_due does not treat 国庆节后第一个工作日 as 春节 fallback', () {
+    final result = TemporalEngine.resolve(
+      text: '把报销改到国庆节后第一个工作日',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoFollowupDue,
+      allowEnhancement: true,
+    );
+
+    expect(result.dueAtLocal, isNull);
+    expect(result.metadata.needsEnhancement, isTrue);
+  });
+
   test('todo_due keeps übermorgen as day-after-tomorrow instead of morgen', () {
     final result = TemporalEngine.resolve(
       text: 'übermorgen',

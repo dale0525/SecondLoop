@@ -666,11 +666,14 @@ fn set_semantic_parse_todo_status_in_existing_txn(
     todo_id: &str,
     new_status: &str,
     source_message_id: &str,
-) -> Result<String> {
+) -> Result<Option<String>> {
     let existing = get_todo(conn, key, todo_id)?;
+    if existing.status == new_status {
+        return Ok(None);
+    }
     let previous_status = existing.status.clone();
     let _ = set_todo_status_in_txn(conn, key, todo_id, new_status, Some(source_message_id))?;
-    Ok(previous_status)
+    Ok(Some(previous_status))
 }
 
 pub fn mark_semantic_parse_job_failed(

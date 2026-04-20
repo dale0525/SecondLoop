@@ -537,13 +537,7 @@ pub fn set_semantic_parse_todo_status_if_current_attempt(
             return Ok(None);
         }
 
-        Ok(Some(set_semantic_parse_todo_status_in_existing_txn(
-            conn,
-            key,
-            todo_id,
-            new_status,
-            message_id,
-        )?))
+        set_semantic_parse_todo_status_in_existing_txn(conn, key, todo_id, new_status, message_id)
     })
 }
 
@@ -552,8 +546,11 @@ fn set_semantic_parse_todo_due_in_existing_txn(
     key: &[u8; 32],
     todo_id: &str,
     due_at_ms: i64,
-) -> Result<Option<i64>> {
+) -> Result<(bool, Option<i64>)> {
     let current = get_todo(conn, key, todo_id)?;
+    if current.due_at_ms == Some(due_at_ms) {
+        return Ok((false, None));
+    }
     let previous_due_at_ms = current.due_at_ms;
     let _ = upsert_todo(
         conn,
@@ -569,7 +566,7 @@ fn set_semantic_parse_todo_due_in_existing_txn(
         current.manual_importance_nudge_score,
         current.manual_urgency_nudge_score,
     )?;
-    Ok(previous_due_at_ms)
+    Ok((true, previous_due_at_ms))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -784,20 +781,17 @@ pub fn complete_semantic_parse_followup_if_current_attempt(
         }
 
         let previous_status = match new_status {
-            Some(status) if !status.trim().is_empty() => Some(
-                set_semantic_parse_todo_status_in_existing_txn(
-                    conn, key, todo_id, status, message_id,
-                )?,
-            ),
+            Some(status) if !status.trim().is_empty() => {
+                set_semantic_parse_todo_status_in_existing_txn(conn, key, todo_id, status, message_id)?
+            }
             _ => None,
         };
-        let previous_due_at_ms = match due_at_ms {
+        let (did_change_due, previous_due_at_ms) = match due_at_ms {
             Some(next_due_at_ms) => {
-                Some(set_semantic_parse_todo_due_in_existing_txn(conn, key, todo_id, next_due_at_ms)?)
+                set_semantic_parse_todo_due_in_existing_txn(conn, key, todo_id, next_due_at_ms)?
             }
-            None => None,
-        }
-        .flatten();
+            None => (false, None),
+        };
 
         let finalized =
             mark_semantic_parse_job_succeeded_with_tag_metadata_and_due_metadata_if_current_attempt(
@@ -810,7 +804,7 @@ pub fn complete_semantic_parse_followup_if_current_attempt(
             todo_title,
             previous_status.as_deref(),
             previous_due_at_ms,
-            due_at_ms.is_some(),
+            did_change_due,
             stored_suggested_tags,
             stored_tag_confidence,
             stored_tag_state,

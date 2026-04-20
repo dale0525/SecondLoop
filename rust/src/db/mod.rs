@@ -48,6 +48,9 @@ include!("parts/31_todo_followup_generation_jobs.rs");
 mod semantic_parse_jobs_tests;
 
 #[cfg(test)]
+mod semantic_parse_jobs_noop_tests;
+
+#[cfg(test)]
 mod cloud_media_backup_tests;
 
 #[cfg(test)]
