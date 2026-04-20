@@ -781,6 +781,109 @@ void main() {
     }
   });
 
+  testWidgets(
+      'Managed-vault pull repairs a missing pending flag from media summary',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(syncKey);
+    await store.writeCloudMediaBackupEnabled(false);
+    await store.writeCloudMediaBackupWifiOnly(true);
+    final pendingScopeId = store.syncStateScopeId(
+      SyncConfig.managedVault(
+        syncKey: syncKey,
+        vaultId: 'vault-1',
+        baseUrl: 'https://vault.example.com',
+      ),
+    );
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultRetryingUploadBackend(
+        dueBackups: [
+          const CloudMediaBackup(
+            attachmentSha256: 'a',
+            desiredVariant: 'original',
+            byteLen: 0,
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            updatedAtMs: 0,
+          ),
+        ],
+      );
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultPullCalls < 1 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(
+        await store.readManagedVaultMediaUploadPending(scopeId: pendingScopeId),
+        isTrue,
+      );
+
+      await store.writeCloudMediaBackupEnabled(true);
+      await store.writeManagedVaultMediaUploadPending(
+        scopeId: pendingScopeId,
+        pending: false,
+      );
+
+      engine!.triggerPullNow();
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultUploadAttachmentCalls < 1 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultUploadAttachmentCalls, 1);
+      expect(
+        await store.readManagedVaultMediaUploadPending(scopeId: pendingScopeId),
+        isTrue,
+      );
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
   testWidgets('SyncEngineGate rebuild swaps managed-vault auth token source',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

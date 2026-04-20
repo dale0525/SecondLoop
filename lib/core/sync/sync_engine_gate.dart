@@ -262,6 +262,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   final SyncConfigStore _configStore;
   final Uint8List _sessionKey;
   final Future<String?> Function()? _idTokenGetter;
+  bool _managedVaultPushSucceededInSession = false;
 
   String _managedVaultMediaUploadScopeId(SyncConfig config) {
     if (config.backendType != SyncBackendType.managedVault) return '';
@@ -282,6 +283,18 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
       scopeId: _managedVaultMediaUploadScopeId(config),
       pending: pending,
     );
+  }
+
+  Future<bool> _hasManagedVaultMediaUploadWork(SyncConfig config) async {
+    if (config.backendType != SyncBackendType.managedVault) return false;
+    try {
+      final summary = await backend.cloudMediaBackupSummary(_sessionKey);
+      return summary.pending.toInt() > 0 || summary.failed.toInt() > 0;
+    } catch (_) {
+      // Be conservative: if we cannot inspect the local queue, keep retrying on
+      // future pulls rather than risk dropping pending uploads forever.
+      return true;
+    }
   }
 
   Future<CloudMediaBackupNetwork> _safeGetCloudMediaBackupNetwork({
@@ -475,6 +488,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
               backendType: SyncBackendType.managedVault,
               scopeId: scopeId,
             );
+            _managedVaultPushSucceededInSession = true;
             await _writeManagedVaultMediaUploadPending(config, true);
             return pushed;
           } catch (error) {
@@ -526,7 +540,18 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
         await _runCloudMediaBackupIfEnabled(config);
         break;
       case SyncBackendType.managedVault:
-        if (await _readManagedVaultMediaUploadPending(config)) {
+        final persistedPending = await _readManagedVaultMediaUploadPending(
+          config,
+        );
+        final summaryPending = persistedPending
+            ? true
+            : _managedVaultPushSucceededInSession
+                ? await _hasManagedVaultMediaUploadWork(config)
+                : false;
+        if (summaryPending && !persistedPending) {
+          await _writeManagedVaultMediaUploadPending(config, true);
+        }
+        if (summaryPending) {
           final mediaResult = await _runCloudMediaBackupIfEnabled(config);
           if (mediaResult.executed) {
             await _writeManagedVaultMediaUploadPending(
