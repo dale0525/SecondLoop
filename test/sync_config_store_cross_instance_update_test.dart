@@ -96,6 +96,51 @@ void main() {
     );
   });
 
+  test('SyncConfigStore notifies listeners when sync key changes', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final listenerStore = SyncConfigStore();
+    var notifications = 0;
+    void onChange() => notifications += 1;
+
+    listenerStore.changes.addListener(onChange);
+    addTearDown(() => listenerStore.changes.removeListener(onChange));
+
+    final writer = SyncConfigStore();
+    await writer.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+
+    expect(notifications, 1);
+    expect(
+      await listenerStore.readSyncKey(),
+      Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+  });
+
+  test(
+      'SyncConfigStore notifies listeners when clearing persisted config from an unloaded instance',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final writer = SyncConfigStore();
+    await writer.writeBackendType(SyncBackendType.webdav);
+    await writer.writeAutoEnabled(true);
+    await writer.writeRemoteRoot('SecondLoop');
+    await writer.writeWebdavBaseUrl('https://example.com/dav');
+    await writer.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 3)));
+
+    final clearer = SyncConfigStore();
+    var notifications = 0;
+    void onChange() => notifications += 1;
+
+    clearer.changes.addListener(onChange);
+    addTearDown(() => clearer.changes.removeListener(onChange));
+
+    await clearer.clearAll();
+
+    expect(notifications, 1);
+    expect(await SyncConfigStore().loadConfiguredSyncIfAutoEnabled(), isNull);
+  });
+
   test('SyncConfigStore isolates scoped data between users', () async {
     SharedPreferences.setMockInitialValues({});
 

@@ -428,4 +428,66 @@ void main() {
       isNot(store.syncStateScopeId(configB)),
     );
   });
+
+  test('SyncConfigStore ignores unrelated fields when deriving backend scope',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 9));
+
+    final managedVaultScopeA = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      localDir: '/tmp/stale-local-dir',
+      username: 'stale-user',
+      remoteRoot: 'vault-1',
+      syncKey: syncKey,
+    );
+    final managedVaultScopeB = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      localDir: null,
+      username: null,
+      remoteRoot: 'vault-1',
+      syncKey: syncKey,
+    );
+
+    final webdavScopeA = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.webdav,
+      baseUrl: 'https://dav.example.com',
+      localDir: '/tmp/stale-local-dir',
+      username: 'alice',
+      remoteRoot: 'SecondLoop',
+      syncKey: syncKey,
+    );
+    final webdavScopeB = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.webdav,
+      baseUrl: 'https://dav.example.com',
+      localDir: null,
+      username: 'alice',
+      remoteRoot: 'SecondLoop',
+      syncKey: syncKey,
+    );
+
+    final localDirScopeA = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.localDir,
+      baseUrl: 'https://stale-webdav.example.com',
+      localDir: '/tmp/secondloop',
+      username: 'stale-user',
+      remoteRoot: 'SecondLoop',
+      syncKey: syncKey,
+    );
+    final localDirScopeB = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.localDir,
+      baseUrl: null,
+      localDir: '/tmp/secondloop',
+      username: null,
+      remoteRoot: 'SecondLoop',
+      syncKey: syncKey,
+    );
+
+    expect(managedVaultScopeA, managedVaultScopeB);
+    expect(webdavScopeA, webdavScopeB);
+    expect(localDirScopeA, localDirScopeB);
+  });
 }

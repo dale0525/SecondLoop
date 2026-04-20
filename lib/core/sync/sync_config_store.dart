@@ -41,6 +41,7 @@ final class SyncConfigStore {
 
   static const _kPrefsBlobKey = SyncConfigMigrator.publicPrefsBlobKey;
   static const _kLegacyPrefsBlobKey = SyncConfigMigrator.legacyPrefsBlobKey;
+  static const _kStateRevisionKey = 'sync_config_state_revision_v1';
   static const prefsBlobKeyForTest = _kPrefsBlobKey;
   static const legacyPrefsBlobKeyForTest = _kLegacyPrefsBlobKey;
   static const syncSecretStoreVersionPrefsKeyForTest =
@@ -53,6 +54,7 @@ final class SyncConfigStore {
   bool _loaded = false;
   String? _lastRaw;
   Map<String, String> _cache = <String, String>{};
+  int _lastStateRevision = 0;
 
   Listenable get changes => _changeCounter;
 
@@ -202,7 +204,7 @@ final class SyncConfigStore {
     if (_scopeKey == null) {
       SyncKeyManager.cacheSyncKey(key);
     }
-    await _writeConfigUpdates({kSyncKeyB64: null});
+    await _writeConfigUpdates({kSyncKeyB64: null}, noteStateChangeIfNoop: true);
   }
 
   Future<void> clearSyncKey() async {
@@ -210,7 +212,7 @@ final class SyncConfigStore {
     if (_scopeKey == null) {
       SyncKeyManager.clearSyncKeyCache();
     }
-    await _writeConfigUpdates({kSyncKeyB64: null});
+    await _writeConfigUpdates({kSyncKeyB64: null}, noteStateChangeIfNoop: true);
   }
 
   Future<String?> readWebdavBaseUrl() async =>
@@ -262,7 +264,10 @@ final class SyncConfigStore {
 
   Future<void> writeWebdavPassword(String? password) async {
     await _secretStore.writeWebdavPassword(password);
-    await _writeConfigUpdates({kWebdavPassword: null});
+    await _writeConfigUpdates(
+      {kWebdavPassword: null},
+      noteStateChangeIfNoop: true,
+    );
   }
 
   Future<void> writeRecoveryEnvelopeJson(String? envelopeJson) async {
@@ -511,14 +516,27 @@ final class SyncConfigStore {
       SyncBackendType.managedVault => 'managedvault',
     };
 
-    final raw = [
-      backend,
-      baseUrl?.trim() ?? '',
-      localDir?.trim() ?? '',
-      username?.trim() ?? '',
-      remoteRoot.trim(),
-      _syncKeyFingerprint(syncKey),
-    ].join('|');
+    final raw = switch (backendType) {
+      SyncBackendType.webdav => [
+          backend,
+          baseUrl?.trim() ?? '',
+          username?.trim() ?? '',
+          remoteRoot.trim(),
+          _syncKeyFingerprint(syncKey),
+        ].join('|'),
+      SyncBackendType.localDir => [
+          backend,
+          localDir?.trim() ?? '',
+          remoteRoot.trim(),
+          _syncKeyFingerprint(syncKey),
+        ].join('|'),
+      SyncBackendType.managedVault => [
+          backend,
+          baseUrl?.trim() ?? '',
+          remoteRoot.trim(),
+          _syncKeyFingerprint(syncKey),
+        ].join('|'),
+    };
     return base64Url.encode(utf8.encode(raw));
   }
 
@@ -707,7 +725,10 @@ final class SyncConfigStore {
     });
   }
 
-  Future<void> _writeConfigUpdates(Map<String, String?> updates) async {
+  Future<void> _writeConfigUpdates(
+    Map<String, String?> updates, {
+    bool noteStateChangeIfNoop = false,
+  }) async {
     await _serial(() async {
       await _ensureLoaded();
       await _reloadIfChanged();
@@ -726,17 +747,29 @@ final class SyncConfigStore {
         }
       }
 
-      if (!changed) return;
+      if (!changed) {
+        if (noteStateChangeIfNoop) {
+          await _bumpStateRevision();
+        }
+        return;
+      }
       await _persistCache();
     });
   }
 
   Future<void> clearAll() async {
     await _serial(() async {
-      final hadState = _cache.isNotEmpty || _lastRaw != null;
+      await _ensureLoaded();
+      await _reloadIfChanged();
+
       final prefs = await _prefs();
+      final hadPublicState = _cache.isNotEmpty ||
+          _lastRaw != null ||
+          prefs.getInt(_stateRevisionPrefsKey) != null ||
+          prefs.getInt(_secretStoreVersionPrefsKey) != null;
       await prefs.remove(_prefsBlobKey);
       await prefs.remove(_legacyPrefsBlobKey);
+      await prefs.remove(_stateRevisionPrefsKey);
       await prefs.remove(_secretStoreVersionPrefsKey);
       await _secretStore.clearAll();
       if (_scopeKey == null) {
@@ -744,8 +777,9 @@ final class SyncConfigStore {
       }
       _lastRaw = null;
       _cache = <String, String>{};
+      _lastStateRevision = 0;
       _loaded = true;
-      if (hadState) {
+      if (hadPublicState) {
         _notifyChanged();
       }
     });
@@ -764,16 +798,19 @@ final class SyncConfigStore {
 
     final prefs = await _prefs();
     final raw = _readRawConfigBlob(prefs);
-    if (raw == _lastRaw) return;
+    final stateRevision = prefs.getInt(_stateRevisionPrefsKey) ?? 0;
+    if (raw == _lastRaw && stateRevision == _lastStateRevision) return;
 
     if (raw == null || raw.trim().isEmpty) {
       _lastRaw = null;
       _cache = <String, String>{};
+      _lastStateRevision = stateRevision;
       return;
     }
 
     _lastRaw = raw;
     _cache = _migrator.decodeRawConfigMap(raw);
+    _lastStateRevision = stateRevision;
     await _migrateSensitiveFieldsFromPublicCacheIfNeeded();
     final hasPublicBlob =
         prefs.getString(_prefsBlobKey)?.trim().isNotEmpty == true;
@@ -788,6 +825,7 @@ final class SyncConfigStore {
     if (_loaded) return;
 
     final prefs = await _prefs();
+    _lastStateRevision = prefs.getInt(_stateRevisionPrefsKey) ?? 0;
     final raw = _readRawConfigBlob(prefs);
     if (raw == null || raw.trim().isEmpty) {
       final migrated = await _tryMigrateFromSecureStore();
@@ -931,23 +969,34 @@ final class SyncConfigStore {
       await prefs.remove(_prefsBlobKey);
       await prefs.remove(_legacyPrefsBlobKey);
       _lastRaw = null;
-      _notifyChanged();
+      await _bumpStateRevision(prefs: prefs);
       return;
     }
     final raw = jsonEncode(_cache);
     await prefs.setString(_prefsBlobKey, raw);
     await prefs.remove(_legacyPrefsBlobKey);
     _lastRaw = raw;
-    _notifyChanged();
+    await _bumpStateRevision(prefs: prefs);
   }
 
   void _notifyChanged() {
     _changeCounter.value++;
   }
 
+  Future<void> _bumpStateRevision({SharedPreferences? prefs}) async {
+    final resolvedPrefs = prefs ?? await _prefs();
+    final current = resolvedPrefs.getInt(_stateRevisionPrefsKey) ?? 0;
+    final next = current + 1;
+    await resolvedPrefs.setInt(_stateRevisionPrefsKey, next);
+    _lastStateRevision = next;
+    _notifyChanged();
+  }
+
   String get _prefsBlobKey => _scopedKey(_kPrefsBlobKey);
 
   String get _legacyPrefsBlobKey => _scopedKey(_kLegacyPrefsBlobKey);
+
+  String get _stateRevisionPrefsKey => _scopedKey(_kStateRevisionKey);
 
   String get _secretStoreVersionPrefsKey =>
       _scopedKey(SyncConfigMigrator.secretStoreVersionPrefsKey);
