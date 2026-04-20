@@ -645,13 +645,23 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
           if (getter == null) return 0;
           final idToken = await getter();
           if (idToken == null || idToken.trim().isEmpty) return 0;
-          return backend.syncManagedVaultPull(
-            _sessionKey,
-            config.syncKey,
-            baseUrl: config.baseUrl ?? '',
-            vaultId: config.remoteRoot,
-            idToken: idToken,
-          );
+          final scopeId = _configStore.syncStateScopeId(config);
+          try {
+            return await backend.syncManagedVaultPull(
+              _sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              vaultId: config.remoteRoot,
+              idToken: idToken,
+            );
+          } catch (error) {
+            await _configStore.writeBackgroundSyncRepairRequired(
+              shouldPersistManagedVaultBackgroundRepairBlock(error),
+              backendType: SyncBackendType.managedVault,
+              scopeId: scopeId,
+            );
+            rethrow;
+          }
         }(),
     };
     switch (config.backendType) {

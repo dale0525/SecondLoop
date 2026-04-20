@@ -186,7 +186,13 @@ fn finalize_v2_pull_blob_backfill(
     applied_ops: u64,
 ) -> Result<()> {
     let scope_id = runtime::scope_id(base_url, vault_id);
-    if !should_finalize_v2_pull_blob_backfill(conn, &scope_id, applied_ops)? {
+    let app_dir = super::app_dir_from_conn(conn)?;
+    let missing_attachments = has_missing_local_attachment_bytes(conn, db_key, app_dir.as_path())?;
+    let missing_artifacts = has_missing_embedding_artifact_blobs(conn, app_dir.as_path())?;
+    if !missing_attachments
+        && !missing_artifacts
+        && !should_finalize_v2_pull_blob_backfill(conn, &scope_id, applied_ops)?
+    {
         return Ok(());
     }
     let _ = state_machine::transition(
@@ -196,7 +202,6 @@ fn finalize_v2_pull_blob_backfill(
     );
 
     let http = runtime::client()?;
-    let app_dir = super::app_dir_from_conn(conn)?;
     let download_ctx = attachments::AttachmentUploadContext {
         conn,
         db_key,

@@ -230,6 +230,44 @@ fn managed_vault_v2_generation_rebuild_clears_stale_blob_repair_and_backfill_sta
 }
 
 #[test]
+fn managed_vault_v2_pull_rejects_empty_page_that_claims_more_data() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.empty_pull_page_once_after_global_seq = Some(0);
+        server.empty_pull_page_has_more_once = true;
+        server.empty_pull_page_remote_latest_global_seq_once = Some(1);
+    }
+
+    let error = sync::managed_vault::pull(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+        .expect_err("pull should reject inconsistent empty page");
+    assert!(
+        error
+            .to_string()
+            .contains("empty page while more remote data is still advertised"),
+        "unexpected error: {error}",
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_v2_pull_rebuilds_after_non_contiguous_page() {
     let (base_url, stop_tx, state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();

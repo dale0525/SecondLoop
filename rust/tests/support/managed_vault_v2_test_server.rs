@@ -23,6 +23,9 @@ pub struct V2ServerState {
     pub partial_accept_count_once: Option<usize>,
     pub gap_pull_once_after_global_seq: Option<i64>,
     pub reset_required_once_after_global_seq: Option<i64>,
+    pub empty_pull_page_once_after_global_seq: Option<i64>,
+    pub empty_pull_page_has_more_once: bool,
+    pub empty_pull_page_remote_latest_global_seq_once: Option<i64>,
     pub pull_page_size: Option<usize>,
     pub switch_generation_once_after_global_seq: Option<i64>,
     pub switch_generation_id: Option<String>,
@@ -374,6 +377,26 @@ pub fn start_mock_v2_server() -> (
                                     "reason": "global_log_gap",
                                     "remote_generation_id": state.generation_id,
                                     "remote_latest_global_seq": state.latest_global_seq,
+                                }),
+                            );
+                            continue;
+                        }
+                        if state.empty_pull_page_once_after_global_seq == Some(after) {
+                            state.empty_pull_page_once_after_global_seq = None;
+                            let has_more = state.empty_pull_page_has_more_once;
+                            state.empty_pull_page_has_more_once = false;
+                            let remote_latest_global_seq = state
+                                .empty_pull_page_remote_latest_global_seq_once
+                                .take()
+                                .unwrap_or(state.latest_global_seq);
+                            write_json_response(
+                                &mut stream,
+                                200,
+                                serde_json::json!({
+                                    "generation_id": state.generation_id,
+                                    "remote_latest_global_seq": remote_latest_global_seq,
+                                    "has_more": has_more,
+                                    "ops": [],
                                 }),
                             );
                             continue;

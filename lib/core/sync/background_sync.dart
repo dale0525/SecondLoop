@@ -673,6 +673,7 @@ final class BackgroundSync {
       userMessage: userReadableSyncErrorMessage(
         statusCode: statusCode,
         errorCode: errorCode,
+        errorMessage: errorMessage,
       ),
     );
   }
@@ -766,7 +767,16 @@ final class BackgroundSync {
   static String userReadableSyncErrorMessage({
     int? statusCode,
     String? errorCode,
+    String? errorMessage,
   }) {
+    final recoveryBlockedReason =
+        extractManagedVaultRecoveryBlockedReason(errorMessage ?? '');
+    if (recoveryBlockedReason == 'local_unpushed_changes') {
+      return 'Local changes must upload successfully before cloud recovery can continue.';
+    }
+    if (recoveryBlockedReason == 'local_media_backfill_pending') {
+      return 'Local media must finish cloud backfill before cloud recovery can continue.';
+    }
     if (statusCode == 400 && errorCode == 'invalid_batch') {
       return 'Local sync data needs repair before cloud sync can continue.';
     }

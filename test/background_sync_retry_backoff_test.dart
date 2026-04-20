@@ -108,6 +108,20 @@ void main() {
       ),
       contains('Local sync data'),
     );
+    expect(
+      BackgroundSync.userReadableSyncErrorMessage(
+        errorMessage:
+            'managed-vault v2 recovery blocked: local_media_backfill_pending',
+      ),
+      contains('backfill'),
+    );
+    expect(
+      BackgroundSync.userReadableSyncErrorMessage(
+        errorMessage:
+            'managed-vault v2 recovery blocked: local_unpushed_changes',
+      ),
+      contains('upload'),
+    );
   });
 
   test('managed-vault media uploads only run after a successful final push',

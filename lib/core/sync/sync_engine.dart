@@ -550,10 +550,16 @@ final class SyncEngine {
         return false;
       }
 
-      final message = e.toString();
-      final status =
-          RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message)?.group(1);
-      if (status == '402') {
+      final statusCode = extractManagedVaultSyncHttpStatusCode(e);
+      final errorCode = extractManagedVaultSyncErrorCode(e);
+      final recoveryBlockedReason = RegExp(
+        r'managed-vault v2 recovery blocked:\s*([a-z_]+)',
+      ).firstMatch(e.toString())?.group(1);
+      if (recoveryBlockedReason == 'local_unpushed_changes' ||
+          recoveryBlockedReason == 'local_media_backfill_pending' ||
+          (statusCode == 400 && errorCode == 'invalid_batch')) {
+        _setWriteGate(const SyncWriteGateState.localRepairRequired());
+      } else if (statusCode == 402) {
         _setWriteGate(const SyncWriteGateState.paymentRequired());
       }
 

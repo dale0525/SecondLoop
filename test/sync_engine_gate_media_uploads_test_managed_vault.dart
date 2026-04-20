@@ -310,6 +310,80 @@ void registerSyncEngineGateMediaUploadManagedVaultTests() {
   });
 
   testWidgets(
+      'Managed-vault pull-side recovery blockers persist repair blocks and gate state',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(syncKey);
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultPullRecoveryBlockedBackend();
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultPullCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(engine, isNotNull);
+      expect(backend.managedVaultPullCalls, greaterThanOrEqualTo(1));
+      expect(
+        engine!.writeGate.value.kind,
+        SyncWriteGateKind.localRepairRequired,
+      );
+      expect(
+        await store.readBackgroundSyncRepairRequired(
+          backendType: SyncBackendType.managedVault,
+          scopeId: store.syncStateScopeId(
+            SyncConfig.managedVault(
+              syncKey: syncKey,
+              vaultId: 'vault-1',
+              baseUrl: 'https://vault.example.com',
+            ),
+          ),
+        ),
+        isTrue,
+      );
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
+  testWidgets(
       'Managed-vault media uploads stay pending across pulls until the queue is clear',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

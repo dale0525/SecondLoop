@@ -798,6 +798,13 @@ pub(super) fn pull_v2(
         super::global_log_state::write_generation_id(conn, &scope_id, response_generation)?;
 
         if response.ops.is_empty() {
+            if response.has_more || response.remote_latest_global_seq > last_applied {
+                return Err(anyhow!(
+                    "managed-vault v2 pull returned an empty page while more remote data is still advertised: after_global_seq={last_applied} remote_latest_global_seq={} has_more={}",
+                    response.remote_latest_global_seq,
+                    response.has_more
+                ));
+            }
             if let Some(progress_fn) = progress.as_deref_mut() {
                 progress_fn(total_applied, effective_total_target);
             }

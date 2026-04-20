@@ -45,6 +45,11 @@ String? _extractManagedVaultRecoveryBlockedReasonFromMessage(String? message) {
 SyncWriteGateState? managedVaultWriteGateStateForError(Object error) {
   final statusCode = extractSyncHttpStatusCode(error);
   final errorCode = extractSyncErrorCode(error);
+  final recoveryBlockedReason = extractManagedVaultRecoveryBlockedReason(error);
+  if (recoveryBlockedReason == 'local_unpushed_changes' ||
+      recoveryBlockedReason == 'local_media_backfill_pending') {
+    return const SyncWriteGateState.localRepairRequired();
+  }
   if (statusCode == 400 && errorCode == 'invalid_batch') {
     return const SyncWriteGateState.localRepairRequired();
   }

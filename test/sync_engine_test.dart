@@ -617,6 +617,32 @@ void main() {
     });
   });
 
+  test('managed vault pull blocker flips gate to local repair required', () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultPullRecoveryBlockedRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['pull']);
+      expect(
+        engine.writeGate.value.kind,
+        SyncWriteGateKind.localRepairRequired,
+      );
+
+      engine.stop();
+    });
+  });
+
   test(
       'managed vault keeps retry-after-recovery intent across transient pull failures',
       () {
@@ -1041,6 +1067,24 @@ final class _ManagedVaultStorageQuotaRecoveryRunner implements SyncRunner {
   Future<int> pull(SyncConfig config) async {
     calls.add('pull');
     return 0;
+  }
+}
+
+final class _ManagedVaultPullRecoveryBlockedRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    return 0;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    throw StateError(
+      'managed-vault v2 recovery blocked: local_media_backfill_pending',
+    );
   }
 }
 

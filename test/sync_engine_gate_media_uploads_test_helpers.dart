@@ -394,6 +394,35 @@ final class _ManagedVaultInvalidBatchBackend
   }
 }
 
+final class _ManagedVaultPullRecoveryBlockedBackend
+    extends _ManagedVaultRecordingBackend {
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPushCalls++;
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPullCalls++;
+    throw StateError(
+      'managed-vault v2 recovery blocked: local_media_backfill_pending',
+    );
+  }
+}
+
 final class _ManagedVaultTokenRecordingBackend extends TestAppBackend {
   final List<String> managedVaultPushTokens = <String>[];
 
