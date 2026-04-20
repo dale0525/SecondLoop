@@ -3,7 +3,7 @@ use tempfile::tempdir;
 use super::*;
 
 #[test]
-fn semantic_parse_followup_same_status_does_not_store_undo_metadata() {
+fn semantic_parse_followup_same_status_finalizes_as_no_action() {
     let dir = tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");
     let key = [4u8; 32];
@@ -54,13 +54,15 @@ fn semantic_parse_followup_same_status_does_not_store_undo_metadata() {
         list_semantic_parse_jobs_by_message_ids(&conn, &key, &[message.id.clone()]).expect("jobs");
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].status, "succeeded");
+    assert_eq!(jobs[0].applied_action_kind.as_deref(), Some("none"));
+    assert_eq!(jobs[0].applied_todo_id, None);
     assert_eq!(jobs[0].applied_prev_todo_status, None);
     assert!(!jobs[0].applied_due_changed);
     assert_eq!(jobs[0].applied_prev_todo_due_at_ms, None);
 }
 
 #[test]
-fn semantic_parse_followup_same_due_does_not_store_due_undo_metadata() {
+fn semantic_parse_followup_same_due_finalizes_as_no_action() {
     let dir = tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");
     let key = [5u8; 32];
@@ -111,6 +113,8 @@ fn semantic_parse_followup_same_due_does_not_store_due_undo_metadata() {
         list_semantic_parse_jobs_by_message_ids(&conn, &key, &[message.id.clone()]).expect("jobs");
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].status, "succeeded");
+    assert_eq!(jobs[0].applied_action_kind.as_deref(), Some("none"));
+    assert_eq!(jobs[0].applied_todo_id, None);
     assert_eq!(jobs[0].applied_prev_todo_due_at_ms, None);
     assert!(!jobs[0].applied_due_changed);
     assert_eq!(jobs[0].applied_prev_todo_status, None);

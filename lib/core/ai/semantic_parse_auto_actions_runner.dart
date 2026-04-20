@@ -636,12 +636,45 @@ final class SemanticParseAutoActionsRunner {
             )) {
               continue;
             }
-            final candidateTitle = candidates
+            final candidate = candidates
                 .where((c) => c.id == todoId)
-                .map((c) => c.title)
-                .cast<String?>()
+                .cast<SemanticParseTodoCandidate?>()
                 .firstWhere((_) => true, orElse: () => null);
-            if (candidateTitle == null) {
+            final candidateTitle = candidate?.title;
+            if (candidate == null || candidateTitle == null) {
+              final appliedTagIds =
+                  await store.completeNoActionIfCurrentAttempt(
+                messageId: job.messageId,
+                expectedAttemptId: attemptId,
+                pendingSuggestedTags: pendingSuggestedTags,
+                autoApplySuggestedTags: autoApplySuggestedTags,
+                suggestedTagConfidence: suggestedTagConfidence,
+                nowMs: nowMs,
+              );
+              if (appliedTagIds == null) {
+                continue;
+              }
+              if (appliedTagIds.isNotEmpty) {
+                didMutateAny = true;
+              }
+              continue;
+            }
+
+            final requestedDueAtMs = dueAtLocal?.toUtc().millisecondsSinceEpoch;
+            final candidateDueAtMs = candidate.dueLocalIso == null
+                ? null
+                : DateTime.tryParse(candidate.dueLocalIso!)
+                    ?.toUtc()
+                    .millisecondsSinceEpoch;
+            final requestsStatusChange = newStatus != null;
+            final requestsDueChange = requestedDueAtMs != null;
+            final statusAlreadyMatches =
+                !requestsStatusChange || newStatus == candidate.status;
+            final dueAlreadyMatches =
+                !requestsDueChange || requestedDueAtMs == candidateDueAtMs;
+            if ((requestsStatusChange || requestsDueChange) &&
+                statusAlreadyMatches &&
+                dueAlreadyMatches) {
               final appliedTagIds =
                   await store.completeNoActionIfCurrentAttempt(
                 messageId: job.messageId,
@@ -666,7 +699,7 @@ final class SemanticParseAutoActionsRunner {
               todoId: todoId,
               todoTitle: candidateTitle,
               newStatus: newStatus,
-              dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
+              dueAtMs: requestedDueAtMs,
               pendingSuggestedTags: pendingSuggestedTags,
               autoApplySuggestedTags: autoApplySuggestedTags,
               suggestedTagConfidence: suggestedTagConfidence,

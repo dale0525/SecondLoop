@@ -792,6 +792,8 @@ pub fn complete_semantic_parse_followup_if_current_attempt(
             }
             None => (false, None),
         };
+        let did_change_status = previous_status.is_some();
+        let did_apply_followup = did_change_status || did_change_due;
 
         let finalized =
             mark_semantic_parse_job_succeeded_with_tag_metadata_and_due_metadata_if_current_attempt(
@@ -799,12 +801,20 @@ pub fn complete_semantic_parse_followup_if_current_attempt(
             key,
             message_id,
             expected_attempt_id,
-            "followup",
-            Some(todo_id),
-            todo_title,
-            previous_status.as_deref(),
-            previous_due_at_ms,
-            did_change_due,
+            if did_apply_followup { "followup" } else { "none" },
+            if did_apply_followup { Some(todo_id) } else { None },
+            if did_apply_followup { todo_title } else { None },
+            if did_apply_followup {
+                previous_status.as_deref()
+            } else {
+                None
+            },
+            if did_apply_followup {
+                previous_due_at_ms
+            } else {
+                None
+            },
+            if did_apply_followup { did_change_due } else { false },
             stored_suggested_tags,
             stored_tag_confidence,
             stored_tag_state,
