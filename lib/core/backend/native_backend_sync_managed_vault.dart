@@ -1,5 +1,23 @@
 part of 'native_backend.dart';
 
+@visibleForTesting
+int parseManagedVaultBlobRepairQueueDepthForTest(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map) {
+    throw const FormatException(
+      'Managed-vault diagnostics payload must be a JSON object.',
+    );
+  }
+  final depth = decoded['blob_repair_queue_depth'];
+  if (depth is! num) {
+    throw const FormatException(
+      'Managed-vault diagnostics payload missing blob_repair_queue_depth.',
+    );
+  }
+  final normalizedDepth = depth.toInt();
+  return normalizedDepth < 0 ? 0 : normalizedDepth;
+}
+
 mixin _NativeAppBackendSyncManagedVault on _NativeAppBackendAccess {
   @override
   Future<int> syncManagedVaultPush(
@@ -52,17 +70,7 @@ mixin _NativeAppBackendSyncManagedVault on _NativeAppBackendAccess {
       baseUrl: baseUrl,
       vaultId: vaultId,
     );
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) {
-        final depth =
-            (decoded['blob_repair_queue_depth'] as num?)?.toInt() ?? 0;
-        return depth < 0 ? 0 : depth;
-      }
-    } catch (_) {
-      // Best-effort: diagnostics should not break sync when parsing fails.
-    }
-    return 0;
+    return parseManagedVaultBlobRepairQueueDepthForTest(raw);
   }
 
   @override

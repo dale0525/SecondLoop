@@ -808,24 +808,7 @@ final class _CloudSyncSwitchPromptGateState
     final previousBackendType = await _store.readBackendType();
     final previousRemoteRoot = await _store.readRemoteRoot();
     final previousSyncKey = await _store.readSyncKey();
-
-    final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
-      vaultId: uid,
-      deriveSyncKey: backend.deriveSyncKey,
-    );
-    await SyncKeyManager.save(
-      write: _store.writeSyncKey,
-      key: syncKey,
-    );
-
-    await _store.writeBackendType(SyncBackendType.managedVault);
-    await _store.writeRemoteRoot(uid);
     if (!mounted) return;
-
-    unawaited(BackgroundSync.refreshSchedule(
-      backend: backend,
-      configStore: _store,
-    ));
 
     final sessionKey =
         context.getInheritedWidgetOfExactType<SessionScope>()?.sessionKey;
@@ -850,44 +833,64 @@ final class _CloudSyncSwitchPromptGateState
     final canShowDialog =
         Navigator.maybeOf(effectiveContext, rootNavigator: true) != null;
 
+    if (sessionKey == null ||
+        baseUrl == null ||
+        baseUrl.trim().isEmpty ||
+        idToken == null ||
+        idToken.trim().isEmpty ||
+        !effectiveContext.mounted ||
+        !canShowDialog) {
+      if (mounted) {
+        _showSnack(
+          switch ((sessionKey, baseUrl, idToken, canShowDialog)) {
+            (null, _, _, _) =>
+              context.t.sync.cloudManagedVault.serverUnavailable,
+            (_, null, _, _) => context.t.sync.baseUrlRequired,
+            (_, final String value, _, _) when value.trim().isEmpty =>
+              context.t.sync.baseUrlRequired,
+            (_, _, null, _) => context.t.sync.cloudManagedVault.signInRequired,
+            (_, _, final String value, _) when value.trim().isEmpty =>
+              context.t.sync.cloudManagedVault.signInRequired,
+            _ => context.t.sync.cloudManagedVault.serverUnavailable,
+          },
+        );
+      }
+      return;
+    }
+
+    final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
+      vaultId: uid,
+      deriveSyncKey: backend.deriveSyncKey,
+    );
+    await SyncKeyManager.save(
+      write: _store.writeSyncKey,
+      key: syncKey,
+    );
+
+    await _store.writeBackendType(SyncBackendType.managedVault);
+    await _store.writeRemoteRoot(uid);
+    if (!mounted) return;
+
+    unawaited(BackgroundSync.refreshSchedule(
+      backend: backend,
+      configStore: _store,
+    ));
+
     var didSync = false;
     final engine = SyncEngineScope.maybeOf(context);
-    if (sessionKey != null &&
-        baseUrl != null &&
-        baseUrl.trim().isNotEmpty &&
-        idToken != null &&
-        idToken.trim().isNotEmpty &&
-        effectiveContext.mounted &&
-        canShowDialog) {
-      try {
-        final result = await _runManagedVaultSyncWithProgress(
-          dialogContext: effectiveContext,
-          engine: engine,
-          backend: backend,
-          sessionKey: sessionKey,
-          syncKey: syncKey,
-          baseUrl: baseUrl.trim(),
-          vaultId: uid,
-          idToken: idToken.trim(),
-        );
-        if (!result.completed && result.rollbackConfig) {
-          await _restorePreviousSyncConfig(
-            backend: backend,
-            previousBackendType: previousBackendType,
-            previousRemoteRoot: previousRemoteRoot,
-            previousSyncKey: previousSyncKey,
-            engine: engine,
-          );
-          if (mounted && result.failureMessage != null) {
-            _showSnack(result.failureMessage!);
-          }
-          return;
-        }
-        didSync = result.completed;
-        if (mounted && result.failureMessage != null) {
-          _showSnack(result.failureMessage!);
-        }
-      } catch (error) {
+    if (!effectiveContext.mounted) return;
+    try {
+      final result = await _runManagedVaultSyncWithProgress(
+        dialogContext: effectiveContext,
+        engine: engine,
+        backend: backend,
+        sessionKey: sessionKey,
+        syncKey: syncKey,
+        baseUrl: baseUrl.trim(),
+        vaultId: uid,
+        idToken: idToken.trim(),
+      );
+      if (!result.completed && result.rollbackConfig) {
         await _restorePreviousSyncConfig(
           backend: backend,
           previousBackendType: previousBackendType,
@@ -895,11 +898,27 @@ final class _CloudSyncSwitchPromptGateState
           previousSyncKey: previousSyncKey,
           engine: engine,
         );
-        if (mounted) {
-          _showSnack(_managedVaultUserFacingErrorMessage(error));
+        if (mounted && result.failureMessage != null) {
+          _showSnack(result.failureMessage!);
         }
         return;
       }
+      didSync = result.completed;
+      if (mounted && result.failureMessage != null) {
+        _showSnack(result.failureMessage!);
+      }
+    } catch (error) {
+      await _restorePreviousSyncConfig(
+        backend: backend,
+        previousBackendType: previousBackendType,
+        previousRemoteRoot: previousRemoteRoot,
+        previousSyncKey: previousSyncKey,
+        engine: engine,
+      );
+      if (mounted) {
+        _showSnack(_managedVaultUserFacingErrorMessage(error));
+      }
+      return;
     }
 
     if (!mounted) return;

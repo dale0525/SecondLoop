@@ -136,6 +136,62 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _Backend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.unknown);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    subscription.setStatus(SubscriptionStatus.entitled);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(await store.readRemoteRoot(), 'uid_1');
+    final syncKey = await store.readSyncKey();
+    expect(syncKey, isNotNull);
+    expect(syncKey, Uint8List.fromList(List<int>.filled(32, 9)));
+    expect(find.text('Enter your recovery passphrase and tap Save first.'),
+        findsNothing);
+  });
+
+  testWidgets(
+      'Switching to Cloud does not persist managed-vault config when bootstrap prerequisites are missing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final previousSyncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(previousSyncKey);
 
     final backend = _Backend();
     final cloudAuth = _FakeCloudAuthController();
@@ -169,13 +225,9 @@ void main() {
     await tester.tap(find.text('Switch'));
     await tester.pumpAndSettle();
 
-    expect(await store.readBackendType(), SyncBackendType.managedVault);
-    expect(await store.readRemoteRoot(), 'uid_1');
-    final syncKey = await store.readSyncKey();
-    expect(syncKey, isNotNull);
-    expect(syncKey, Uint8List.fromList(List<int>.filled(32, 9)));
-    expect(find.text('Enter your recovery passphrase and tap Save first.'),
-        findsNothing);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect(await store.readSyncKey(), previousSyncKey);
   });
 
   testWidgets(

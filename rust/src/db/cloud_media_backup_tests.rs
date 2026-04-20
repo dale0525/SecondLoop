@@ -203,7 +203,7 @@ fn cloud_media_backup_scope_filters_due_rows_and_summary() {
 }
 
 #[test]
-fn cloud_media_backup_adopts_legacy_unscoped_rows_for_first_scoped_access() {
+fn cloud_media_backup_scoped_reads_ignore_legacy_unscoped_rows() {
     let dir = tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
     let conn = open(&app_dir).expect("open");
@@ -227,13 +227,14 @@ fn cloud_media_backup_adopts_legacy_unscoped_rows_for_first_scoped_access() {
     )
     .expect("seed legacy row");
 
-    let due =
-        list_due_cloud_media_backups(&conn, 1_500, 10, Some("scope-a")).expect("list adopted");
-    assert_eq!(due.len(), 1);
-    assert_eq!(due[0].attachment_sha256, attachment.sha256);
+    let due = list_due_cloud_media_backups(&conn, 1_500, 10, Some("scope-a")).expect("list scoped");
+    assert!(
+        due.is_empty(),
+        "legacy unscoped rows must not leak into scoped queues"
+    );
 
     let summary = cloud_media_backup_summary(&conn, Some("scope-a")).expect("summary");
-    assert_eq!(summary.pending, 1);
+    assert_eq!(summary.pending, 0);
 
     let scope_id: String = conn
         .query_row(
@@ -243,8 +244,8 @@ fn cloud_media_backup_adopts_legacy_unscoped_rows_for_first_scoped_access() {
             params![attachment.sha256.as_str()],
             |row| row.get(0),
         )
-        .expect("load adopted scope");
-    assert_eq!(scope_id, "scope-a");
+        .expect("load legacy scope");
+    assert_eq!(scope_id, "");
 }
 
 #[test]

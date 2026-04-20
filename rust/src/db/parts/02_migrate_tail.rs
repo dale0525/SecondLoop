@@ -714,31 +714,7 @@ CREATE INDEX idx_cloud_media_backup_status_retry
     )?;
 
     if sqlite_table_exists(conn, "cloud_media_backup_v48_legacy")? {
-        conn.execute_batch(
-            r#"
-INSERT INTO cloud_media_backup(
-  scope_id,
-  attachment_sha256,
-  desired_variant,
-  status,
-  attempts,
-  next_retry_at,
-  last_error,
-  updated_at
-)
-SELECT '',
-       attachment_sha256,
-       desired_variant,
-       status,
-       attempts,
-       next_retry_at,
-       last_error,
-       updated_at
-FROM cloud_media_backup_v48_legacy;
-
-DROP TABLE cloud_media_backup_v48_legacy;
-"#,
-        )?;
+        conn.execute_batch("DROP TABLE cloud_media_backup_v48_legacy;")?;
     }
 
     conn.execute_batch("PRAGMA user_version = 49;")?;
@@ -1020,10 +996,9 @@ PRAGMA user_version = 48;
             .expect("query migrated rows")
             .collect::<std::result::Result<Vec<_>, _>>()
             .expect("collect migrated rows");
-        assert_eq!(
-            migrated,
-            vec![("".to_string(), "sha-1".to_string(), "pending".to_string())],
-            "legacy queue rows should be preserved under the unscoped legacy bucket"
+        assert!(
+            migrated.is_empty(),
+            "v49 migration should drop legacy cloud media backup rows rather than risking a wrong scoped upload"
         );
 
         let user_version: i64 = conn
