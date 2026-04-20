@@ -34,15 +34,19 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
   Object? _cloudAuthIdentity;
   Uint8List? _sessionKey;
   int _engineGeneration = 0;
+  SyncBackendType? _activeSyncBackendType;
+  String? _activeManagedVaultScopeId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _configStore.changes.addListener(_handleConfigStoreChanged);
   }
 
   @override
   void dispose() {
+    _configStore.changes.removeListener(_handleConfigStoreChanged);
     WidgetsBinding.instance.removeObserver(this);
     _engine?.stop();
     super.dispose();
@@ -128,28 +132,17 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     required SubscriptionStatus? subscriptionStatus,
   }) async {
     final config = await _configStore.loadConfiguredSyncIfAutoEnabled();
-    if (!mounted ||
-        !identical(_engine, engine) ||
-        _engineGeneration != generation) {
+    if (!_isActiveEngine(engine, generation)) {
       return;
     }
 
-    if (config?.backendType == SyncBackendType.managedVault) {
-      final scopeId = _configStore.syncStateScopeId(config!);
-      final repairRequired =
-          await _configStore.readBackgroundSyncRepairRequired(
-        backendType: SyncBackendType.managedVault,
-        scopeId: scopeId,
-      );
-      if (!mounted ||
-          !identical(_engine, engine) ||
-          _engineGeneration != generation) {
-        return;
-      }
-      if (repairRequired) {
-        engine.writeGate.value = const SyncWriteGateState.localRepairRequired();
-      }
-    }
+    await _rehydrateWriteGateForConfig(
+      engine: engine,
+      generation: generation,
+      config: config,
+      forceResetForScopeChange: true,
+    );
+    if (!_isActiveEngine(engine, generation)) return;
 
     _maybeReopenWriteGateForEntitledSubscription(
       engine: engine,
@@ -158,6 +151,73 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     engine.start();
     engine.triggerPushNow();
     engine.triggerPullNow();
+  }
+
+  bool _isActiveEngine(SyncEngine engine, int generation) {
+    return mounted &&
+        identical(_engine, engine) &&
+        _engineGeneration == generation;
+  }
+
+  void _handleConfigStoreChanged() {
+    final engine = _engine;
+    if (engine == null) return;
+    final generation = _engineGeneration;
+    unawaited(
+      _syncWriteGateForLatestConfig(engine: engine, generation: generation),
+    );
+  }
+
+  Future<void> _syncWriteGateForLatestConfig({
+    required SyncEngine engine,
+    required int generation,
+  }) async {
+    final config = await _configStore.loadConfiguredSyncIfAutoEnabled();
+    if (!_isActiveEngine(engine, generation)) return;
+    await _rehydrateWriteGateForConfig(
+      engine: engine,
+      generation: generation,
+      config: config,
+    );
+  }
+
+  Future<void> _rehydrateWriteGateForConfig({
+    required SyncEngine engine,
+    required int generation,
+    required SyncConfig? config,
+    bool forceResetForScopeChange = false,
+  }) async {
+    final backendType = config?.backendType;
+    final scopeId =
+        backendType == SyncBackendType.managedVault && config != null
+            ? _configStore.syncStateScopeId(config)
+            : null;
+    final backendChanged = _activeSyncBackendType != backendType;
+    final scopeChanged = _activeManagedVaultScopeId != scopeId;
+
+    _activeSyncBackendType = backendType;
+    _activeManagedVaultScopeId = scopeId;
+
+    if (backendType == SyncBackendType.managedVault && scopeId != null) {
+      final repairRequired =
+          await _configStore.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      );
+      if (!_isActiveEngine(engine, generation)) return;
+      if (repairRequired) {
+        engine.writeGate.value = const SyncWriteGateState.localRepairRequired();
+        return;
+      }
+      if (forceResetForScopeChange || backendChanged || scopeChanged) {
+        engine.writeGate.value = const SyncWriteGateState.open();
+      }
+      return;
+    }
+
+    if (forceResetForScopeChange || backendChanged || scopeChanged) {
+      engine.writeGate.value = const SyncWriteGateState.open();
+    }
   }
 
   void _maybeReopenWriteGateForEntitledSubscription({

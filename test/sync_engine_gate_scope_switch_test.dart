@@ -96,6 +96,91 @@ void main() {
       ConnectivityPlatform.instance = oldConnectivity;
     }
   });
+
+  testWidgets(
+      'managed-vault write gate is rehydrated when switching from a blocked scope to a clean scope',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKeyA = Uint8List.fromList(List<int>.filled(32, 1));
+    final syncKeyB = Uint8List.fromList(List<int>.filled(32, 2));
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(syncKeyA);
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ScopedWriteGateBackend();
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: const _StubCloudAuthController(),
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.blockedPushCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(engine, isNotNull);
+      expect(backend.blockedPushCalls, greaterThanOrEqualTo(1));
+      expect(
+        engine!.writeGate.value.kind,
+        SyncWriteGateKind.localRepairRequired,
+      );
+
+      await store.writeRemoteRoot('vault-2');
+      await store.writeSyncKey(syncKeyB);
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pump();
+
+      engine!.triggerPushNow();
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (
+            backend.cleanPushCalls == 0 && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(engine!.writeGate.value.kind, SyncWriteGateKind.open);
+      expect(backend.cleanPushCalls, 1);
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
 }
 
 final class _FakeConnectivityPlatform extends ConnectivityPlatform {
@@ -221,6 +306,39 @@ final class _ScopeAwareManagedVaultBackend extends TestAppBackend {
     Uint8List key, {
     required String desiredVariant,
     required int nowMs,
+  }) async =>
+      0;
+}
+
+final class _ScopedWriteGateBackend extends TestAppBackend {
+  int blockedPushCalls = 0;
+  int cleanPushCalls = 0;
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    if (vaultId == 'vault-1') {
+      blockedPushCalls++;
+      throw StateError(
+        'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"duplicate_client_op_id"}',
+      );
+    }
+    cleanPushCalls++;
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
   }) async =>
       0;
 }

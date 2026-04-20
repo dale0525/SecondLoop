@@ -45,6 +45,7 @@ final class SyncConfigStore {
   static const legacyPrefsBlobKeyForTest = _kLegacyPrefsBlobKey;
   static const syncSecretStoreVersionPrefsKeyForTest =
       SyncConfigMigrator.secretStoreVersionPrefsKey;
+  static final ValueNotifier<int> _changeCounter = ValueNotifier<int>(0);
 
   Future<void> _tail = Future<void>.value();
   Future<SharedPreferences>? _prefsFuture;
@@ -52,6 +53,8 @@ final class SyncConfigStore {
   bool _loaded = false;
   String? _lastRaw;
   Map<String, String> _cache = <String, String>{};
+
+  Listenable get changes => _changeCounter;
 
   static const kBackendType = 'sync_backend_type'; // webdav | localdir
   static const kAutoEnabled = 'sync_auto_enabled'; // 1 | 0
@@ -729,6 +732,7 @@ final class SyncConfigStore {
 
   Future<void> clearAll() async {
     await _serial(() async {
+      final hadState = _cache.isNotEmpty || _lastRaw != null;
       final prefs = await _prefs();
       await prefs.remove(_prefsBlobKey);
       await prefs.remove(_legacyPrefsBlobKey);
@@ -740,6 +744,9 @@ final class SyncConfigStore {
       _lastRaw = null;
       _cache = <String, String>{};
       _loaded = true;
+      if (hadState) {
+        _notifyChanged();
+      }
     });
   }
 
@@ -923,12 +930,18 @@ final class SyncConfigStore {
       await prefs.remove(_prefsBlobKey);
       await prefs.remove(_legacyPrefsBlobKey);
       _lastRaw = null;
+      _notifyChanged();
       return;
     }
     final raw = jsonEncode(_cache);
     await prefs.setString(_prefsBlobKey, raw);
     await prefs.remove(_legacyPrefsBlobKey);
     _lastRaw = raw;
+    _notifyChanged();
+  }
+
+  void _notifyChanged() {
+    _changeCounter.value++;
   }
 
   String get _prefsBlobKey => _scopedKey(_kPrefsBlobKey);
