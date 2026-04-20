@@ -180,6 +180,16 @@ pub fn process_blob_repairs(
     limit: usize,
     mut handler: impl FnMut(&BlobRepairItem) -> Result<RepairAttemptOutcome>,
 ) -> Result<BlobRepairProcessStats> {
+    process_blob_repairs_matching(conn, scope_id, limit, |_| true, |item| handler(item))
+}
+
+pub fn process_blob_repairs_matching(
+    conn: &Connection,
+    scope_id: &str,
+    limit: usize,
+    mut filter: impl FnMut(&BlobRepairItem) -> bool,
+    mut handler: impl FnMut(&BlobRepairItem) -> Result<RepairAttemptOutcome>,
+) -> Result<BlobRepairProcessStats> {
     if limit == 0 {
         let diagnostics = load_blob_repair_diagnostics(conn, scope_id)?;
         return Ok(BlobRepairProcessStats {
@@ -189,9 +199,17 @@ pub fn process_blob_repairs(
         });
     }
 
-    let items = load_queue_items(conn, scope_id)?;
+    let items: Vec<_> = load_queue_items(conn, scope_id)?
+        .into_iter()
+        .filter(|(_, item)| filter(item))
+        .collect();
     if items.is_empty() {
-        return Ok(BlobRepairProcessStats::default());
+        let diagnostics = load_blob_repair_diagnostics(conn, scope_id)?;
+        return Ok(BlobRepairProcessStats {
+            attempted: 0,
+            repaired: 0,
+            remaining: diagnostics.queued_count,
+        });
     }
 
     kv_set_i64(conn, &last_attempt_key(scope_id), now_ms())?;

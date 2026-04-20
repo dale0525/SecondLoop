@@ -448,19 +448,8 @@ fn has_local_unpushed_changes(conn: &Connection, scope_id: &str) -> Result<bool>
     .map_err(Into::into)
 }
 
-fn rebuild_local_vault_if_safe(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    scope_id: &str,
-    base_url: &str,
-    vault_id: &str,
-) -> Result<()> {
-    if super::full_push_requires_legacy_media_sync(conn, db_key, base_url, vault_id)? {
-        return Err(anyhow!(
-            "managed-vault v2 recovery blocked: local_media_backfill_pending"
-        ));
-    }
-    if super::has_pending_local_media_upload_repairs(conn, scope_id)? {
+fn rebuild_local_vault_if_safe(conn: &Connection, db_key: &[u8; 32], scope_id: &str) -> Result<()> {
+    if super::media_state::has_pending_local_media_write_work(conn, db_key, scope_id)? {
         return Err(anyhow!(
             "managed-vault v2 recovery blocked: local_media_backfill_pending"
         ));
@@ -741,7 +730,7 @@ pub(super) fn pull_v2(
                         error.remote_latest_global_seq
                     ));
                 }
-                rebuild_local_vault_if_safe(conn, db_key, &scope_id, base_url, vault_id)?;
+                rebuild_local_vault_if_safe(conn, db_key, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
@@ -771,7 +760,7 @@ pub(super) fn pull_v2(
         if response_generation.is_empty() {
             if response.remote_latest_global_seq == 0 && response.ops.is_empty() {
                 if local_generation.is_some() || last_applied > 0 {
-                    rebuild_local_vault_if_safe(conn, db_key, &scope_id, base_url, vault_id)?;
+                    rebuild_local_vault_if_safe(conn, db_key, &scope_id)?;
                     total_applied = 0;
                     total_target = None;
                 }
@@ -795,7 +784,7 @@ pub(super) fn pull_v2(
                         response_generation
                     ));
                 }
-                rebuild_local_vault_if_safe(conn, db_key, &scope_id, base_url, vault_id)?;
+                rebuild_local_vault_if_safe(conn, db_key, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
@@ -816,7 +805,7 @@ pub(super) fn pull_v2(
 
         if !pull_page_is_contiguous(&response.ops, last_applied) {
             if local_generation.is_some() || last_applied > 0 {
-                rebuild_local_vault_if_safe(conn, db_key, &scope_id, base_url, vault_id)?;
+                rebuild_local_vault_if_safe(conn, db_key, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;

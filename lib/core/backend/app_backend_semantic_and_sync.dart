@@ -414,6 +414,13 @@ mixin _AppBackendSemanticAndSyncMixin {
     throw UnimplementedError('syncManagedVaultPull');
   }
 
+  Future<int> syncManagedVaultBlobRepairQueueDepth({
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    return 0;
+  }
+
   Stream<String> syncManagedVaultPullProgress(
     Uint8List key,
     Uint8List syncKey, {

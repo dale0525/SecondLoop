@@ -6,7 +6,6 @@ use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
@@ -19,6 +18,7 @@ mod checkpoint;
 mod global_log_client;
 mod global_log_protocol;
 mod global_log_state;
+mod media_state;
 mod pending_apply;
 mod probe;
 mod progress;
@@ -33,6 +33,10 @@ mod v2_client;
 
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
+use media_state::{
+    artifact_backfill_key, attachment_backfill_key, has_missing_embedding_artifact_blobs,
+    has_missing_local_attachment_bytes, update_v2_pull_backfill_markers,
+};
 use pending_apply::{
     apply_pending_ops_until_stable, has_local_oplog_for_device, is_foreign_key_constraint_error,
     load_pending_apply_op_ids, pending_apply_key, rewind_since_for_unresolved_pending_devices,
@@ -171,194 +175,6 @@ fn v2_route_unavailable(error: &anyhow::Error) -> bool {
         || message.contains("managed-vault v2 push route unavailable")
 }
 
-fn has_local_attachments(conn: &Connection) -> Result<bool> {
-    conn.query_row(
-        r#"SELECT EXISTS(SELECT 1 FROM attachments LIMIT 1)"#,
-        [],
-        |row| row.get(0),
-    )
-    .map_err(Into::into)
-}
-
-fn has_ready_embedding_artifact_blobs(conn: &Connection) -> Result<bool> {
-    conn.query_row(
-        r#"SELECT EXISTS(
-               SELECT 1
-               FROM embedding_artifact_manifests
-               WHERE status = 'ready'
-               LIMIT 1
-           )"#,
-        [],
-        |row| row.get(0),
-    )
-    .map_err(Into::into)
-}
-
-fn attachment_backfill_key(scope_id: &str) -> String {
-    format!("managed_vault.attachments.bytes_backfilled:{scope_id}")
-}
-
-fn artifact_backfill_key(scope_id: &str) -> String {
-    format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}")
-}
-
-fn is_not_found_io_error(error: &anyhow::Error) -> bool {
-    error
-        .downcast_ref::<std::io::Error>()
-        .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
-}
-
-fn has_missing_local_attachment_bytes(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    app_dir: &Path,
-) -> Result<bool> {
-    let mut stmt = conn.prepare(r#"SELECT sha256 FROM attachments ORDER BY sha256 ASC"#)?;
-    let mut rows = stmt.query([])?;
-    while let Some(row) = rows.next()? {
-        let sha256: String = row.get(0)?;
-        match crate::db::read_attachment_bytes(conn, db_key, app_dir, &sha256) {
-            Ok(_) => {}
-            Err(error) if is_not_found_io_error(&error) => return Ok(true),
-            Err(error) => return Err(error),
-        }
-    }
-    Ok(false)
-}
-
-fn has_missing_embedding_artifact_blobs(conn: &Connection, app_dir: &Path) -> Result<bool> {
-    for blob_ref in crate::db::list_distinct_embedding_artifact_blob_refs(conn)? {
-        if !crate::db::has_embedding_artifact_blob(app_dir, &blob_ref) {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-#[derive(Default)]
-struct PendingLocalMediaUploadRepairs {
-    attachments: bool,
-    artifacts: bool,
-}
-
-fn has_attachment_record(conn: &Connection, sha256: &str) -> Result<bool> {
-    conn.query_row(
-        r#"SELECT EXISTS(SELECT 1 FROM attachments WHERE sha256 = ?1 LIMIT 1)"#,
-        params![sha256],
-        |row| row.get(0),
-    )
-    .map_err(Into::into)
-}
-
-fn has_ready_embedding_artifact_ref(conn: &Connection, blob_ref: &str) -> Result<bool> {
-    conn.query_row(
-        r#"SELECT EXISTS(
-               SELECT 1
-               FROM embedding_artifact_manifests
-               WHERE status = 'ready' AND blob_ref = ?1
-               LIMIT 1
-           )"#,
-        params![blob_ref],
-        |row| row.get(0),
-    )
-    .map_err(Into::into)
-}
-
-fn pending_local_media_upload_repairs(
-    conn: &Connection,
-    scope_id: &str,
-) -> Result<PendingLocalMediaUploadRepairs> {
-    let mut repairs = PendingLocalMediaUploadRepairs::default();
-    for item in crate::sync::blob_repair::load_blob_repair_items(conn, scope_id)? {
-        match item.kind {
-            crate::sync::blob_repair::BlobRepairKind::UploadAttachment { sha256 } => {
-                if has_attachment_record(conn, &sha256)? {
-                    repairs.attachments = true;
-                }
-            }
-            crate::sync::blob_repair::BlobRepairKind::UploadArtifact { blob_ref } => {
-                if has_ready_embedding_artifact_ref(conn, &blob_ref)? {
-                    repairs.artifacts = true;
-                }
-            }
-            _ => {}
-        }
-        if repairs.attachments && repairs.artifacts {
-            break;
-        }
-    }
-    Ok(repairs)
-}
-
-pub(super) fn has_pending_local_media_upload_repairs(
-    conn: &Connection,
-    scope_id: &str,
-) -> Result<bool> {
-    let repairs = pending_local_media_upload_repairs(conn, scope_id)?;
-    Ok(repairs.attachments || repairs.artifacts)
-}
-
-fn update_v2_pull_backfill_markers(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    app_dir: &Path,
-    scope_id: &str,
-) -> Result<()> {
-    let pending_repairs = pending_local_media_upload_repairs(conn, scope_id)?;
-    let attachment_key = attachment_backfill_key(scope_id);
-    if has_local_attachments(conn)?
-        && !has_missing_local_attachment_bytes(conn, db_key, app_dir)?
-        && !pending_repairs.attachments
-    {
-        super::kv_set_i64(conn, &attachment_backfill_key(scope_id), 1)?;
-    } else {
-        let _ = conn.execute("DELETE FROM kv WHERE key = ?1", params![attachment_key])?;
-    }
-
-    let artifact_key = artifact_backfill_key(scope_id);
-    if has_ready_embedding_artifact_blobs(conn)?
-        && !has_missing_embedding_artifact_blobs(conn, app_dir)?
-        && !pending_repairs.artifacts
-    {
-        super::kv_set_i64(conn, &artifact_backfill_key(scope_id), 1)?;
-    } else {
-        let _ = conn.execute("DELETE FROM kv WHERE key = ?1", params![artifact_key])?;
-    }
-
-    Ok(())
-}
-
-fn full_push_requires_legacy_media_sync(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    base_url: &str,
-    vault_id: &str,
-) -> Result<bool> {
-    let scope_id = runtime::scope_id(base_url, vault_id);
-    let app_dir = super::app_dir_from_conn(conn)?;
-    let attachment_backfill_key = attachment_backfill_key(&scope_id);
-    if super::kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0
-        || (has_local_attachments(conn)?
-            && has_missing_local_attachment_bytes(conn, db_key, app_dir.as_path())?)
-    {
-        if has_local_attachments(conn)? {
-            return Ok(true);
-        }
-    }
-
-    let artifact_backfill_key = artifact_backfill_key(&scope_id);
-    if super::kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0
-        || (has_ready_embedding_artifact_blobs(conn)?
-            && has_missing_embedding_artifact_blobs(conn, app_dir.as_path())?)
-    {
-        if has_ready_embedding_artifact_blobs(conn)? {
-            return Ok(true);
-        }
-    }
-
-    Ok(false)
-}
-
 fn finalize_v2_pull_blob_backfill(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -389,7 +205,7 @@ fn finalize_v2_pull_blob_backfill(
     loop {
         let downloaded_artifacts =
             artifacts::download_missing_embedding_artifact_blobs(&download_ctx)?;
-        let repair_stats = blob_repair::process_pending_blob_repairs(&download_ctx, 8)?;
+        let repair_stats = blob_repair::process_pending_download_repairs(&download_ctx, 8)?;
         let missing_attachments =
             has_missing_local_attachment_bytes(conn, db_key, app_dir.as_path())?;
         let missing_artifacts = has_missing_embedding_artifact_blobs(conn, app_dir.as_path())?;
@@ -418,10 +234,6 @@ pub fn push(
     vault_id: &str,
     id_token: &str,
 ) -> Result<u64> {
-    if full_push_requires_legacy_media_sync(conn, db_key, base_url, vault_id)? {
-        return push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true);
-    }
-
     match global_log_client::push_v2(
         conn, db_key, sync_key, base_url, vault_id, id_token, true, None,
     ) {
@@ -442,12 +254,6 @@ pub fn push_with_progress(
     id_token: &str,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<u64> {
-    if full_push_requires_legacy_media_sync(conn, db_key, base_url, vault_id)? {
-        let pushed = push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true)?;
-        progress(pushed, pushed);
-        return Ok(pushed);
-    }
-
     match global_log_client::push_v2(
         conn,
         db_key,

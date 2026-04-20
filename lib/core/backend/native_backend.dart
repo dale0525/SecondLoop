@@ -29,6 +29,7 @@ import '../../src/rust/knowledge/history.dart' as rust_knowledge_history;
 import '../../src/rust/knowledge/pages.dart' as rust_knowledge_pages;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
+import '../../src/rust/api/sync_diagnostics.dart' as rust_sync_diagnostics;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
 import '../../src/rust/db.dart';
 import '../../src/rust/frb_generated.dart';
@@ -3162,6 +3163,30 @@ class NativeAppBackend extends _NativeAppBackendAccess
       firebaseIdToken: idToken,
     );
     return pulled.toInt();
+  }
+
+  @override
+  Future<int> syncManagedVaultBlobRepairQueueDepth({
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    final appDir = await _getAppDir();
+    final raw = await rust_sync_diagnostics.syncManagedVaultCursorDiagnostics(
+      appDir: appDir,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+    );
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        final depth =
+            (decoded['blob_repair_queue_depth'] as num?)?.toInt() ?? 0;
+        return depth < 0 ? 0 : depth;
+      }
+    } catch (_) {
+      // Best-effort: diagnostics should not break sync when parsing fails.
+    }
+    return 0;
   }
 
   @override

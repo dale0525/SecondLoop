@@ -42,6 +42,30 @@ mixin _NativeAppBackendSyncManagedVault on _NativeAppBackendAccess {
   }
 
   @override
+  Future<int> syncManagedVaultBlobRepairQueueDepth({
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    final appDir = await _getAppDir();
+    final raw = await rust_sync_diagnostics.syncManagedVaultCursorDiagnostics(
+      appDir: appDir,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+    );
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        final depth =
+            (decoded['blob_repair_queue_depth'] as num?)?.toInt() ?? 0;
+        return depth < 0 ? 0 : depth;
+      }
+    } catch (_) {
+      // Best-effort: diagnostics should not break sync when parsing fails.
+    }
+    return 0;
+  }
+
+  @override
   Stream<String> syncManagedVaultPullProgress(
     Uint8List key,
     Uint8List syncKey, {

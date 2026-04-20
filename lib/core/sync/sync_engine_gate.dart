@@ -11,6 +11,7 @@ import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
+import 'managed_vault_pending_write_work.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
 import 'sync_http_error.dart';
@@ -349,7 +350,15 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
     if (config.backendType != SyncBackendType.managedVault) return false;
     try {
       final summary = await backend.cloudMediaBackupSummary(_sessionKey);
-      return summary.pending.toInt() > 0 || summary.failed.toInt() > 0;
+      final blobRepairQueueDepth =
+          await backend.syncManagedVaultBlobRepairQueueDepth(
+        baseUrl: config.baseUrl ?? '',
+        vaultId: config.remoteRoot,
+      );
+      return hasManagedVaultPendingWriteWork(
+        mediaSummary: summary,
+        blobRepairQueueDepth: blobRepairQueueDepth,
+      );
     } catch (_) {
       // Be conservative: if we cannot inspect the local queue, keep retrying on
       // future pulls rather than risk dropping pending uploads forever.
@@ -490,10 +499,17 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
     }
     try {
       final summary = await backend.cloudMediaBackupSummary(_sessionKey);
+      final blobRepairQueueDepth =
+          await backend.syncManagedVaultBlobRepairQueueDepth(
+        baseUrl: config.baseUrl ?? '',
+        vaultId: config.remoteRoot,
+      );
       return _CloudMediaBackupRunResult(
         executed: true,
-        hasPendingUploads:
-            summary.pending.toInt() > 0 || summary.failed.toInt() > 0,
+        hasPendingUploads: hasManagedVaultPendingWriteWork(
+          mediaSummary: summary,
+          blobRepairQueueDepth: blobRepairQueueDepth,
+        ),
       );
     } catch (_) {
       return const _CloudMediaBackupRunResult(

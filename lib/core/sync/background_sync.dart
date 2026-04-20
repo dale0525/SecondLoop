@@ -13,6 +13,7 @@ import '../cloud/cloud_auth_scope.dart';
 import '../cloud/firebase_identity_toolkit.dart';
 import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
+import 'managed_vault_pending_write_work.dart';
 import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
 import 'sync_diagnostics.dart';
@@ -468,6 +469,8 @@ final class BackgroundSync {
           backend: backend,
           store: store,
           sessionKey: sessionKey,
+          baseUrl: config.baseUrl ?? '',
+          vaultId: config.remoteRoot,
           scopeId: backgroundScopeId,
           fallbackPending: managedVaultPendingUploads,
         );
@@ -867,14 +870,23 @@ final class BackgroundSync {
     required AppBackend backend,
     required SyncConfigStore store,
     required Uint8List sessionKey,
+    required String baseUrl,
+    required String vaultId,
     required String scopeId,
     required bool fallbackPending,
   }) async {
     var hasPendingUploads = fallbackPending;
     try {
       final summary = await backend.cloudMediaBackupSummary(sessionKey);
-      hasPendingUploads =
-          summary.pending.toInt() > 0 || summary.failed.toInt() > 0;
+      final blobRepairQueueDepth =
+          await backend.syncManagedVaultBlobRepairQueueDepth(
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+      );
+      hasPendingUploads = hasManagedVaultPendingWriteWork(
+        mediaSummary: summary,
+        blobRepairQueueDepth: blobRepairQueueDepth,
+      );
     } catch (_) {
       hasPendingUploads = fallbackPending;
     }
@@ -928,6 +940,8 @@ final class BackgroundSync {
       backend: backend,
       store: store,
       sessionKey: sessionKey,
+      baseUrl: config.baseUrl ?? '',
+      vaultId: config.remoteRoot,
       scopeId: scopeId,
       fallbackPending: fallbackPending,
     );
