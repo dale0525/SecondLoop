@@ -151,11 +151,26 @@ bool _shouldRetrieveSemanticCandidates(LocalSemanticParseResult result) {
   if (result.kind != LocalSemanticParseKind.none) {
     return false;
   }
-  return switch (result.diagnostics.localIntent) {
+  final diagnostics = result.diagnostics;
+  return switch (diagnostics.localIntent) {
     'ambiguous_followup' => true,
-    'needs_enhancement' => result.diagnostics.semanticNeedsEnhancement,
+    'needs_enhancement' => diagnostics.semanticNeedsEnhancement ||
+        _looksLikeUnresolvedFollowupAutomation(diagnostics),
+    'none' => _looksLikeUnresolvedFollowupAutomation(diagnostics),
     _ => false,
   };
+}
+
+bool _looksLikeUnresolvedFollowupAutomation(
+  LocalSemanticParseDiagnostics diagnostics,
+) {
+  if (diagnostics.hasExplicitStatusUpdate) {
+    return true;
+  }
+  if (!diagnostics.looksLikeFollowupEdit) {
+    return false;
+  }
+  return diagnostics.hasDueSignal || diagnostics.temporalNeedsEnhancement;
 }
 
 bool _isSuspiciousLocalCreate(LocalSemanticParseResult result) {

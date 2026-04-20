@@ -182,6 +182,109 @@ void main() {
   });
 
   test(
+      'runner retrieves semantic candidates for zh deictic holiday followup with a single open todo',
+      () async {
+    final store = _FakeStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:zh_deictic_holiday_single',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{
+        'msg:zh_deictic_holiday_single': '把这个改到年初一之后第一个工作日',
+      },
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(
+          id: 'todo:1',
+          title: '提交材料',
+          status: 'open',
+        ),
+      ],
+    );
+    final client = _FakeClient(
+      retrievedTodoCandidateIds: const <String>['todo:1'],
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 4, 20, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.retrieveRequests, 1);
+    expect(client.parseRequests, 0);
+    expect(
+      store.updatedDueByTodoId['todo:1'],
+      DateTime.parse('2027-02-15T21:00:00+08:00').millisecondsSinceEpoch,
+    );
+  });
+
+  test(
+      'runner retrieves semantic candidates for zh deictic status followup with a single open todo',
+      () async {
+    final store = _FakeStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:zh_deictic_status_single',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{
+        'msg:zh_deictic_status_single': '把这个完成',
+      },
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(
+          id: 'todo:1',
+          title: '提交材料',
+          status: 'open',
+        ),
+      ],
+    );
+    final client = _FakeClient(
+      retrievedTodoCandidateIds: const <String>['todo:1'],
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 4, 20, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.retrieveRequests, 1);
+    expect(client.parseRequests, 0);
+    expect(store.updatedStatusByTodoId['todo:1'], 'done');
+  });
+
+  test(
       'runner treats multiple retrieved semantic candidate ids as ambiguous order-only hints',
       () async {
     final store = _FakeStore(
