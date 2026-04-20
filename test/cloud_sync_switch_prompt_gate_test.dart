@@ -844,6 +844,7 @@ void main() {
         'syncManagedVaultPush',
         'syncManagedVaultPull',
         'syncManagedVaultPush',
+        'syncManagedVaultPull',
       ],
     );
     expect(find.textContaining('managed-vault push failed'), findsNothing);

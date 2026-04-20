@@ -27,6 +27,7 @@ pub struct V2ServerState {
     pub switch_generation_id: Option<String>,
     pub switch_generation_latest_global_seq: Option<i64>,
     pub switch_generation_ops: Vec<serde_json::Value>,
+    pub queued_generation_switches: Vec<(i64, String, i64, Vec<serde_json::Value>)>,
 }
 
 fn read_request(stream: &mut TcpStream) -> (String, String, String, Vec<u8>) {
@@ -410,6 +411,17 @@ pub fn start_mock_v2_server() -> (
                                 .take()
                                 .unwrap_or(0);
                             state.ops = std::mem::take(&mut state.switch_generation_ops);
+                        }
+                        if state
+                            .queued_generation_switches
+                            .first()
+                            .is_some_and(|(switch_after, _, _, _)| *switch_after == after)
+                        {
+                            let (_, generation_id, latest_global_seq, ops) =
+                                state.queued_generation_switches.remove(0);
+                            state.generation_id = generation_id;
+                            state.latest_global_seq = latest_global_seq;
+                            state.ops = ops;
                         }
                         let page_size = state.pull_page_size.unwrap_or(limit).max(1);
                         let all_ops: Vec<serde_json::Value> = state

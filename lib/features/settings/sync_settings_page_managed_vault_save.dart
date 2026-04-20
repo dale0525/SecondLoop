@@ -33,7 +33,6 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
 
     final baseUrlTrimmed = baseUrl.trim();
     final idTokenTrimmed = idToken.trim();
-    final pullingLabel = context.t.sync.progressDialog.pulling;
     final uploadingMediaLabel = context.t.sync.progressDialog.uploadingMedia;
     final finalizingLabel = context.t.sync.progressDialog.finalizing;
 
@@ -63,18 +62,16 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
           retryPushAfterPull = initialPush.recoveryAction ==
               ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
 
-          final stageProgress = _makeSmoothStageProgressReporter(progress);
-          stage.value = pullingLabel;
-          progress.value = 0.0;
-          await _consumeRustProgressStream(
-            backend.syncManagedVaultPullProgress(
-              sessionKey,
-              syncKey,
-              baseUrl: baseUrlTrimmed,
-              vaultId: vaultId,
-              idToken: idTokenTrimmed,
-            ),
-            onProgress: stageProgress.onProgress,
+          await _runManagedVaultPullStageWithProgress(
+            backend: backend,
+            sessionKey: sessionKey,
+            syncKey: syncKey,
+            baseUrl: baseUrlTrimmed,
+            vaultId: vaultId,
+            idToken: idTokenTrimmed,
+            stage: stage,
+            progress: progress,
+            hasTotal: hasTotal,
           );
           if (retryPushAfterPull) {
             await _runManagedVaultPushStageWithProgress(
@@ -91,6 +88,17 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
               allowRecovery: false,
             );
             allowMediaUploads = true;
+            await _runManagedVaultPullStageWithProgress(
+              backend: backend,
+              sessionKey: sessionKey,
+              syncKey: syncKey,
+              baseUrl: baseUrlTrimmed,
+              vaultId: vaultId,
+              idToken: idTokenTrimmed,
+              stage: stage,
+              progress: progress,
+              hasTotal: hasTotal,
+            );
           }
 
           if (allowMediaUploads && _cloudMediaBackupEnabled) {
@@ -130,7 +138,6 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
           }
 
           stage.value = finalizingLabel;
-          stageProgress.complete();
         },
       );
       return true;

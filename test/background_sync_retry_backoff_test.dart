@@ -111,6 +111,7 @@ void main() {
     expect(
       BackgroundSync.shouldRunManagedVaultMediaUploads(
         pushSucceeded: true,
+        pullSucceeded: true,
         statusCode: null,
         errorCode: null,
       ),
@@ -119,6 +120,7 @@ void main() {
     expect(
       BackgroundSync.shouldRunManagedVaultMediaUploads(
         pushSucceeded: false,
+        pullSucceeded: false,
         statusCode: 402,
         errorCode: 'payment_required',
       ),
@@ -127,6 +129,7 @@ void main() {
     expect(
       BackgroundSync.shouldRunManagedVaultMediaUploads(
         pushSucceeded: false,
+        pullSucceeded: true,
         statusCode: 403,
         errorCode: 'grace_readonly',
       ),
@@ -135,6 +138,7 @@ void main() {
     expect(
       BackgroundSync.shouldRunManagedVaultMediaUploads(
         pushSucceeded: false,
+        pullSucceeded: false,
         statusCode: 503,
         errorCode: null,
       ),
@@ -143,6 +147,16 @@ void main() {
     expect(
       BackgroundSync.shouldRunManagedVaultMediaUploads(
         pushSucceeded: false,
+        pullSucceeded: false,
+        statusCode: null,
+        errorCode: null,
+      ),
+      isFalse,
+    );
+    expect(
+      BackgroundSync.shouldRunManagedVaultMediaUploads(
+        pushSucceeded: true,
+        pullSucceeded: false,
         statusCode: null,
         errorCode: null,
       ),

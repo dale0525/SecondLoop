@@ -1194,6 +1194,7 @@ void main() {
         'syncManagedVaultPush',
         'syncManagedVaultPull',
         'syncManagedVaultPush',
+        'syncManagedVaultPull',
       ],
     );
     expect(find.text('Uploaded 1 changes'), findsOneWidget);
@@ -1259,6 +1260,7 @@ void main() {
         'syncManagedVaultPush',
         'syncManagedVaultPull',
         'syncManagedVaultPush',
+        'syncManagedVaultPull',
       ],
     );
     expect(

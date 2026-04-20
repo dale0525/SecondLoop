@@ -709,6 +709,7 @@ pub(super) fn pull_v2(
     let mut total_applied = 0u64;
     let mut last_applied = initial_last_applied;
     let mut reset_recovered = false;
+    let mut generation_recovered = false;
     let mut progress_reset_pending = false;
     loop {
         let request = GlobalLogPullRequest {
@@ -775,11 +776,19 @@ pub(super) fn pull_v2(
         }
         if let Some(existing_generation) = &local_generation {
             if existing_generation != response_generation {
+                if generation_recovered {
+                    return Err(anyhow!(
+                        "managed-vault v2 pull generation mismatch persisted after local rebuild: local_generation_id={} remote_generation_id={}",
+                        existing_generation,
+                        response_generation
+                    ));
+                }
                 rebuild_local_vault_if_safe(conn, db_key, &scope_id, base_url, vault_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
                 total_target = None;
+                generation_recovered = true;
                 progress_reset_pending = true;
                 continue;
             }

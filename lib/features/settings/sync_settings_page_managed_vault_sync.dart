@@ -238,22 +238,16 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         ManagedVaultPushFailureRecoveryAction.pullOnly;
     recoveredMessage = initialPush.recoveredMessage;
 
-    stage.value = t.sync.progressDialog.pulling;
-    progress.value = 0.0;
-    hasTotal.value = false;
-    final pullProgressReporter = _makeSmoothStageProgressReporter(
-      progress,
-      onHasTotal: () => hasTotal.value = true,
-    );
-    await _consumeRustProgressStream(
-      backend.syncManagedVaultPullProgress(
-        sessionKey,
-        syncKey,
-        baseUrl: baseUrl,
-        vaultId: vaultId,
-        idToken: idToken,
-      ),
-      onProgress: pullProgressReporter.onProgress,
+    await _runManagedVaultPullStageWithProgress(
+      backend: backend,
+      sessionKey: sessionKey,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+      stage: stage,
+      progress: progress,
+      hasTotal: hasTotal,
     );
     if (retryPushAfterPull) {
       final retryPush = await _runManagedVaultPushStageWithProgress(
@@ -271,13 +265,55 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
       );
       pushed = retryPush.pushed;
       recoveredOnly = false;
+      await _runManagedVaultPullStageWithProgress(
+        backend: backend,
+        sessionKey: sessionKey,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken,
+        stage: stage,
+        progress: progress,
+        hasTotal: hasTotal,
+      );
     }
     stage.value = t.sync.progressDialog.finalizing;
-    pullProgressReporter.complete();
     return _ManagedVaultManualPushResult(
       pushed: pushed,
       recoveredOnly: recoveredOnly,
       recoveredMessage: recoveredMessage,
     );
+  }
+
+  Future<void> _runManagedVaultPullStageWithProgress({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required Uint8List syncKey,
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required ValueNotifier<String> stage,
+    required ValueNotifier<double?> progress,
+    required ValueNotifier<bool> hasTotal,
+  }) async {
+    final t = context.t;
+    stage.value = t.sync.progressDialog.pulling;
+    progress.value = 0.0;
+    hasTotal.value = false;
+    final pullProgressReporter = _makeSmoothStageProgressReporter(
+      progress,
+      onHasTotal: () => hasTotal.value = true,
+    );
+    await _consumeRustProgressStream(
+      backend.syncManagedVaultPullProgress(
+        sessionKey,
+        syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken,
+      ),
+      onProgress: pullProgressReporter.onProgress,
+    );
+    pullProgressReporter.complete();
   }
 }

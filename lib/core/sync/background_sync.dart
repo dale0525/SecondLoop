@@ -291,7 +291,7 @@ final class BackgroundSync {
                     errorCode: pushResult.errorCode,
                   ),
               };
-      final pullResult = shouldRunPull
+      var pullResult = shouldRunPull
           ? await _pullOnce(
               backend: backend,
               sessionKey: sessionKey,
@@ -314,6 +314,18 @@ final class BackgroundSync {
           config: config,
           managedVaultIdToken: idToken,
         );
+        if (shouldRunManagedVaultFinalPullAfterRecoveryRetry(
+          recoveryAction: recoveryAction,
+          initialPullSucceeded: true,
+          retryPushSucceeded: pushResult.status == _BackgroundOpStatus.success,
+        )) {
+          pullResult = await _pullOnce(
+            backend: backend,
+            sessionKey: sessionKey,
+            config: config,
+            managedVaultIdToken: idToken,
+          );
+        }
       }
       await store.writeBackgroundSyncRepairRequired(
         shouldBlockBackgroundSyncForFailure(
@@ -372,6 +384,7 @@ final class BackgroundSync {
           config.backendType != SyncBackendType.managedVault ||
               shouldRunManagedVaultMediaUploads(
                 pushSucceeded: pushResult.status == _BackgroundOpStatus.success,
+                pullSucceeded: pullResult.status == _BackgroundOpStatus.success,
                 statusCode: pushResult.statusCode,
                 errorCode: pushResult.errorCode,
               );
@@ -721,10 +734,12 @@ final class BackgroundSync {
   @visibleForTesting
   static bool shouldRunManagedVaultMediaUploads({
     required bool pushSucceeded,
+    required bool pullSucceeded,
     int? statusCode,
     String? errorCode,
   }) {
     if (!pushSucceeded) return false;
+    if (!pullSucceeded) return false;
     if (statusCode == 402) return false;
     return managedVaultPushFailureRecoveryActionForStatus(
           statusCode: statusCode,
@@ -742,6 +757,18 @@ final class BackgroundSync {
       statusCode: statusCode,
       errorCode: errorCode,
     );
+  }
+
+  @visibleForTesting
+  static bool shouldRunManagedVaultFinalPullAfterRecoveryRetry({
+    required ManagedVaultPushFailureRecoveryAction recoveryAction,
+    required bool initialPullSucceeded,
+    required bool retryPushSucceeded,
+  }) {
+    return recoveryAction ==
+            ManagedVaultPushFailureRecoveryAction.pullThenRetryPush &&
+        initialPullSucceeded &&
+        retryPushSucceeded;
   }
 
   static Future<int?> _updateBackoffState({

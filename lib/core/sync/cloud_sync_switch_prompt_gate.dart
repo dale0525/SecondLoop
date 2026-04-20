@@ -137,6 +137,33 @@ final class _CloudSyncSwitchPromptGateState
     return details;
   }
 
+  Future<void> _runManagedVaultPullStageWithProgress({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required Uint8List syncKey,
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required ValueNotifier<String> stage,
+    required ValueNotifier<double> progress,
+  }) async {
+    final t = context.t;
+    final stageProgress = _makeSmoothStageProgressReporter(progress);
+    stage.value = t.sync.progressDialog.pulling;
+    progress.value = 0.0;
+    await _consumeRustProgressStream(
+      backend.syncManagedVaultPullProgress(
+        sessionKey,
+        syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken,
+      ),
+      onProgress: stageProgress.onProgress,
+    );
+    stageProgress.complete();
+  }
+
   String? _managedVaultSyncFailureMessage(Object error) {
     return _managedVaultUserFacingErrorMessage(error);
   }
@@ -542,19 +569,15 @@ final class _CloudSyncSwitchPromptGateState
                     ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
 
                 // Pull after push to converge to the latest remote log head.
-                final stageProgress =
-                    _makeSmoothStageProgressReporter(progress);
-                stage.value = t.sync.progressDialog.pulling;
-                progress.value = 0.0;
-                await _consumeRustProgressStream(
-                  backend.syncManagedVaultPullProgress(
-                    sessionKey,
-                    syncKey,
-                    baseUrl: baseUrl,
-                    vaultId: vaultId,
-                    idToken: idToken,
-                  ),
-                  onProgress: stageProgress.onProgress,
+                await _runManagedVaultPullStageWithProgress(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: syncKey,
+                  baseUrl: baseUrl,
+                  vaultId: vaultId,
+                  idToken: idToken,
+                  stage: stage,
+                  progress: progress,
                 );
                 if (retryPushAfterPull) {
                   await _runManagedVaultPushStageWithProgress(
@@ -571,6 +594,16 @@ final class _CloudSyncSwitchPromptGateState
                   );
                   allowMediaUploads = true;
                   retryPushAfterPull = false;
+                  await _runManagedVaultPullStageWithProgress(
+                    backend: backend,
+                    sessionKey: sessionKey,
+                    syncKey: syncKey,
+                    baseUrl: baseUrl,
+                    vaultId: vaultId,
+                    idToken: idToken,
+                    stage: stage,
+                    progress: progress,
+                  );
                 }
 
                 // Media uploads (optional)
@@ -616,7 +649,7 @@ final class _CloudSyncSwitchPromptGateState
 
                 // Finalize
                 stage.value = t.sync.progressDialog.finalizing;
-                stageProgress.complete();
+                progress.value = 1.0;
               } catch (error, stackTrace) {
                 if (shouldRollbackManagedVaultBootstrapOnError(error)) {
                   runError = error;
