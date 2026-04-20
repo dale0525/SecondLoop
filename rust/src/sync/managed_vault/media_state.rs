@@ -200,8 +200,10 @@ fn pending_local_media_write_work(
 ) -> Result<PendingLocalMediaWriteWork> {
     let mut work = pending_local_media_write_repairs(conn, scope_id)?;
     let pending_ops = pending_local_media_write_ops(conn, db_key, scope_id)?;
+    let media_backup_summary = crate::db::cloud_media_backup_summary(conn)?;
     work.attachments |= pending_ops.attachments;
     work.artifacts |= pending_ops.artifacts;
+    work.attachments |= media_backup_summary.pending > 0 || media_backup_summary.failed > 0;
     Ok(work)
 }
 
