@@ -683,6 +683,32 @@ ALTER TABLE knowledge_pages
     Ok(())
 }
 
+fn migrate_from_v48_to_v49(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+DROP TABLE IF EXISTS cloud_media_backup;
+
+CREATE TABLE cloud_media_backup (
+  scope_id TEXT NOT NULL,
+  attachment_sha256 TEXT NOT NULL,
+  desired_variant TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at INTEGER,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (scope_id, attachment_sha256),
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX idx_cloud_media_backup_status_retry
+  ON cloud_media_backup(scope_id, status, next_retry_at);
+
+PRAGMA user_version = 49;
+"#,
+    )?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -892,6 +918,66 @@ CREATE TABLE knowledge_pages (
             .collect::<std::result::Result<Vec<_>, _>>()
             .expect("collect column names");
         assert!(column_names.contains(&"state_before_answer_muted".to_string()));
+    }
+
+    #[test]
+    fn v49_cloud_media_backup_migration_rebuilds_scope_primary_key() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE cloud_media_backup (
+  attachment_sha256 TEXT PRIMARY KEY,
+  desired_variant TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at INTEGER,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL
+);
+INSERT INTO cloud_media_backup(
+  attachment_sha256,
+  desired_variant,
+  status,
+  attempts,
+  next_retry_at,
+  last_error,
+  updated_at
+) VALUES ('sha-1', 'original', 'pending', 0, NULL, NULL, 1234);
+PRAGMA user_version = 48;
+"#,
+        )
+        .expect("seed pre-v49 cloud_media_backup");
+
+        migrate_from_v48_to_v49(&conn).expect("run v49 migration");
+
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(cloud_media_backup)")
+            .expect("prepare table info");
+        let columns = stmt
+            .query_map([], |row| Ok((row.get::<_, String>(1)?, row.get::<_, i64>(5)?)))
+            .expect("query table info")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect columns");
+        assert!(
+            columns.iter().any(|(name, pk)| name == "scope_id" && *pk == 1),
+            "scope_id should be the first primary-key column"
+        );
+        assert!(
+            columns
+                .iter()
+                .any(|(name, pk)| name == "attachment_sha256" && *pk == 2),
+            "attachment_sha256 should be the second primary-key column"
+        );
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM cloud_media_backup", [], |row| row.get(0))
+            .expect("count rows");
+        assert_eq!(count, 0, "v49 intentionally drops legacy rows");
+
+        let user_version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("user_version");
+        assert_eq!(user_version, 49);
     }
 }
 

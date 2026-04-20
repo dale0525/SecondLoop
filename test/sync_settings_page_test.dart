@@ -1203,6 +1203,73 @@ void main() {
   });
 
   testWidgets(
+      'managed vault manual upload notifies listeners after recovery pull',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _GenerationMismatchRecoveryManagedVaultSyncBackend();
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+    var notifications = 0;
+    engine.changes.addListener(() => notifications++);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: SyncEngineScope(
+                  engine: engine,
+                  child: Scaffold(
+                    body: SyncSettingsPage(configStore: store),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+      ],
+    );
+    expect(notifications, 1);
+    engine.stop();
+  });
+
+  testWidgets(
       'managed vault manual upload clears background repair block after success',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -1868,6 +1935,14 @@ final class _GenerationMismatchRecoveryManagedVaultSyncBackend
     }
     return 1;
   }
+}
+
+final class _NoopSyncRunner implements SyncRunner {
+  @override
+  Future<int> push(SyncConfig config) async => 0;
+
+  @override
+  Future<int> pull(SyncConfig config) async => 0;
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {

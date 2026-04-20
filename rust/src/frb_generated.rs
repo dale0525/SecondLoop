@@ -1410,6 +1410,7 @@ fn wire__crate__api__core__db_backfill_cloud_media_backup_images_impl(
             let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
             let api_desired_variant = <String>::sse_decode(&mut deserializer);
             let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            let api_scope_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
@@ -1418,6 +1419,7 @@ fn wire__crate__api__core__db_backfill_cloud_media_backup_images_impl(
                         api_key,
                         api_desired_variant,
                         api_now_ms,
+                        api_scope_id,
                     )
                 })())
             }
@@ -1521,10 +1523,15 @@ fn wire__crate__api__core__db_cloud_media_backup_summary_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_app_dir = <String>::sse_decode(&mut deserializer);
             let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_scope_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
-                    crate::api::core::db_cloud_media_backup_summary(api_app_dir, api_key)
+                    crate::api::core::db_cloud_media_backup_summary(
+                        api_app_dir,
+                        api_key,
+                        api_scope_id,
+                    )
                 })())
             }
         },
@@ -2332,6 +2339,7 @@ fn wire__crate__api__core__db_enqueue_cloud_media_backup_impl(
             let api_attachment_sha256 = <String>::sse_decode(&mut deserializer);
             let api_desired_variant = <String>::sse_decode(&mut deserializer);
             let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            let api_scope_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
@@ -2341,6 +2349,7 @@ fn wire__crate__api__core__db_enqueue_cloud_media_backup_impl(
                         api_attachment_sha256,
                         api_desired_variant,
                         api_now_ms,
+                        api_scope_id,
                     )
                 })())
             }
@@ -2973,6 +2982,7 @@ fn wire__crate__api__core__db_list_due_cloud_media_backups_impl(
             let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
             let api_now_ms = <i64>::sse_decode(&mut deserializer);
             let api_limit = <u32>::sse_decode(&mut deserializer);
+            let api_scope_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
@@ -2981,6 +2991,7 @@ fn wire__crate__api__core__db_list_due_cloud_media_backups_impl(
                         api_key,
                         api_now_ms,
                         api_limit,
+                        api_scope_id,
                     )
                 })())
             }
@@ -3930,6 +3941,7 @@ fn wire__crate__api__core__db_mark_cloud_media_backup_failed_impl(
             let api_next_retry_at_ms = <i64>::sse_decode(&mut deserializer);
             let api_last_error = <String>::sse_decode(&mut deserializer);
             let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            let api_scope_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
@@ -3941,6 +3953,7 @@ fn wire__crate__api__core__db_mark_cloud_media_backup_failed_impl(
                         api_next_retry_at_ms,
                         api_last_error,
                         api_now_ms,
+                        api_scope_id,
                     )
                 })())
             }
@@ -3973,6 +3986,7 @@ fn wire__crate__api__core__db_mark_cloud_media_backup_uploaded_impl(
             let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
             let api_attachment_sha256 = <String>::sse_decode(&mut deserializer);
             let api_now_ms = <i64>::sse_decode(&mut deserializer);
+            let api_scope_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
@@ -3981,6 +3995,7 @@ fn wire__crate__api__core__db_mark_cloud_media_backup_uploaded_impl(
                         api_key,
                         api_attachment_sha256,
                         api_now_ms,
+                        api_scope_id,
                     )
                 })())
             }

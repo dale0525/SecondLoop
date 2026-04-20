@@ -73,6 +73,9 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
             progress: progress,
             hasTotal: hasTotal,
           );
+          if (mounted) {
+            engine?.notifyExternalChange();
+          }
           if (retryPushAfterPull) {
             await _runManagedVaultPushStageWithProgress(
               backend: backend,
@@ -99,6 +102,9 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
               progress: progress,
               hasTotal: hasTotal,
             );
+            if (mounted) {
+              engine?.notifyExternalChange();
+            }
           }
 
           if (allowMediaUploads && _cloudMediaBackupEnabled) {

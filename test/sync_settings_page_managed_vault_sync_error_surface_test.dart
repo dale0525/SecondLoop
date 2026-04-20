@@ -158,6 +158,8 @@ void main() {
       loadConfig: () async => null,
       pullOnStart: false,
     );
+    var notifications = 0;
+    engine.changes.addListener(() => notifications++);
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -205,6 +207,7 @@ void main() {
       ],
     );
     expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    expect(notifications, 1);
     expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
     engine.stop();
   });

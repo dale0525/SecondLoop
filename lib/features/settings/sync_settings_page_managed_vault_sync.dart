@@ -5,11 +5,13 @@ final class _ManagedVaultManualPushResult {
     required this.pushed,
     required this.recoveredOnly,
     required this.recoveredMessage,
+    required this.refreshedLocalState,
   });
 
   final int pushed;
   final bool recoveredOnly;
   final String? recoveredMessage;
+  final bool refreshedLocalState;
 }
 
 final class _ManagedVaultPushStageResult {
@@ -229,6 +231,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     var pushed = 0;
     var recoveredOnly = false;
     var retryPushAfterPull = false;
+    var refreshedLocalState = false;
     String? recoveredMessage;
     final initialPush = await _runManagedVaultPushStageWithProgress(
       backend: backend,
@@ -261,6 +264,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
       progress: progress,
       hasTotal: hasTotal,
     );
+    refreshedLocalState = true;
     if (retryPushAfterPull) {
       final retryPush = await _runManagedVaultPushStageWithProgress(
         backend: backend,
@@ -288,12 +292,14 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         progress: progress,
         hasTotal: hasTotal,
       );
+      refreshedLocalState = true;
     }
     stage.value = t.sync.progressDialog.finalizing;
     return _ManagedVaultManualPushResult(
       pushed: pushed,
       recoveredOnly: recoveredOnly,
       recoveredMessage: recoveredMessage,
+      refreshedLocalState: refreshedLocalState,
     );
   }
 

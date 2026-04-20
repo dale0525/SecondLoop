@@ -615,7 +615,9 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
         if (!mounted) return;
         engine?.start();
-        engine?.notifyExternalChange();
+        if (!(didSync && newBackendType == SyncBackendType.managedVault)) {
+          engine?.notifyExternalChange();
+        }
         if (!didSync) {
           engine?.triggerPushNow();
           engine?.triggerPullNow();
@@ -675,6 +677,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
       var pushed = 0;
       var recoveredOnly = false;
+      var refreshedLocalState = false;
       String? recoveredMessage;
       await _runSaveSyncWithProgress(
         progressKey: _SyncSettingsPageState._kManualSyncProgressKey,
@@ -707,6 +710,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
               pushed = result.pushed;
               recoveredOnly = result.recoveredOnly;
               recoveredMessage = result.recoveredMessage;
+              refreshedLocalState = result.refreshedLocalState;
             } else {
               final progressReporter = _makeSmoothStageProgressReporter(
                 progress,
@@ -755,6 +759,9 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         scopeId: stateScopeId,
         userMessage: successMessage,
       );
+      if (mounted && refreshedLocalState) {
+        engine?.notifyExternalChange();
+      }
       _showSnack(successMessage);
     } catch (e) {
       final errorMessage = managedVaultUserFacingErrorMessage(e);

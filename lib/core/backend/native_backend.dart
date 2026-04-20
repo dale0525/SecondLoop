@@ -37,6 +37,7 @@ import '../../src/rust/semantic_parse.dart';
 import 'app_backend.dart';
 import 'attachments_backend.dart';
 import 'semantic_parse_attempt_aware_backend.dart';
+import '../sync/sync_config_store.dart';
 import 'rust_external_library_resolver.dart';
 import 'serialized_rust_handler.dart';
 
@@ -3539,12 +3540,14 @@ class NativeAppBackend extends _NativeAppBackendAccess
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
+    final scopeId = await _resolveCloudMediaBackupScopeId();
     await rust_core.dbEnqueueCloudMediaBackup(
       appDir: appDir,
       key: key,
       attachmentSha256: attachmentSha256,
       desiredVariant: desiredVariant,
       nowMs: PlatformInt64Util.from(nowMs),
+      scopeId: scopeId,
     );
   }
 
@@ -3555,11 +3558,13 @@ class NativeAppBackend extends _NativeAppBackendAccess
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
+    final scopeId = await _resolveCloudMediaBackupScopeId();
     final affected = await rust_core.dbBackfillCloudMediaBackupImages(
       appDir: appDir,
       key: key,
       desiredVariant: desiredVariant,
       nowMs: PlatformInt64Util.from(nowMs),
+      scopeId: scopeId,
     );
     return affected.toInt();
   }
@@ -3571,11 +3576,13 @@ class NativeAppBackend extends _NativeAppBackendAccess
     int limit = 100,
   }) async {
     final appDir = await _getAppDir();
+    final scopeId = await _resolveCloudMediaBackupScopeId();
     return rust_core.dbListDueCloudMediaBackups(
       appDir: appDir,
       key: key,
       nowMs: PlatformInt64Util.from(nowMs),
       limit: limit,
+      scopeId: scopeId,
     );
   }
 
@@ -3589,6 +3596,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
+    final scopeId = await _resolveCloudMediaBackupScopeId();
     await rust_core.dbMarkCloudMediaBackupFailed(
       appDir: appDir,
       key: key,
@@ -3597,6 +3605,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
       nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
       lastError: lastError,
       nowMs: PlatformInt64Util.from(nowMs),
+      scopeId: scopeId,
     );
   }
 
@@ -3607,17 +3616,24 @@ class NativeAppBackend extends _NativeAppBackendAccess
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
+    final scopeId = await _resolveCloudMediaBackupScopeId();
     await rust_core.dbMarkCloudMediaBackupUploaded(
       appDir: appDir,
       key: key,
       attachmentSha256: attachmentSha256,
       nowMs: PlatformInt64Util.from(nowMs),
+      scopeId: scopeId,
     );
   }
 
   @override
   Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbCloudMediaBackupSummary(appDir: appDir, key: key);
+    final scopeId = await _resolveCloudMediaBackupScopeId();
+    return rust_core.dbCloudMediaBackupSummary(
+      appDir: appDir,
+      key: key,
+      scopeId: scopeId,
+    );
   }
 }

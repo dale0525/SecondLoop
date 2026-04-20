@@ -1889,10 +1889,17 @@ pub fn db_enqueue_cloud_media_backup(
     attachment_sha256: String,
     desired_variant: String,
     now_ms: i64,
+    scope_id: Option<String>,
 ) -> Result<()> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::enqueue_cloud_media_backup(&conn, &attachment_sha256, &desired_variant, now_ms)
+    db::enqueue_cloud_media_backup(
+        &conn,
+        &attachment_sha256,
+        &desired_variant,
+        now_ms,
+        scope_id.as_deref(),
+    )
 }
 
 #[flutter_rust_bridge::frb]
@@ -1901,10 +1908,11 @@ pub fn db_backfill_cloud_media_backup_images(
     key: Vec<u8>,
     desired_variant: String,
     now_ms: i64,
+    scope_id: Option<String>,
 ) -> Result<u64> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::backfill_cloud_media_backup_images(&conn, &desired_variant, now_ms)
+    db::backfill_cloud_media_backup_images(&conn, &desired_variant, now_ms, scope_id.as_deref())
 }
 
 #[flutter_rust_bridge::frb]
@@ -1913,10 +1921,11 @@ pub fn db_list_due_cloud_media_backups(
     key: Vec<u8>,
     now_ms: i64,
     limit: u32,
+    scope_id: Option<String>,
 ) -> Result<Vec<db::CloudMediaBackup>> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::list_due_cloud_media_backups(&conn, now_ms, limit as i64)
+    db::list_due_cloud_media_backups(&conn, now_ms, limit as i64, scope_id.as_deref())
 }
 
 #[flutter_rust_bridge::frb]
@@ -1928,6 +1937,7 @@ pub fn db_mark_cloud_media_backup_failed(
     next_retry_at_ms: i64,
     last_error: String,
     now_ms: i64,
+    scope_id: Option<String>,
 ) -> Result<()> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
@@ -1938,6 +1948,7 @@ pub fn db_mark_cloud_media_backup_failed(
         next_retry_at_ms,
         &last_error,
         now_ms,
+        scope_id.as_deref(),
     )
 }
 
@@ -1947,20 +1958,22 @@ pub fn db_mark_cloud_media_backup_uploaded(
     key: Vec<u8>,
     attachment_sha256: String,
     now_ms: i64,
+    scope_id: Option<String>,
 ) -> Result<()> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::mark_cloud_media_backup_uploaded(&conn, &attachment_sha256, now_ms)
+    db::mark_cloud_media_backup_uploaded(&conn, &attachment_sha256, now_ms, scope_id.as_deref())
 }
 
 #[flutter_rust_bridge::frb]
 pub fn db_cloud_media_backup_summary(
     app_dir: String,
     key: Vec<u8>,
+    scope_id: Option<String>,
 ) -> Result<db::CloudMediaBackupSummary> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::cloud_media_backup_summary(&conn)
+    db::cloud_media_backup_summary(&conn, scope_id.as_deref())
 }
 
 #[flutter_rust_bridge::frb]

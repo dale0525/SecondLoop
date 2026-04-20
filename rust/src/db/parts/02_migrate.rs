@@ -478,17 +478,19 @@ CREATE TABLE IF NOT EXISTS attachment_variants (
 );
 
 CREATE TABLE IF NOT EXISTS cloud_media_backup (
-  attachment_sha256 TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL,
+  attachment_sha256 TEXT NOT NULL,
   desired_variant TEXT NOT NULL,
   status TEXT NOT NULL,
   attempts INTEGER NOT NULL DEFAULT 0,
   next_retry_at INTEGER,
   last_error TEXT,
   updated_at INTEGER NOT NULL,
+  PRIMARY KEY (scope_id, attachment_sha256),
   FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_cloud_media_backup_status_retry
-  ON cloud_media_backup(status, next_retry_at);
+  ON cloud_media_backup(scope_id, status, next_retry_at);
 PRAGMA user_version = 14;
 "#,
         )?;
@@ -1094,7 +1096,12 @@ PRAGMA user_version = 29;
         user_version = 48;
     }
 
-    debug_assert!(user_version >= 48);
+    if user_version < 49 {
+        migrate_from_v48_to_v49(conn)?;
+        user_version = 49;
+    }
+
+    debug_assert!(user_version >= 49);
 
     Ok(())
 }
