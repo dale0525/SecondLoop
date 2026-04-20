@@ -102,50 +102,7 @@ fn build_message_action_prompt(
     out.push_str("  \"tag_confidence\": number // 0..1 confidence for suggested_tags\n");
     out.push_str("}\n\n");
 
-    out.push_str("Constraints:\n");
-    out.push_str("- If kind=followup, todo_id MUST be one of the candidate IDs.\n");
-    out.push_str(
-        "- Use kind=followup ONLY when the user clearly refers to a specific candidate.\n",
-    );
-    out.push_str(
-        "- If kind=followup, at least one of new_status or due_local_iso MUST be non-null.\n",
-    );
-    out.push_str(
-        "- If the message describes a new task, use kind=create even if no candidates match.\n",
-    );
-    out.push_str("- If unsure, use kind=none.\n");
-    out.push_str(
-        "- due_local_iso must be local ISO 8601 without timezone, like 2026-02-04T15:00:00.\n",
-    );
-    out.push_str("- If the user provides a date but no time, use day_end_minutes.\n");
-    out.push_str("- The user message may be in any language; infer intent from that language.\n");
-    out.push_str("- recurrence is optional. If absent, set recurrence to null.\n");
-    out.push_str(
-        "- recurrence.freq MUST use the canonical enum values: daily|weekly|monthly|yearly.\n",
-    );
-    out.push_str("- recurrence.interval defaults to 1 when omitted by user intent.\n");
-    out.push_str(
-        "- status/new_status MUST use canonical enum values even if user text is non-English.\n",
-    );
-    out.push_str("- task_type MUST use the fixed enum values above; never invent new values.\n");
-    out.push_str("- suggested_tags MUST contain at most 3 concise tags.\n");
-    if available_tags.is_empty() {
-        out.push_str(
-            "- Prefer these canonical tags when relevant: work|personal|family|health|finance|study|travel|social|home|hobby.\n",
-        );
-    } else {
-        out.push_str("- Prefer tags from available_tags when relevant.\n");
-        out.push_str(
-            "- Only suggest tags from available_tags; if none fit, return suggested_tags as [].\n",
-        );
-        out.push_str(&format!(
-            "available_tags: {}\n",
-            serde_json::to_string(available_tags).expect("serialize available_tags")
-        ));
-    }
-    out.push_str(
-        "- If no useful tag is inferred, return suggested_tags as [] and tag_confidence as 0.\n\n",
-    );
+    append_message_action_common_constraints(&mut out, available_tags);
 
     out.push_str(&format!("now_local_iso: {now_local_iso}\n"));
     out.push_str(&format!("locale: {locale}\n"));
@@ -221,46 +178,9 @@ fn build_message_action_enhancement_prompt(
     out.push_str("}\n\n");
 
     out.push_str("Constraints:\n");
-    out.push_str("- If kind=followup, todo_id MUST be one of the candidate IDs.\n");
-    out.push_str(
-        "- Use kind=followup ONLY when the user clearly refers to a specific candidate.\n",
-    );
-    out.push_str(
-        "- If kind=followup, at least one of new_status or due_local_iso MUST be non-null.\n",
-    );
     out.push_str("- If kind=create, preserve the local result unless the message clearly indicates otherwise.\n");
     out.push_str("- If still unsure after considering local_result, use kind=none.\n");
-    out.push_str(
-        "- due_local_iso must be local ISO 8601 without timezone, like 2026-02-04T15:00:00.\n",
-    );
-    out.push_str("- If the user provides a date but no time, use day_end_minutes.\n");
-    out.push_str("- recurrence is optional. If absent, set recurrence to null.\n");
-    out.push_str(
-        "- recurrence.freq MUST use the canonical enum values: daily|weekly|monthly|yearly.\n",
-    );
-    out.push_str("- recurrence.interval defaults to 1 when omitted by user intent.\n");
-    out.push_str(
-        "- status/new_status MUST use canonical enum values even if user text is non-English.\n",
-    );
-    out.push_str("- task_type MUST use the fixed enum values above; never invent new values.\n");
-    out.push_str("- suggested_tags MUST contain at most 3 concise tags.\n");
-    if available_tags.is_empty() {
-        out.push_str(
-            "- Prefer these canonical tags when relevant: work|personal|family|health|finance|study|travel|social|home|hobby.\n",
-        );
-    } else {
-        out.push_str("- Prefer tags from available_tags when relevant.\n");
-        out.push_str(
-            "- Only suggest tags from available_tags; if none fit, return suggested_tags as [].\n",
-        );
-        out.push_str(&format!(
-            "available_tags: {}\n",
-            serde_json::to_string(available_tags).expect("serialize available_tags")
-        ));
-    }
-    out.push_str(
-        "- If no useful tag is inferred, return suggested_tags as [] and tag_confidence as 0.\n\n",
-    );
+    append_message_action_common_constraints(&mut out, available_tags);
 
     out.push_str(&format!("now_local_iso: {now_local_iso}\n"));
     out.push_str(&format!("locale: {locale}\n"));
@@ -297,6 +217,52 @@ fn build_message_action_enhancement_prompt(
     out.push('\n');
 
     out
+}
+
+fn append_message_action_common_constraints(out: &mut String, available_tags: &[String]) {
+    out.push_str("- If kind=followup, todo_id MUST be one of the candidate IDs.\n");
+    out.push_str(
+        "- Use kind=followup ONLY when the user clearly refers to a specific candidate.\n",
+    );
+    out.push_str(
+        "- If kind=followup, at least one of new_status or due_local_iso MUST be non-null.\n",
+    );
+    out.push_str(
+        "- If the message describes a new task, use kind=create even if no candidates match.\n",
+    );
+    out.push_str("- If unsure, use kind=none.\n");
+    out.push_str(
+        "- due_local_iso must be local ISO 8601 without timezone, like 2026-02-04T15:00:00.\n",
+    );
+    out.push_str("- If the user provides a date but no time, use day_end_minutes.\n");
+    out.push_str("- The user message may be in any language; infer intent from that language.\n");
+    out.push_str("- recurrence is optional. If absent, set recurrence to null.\n");
+    out.push_str(
+        "- recurrence.freq MUST use the canonical enum values: daily|weekly|monthly|yearly.\n",
+    );
+    out.push_str("- recurrence.interval defaults to 1 when omitted by user intent.\n");
+    out.push_str(
+        "- status/new_status MUST use canonical enum values even if user text is non-English.\n",
+    );
+    out.push_str("- task_type MUST use the fixed enum values above; never invent new values.\n");
+    out.push_str("- suggested_tags MUST contain at most 3 concise tags.\n");
+    if available_tags.is_empty() {
+        out.push_str(
+            "- Prefer these canonical tags when relevant: work|personal|family|health|finance|study|travel|social|home|hobby.\n",
+        );
+    } else {
+        out.push_str("- Prefer tags from available_tags when relevant.\n");
+        out.push_str(
+            "- Only suggest tags from available_tags; if none fit, return suggested_tags as [].\n",
+        );
+        out.push_str(&format!(
+            "available_tags: {}\n",
+            serde_json::to_string(available_tags).expect("serialize available_tags")
+        ));
+    }
+    out.push_str(
+        "- If no useful tag is inferred, return suggested_tags as [] and tag_confidence as 0.\n\n",
+    );
 }
 
 pub fn semantic_parse_message_action_json(
@@ -524,6 +490,42 @@ mod tests {
         assert!(prompt.contains("unresolved_fields"));
         assert!(prompt.contains("ambiguous_followup"));
         assert!(prompt.contains("Do not ignore the local_result"));
+    }
+
+    #[test]
+    fn enhancement_prompt_keeps_create_without_candidate_guidance() {
+        let prompt = build_message_action_enhancement_prompt(
+            "book dentist for next Tuesday",
+            "2026-02-04T10:00:00",
+            "en",
+            21 * 60,
+            r#"{"kind":"none","confidence":0.55,"resolver":"local","diagnostics":{"local_intent":"needs_enhancement"}}"#,
+            &[
+                "kind".to_string(),
+                "title".to_string(),
+                "status".to_string(),
+            ],
+            &[],
+            &[],
+        );
+
+        assert!(prompt.contains("even if no candidates match"));
+    }
+
+    #[test]
+    fn enhancement_prompt_keeps_multilingual_guidance() {
+        let prompt = build_message_action_enhancement_prompt(
+            "把这个改到节后第一个工作日",
+            "2026-02-04T10:00:00",
+            "zh-CN",
+            21 * 60,
+            r#"{"kind":"none","confidence":0.45,"resolver":"local","diagnostics":{"local_intent":"ambiguous_followup"}}"#,
+            &["todo_id".to_string(), "due_local_iso".to_string()],
+            &[],
+            &[],
+        );
+
+        assert!(prompt.contains("message may be in any language"));
     }
 
     #[test]
