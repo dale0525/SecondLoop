@@ -419,6 +419,32 @@ void main() {
     });
   });
 
+  test(
+      'managed vault caps retry-after-recovery loops on repeated generation mismatch',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultRepeatedRecoveryRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 2);
+      expect(runner.pullCalls, 1);
+      expect(runner.calls, <String>['push', 'pull', 'push']);
+
+      engine.stop();
+    });
+  });
+
   test('managed vault invalid_batch stops subsequent automatic pushes', () {
     fakeAsync((async) {
       final runner = _ManagedVaultInvalidBatchRunner();
@@ -851,6 +877,31 @@ final class _ManagedVaultInvalidBatchRunner implements SyncRunner {
 
   @override
   Future<int> pull(SyncConfig config) async => 0;
+}
+
+final class _ManagedVaultRepeatedRecoveryRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+  int pushCalls = 0;
+  int pullCalls = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    pushCalls += 1;
+    if (pushCalls <= 2) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    throw Exception('unexpected extra recovery push');
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    pullCalls += 1;
+    return 0;
+  }
 }
 
 final class _ManagedVaultRecoveryOrderingRunner

@@ -170,6 +170,8 @@ final class SyncWriteGateState {
 }
 
 final class SyncEngine {
+  static const int _maxManagedVaultRecoveryRetryPushes = 1;
+
   SyncEngine({
     required this.syncRunner,
     required this.loadConfig,
@@ -219,6 +221,7 @@ final class SyncEngine {
   int? _lastZeroApplyRefreshAtMs;
   bool _pendingPullAfterPush = false;
   bool _retryPushAfterRecoveryPull = false;
+  int _managedVaultRecoveryRetryPushes = 0;
 
   static int _defaultNowMs() => DateTime.now().millisecondsSinceEpoch;
 
@@ -274,6 +277,7 @@ final class SyncEngine {
     _pullQueued = false;
     _pendingPullAfterPush = false;
     _retryPushAfterRecoveryPull = false;
+    _managedVaultRecoveryRetryPushes = 0;
     _running = false;
     _stopAfterDrain = false;
   }
@@ -443,6 +447,7 @@ final class SyncEngine {
 
       await syncRunner.push(config);
       if (backendType == SyncBackendType.managedVault) {
+        _managedVaultRecoveryRetryPushes = 0;
         if (_acceptsNewWork) {
           _pullQueued = true;
           _pendingPullAfterPush = true;
@@ -488,12 +493,18 @@ final class SyncEngine {
         statusCode: statusCode,
         errorCode: errorCode,
       );
-      if (_acceptsNewWork &&
-          recoveryAction != ManagedVaultPushFailureRecoveryAction.none) {
-        _pullQueued = true;
-        if (recoveryAction ==
+      if (_acceptsNewWork) {
+        if (recoveryAction == ManagedVaultPushFailureRecoveryAction.pullOnly) {
+          _pullQueued = true;
+        } else if (recoveryAction ==
             ManagedVaultPushFailureRecoveryAction.pullThenRetryPush) {
-          _retryPushAfterRecoveryPull = true;
+          final canRetryAfterPull = _managedVaultRecoveryRetryPushes <
+                  _maxManagedVaultRecoveryRetryPushes &&
+              !_retryPushAfterRecoveryPull;
+          if (canRetryAfterPull) {
+            _pullQueued = true;
+            _retryPushAfterRecoveryPull = true;
+          }
         }
       }
 
@@ -518,7 +529,11 @@ final class SyncEngine {
           _retryPushAfterRecoveryPull &&
           _acceptsNewWork) {
         _retryPushAfterRecoveryPull = false;
+        _managedVaultRecoveryRetryPushes += 1;
         _pushQueued = true;
+      } else if (config.backendType == SyncBackendType.managedVault &&
+          !_pendingPullAfterPush) {
+        _managedVaultRecoveryRetryPushes = 0;
       }
 
       if (pullResult.hasAppliedChanges) {

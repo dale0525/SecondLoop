@@ -231,7 +231,7 @@ void main() {
   });
 
   test(
-      'SyncConfigStore reads legacy unscoped background state for scoped callers',
+      'SyncConfigStore does not map unscoped background state into a scoped config',
       () async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -267,11 +267,19 @@ void main() {
       backendType: SyncBackendType.managedVault,
       scopeId: scopeId,
     );
+    final legacyBackoff = await store.readBackgroundSyncBackoffState(
+      backendType: SyncBackendType.managedVault,
+    );
+    final legacyRepair = await store.readBackgroundSyncRepairRequired(
+      backendType: SyncBackendType.managedVault,
+    );
 
-    expect(restoredBackoff, isNotNull);
-    expect(restoredBackoff!.retryCount, 4);
-    expect(restoredBackoff.nextAllowedAtMs, 4321);
-    expect(restoredRepair, isTrue);
+    expect(restoredBackoff, isNull);
+    expect(restoredRepair, isFalse);
+    expect(legacyBackoff, isNotNull);
+    expect(legacyBackoff!.retryCount, 4);
+    expect(legacyBackoff.nextAllowedAtMs, 4321);
+    expect(legacyRepair, isTrue);
   });
 
   test('SyncConfigStore no-scope reads return latest scoped diagnostics state',

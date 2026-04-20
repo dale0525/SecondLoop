@@ -262,7 +262,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   final SyncConfigStore _configStore;
   final Uint8List _sessionKey;
   final Future<String?> Function()? _idTokenGetter;
-  bool _managedVaultPushSucceededInSession = false;
+  String? _managedVaultLastSuccessfulPushScopeId;
 
   String _managedVaultMediaUploadScopeId(SyncConfig config) {
     if (config.backendType != SyncBackendType.managedVault) return '';
@@ -488,7 +488,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
               backendType: SyncBackendType.managedVault,
               scopeId: scopeId,
             );
-            _managedVaultPushSucceededInSession = true;
+            _managedVaultLastSuccessfulPushScopeId = scopeId;
             await _writeManagedVaultMediaUploadPending(config, true);
             return pushed;
           } catch (error) {
@@ -540,12 +540,13 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
         await _runCloudMediaBackupIfEnabled(config);
         break;
       case SyncBackendType.managedVault:
+        final scopeId = _configStore.syncStateScopeId(config);
         final persistedPending = await _readManagedVaultMediaUploadPending(
           config,
         );
         final summaryPending = persistedPending
             ? true
-            : _managedVaultPushSucceededInSession
+            : _managedVaultLastSuccessfulPushScopeId == scopeId
                 ? await _hasManagedVaultMediaUploadWork(config)
                 : false;
         if (summaryPending && !persistedPending) {

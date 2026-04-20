@@ -367,26 +367,14 @@ final class SyncConfigStore {
     String? scopeId,
   }) async {
     final all = await _loadConfigMap();
-    final scopedKey = _backgroundSyncScopedKey(
-      _kBackgroundSyncResultPrefix,
-      backendType,
-      scopeId: scopeId,
-    );
-    final legacyKey = _backgroundSyncLegacyKey(
-      _kBackgroundSyncResultPrefix,
-      backendType,
-    );
     if (scopeId != null && scopeId.trim().isNotEmpty) {
-      final scoped = _decodeBackgroundSyncResult(all[scopedKey]);
-      if (scoped != null) return scoped;
-      final legacy = _decodeBackgroundSyncResult(all[legacyKey]);
-      if (legacy == null) return null;
-      await _migrateLegacyBackgroundStateIfNeeded(
-        scopedKey: scopedKey,
-        legacyKey: legacyKey,
-        rawValue: all[legacyKey],
+      return _decodeBackgroundSyncResult(
+        all[_backgroundSyncScopedKey(
+          _kBackgroundSyncResultPrefix,
+          backendType,
+          scopeId: scopeId,
+        )],
       );
-      return legacy;
     }
     return _readLatestBackgroundSyncValue(
       all,
@@ -419,26 +407,14 @@ final class SyncConfigStore {
     String? scopeId,
   }) async {
     final all = await _loadConfigMap();
-    final scopedKey = _backgroundSyncScopedKey(
-      _kBackgroundSyncBackoffPrefix,
-      backendType,
-      scopeId: scopeId,
-    );
-    final legacyKey = _backgroundSyncLegacyKey(
-      _kBackgroundSyncBackoffPrefix,
-      backendType,
-    );
     if (scopeId != null && scopeId.trim().isNotEmpty) {
-      final scoped = _decodeBackgroundSyncBackoffState(all[scopedKey]);
-      if (scoped != null) return scoped;
-      final legacy = _decodeBackgroundSyncBackoffState(all[legacyKey]);
-      if (legacy == null) return null;
-      await _migrateLegacyBackgroundStateIfNeeded(
-        scopedKey: scopedKey,
-        legacyKey: legacyKey,
-        rawValue: all[legacyKey],
+      return _decodeBackgroundSyncBackoffState(
+        all[_backgroundSyncScopedKey(
+          _kBackgroundSyncBackoffPrefix,
+          backendType,
+          scopeId: scopeId,
+        )],
       );
-      return legacy;
     }
     return _readLatestBackgroundSyncValue(
       all,
@@ -471,26 +447,19 @@ final class SyncConfigStore {
     String? scopeId,
   }) async {
     final all = await _loadConfigMap();
-    final scopedKey = _backgroundSyncScopedKey(
-      _kBackgroundSyncRepairRequiredPrefix,
-      backendType,
-      scopeId: scopeId,
-    );
+    if (scopeId != null && scopeId.trim().isNotEmpty) {
+      return all[_backgroundSyncScopedKey(
+            _kBackgroundSyncRepairRequiredPrefix,
+            backendType,
+            scopeId: scopeId,
+          )] ==
+          '1';
+    }
+
     final legacyKey = _backgroundSyncLegacyKey(
       _kBackgroundSyncRepairRequiredPrefix,
       backendType,
     );
-    if (scopeId != null && scopeId.trim().isNotEmpty) {
-      if (all[scopedKey] == '1') return true;
-      if (all[legacyKey] != '1') return false;
-      await _migrateLegacyBackgroundStateIfNeeded(
-        scopedKey: scopedKey,
-        legacyKey: legacyKey,
-        rawValue: all[legacyKey],
-      );
-      return true;
-    }
-
     final scopedPrefix = '$legacyKey:';
     if (all[legacyKey] == '1') return true;
     for (final entry in all.entries) {
@@ -640,18 +609,6 @@ final class SyncConfigStore {
       }
     }
     return best;
-  }
-
-  Future<void> _migrateLegacyBackgroundStateIfNeeded({
-    required String scopedKey,
-    required String legacyKey,
-    required String? rawValue,
-  }) async {
-    if (rawValue == null || rawValue.isEmpty || scopedKey == legacyKey) return;
-    await _writeConfigUpdates({
-      scopedKey: rawValue,
-      legacyKey: null,
-    });
   }
 
   String? _syncStateKey(String prefix, String? scopeId) {
