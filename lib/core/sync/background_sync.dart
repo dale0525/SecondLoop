@@ -21,6 +21,9 @@ import 'sync_engine.dart';
 import 'sync_http_error.dart';
 import 'sync_key_manager.dart';
 
+part 'background_sync_results.dart';
+part 'background_sync_scheduler.dart';
+
 const _kAppId = String.fromEnvironment(
   'SECONDLOOP_APP_ID',
   defaultValue: 'com.secondloop.secondloop',
@@ -972,81 +975,5 @@ final class BackgroundSync {
       fallbackPending: fallbackPending,
       getNetwork: getNetwork,
     );
-  }
-
-  static Future<void> _writeBackgroundResult({
-    required SyncConfigStore store,
-    required SyncBackendType backendType,
-    required String scopeId,
-    required SyncBackgroundDirection direction,
-    required _BackgroundSyncOpResult result,
-    required int? retryCount,
-  }) async {
-    final status = switch (result.status) {
-      _BackgroundOpStatus.success => SyncBackgroundResultStatus.success,
-      _BackgroundOpStatus.skipped => SyncBackgroundResultStatus.skipped,
-      _BackgroundOpStatus.failure => SyncBackgroundResultStatus.failure,
-    };
-    await store.writeBackgroundSyncResult(
-      SyncBackgroundResult(
-        backendType: backendType,
-        direction: direction,
-        status: status,
-        timestampMs: DateTime.now().millisecondsSinceEpoch,
-        statusCode: result.statusCode,
-        errorCode: result.errorCode,
-        errorMessage: result.errorMessage,
-        userMessage: result.userMessage,
-        retryCount: retryCount,
-        durationMs: result.durationMs,
-      ),
-      backendType: backendType,
-      scopeId: scopeId,
-    );
-  }
-}
-
-final class WorkmanagerBackgroundSyncScheduler
-    implements BackgroundSyncScheduler {
-  @override
-  Future<void> schedulePeriodicSync({required Duration frequency}) async {
-    try {
-      if (defaultTargetPlatform == TargetPlatform.iOS) {
-        await Workmanager()
-            .cancelByUniqueName(BackgroundSync.workmanagerUniqueName);
-        await Workmanager().registerOneOffTask(
-          BackgroundSync.workmanagerUniqueName,
-          BackgroundSync.workmanagerTaskName,
-          initialDelay: frequency,
-          existingWorkPolicy: ExistingWorkPolicy.replace,
-          constraints: Constraints(
-            networkType: NetworkType.connected,
-          ),
-        );
-        return;
-      }
-
-      await Workmanager().registerPeriodicTask(
-        BackgroundSync.workmanagerUniqueName,
-        BackgroundSync.workmanagerTaskName,
-        existingWorkPolicy: ExistingWorkPolicy.replace,
-        frequency: frequency,
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-        ),
-      );
-    } catch (_) {
-      return;
-    }
-  }
-
-  @override
-  Future<void> cancelPeriodicSync() async {
-    try {
-      await Workmanager()
-          .cancelByUniqueName(BackgroundSync.workmanagerUniqueName);
-    } catch (_) {
-      return;
-    }
   }
 }
