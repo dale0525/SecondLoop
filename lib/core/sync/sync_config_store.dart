@@ -329,9 +329,8 @@ final class SyncConfigStore {
   Future<bool> readCloudMediaBackupBackfillDone({
     required String scopeId,
   }) async {
-    final trimmedScope = scopeId.trim();
-    if (trimmedScope.isEmpty) return false;
-    final key = '$_kCloudMediaBackupBackfillDonePrefix$trimmedScope';
+    final key = _syncStateKey(_kCloudMediaBackupBackfillDonePrefix, scopeId);
+    if (key == null) return false;
     final v = (await _loadConfigMap())[key];
     return v == '1';
   }
@@ -340,18 +339,16 @@ final class SyncConfigStore {
     required String scopeId,
     required bool done,
   }) async {
-    final trimmedScope = scopeId.trim();
-    if (trimmedScope.isEmpty) return;
-    final key = '$_kCloudMediaBackupBackfillDonePrefix$trimmedScope';
+    final key = _syncStateKey(_kCloudMediaBackupBackfillDonePrefix, scopeId);
+    if (key == null) return;
     await _writeConfigUpdates({key: done ? '1' : null});
   }
 
   Future<bool> readManagedVaultMediaUploadPending({
     required String scopeId,
   }) async {
-    final trimmedScope = scopeId.trim();
-    if (trimmedScope.isEmpty) return false;
-    final key = '$_kManagedVaultMediaUploadPendingPrefix$trimmedScope';
+    final key = _syncStateKey(_kManagedVaultMediaUploadPendingPrefix, scopeId);
+    if (key == null) return false;
     final raw = (await _loadConfigMap())[key];
     return raw == '1';
   }
@@ -360,9 +357,8 @@ final class SyncConfigStore {
     required String scopeId,
     required bool pending,
   }) async {
-    final trimmedScope = scopeId.trim();
-    if (trimmedScope.isEmpty) return;
-    final key = '$_kManagedVaultMediaUploadPendingPrefix$trimmedScope';
+    final key = _syncStateKey(_kManagedVaultMediaUploadPendingPrefix, scopeId);
+    if (key == null) return;
     await _writeConfigUpdates({key: pending ? '1' : null});
   }
 
@@ -466,8 +462,8 @@ final class SyncConfigStore {
     await _writeConfigUpdates({key: required ? '1' : null});
   }
 
-  String backgroundSyncScopeId(SyncConfig config) {
-    return backgroundSyncScopeIdForFields(
+  String syncStateScopeId(SyncConfig config) {
+    return syncStateScopeIdForFields(
       backendType: config.backendType,
       baseUrl: config.baseUrl,
       localDir: config.localDir,
@@ -477,33 +473,13 @@ final class SyncConfigStore {
     );
   }
 
-  String backgroundSyncScopeIdForFields({
+  String syncStateScopeIdForFields({
     required SyncBackendType backendType,
     String? baseUrl,
     String? localDir,
     String? username,
     required String remoteRoot,
     Uint8List? syncKey,
-  }) {
-    return syncConfigScopeId(
-      backendType: backendType,
-      baseUrl: baseUrl,
-      localDir: localDir,
-      username: username,
-      remoteRoot: remoteRoot,
-      syncKey: syncKey,
-      includeIdentity: true,
-    );
-  }
-
-  String syncConfigScopeId({
-    required SyncBackendType backendType,
-    String? baseUrl,
-    String? localDir,
-    String? username,
-    required String remoteRoot,
-    Uint8List? syncKey,
-    bool includeIdentity = false,
   }) {
     final backend = switch (backendType) {
       SyncBackendType.webdav => 'webdav',
@@ -515,15 +491,11 @@ final class SyncConfigStore {
       backend,
       baseUrl?.trim() ?? '',
       localDir?.trim() ?? '',
-      includeIdentity ? username?.trim() ?? '' : '',
+      username?.trim() ?? '',
       remoteRoot.trim(),
-      includeIdentity ? _syncKeyFingerprint(syncKey) : '',
+      _syncKeyFingerprint(syncKey),
     ].join('|');
     return base64Url.encode(utf8.encode(raw));
-  }
-
-  String cloudMediaBackupBackfillScopeId(SyncConfig config) {
-    return backgroundSyncScopeId(config);
   }
 
   static String _syncKeyFingerprint(Uint8List? syncKey) {
@@ -550,12 +522,20 @@ final class SyncConfigStore {
     SyncBackendType backendType, {
     String? scopeId,
   }) {
-    final normalizedScope = scopeId?.trim();
     final backendKey = '$prefix${_backendTypeToken(backendType)}';
-    if (normalizedScope == null || normalizedScope.isEmpty) {
+    final stateKey = _syncStateKey('$backendKey:', scopeId);
+    if (stateKey == null) {
       return backendKey;
     }
-    return '$backendKey:$normalizedScope';
+    return stateKey;
+  }
+
+  String? _syncStateKey(String prefix, String? scopeId) {
+    final normalizedScope = scopeId?.trim();
+    if (normalizedScope == null || normalizedScope.isEmpty) {
+      return null;
+    }
+    return '$prefix$normalizedScope';
   }
 
   Future<SyncConfig?> loadConfiguredSync() async {

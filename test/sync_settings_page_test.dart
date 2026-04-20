@@ -1211,7 +1211,7 @@ void main() {
     await store.writeRemoteRoot('uid_1');
     await store.writeManagedVaultBaseUrl('https://vault.example.com');
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
-    final scopeId = store.backgroundSyncScopeIdForFields(
+    final scopeId = store.syncStateScopeIdForFields(
       backendType: SyncBackendType.managedVault,
       baseUrl: 'https://vault.example.com',
       remoteRoot: 'uid_1',

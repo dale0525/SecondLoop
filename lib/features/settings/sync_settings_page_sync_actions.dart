@@ -112,14 +112,29 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return int.tryParse(statusText);
   }
 
-  String? _currentBackgroundSyncScopeId() {
-    final remoteRoot = _requiredTrimmed(_remoteRootController);
+  Future<String?> _currentSyncStateScopeId({
+    required Uint8List? syncKey,
+  }) async {
+    final backendType = _effectiveBackendType;
+    final cloudUid = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
+    final remoteRoot = switch (backendType) {
+      SyncBackendType.managedVault =>
+        cloudUid == null || cloudUid.isEmpty ? '' : cloudUid,
+      _ => _requiredTrimmed(_remoteRootController),
+    };
     if (remoteRoot.isEmpty) return null;
-    return _store.syncConfigScopeId(
-      backendType: _effectiveBackendType,
-      baseUrl: _optionalTrimmed(_baseUrlController),
+    final baseUrl = switch (backendType) {
+      SyncBackendType.managedVault =>
+        (await _store.resolveManagedVaultBaseUrl())?.trim() ?? '',
+      _ => _optionalTrimmed(_baseUrlController),
+    };
+    return _store.syncStateScopeIdForFields(
+      backendType: backendType,
+      baseUrl: baseUrl,
       localDir: _optionalTrimmed(_localDirController),
+      username: _optionalTrimmed(_usernameController),
       remoteRoot: remoteRoot,
+      syncKey: syncKey,
     );
   }
 
@@ -127,6 +142,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     required SyncBackgroundDirection direction,
     required SyncBackgroundResultStatus status,
     required int durationMs,
+    required String? scopeId,
     int? statusCode,
     String? errorMessage,
     String? userMessage,
@@ -146,7 +162,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           durationMs: durationMs,
         ),
         backendType: _effectiveBackendType,
-        scopeId: _currentBackgroundSyncScopeId(),
+        scopeId: scopeId,
       );
     } catch (_) {
       // Diagnostics persistence is best-effort and should never block sync UX.
@@ -640,6 +656,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
     final t = context.t;
     final stopwatch = Stopwatch()..start();
+    String? stateScopeId;
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
@@ -654,6 +671,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
               ? await _loadOrCreateSyncKey()
               : await _deriveManagedVaultSyncKey(backend))
           : await _loadOrCreateSyncKey();
+      stateScopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 
       var pushed = 0;
       var recoveredOnly = false;
@@ -734,6 +752,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             ? SyncBackgroundResultStatus.skipped
             : SyncBackgroundResultStatus.success,
         durationMs: stopwatch.elapsedMilliseconds,
+        scopeId: stateScopeId,
         userMessage: successMessage,
       );
       _showSnack(successMessage);
@@ -744,6 +763,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         direction: SyncBackgroundDirection.push,
         status: SyncBackgroundResultStatus.failure,
         durationMs: stopwatch.elapsedMilliseconds,
+        scopeId: stateScopeId,
         statusCode: _extractHttpStatusCode(e),
         errorMessage: errorMessage,
         userMessage: failedMessage,
@@ -765,6 +785,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     final t = context.t;
     final stopwatch = Stopwatch()..start();
     final engine = SyncEngineScope.maybeOf(context);
+    String? stateScopeId;
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
@@ -778,6 +799,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
               ? await _loadOrCreateSyncKey()
               : await _deriveManagedVaultSyncKey(backend))
           : await _loadOrCreateSyncKey();
+      stateScopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 
       var pulled = 0;
       await _runSaveSyncWithProgress(
@@ -863,6 +885,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         direction: SyncBackgroundDirection.pull,
         status: SyncBackgroundResultStatus.success,
         durationMs: stopwatch.elapsedMilliseconds,
+        scopeId: stateScopeId,
         userMessage: successMessage,
       );
       _showSnack(successMessage);
@@ -881,6 +904,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         direction: SyncBackgroundDirection.pull,
         status: SyncBackgroundResultStatus.failure,
         durationMs: stopwatch.elapsedMilliseconds,
+        scopeId: stateScopeId,
         statusCode: _extractHttpStatusCode(e),
         errorMessage: errorMessage,
         userMessage: failedMessage,

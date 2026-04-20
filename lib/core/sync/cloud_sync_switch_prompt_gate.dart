@@ -173,7 +173,7 @@ final class _CloudSyncSwitchPromptGateState
     required String vaultId,
     required Uint8List syncKey,
   }) async {
-    final scopeId = _store.backgroundSyncScopeIdForFields(
+    final scopeId = _store.syncStateScopeIdForFields(
       backendType: SyncBackendType.managedVault,
       baseUrl: baseUrl,
       remoteRoot: vaultId,
@@ -201,7 +201,7 @@ final class _CloudSyncSwitchPromptGateState
     return _store.writeBackgroundSyncRepairRequired(
       gate?.kind == SyncWriteGateKind.localRepairRequired,
       backendType: SyncBackendType.managedVault,
-      scopeId: _store.backgroundSyncScopeIdForFields(
+      scopeId: _store.syncStateScopeIdForFields(
         backendType: SyncBackendType.managedVault,
         baseUrl: baseUrl,
         remoteRoot: vaultId,

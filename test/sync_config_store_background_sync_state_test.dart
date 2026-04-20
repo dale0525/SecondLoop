@@ -57,8 +57,8 @@ void main() {
       vaultId: 'vault-b',
       baseUrl: 'https://vault-b.example.com',
     );
-    final scopeA = store.backgroundSyncScopeId(configA);
-    final scopeB = store.backgroundSyncScopeId(configB);
+    final scopeA = store.syncStateScopeId(configA);
+    final scopeB = store.syncStateScopeId(configB);
 
     const result = SyncBackgroundResult(
       backendType: SyncBackendType.managedVault,
@@ -179,8 +179,8 @@ void main() {
       vaultId: 'vault-b',
       baseUrl: 'https://vault-b.example.com',
     );
-    final scopeA = store.backgroundSyncScopeId(configA);
-    final scopeB = store.backgroundSyncScopeId(configB);
+    final scopeA = store.syncStateScopeId(configA);
+    final scopeB = store.syncStateScopeId(configB);
 
     await store.writeBackgroundSyncBackoffState(
       const SyncBackgroundBackoffState(
@@ -249,8 +249,10 @@ void main() {
       password: 'pw-b',
     );
 
-    expect(store.backgroundSyncScopeId(configA),
-        isNot(store.backgroundSyncScopeId(configB)));
+    expect(
+      store.syncStateScopeId(configA),
+      isNot(store.syncStateScopeId(configB)),
+    );
   });
 
   test('SyncConfigStore differentiates managed-vault scope by sync key',
@@ -268,7 +270,9 @@ void main() {
       baseUrl: 'https://vault.example.com',
     );
 
-    expect(store.backgroundSyncScopeId(configA),
-        isNot(store.backgroundSyncScopeId(configB)));
+    expect(
+      store.syncStateScopeId(configA),
+      isNot(store.syncStateScopeId(configB)),
+    );
   });
 }

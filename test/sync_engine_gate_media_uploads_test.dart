@@ -275,7 +275,7 @@ void main() {
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
     await store.writeCloudMediaBackupEnabled(true);
     await store.writeCloudMediaBackupWifiOnly(true);
-    final scopeId = store.backgroundSyncScopeIdForFields(
+    final scopeId = store.syncStateScopeIdForFields(
       backendType: SyncBackendType.managedVault,
       baseUrl: 'https://vault.example.com',
       remoteRoot: 'vault-1',
@@ -486,7 +486,7 @@ void main() {
       expect(
         await store.readBackgroundSyncRepairRequired(
           backendType: SyncBackendType.managedVault,
-          scopeId: store.backgroundSyncScopeIdForFields(
+          scopeId: store.syncStateScopeIdForFields(
             backendType: SyncBackendType.managedVault,
             baseUrl: 'https://vault.example.com',
             remoteRoot: 'vault-1',
@@ -514,7 +514,7 @@ void main() {
     await store.writeBackgroundSyncRepairRequired(
       true,
       backendType: SyncBackendType.managedVault,
-      scopeId: store.backgroundSyncScopeId(
+      scopeId: store.syncStateScopeId(
         SyncConfig.managedVault(
           syncKey: syncKey,
           vaultId: 'vault-1',
@@ -576,7 +576,7 @@ void main() {
     await store.writeSyncKey(syncKey);
     await store.writeCloudMediaBackupEnabled(true);
     await store.writeCloudMediaBackupWifiOnly(true);
-    final pendingScopeId = store.cloudMediaBackupBackfillScopeId(
+    final pendingScopeId = store.syncStateScopeId(
       SyncConfig.managedVault(
         syncKey: syncKey,
         vaultId: 'vault-1',
@@ -656,6 +656,122 @@ void main() {
       expect(backend.managedVaultPullCalls, greaterThanOrEqualTo(2));
       expect(backend.managedVaultUploadAttachmentCalls, 2);
       expect(backend.markUploadedCalls, 1);
+      expect(
+        await store.readManagedVaultMediaUploadPending(scopeId: pendingScopeId),
+        isFalse,
+      );
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
+  testWidgets(
+      'Managed-vault media uploads remain pending while media backup is disabled',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(syncKey);
+    await store.writeCloudMediaBackupEnabled(true);
+    await store.writeCloudMediaBackupWifiOnly(true);
+    final pendingScopeId = store.syncStateScopeId(
+      SyncConfig.managedVault(
+        syncKey: syncKey,
+        vaultId: 'vault-1',
+        baseUrl: 'https://vault.example.com',
+      ),
+    );
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultRetryingUploadBackend(
+        dueBackups: [
+          const CloudMediaBackup(
+            attachmentSha256: 'a',
+            desiredVariant: 'original',
+            byteLen: 0,
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            updatedAtMs: 0,
+          ),
+        ],
+      );
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultUploadAttachmentCalls < 1 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(
+        await store.readManagedVaultMediaUploadPending(scopeId: pendingScopeId),
+        isTrue,
+      );
+
+      await store.writeCloudMediaBackupEnabled(false);
+      engine!.triggerPullNow();
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultPullCalls < 2 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultUploadAttachmentCalls, 1);
+      expect(
+        await store.readManagedVaultMediaUploadPending(scopeId: pendingScopeId),
+        isTrue,
+      );
+
+      await store.writeCloudMediaBackupEnabled(true);
+      engine!.triggerPullNow();
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultUploadAttachmentCalls < 2 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultUploadAttachmentCalls, 2);
       expect(
         await store.readManagedVaultMediaUploadPending(scopeId: pendingScopeId),
         isFalse,

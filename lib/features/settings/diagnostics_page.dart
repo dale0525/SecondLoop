@@ -77,7 +77,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     SyncBackgroundResult? latestSyncLog;
     final activeConfig = await store.loadConfiguredSync();
     final activeScopeId =
-        activeConfig == null ? null : store.backgroundSyncScopeId(activeConfig);
+        activeConfig == null ? null : store.syncStateScopeId(activeConfig);
 
     for (final backendType in SyncBackendType.values) {
       final token = _backendTypeToken(backendType);

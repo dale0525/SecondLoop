@@ -290,6 +290,14 @@ fn pending_local_media_upload_repairs(
     Ok(repairs)
 }
 
+pub(super) fn has_pending_local_media_upload_repairs(
+    conn: &Connection,
+    scope_id: &str,
+) -> Result<bool> {
+    let repairs = pending_local_media_upload_repairs(conn, scope_id)?;
+    Ok(repairs.attachments || repairs.artifacts)
+}
+
 fn update_v2_pull_backfill_markers(
     conn: &Connection,
     db_key: &[u8; 32],

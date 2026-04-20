@@ -123,10 +123,11 @@ void main() {
         durationMs: 520,
       ),
       backendType: SyncBackendType.managedVault,
-      scopeId: store.syncConfigScopeId(
+      scopeId: store.syncStateScopeIdForFields(
         backendType: SyncBackendType.managedVault,
         baseUrl: 'https://vault.example.com',
         remoteRoot: 'vault-user-1',
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
       ),
     );
 

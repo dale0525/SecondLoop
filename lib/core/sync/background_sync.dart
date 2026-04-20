@@ -183,7 +183,7 @@ final class BackgroundSync {
       await rescheduleIfNeeded();
       return true;
     }
-    final backgroundScopeId = store.backgroundSyncScopeId(config);
+    final backgroundScopeId = store.syncStateScopeId(config);
 
     final backgroundDiagEnabled = await store.readSyncBackgroundDiagV1Enabled();
     final backoffEnabled = await store.readSyncBackoffV1Enabled();

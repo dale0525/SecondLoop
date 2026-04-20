@@ -460,6 +460,11 @@ fn rebuild_local_vault_if_safe(
             "managed-vault v2 recovery blocked: local_media_backfill_pending"
         ));
     }
+    if super::has_pending_local_media_upload_repairs(conn, scope_id)? {
+        return Err(anyhow!(
+            "managed-vault v2 recovery blocked: local_media_backfill_pending"
+        ));
+    }
     if has_local_unpushed_changes(conn, scope_id)? {
         return Err(anyhow!(
             "managed-vault v2 recovery blocked: local_unpushed_changes"
