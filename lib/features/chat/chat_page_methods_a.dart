@@ -892,6 +892,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final todoId = 'todo:${message.id}';
 
     final locale = Localizations.localeOf(context);
+    final firstDayOfWeekIndex =
+        MaterialLocalizations.of(context).firstDayOfWeekIndex;
     final settings = await ActionsSettingsStore.load();
     if (!mounted) return;
 
@@ -901,6 +903,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       nowLocal,
       locale: locale,
       dayEndMinutes: settings.dayEndMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
 
     DateTime? dueAtLocal;

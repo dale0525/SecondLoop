@@ -21,6 +21,10 @@ import '../../src/rust/api/external_import.dart' as rust_external_import;
 import '../../src/rust/api/migration_archive.dart' as rust_migration_archive;
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/api/detached_ask.dart' as rust_detached_ask;
+import '../../src/rust/api/semantic_parse_enhancement.dart'
+    as rust_semantic_parse_enhancement;
+import '../../src/rust/api/semantic_parse_jobs.dart'
+    as rust_semantic_parse_jobs;
 import '../../src/rust/api/todo_followup_generation.dart'
     as rust_todo_followup_generation;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
@@ -32,6 +36,7 @@ import '../../src/rust/semantic_parse.dart';
 import 'app_backend.dart';
 import 'attachments_backend.dart';
 import 'semantic_parse_attempt_aware_backend.dart';
+import 'semantic_parse_enhancement_backend.dart';
 import 'rust_external_library_resolver.dart';
 import 'serialized_rust_handler.dart';
 

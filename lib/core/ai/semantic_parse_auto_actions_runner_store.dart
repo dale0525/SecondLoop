@@ -599,36 +599,44 @@ final class BackendSemanticParseAutoActionsStore
     required int expectedAttemptId,
     required String todoId,
     String? todoTitle,
-    required String newStatus,
+    String? newStatus,
+    int? dueAtMs,
     List<String>? pendingSuggestedTags,
     List<String>? autoApplySuggestedTags,
     double? suggestedTagConfidence,
     required int nowMs,
   }) async {
-    if (_backend is SemanticParseAttemptAwareBackend) {
-      final awareBackend = _backend as SemanticParseAttemptAwareBackend;
-      return awareBackend.completeSemanticParseFollowupIfCurrentAttempt(
-        _sessionKey,
+    if (_backend is! SemanticParseAttemptAwareBackend) {
+      if (!await _hasCurrentRunningAttempt(
         messageId: messageId,
         expectedAttemptId: expectedAttemptId,
-        todoId: todoId,
-        todoTitle: todoTitle,
-        newStatus: newStatus,
-        pendingSuggestedTags: pendingSuggestedTags,
-        autoApplySuggestedTags: autoApplySuggestedTags,
-        suggestedTagConfidence: suggestedTagConfidence,
-        nowMs: nowMs,
+      )) {
+        return false;
+      }
+      _throwNonAtomicAttemptAwareMutation(
+        'completeFollowupIfCurrentAttempt',
       );
     }
 
-    if (!await _hasCurrentRunningAttempt(
+    final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+    final normalizedStatus = switch (newStatus?.trim()) {
+      final String value when value.isNotEmpty => value,
+      _ => null,
+    };
+
+    return awareBackend.completeSemanticParseFollowupIfCurrentAttempt(
+      _sessionKey,
       messageId: messageId,
       expectedAttemptId: expectedAttemptId,
-    )) {
-      return false;
-    }
-
-    _throwNonAtomicAttemptAwareMutation('completeFollowupIfCurrentAttempt');
+      todoId: todoId,
+      todoTitle: todoTitle,
+      newStatus: normalizedStatus,
+      dueAtMs: dueAtMs,
+      pendingSuggestedTags: pendingSuggestedTags,
+      autoApplySuggestedTags: autoApplySuggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      nowMs: nowMs,
+    );
   }
 
   @override

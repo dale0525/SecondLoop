@@ -6,6 +6,8 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     if (!mounted) return;
 
     final locale = Localizations.localeOf(context);
+    final firstDayOfWeekIndex =
+        MaterialLocalizations.of(context).firstDayOfWeekIndex;
     final trimmedText = rawText.trim();
     final forceTodoSelectionPrompt =
         _looksLikeBareTodoStatusUpdate(trimmedText);
@@ -32,6 +34,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       nowLocal,
       locale: locale,
       dayEndMinutes: settings.dayEndMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
     final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(rawText);
     final targets = <TodoLinkTarget>[];
@@ -78,8 +81,6 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     }
 
     if (!mounted) return;
-    final firstDayOfWeekIndex =
-        MaterialLocalizations.of(context).firstDayOfWeekIndex;
     final looksLikeLongFormNote = isLongTextForTodoAutomation(trimmedText);
     final looksLikeTodoRelevant = _looksLikeTodoRelevantForAi(trimmedText);
 
@@ -147,16 +148,24 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     }
 
     switch (decision) {
-      case MessageActionFollowUpDecision(:final todoId, :final newStatus):
+      case MessageActionFollowUpDecision(
+          :final todoId,
+          :final newStatus,
+          :final dueAtLocal,
+        ):
         final selected = todosById[todoId];
         if (selected == null) return;
 
         final previousStatus = selected.status;
+        final previousDueAtMs = selected.dueAtMs?.toInt();
+        final didUpdateDue = dueAtLocal != null;
+        final didUpdateStatus = newStatus != null;
         try {
-          await backend.setTodoStatus(
+          await backend.transitionTodo(
             sessionKey,
             todoId: selected.id,
             newStatus: newStatus,
+            dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
             sourceMessageId: message.id,
           );
           syncEngine?.notifyLocalMutation();
@@ -194,9 +203,23 @@ extension _ChatPageStateMethodsC on _ChatPageState {
         if (!mounted) return;
         _refresh();
 
-        final snackText = context.t.actions.todoLink.updated(
+        final snackText = buildFollowupUpdateFeedbackText(
           title: selected.title,
-          status: _todoStatusLabel(context, newStatus),
+          didUpdateStatus: didUpdateStatus,
+          didUpdateDue: didUpdateDue,
+          statusLabel: _todoStatusLabel(context, newStatus ?? selected.status),
+          updatedStatusBuilder: ({
+            required String title,
+            required String status,
+          }) =>
+              context.t.actions.todoLink.updated(
+            title: title,
+            status: status,
+          ),
+          updatedDueBuilder: ({required String title}) =>
+              context.t.actions.todoLink.updatedDue(title: title),
+          updatedStatusAndDueBuilder: ({required String title}) =>
+              context.t.actions.todoLink.updatedStatusAndDue(title: title),
         );
         _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
@@ -206,10 +229,27 @@ extension _ChatPageStateMethodsC on _ChatPageState {
               label: context.t.common.actions.undo,
               onPressed: () async {
                 try {
-                  await backend.setTodoStatus(
+                  if (!didUpdateDue && !didUpdateStatus) {
+                    return;
+                  }
+                  final todos = await backend.listTodos(sessionKey);
+                  Todo? current;
+                  for (final todo in todos) {
+                    if (todo.id == selected.id) {
+                      current = todo;
+                      break;
+                    }
+                  }
+                  if (current == null) {
+                    return;
+                  }
+                  await backend.transitionTodo(
                     sessionKey,
-                    todoId: selected.id,
-                    newStatus: previousStatus,
+                    todoId: current.id,
+                    dueAtMs: didUpdateDue ? previousDueAtMs : null,
+                    clearDueAtMs: didUpdateDue && previousDueAtMs == null,
+                    newStatus: didUpdateStatus ? previousStatus : null,
+                    sourceMessageId: message.id,
                   );
                   syncEngine?.notifyLocalMutation();
                 } catch (_) {

@@ -683,6 +683,35 @@ ALTER TABLE knowledge_pages
     Ok(())
 }
 
+fn migrate_from_v48_to_v49(conn: &Connection) -> Result<()> {
+    if !table_has_column(
+        conn,
+        "semantic_parse_jobs",
+        "applied_prev_todo_due_at_ms",
+    )? {
+        execute_batch_allowing_duplicate_columns(
+            conn,
+            r#"
+ALTER TABLE semantic_parse_jobs
+  ADD COLUMN applied_prev_todo_due_at_ms INTEGER;
+"#,
+        )?;
+    }
+
+    if !table_has_column(conn, "semantic_parse_jobs", "applied_due_changed")? {
+        execute_batch_allowing_duplicate_columns(
+            conn,
+            r#"
+ALTER TABLE semantic_parse_jobs
+  ADD COLUMN applied_due_changed INTEGER NOT NULL DEFAULT 0;
+"#,
+        )?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 49;")?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -892,6 +921,44 @@ CREATE TABLE knowledge_pages (
             .collect::<std::result::Result<Vec<_>, _>>()
             .expect("collect column names");
         assert!(column_names.contains(&"state_before_answer_muted".to_string()));
+    }
+
+    #[test]
+    fn v49_semantic_parse_jobs_migration_adds_due_undo_columns() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE semantic_parse_jobs (
+  message_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  attempt_id INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at_ms INTEGER,
+  last_error TEXT,
+  applied_action_kind TEXT,
+  applied_todo_id TEXT,
+  applied_todo_title BLOB,
+  applied_prev_todo_status TEXT,
+  undone_at_ms INTEGER,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+"#,
+        )
+        .expect("seed pre-v49 semantic_parse_jobs");
+
+        migrate_from_v48_to_v49(&conn).expect("rerun v49 migration");
+
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(semantic_parse_jobs)")
+            .expect("prepare table info");
+        let column_names = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query table info")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect column names");
+        assert!(column_names.contains(&"applied_prev_todo_due_at_ms".to_string()));
+        assert!(column_names.contains(&"applied_due_changed".to_string()));
     }
 }
 

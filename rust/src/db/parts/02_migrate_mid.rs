@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS semantic_parse_jobs (
   applied_todo_id TEXT,
   applied_todo_title BLOB,
   applied_prev_todo_status TEXT,
+  applied_prev_todo_due_at_ms INTEGER,
+  applied_due_changed INTEGER NOT NULL DEFAULT 0,
   undone_at_ms INTEGER,
   created_at_ms INTEGER NOT NULL,
   updated_at_ms INTEGER NOT NULL

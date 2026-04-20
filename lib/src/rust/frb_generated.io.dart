@@ -16,6 +16,8 @@ import 'api/external_import.dart';
 import 'api/media_annotation.dart';
 import 'api/migration_archive.dart';
 import 'api/oplog_maintenance.dart';
+import 'api/semantic_parse_enhancement.dart';
+import 'api/semantic_parse_jobs.dart';
 import 'api/simple.dart';
 import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';

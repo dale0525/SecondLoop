@@ -128,6 +128,11 @@ fn apply_recent_main_db_migrations(conn: &Connection, mut user_version: i64) -> 
         user_version = 48;
     }
 
+    if user_version < 49 {
+        migrate_from_v48_to_v49(conn)?;
+        user_version = 49;
+    }
+
     Ok(user_version)
 }
 

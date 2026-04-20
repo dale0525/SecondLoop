@@ -23,6 +23,7 @@ void main() {
     final follow = decision as MessageActionFollowUpDecision;
     expect(follow.todoId, 'todo:1');
     expect(follow.newStatus, 'done');
+    expect(follow.dueAtLocal, isNull);
   });
 
   test('does not treat "今天把 X 做完了" as create just because of today', () {
@@ -70,6 +71,298 @@ void main() {
     expect(create.title, '提交材料');
     expect(create.status, 'open');
     expect(create.dueAtLocal, DateTime(2026, 1, 25, 15, 0));
+  });
+
+  test('followup can extract due update without forcing a status change', () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      '把报销改到年初一之后第一个工作日',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: '报销', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionFollowUpDecision>());
+    final follow = decision as MessageActionFollowUpDecision;
+    expect(follow.todoId, 'todo:1');
+    expect(follow.newStatus, isNull);
+    expect(follow.dueAtLocal, isNotNull);
+  });
+
+  test('followup can combine explicit status and due update in one decision',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      '把报销完成并改到明天',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: '报销', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionFollowUpDecision>());
+    final follow = decision as MessageActionFollowUpDecision;
+    expect(follow.todoId, 'todo:1');
+    expect(follow.newStatus, 'done');
+    expect(follow.dueAtLocal, DateTime(2026, 2, 5, 21, 0));
+  });
+
+  test(
+      'holiday due phrases keep the task title instead of stripping the whole message',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      '节后第一个工作日处理报销',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, '处理报销');
+    expect(create.dueAtLocal, DateTime(2026, 2, 24, 21, 0));
+  });
+
+  test('fullwidth date phrases are stripped from create titles', () {
+    final now = DateTime(2026, 2, 1, 10, 0);
+    final cases =
+        <({String text, DateTime expectedDueAt, String expectedTitle})>[
+      (
+        text: '２／４ 14:30 提交材料',
+        expectedDueAt: DateTime(2026, 2, 4, 14, 30),
+        expectedTitle: '提交材料',
+      ),
+      (
+        text: '２月１号下午3点提交材料',
+        expectedDueAt: DateTime(2026, 2, 1, 15, 0),
+        expectedTitle: '提交材料',
+      ),
+    ];
+
+    for (final sample in cases) {
+      final decision = MessageActionResolver.resolve(
+        sample.text,
+        locale: const Locale('zh', 'CN'),
+        nowLocal: now,
+        dayEndMinutes: 21 * 60,
+        openTodoTargets: const <TodoLinkTarget>[],
+      );
+
+      expect(decision, isA<MessageActionCreateDecision>(), reason: sample.text);
+      final create = decision as MessageActionCreateDecision;
+      expect(create.title, sample.expectedTitle, reason: sample.text);
+      expect(create.dueAtLocal, sample.expectedDueAt, reason: sample.text);
+    }
+  });
+
+  test('localized followup reschedule cues do not regress to create', () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final cases = <({String text, Locale locale, DateTime expectedDueAt})>[
+      (
+        text: 'déplacer remboursement à mardi',
+        locale: const Locale('fr'),
+        expectedDueAt: DateTime(2026, 2, 10, 21, 0),
+      ),
+      (
+        text: 'verschieben erstattung auf freitag',
+        locale: const Locale('de'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '経費精算を金曜日に変更',
+        locale: const Locale('ja'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '환급을 금요일로 변경',
+        locale: const Locale('ko'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+    ];
+
+    for (final c in cases) {
+      final decision = MessageActionResolver.resolve(
+        c.text,
+        locale: c.locale,
+        nowLocal: now,
+        dayEndMinutes: 21 * 60,
+        openTodoTargets: const <TodoLinkTarget>[
+          TodoLinkTarget(id: 'todo:1', title: 'remboursement', status: 'open'),
+          TodoLinkTarget(id: 'todo:2', title: 'erstattung', status: 'open'),
+          TodoLinkTarget(id: 'todo:3', title: '経費精算', status: 'open'),
+          TodoLinkTarget(id: 'todo:4', title: '환급', status: 'open'),
+        ],
+      );
+
+      expect(
+        decision,
+        isA<MessageActionFollowUpDecision>(),
+        reason: 'locale=${c.locale} text=${c.text}',
+      );
+      final follow = decision as MessageActionFollowUpDecision;
+      expect(follow.newStatus, isNull,
+          reason: 'locale=${c.locale} text=${c.text}');
+      expect(follow.dueAtLocal, c.expectedDueAt,
+          reason: 'locale=${c.locale} text=${c.text}');
+    }
+  });
+
+  test('time plus matching title does not force followup without edit cue', () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      '周五报销',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: '报销', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, '报销');
+    expect(create.dueAtLocal, DateTime(2026, 2, 6, 21, 0));
+  });
+
+  test(
+      'deictic followup edit does not create todo when no candidate is available',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      'move this to tomorrow',
+      locale: const Locale('en', 'US'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionNoneDecision>());
+  });
+
+  test(
+      'generic english change phrasing still allows create when no todo matches',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      'change travel booking to Friday',
+      locale: const Locale('en', 'US'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: 'expense report', status: 'open'),
+        TodoLinkTarget(id: 'todo:2', title: 'call Alice', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, 'change travel booking');
+    expect(create.dueAtLocal, DateTime(2026, 2, 6, 21, 0));
+  });
+
+  test('create titles keep leading action verbs when no todo matches', () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      'change oil tomorrow',
+      locale: const Locale('en', 'US'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: 'expense report', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, 'change oil');
+    expect(create.dueAtLocal, DateTime(2026, 2, 5, 21, 0));
+  });
+
+  test('next-week weekday create keeps correct due date and clean title', () {
+    final now = DateTime(2026, 2, 2, 10, 0); // Monday
+    final decision = MessageActionResolver.resolve(
+      '下周二报销',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, '报销');
+    expect(create.dueAtLocal, DateTime(2026, 2, 10, 21, 0));
+  });
+
+  test(
+      'followup keeps day-after-tomorrow semantics for localized relative days',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final cases = <({String text, Locale locale, DateTime expectedDueAt})>[
+      (
+        text: '把报销改到übermorgen',
+        locale: const Locale('de'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '把报销改到après-demain',
+        locale: const Locale('fr'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '把报销改到明後日',
+        locale: const Locale('ja'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '把报销改到모레',
+        locale: const Locale('ko'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+      (
+        text: '把报销改到mardi',
+        locale: const Locale('fr'),
+        expectedDueAt: DateTime(2026, 2, 10, 21, 0),
+      ),
+      (
+        text: '把报销改到금요일',
+        locale: const Locale('ko'),
+        expectedDueAt: DateTime(2026, 2, 6, 21, 0),
+      ),
+    ];
+
+    for (final c in cases) {
+      final decision = MessageActionResolver.resolve(
+        c.text,
+        locale: c.locale,
+        nowLocal: now,
+        dayEndMinutes: 21 * 60,
+        openTodoTargets: const <TodoLinkTarget>[
+          TodoLinkTarget(id: 'todo:1', title: '报销', status: 'open'),
+        ],
+      );
+
+      expect(
+        decision,
+        isA<MessageActionFollowUpDecision>(),
+        reason: 'locale=${c.locale} text=${c.text}',
+      );
+      final follow = decision as MessageActionFollowUpDecision;
+      expect(follow.todoId, 'todo:1',
+          reason: 'locale=${c.locale} text=${c.text}');
+      expect(follow.newStatus, isNull,
+          reason: 'locale=${c.locale} text=${c.text}');
+      expect(follow.dueAtLocal, c.expectedDueAt,
+          reason: 'locale=${c.locale} text=${c.text}');
+    }
   });
 
   test('does not create todo from long-form note with schedule text', () {

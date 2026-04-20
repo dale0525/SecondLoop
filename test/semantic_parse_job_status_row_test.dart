@@ -240,6 +240,67 @@ void main() {
     expect(find.text('AI analysis canceled'), findsNothing);
     expect(find.text('Retry'), findsNothing);
   });
+
+  testWidgets('undo restores due-only followup updates',
+      (WidgetTester tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _RecordingBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'todo:1',
+          title: '报销',
+          dueAtMs: PlatformInt64Util.from(1730),
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: PlatformInt64Util.from(0),
+          updatedAtMs: PlatformInt64Util.from(0),
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualImportanceNudgeScore: null,
+          manualUrgencyNudgeScore: null,
+        ),
+      ],
+    );
+    final job = SemanticParseJob(
+      messageId: message.id,
+      status: 'succeeded',
+      attemptId: PlatformInt64Util.from(0),
+      attempts: PlatformInt64Util.from(0),
+      nextRetryAtMs: null,
+      lastError: null,
+      appliedActionKind: 'followup',
+      appliedTodoId: 'todo:1',
+      appliedTodoTitle: '报销',
+      appliedPrevTodoStatus: null,
+      appliedPrevTodoDueAtMs: PlatformInt64Util.from(1200),
+      appliedDueChanged: true,
+      suggestedTags: null,
+      suggestedTagConfidence: null,
+      tagSuggestionState: null,
+      appliedTagIds: null,
+      undoneAtMs: null,
+      createdAtMs: PlatformInt64Util.from(nowMs),
+      updatedAtMs: PlatformInt64Util.from(nowMs),
+    );
+
+    await tester.pumpWidget(
+      _buildHost(
+        message: message,
+        job: job,
+        backend: backend,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Undo'));
+    await tester.pump();
+
+    expect(backend.lastTransitionTodoId, 'todo:1');
+    expect(backend.lastTransitionTodoDueAtMs, 1200);
+    expect(backend.lastTransitionTodoStatus, isNull);
+    expect(backend.lastUndoneMessageId, 'm1');
+  });
 }
 
 Widget _buildHost({
@@ -269,9 +330,18 @@ Widget _buildHost({
 }
 
 final class _RecordingBackend extends TestAppBackend {
+  _RecordingBackend({
+    List<Todo> todos = const <Todo>[],
+  }) : _todos = List<Todo>.from(todos);
+
+  final List<Todo> _todos;
   String? lastTagSuggestionState;
   List<String>? lastSuggestedTags;
   String? lastCanceledMessageId;
+  String? lastUndoneMessageId;
+  String? lastTransitionTodoId;
+  int? lastTransitionTodoDueAtMs;
+  String? lastTransitionTodoStatus;
 
   @override
   Future<void> markSemanticParseJobCanceled(
@@ -298,5 +368,91 @@ final class _RecordingBackend extends TestAppBackend {
   }) async {
     lastTagSuggestionState = tagSuggestionState;
     lastSuggestedTags = suggestedTags;
+  }
+
+  @override
+  Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
+
+  @override
+  Future<Todo> upsertTodo(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
+  }) async {
+    throw StateError('undo_should_use_transition_todo');
+  }
+
+  @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
+    String? sourceMessageId,
+  }) async {
+    lastTransitionTodoId = todoId;
+    lastTransitionTodoDueAtMs = clearDueAtMs ? null : dueAtMs;
+    lastTransitionTodoStatus = newStatus;
+    Todo? current;
+    for (final todo in _todos) {
+      if (todo.id == todoId) {
+        current = todo;
+        break;
+      }
+    }
+    if (current == null) {
+      throw StateError('todo not found: $todoId');
+    }
+    return Todo(
+      id: current.id,
+      title: current.title,
+      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
+      status: newStatus ?? current.status,
+      sourceEntryId: current.sourceEntryId,
+      createdAtMs: PlatformInt64Util.from(0),
+      updatedAtMs: PlatformInt64Util.from(0),
+      reviewStage:
+          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
+      nextReviewAtMs: nextReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(nextReviewAtMs),
+      lastReviewAtMs: lastReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(lastReviewAtMs),
+      manualImportanceNudgeScore: manualImportanceNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualImportanceNudgeScore),
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualUrgencyNudgeScore),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobUndone(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    lastUndoneMessageId = messageId;
   }
 }

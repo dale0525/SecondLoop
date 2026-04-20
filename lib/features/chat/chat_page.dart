@@ -109,6 +109,7 @@ import 'chat_answer_evidence_parser.dart';
 import 'chat_assistant_message_footer.dart';
 import 'chat_composer_inline_button.dart';
 import 'chat_attachment_send_failure_chip.dart';
+import 'followup_update_feedback.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'chat_markdown_editor_launcher.dart';
 import 'chat_markdown_preview.dart';

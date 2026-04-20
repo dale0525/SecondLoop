@@ -16,6 +16,8 @@ import 'api/external_import.dart';
 import 'api/media_annotation.dart';
 import 'api/migration_archive.dart';
 import 'api/oplog_maintenance.dart';
+import 'api/semantic_parse_enhancement.dart';
+import 'api/semantic_parse_jobs.dart';
 import 'api/simple.dart';
 import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';
@@ -77,7 +79,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => 391803416;
+  int get rustContentHash => -238819800;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1566,6 +1568,49 @@ abstract class RustLibApi extends BaseApi {
       required List<int> key,
       required OplogMaintenanceBackend backend,
       required String scopeId});
+
+  Future<String>
+      crateApiSemanticParseEnhancementAiSemanticParseMessageActionEnhancement(
+          {required String appDir,
+          required List<int> key,
+          required String text,
+          required String nowLocalIso,
+          required String locale,
+          required int dayEndMinutes,
+          required String localResultJson,
+          required List<String> unresolvedFields,
+          required List<TodoCandidate> candidates,
+          required String localDay});
+
+  Future<String>
+      crateApiSemanticParseEnhancementAiSemanticParseMessageActionEnhancementCloudGateway(
+          {required String appDir,
+          required List<int> key,
+          required String text,
+          required String nowLocalIso,
+          required String locale,
+          required int dayEndMinutes,
+          required String localResultJson,
+          required List<String> unresolvedFields,
+          required List<TodoCandidate> candidates,
+          required String gatewayBaseUrl,
+          required String firebaseIdToken,
+          required String modelName});
+
+  Future<bool>
+      crateApiSemanticParseJobsDbCompleteSemanticParseFollowupIfCurrentAttempt(
+          {required String appDir,
+          required List<int> key,
+          required String messageId,
+          required PlatformInt64 expectedAttemptId,
+          required String todoId,
+          String? todoTitle,
+          String? newStatus,
+          PlatformInt64? dueAtMs,
+          List<String>? pendingSuggestedTags,
+          List<String>? autoApplySuggestedTags,
+          double? suggestedTagConfidence,
+          required PlatformInt64 nowMs});
 
   String crateApiSimpleGreet({required String name});
 
@@ -10551,12 +10596,236 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<String>
+      crateApiSemanticParseEnhancementAiSemanticParseMessageActionEnhancement(
+          {required String appDir,
+          required List<int> key,
+          required String text,
+          required String nowLocalIso,
+          required String locale,
+          required int dayEndMinutes,
+          required String localResultJson,
+          required List<String> unresolvedFields,
+          required List<TodoCandidate> candidates,
+          required String localDay}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(text, serializer);
+        sse_encode_String(nowLocalIso, serializer);
+        sse_encode_String(locale, serializer);
+        sse_encode_i_32(dayEndMinutes, serializer);
+        sse_encode_String(localResultJson, serializer);
+        sse_encode_list_String(unresolvedFields, serializer);
+        sse_encode_list_todo_candidate(candidates, serializer);
+        sse_encode_String(localDay, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 223, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiSemanticParseEnhancementAiSemanticParseMessageActionEnhancementConstMeta,
+      argValues: [
+        appDir,
+        key,
+        text,
+        nowLocalIso,
+        locale,
+        dayEndMinutes,
+        localResultJson,
+        unresolvedFields,
+        candidates,
+        localDay
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiSemanticParseEnhancementAiSemanticParseMessageActionEnhancementConstMeta =>
+          const TaskConstMeta(
+            debugName: "ai_semantic_parse_message_action_enhancement",
+            argNames: [
+              "appDir",
+              "key",
+              "text",
+              "nowLocalIso",
+              "locale",
+              "dayEndMinutes",
+              "localResultJson",
+              "unresolvedFields",
+              "candidates",
+              "localDay"
+            ],
+          );
+
+  @override
+  Future<String>
+      crateApiSemanticParseEnhancementAiSemanticParseMessageActionEnhancementCloudGateway(
+          {required String appDir,
+          required List<int> key,
+          required String text,
+          required String nowLocalIso,
+          required String locale,
+          required int dayEndMinutes,
+          required String localResultJson,
+          required List<String> unresolvedFields,
+          required List<TodoCandidate> candidates,
+          required String gatewayBaseUrl,
+          required String firebaseIdToken,
+          required String modelName}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(text, serializer);
+        sse_encode_String(nowLocalIso, serializer);
+        sse_encode_String(locale, serializer);
+        sse_encode_i_32(dayEndMinutes, serializer);
+        sse_encode_String(localResultJson, serializer);
+        sse_encode_list_String(unresolvedFields, serializer);
+        sse_encode_list_todo_candidate(candidates, serializer);
+        sse_encode_String(gatewayBaseUrl, serializer);
+        sse_encode_String(firebaseIdToken, serializer);
+        sse_encode_String(modelName, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 224, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiSemanticParseEnhancementAiSemanticParseMessageActionEnhancementCloudGatewayConstMeta,
+      argValues: [
+        appDir,
+        key,
+        text,
+        nowLocalIso,
+        locale,
+        dayEndMinutes,
+        localResultJson,
+        unresolvedFields,
+        candidates,
+        gatewayBaseUrl,
+        firebaseIdToken,
+        modelName
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiSemanticParseEnhancementAiSemanticParseMessageActionEnhancementCloudGatewayConstMeta =>
+          const TaskConstMeta(
+            debugName:
+                "ai_semantic_parse_message_action_enhancement_cloud_gateway",
+            argNames: [
+              "appDir",
+              "key",
+              "text",
+              "nowLocalIso",
+              "locale",
+              "dayEndMinutes",
+              "localResultJson",
+              "unresolvedFields",
+              "candidates",
+              "gatewayBaseUrl",
+              "firebaseIdToken",
+              "modelName"
+            ],
+          );
+
+  @override
+  Future<bool>
+      crateApiSemanticParseJobsDbCompleteSemanticParseFollowupIfCurrentAttempt(
+          {required String appDir,
+          required List<int> key,
+          required String messageId,
+          required PlatformInt64 expectedAttemptId,
+          required String todoId,
+          String? todoTitle,
+          String? newStatus,
+          PlatformInt64? dueAtMs,
+          List<String>? pendingSuggestedTags,
+          List<String>? autoApplySuggestedTags,
+          double? suggestedTagConfidence,
+          required PlatformInt64 nowMs}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(messageId, serializer);
+        sse_encode_i_64(expectedAttemptId, serializer);
+        sse_encode_String(todoId, serializer);
+        sse_encode_opt_String(todoTitle, serializer);
+        sse_encode_opt_String(newStatus, serializer);
+        sse_encode_opt_box_autoadd_i_64(dueAtMs, serializer);
+        sse_encode_opt_list_String(pendingSuggestedTags, serializer);
+        sse_encode_opt_list_String(autoApplySuggestedTags, serializer);
+        sse_encode_opt_box_autoadd_f_64(suggestedTagConfidence, serializer);
+        sse_encode_i_64(nowMs, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 225, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiSemanticParseJobsDbCompleteSemanticParseFollowupIfCurrentAttemptConstMeta,
+      argValues: [
+        appDir,
+        key,
+        messageId,
+        expectedAttemptId,
+        todoId,
+        todoTitle,
+        newStatus,
+        dueAtMs,
+        pendingSuggestedTags,
+        autoApplySuggestedTags,
+        suggestedTagConfidence,
+        nowMs
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiSemanticParseJobsDbCompleteSemanticParseFollowupIfCurrentAttemptConstMeta =>
+          const TaskConstMeta(
+            debugName: "db_complete_semantic_parse_followup_if_current_attempt",
+            argNames: [
+              "appDir",
+              "key",
+              "messageId",
+              "expectedAttemptId",
+              "todoId",
+              "todoTitle",
+              "newStatus",
+              "dueAtMs",
+              "pendingSuggestedTags",
+              "autoApplySuggestedTags",
+              "suggestedTagConfidence",
+              "nowMs"
+            ],
+          );
+
+  @override
   String crateApiSimpleGreet({required String name}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 223)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 226)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -10579,7 +10848,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 224, port: port_);
+            funcId: 227, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10610,7 +10879,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_opt_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 225, port: port_);
+            funcId: 228, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -10648,7 +10917,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 226, port: port_);
+            funcId: 229, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10692,7 +10961,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 227, port: port_);
+            funcId: 230, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10738,7 +11007,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 228, port: port_);
+            funcId: 231, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10786,7 +11055,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 229, port: port_);
+            funcId: 232, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10837,7 +11106,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 230, port: port_);
+            funcId: 233, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10896,7 +11165,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 231, port: port_);
+            funcId: 234, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10948,7 +11217,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 232, port: port_);
+            funcId: 235, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -10976,7 +11245,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(tagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 233, port: port_);
+            funcId: 236, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11003,7 +11272,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 234, port: port_);
+            funcId: 237, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -11033,7 +11302,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 235, port: port_);
+            funcId: 238, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -11065,7 +11334,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(conversationId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 236, port: port_);
+            funcId: 239, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -11095,7 +11364,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 237, port: port_);
+            funcId: 240, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -11125,7 +11394,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 238, port: port_);
+            funcId: 241, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -11153,7 +11422,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 239, port: port_);
+            funcId: 242, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -11180,7 +11449,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 240, port: port_);
+            funcId: 243, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -11211,7 +11480,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 241, port: port_);
+            funcId: 244, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -11246,7 +11515,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(reason, serializer);
         sse_encode_String(action, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 242, port: port_);
+            funcId: 245, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11285,7 +11554,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 243, port: port_);
+            funcId: 246, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -11313,7 +11582,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(name, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 244, port: port_);
+            funcId: 247, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_tag,
@@ -11345,7 +11614,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_i_64(nowMs, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 245, port: port_);
+            funcId: 248, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_todo_followup_generation_job,
@@ -12210,8 +12479,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SemanticParseJob dco_decode_semantic_parse_job(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 17)
-      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
+    if (arr.length != 19)
+      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
     return SemanticParseJob(
       messageId: dco_decode_String(arr[0]),
       status: dco_decode_String(arr[1]),
@@ -12223,13 +12492,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       appliedTodoId: dco_decode_opt_String(arr[7]),
       appliedTodoTitle: dco_decode_opt_String(arr[8]),
       appliedPrevTodoStatus: dco_decode_opt_String(arr[9]),
-      suggestedTags: dco_decode_opt_list_String(arr[10]),
-      suggestedTagConfidence: dco_decode_opt_box_autoadd_f_64(arr[11]),
-      tagSuggestionState: dco_decode_opt_String(arr[12]),
-      appliedTagIds: dco_decode_opt_list_String(arr[13]),
-      undoneAtMs: dco_decode_opt_box_autoadd_i_64(arr[14]),
-      createdAtMs: dco_decode_i_64(arr[15]),
-      updatedAtMs: dco_decode_i_64(arr[16]),
+      appliedPrevTodoDueAtMs: dco_decode_opt_box_autoadd_i_64(arr[10]),
+      appliedDueChanged: dco_decode_bool(arr[11]),
+      suggestedTags: dco_decode_opt_list_String(arr[12]),
+      suggestedTagConfidence: dco_decode_opt_box_autoadd_f_64(arr[13]),
+      tagSuggestionState: dco_decode_opt_String(arr[14]),
+      appliedTagIds: dco_decode_opt_list_String(arr[15]),
+      undoneAtMs: dco_decode_opt_box_autoadd_i_64(arr[16]),
+      createdAtMs: dco_decode_i_64(arr[17]),
+      updatedAtMs: dco_decode_i_64(arr[18]),
     );
   }
 
@@ -13662,6 +13933,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_appliedTodoId = sse_decode_opt_String(deserializer);
     var var_appliedTodoTitle = sse_decode_opt_String(deserializer);
     var var_appliedPrevTodoStatus = sse_decode_opt_String(deserializer);
+    var var_appliedPrevTodoDueAtMs =
+        sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_appliedDueChanged = sse_decode_bool(deserializer);
     var var_suggestedTags = sse_decode_opt_list_String(deserializer);
     var var_suggestedTagConfidence =
         sse_decode_opt_box_autoadd_f_64(deserializer);
@@ -13681,6 +13955,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         appliedTodoId: var_appliedTodoId,
         appliedTodoTitle: var_appliedTodoTitle,
         appliedPrevTodoStatus: var_appliedPrevTodoStatus,
+        appliedPrevTodoDueAtMs: var_appliedPrevTodoDueAtMs,
+        appliedDueChanged: var_appliedDueChanged,
         suggestedTags: var_suggestedTags,
         suggestedTagConfidence: var_suggestedTagConfidence,
         tagSuggestionState: var_tagSuggestionState,
@@ -14876,6 +15152,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.appliedTodoId, serializer);
     sse_encode_opt_String(self.appliedTodoTitle, serializer);
     sse_encode_opt_String(self.appliedPrevTodoStatus, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.appliedPrevTodoDueAtMs, serializer);
+    sse_encode_bool(self.appliedDueChanged, serializer);
     sse_encode_opt_list_String(self.suggestedTags, serializer);
     sse_encode_opt_box_autoadd_f_64(self.suggestedTagConfidence, serializer);
     sse_encode_opt_String(self.tagSuggestionState, serializer);

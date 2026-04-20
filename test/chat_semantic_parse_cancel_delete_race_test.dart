@@ -16,20 +16,47 @@ import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 import 'package:secondloop/src/rust/semantic_parse.dart' as rust_semantic;
 
-import 'message_actions_test_helpers.dart';
 import 'noop_sync_runner.dart';
 import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-    'deleting message while semantic parse is running prevents late todo creation',
+    'deleting message while semantic parse is running prevents late followup mutation',
     (tester) async {
+      const pendingText = '把这个完成';
       SharedPreferences.setMockInitialValues({
         'semantic_parse_data_consent_v1': true,
         'embeddings_source_preference_v1': 'local',
       });
 
-      final backend = _RaceBackend();
+      final backend = _RaceBackend(
+        initialTodos: const <Todo>[
+          Todo(
+            id: 'todo:1',
+            title: '报销',
+            dueAtMs: null,
+            status: 'open',
+            sourceEntryId: null,
+            reviewStage: null,
+            nextReviewAtMs: null,
+            lastReviewAtMs: null,
+            createdAtMs: 1,
+            updatedAtMs: 1,
+          ),
+          Todo(
+            id: 'todo:2',
+            title: '回访客户',
+            dueAtMs: null,
+            status: 'open',
+            sourceEntryId: null,
+            reviewStage: null,
+            nextReviewAtMs: null,
+            lastReviewAtMs: null,
+            createdAtMs: 2,
+            updatedAtMs: 2,
+          ),
+        ],
+      );
       final engine = SyncEngine(
         syncRunner: NoopSyncRunner(),
         loadConfig: () async => null,
@@ -65,35 +92,45 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byKey(const ValueKey('chat_input')), '买牛奶');
+      await tester.enterText(
+          find.byKey(const ValueKey('chat_input')), pendingText);
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('chat_send')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('买牛奶'), findsOneWidget);
+      expect(find.text(pendingText), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 3));
       await backend.parseStarted.future.timeout(const Duration(seconds: 1));
 
-      await tester.longPress(find.text('买牛奶'));
-      await tester.pumpAndSettle();
+      await tester.longPress(find.text(pendingText));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
       await tester.tap(find.byKey(const ValueKey('message_action_delete')));
-      await tester.pumpAndSettle();
-      await confirmChatMessageDelete(tester);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester
+          .tap(find.byKey(const ValueKey('chat_delete_message_confirm')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('买牛奶'), findsNothing);
+      expect(find.text(pendingText), findsNothing);
       expect(backend.deletedMessageIds, contains('m1'));
       expect(backend.canceledMessageIds, contains('m1'));
 
-      backend.releaseLateParseCreate();
+      backend.releaseLateParseFollowup();
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
 
       expect(backend.createdTodos, isEmpty);
+      expect(backend.completedFollowupTodoIds, isEmpty);
       expect(backend.markedSucceededMessageIds, isEmpty);
       expect(backend.currentJobStatus('m1'), 'canceled');
+      expect(backend.todoStatus('todo:1'), 'open');
+      expect(backend.todoStatus('todo:2'), 'open');
     },
   );
 }
@@ -128,9 +165,13 @@ SemanticParseJob _job({
 }
 
 final class _RaceBackend extends NativeAppBackend {
-  _RaceBackend() : super(appDirProvider: () async => '/tmp/secondloop-test');
+  _RaceBackend({
+    List<Todo> initialTodos = const <Todo>[],
+  })  : _todos = List<Todo>.from(initialTodos),
+        super(appDirProvider: () async => '/tmp/secondloop-test');
 
   final List<Message> _messages = <Message>[];
+  final List<Todo> _todos;
   final Map<String, SemanticParseJob> _jobsByMessageId =
       <String, SemanticParseJob>{};
 
@@ -140,17 +181,25 @@ final class _RaceBackend extends NativeAppBackend {
   final List<String> canceledMessageIds = <String>[];
   final List<String> deletedMessageIds = <String>[];
   final List<String> markedSucceededMessageIds = <String>[];
+  final List<String> completedFollowupTodoIds = <String>[];
   final List<Todo> createdTodos = <Todo>[];
 
-  void releaseLateParseCreate() {
+  void releaseLateParseFollowup() {
     if (_lateParseResponse.isCompleted) return;
     _lateParseResponse.complete(
-      '{"kind":"create","confidence":1.0,"title":"买牛奶","status":"inbox","due_local_iso":null}',
+      '{"kind":"followup","confidence":0.91,"todo_id":"todo:2","new_status":"done","due_local_iso":null}',
     );
   }
 
   String? currentJobStatus(String messageId) =>
       _jobsByMessageId[messageId]?.status;
+
+  String? todoStatus(String todoId) {
+    for (final todo in _todos) {
+      if (todo.id == todoId) return todo.status;
+    }
+    return null;
+  }
 
   @override
   Future<List<Message>> listMessages(
@@ -452,7 +501,7 @@ final class _RaceBackend extends NativeAppBackend {
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async {
-    return List<Todo>.from(createdTodos);
+    return List<Todo>.from(_todos);
   }
 
   @override
@@ -482,7 +531,61 @@ final class _RaceBackend extends NativeAppBackend {
     );
     createdTodos.removeWhere((existing) => existing.id == id);
     createdTodos.add(todo);
+    _todos.removeWhere((existing) => existing.id == id);
+    _todos.add(todo);
     return todo;
+  }
+
+  @override
+  Future<bool> completeSemanticParseFollowupIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    String? todoTitle,
+    String? newStatus,
+    int? dueAtMs,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    final job = _jobsByMessageId[messageId];
+    if (job == null ||
+        job.attemptId.toInt() != expectedAttemptId ||
+        job.status == 'canceled') {
+      return false;
+    }
+
+    final index = _todos.indexWhere((todo) => todo.id == todoId);
+    if (index >= 0) {
+      final existing = _todos[index];
+      _todos[index] = Todo(
+        id: existing.id,
+        title: todoTitle ?? existing.title,
+        dueAtMs: dueAtMs ?? existing.dueAtMs,
+        status: (newStatus?.trim().isNotEmpty ?? false)
+            ? newStatus!.trim()
+            : existing.status,
+        sourceEntryId: existing.sourceEntryId,
+        reviewStage: existing.reviewStage,
+        nextReviewAtMs: existing.nextReviewAtMs,
+        lastReviewAtMs: existing.lastReviewAtMs,
+        createdAtMs: existing.createdAtMs,
+        updatedAtMs: nowMs,
+      );
+    }
+    completedFollowupTodoIds.add(todoId);
+    await markSemanticParseJobSucceeded(
+      key,
+      messageId: messageId,
+      appliedActionKind: 'followup',
+      appliedTodoId: todoId,
+      appliedTodoTitle: todoTitle,
+      appliedPrevTodoStatus: null,
+      nowMs: nowMs,
+    );
+    return true;
   }
 
   @override
@@ -565,6 +668,23 @@ final class _RaceBackend extends NativeAppBackend {
     required String nowLocalIso,
     required Locale locale,
     required int dayEndMinutes,
+    required List<rust_semantic.TodoCandidate> candidates,
+  }) async {
+    if (!parseStarted.isCompleted) {
+      parseStarted.complete();
+    }
+    return _lateParseResponse.future;
+  }
+
+  @override
+  Future<String> semanticParseMessageActionEnhancement(
+    Uint8List key, {
+    required String text,
+    required String nowLocalIso,
+    required Locale locale,
+    required int dayEndMinutes,
+    required String localResultJson,
+    required List<String> unresolvedFields,
     required List<rust_semantic.TodoCandidate> candidates,
   }) async {
     if (!parseStarted.isCompleted) {

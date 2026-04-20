@@ -46,6 +46,8 @@ SET status = 'pending',
     applied_todo_id = NULL,
     applied_todo_title = NULL,
     applied_prev_todo_status = NULL,
+    applied_prev_todo_due_at_ms = NULL,
+    applied_due_changed = 0,
     suggested_tags_json = NULL,
     suggested_tag_confidence = NULL,
     tag_suggestion_state = 'none',
@@ -70,6 +72,8 @@ SET status = 'pending',
     applied_todo_id = NULL,
     applied_todo_title = NULL,
     applied_prev_todo_status = NULL,
+    applied_prev_todo_due_at_ms = NULL,
+    applied_due_changed = 0,
     suggested_tags_json = NULL,
     suggested_tag_confidence = NULL,
     tag_suggestion_state = 'none',
@@ -153,6 +157,41 @@ pub fn mark_semantic_parse_job_succeeded_with_tag_metadata(
     applied_tag_ids: Option<&[String]>,
     now_ms: i64,
 ) -> Result<()> {
+    mark_semantic_parse_job_succeeded_with_tag_metadata_and_due_metadata(
+        conn,
+        key,
+        message_id,
+        applied_action_kind,
+        applied_todo_id,
+        applied_todo_title,
+        applied_prev_todo_status,
+        None,
+        false,
+        suggested_tags,
+        suggested_tag_confidence,
+        tag_suggestion_state,
+        applied_tag_ids,
+        now_ms,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn mark_semantic_parse_job_succeeded_with_tag_metadata_and_due_metadata(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    applied_action_kind: &str,
+    applied_todo_id: Option<&str>,
+    applied_todo_title: Option<&str>,
+    applied_prev_todo_status: Option<&str>,
+    applied_prev_todo_due_at_ms: Option<i64>,
+    applied_due_changed: bool,
+    suggested_tags: Option<&[String]>,
+    suggested_tag_confidence: Option<f64>,
+    tag_suggestion_state: Option<&str>,
+    applied_tag_ids: Option<&[String]>,
+    now_ms: i64,
+) -> Result<()> {
     let message_id = message_id.trim();
     if message_id.is_empty() {
         return Err(anyhow!("message_id is required"));
@@ -197,14 +236,24 @@ SET status = 'succeeded',
     applied_todo_id = ?3,
     applied_todo_title = ?4,
     applied_prev_todo_status = ?5,
-    suggested_tags_json = ?6,
-    suggested_tag_confidence = ?7,
-    tag_suggestion_state = ?8,
-    applied_tag_ids_json = ?9,
-    updated_at_ms = ?10
+    applied_prev_todo_due_at_ms = CASE
+      WHEN status = 'succeeded' AND ?6 IS NULL THEN applied_prev_todo_due_at_ms
+      ELSE ?6
+    END,
+    applied_due_changed = CASE
+      WHEN status = 'succeeded' AND ?7 = 0 THEN applied_due_changed
+      ELSE ?7
+    END,
+    suggested_tags_json = ?8,
+    suggested_tag_confidence = ?9,
+    tag_suggestion_state = ?10,
+    applied_tag_ids_json = ?11,
+    updated_at_ms = ?12
 WHERE message_id = ?1
-  AND status = 'running'
-  AND updated_at_ms = ?10
+  AND (
+    (status = 'running' AND updated_at_ms = ?12)
+    OR status = 'succeeded'
+  )
 "#,
         params![
             message_id,
@@ -212,6 +261,8 @@ WHERE message_id = ?1
             applied_todo_id,
             title_blob,
             applied_prev_todo_status,
+            applied_prev_todo_due_at_ms,
+            if applied_due_changed { 1 } else { 0 },
             suggested_tags_blob,
             normalized_tag_confidence,
             normalized_tag_suggestion_state,
@@ -232,6 +283,43 @@ pub fn mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
     applied_todo_id: Option<&str>,
     applied_todo_title: Option<&str>,
     applied_prev_todo_status: Option<&str>,
+    suggested_tags: Option<&[String]>,
+    suggested_tag_confidence: Option<f64>,
+    tag_suggestion_state: Option<&str>,
+    applied_tag_ids: Option<&[String]>,
+    now_ms: i64,
+) -> Result<bool> {
+    mark_semantic_parse_job_succeeded_with_tag_metadata_and_due_metadata_if_current_attempt(
+        conn,
+        key,
+        message_id,
+        expected_attempt_id,
+        applied_action_kind,
+        applied_todo_id,
+        applied_todo_title,
+        applied_prev_todo_status,
+        None,
+        false,
+        suggested_tags,
+        suggested_tag_confidence,
+        tag_suggestion_state,
+        applied_tag_ids,
+        now_ms,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn mark_semantic_parse_job_succeeded_with_tag_metadata_and_due_metadata_if_current_attempt(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    expected_attempt_id: i64,
+    applied_action_kind: &str,
+    applied_todo_id: Option<&str>,
+    applied_todo_title: Option<&str>,
+    applied_prev_todo_status: Option<&str>,
+    applied_prev_todo_due_at_ms: Option<i64>,
+    applied_due_changed: bool,
     suggested_tags: Option<&[String]>,
     suggested_tag_confidence: Option<f64>,
     tag_suggestion_state: Option<&str>,
@@ -282,11 +370,13 @@ SET status = 'succeeded',
     applied_todo_id = ?4,
     applied_todo_title = ?5,
     applied_prev_todo_status = ?6,
-    suggested_tags_json = ?7,
-    suggested_tag_confidence = ?8,
-    tag_suggestion_state = ?9,
-    applied_tag_ids_json = ?10,
-    updated_at_ms = ?11
+    applied_prev_todo_due_at_ms = ?7,
+    applied_due_changed = ?8,
+    suggested_tags_json = ?9,
+    suggested_tag_confidence = ?10,
+    tag_suggestion_state = ?11,
+    applied_tag_ids_json = ?12,
+    updated_at_ms = ?13
 WHERE message_id = ?1
   AND status = 'running'
   AND attempt_id = ?2
@@ -298,6 +388,8 @@ WHERE message_id = ?1
             applied_todo_id,
             title_blob,
             applied_prev_todo_status,
+            applied_prev_todo_due_at_ms,
+            if applied_due_changed { 1 } else { 0 },
             suggested_tags_blob,
             normalized_tag_confidence,
             normalized_tag_suggestion_state,
@@ -445,14 +537,36 @@ pub fn set_semantic_parse_todo_status_if_current_attempt(
             return Ok(None);
         }
 
-        Ok(Some(set_semantic_parse_todo_status_in_existing_txn(
-            conn,
-            key,
-            todo_id,
-            new_status,
-            message_id,
-        )?))
+        set_semantic_parse_todo_status_in_existing_txn(conn, key, todo_id, new_status, message_id)
     })
+}
+
+fn set_semantic_parse_todo_due_in_existing_txn(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    due_at_ms: i64,
+) -> Result<(bool, Option<i64>)> {
+    let current = get_todo(conn, key, todo_id)?;
+    if current.due_at_ms == Some(due_at_ms) {
+        return Ok((false, None));
+    }
+    let previous_due_at_ms = current.due_at_ms;
+    let _ = upsert_todo(
+        conn,
+        key,
+        &current.id,
+        &current.title,
+        Some(due_at_ms),
+        &current.status,
+        current.source_entry_id.as_deref(),
+        current.review_stage,
+        current.next_review_at_ms,
+        current.last_review_at_ms,
+        current.manual_importance_nudge_score,
+        current.manual_urgency_nudge_score,
+    )?;
+    Ok((true, previous_due_at_ms))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -631,7 +745,8 @@ pub fn complete_semantic_parse_followup_if_current_attempt(
     expected_attempt_id: i64,
     todo_id: &str,
     todo_title: Option<&str>,
-    new_status: &str,
+    new_status: Option<&str>,
+    due_at_ms: Option<i64>,
     pending_suggested_tags: Option<&[String]>,
     auto_apply_suggested_tags: Option<&[String]>,
     suggested_tag_confidence: Option<f64>,
@@ -665,23 +780,41 @@ pub fn complete_semantic_parse_followup_if_current_attempt(
             }
         }
 
-        let previous_status = set_semantic_parse_todo_status_in_existing_txn(
-            conn,
-            key,
-            todo_id,
-            new_status,
-            message_id,
-        )?;
+        let previous_status = match new_status {
+            Some(status) if !status.trim().is_empty() => {
+                set_semantic_parse_todo_status_in_existing_txn(conn, key, todo_id, status, message_id)?
+            }
+            _ => None,
+        };
+        let (did_change_due, previous_due_at_ms) = match due_at_ms {
+            Some(next_due_at_ms) => {
+                set_semantic_parse_todo_due_in_existing_txn(conn, key, todo_id, next_due_at_ms)?
+            }
+            None => (false, None),
+        };
+        let did_change_status = previous_status.is_some();
+        let did_apply_followup = did_change_status || did_change_due;
 
-        let finalized = mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
+        let finalized =
+            mark_semantic_parse_job_succeeded_with_tag_metadata_and_due_metadata_if_current_attempt(
             conn,
             key,
             message_id,
             expected_attempt_id,
-            "followup",
-            Some(todo_id),
-            todo_title,
-            Some(previous_status.as_str()),
+            if did_apply_followup { "followup" } else { "none" },
+            if did_apply_followup { Some(todo_id) } else { None },
+            if did_apply_followup { todo_title } else { None },
+            if did_apply_followup {
+                previous_status.as_deref()
+            } else {
+                None
+            },
+            if did_apply_followup {
+                previous_due_at_ms
+            } else {
+                None
+            },
+            if did_apply_followup { did_change_due } else { false },
             stored_suggested_tags,
             stored_tag_confidence,
             stored_tag_state,
