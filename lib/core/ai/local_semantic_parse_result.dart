@@ -11,6 +11,7 @@ final class LocalSemanticParseDiagnostics {
     this.hasDueSignal = false,
     this.temporalNeedsEnhancement = false,
     this.semanticNeedsEnhancement = false,
+    this.looksLikeFollowupEdit = false,
   });
 
   final String localIntent;
@@ -18,6 +19,7 @@ final class LocalSemanticParseDiagnostics {
   final bool hasDueSignal;
   final bool temporalNeedsEnhancement;
   final bool semanticNeedsEnhancement;
+  final bool looksLikeFollowupEdit;
 }
 
 final class LocalSemanticParseResult {

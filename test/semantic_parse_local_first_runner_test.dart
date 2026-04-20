@@ -127,6 +127,61 @@ void main() {
   });
 
   test(
+      'runner retrieves semantic candidates for deictic followup edits with no lexical match',
+      () async {
+    final store = _FakeStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:deictic_edit',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{
+        'msg:deictic_edit': 'move this to tomorrow'
+      },
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(
+          id: 'todo:1',
+          title: 'expense report',
+          status: 'open',
+        ),
+        SemanticParseTodoCandidate(
+          id: 'todo:2',
+          title: 'client followup',
+          status: 'open',
+        ),
+      ],
+    );
+    final client = _FakeClient(
+      retrievedTodoCandidateIds: const <String>['todo:2'],
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 4, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'en-US',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.retrieveRequests, 1);
+    expect(client.parseRequests, 0);
+    expect(store.updatedDueByTodoId['todo:2'], isNotNull);
+  });
+
+  test(
       'runner treats multiple retrieved semantic candidate ids as ambiguous order-only hints',
       () async {
     final store = _FakeStore(

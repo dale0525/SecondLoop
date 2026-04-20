@@ -73,6 +73,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final restored = backend.todoById('todo:1')!;
+    expect(backend.transitionCalls, 2);
     expect(restored.title, '报销-已重命名');
     expect(restored.dueAtMs?.toInt(), 1200);
   });

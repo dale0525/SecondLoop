@@ -27,6 +27,7 @@ String _localResultJson(LocalSemanticParseResult result) {
       'has_due_signal': result.diagnostics.hasDueSignal,
       'temporal_needs_enhancement': result.diagnostics.temporalNeedsEnhancement,
       'semantic_needs_enhancement': result.diagnostics.semanticNeedsEnhancement,
+      'looks_like_followup_edit': result.diagnostics.looksLikeFollowupEdit,
     },
   });
 }
@@ -144,6 +145,9 @@ LocalSemanticParseResult _parseLocally({
 }
 
 bool _shouldRetrieveSemanticCandidates(LocalSemanticParseResult result) {
+  if (_isSuspiciousLocalCreate(result)) {
+    return true;
+  }
   if (result.kind != LocalSemanticParseKind.none) {
     return false;
   }
@@ -152,6 +156,47 @@ bool _shouldRetrieveSemanticCandidates(LocalSemanticParseResult result) {
     'needs_enhancement' => result.diagnostics.semanticNeedsEnhancement,
     _ => false,
   };
+}
+
+bool _isSuspiciousLocalCreate(LocalSemanticParseResult result) {
+  if (result.kind != LocalSemanticParseKind.create) {
+    return false;
+  }
+  if (!result.diagnostics.looksLikeFollowupEdit) {
+    return false;
+  }
+  return _looksLikeDeicticOnlyLocalTitle(result.title);
+}
+
+bool _looksLikeDeicticOnlyLocalTitle(String? text) {
+  final normalized = text?.trim().toLowerCase();
+  if (normalized == null || normalized.isEmpty) {
+    return true;
+  }
+  const deicticTitles = <String>{
+    'this',
+    'that',
+    'it',
+    'this one',
+    'that one',
+    'the task',
+    'task',
+    'todo',
+    '这个',
+    '這個',
+    '这件事',
+    '這件事',
+    '这个任务',
+    '這個任務',
+    '这个待办',
+    '這個待辦',
+    '它',
+    '此项',
+    '此項',
+    '该项',
+    '該項',
+  };
+  return deicticTitles.contains(normalized);
 }
 
 List<TodoThreadMatch> _semanticMatchesFromPreferredTodoIds(

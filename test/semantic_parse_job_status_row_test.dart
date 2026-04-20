@@ -296,9 +296,9 @@ void main() {
     await tester.tap(find.text('Undo'));
     await tester.pump();
 
-    expect(backend.lastUpsertTodoId, 'todo:1');
-    expect(backend.lastUpsertTodoDueAtMs, 1200);
-    expect(backend.lastUpsertTodoStatus, 'open');
+    expect(backend.lastTransitionTodoId, 'todo:1');
+    expect(backend.lastTransitionTodoDueAtMs, 1200);
+    expect(backend.lastTransitionTodoStatus, isNull);
     expect(backend.lastUndoneMessageId, 'm1');
   });
 }
@@ -339,9 +339,9 @@ final class _RecordingBackend extends TestAppBackend {
   List<String>? lastSuggestedTags;
   String? lastCanceledMessageId;
   String? lastUndoneMessageId;
-  String? lastUpsertTodoId;
-  int? lastUpsertTodoDueAtMs;
-  String? lastUpsertTodoStatus;
+  String? lastTransitionTodoId;
+  int? lastTransitionTodoDueAtMs;
+  String? lastTransitionTodoStatus;
 
   @override
   Future<void> markSemanticParseJobCanceled(
@@ -387,15 +387,47 @@ final class _RecordingBackend extends TestAppBackend {
     int? manualImportanceNudgeScore,
     int? manualUrgencyNudgeScore,
   }) async {
-    lastUpsertTodoId = id;
-    lastUpsertTodoDueAtMs = dueAtMs;
-    lastUpsertTodoStatus = status;
+    throw StateError('undo_should_use_transition_todo');
+  }
+
+  @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
+    String? sourceMessageId,
+  }) async {
+    lastTransitionTodoId = todoId;
+    lastTransitionTodoDueAtMs = clearDueAtMs ? null : dueAtMs;
+    lastTransitionTodoStatus = newStatus;
+    Todo? current;
+    for (final todo in _todos) {
+      if (todo.id == todoId) {
+        current = todo;
+        break;
+      }
+    }
+    if (current == null) {
+      throw StateError('todo not found: $todoId');
+    }
     return Todo(
-      id: id,
-      title: title,
+      id: current.id,
+      title: current.title,
       dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
-      status: status,
-      sourceEntryId: sourceEntryId,
+      status: newStatus ?? current.status,
+      sourceEntryId: current.sourceEntryId,
       createdAtMs: PlatformInt64Util.from(0),
       updatedAtMs: PlatformInt64Util.from(0),
       reviewStage:

@@ -28,6 +28,8 @@ final class LocalSemanticParser {
       );
     }
 
+    final followupEditCue = looksLikeTodoFollowupEdit(raw);
+
     final decision = MessageActionResolver.resolve(
       raw,
       locale: locale,
@@ -57,6 +59,7 @@ final class LocalSemanticParser {
           diagnostics: LocalSemanticParseDiagnostics(
             localIntent: 'create',
             hasDueSignal: dueAtLocal != null,
+            looksLikeFollowupEdit: followupEditCue,
           ),
         );
       case MessageActionFollowUpDecision(
@@ -75,6 +78,7 @@ final class LocalSemanticParser {
             localIntent: 'followup',
             hasExplicitStatusUpdate: newStatus != null,
             hasDueSignal: dueAtLocal != null,
+            looksLikeFollowupEdit: followupEditCue,
           ),
         );
       case MessageActionNoneDecision():
@@ -135,6 +139,7 @@ final class LocalSemanticParser {
             hasDueSignal: hasDueSignal,
             temporalNeedsEnhancement: temporalNeedsEnhancement,
             semanticNeedsEnhancement: semanticNeedsEnhancement,
+            looksLikeFollowupEdit: followupEditCue,
           ),
         );
     }

@@ -201,6 +201,21 @@ void main() {
   });
 
   test(
+      'deictic followup edit does not create todo when no candidate is available',
+      () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      'move this to tomorrow',
+      locale: const Locale('en', 'US'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionNoneDecision>());
+  });
+
+  test(
       'generic english change phrasing still allows create when no todo matches',
       () {
     final now = DateTime(2026, 2, 4, 10, 0);
@@ -217,8 +232,26 @@ void main() {
 
     expect(decision, isA<MessageActionCreateDecision>());
     final create = decision as MessageActionCreateDecision;
-    expect(create.title, 'travel booking');
+    expect(create.title, 'change travel booking');
     expect(create.dueAtLocal, DateTime(2026, 2, 6, 21, 0));
+  });
+
+  test('create titles keep leading action verbs when no todo matches', () {
+    final now = DateTime(2026, 2, 4, 10, 0);
+    final decision = MessageActionResolver.resolve(
+      'change oil tomorrow',
+      locale: const Locale('en', 'US'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: 'expense report', status: 'open'),
+      ],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, 'change oil');
+    expect(create.dueAtLocal, DateTime(2026, 2, 5, 21, 0));
   });
 
   test('next-week weekday create keeps correct due date and clean title', () {

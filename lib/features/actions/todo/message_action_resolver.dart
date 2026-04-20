@@ -312,17 +312,10 @@ class MessageActionResolver {
     return out;
   }
 
-  static String _stripFollowupEditDecorations(String text) {
+  static String _stripCreateEditDecorations(String text) {
     var out = text.trim();
     if (out.isEmpty) return out;
 
-    out = out.replaceAll(
-      RegExp(
-        r'^(?:change|move|push|postpone|reschedule)\s+',
-        caseSensitive: false,
-      ),
-      '',
-    );
     out = out.replaceAll(
       RegExp(r'^(?:把|將|将)\s*', caseSensitive: false),
       '',
@@ -336,6 +329,16 @@ class MessageActionResolver {
     );
     out = out.replaceAll(RegExp(r'^[,，:：\-–—\s]+'), '').trim();
     out = out.replaceAll(RegExp(r'[，,。.!！?？]+$'), '').trim();
+    final deicticWithoutLeadingVerb = out.replaceAll(
+      RegExp(
+        r'^(?:change|move|push|postpone|reschedule)\s+',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    if (_looksLikeDeicticOnlyTitle(deicticWithoutLeadingVerb)) {
+      return deicticWithoutLeadingVerb;
+    }
     return out;
   }
 
@@ -379,7 +382,7 @@ class MessageActionResolver {
   }) {
     var title = _stripTimeDecorations(raw, time);
     title = _stripRecurrenceDecorations(title);
-    title = _stripFollowupEditDecorations(title);
+    title = _stripCreateEditDecorations(title);
     if (recurrenceRule != null) {
       title = _cleanupRecurringTitleArtifacts(title);
     }
@@ -511,7 +514,8 @@ class MessageActionResolver {
         final secondScore = ranked.length > 1 ? ranked[1].score : 0;
         final highConfidence = top.score >= 3200 ||
             (top.score >= 2400 && (top.score - secondScore) >= 900) ||
-            (updateIntent.isExplicit &&
+            ((updateIntent.isExplicit ||
+                    (followupEditCue && followupDueAtLocal != null)) &&
                 top.score >= 1600 &&
                 (top.score - secondScore) >= 500);
 
@@ -549,8 +553,7 @@ class MessageActionResolver {
       firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
 
-    if (openTodoTargets.isNotEmpty &&
-        (followupEditCue ||
+    if ((followupEditCue ||
             updateIntent.isExplicit ||
             followupDueAtLocal != null) &&
         !_canTreatEditPhraseAsCreate(
@@ -620,7 +623,7 @@ class MessageActionResolver {
 
     var title = _stripTimeDecorations(raw, time);
     title = _stripRecurrenceDecorations(title);
-    title = _stripFollowupEditDecorations(title);
+    title = _stripCreateEditDecorations(title);
     if (recurrenceRule != null) {
       title = _cleanupRecurringTitleArtifacts(title);
     }

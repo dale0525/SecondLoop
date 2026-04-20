@@ -243,22 +243,13 @@ extension _ChatPageStateMethodsC on _ChatPageState {
                   if (current == null) {
                     return;
                   }
-                  await backend.upsertTodo(
+                  await backend.transitionTodo(
                     sessionKey,
-                    id: current.id,
-                    title: current.title,
-                    dueAtMs: didUpdateDue
-                        ? previousDueAtMs
-                        : current.dueAtMs?.toInt(),
-                    status: didUpdateStatus ? previousStatus : current.status,
-                    sourceEntryId: current.sourceEntryId,
-                    reviewStage: current.reviewStage?.toInt(),
-                    nextReviewAtMs: current.nextReviewAtMs?.toInt(),
-                    lastReviewAtMs: current.lastReviewAtMs?.toInt(),
-                    manualImportanceNudgeScore:
-                        current.manualImportanceNudgeScore?.toInt(),
-                    manualUrgencyNudgeScore:
-                        current.manualUrgencyNudgeScore?.toInt(),
+                    todoId: current.id,
+                    dueAtMs: didUpdateDue ? previousDueAtMs : null,
+                    clearDueAtMs: didUpdateDue && previousDueAtMs == null,
+                    newStatus: didUpdateStatus ? previousStatus : null,
+                    sourceMessageId: message.id,
                   );
                   syncEngine?.notifyLocalMutation();
                 } catch (_) {

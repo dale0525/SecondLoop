@@ -470,19 +470,13 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
           }
           if (current == null) return;
 
-          await backend.upsertTodo(
+          await backend.transitionTodo(
             sessionKey,
-            id: current.id,
-            title: current.title,
-            dueAtMs: dueChanged ? prevDueAtMs : current.dueAtMs?.toInt(),
-            status: (prev != null && prev.isNotEmpty) ? prev : current.status,
-            sourceEntryId: current.sourceEntryId,
-            reviewStage: current.reviewStage?.toInt(),
-            nextReviewAtMs: current.nextReviewAtMs?.toInt(),
-            lastReviewAtMs: current.lastReviewAtMs?.toInt(),
-            manualImportanceNudgeScore:
-                current.manualImportanceNudgeScore?.toInt(),
-            manualUrgencyNudgeScore: current.manualUrgencyNudgeScore?.toInt(),
+            todoId: current.id,
+            dueAtMs: prevDueAtMs,
+            clearDueAtMs: dueChanged && prevDueAtMs == null,
+            newStatus: (prev != null && prev.isNotEmpty) ? prev : null,
+            sourceMessageId: widget.message.id,
           );
           break;
       }
