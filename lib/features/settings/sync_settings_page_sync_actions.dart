@@ -341,6 +341,16 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return syncKey;
   }
 
+  Future<Uint8List> _resolveSyncKeyForCurrentBackend(AppBackend backend) async {
+    if (_effectiveBackendType != SyncBackendType.managedVault) {
+      return _loadOrCreateSyncKey();
+    }
+    if (_usesCloudSessionModel) {
+      return _loadOrCreateSyncKey();
+    }
+    return _deriveManagedVaultSyncKey(backend);
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     _setState(() => _busy = true);
@@ -675,11 +685,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = backendType == SyncBackendType.managedVault
-          ? (_usesCloudSessionModel
-              ? await _loadOrCreateSyncKey()
-              : await _deriveManagedVaultSyncKey(backend))
-          : await _loadOrCreateSyncKey();
+      final syncKey = await _resolveSyncKeyForCurrentBackend(backend);
       stateScopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 
       var pushed = 0;
@@ -808,11 +814,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = backendType == SyncBackendType.managedVault
-          ? (_usesCloudSessionModel
-              ? await _loadOrCreateSyncKey()
-              : await _deriveManagedVaultSyncKey(backend))
-          : await _loadOrCreateSyncKey();
+      final syncKey = await _resolveSyncKeyForCurrentBackend(backend);
       stateScopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 
       var pulled = 0;

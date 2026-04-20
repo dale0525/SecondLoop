@@ -501,41 +501,29 @@ fn record_blob_side_effect_error(
     super::super::blob_repair::record_blob_repair_error(conn, scope_id, &error.to_string())
 }
 
-fn run_post_commit_blob_side_effects(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    http: &Client,
-    app_dir: &std::path::Path,
-    base_url: &str,
-    vault_id: &str,
-    id_token: &str,
-    scope_id: &str,
-    batch: &LocalPushBatch,
-) -> Result<()> {
-    let upload_ctx = super::attachments::AttachmentUploadContext {
-        conn,
-        db_key,
-        sync_key,
-        http,
-        base_url,
-        vault_id,
-        id_token,
-        app_dir,
-    };
+struct PostCommitBlobSideEffectsContext<'a> {
+    upload_ctx: super::attachments::AttachmentUploadContext<'a>,
+    scope_id: &'a str,
+    batch: &'a LocalPushBatch,
+}
+
+fn run_post_commit_blob_side_effects(ctx: &PostCommitBlobSideEffectsContext<'_>) -> Result<()> {
+    let upload_ctx = &ctx.upload_ctx;
+    let scope_id = ctx.scope_id;
+    let batch = ctx.batch;
 
     if batch
         .attachment_actions
         .values()
         .any(|action| matches!(action, PendingAttachmentAction::Upload { .. }))
     {
-        if let Err(error) = super::attachments::prepare_local_attachment_uploads(&upload_ctx) {
+        if let Err(error) = super::attachments::prepare_local_attachment_uploads(upload_ctx) {
             for (sha256, action) in &batch.attachment_actions {
                 if matches!(action, PendingAttachmentAction::Upload { .. }) {
-                    enqueue_attachment_upload_repair(conn, scope_id, sha256)?;
+                    enqueue_attachment_upload_repair(upload_ctx.conn, scope_id, sha256)?;
                 }
             }
-            record_blob_side_effect_error(conn, scope_id, &error)?;
+            record_blob_side_effect_error(upload_ctx.conn, scope_id, &error)?;
         }
     }
 
@@ -545,34 +533,34 @@ fn run_post_commit_blob_side_effects(
                 mime_type,
                 created_at_ms,
             } => match super::attachments::upload_attachment_bytes_if_present(
-                &upload_ctx,
+                upload_ctx,
                 sha256,
                 mime_type,
                 *created_at_ms,
             ) {
                 Ok(_) => {}
                 Err(error) => {
-                    enqueue_attachment_upload_repair(conn, scope_id, sha256)?;
-                    record_blob_side_effect_error(conn, scope_id, &error)?;
+                    enqueue_attachment_upload_repair(upload_ctx.conn, scope_id, sha256)?;
+                    record_blob_side_effect_error(upload_ctx.conn, scope_id, &error)?;
                 }
             },
             PendingAttachmentAction::Delete => {
                 if let Err(error) =
-                    super::attachments::delete_remote_attachment_bytes(&upload_ctx, sha256)
+                    super::attachments::delete_remote_attachment_bytes(upload_ctx, sha256)
                 {
-                    enqueue_attachment_delete_repair(conn, scope_id, sha256)?;
-                    record_blob_side_effect_error(conn, scope_id, &error)?;
+                    enqueue_attachment_delete_repair(upload_ctx.conn, scope_id, sha256)?;
+                    record_blob_side_effect_error(upload_ctx.conn, scope_id, &error)?;
                 }
             }
         }
     }
 
     for blob_ref in &batch.artifact_blob_refs {
-        match super::artifacts::upload_embedding_artifact_blob_if_present(&upload_ctx, blob_ref) {
+        match super::artifacts::upload_embedding_artifact_blob_if_present(upload_ctx, blob_ref) {
             Ok(_) => {}
             Err(error) => {
-                enqueue_artifact_upload_repair(conn, scope_id, blob_ref)?;
-                record_blob_side_effect_error(conn, scope_id, &error)?;
+                enqueue_artifact_upload_repair(upload_ctx.conn, scope_id, blob_ref)?;
+                record_blob_side_effect_error(upload_ctx.conn, scope_id, &error)?;
             }
         }
     }
@@ -668,18 +656,21 @@ pub(super) fn push_v2(
                     batch.max_seq,
                 )?;
                 if upload_attachment_bytes {
-                    run_post_commit_blob_side_effects(
-                        conn,
-                        db_key,
-                        sync_key,
-                        &http,
-                        app_dir.as_ref().expect("managed-vault app_dir").as_path(),
-                        base_url,
-                        vault_id,
-                        id_token,
-                        &scope_id,
-                        &batch,
-                    )?;
+                    let blob_side_effects_ctx = PostCommitBlobSideEffectsContext {
+                        upload_ctx: super::attachments::AttachmentUploadContext {
+                            conn,
+                            db_key,
+                            sync_key,
+                            http: &http,
+                            base_url,
+                            vault_id,
+                            id_token,
+                            app_dir: app_dir.as_ref().expect("managed-vault app_dir").as_path(),
+                        },
+                        scope_id: &scope_id,
+                        batch: &batch,
+                    };
+                    run_post_commit_blob_side_effects(&blob_side_effects_ctx)?;
                 }
                 total_pushed += (batch.max_seq - last_pushed_seq).max(0) as u64;
                 if let Some(progress_fn) = progress.as_deref_mut() {

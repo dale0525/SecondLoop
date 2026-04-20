@@ -41,7 +41,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final now = DateTime.now().millisecondsSinceEpoch;
-      final syncKey = await _loadOrCreateSyncKey();
+      final syncKey = await _resolveSyncKeyForCurrentBackend(backend);
       if (!mounted) return;
       final scopeId = await _currentSyncStateScopeId(syncKey: syncKey);
       final enqueued = await backend.backfillCloudMediaBackupImages(
@@ -85,7 +85,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
               ? CloudAuthScope.of(context).controller
               : null;
 
-      final syncKey = await _loadOrCreateSyncKey();
+      final syncKey = await _resolveSyncKeyForCurrentBackend(backend);
       if (!mounted) return;
       final scopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 

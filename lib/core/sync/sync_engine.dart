@@ -447,6 +447,7 @@ final class SyncEngine {
       await syncRunner.push(config);
       if (backendType == SyncBackendType.managedVault) {
         _managedVaultRecoveryRetryPushes = 0;
+        _retryPushAfterRecoveryPull = false;
         if (_acceptsNewWork) {
           _pullQueued = true;
           _pendingPullAfterPush = true;

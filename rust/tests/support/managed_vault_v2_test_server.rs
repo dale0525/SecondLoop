@@ -580,6 +580,7 @@ pub fn start_mock_v2_server() -> (
     (format!("http://{addr}"), stop_tx, state, handle)
 }
 
+#[allow(dead_code)]
 pub fn managed_vault_v2_scope_id(base_url: &str, vault_id: &str) -> String {
     B64_URL.encode(format!("managed_vault|{}|{}", base_url.trim(), vault_id.trim()).as_bytes())
 }
