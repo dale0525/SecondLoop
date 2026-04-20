@@ -104,10 +104,11 @@ fn clear_legacy_scope_state(conn: &Connection, scope_id: &str) -> Result<()> {
         params![format!("managed_vault.last_pushed_seq:{scope_id}:%")],
     )?;
     conn.execute(
-        "DELETE FROM kv WHERE key IN (?1, ?2)",
+        "DELETE FROM kv WHERE key IN (?1, ?2, ?3)",
         params![
             super::media_state::attachment_backfill_key(scope_id),
             super::media_state::artifact_backfill_key(scope_id),
+            super::media_state::v2_pull_media_clean_key(scope_id),
         ],
     )?;
     super::checkpoint::clear_checkpoint_state(conn, scope_id)?;

@@ -35,6 +35,13 @@ String? extractManagedVaultRecoveryBlockedReason(Object error) {
   ).firstMatch(error.toString())?.group(1);
 }
 
+String? _extractManagedVaultRecoveryBlockedReasonFromMessage(String? message) {
+  if (message == null || message.trim().isEmpty) return null;
+  return RegExp(
+    r'managed-vault v2 recovery blocked:\s*([a-z_]+)',
+  ).firstMatch(message)?.group(1);
+}
+
 SyncWriteGateState? managedVaultWriteGateStateForError(Object error) {
   final statusCode = extractSyncHttpStatusCode(error);
   final errorCode = extractSyncErrorCode(error);
@@ -69,7 +76,16 @@ bool shouldBlockManagedVaultBackgroundSyncForFailure({
   required String? errorCode,
   required String? errorMessage,
 }) {
-  return statusCode == 400 && errorCode == 'invalid_batch';
+  final recoveryBlockedReason =
+      _extractManagedVaultRecoveryBlockedReasonFromMessage(errorMessage);
+  if (statusCode == 400 && errorCode == 'invalid_batch') {
+    return true;
+  }
+  if (recoveryBlockedReason == 'local_unpushed_changes' ||
+      recoveryBlockedReason == 'local_media_backfill_pending') {
+    return true;
+  }
+  return false;
 }
 
 bool shouldPersistManagedVaultBackgroundRepairBlock(Object error) {

@@ -35,7 +35,8 @@ pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
 use media_state::{
     artifact_backfill_key, attachment_backfill_key, has_missing_embedding_artifact_blobs,
-    has_missing_local_attachment_bytes, update_v2_pull_backfill_markers,
+    has_missing_local_attachment_bytes, should_finalize_v2_pull_blob_backfill,
+    update_v2_pull_backfill_markers,
 };
 use pending_apply::{
     apply_pending_ops_until_stable, has_local_oplog_for_device, is_foreign_key_constraint_error,
@@ -182,8 +183,12 @@ fn finalize_v2_pull_blob_backfill(
     base_url: &str,
     vault_id: &str,
     id_token: &str,
+    applied_ops: u64,
 ) -> Result<()> {
     let scope_id = runtime::scope_id(base_url, vault_id);
+    if !should_finalize_v2_pull_blob_backfill(conn, &scope_id, applied_ops)? {
+        return Ok(());
+    }
     let _ = state_machine::transition(
         conn,
         &scope_id,
@@ -303,7 +308,9 @@ pub fn pull(
 ) -> Result<u64> {
     match global_log_client::pull_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None) {
         Ok(pulled) => {
-            finalize_v2_pull_blob_backfill(conn, db_key, sync_key, base_url, vault_id, id_token)?;
+            finalize_v2_pull_blob_backfill(
+                conn, db_key, sync_key, base_url, vault_id, id_token, pulled,
+            )?;
             Ok(pulled)
         }
         Err(error) if v2_route_unavailable(&error) => {
@@ -332,7 +339,9 @@ pub fn pull_with_progress(
         Some(progress),
     ) {
         Ok(pulled) => {
-            finalize_v2_pull_blob_backfill(conn, db_key, sync_key, base_url, vault_id, id_token)?;
+            finalize_v2_pull_blob_backfill(
+                conn, db_key, sync_key, base_url, vault_id, id_token, pulled,
+            )?;
             Ok(pulled)
         }
         Err(error) if v2_route_unavailable(&error) => progress::pull_with_progress(

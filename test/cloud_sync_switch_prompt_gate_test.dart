@@ -460,7 +460,8 @@ void main() {
     );
   });
 
-  testWidgets('Switching to Cloud still pulls when push is read-only blocked',
+  testWidgets(
+      'Switching to Cloud rolls back config when push is read-only blocked',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': false,
@@ -526,8 +527,11 @@ void main() {
       backend.calls,
       <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
     );
-    expect(find.textContaining('managed-vault push failed'), findsNothing);
-    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+    expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
     engine.stop();
   });
 
@@ -897,7 +901,7 @@ void main() {
   });
 
   testWidgets(
-      'Switching to Cloud updates write gate when retry push fails after recovery pull',
+      'Switching to Cloud rolls back config when retry push fails after recovery pull',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': false,
@@ -968,7 +972,10 @@ void main() {
         'syncManagedVaultPush',
       ],
     );
-    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
     expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
     engine.stop();
   });

@@ -24,6 +24,10 @@ pub(super) fn artifact_backfill_key(scope_id: &str) -> String {
     format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}")
 }
 
+pub(super) fn v2_pull_media_clean_key(scope_id: &str) -> String {
+    format!("managed_vault.v2_pull_media_clean:{scope_id}")
+}
+
 fn is_not_found_io_error(error: &anyhow::Error) -> bool {
     error
         .downcast_ref::<std::io::Error>()
@@ -215,6 +219,33 @@ pub(super) fn has_pending_local_media_write_work(
     Ok(pending_local_media_write_work(conn, db_key, scope_id)?.any())
 }
 
+fn has_pending_download_blob_repairs(conn: &Connection, scope_id: &str) -> Result<bool> {
+    for item in crate::sync::blob_repair::load_blob_repair_items(conn, scope_id)? {
+        if matches!(
+            item.kind,
+            crate::sync::blob_repair::BlobRepairKind::DownloadAttachment { .. }
+                | crate::sync::blob_repair::BlobRepairKind::DownloadArtifact { .. }
+        ) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+pub(super) fn should_finalize_v2_pull_blob_backfill(
+    conn: &Connection,
+    scope_id: &str,
+    applied_ops: u64,
+) -> Result<bool> {
+    if applied_ops > 0 {
+        return Ok(true);
+    }
+    if has_pending_download_blob_repairs(conn, scope_id)? {
+        return Ok(true);
+    }
+    Ok(super::super::kv_get_i64(conn, &v2_pull_media_clean_key(scope_id))?.unwrap_or(0) == 0)
+}
+
 pub(super) fn update_v2_pull_backfill_markers(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -222,25 +253,84 @@ pub(super) fn update_v2_pull_backfill_markers(
     scope_id: &str,
 ) -> Result<()> {
     let pending_work = pending_local_media_write_work(conn, db_key, scope_id)?;
-    let attachment_key = attachment_backfill_key(scope_id);
-    if has_local_attachments(conn)?
+    let attachment_clean = has_local_attachments(conn)?
         && !has_missing_local_attachment_bytes(conn, db_key, app_dir)?
-        && !pending_work.attachments
-    {
+        && !pending_work.attachments;
+    let attachment_key = attachment_backfill_key(scope_id);
+    if attachment_clean {
         super::super::kv_set_i64(conn, &attachment_backfill_key(scope_id), 1)?;
     } else {
         let _ = conn.execute("DELETE FROM kv WHERE key = ?1", params![attachment_key])?;
     }
 
-    let artifact_key = artifact_backfill_key(scope_id);
-    if has_ready_embedding_artifact_blobs(conn)?
+    let artifact_clean = has_ready_embedding_artifact_blobs(conn)?
         && !has_missing_embedding_artifact_blobs(conn, app_dir)?
-        && !pending_work.artifacts
-    {
+        && !pending_work.artifacts;
+    let artifact_key = artifact_backfill_key(scope_id);
+    if artifact_clean {
         super::super::kv_set_i64(conn, &artifact_backfill_key(scope_id), 1)?;
     } else {
         let _ = conn.execute("DELETE FROM kv WHERE key = ?1", params![artifact_key])?;
     }
 
+    let clean_key = v2_pull_media_clean_key(scope_id);
+    if !pending_work.any()
+        && !has_missing_local_attachment_bytes(conn, db_key, app_dir)?
+        && !has_missing_embedding_artifact_blobs(conn, app_dir)?
+    {
+        super::super::kv_set_i64(conn, &clean_key, 1)?;
+    } else {
+        let _ = conn.execute("DELETE FROM kv WHERE key = ?1", params![clean_key])?;
+    }
+
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_op_pull_skips_finalize_when_scope_is_already_clean() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+
+        super::super::super::kv_set_i64(&conn, &v2_pull_media_clean_key("scope-a"), 1)
+            .expect("seed clean marker");
+
+        assert!(!should_finalize_v2_pull_blob_backfill(&conn, "scope-a", 0)
+            .expect("evaluate finalize gate"));
+    }
+
+    #[test]
+    fn no_op_pull_still_finalizes_when_download_repairs_are_pending() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+
+        super::super::super::kv_set_i64(&conn, &v2_pull_media_clean_key("scope-a"), 1)
+            .expect("seed clean marker");
+        crate::sync::blob_repair::enqueue_blob_repair(
+            &conn,
+            "scope-a",
+            crate::sync::blob_repair::BlobRepairKind::DownloadAttachment {
+                sha256: "sha-a".to_string(),
+            },
+        )
+        .expect("seed download repair");
+
+        assert!(should_finalize_v2_pull_blob_backfill(&conn, "scope-a", 0)
+            .expect("evaluate finalize gate"));
+    }
+
+    #[test]
+    fn pull_with_new_ops_still_finalizes_even_after_scope_is_clean() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+
+        super::super::super::kv_set_i64(&conn, &v2_pull_media_clean_key("scope-a"), 1)
+            .expect("seed clean marker");
+
+        assert!(should_finalize_v2_pull_blob_backfill(&conn, "scope-a", 1)
+            .expect("evaluate finalize gate"));
+    }
 }

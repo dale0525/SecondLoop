@@ -167,7 +167,7 @@ void main() {
   });
 
   test(
-      'managed-vault soft recovery blockers do not persist a local-repair background block',
+      'managed-vault local recovery blockers persist a background repair block',
       () {
     expect(
       shouldPersistManagedVaultBackgroundRepairBlock(
@@ -175,7 +175,7 @@ void main() {
           'managed-vault v2 recovery blocked: local_unpushed_changes',
         ),
       ),
-      isFalse,
+      isTrue,
     );
     expect(
       shouldPersistManagedVaultBackgroundRepairBlock(
@@ -183,7 +183,7 @@ void main() {
           'managed-vault v2 recovery blocked: local_media_backfill_pending',
         ),
       ),
-      isFalse,
+      isTrue,
     );
     expect(
       shouldPersistManagedVaultBackgroundRepairBlock(

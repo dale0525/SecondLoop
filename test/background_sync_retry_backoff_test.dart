@@ -261,7 +261,7 @@ void main() {
   });
 
   test(
-      'managed-vault pull-side recovery blockers do not enter a persistent local-repair block',
+      'managed-vault pull-side recovery blockers enter a persistent local-repair block',
       () {
     expect(
       BackgroundSync.shouldBlockBackgroundSyncForResults(
@@ -274,7 +274,7 @@ void main() {
         pullErrorMessage:
             'managed-vault v2 recovery blocked: local_media_backfill_pending',
       ),
-      isFalse,
+      isTrue,
     );
     expect(
       BackgroundSync.shouldBlockBackgroundSyncForResults(
@@ -287,7 +287,7 @@ void main() {
         pullErrorMessage:
             'managed-vault v2 recovery blocked: local_unpushed_changes',
       ),
-      isFalse,
+      isTrue,
     );
   });
 
