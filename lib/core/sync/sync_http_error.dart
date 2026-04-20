@@ -69,14 +69,7 @@ bool shouldBlockManagedVaultBackgroundSyncForFailure({
   required String? errorCode,
   required String? errorMessage,
 }) {
-  if (statusCode == 400 && errorCode == 'invalid_batch') {
-    return true;
-  }
-  final recoveryBlockedReason = errorMessage == null
-      ? null
-      : extractManagedVaultRecoveryBlockedReason(errorMessage);
-  return recoveryBlockedReason == 'local_unpushed_changes' ||
-      recoveryBlockedReason == 'local_media_backfill_pending';
+  return statusCode == 400 && errorCode == 'invalid_batch';
 }
 
 bool shouldPersistManagedVaultBackgroundRepairBlock(Object error) {

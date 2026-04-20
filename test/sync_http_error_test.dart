@@ -165,4 +165,33 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+      'managed-vault soft recovery blockers do not persist a local-repair background block',
+      () {
+    expect(
+      shouldPersistManagedVaultBackgroundRepairBlock(
+        StateError(
+          'managed-vault v2 recovery blocked: local_unpushed_changes',
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      shouldPersistManagedVaultBackgroundRepairBlock(
+        StateError(
+          'managed-vault v2 recovery blocked: local_media_backfill_pending',
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      shouldPersistManagedVaultBackgroundRepairBlock(
+        Exception(
+          'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"malformed_op"}',
+        ),
+      ),
+      isTrue,
+    );
+  });
 }
