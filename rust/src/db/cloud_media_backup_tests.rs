@@ -203,6 +203,51 @@ fn cloud_media_backup_scope_filters_due_rows_and_summary() {
 }
 
 #[test]
+fn cloud_media_backup_adopts_legacy_unscoped_rows_for_first_scoped_access() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+    let key = [6u8; 32];
+
+    let attachment =
+        insert_attachment(&conn, &key, &app_dir, b"legacy", "image/png").expect("insert");
+
+    conn.execute(
+        r#"INSERT INTO cloud_media_backup(
+               scope_id,
+               attachment_sha256,
+               desired_variant,
+               status,
+               attempts,
+               next_retry_at,
+               last_error,
+               updated_at
+           ) VALUES ('', ?1, 'original', 'pending', 0, NULL, NULL, 1234)"#,
+        params![attachment.sha256.as_str()],
+    )
+    .expect("seed legacy row");
+
+    let due =
+        list_due_cloud_media_backups(&conn, 1_500, 10, Some("scope-a")).expect("list adopted");
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].attachment_sha256, attachment.sha256);
+
+    let summary = cloud_media_backup_summary(&conn, Some("scope-a")).expect("summary");
+    assert_eq!(summary.pending, 1);
+
+    let scope_id: String = conn
+        .query_row(
+            r#"SELECT scope_id
+               FROM cloud_media_backup
+               WHERE attachment_sha256 = ?1"#,
+            params![attachment.sha256.as_str()],
+            |row| row.get(0),
+        )
+        .expect("load adopted scope");
+    assert_eq!(scope_id, "scope-a");
+}
+
+#[test]
 fn mark_attachment_annotation_ok_is_noop_when_attachment_missing() {
     let dir = tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

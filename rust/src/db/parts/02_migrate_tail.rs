@@ -684,10 +684,18 @@ ALTER TABLE knowledge_pages
 }
 
 fn migrate_from_v48_to_v49(conn: &Connection) -> Result<()> {
+    if sqlite_table_exists(conn, "cloud_media_backup")? {
+        conn.execute_batch(
+            r#"
+DROP TABLE IF EXISTS cloud_media_backup_v48_legacy;
+ALTER TABLE cloud_media_backup RENAME TO cloud_media_backup_v48_legacy;
+DROP INDEX IF EXISTS idx_cloud_media_backup_status_retry;
+"#,
+        )?;
+    }
+
     conn.execute_batch(
         r#"
-DROP TABLE IF EXISTS cloud_media_backup;
-
 CREATE TABLE cloud_media_backup (
   scope_id TEXT NOT NULL,
   attachment_sha256 TEXT NOT NULL,
@@ -702,10 +710,38 @@ CREATE TABLE cloud_media_backup (
 );
 CREATE INDEX idx_cloud_media_backup_status_retry
   ON cloud_media_backup(scope_id, status, next_retry_at);
-
-PRAGMA user_version = 49;
 "#,
     )?;
+
+    if sqlite_table_exists(conn, "cloud_media_backup_v48_legacy")? {
+        conn.execute_batch(
+            r#"
+INSERT INTO cloud_media_backup(
+  scope_id,
+  attachment_sha256,
+  desired_variant,
+  status,
+  attempts,
+  next_retry_at,
+  last_error,
+  updated_at
+)
+SELECT '',
+       attachment_sha256,
+       desired_variant,
+       status,
+       attempts,
+       next_retry_at,
+       last_error,
+       updated_at
+FROM cloud_media_backup_v48_legacy;
+
+DROP TABLE cloud_media_backup_v48_legacy;
+"#,
+        )?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 49;")?;
     Ok(())
 }
 
@@ -925,6 +961,9 @@ CREATE TABLE knowledge_pages (
         let conn = Connection::open_in_memory().expect("open in memory");
         conn.execute_batch(
             r#"
+CREATE TABLE attachments (
+  sha256 TEXT PRIMARY KEY
+);
 CREATE TABLE cloud_media_backup (
   attachment_sha256 TEXT PRIMARY KEY,
   desired_variant TEXT NOT NULL,
@@ -943,6 +982,7 @@ INSERT INTO cloud_media_backup(
   last_error,
   updated_at
 ) VALUES ('sha-1', 'original', 'pending', 0, NULL, NULL, 1234);
+INSERT INTO attachments(sha256) VALUES ('sha-1');
 PRAGMA user_version = 48;
 "#,
         )
@@ -969,10 +1009,22 @@ PRAGMA user_version = 48;
             "attachment_sha256 should be the second primary-key column"
         );
 
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM cloud_media_backup", [], |row| row.get(0))
-            .expect("count rows");
-        assert_eq!(count, 0, "v49 intentionally drops legacy rows");
+        let migrated: Vec<(String, String, String)> = conn
+            .prepare(
+                r#"SELECT scope_id, attachment_sha256, status
+                   FROM cloud_media_backup
+                   ORDER BY attachment_sha256 ASC"#,
+            )
+            .expect("prepare migrated rows")
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .expect("query migrated rows")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect migrated rows");
+        assert_eq!(
+            migrated,
+            vec![("".to_string(), "sha-1".to_string(), "pending".to_string())],
+            "legacy queue rows should be preserved under the unscoped legacy bucket"
+        );
 
         let user_version: i64 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))

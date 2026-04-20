@@ -169,23 +169,30 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     super.dispose();
   }
 
-  Future<CloudMediaBackupSummary>? _maybeLoadCloudMediaBackupSummary() {
+  Future<CloudMediaBackupSummary>? _maybeLoadCloudMediaBackupSummary({
+    String? scopeId,
+  }) {
     final backendScope =
         context.getInheritedWidgetOfExactType<AppBackendScope>();
     final sessionScope = context.getInheritedWidgetOfExactType<SessionScope>();
     if (backendScope == null || sessionScope == null) return null;
     try {
-      return backendScope.backend
-          .cloudMediaBackupSummary(sessionScope.sessionKey);
+      return backendScope.backend.cloudMediaBackupSummary(
+        sessionScope.sessionKey,
+        scopeId: scopeId,
+      );
     } on UnimplementedError {
       return null;
     }
   }
 
-  void _refreshCloudMediaBackupSummary() {
+  void _refreshCloudMediaBackupSummary({
+    String? scopeId,
+  }) {
     if (!mounted) return;
     setState(() {
-      _cloudMediaBackupSummary = _maybeLoadCloudMediaBackupSummary();
+      _cloudMediaBackupSummary =
+          _maybeLoadCloudMediaBackupSummary(scopeId: scopeId);
     });
   }
 

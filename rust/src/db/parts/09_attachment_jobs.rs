@@ -177,12 +177,38 @@ pub fn enqueue_cloud_media_backup(
     }
 
     let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    let _ = adopt_legacy_cloud_media_backup_scope(conn, &scope_id)?;
     upsert_cloud_media_backup_row(conn, attachment_sha256, desired_variant, now_ms, &scope_id)?;
     Ok(())
 }
 
 fn normalize_cloud_media_backup_scope_id(scope_id: Option<&str>) -> String {
     scope_id.unwrap_or("").trim().to_string()
+}
+
+fn adopt_legacy_cloud_media_backup_scope(conn: &Connection, scope_id: &str) -> Result<u64> {
+    if scope_id.is_empty() {
+        return Ok(0);
+    }
+
+    let scoped_count: i64 = conn.query_row(
+        r#"SELECT COUNT(*) FROM cloud_media_backup WHERE scope_id = ?1"#,
+        params![scope_id],
+        |row| row.get(0),
+    )?;
+    if scoped_count > 0 {
+        return Ok(0);
+    }
+
+    let adopted = conn.execute(
+        r#"
+UPDATE cloud_media_backup
+SET scope_id = ?1
+WHERE scope_id = ''
+"#,
+        params![scope_id],
+    )?;
+    Ok(adopted as u64)
 }
 
 fn upsert_cloud_media_backup_row(
@@ -274,6 +300,7 @@ pub fn backfill_cloud_media_backup_images(
     }
 
     let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    let _ = adopt_legacy_cloud_media_backup_scope(conn, &scope_id)?;
     let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn, &scope_id)?;
 
     let Ok(app_dir) = app_dir_from_conn(conn) else {
@@ -316,6 +343,7 @@ pub fn list_due_cloud_media_backups(
     scope_id: Option<&str>,
 ) -> Result<Vec<CloudMediaBackup>> {
     let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    let _ = adopt_legacy_cloud_media_backup_scope(conn, &scope_id)?;
     let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn, &scope_id)?;
 
     let limit = limit.clamp(1, 500);
@@ -366,6 +394,7 @@ pub fn mark_cloud_media_backup_failed(
     scope_id: Option<&str>,
 ) -> Result<()> {
     let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    let _ = adopt_legacy_cloud_media_backup_scope(conn, &scope_id)?;
     conn.execute(
         r#"
 UPDATE cloud_media_backup
@@ -396,6 +425,7 @@ pub fn mark_cloud_media_backup_uploaded(
     scope_id: Option<&str>,
 ) -> Result<()> {
     let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    let _ = adopt_legacy_cloud_media_backup_scope(conn, &scope_id)?;
     conn.execute(
         r#"
 UPDATE cloud_media_backup
@@ -416,6 +446,7 @@ pub fn cloud_media_backup_summary(
     scope_id: Option<&str>,
 ) -> Result<CloudMediaBackupSummary> {
     let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    let _ = adopt_legacy_cloud_media_backup_scope(conn, &scope_id)?;
     let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn, &scope_id)?;
 
     let mut pending = 0i64;

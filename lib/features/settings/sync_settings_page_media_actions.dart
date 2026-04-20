@@ -58,7 +58,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       }
       if (!mounted) return;
       _showSnack(t.sync.mediaBackup.backfillEnqueued(count: enqueued));
-      _refreshCloudMediaBackupSummary();
+      _refreshCloudMediaBackupSummary(scopeId: scopeId);
     } catch (e) {
       if (!mounted) return;
       _showSnack(t.sync.mediaBackup.backfillFailed(error: '$e'));
@@ -205,7 +205,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       } else {
         _showSnack(t.sync.mediaBackup.nothingToUpload);
       }
-      _refreshCloudMediaBackupSummary();
+      _refreshCloudMediaBackupSummary(scopeId: scopeId);
     } catch (e) {
       if (!mounted) return;
       _showSnack(t.sync.mediaBackup.uploadFailed(error: '$e'));

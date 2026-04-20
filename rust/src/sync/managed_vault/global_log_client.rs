@@ -402,7 +402,8 @@ fn apply_v2_pull_ops(
                 Err(error) => return Err(error),
             }
         }
-        super::apply_pending_ops_until_stable(conn, db_key, &apply_scope_id, &mut pending)?;
+        batch_applied +=
+            super::apply_pending_ops_until_stable(conn, db_key, &apply_scope_id, &mut pending)?;
         Ok(())
     })?;
     Ok(batch_applied)

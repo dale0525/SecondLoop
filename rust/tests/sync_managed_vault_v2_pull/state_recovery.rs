@@ -1,5 +1,25 @@
 use super::*;
 
+fn op_type_from_server_value(sync_key: &[u8; 32], value: &serde_json::Value) -> String {
+    let ciphertext = base64::engine::general_purpose::STANDARD
+        .decode(value["ciphertext_b64"].as_str().expect("ciphertext_b64"))
+        .expect("decode ciphertext");
+    let device_id = value["device_id"].as_str().expect("device_id");
+    let seq = value["seq"].as_i64().expect("seq");
+    let plaintext = secondloop_rust::crypto::decrypt_bytes(
+        sync_key,
+        &ciphertext,
+        format!("sync.ops:{device_id}:{seq}").as_bytes(),
+    )
+    .expect("decrypt op");
+    serde_json::from_slice::<serde_json::Value>(&plaintext)
+        .expect("parse op")
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .to_string()
+}
+
 #[test]
 fn managed_vault_v2_empty_remote_pull_does_not_persist_generation_state() {
     let (base_url, stop_tx, state, handle) = start_mock_v2_server();
@@ -42,6 +62,76 @@ fn managed_vault_v2_empty_remote_pull_does_not_persist_generation_state() {
         .optional()
         .expect("load generation");
     assert_eq!(generation, None);
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_counts_ops_applied_after_pending_dependency_resolves() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    {
+        let mut server = state.lock().expect("lock");
+        assert_eq!(server.ops.len(), 2, "expected conversation + message ops");
+        let mut conversation = None;
+        let mut message = None;
+        for value in &server.ops {
+            match op_type_from_server_value(&sync_key, value).as_str() {
+                "conversation.upsert.v1" => conversation = Some(value.clone()),
+                "message.insert.v1" => message = Some(value.clone()),
+                _ => {}
+            }
+        }
+        let mut conversation = conversation.expect("conversation op");
+        let mut message = message.expect("message op");
+        message["global_seq"] = serde_json::Value::from(1);
+        conversation["global_seq"] = serde_json::Value::from(2);
+        server.ops = vec![message, conversation];
+        server.latest_global_seq = 2;
+    }
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull");
+    assert_eq!(
+        pulled, 2,
+        "pending apply resolution should count toward pull total"
+    );
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
+    assert_eq!(msgs_b.len(), 1);
+    assert_eq!(msgs_b[0].content, "hello");
 
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");
