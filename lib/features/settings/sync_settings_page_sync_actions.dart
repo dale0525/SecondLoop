@@ -112,6 +112,17 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return int.tryParse(statusText);
   }
 
+  String? _currentBackgroundSyncScopeId() {
+    final remoteRoot = _requiredTrimmed(_remoteRootController);
+    if (remoteRoot.isEmpty) return null;
+    return _store.syncConfigScopeId(
+      backendType: _effectiveBackendType,
+      baseUrl: _optionalTrimmed(_baseUrlController),
+      localDir: _optionalTrimmed(_localDirController),
+      remoteRoot: remoteRoot,
+    );
+  }
+
   Future<void> _writeLastSyncLog({
     required SyncBackgroundDirection direction,
     required SyncBackgroundResultStatus status,
@@ -135,6 +146,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           durationMs: durationMs,
         ),
         backendType: _effectiveBackendType,
+        scopeId: _currentBackgroundSyncScopeId(),
       );
     } catch (_) {
       // Diagnostics persistence is best-effort and should never block sync UX.

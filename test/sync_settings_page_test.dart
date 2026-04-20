@@ -10,6 +10,7 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
+import 'package:secondloop/core/sync/sync_diagnostics.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
@@ -1210,14 +1211,27 @@ void main() {
     await store.writeRemoteRoot('uid_1');
     await store.writeManagedVaultBaseUrl('https://vault.example.com');
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    final scopeId = store.syncConfigScopeId(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+    );
     await store.writeBackgroundSyncRepairRequired(
       true,
       backendType: SyncBackendType.managedVault,
-      scopeId: store.syncConfigScopeId(
+      scopeId: scopeId,
+    );
+    await store.writeBackgroundSyncBackoffState(
+      const SyncBackgroundBackoffState(
         backendType: SyncBackendType.managedVault,
-        baseUrl: 'https://vault.example.com',
-        remoteRoot: 'uid_1',
+        retryCount: 3,
+        nextAllowedAtMs: 999999,
+        updatedAtMs: 999000,
+        lastStatusCode: 503,
+        lastErrorCode: 'server_error',
       ),
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
     );
 
     final backend = _GenerationMismatchRecoveryManagedVaultSyncBackend();
@@ -1266,13 +1280,16 @@ void main() {
     expect(
       await store.readBackgroundSyncRepairRequired(
         backendType: SyncBackendType.managedVault,
-        scopeId: store.syncConfigScopeId(
-          backendType: SyncBackendType.managedVault,
-          baseUrl: 'https://vault.example.com',
-          remoteRoot: 'uid_1',
-        ),
+        scopeId: scopeId,
       ),
       isFalse,
+    );
+    expect(
+      await store.readBackgroundSyncBackoffState(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isNull,
     );
   });
 }

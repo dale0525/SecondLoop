@@ -43,6 +43,58 @@ void main() {
     expect(restored.durationMs, 520);
   });
 
+  test('SyncConfigStore scopes background sync result by config', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    final configA = SyncConfig.managedVault(
+      syncKey: syncKey,
+      vaultId: 'vault-a',
+      baseUrl: 'https://vault-a.example.com',
+    );
+    final configB = SyncConfig.managedVault(
+      syncKey: syncKey,
+      vaultId: 'vault-b',
+      baseUrl: 'https://vault-b.example.com',
+    );
+    final scopeA = store.backgroundSyncScopeId(configA);
+    final scopeB = store.backgroundSyncScopeId(configB);
+
+    const result = SyncBackgroundResult(
+      backendType: SyncBackendType.managedVault,
+      direction: SyncBackgroundDirection.pull,
+      status: SyncBackgroundResultStatus.failure,
+      timestampMs: 123,
+      statusCode: 429,
+      errorCode: 'rate_limited',
+      errorMessage: 'managed-vault pull failed: HTTP 429',
+      userMessage: 'Sync is being throttled. Retrying later.',
+      retryCount: 2,
+      durationMs: 520,
+    );
+
+    await store.writeBackgroundSyncResult(
+      result,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeA,
+    );
+
+    expect(
+      await store.readBackgroundSyncResult(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeA,
+      ),
+      isNotNull,
+    );
+    expect(
+      await store.readBackgroundSyncResult(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeB,
+      ),
+      isNull,
+    );
+  });
+
   test('SyncConfigStore persists background sync backoff state', () async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();

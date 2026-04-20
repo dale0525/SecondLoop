@@ -12,6 +12,7 @@ import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
+import 'package:secondloop/core/sync/sync_diagnostics.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
@@ -274,6 +275,23 @@ void main() {
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
     await store.writeCloudMediaBackupEnabled(true);
     await store.writeCloudMediaBackupWifiOnly(true);
+    final scopeId = store.syncConfigScopeId(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'vault-1',
+    );
+    await store.writeBackgroundSyncBackoffState(
+      const SyncBackgroundBackoffState(
+        backendType: SyncBackendType.managedVault,
+        retryCount: 4,
+        nextAllowedAtMs: 999999,
+        updatedAtMs: 999000,
+        lastStatusCode: 503,
+        lastErrorCode: 'server_error',
+      ),
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
 
     final oldConnectivity = ConnectivityPlatform.instance;
     ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
@@ -335,6 +353,13 @@ void main() {
       expect(backend.managedVaultPullCalls, 1);
       expect(backend.managedVaultUploadAttachmentCalls, 1);
       expect(backend.markUploadedCalls, 1);
+      expect(
+        await store.readBackgroundSyncBackoffState(
+          backendType: SyncBackendType.managedVault,
+          scopeId: scopeId,
+        ),
+        isNull,
+      );
     } finally {
       ConnectivityPlatform.instance = oldConnectivity;
     }

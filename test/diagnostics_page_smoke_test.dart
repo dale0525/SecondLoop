@@ -105,6 +105,10 @@ void main() {
   testWidgets('Diagnostics JSON includes last sync log', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-user-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
     await store.writeBackgroundSyncResult(
       const SyncBackgroundResult(
         backendType: SyncBackendType.managedVault,
@@ -119,6 +123,11 @@ void main() {
         durationMs: 520,
       ),
       backendType: SyncBackendType.managedVault,
+      scopeId: store.syncConfigScopeId(
+        backendType: SyncBackendType.managedVault,
+        baseUrl: 'https://vault.example.com',
+        remoteRoot: 'vault-user-1',
+      ),
     );
 
     await tester.pumpWidget(

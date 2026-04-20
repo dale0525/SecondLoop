@@ -392,6 +392,11 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
               backendType: SyncBackendType.managedVault,
               scopeId: scopeId,
             );
+            await _configStore.writeBackgroundSyncBackoffState(
+              null,
+              backendType: SyncBackendType.managedVault,
+              scopeId: scopeId,
+            );
             await _writeManagedVaultMediaUploadPending(config, true);
             return pushed;
           } catch (error) {

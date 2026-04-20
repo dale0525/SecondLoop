@@ -196,6 +196,7 @@ final class BackgroundSync {
         await _writeBackgroundResult(
           store: store,
           backendType: config.backendType,
+          scopeId: backgroundScopeId,
           direction: SyncBackgroundDirection.push,
           result: _BackgroundSyncOpResult.skipped(
             durationMs: 0,
@@ -367,6 +368,7 @@ final class BackgroundSync {
         await _writeBackgroundResult(
           store: store,
           backendType: config.backendType,
+          scopeId: backgroundScopeId,
           direction: SyncBackgroundDirection.pull,
           result: pullResult,
           retryCount: pullResult.retryable ? retryCount : null,
@@ -374,6 +376,7 @@ final class BackgroundSync {
         await _writeBackgroundResult(
           store: store,
           backendType: config.backendType,
+          scopeId: backgroundScopeId,
           direction: SyncBackgroundDirection.push,
           result: pushResult,
           retryCount: pushResult.retryable ? retryCount : null,
@@ -810,6 +813,7 @@ final class BackgroundSync {
   static Future<void> _writeBackgroundResult({
     required SyncConfigStore store,
     required SyncBackendType backendType,
+    required String scopeId,
     required SyncBackgroundDirection direction,
     required _BackgroundSyncOpResult result,
     required int? retryCount,
@@ -833,6 +837,7 @@ final class BackgroundSync {
         durationMs: result.durationMs,
       ),
       backendType: backendType,
+      scopeId: scopeId,
     );
   }
 }

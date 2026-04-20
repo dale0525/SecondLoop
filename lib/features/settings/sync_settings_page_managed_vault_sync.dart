@@ -32,18 +32,24 @@ final class _ManagedVaultPushStageResult {
 }
 
 extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
-  Future<void> _clearManagedVaultBackgroundRepairBlock({
+  Future<void> _clearManagedVaultBackgroundSyncBlockers({
     required String baseUrl,
     required String vaultId,
-  }) {
-    return _store.writeBackgroundSyncRepairRequired(
+  }) async {
+    final scopeId = _store.syncConfigScopeId(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: baseUrl,
+      remoteRoot: vaultId,
+    );
+    await _store.writeBackgroundSyncRepairRequired(
       false,
       backendType: SyncBackendType.managedVault,
-      scopeId: _store.syncConfigScopeId(
-        backendType: SyncBackendType.managedVault,
-        baseUrl: baseUrl,
-        remoteRoot: vaultId,
-      ),
+      scopeId: scopeId,
+    );
+    await _store.writeBackgroundSyncBackoffState(
+      null,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
     );
   }
 
@@ -162,7 +168,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         onProgress: reporter.onProgress,
       );
       reporter.complete();
-      await _clearManagedVaultBackgroundRepairBlock(
+      await _clearManagedVaultBackgroundSyncBlockers(
         baseUrl: baseUrl,
         vaultId: vaultId,
       );

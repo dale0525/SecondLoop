@@ -81,8 +81,11 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
 
     for (final backendType in SyncBackendType.values) {
       final token = _backendTypeToken(backendType);
-      final log =
-          await store.readBackgroundSyncResult(backendType: backendType);
+      final log = await store.readBackgroundSyncResult(
+        backendType: backendType,
+        scopeId:
+            activeConfig?.backendType == backendType ? activeScopeId : null,
+      );
       if (log != null) {
         syncLogsByBackend[token] = _syncResultToDiagnosticsJson(log);
         if (latestSyncLog == null ||

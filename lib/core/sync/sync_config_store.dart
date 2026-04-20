@@ -368,9 +368,13 @@ final class SyncConfigStore {
 
   Future<SyncBackgroundResult?> readBackgroundSyncResult({
     required SyncBackendType backendType,
+    String? scopeId,
   }) async {
-    final key =
-        '$_kBackgroundSyncResultPrefix${_backendTypeToken(backendType)}';
+    final key = _backgroundSyncScopedKey(
+      _kBackgroundSyncResultPrefix,
+      backendType,
+      scopeId: scopeId,
+    );
     final raw = (await _loadConfigMap())[key];
     if (raw == null || raw.trim().isEmpty) return null;
     try {
@@ -385,9 +389,13 @@ final class SyncConfigStore {
   Future<void> writeBackgroundSyncResult(
     SyncBackgroundResult? result, {
     required SyncBackendType backendType,
+    String? scopeId,
   }) async {
-    final key =
-        '$_kBackgroundSyncResultPrefix${_backendTypeToken(backendType)}';
+    final key = _backgroundSyncScopedKey(
+      _kBackgroundSyncResultPrefix,
+      backendType,
+      scopeId: scopeId,
+    );
     if (result == null) {
       await _writeConfigUpdates({key: null});
       return;
