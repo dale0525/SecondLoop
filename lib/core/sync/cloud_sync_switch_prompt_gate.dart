@@ -197,9 +197,8 @@ final class _CloudSyncSwitchPromptGateState
     required String vaultId,
     required Uint8List syncKey,
   }) {
-    final gate = managedVaultWriteGateStateForError(error);
     return _store.writeBackgroundSyncRepairRequired(
-      gate?.kind == SyncWriteGateKind.localRepairRequired,
+      shouldPersistManagedVaultBackgroundRepairBlock(error),
       backendType: SyncBackendType.managedVault,
       scopeId: _store.syncStateScopeIdForFields(
         backendType: SyncBackendType.managedVault,

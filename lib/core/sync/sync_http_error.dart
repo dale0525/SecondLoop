@@ -64,6 +64,29 @@ ManagedVaultPushFailureDetails inspectManagedVaultPushFailure(Object error) {
   );
 }
 
+bool shouldBlockManagedVaultBackgroundSyncForFailure({
+  required int? statusCode,
+  required String? errorCode,
+  required String? errorMessage,
+}) {
+  if (statusCode == 400 && errorCode == 'invalid_batch') {
+    return true;
+  }
+  final recoveryBlockedReason = errorMessage == null
+      ? null
+      : extractManagedVaultRecoveryBlockedReason(errorMessage);
+  return recoveryBlockedReason == 'local_unpushed_changes' ||
+      recoveryBlockedReason == 'local_media_backfill_pending';
+}
+
+bool shouldPersistManagedVaultBackgroundRepairBlock(Object error) {
+  return shouldBlockManagedVaultBackgroundSyncForFailure(
+    statusCode: extractSyncHttpStatusCode(error),
+    errorCode: extractSyncErrorCode(error),
+    errorMessage: error.toString(),
+  );
+}
+
 void reopenManagedVaultWriteGateOnSuccess(SyncEngine? engine) {
   engine?.writeGate.value = const SyncWriteGateState.open();
 }

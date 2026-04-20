@@ -218,7 +218,7 @@ void main() {
     }
   });
 
-  testWidgets('Media uploads on => auto-backfills cloud media queue once',
+  testWidgets('Media uploads on => auto-backfills cloud media queue',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -258,7 +258,62 @@ void main() {
         }
       });
 
-      expect(backend.cloudMediaBackfillCalls, 1);
+      expect(backend.cloudMediaBackfillCalls, greaterThanOrEqualTo(1));
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
+  testWidgets('Auto sync ignores stale media backfill done markers',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeWebdavUsername('u');
+    await store.writeWebdavPassword('p');
+    await store.writeSyncKey(syncKey);
+    await store.writeCloudMediaBackupEnabled(true);
+    await store.writeCloudMediaBackupWifiOnly(true);
+    final scopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.webdav,
+      baseUrl: 'https://example.com/dav',
+      username: 'u',
+      remoteRoot: 'SecondLoop',
+      syncKey: syncKey,
+    );
+    await store.writeCloudMediaBackupBackfillDone(scopeId: scopeId, done: true);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _RecordingBackend();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const SyncEngineGate(child: SizedBox.shrink()),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.cloudMediaBackfillCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.cloudMediaBackfillCalls, greaterThanOrEqualTo(1));
     } finally {
       ConnectivityPlatform.instance = oldConnectivity;
     }
@@ -965,7 +1020,7 @@ void main() {
   });
 
   testWidgets(
-      'Entitled subscription reopens payment and storage-quota gates, not grace read-only',
+      'Entitled subscription reopens payment gates, but not grace or storage quota gates',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -1038,7 +1093,10 @@ void main() {
       subscription.status = SubscriptionStatus.entitled;
       await tester.pump();
 
-      expect(engine!.writeGate.value.kind, SyncWriteGateKind.open);
+      expect(
+        engine!.writeGate.value.kind,
+        SyncWriteGateKind.storageQuotaExceeded,
+      );
     } finally {
       ConnectivityPlatform.instance = oldConnectivity;
     }

@@ -726,6 +726,19 @@ void main() {
     expect(await store.readBackendType(), SyncBackendType.webdav);
     expect(await store.readRemoteRoot(), 'SecondLoop');
     expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    final blockedScopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: blockedScopeId,
+      ),
+      isTrue,
+    );
     expect(
       find.textContaining(
         'Local changes still need to upload before cloud recovery can continue.',
@@ -785,6 +798,19 @@ void main() {
     expect(await store.readBackendType(), SyncBackendType.webdav);
     expect(await store.readRemoteRoot(), 'SecondLoop');
     expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    final blockedScopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: blockedScopeId,
+      ),
+      isTrue,
+    );
     expect(
       find.textContaining(
         'Local media still needs cloud backfill before recovery can continue.',

@@ -229,8 +229,7 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
       return;
     }
     final gateKind = engine.writeGate.value.kind;
-    if (gateKind == SyncWriteGateKind.paymentRequired ||
-        gateKind == SyncWriteGateKind.storageQuotaExceeded) {
+    if (gateKind == SyncWriteGateKind.paymentRequired) {
       engine.writeGate.value = const SyncWriteGateState.open();
     }
   }
@@ -386,19 +385,10 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
     final scopeId = _configStore.syncStateScopeId(config);
     if (scopeId.isEmpty) return;
 
-    final alreadyDone = await _configStore.readCloudMediaBackupBackfillDone(
-      scopeId: scopeId,
-    );
-    if (alreadyDone) return;
-
     await backend.backfillCloudMediaBackupImages(
       _sessionKey,
       desiredVariant: 'original',
       nowMs: DateTime.now().millisecondsSinceEpoch,
-    );
-    await _configStore.writeCloudMediaBackupBackfillDone(
-      scopeId: scopeId,
-      done: true,
     );
   }
 

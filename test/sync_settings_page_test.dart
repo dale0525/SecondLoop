@@ -1360,6 +1360,67 @@ void main() {
       isNull,
     );
   });
+
+  testWidgets(
+      'managed vault manual upload persists repair block when local changes still need upload',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    final scopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+
+    final backend =
+        _LocalUnpushedChangesRecoveryBlockedManagedVaultSyncBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isTrue,
+    );
+  });
 }
 
 Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
@@ -1934,6 +1995,25 @@ final class _GenerationMismatchRecoveryManagedVaultSyncBackend
       );
     }
     return 1;
+  }
+}
+
+final class _LocalUnpushedChangesRecoveryBlockedManagedVaultSyncBackend
+    extends _SyncSettingsBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw StateError(
+      'managed-vault v2 recovery blocked: local_unpushed_changes',
+    );
   }
 }
 
