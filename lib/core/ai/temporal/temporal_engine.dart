@@ -202,6 +202,20 @@ final class TemporalEngine {
       return null;
     }
 
+    if (candidate.startLocal != null && candidate.endLocal != null) {
+      return TemporalResolution(
+        mode: mode,
+        confidence: candidate.confidence,
+        resolver: candidate.resolver,
+        semantics: candidate.semantics,
+        startLocal: candidate.startLocal,
+        endLocal: candidate.endLocal,
+        metadata: candidate.metadata.copyWith(
+          normalizedExpression: expression,
+        ),
+      );
+    }
+
     final boundary = candidate.pointLocal!;
     if (!boundary.isAfter(nowLocal)) {
       return TemporalResolution(

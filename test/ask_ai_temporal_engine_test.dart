@@ -71,4 +71,18 @@ void main() {
     expect(result.timeRange?.startLocal, DateTime(2026, 2, 2));
     expect(result.timeRange?.endLocal, DateTime(2026, 2, 9));
   });
+
+  test('Ask AI keeps 春节后 future scope open until the next supported boundary',
+      () {
+    final result = AskAiIntentResolver.resolve(
+      '春节后要处理哪些报销？',
+      DateTime(2025, 12, 20, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      firstDayOfWeekIndex: 1,
+    );
+
+    expect(result.kind, AskAiIntentKind.future);
+    expect(result.timeRange?.startLocal, DateTime(2026, 2, 24));
+    expect(result.timeRange?.endLocal, DateTime(2027, 2, 15));
+  });
 }

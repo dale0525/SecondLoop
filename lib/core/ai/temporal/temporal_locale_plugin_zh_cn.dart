@@ -115,11 +115,34 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
           ),
         );
       }
+      final today = DateTime(
+        request.nowLocal.year,
+        request.nowLocal.month,
+        request.nowLocal.day,
+      );
+      if (!firstWorkingDay.isAfter(today)) {
+        return TemporalCandidate(
+          resolver: TemporalResolver.localePlugin,
+          confidence: 0.82,
+          semantics: TemporalSemantics.rangePast,
+          pointLocal: firstWorkingDay,
+          startLocal: firstWorkingDay,
+          endLocal: request.nowLocal,
+          metadata: metadata.copyWith(normalizedExpression: matchedExpression),
+        );
+      }
+      final nextBoundary = _resolveNextFestivalBoundary(
+            firstWorkingDay,
+            useFirstWorkingDay: true,
+          ) ??
+          firstWorkingDay.add(const Duration(days: 366));
       return TemporalCandidate(
         resolver: TemporalResolver.localePlugin,
         confidence: 0.82,
         semantics: TemporalSemantics.rangeFuture,
         pointLocal: firstWorkingDay,
+        startLocal: firstWorkingDay,
+        endLocal: nextBoundary,
         metadata: metadata.copyWith(normalizedExpression: matchedExpression),
       );
     }
@@ -187,6 +210,25 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
       return mostRecent;
     }
     return upcoming;
+  }
+
+  static DateTime? _resolveNextFestivalBoundary(
+    DateTime boundary, {
+    required bool useFirstWorkingDay,
+  }) {
+    final boundaries =
+        useFirstWorkingDay ? _springFestivalFirstWorkingDay : _lunarNewYearDay;
+    if (boundaries.isEmpty) return null;
+
+    final years = boundaries.keys.toList()..sort();
+    for (final year in years) {
+      final candidate = boundaries[year];
+      if (candidate == null) continue;
+      if (candidate.isAfter(boundary)) {
+        return candidate;
+      }
+    }
+    return null;
   }
 
   static String _matchedExpression(String text) {

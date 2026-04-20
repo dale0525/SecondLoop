@@ -416,7 +416,7 @@ final class TemporalRuleResolver {
   }) {
     if (normalizedText.isEmpty) return null;
 
-    final timeOfDay = _parseTimeOfDay(text);
+    final timeOfDay = _parseTimeOfDay(normalizedText);
 
     final explicitDateCandidate = _resolveExplicitDate(
       text: text,
@@ -680,7 +680,7 @@ final class TemporalRuleResolver {
       }
     }
 
-    final cjkMatch = _cjkMonthDay.firstMatch(text);
+    final cjkMatch = _cjkMonthDay.firstMatch(normalizedText);
     if (cjkMatch != null) {
       final month = int.tryParse(cjkMatch.group(1)!);
       final day = int.tryParse(cjkMatch.group(2)!);

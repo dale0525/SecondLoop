@@ -421,4 +421,38 @@ void main() {
     expect(result.dueAtLocal, isNull);
     expect(result.metadata.needsEnhancement, isFalse);
   });
+
+  test('todo_due parses fullwidth CJK month-day and zh time-of-day', () {
+    final result = TemporalEngine.resolve(
+      text: '把报销改到２月１号下午３点半',
+      nowLocal: DateTime(2026, 1, 20, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoFollowupDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.resolver, TemporalResolver.rule);
+    expect(result.dueAtLocal, DateTime(2026, 2, 1, 15, 30));
+    expect(result.metadata.normalizedExpression, '2月1号');
+  });
+
+  test('todo_due parses fullwidth slash date and 24h time', () {
+    final result = TemporalEngine.resolve(
+      text: '２０２６／２／４ １４：３０提醒我开会',
+      nowLocal: DateTime(2026, 1, 20, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.resolver, TemporalResolver.rule);
+    expect(result.dueAtLocal, DateTime(2026, 2, 4, 14, 30));
+    expect(result.metadata.normalizedExpression, contains('2/4'));
+  });
 }
