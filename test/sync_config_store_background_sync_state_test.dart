@@ -229,4 +229,46 @@ void main() {
       isFalse,
     );
   });
+
+  test('SyncConfigStore differentiates WebDAV scope by username', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 3));
+    final configA = SyncConfig.webdav(
+      syncKey: syncKey,
+      remoteRoot: 'SecondLoop',
+      baseUrl: 'https://dav.example.com',
+      username: 'alice',
+      password: 'pw-a',
+    );
+    final configB = SyncConfig.webdav(
+      syncKey: syncKey,
+      remoteRoot: 'SecondLoop',
+      baseUrl: 'https://dav.example.com',
+      username: 'bob',
+      password: 'pw-b',
+    );
+
+    expect(store.backgroundSyncScopeId(configA),
+        isNot(store.backgroundSyncScopeId(configB)));
+  });
+
+  test('SyncConfigStore differentiates managed-vault scope by sync key',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final configA = SyncConfig.managedVault(
+      syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      vaultId: 'vault-1',
+      baseUrl: 'https://vault.example.com',
+    );
+    final configB = SyncConfig.managedVault(
+      syncKey: Uint8List.fromList(List<int>.filled(32, 2)),
+      vaultId: 'vault-1',
+      baseUrl: 'https://vault.example.com',
+    );
+
+    expect(store.backgroundSyncScopeId(configA),
+        isNot(store.backgroundSyncScopeId(configB)));
+  });
 }

@@ -275,10 +275,11 @@ void main() {
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
     await store.writeCloudMediaBackupEnabled(true);
     await store.writeCloudMediaBackupWifiOnly(true);
-    final scopeId = store.syncConfigScopeId(
+    final scopeId = store.backgroundSyncScopeIdForFields(
       backendType: SyncBackendType.managedVault,
       baseUrl: 'https://vault.example.com',
       remoteRoot: 'vault-1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
     );
     await store.writeBackgroundSyncBackoffState(
       const SyncBackgroundBackoffState(
@@ -485,14 +486,79 @@ void main() {
       expect(
         await store.readBackgroundSyncRepairRequired(
           backendType: SyncBackendType.managedVault,
-          scopeId: store.syncConfigScopeId(
+          scopeId: store.backgroundSyncScopeIdForFields(
             backendType: SyncBackendType.managedVault,
             baseUrl: 'https://vault.example.com',
             remoteRoot: 'vault-1',
+            syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
           ),
         ),
         isTrue,
       );
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
+  testWidgets(
+      'Managed-vault persisted repair block hydrates before foreground auto-push',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(syncKey);
+    await store.writeCloudMediaBackupEnabled(false);
+    await store.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+      scopeId: store.backgroundSyncScopeId(
+        SyncConfig.managedVault(
+          syncKey: syncKey,
+          vaultId: 'vault-1',
+          baseUrl: 'https://vault.example.com',
+        ),
+      ),
+    );
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultRecordingBackend();
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(engine, isNotNull);
+      expect(
+        engine!.writeGate.value.kind,
+        SyncWriteGateKind.localRepairRequired,
+      );
+      expect(backend.managedVaultPushCalls, 0);
     } finally {
       ConnectivityPlatform.instance = oldConnectivity;
     }

@@ -35,11 +35,13 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
   Future<void> _clearManagedVaultBackgroundSyncBlockers({
     required String baseUrl,
     required String vaultId,
+    required Uint8List syncKey,
   }) async {
-    final scopeId = _store.syncConfigScopeId(
+    final scopeId = _store.backgroundSyncScopeIdForFields(
       backendType: SyncBackendType.managedVault,
       baseUrl: baseUrl,
       remoteRoot: vaultId,
+      syncKey: syncKey,
     );
     await _store.writeBackgroundSyncRepairRequired(
       false,
@@ -57,15 +59,17 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     Object error, {
     required String baseUrl,
     required String vaultId,
+    required Uint8List syncKey,
   }) {
     final gate = managedVaultWriteGateStateForError(error);
     return _store.writeBackgroundSyncRepairRequired(
       gate?.kind == SyncWriteGateKind.localRepairRequired,
       backendType: SyncBackendType.managedVault,
-      scopeId: _store.syncConfigScopeId(
+      scopeId: _store.backgroundSyncScopeIdForFields(
         backendType: SyncBackendType.managedVault,
         baseUrl: baseUrl,
         remoteRoot: vaultId,
+        syncKey: syncKey,
       ),
     );
   }
@@ -171,6 +175,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
       await _clearManagedVaultBackgroundSyncBlockers(
         baseUrl: baseUrl,
         vaultId: vaultId,
+        syncKey: syncKey,
       );
       reopenManagedVaultWriteGateOnSuccess(engine);
       return _ManagedVaultPushStageResult.success(pushed);
@@ -180,6 +185,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         error,
         baseUrl: baseUrl,
         vaultId: vaultId,
+        syncKey: syncKey,
       );
       if (!allowRecovery ||
           details.recoveryAction ==

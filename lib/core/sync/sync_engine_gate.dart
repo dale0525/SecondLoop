@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -31,6 +33,7 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
   Object? _backendIdentity;
   Object? _cloudAuthIdentity;
   Uint8List? _sessionKey;
+  int _engineGeneration = 0;
 
   @override
   void initState() {
@@ -105,19 +108,56 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
       pullJitter: const Duration(seconds: 5),
       pullOnStart: true,
     );
-    engine.start();
-    engine.triggerPushNow();
-    engine.triggerPullNow();
-
     _backendIdentity = backend;
     _cloudAuthIdentity = cloudAuth;
     _sessionKey = Uint8List.fromList(sessionKey);
     _engine = engine;
+    final generation = ++_engineGeneration;
+    unawaited(
+      _initializeEngine(
+        engine: engine,
+        generation: generation,
+        subscriptionStatus: subscriptionStatus,
+      ),
+    );
+  }
+
+  Future<void> _initializeEngine({
+    required SyncEngine engine,
+    required int generation,
+    required SubscriptionStatus? subscriptionStatus,
+  }) async {
+    final config = await _configStore.loadConfiguredSyncIfAutoEnabled();
+    if (!mounted ||
+        !identical(_engine, engine) ||
+        _engineGeneration != generation) {
+      return;
+    }
+
+    if (config?.backendType == SyncBackendType.managedVault) {
+      final scopeId = _configStore.backgroundSyncScopeId(config!);
+      final repairRequired =
+          await _configStore.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      );
+      if (!mounted ||
+          !identical(_engine, engine) ||
+          _engineGeneration != generation) {
+        return;
+      }
+      if (repairRequired) {
+        engine.writeGate.value = const SyncWriteGateState.localRepairRequired();
+      }
+    }
 
     _maybeReopenWriteGateForEntitledSubscription(
       engine: engine,
       subscriptionStatus: subscriptionStatus,
     );
+    engine.start();
+    engine.triggerPushNow();
+    engine.triggerPullNow();
   }
 
   void _maybeReopenWriteGateForEntitledSubscription({

@@ -467,11 +467,32 @@ final class SyncConfigStore {
   }
 
   String backgroundSyncScopeId(SyncConfig config) {
-    return syncConfigScopeId(
+    return backgroundSyncScopeIdForFields(
       backendType: config.backendType,
       baseUrl: config.baseUrl,
       localDir: config.localDir,
+      username: config.username,
       remoteRoot: config.remoteRoot,
+      syncKey: config.syncKey,
+    );
+  }
+
+  String backgroundSyncScopeIdForFields({
+    required SyncBackendType backendType,
+    String? baseUrl,
+    String? localDir,
+    String? username,
+    required String remoteRoot,
+    Uint8List? syncKey,
+  }) {
+    return syncConfigScopeId(
+      backendType: backendType,
+      baseUrl: baseUrl,
+      localDir: localDir,
+      username: username,
+      remoteRoot: remoteRoot,
+      syncKey: syncKey,
+      includeIdentity: true,
     );
   }
 
@@ -479,7 +500,10 @@ final class SyncConfigStore {
     required SyncBackendType backendType,
     String? baseUrl,
     String? localDir,
+    String? username,
     required String remoteRoot,
+    Uint8List? syncKey,
+    bool includeIdentity = false,
   }) {
     final backend = switch (backendType) {
       SyncBackendType.webdav => 'webdav',
@@ -491,13 +515,26 @@ final class SyncConfigStore {
       backend,
       baseUrl?.trim() ?? '',
       localDir?.trim() ?? '',
+      includeIdentity ? username?.trim() ?? '' : '',
       remoteRoot.trim(),
+      includeIdentity ? _syncKeyFingerprint(syncKey) : '',
     ].join('|');
     return base64Url.encode(utf8.encode(raw));
   }
 
   String cloudMediaBackupBackfillScopeId(SyncConfig config) {
     return backgroundSyncScopeId(config);
+  }
+
+  static String _syncKeyFingerprint(Uint8List? syncKey) {
+    if (syncKey == null || syncKey.isEmpty) return '';
+
+    var hash = 0xcbf29ce484222325;
+    for (final byte in syncKey) {
+      hash ^= byte;
+      hash = (hash * 0x100000001b3) & 0xffffffffffffffff;
+    }
+    return hash.toRadixString(16).padLeft(16, '0');
   }
 
   static String _backendTypeToken(SyncBackendType backendType) {

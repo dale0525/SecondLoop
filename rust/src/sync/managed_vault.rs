@@ -328,12 +328,10 @@ fn full_push_requires_legacy_media_sync(
 ) -> Result<bool> {
     let scope_id = runtime::scope_id(base_url, vault_id);
     let app_dir = super::app_dir_from_conn(conn)?;
-    let pending_repairs = pending_local_media_upload_repairs(conn, &scope_id)?;
     let attachment_backfill_key = attachment_backfill_key(&scope_id);
     if super::kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0
         || (has_local_attachments(conn)?
-            && (has_missing_local_attachment_bytes(conn, db_key, app_dir.as_path())?
-                || pending_repairs.attachments))
+            && has_missing_local_attachment_bytes(conn, db_key, app_dir.as_path())?)
     {
         if has_local_attachments(conn)? {
             return Ok(true);
@@ -343,8 +341,7 @@ fn full_push_requires_legacy_media_sync(
     let artifact_backfill_key = artifact_backfill_key(&scope_id);
     if super::kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0
         || (has_ready_embedding_artifact_blobs(conn)?
-            && (has_missing_embedding_artifact_blobs(conn, app_dir.as_path())?
-                || pending_repairs.artifacts))
+            && has_missing_embedding_artifact_blobs(conn, app_dir.as_path())?)
     {
         if has_ready_embedding_artifact_blobs(conn)? {
             return Ok(true);

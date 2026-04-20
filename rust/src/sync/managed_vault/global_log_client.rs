@@ -534,7 +534,14 @@ fn run_post_commit_blob_side_effects(
         .values()
         .any(|action| matches!(action, PendingAttachmentAction::Upload { .. }))
     {
-        super::attachments::prepare_local_attachment_uploads(&upload_ctx)?;
+        if let Err(error) = super::attachments::prepare_local_attachment_uploads(&upload_ctx) {
+            for (sha256, action) in &batch.attachment_actions {
+                if matches!(action, PendingAttachmentAction::Upload { .. }) {
+                    enqueue_attachment_upload_repair(conn, scope_id, sha256)?;
+                }
+            }
+            record_blob_side_effect_error(conn, scope_id, &error)?;
+        }
     }
 
     for (sha256, action) in &batch.attachment_actions {

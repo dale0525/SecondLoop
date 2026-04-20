@@ -1211,10 +1211,11 @@ void main() {
     await store.writeRemoteRoot('uid_1');
     await store.writeManagedVaultBaseUrl('https://vault.example.com');
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
-    final scopeId = store.syncConfigScopeId(
+    final scopeId = store.backgroundSyncScopeIdForFields(
       backendType: SyncBackendType.managedVault,
       baseUrl: 'https://vault.example.com',
       remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
     );
     await store.writeBackgroundSyncRepairRequired(
       true,

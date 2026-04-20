@@ -1025,6 +1025,90 @@ fn managed_vault_v2_post_commit_missing_attachment_is_queued_for_repair_and_reco
 }
 
 #[test]
+fn managed_vault_v2_post_commit_attachment_upload_failure_queues_repair_without_failing_push() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let attachment = db::insert_attachment(&conn, &key, &app_dir, b"upload failure", "image/png")
+        .expect("insert attachment");
+
+    state
+        .lock()
+        .expect("lock")
+        .put_attachment_failures
+        .insert(attachment.sha256.clone(), 2);
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn.execute(
+        "INSERT INTO kv(key, value) VALUES (?1, '1'), (?2, '1')
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![
+            format!("managed_vault.attachments.bytes_backfilled:{scope_id}"),
+            format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}"),
+        ],
+    )
+    .expect("seed backfill flags");
+
+    let pushed = sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("push should succeed while queueing post-commit repair");
+    assert!(pushed > 0);
+
+    let diagnostics = sync::blob_repair::load_blob_repair_diagnostics(&conn, &scope_id)
+        .expect("blob repair diagnostics after failed post-commit upload");
+    assert_eq!(diagnostics.queued_count, 1);
+
+    let last_pushed_seq: Option<i64> = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key LIKE 'managed_vault_v2.last_pushed_seq:%' LIMIT 1",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .expect("load last pushed seq")
+        .and_then(|raw| raw.parse::<i64>().ok());
+    assert!(last_pushed_seq.unwrap_or(0) > 0);
+
+    assert!(
+        !state
+            .lock()
+            .expect("lock")
+            .attachments
+            .contains_key(&attachment.sha256),
+        "attachment upload should have failed on first post-commit attempt"
+    );
+
+    let second_push =
+        sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("second push should drain queued repair");
+    assert_eq!(second_push, 0);
+
+    let diagnostics_after_retry = sync::blob_repair::load_blob_repair_diagnostics(&conn, &scope_id)
+        .expect("blob repair diagnostics after retry");
+    assert_eq!(diagnostics_after_retry.queued_count, 0);
+    assert!(state
+        .lock()
+        .expect("lock")
+        .attachments
+        .contains_key(&attachment.sha256));
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_v2_push_runs_managed_vault_retention_after_success() {
     let (base_url, stop_tx, _state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();

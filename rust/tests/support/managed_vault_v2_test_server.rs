@@ -15,6 +15,7 @@ pub struct V2ServerState {
     pub latest_global_seq: i64,
     pub ops: Vec<serde_json::Value>,
     pub attachments: BTreeMap<String, Vec<u8>>,
+    pub put_attachment_failures: BTreeMap<String, usize>,
     pub delete_attachment_failures: BTreeMap<String, usize>,
     pub requests: Vec<String>,
     pub require_generation_for_push_without_id: bool,
@@ -473,6 +474,33 @@ pub fn start_mock_v2_server() -> (
                             .unwrap_or_default()
                             .to_string();
                         let mut state = state_clone.lock().expect("lock");
+                        if state
+                            .put_attachment_failures
+                            .get(&artifact_id)
+                            .copied()
+                            .unwrap_or(0)
+                            > 0
+                        {
+                            let remaining = state
+                                .put_attachment_failures
+                                .get(&artifact_id)
+                                .copied()
+                                .unwrap_or(0)
+                                .saturating_sub(1);
+                            if remaining == 0 {
+                                state.put_attachment_failures.remove(&artifact_id);
+                            } else {
+                                state
+                                    .put_attachment_failures
+                                    .insert(artifact_id.clone(), remaining);
+                            }
+                            write_json_response(
+                                &mut stream,
+                                500,
+                                serde_json::json!({ "error": "upload_failed" }),
+                            );
+                            continue;
+                        }
                         state.attachments.insert(artifact_id, body);
                         write_json_response(&mut stream, 200, serde_json::json!({}));
                     }

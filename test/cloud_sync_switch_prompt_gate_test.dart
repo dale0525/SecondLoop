@@ -449,10 +449,11 @@ void main() {
     expect(
       await store.readBackgroundSyncRepairRequired(
         backendType: SyncBackendType.managedVault,
-        scopeId: store.syncConfigScopeId(
+        scopeId: store.backgroundSyncScopeIdForFields(
           backendType: SyncBackendType.managedVault,
           baseUrl: 'https://vault.example.com',
           remoteRoot: 'uid_1',
+          syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
         ),
       ),
       isTrue,
@@ -542,10 +543,11 @@ void main() {
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
     await store.writeManagedVaultBaseUrl('https://vault.example.com');
     await store.writeCloudMediaBackupEnabled(false);
-    final scopeId = store.syncConfigScopeId(
+    final scopeId = store.backgroundSyncScopeIdForFields(
       backendType: SyncBackendType.managedVault,
       baseUrl: 'https://vault.example.com',
       remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
     );
     await store.writeBackgroundSyncRepairRequired(
       true,

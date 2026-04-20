@@ -171,11 +171,13 @@ final class _CloudSyncSwitchPromptGateState
   Future<void> _clearManagedVaultBackgroundSyncBlockers({
     required String baseUrl,
     required String vaultId,
+    required Uint8List syncKey,
   }) async {
-    final scopeId = _store.syncConfigScopeId(
+    final scopeId = _store.backgroundSyncScopeIdForFields(
       backendType: SyncBackendType.managedVault,
       baseUrl: baseUrl,
       remoteRoot: vaultId,
+      syncKey: syncKey,
     );
     await _store.writeBackgroundSyncRepairRequired(
       false,
@@ -193,15 +195,17 @@ final class _CloudSyncSwitchPromptGateState
     Object error, {
     required String baseUrl,
     required String vaultId,
+    required Uint8List syncKey,
   }) {
     final gate = managedVaultWriteGateStateForError(error);
     return _store.writeBackgroundSyncRepairRequired(
       gate?.kind == SyncWriteGateKind.localRepairRequired,
       backendType: SyncBackendType.managedVault,
-      scopeId: _store.syncConfigScopeId(
+      scopeId: _store.backgroundSyncScopeIdForFields(
         backendType: SyncBackendType.managedVault,
         baseUrl: baseUrl,
         remoteRoot: vaultId,
+        syncKey: syncKey,
       ),
     );
   }
@@ -237,6 +241,7 @@ final class _CloudSyncSwitchPromptGateState
       await _clearManagedVaultBackgroundSyncBlockers(
         baseUrl: baseUrl,
         vaultId: vaultId,
+        syncKey: syncKey,
       );
       reopenManagedVaultWriteGateOnSuccess(engine);
       return ManagedVaultPushFailureRecoveryAction.none;
@@ -246,6 +251,7 @@ final class _CloudSyncSwitchPromptGateState
         error,
         baseUrl: baseUrl,
         vaultId: vaultId,
+        syncKey: syncKey,
       );
       if (!allowRecovery ||
           details.recoveryAction ==
