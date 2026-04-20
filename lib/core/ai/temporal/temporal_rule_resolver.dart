@@ -434,6 +434,7 @@ final class TemporalRuleResolver {
       nowLocal: nowLocal,
       firstDayOfWeek: firstDayOfWeek,
       timeOfDay: timeOfDay,
+      mode: mode,
     );
     if (weekScopedWeekday != null) {
       return weekScopedWeekday;
@@ -581,6 +582,7 @@ final class TemporalRuleResolver {
     required DateTime nowLocal,
     required int firstDayOfWeek,
     required _TemporalTimeOfDay? timeOfDay,
+    required TemporalMode mode,
   }) {
     final scopedWeekday = _matchWeekScopedWeekday(normalizedText);
     if (scopedWeekday == null) return null;
@@ -601,14 +603,18 @@ final class TemporalRuleResolver {
             timeOfDay.hour,
             timeOfDay.minute,
           );
+    final startOfToday = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+    final isPastForTodoModes = mode != TemporalMode.retrievalWindow &&
+        (day.isBefore(startOfToday) || point.isBefore(nowLocal));
     return TemporalCandidate(
       resolver: TemporalResolver.rule,
-      confidence: 0.93,
+      confidence: isPastForTodoModes ? 0.45 : 0.93,
       semantics: TemporalSemantics.pointInTime,
       pointLocal: point,
       hasExplicitTime: timeOfDay != null,
       metadata: TemporalMetadata(
         inferredTimeOfDay: timeOfDay?.label,
+        ambiguous: isPastForTodoModes,
         normalizedExpression: scopedWeekday.token,
       ),
     );

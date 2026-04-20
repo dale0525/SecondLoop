@@ -203,9 +203,23 @@ extension _ChatPageStateMethodsC on _ChatPageState {
         if (!mounted) return;
         _refresh();
 
-        final snackText = context.t.actions.todoLink.updated(
+        final snackText = buildFollowupUpdateFeedbackText(
           title: selected.title,
-          status: _todoStatusLabel(context, newStatus ?? selected.status),
+          didUpdateStatus: didUpdateStatus,
+          didUpdateDue: didUpdateDue,
+          statusLabel: _todoStatusLabel(context, newStatus ?? selected.status),
+          updatedStatusBuilder: ({
+            required String title,
+            required String status,
+          }) =>
+              context.t.actions.todoLink.updated(
+            title: title,
+            status: status,
+          ),
+          updatedDueBuilder: ({required String title}) =>
+              context.t.actions.todoLink.updatedDue(title: title),
+          updatedStatusAndDueBuilder: ({required String title}) =>
+              context.t.actions.todoLink.updatedStatusAndDue(title: title),
         );
         _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(

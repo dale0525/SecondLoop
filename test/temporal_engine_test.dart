@@ -242,6 +242,23 @@ void main() {
     expect(result.metadata.normalizedExpression, '周三');
   });
 
+  test('todo_due degrades scoped current-week weekday in the past to none', () {
+    final result = TemporalEngine.resolve(
+      text: '本周一',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      timezone: '',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.resolver, TemporalResolver.none);
+    expect(result.semantics, TemporalSemantics.none);
+    expect(result.dueAtLocal, isNull);
+  });
+
   test('todo_due rolls same-day weekday to next week after day end', () {
     final result = TemporalEngine.resolve(
       text: '周一',

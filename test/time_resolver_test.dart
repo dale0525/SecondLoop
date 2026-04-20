@@ -162,6 +162,19 @@ void main() {
     expect(res.candidates.single.dueAtLocal, DateTime(2026, 2, 9, 21, 0));
   });
 
+  test('does not resolve past current-week weekday into a due candidate', () {
+    final now = DateTime(2026, 2, 4, 10, 0); // Wednesday
+    final res = LocalTimeResolver.resolve(
+      '本周一报销',
+      now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+      firstDayOfWeekIndex: 1,
+    );
+
+    expect(res, isNull);
+  });
+
   test('resolves time-only (zh) into today/tomorrow candidates', () {
     final now = DateTime(2026, 1, 24, 12, 0);
     final res = LocalTimeResolver.resolve(

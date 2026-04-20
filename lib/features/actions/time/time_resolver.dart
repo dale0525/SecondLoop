@@ -643,6 +643,11 @@ class LocalTimeResolver {
               timeOfDay.hour,
               timeOfDay.minute,
             );
+      final startOfToday =
+          DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+      if (day.isBefore(startOfToday) || due.isBefore(nowLocal)) {
+        return null;
+      }
       return LocalTimeResolution(
         kind: 'weekday',
         matchedText: scopedWeekday.token,
