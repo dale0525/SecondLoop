@@ -362,36 +362,7 @@ class MessageActionResolver {
   }
 
   static bool _looksLikeDeicticOnlyTitle(String text) {
-    final normalized = text.trim().toLowerCase();
-    if (normalized.isEmpty) return true;
-
-    const deicticTitles = <String>{
-      'this',
-      'that',
-      'it',
-      'this one',
-      'that one',
-      'the task',
-      'task',
-      'todo',
-      '这个',
-      '這個',
-      '这个事',
-      '這個事',
-      '这件事',
-      '這件事',
-      '这个任务',
-      '這個任務',
-      '这个待办',
-      '這個待辦',
-      '它',
-      '此项',
-      '此項',
-      '该项',
-      '該項',
-    };
-
-    return deicticTitles.contains(normalized);
+    return isDeicticOnlyTodoTitle(text);
   }
 
   static bool _canTreatEditPhraseAsCreate(

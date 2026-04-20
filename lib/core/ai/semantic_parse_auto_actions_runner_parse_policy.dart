@@ -190,55 +190,23 @@ bool _isSuspiciousLocalCreate(LocalSemanticParseResult result) {
 }
 
 bool _looksLikeDeicticOnlyLocalTitle(String? text) {
-  final normalized = text?.trim().toLowerCase();
-  if (normalized == null || normalized.isEmpty) {
+  if (text == null) {
     return true;
   }
-  const deicticTitles = <String>{
-    'this',
-    'that',
-    'it',
-    'this one',
-    'that one',
-    'the task',
-    'task',
-    'todo',
-    '这个',
-    '這個',
-    '这件事',
-    '這件事',
-    '这个任务',
-    '這個任務',
-    '这个待办',
-    '這個待辦',
-    '它',
-    '此项',
-    '此項',
-    '该项',
-    '該項',
-  };
-  return deicticTitles.contains(normalized);
+  return isDeicticOnlyTodoTitle(text);
 }
 
-List<TodoThreadMatch> _semanticMatchesFromPreferredTodoIds(
-  List<String> preferredTodoIds,
+List<String> _preferredTodoIdsFromSemanticMatches(
+  List<TodoThreadMatch> semanticMatches,
 ) {
   final seen = <String>{};
-  String? topTodoId;
-  for (var i = 0; i < preferredTodoIds.length; i++) {
-    final todoId = preferredTodoIds[i].trim();
+  final preferredTodoIds = <String>[];
+  for (final match in semanticMatches) {
+    final todoId = match.todoId.trim();
     if (todoId.isEmpty || !seen.add(todoId)) continue;
-    topTodoId ??= todoId;
-    if (seen.length > 1) {
-      return const <TodoThreadMatch>[];
-    }
+    preferredTodoIds.add(todoId);
   }
-  if (topTodoId == null) {
-    return const <TodoThreadMatch>[];
-  }
-  return <TodoThreadMatch>[
-    TodoThreadMatch(todoId: topTodoId, distance: 0.12),
-  ];
+  return preferredTodoIds;
 }
 
 bool _isTaskTypeMissing(String? taskType) {

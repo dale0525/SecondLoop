@@ -32,6 +32,38 @@ class TodoUpdateIntent {
   final bool isExplicit;
 }
 
+const Set<String> kDeicticOnlyTodoTitles = <String>{
+  'this',
+  'that',
+  'it',
+  'this one',
+  'that one',
+  'the task',
+  'task',
+  'todo',
+  '这个',
+  '這個',
+  '这个事',
+  '這個事',
+  '这件事',
+  '這件事',
+  '这个任务',
+  '這個任務',
+  '这个待办',
+  '這個待辦',
+  '它',
+  '此项',
+  '此項',
+  '该项',
+  '該項',
+};
+
+bool isDeicticOnlyTodoTitle(String text) {
+  final normalized = text.trim().toLowerCase();
+  if (normalized.isEmpty) return true;
+  return kDeicticOnlyTodoTitles.contains(normalized);
+}
+
 TodoUpdateIntent inferTodoUpdateIntent(String text) {
   final t = text.trim().toLowerCase();
   if (t.isEmpty) {

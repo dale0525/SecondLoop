@@ -1,4 +1,5 @@
 import 'package:secondloop/core/ai/semantic_parse_auto_actions_runner.dart';
+import 'package:secondloop/features/actions/todo/todo_thread_match.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 final class FakeSemanticParseStore implements SemanticParseAutoActionsStore {
@@ -339,10 +340,12 @@ final class FakeSemanticParseStore implements SemanticParseAutoActionsStore {
 final class FakeSemanticParseClient implements SemanticParseAutoActionsClient {
   FakeSemanticParseClient({
     this.responseJson,
+    this.retrievedTodoCandidateMatches = const <TodoThreadMatch>[],
     this.retrievedTodoCandidateIds = const <String>[],
   });
 
   final String? responseJson;
+  final List<TodoThreadMatch> retrievedTodoCandidateMatches;
   final List<String> retrievedTodoCandidateIds;
   int retrieveRequests = 0;
   int parseRequests = 0;
@@ -355,7 +358,40 @@ final class FakeSemanticParseClient implements SemanticParseAutoActionsClient {
     required int topK,
   }) async {
     retrieveRequests += 1;
+    if (retrievedTodoCandidateMatches.isNotEmpty) {
+      return retrievedTodoCandidateMatches
+          .take(topK)
+          .map((match) => match.todoId)
+          .toList(growable: false);
+    }
     return List<String>.from(retrievedTodoCandidateIds);
+  }
+
+  @override
+  Future<List<TodoThreadMatch>> retrieveTodoCandidateMatches({
+    required String query,
+    required int topK,
+  }) async {
+    retrieveRequests += 1;
+    if (retrievedTodoCandidateMatches.isNotEmpty) {
+      return retrievedTodoCandidateMatches.take(topK).toList(growable: false);
+    }
+    final seen = <String>{};
+    String? topTodoId;
+    for (final rawTodoId in retrievedTodoCandidateIds.take(topK)) {
+      final todoId = rawTodoId.trim();
+      if (todoId.isEmpty || !seen.add(todoId)) continue;
+      topTodoId ??= todoId;
+      if (seen.length > 1) {
+        return const <TodoThreadMatch>[];
+      }
+    }
+    if (topTodoId == null) {
+      return const <TodoThreadMatch>[];
+    }
+    return <TodoThreadMatch>[
+      TodoThreadMatch(todoId: topTodoId, distance: 0.12),
+    ];
   }
 
   @override

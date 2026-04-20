@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/ai/semantic_parse_auto_actions_runner.dart';
+import 'package:secondloop/features/actions/todo/todo_thread_match.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
@@ -195,6 +196,13 @@ final class _UnusedClient implements SemanticParseAutoActionsClient {
 
   @override
   Future<List<String>> retrieveTodoCandidateIds({
+    required String query,
+    required int topK,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<TodoThreadMatch>> retrieveTodoCandidateMatches({
     required String query,
     required int topK,
   }) async =>

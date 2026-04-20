@@ -34,9 +34,19 @@ final class BackendSemanticParseAutoActionsClient
     required String query,
     required int topK,
   }) async {
+    final matches =
+        await retrieveTodoCandidateMatches(query: query, topK: topK);
+    return matches.map((match) => match.todoId).toList(growable: false);
+  }
+
+  @override
+  Future<List<TodoThreadMatch>> retrieveTodoCandidateMatches({
+    required String query,
+    required int topK,
+  }) async {
     final trimmedQuery = query.trim();
     if (trimmedQuery.isEmpty || topK <= 0) {
-      return const <String>[];
+      return const <TodoThreadMatch>[];
     }
 
     for (final route in _embeddingsRouteFallbackOrder()) {
@@ -47,13 +57,13 @@ final class BackendSemanticParseAutoActionsClient
           topK,
           route,
         );
-        return _extractTodoIds(matches, topK);
+        return _extractTodoMatches(matches, topK);
       } catch (_) {
         continue;
       }
     }
 
-    return const <String>[];
+    return const <TodoThreadMatch>[];
   }
 
   List<EmbeddingsSourceRouteKind> _embeddingsRouteFallbackOrder() {
@@ -74,17 +84,20 @@ final class BackendSemanticParseAutoActionsClient
     };
   }
 
-  List<String> _extractTodoIds(List<TodoThreadMatch> matches, int topK) {
+  List<TodoThreadMatch> _extractTodoMatches(
+    List<TodoThreadMatch> matches,
+    int topK,
+  ) {
     if (matches.isEmpty) {
-      return const <String>[];
+      return const <TodoThreadMatch>[];
     }
 
-    final out = <String>[];
+    final out = <TodoThreadMatch>[];
     final seen = <String>{};
     for (final match in matches) {
       final todoId = match.todoId.trim();
       if (todoId.isEmpty || !seen.add(todoId)) continue;
-      out.add(todoId);
+      out.add(TodoThreadMatch(todoId: todoId, distance: match.distance));
       if (out.length >= topK) break;
     }
     return out;

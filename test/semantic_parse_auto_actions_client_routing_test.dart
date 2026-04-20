@@ -31,12 +31,14 @@ void main() {
       modelName: 'baai/bge-m3',
     );
 
-    final ids = await client.retrieveTodoCandidateIds(
+    final matches = await client.retrieveTodoCandidateMatches(
       query: '狗不理包子',
       topK: 4,
     );
 
-    expect(ids, const ['todo:cloud']);
+    expect(matches, hasLength(1));
+    expect(matches.single.todoId, 'todo:cloud');
+    expect(matches.single.distance, 0.12);
     expect(backend.processCloudCalls, 1);
     expect(backend.searchCloudCalls, 1);
     expect(backend.processByokCalls, 0);
@@ -63,12 +65,14 @@ void main() {
       modelName: 'baai/bge-m3',
     );
 
-    final ids = await client.retrieveTodoCandidateIds(
+    final matches = await client.retrieveTodoCandidateMatches(
       query: '狗不理包子',
       topK: 4,
     );
 
-    expect(ids, const ['todo:local']);
+    expect(matches, hasLength(1));
+    expect(matches.single.todoId, 'todo:local');
+    expect(matches.single.distance, 0.21);
     expect(backend.processLocalCalls, 1);
     expect(backend.searchLocalCalls, 1);
     expect(backend.processCloudCalls, 0);
@@ -96,12 +100,14 @@ void main() {
       modelName: 'gpt-4o-mini',
     );
 
-    final ids = await client.retrieveTodoCandidateIds(
+    final matches = await client.retrieveTodoCandidateMatches(
       query: '狗不理包子',
       topK: 4,
     );
 
-    expect(ids, const ['todo:byok']);
+    expect(matches, hasLength(1));
+    expect(matches.single.todoId, 'todo:byok');
+    expect(matches.single.distance, 0.31);
     expect(backend.processCloudCalls, 1);
     expect(backend.processByokCalls, 1);
     expect(backend.searchByokCalls, 1);
@@ -128,12 +134,14 @@ void main() {
       modelName: 'gpt-4o-mini',
     );
 
-    final ids = await client.retrieveTodoCandidateIds(
+    final matches = await client.retrieveTodoCandidateMatches(
       query: '狗不理包子',
       topK: 4,
     );
 
-    expect(ids, const ['todo:local-fallback']);
+    expect(matches, hasLength(1));
+    expect(matches.single.todoId, 'todo:local-fallback');
+    expect(matches.single.distance, 0.37);
     expect(backend.processByokCalls, 1);
     expect(backend.searchByokCalls, 1);
     expect(backend.processLocalCalls, 1);

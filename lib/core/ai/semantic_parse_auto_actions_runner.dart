@@ -246,6 +246,22 @@ abstract class SemanticParseAutoActionsClient {
     required int topK,
   });
 
+  Future<List<TodoThreadMatch>> retrieveTodoCandidateMatches({
+    required String query,
+    required int topK,
+  }) async {
+    final ids = await retrieveTodoCandidateIds(query: query, topK: topK);
+    final out = <TodoThreadMatch>[];
+    final seen = <String>{};
+    for (final rawId in ids) {
+      final todoId = rawId.trim();
+      if (todoId.isEmpty || !seen.add(todoId)) continue;
+      out.add(TodoThreadMatch(todoId: todoId, distance: 1.0));
+      if (out.length >= topK) break;
+    }
+    return out;
+  }
+
   Future<String> parseMessageActionJson({
     required String text,
     required String nowLocalIso,
@@ -407,16 +423,20 @@ final class SemanticParseAutoActionsRunner {
           firstDayOfWeekIndex: firstDayOfWeekIndex,
         );
 
+        var preferredMatches = const <TodoThreadMatch>[];
         var preferredTodoIds = const <String>[];
         if (_shouldRetrieveSemanticCandidates(localParsedResult)) {
           try {
-            preferredTodoIds = await client
-                .retrieveTodoCandidateIds(
+            preferredMatches = await client
+                .retrieveTodoCandidateMatches(
                   query: analysisText,
                   topK: 8,
                 )
                 .timeout(settings.hardTimeout);
+            preferredTodoIds =
+                _preferredTodoIdsFromSemanticMatches(preferredMatches);
           } catch (_) {
+            preferredMatches = const <TodoThreadMatch>[];
             preferredTodoIds = const <String>[];
           }
 
@@ -435,8 +455,7 @@ final class SemanticParseAutoActionsRunner {
               dayEndMinutes: dayEndMinutes,
               morningMinutes: resolvedMorningMinutes,
               firstDayOfWeekIndex: firstDayOfWeekIndex,
-              semanticMatches:
-                  _semanticMatchesFromPreferredTodoIds(preferredTodoIds),
+              semanticMatches: preferredMatches,
             );
           }
         }

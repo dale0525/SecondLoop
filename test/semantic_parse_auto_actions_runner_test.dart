@@ -4,6 +4,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/ai/semantic_parse_auto_actions_runner.dart';
+import 'package:secondloop/features/actions/todo/todo_thread_match.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
@@ -1591,6 +1592,18 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
   }) async {
     if (topK <= 0) return const <String>[];
     return candidateTodoIds.take(topK).toList(growable: false);
+  }
+
+  @override
+  Future<List<TodoThreadMatch>> retrieveTodoCandidateMatches({
+    required String query,
+    required int topK,
+  }) async {
+    if (topK <= 0) return const <TodoThreadMatch>[];
+    return candidateTodoIds
+        .take(topK)
+        .map((todoId) => TodoThreadMatch(todoId: todoId, distance: 1.0))
+        .toList(growable: false);
   }
 
   @override
