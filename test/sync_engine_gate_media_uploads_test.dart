@@ -264,7 +264,7 @@ void main() {
     }
   });
 
-  testWidgets('Auto sync ignores stale media backfill done markers',
+  testWidgets('Auto sync skips media backfill when the current scope is done',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -306,14 +306,10 @@ void main() {
       await tester.pump();
 
       await tester.runAsync(() async {
-        final deadline = DateTime.now().add(const Duration(seconds: 2));
-        while (backend.cloudMediaBackfillCalls == 0 &&
-            DateTime.now().isBefore(deadline)) {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
+        await Future<void>.delayed(const Duration(milliseconds: 200));
       });
 
-      expect(backend.cloudMediaBackfillCalls, greaterThanOrEqualTo(1));
+      expect(backend.cloudMediaBackfillCalls, 0);
     } finally {
       ConnectivityPlatform.instance = oldConnectivity;
     }
@@ -1222,6 +1218,7 @@ final class _RecordingBackend extends TestAppBackend {
     Uint8List key, {
     required int nowMs,
     int limit = 100,
+    String? scopeId,
   }) async {
     return _dueBackups
         .where((b) => !_uploaded.contains(b.attachmentSha256))
@@ -1234,6 +1231,7 @@ final class _RecordingBackend extends TestAppBackend {
     Uint8List key, {
     required String attachmentSha256,
     required int nowMs,
+    String? scopeId,
   }) async {
     markUploadedCalls++;
     _uploaded.add(attachmentSha256);
@@ -1247,6 +1245,7 @@ final class _RecordingBackend extends TestAppBackend {
     required int nextRetryAtMs,
     required String lastError,
     required int nowMs,
+    String? scopeId,
   }) async {
     // ignored
   }
@@ -1256,13 +1255,17 @@ final class _RecordingBackend extends TestAppBackend {
     Uint8List key, {
     required String desiredVariant,
     required int nowMs,
+    String? scopeId,
   }) async {
     cloudMediaBackfillCalls++;
     return 0;
   }
 
   @override
-  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(
+    Uint8List key, {
+    String? scopeId,
+  }) async {
     final pendingCount = _dueBackups
         .where((b) => !_uploaded.contains(b.attachmentSha256))
         .length;
@@ -1440,10 +1443,14 @@ final class _ManagedVaultRetryingUploadBackend
     required int nextRetryAtMs,
     required String lastError,
     required int nowMs,
+    String? scopeId,
   }) async {}
 
   @override
-  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(
+    Uint8List key, {
+    String? scopeId,
+  }) async {
     final pendingCount = _dueBackups
         .where((b) => !_uploaded.contains(b.attachmentSha256))
         .length;

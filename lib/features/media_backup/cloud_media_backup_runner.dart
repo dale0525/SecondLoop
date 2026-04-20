@@ -172,10 +172,12 @@ final class BackendCloudMediaBackupStore implements CloudMediaBackupStore {
   BackendCloudMediaBackupStore({
     required this.backend,
     required Uint8List sessionKey,
+    this.scopeId,
   }) : _sessionKey = Uint8List.fromList(sessionKey);
 
   final AppBackend backend;
   final Uint8List _sessionKey;
+  final String? scopeId;
 
   @override
   Future<List<CloudMediaBackupItem>> listDue({
@@ -186,6 +188,7 @@ final class BackendCloudMediaBackupStore implements CloudMediaBackupStore {
       _sessionKey,
       nowMs: nowMs,
       limit: limit,
+      scopeId: scopeId,
     );
     return rows
         .map(
@@ -210,6 +213,7 @@ final class BackendCloudMediaBackupStore implements CloudMediaBackupStore {
       _sessionKey,
       attachmentSha256: attachmentSha256,
       nowMs: nowMs,
+      scopeId: scopeId,
     );
   }
 
@@ -228,6 +232,7 @@ final class BackendCloudMediaBackupStore implements CloudMediaBackupStore {
       nextRetryAtMs: nextRetryAtMs,
       lastError: error,
       nowMs: nowMs,
+      scopeId: scopeId,
     );
   }
 }

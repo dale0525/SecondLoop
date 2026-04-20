@@ -423,6 +423,7 @@ final class BackgroundSync {
                 store: BackendCloudMediaBackupStore(
                   backend: backend,
                   sessionKey: sessionKey,
+                  scopeId: backgroundScopeId,
                 ),
                 client: WebDavCloudMediaBackupClient(
                   backend: backend,
@@ -874,7 +875,10 @@ final class BackgroundSync {
   }) async {
     var hasPendingUploads = fallbackPending;
     try {
-      final summary = await backend.cloudMediaBackupSummary(sessionKey);
+      final summary = await backend.cloudMediaBackupSummary(
+        sessionKey,
+        scopeId: scopeId,
+      );
       final blobRepairQueueDepth =
           await backend.syncManagedVaultBlobRepairQueueDepth(
         baseUrl: baseUrl,
@@ -911,6 +915,7 @@ final class BackgroundSync {
         store: BackendCloudMediaBackupStore(
           backend: backend,
           sessionKey: sessionKey,
+          scopeId: scopeId,
         ),
         client: ManagedVaultCloudMediaBackupClient(
           backend: backend,

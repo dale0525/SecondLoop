@@ -298,9 +298,8 @@ final class SyncEngine {
   }
 
   bool _shouldReopenWriteGateAfterSuccessfulPull(SyncWriteGateState gate) {
-    // A successful pull only proves that read access still works. It does not
-    // mean payment or quota write blockers have been cleared remotely.
-    return false;
+    return gate.kind == SyncWriteGateKind.paymentRequired ||
+        gate.kind == SyncWriteGateKind.storageQuotaExceeded;
   }
 
   void _setWriteGate(SyncWriteGateState next) {

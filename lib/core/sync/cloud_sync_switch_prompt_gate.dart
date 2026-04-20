@@ -629,6 +629,12 @@ final class _CloudSyncSwitchPromptGateState
                     store: BackendCloudMediaBackupStore(
                       backend: backend,
                       sessionKey: sessionKey,
+                      scopeId: _store.syncStateScopeIdForFields(
+                        backendType: SyncBackendType.managedVault,
+                        baseUrl: baseUrl,
+                        remoteRoot: vaultId,
+                        syncKey: syncKey,
+                      ),
                     ),
                     client: ManagedVaultCloudMediaBackupClient(
                       backend: backend,

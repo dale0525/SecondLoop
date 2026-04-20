@@ -529,6 +529,13 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         store: BackendCloudMediaBackupStore(
                           backend: backend,
                           sessionKey: sessionKey,
+                          scopeId: _store.syncStateScopeIdForFields(
+                            backendType: SyncBackendType.webdav,
+                            baseUrl: newWebdavBaseUrl,
+                            username: _optionalTrimmed(_usernameController),
+                            remoteRoot: newRemoteRoot,
+                            syncKey: activeSyncKey,
+                          ),
                         ),
                         client: WebDavCloudMediaBackupClient(
                           backend: backend,

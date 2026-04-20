@@ -155,7 +155,10 @@ final class _BlobRepairPendingManagedVaultBackend extends TestAppBackend {
   }
 
   @override
-  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(
+    Uint8List key, {
+    String? scopeId,
+  }) async {
     return const CloudMediaBackupSummary(
       pending: 0,
       failed: 0,

@@ -329,6 +329,11 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
     return _configStore.syncStateScopeId(config);
   }
 
+  String _cloudMediaBackupScopeId(SyncConfig config) {
+    if (config.backendType == SyncBackendType.localDir) return '';
+    return _configStore.syncStateScopeId(config);
+  }
+
   Future<bool> _readManagedVaultMediaUploadPending(SyncConfig config) {
     return _configStore.readManagedVaultMediaUploadPending(
       scopeId: _managedVaultMediaUploadScopeId(config),
@@ -347,8 +352,12 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
 
   Future<bool> _hasManagedVaultMediaUploadWork(SyncConfig config) async {
     if (config.backendType != SyncBackendType.managedVault) return false;
+    final scopeId = _managedVaultMediaUploadScopeId(config);
     try {
-      final summary = await backend.cloudMediaBackupSummary(_sessionKey);
+      final summary = await backend.cloudMediaBackupSummary(
+        _sessionKey,
+        scopeId: scopeId,
+      );
       final blobRepairQueueDepth =
           await backend.syncManagedVaultBlobRepairQueueDepth(
         baseUrl: config.baseUrl ?? '',
@@ -382,13 +391,22 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   Future<void> _autoBackfillCloudMediaBackupIfNeeded(SyncConfig config) async {
     if (config.backendType == SyncBackendType.localDir) return;
 
-    final scopeId = _configStore.syncStateScopeId(config);
+    final scopeId = _cloudMediaBackupScopeId(config);
     if (scopeId.isEmpty) return;
+    final alreadyDone = await _configStore.readCloudMediaBackupBackfillDone(
+      scopeId: scopeId,
+    );
+    if (alreadyDone) return;
 
     await backend.backfillCloudMediaBackupImages(
       _sessionKey,
       desiredVariant: 'original',
       nowMs: DateTime.now().millisecondsSinceEpoch,
+      scopeId: scopeId,
+    );
+    await _configStore.writeCloudMediaBackupBackfillDone(
+      scopeId: scopeId,
+      done: true,
     );
   }
 
@@ -413,6 +431,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
     final mediaStore = BackendCloudMediaBackupStore(
       backend: backend,
       sessionKey: _sessionKey,
+      scopeId: _cloudMediaBackupScopeId(config),
     );
 
     CloudMediaBackupRunner? runner;
@@ -488,7 +507,10 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
       );
     }
     try {
-      final summary = await backend.cloudMediaBackupSummary(_sessionKey);
+      final summary = await backend.cloudMediaBackupSummary(
+        _sessionKey,
+        scopeId: _managedVaultMediaUploadScopeId(config),
+      );
       final blobRepairQueueDepth =
           await backend.syncManagedVaultBlobRepairQueueDepth(
         baseUrl: config.baseUrl ?? '',

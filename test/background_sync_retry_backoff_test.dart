@@ -415,6 +415,7 @@ final class _ThrowingManagedVaultMediaUploadBackend extends TestAppBackend {
     Uint8List key, {
     required int nowMs,
     int limit = 100,
+    String? scopeId,
   }) async {
     return const <CloudMediaBackup>[
       CloudMediaBackup(
@@ -431,7 +432,10 @@ final class _ThrowingManagedVaultMediaUploadBackend extends TestAppBackend {
   }
 
   @override
-  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(
+    Uint8List key, {
+    String? scopeId,
+  }) async {
     return const CloudMediaBackupSummary(pending: 1, failed: 0, uploaded: 0);
   }
 
@@ -452,6 +456,7 @@ final class _ThrowingManagedVaultMediaUploadBackend extends TestAppBackend {
     Uint8List key, {
     required String attachmentSha256,
     required int nowMs,
+    String? scopeId,
   }) async {}
 
   @override
@@ -462,6 +467,7 @@ final class _ThrowingManagedVaultMediaUploadBackend extends TestAppBackend {
     required int nextRetryAtMs,
     required String lastError,
     required int nowMs,
+    String? scopeId,
   }) async {}
 
   @override
@@ -469,6 +475,7 @@ final class _ThrowingManagedVaultMediaUploadBackend extends TestAppBackend {
     Uint8List key, {
     required String desiredVariant,
     required int nowMs,
+    String? scopeId,
   }) async =>
       0;
 }
@@ -481,6 +488,7 @@ final class _DrainingManagedVaultMediaUploadBackend extends TestAppBackend {
     Uint8List key, {
     required int nowMs,
     int limit = 100,
+    String? scopeId,
   }) async {
     if (_uploaded) {
       return const <CloudMediaBackup>[];
@@ -500,7 +508,10 @@ final class _DrainingManagedVaultMediaUploadBackend extends TestAppBackend {
   }
 
   @override
-  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(
+    Uint8List key, {
+    String? scopeId,
+  }) async {
     return CloudMediaBackupSummary(
       pending: _uploaded ? 0 : 1,
       failed: 0,
@@ -526,6 +537,7 @@ final class _DrainingManagedVaultMediaUploadBackend extends TestAppBackend {
     Uint8List key, {
     required String attachmentSha256,
     required int nowMs,
+    String? scopeId,
   }) async {}
 
   @override
@@ -536,6 +548,7 @@ final class _DrainingManagedVaultMediaUploadBackend extends TestAppBackend {
     required int nextRetryAtMs,
     required String lastError,
     required int nowMs,
+    String? scopeId,
   }) async {}
 
   @override
@@ -543,6 +556,7 @@ final class _DrainingManagedVaultMediaUploadBackend extends TestAppBackend {
     Uint8List key, {
     required String desiredVariant,
     required int nowMs,
+    String? scopeId,
   }) async =>
       0;
 }

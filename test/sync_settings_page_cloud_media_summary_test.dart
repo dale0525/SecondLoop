@@ -84,7 +84,10 @@ final class _SummaryBackend extends AppBackend {
   final CloudMediaBackupSummary summary;
 
   @override
-  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(
+    Uint8List key, {
+    String? scopeId,
+  }) async {
     return summary;
   }
 

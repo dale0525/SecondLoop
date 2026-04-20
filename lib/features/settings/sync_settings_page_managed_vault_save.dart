@@ -115,6 +115,12 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
               store: BackendCloudMediaBackupStore(
                 backend: backend,
                 sessionKey: sessionKey,
+                scopeId: _store.syncStateScopeIdForFields(
+                  backendType: SyncBackendType.managedVault,
+                  baseUrl: baseUrlTrimmed,
+                  remoteRoot: vaultId,
+                  syncKey: syncKey,
+                ),
               ),
               client: ManagedVaultCloudMediaBackupClient(
                 backend: backend,

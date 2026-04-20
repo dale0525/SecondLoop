@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('payment_required from pull stays blocked after a successful pull', () {
+  test('payment_required from pull reopens after a successful pull', () {
     fakeAsync((async) {
       final runner = _PaymentRequiredPullRunner();
       final engine = SyncEngine(
@@ -34,7 +34,7 @@ void main() {
       async.flushMicrotasks();
 
       expect(runner.pullCalls, 2);
-      expect(engine.writeGate.value.kind, SyncWriteGateKind.paymentRequired);
+      expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
 
       engine.stop();
     });

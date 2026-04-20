@@ -547,6 +547,7 @@ mixin _AppBackendSemanticAndSyncMixin {
     required String attachmentSha256,
     required String desiredVariant,
     required int nowMs,
+    String? scopeId,
   }) {
     throw UnimplementedError('enqueueCloudMediaBackup');
   }
@@ -555,6 +556,7 @@ mixin _AppBackendSemanticAndSyncMixin {
     Uint8List key, {
     required String desiredVariant,
     required int nowMs,
+    String? scopeId,
   }) {
     throw UnimplementedError('backfillCloudMediaBackupImages');
   }
@@ -563,6 +565,7 @@ mixin _AppBackendSemanticAndSyncMixin {
     Uint8List key, {
     required int nowMs,
     int limit = 100,
+    String? scopeId,
   }) {
     throw UnimplementedError('listDueCloudMediaBackups');
   }
@@ -574,6 +577,7 @@ mixin _AppBackendSemanticAndSyncMixin {
     required int nextRetryAtMs,
     required String lastError,
     required int nowMs,
+    String? scopeId,
   }) {
     throw UnimplementedError('markCloudMediaBackupFailed');
   }
@@ -582,11 +586,15 @@ mixin _AppBackendSemanticAndSyncMixin {
     Uint8List key, {
     required String attachmentSha256,
     required int nowMs,
+    String? scopeId,
   }) {
     throw UnimplementedError('markCloudMediaBackupUploaded');
   }
 
-  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) {
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(
+    Uint8List key, {
+    String? scopeId,
+  }) {
     throw UnimplementedError('cloudMediaBackupSummary');
   }
 

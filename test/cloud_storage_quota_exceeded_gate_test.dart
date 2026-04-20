@@ -7,7 +7,7 @@ import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
   test(
-      'storage_quota_exceeded blocks pushes and stays blocked after manual pull',
+      'storage_quota_exceeded blocks pushes until a successful manual pull reopens it',
       () {
     fakeAsync((async) {
       final runner = _QuotaExceededRunner();
@@ -46,10 +46,7 @@ void main() {
       async.flushMicrotasks();
 
       expect(runner.pullCalls, 1);
-      expect(
-          engine.writeGate.value.kind, SyncWriteGateKind.storageQuotaExceeded);
-      expect(engine.writeGate.value.quotaUsedBytes, 50);
-      expect(engine.writeGate.value.quotaLimitBytes, 50);
+      expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
 
       engine.stop();
     });

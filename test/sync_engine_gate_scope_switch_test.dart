@@ -244,6 +244,7 @@ final class _ScopeAwareManagedVaultBackend extends TestAppBackend {
     Uint8List key, {
     required int nowMs,
     int limit = 100,
+    String? scopeId,
   }) async {
     if (_activeVaultId != 'vault-2') {
       return const <CloudMediaBackup>[];
@@ -263,7 +264,10 @@ final class _ScopeAwareManagedVaultBackend extends TestAppBackend {
   }
 
   @override
-  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(
+    Uint8List key, {
+    String? scopeId,
+  }) async {
     if (_activeVaultId != 'vault-2') {
       return const CloudMediaBackupSummary(pending: 0, failed: 0, uploaded: 0);
     }
@@ -289,6 +293,7 @@ final class _ScopeAwareManagedVaultBackend extends TestAppBackend {
     Uint8List key, {
     required String attachmentSha256,
     required int nowMs,
+    String? scopeId,
   }) async {}
 
   @override
@@ -299,6 +304,7 @@ final class _ScopeAwareManagedVaultBackend extends TestAppBackend {
     required int nextRetryAtMs,
     required String lastError,
     required int nowMs,
+    String? scopeId,
   }) async {}
 
   @override
@@ -306,6 +312,7 @@ final class _ScopeAwareManagedVaultBackend extends TestAppBackend {
     Uint8List key, {
     required String desiredVariant,
     required int nowMs,
+    String? scopeId,
   }) async =>
       0;
 }
