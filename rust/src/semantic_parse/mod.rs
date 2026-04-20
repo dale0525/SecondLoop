@@ -291,6 +291,7 @@ pub fn semantic_parse_message_action_json(
     Ok(serde_json::to_string(&value)?)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn semantic_parse_message_action_enhancement_json(
     provider: &dyn AnswerProvider,
     text: &str,
