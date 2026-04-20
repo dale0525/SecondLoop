@@ -18,8 +18,22 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_backend.dart';
 
 void main() {
+  test('stale write-gate rehydrate result is ignored after scope switch', () {
+    expect(
+      shouldApplySyncEngineGateWriteGateRehydration(
+        requestVersion: 1,
+        latestVersion: 2,
+        expectedBackendType: SyncBackendType.managedVault,
+        activeBackendType: SyncBackendType.managedVault,
+        expectedScopeId: 'scope-a',
+        activeScopeId: 'scope-b',
+      ),
+      isFalse,
+    );
+  });
+
   testWidgets(
-      'managed-vault pull does not upload media for a new scope before that scope has pushed',
+      'managed-vault pull uploads media for the active scoped queue after switching scopes',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -89,9 +103,17 @@ void main() {
         }
       });
 
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultUploadAttachmentCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
       expect(backend.managedVaultPullCalls, greaterThanOrEqualTo(2));
-      expect(backend.managedVaultUploadAttachmentCalls, 0);
-      expect(backend.uploadedVaultIds, isEmpty);
+      expect(backend.managedVaultUploadAttachmentCalls, 1);
+      expect(backend.uploadedVaultIds, ['vault-2']);
     } finally {
       ConnectivityPlatform.instance = oldConnectivity;
     }
@@ -177,6 +199,121 @@ void main() {
 
       expect(engine!.writeGate.value.kind, SyncWriteGateKind.open);
       expect(backend.cleanPushCalls, 1);
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
+  testWidgets(
+      'managed-vault repair gate reopens when the persisted repair block is cleared for the same scope',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final probeStore = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(syncKey);
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _RepairGateClearingBackend();
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: const _StubCloudAuthController(),
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (
+            backend.failedPushCalls == 0 && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      final scopeId = store.syncStateScopeId(
+        SyncConfig.managedVault(
+          syncKey: syncKey,
+          vaultId: 'vault-1',
+          baseUrl: 'https://vault.example.com',
+        ),
+      );
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (!(await probeStore.readBackgroundSyncRepairRequired(
+              backendType: SyncBackendType.managedVault,
+              scopeId: scopeId,
+            )) &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(engine, isNotNull);
+      expect(
+        engine!.writeGate.value.kind,
+        SyncWriteGateKind.localRepairRequired,
+      );
+
+      backend.allowPush = true;
+      await store.writeBackgroundSyncRepairRequired(
+        false,
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      );
+      expect(
+        await store.readBackgroundSyncRepairRequired(
+          backendType: SyncBackendType.managedVault,
+          scopeId: scopeId,
+        ),
+        isFalse,
+      );
+
+      for (var i = 0;
+          i < 100 && engine!.writeGate.value.kind != SyncWriteGateKind.open;
+          i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+
+      expect(engine!.writeGate.value.kind, SyncWriteGateKind.open);
+
+      engine!.triggerPushNow();
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.successfulPushCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.successfulPushCalls, 1);
     } finally {
       ConnectivityPlatform.instance = oldConnectivity;
     }
@@ -336,6 +473,40 @@ final class _ScopedWriteGateBackend extends TestAppBackend {
       );
     }
     cleanPushCalls++;
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async =>
+      0;
+}
+
+final class _RepairGateClearingBackend extends TestAppBackend {
+  bool allowPush = false;
+  int failedPushCalls = 0;
+  int successfulPushCalls = 0;
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    if (!allowPush) {
+      failedPushCalls++;
+      throw StateError(
+        'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"duplicate_client_op_id"}',
+      );
+    }
+    successfulPushCalls++;
     return 0;
   }
 

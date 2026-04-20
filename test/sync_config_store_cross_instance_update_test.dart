@@ -49,6 +49,53 @@ void main() {
     expect(await staleReader.readSyncBackoffV1Enabled(), isFalse);
   });
 
+  test(
+      'SyncConfigStore clears scoped repair blocks written by another instance',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    final scopeId = SyncConfigStore().syncStateScopeId(
+      SyncConfig.managedVault(
+        syncKey: syncKey,
+        vaultId: 'vault-1',
+        baseUrl: 'https://vault.example.com',
+      ),
+    );
+
+    final staleClearer = SyncConfigStore();
+    await staleClearer.readAll();
+
+    final writer = SyncConfigStore();
+    await writer.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
+
+    expect(
+      await SyncConfigStore().readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isTrue,
+    );
+
+    await staleClearer.writeBackgroundSyncRepairRequired(
+      false,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
+
+    expect(
+      await SyncConfigStore().readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isFalse,
+    );
+  });
+
   test('SyncConfigStore isolates scoped data between users', () async {
     SharedPreferences.setMockInitialValues({});
 

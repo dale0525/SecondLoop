@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -16,6 +16,20 @@ import 'sync_config_store.dart';
 import 'sync_engine.dart';
 import 'sync_http_error.dart';
 import 'sync_result.dart';
+
+@visibleForTesting
+bool shouldApplySyncEngineGateWriteGateRehydration({
+  required int requestVersion,
+  required int latestVersion,
+  required SyncBackendType? expectedBackendType,
+  required SyncBackendType? activeBackendType,
+  required String? expectedScopeId,
+  required String? activeScopeId,
+}) {
+  return requestVersion == latestVersion &&
+      expectedBackendType == activeBackendType &&
+      expectedScopeId == activeScopeId;
+}
 
 final class SyncEngineGate extends StatefulWidget {
   const SyncEngineGate({required this.child, super.key});
@@ -35,6 +49,9 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
   Object? _cloudAuthIdentity;
   Uint8List? _sessionKey;
   int _engineGeneration = 0;
+  int _writeGateRehydrateVersion = 0;
+  SyncBackendType? _requestedSyncBackendType;
+  String? _requestedManagedVaultScopeId;
   SyncBackendType? _activeSyncBackendType;
   String? _activeManagedVaultScopeId;
 
@@ -193,30 +210,46 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
         backendType == SyncBackendType.managedVault && config != null
             ? _configStore.syncStateScopeId(config)
             : null;
+    final requestVersion = ++_writeGateRehydrateVersion;
+    _requestedSyncBackendType = backendType;
+    _requestedManagedVaultScopeId = scopeId;
+
     final backendChanged = _activeSyncBackendType != backendType;
     final scopeChanged = _activeManagedVaultScopeId != scopeId;
+
+    var repairRequired = false;
+    if (backendType == SyncBackendType.managedVault && scopeId != null) {
+      repairRequired = await _configStore.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      );
+    }
+    if (!_isActiveEngine(engine, generation)) return;
+    if (!shouldApplySyncEngineGateWriteGateRehydration(
+      requestVersion: requestVersion,
+      latestVersion: _writeGateRehydrateVersion,
+      expectedBackendType: backendType,
+      activeBackendType: _requestedSyncBackendType,
+      expectedScopeId: scopeId,
+      activeScopeId: _requestedManagedVaultScopeId,
+    )) {
+      return;
+    }
 
     _activeSyncBackendType = backendType;
     _activeManagedVaultScopeId = scopeId;
 
-    if (backendType == SyncBackendType.managedVault && scopeId != null) {
-      final repairRequired =
-          await _configStore.readBackgroundSyncRepairRequired(
-        backendType: SyncBackendType.managedVault,
-        scopeId: scopeId,
-      );
-      if (!_isActiveEngine(engine, generation)) return;
-      if (repairRequired) {
-        engine.writeGate.value = const SyncWriteGateState.localRepairRequired();
-        return;
-      }
-      if (forceResetForScopeChange || backendChanged || scopeChanged) {
-        engine.writeGate.value = const SyncWriteGateState.open();
-      }
+    if (repairRequired) {
+      engine.writeGate.value = const SyncWriteGateState.localRepairRequired();
       return;
     }
 
-    if (forceResetForScopeChange || backendChanged || scopeChanged) {
+    final shouldReopenClearedLocalRepairGate =
+        engine.writeGate.value.kind == SyncWriteGateKind.localRepairRequired;
+    if (forceResetForScopeChange ||
+        backendChanged ||
+        scopeChanged ||
+        shouldReopenClearedLocalRepairGate) {
       engine.writeGate.value = const SyncWriteGateState.open();
     }
   }
@@ -322,7 +355,6 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   final SyncConfigStore _configStore;
   final Uint8List _sessionKey;
   final Future<String?> Function()? _idTokenGetter;
-  String? _managedVaultLastSuccessfulPushScopeId;
 
   String _managedVaultMediaUploadScopeId(SyncConfig config) {
     if (config.backendType != SyncBackendType.managedVault) return '';
@@ -576,7 +608,6 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
               backendType: SyncBackendType.managedVault,
               scopeId: scopeId,
             );
-            _managedVaultLastSuccessfulPushScopeId = scopeId;
             await _writeManagedVaultMediaUploadPending(config, true);
             return pushed;
           } catch (error) {
@@ -628,15 +659,12 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
         await _runCloudMediaBackupIfEnabled(config);
         break;
       case SyncBackendType.managedVault:
-        final scopeId = _configStore.syncStateScopeId(config);
         final persistedPending = await _readManagedVaultMediaUploadPending(
           config,
         );
         final summaryPending = persistedPending
             ? true
-            : _managedVaultLastSuccessfulPushScopeId == scopeId
-                ? await _hasManagedVaultMediaUploadWork(config)
-                : false;
+            : await _hasManagedVaultMediaUploadWork(config);
         if (summaryPending && !persistedPending) {
           await _writeManagedVaultMediaUploadPending(config, true);
         }

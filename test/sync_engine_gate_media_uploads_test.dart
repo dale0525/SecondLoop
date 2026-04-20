@@ -418,7 +418,7 @@ void main() {
   });
 
   testWidgets(
-      'Managed-vault pull-only recovery does not upload media when push failed before it',
+      'Managed-vault pull-only recovery uploads media for the active scoped queue after recovery pull',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -472,10 +472,18 @@ void main() {
         }
       });
 
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultUploadAttachmentCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
       expect(backend.managedVaultPushCalls, 1);
       expect(backend.managedVaultPullCalls, 1);
-      expect(backend.managedVaultUploadAttachmentCalls, 0);
-      expect(backend.markUploadedCalls, 0);
+      expect(backend.managedVaultUploadAttachmentCalls, 1);
+      expect(backend.markUploadedCalls, 1);
     } finally {
       ConnectivityPlatform.instance = oldConnectivity;
     }

@@ -710,6 +710,7 @@ final class SyncConfigStore {
   Future<void> _writeConfigUpdates(Map<String, String?> updates) async {
     await _serial(() async {
       await _ensureLoaded();
+      await _reloadIfChanged();
 
       var changed = false;
       for (final entry in updates.entries) {
