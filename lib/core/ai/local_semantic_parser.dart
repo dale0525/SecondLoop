@@ -29,6 +29,16 @@ final class LocalSemanticParser {
     }
 
     final followupEditCue = looksLikeTodoFollowupEdit(raw);
+    final dueForCreate = TemporalEngine.resolve(
+      text: raw,
+      nowLocal: nowLocal,
+      locale: locale,
+      timezone: '',
+      firstDayOfWeek: firstDayOfWeekIndex,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: true,
+      dayEndMinutes: dayEndMinutes,
+    );
 
     final decision = MessageActionResolver.resolve(
       raw,
@@ -58,7 +68,10 @@ final class LocalSemanticParser {
           recurrenceRule: recurrenceRule,
           diagnostics: LocalSemanticParseDiagnostics(
             localIntent: 'create',
-            hasDueSignal: dueAtLocal != null,
+            hasDueSignal:
+                dueAtLocal != null || dueForCreate.metadata.needsEnhancement,
+            temporalNeedsEnhancement:
+                dueAtLocal == null && dueForCreate.metadata.needsEnhancement,
             looksLikeFollowupEdit: followupEditCue,
           ),
         );
@@ -90,16 +103,6 @@ final class LocalSemanticParser {
           timezone: '',
           firstDayOfWeek: firstDayOfWeekIndex,
           mode: TemporalMode.todoFollowupDue,
-          allowEnhancement: true,
-          dayEndMinutes: dayEndMinutes,
-        );
-        final dueForCreate = TemporalEngine.resolve(
-          text: raw,
-          nowLocal: nowLocal,
-          locale: locale,
-          timezone: '',
-          firstDayOfWeek: firstDayOfWeekIndex,
-          mode: TemporalMode.todoDue,
           allowEnhancement: true,
           dayEndMinutes: dayEndMinutes,
         );

@@ -130,6 +130,38 @@ void main() {
     expect(create.dueAtLocal, DateTime(2026, 2, 24, 21, 0));
   });
 
+  test('fullwidth date phrases are stripped from create titles', () {
+    final now = DateTime(2026, 2, 1, 10, 0);
+    final cases =
+        <({String text, DateTime expectedDueAt, String expectedTitle})>[
+      (
+        text: '２／４ 14:30 提交材料',
+        expectedDueAt: DateTime(2026, 2, 4, 14, 30),
+        expectedTitle: '提交材料',
+      ),
+      (
+        text: '２月１号下午3点提交材料',
+        expectedDueAt: DateTime(2026, 2, 1, 15, 0),
+        expectedTitle: '提交材料',
+      ),
+    ];
+
+    for (final sample in cases) {
+      final decision = MessageActionResolver.resolve(
+        sample.text,
+        locale: const Locale('zh', 'CN'),
+        nowLocal: now,
+        dayEndMinutes: 21 * 60,
+        openTodoTargets: const <TodoLinkTarget>[],
+      );
+
+      expect(decision, isA<MessageActionCreateDecision>(), reason: sample.text);
+      final create = decision as MessageActionCreateDecision;
+      expect(create.title, sample.expectedTitle, reason: sample.text);
+      expect(create.dueAtLocal, sample.expectedDueAt, reason: sample.text);
+    }
+  });
+
   test('localized followup reschedule cues do not regress to create', () {
     final now = DateTime(2026, 2, 4, 10, 0);
     final cases = <({String text, Locale locale, DateTime expectedDueAt})>[

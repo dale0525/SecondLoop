@@ -43,6 +43,54 @@ void main() {
     expect(store.createdTodoIds, contains('todo:msg:1'));
   });
 
+  test(
+      'runner requests enhancement for structured create when temporal parsing needs enhancement',
+      () async {
+    final store = FakeSemanticParseStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:structured_create_holiday',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{
+        'msg:structured_create_holiday': 'TODO: 节后第一个工作日处理报销',
+      },
+    );
+    final client = FakeSemanticParseClient(
+      responseJson:
+          '{"kind":"create","confidence":0.91,"title":"处理报销","status":"open","due_local_iso":"2031-02-05T21:00:00","recurrence":null,"suggested_tags":[],"tag_confidence":0.0}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2031, 1, 20, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.parseRequests, 1);
+    expect(client.lastLocalResultJson, contains('"kind":"create"'));
+    expect(client.lastLocalResultJson,
+        contains('"temporal_needs_enhancement":true'));
+    expect(client.lastUnresolvedFields, contains('due_local_iso'));
+    expect(
+        store.createdTodoIds, contains('todo:msg:structured_create_holiday'));
+  });
+
   test('runner skips enhancement for unambiguous local followup', () async {
     final store = FakeSemanticParseStore(
       jobs: const <SemanticParseAutoActionJob>[

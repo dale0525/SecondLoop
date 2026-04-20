@@ -45,6 +45,7 @@ List<String> _unresolvedFields(LocalSemanticParseResult result) {
     case LocalSemanticParseKind.create:
       if ((result.title ?? '').trim().isEmpty) add('title');
       if ((result.status ?? '').trim().isEmpty) add('status');
+      if (result.diagnostics.temporalNeedsEnhancement) add('due_local_iso');
       if (_isTaskTypeMissing(result.taskType)) add('task_type');
       if (result.suggestedTags.isEmpty) add('suggested_tags');
       break;
@@ -94,6 +95,11 @@ bool _shouldRequestEnhancement(
   LocalSemanticParseResult result, {
   required double minAutoConfidence,
 }) {
+  if (result.kind == LocalSemanticParseKind.create &&
+      result.diagnostics.temporalNeedsEnhancement) {
+    return true;
+  }
+
   if (result.kind == LocalSemanticParseKind.create &&
       _createNeedsMetadataEnhancement(result)) {
     return true;

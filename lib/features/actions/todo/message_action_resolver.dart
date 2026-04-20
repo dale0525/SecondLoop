@@ -61,9 +61,25 @@ final class MessageActionCreateDecision extends MessageActionDecision {
 }
 
 class MessageActionResolver {
+  static const String _dateDigits = r'0-9\uFF10-\uFF19';
   static final RegExp _todoPrefix =
       RegExp(r'^\s*todo\s*[:：]\s*(.+)$', caseSensitive: false);
   static final RegExp _checkboxPrefix = RegExp(r'^\s*[-*]\s*\[\s*\]\s*(.+)$');
+  static final RegExp _isoDate = RegExp(
+    '(?<![$_dateDigits])'
+    '[$_dateDigits]{4}\\s*[-‐‑–—−－]\\s*[$_dateDigits]{1,2}\\s*[-‐‑–—−－]\\s*[$_dateDigits]{1,2}'
+    '(?![$_dateDigits])',
+  );
+  static final RegExp _slashDate = RegExp(
+    '(?<![$_dateDigits])'
+    '[$_dateDigits]{1,2}\\s*[\\/／]\\s*[$_dateDigits]{1,2}(?:\\s*[\\/／]\\s*[$_dateDigits]{2,4})?'
+    '(?![$_dateDigits])',
+  );
+  static final RegExp _cjkMonthDay = RegExp(
+    '(?<![$_dateDigits])'
+    '[$_dateDigits]{1,2}\\s*(?:月|월)\\s*[$_dateDigits]{1,2}\\s*(?:日|号|號|일)'
+    '(?![$_dateDigits])',
+  );
   static final RegExp _time24h = RegExp(r'\b([01]?\d|2[0-3]):([0-5]\d)\b');
   static final RegExp _timeAmPm =
       RegExp(r'\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b', caseSensitive: false);
@@ -303,6 +319,9 @@ class MessageActionResolver {
           RegExp(RegExp.escape(matched), caseSensitive: false), ' ');
     }
 
+    out = out.replaceAll(_isoDate, ' ');
+    out = out.replaceAll(_slashDate, ' ');
+    out = out.replaceAll(_cjkMonthDay, ' ');
     out = out.replaceAll(_time24h, ' ');
     out = out.replaceAll(_timeAmPm, ' ');
     out = out.replaceAll(_timeZh, ' ');
