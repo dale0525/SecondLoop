@@ -37,6 +37,7 @@ void main() {
     );
 
     expect(result.processed, 1);
+    expect(client.retrieveRequests, 0);
     expect(client.parseRequests, 0);
     expect(store.createdTodoIds, contains('todo:msg:1'));
   });
@@ -76,6 +77,7 @@ void main() {
     );
 
     expect(result.processed, 1);
+    expect(client.retrieveRequests, 0);
     expect(client.parseRequests, 0);
     expect(store.updatedStatusByTodoId, isEmpty);
     expect(store.updatedDueByTodoId['todo:1'], isNotNull);
@@ -312,6 +314,58 @@ void main() {
         contains('"local_intent":"needs_enhancement"'));
     expect(client.lastUnresolvedFields, contains('due_local_iso'));
     expect(store.updatedDueByTodoId['todo:1'], isNotNull);
+  });
+
+  test(
+      'runner preserves todo disambiguation when out-of-range holiday phrases need enhancement',
+      () async {
+    final store = _FakeStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:out_of_range_ambiguous',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{
+        'msg:out_of_range_ambiguous': '把这个改到节后第一个工作日',
+      },
+      openCandidates: const <SemanticParseTodoCandidate>[
+        SemanticParseTodoCandidate(id: 'todo:1', title: '报销', status: 'open'),
+        SemanticParseTodoCandidate(id: 'todo:2', title: '回访', status: 'open'),
+      ],
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"followup","confidence":0.91,"todo_id":"todo:2","new_status":null,"due_local_iso":"2031-02-05T21:00:00"}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2031, 1, 20, 10, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(client.retrieveRequests, 1);
+    expect(client.parseRequests, 1);
+    expect(client.lastLocalResultJson,
+        contains('"local_intent":"ambiguous_followup"'));
+    expect(client.lastUnresolvedFields, contains('todo_id'));
+    expect(client.lastUnresolvedFields, contains('due_local_iso'));
+    expect(store.updatedDueByTodoId['todo:2'], isNotNull);
   });
 
   test('runner ignores enhancement followup ids outside candidate set',
@@ -691,6 +745,7 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
 
   final String? responseJson;
   final List<String> retrievedTodoCandidateIds;
+  int retrieveRequests = 0;
   int parseRequests = 0;
   String? lastLocalResultJson;
   List<String> lastUnresolvedFields = const <String>[];
@@ -700,6 +755,7 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
     required String query,
     required int topK,
   }) async {
+    retrieveRequests += 1;
     return List<String>.from(retrievedTodoCandidateIds);
   }
 

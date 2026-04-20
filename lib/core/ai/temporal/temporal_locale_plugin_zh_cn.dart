@@ -161,9 +161,8 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
     if (boundaries.isEmpty) return null;
 
     final years = boundaries.keys.toList()..sort();
-    final minSupportedYear = years.first;
     final maxSupportedYear = years.last;
-    if (today.year < minSupportedYear || today.year > maxSupportedYear) {
+    if (today.year > maxSupportedYear) {
       return null;
     }
     DateTime? mostRecent;
@@ -181,7 +180,13 @@ final class ZhCnTemporalLocalePlugin implements TemporalLocalePlugin {
         }
       }
     }
-    return preferPastIfAvailable ? (mostRecent ?? upcoming) : upcoming;
+    if (!preferPastIfAvailable) {
+      return upcoming;
+    }
+    if (mostRecent != null && mostRecent.year == today.year) {
+      return mostRecent;
+    }
+    return upcoming;
   }
 
   static String _matchedExpression(String text) {

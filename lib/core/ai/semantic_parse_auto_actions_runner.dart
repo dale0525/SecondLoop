@@ -388,52 +388,57 @@ final class SemanticParseAutoActionsRunner {
         }
         didUpdateJobs = true;
 
-        List<String> preferredTodoIds = const <String>[];
-        try {
-          preferredTodoIds = await client
-              .retrieveTodoCandidateIds(
-                query: analysisText,
-                topK: 8,
-              )
-              .timeout(settings.hardTimeout);
-        } catch (_) {
-          preferredTodoIds = const <String>[];
-        }
-
-        final candidates = await store.listOpenTodoCandidates(
+        var candidates = await store.listOpenTodoCandidates(
           query: analysisText,
           nowLocal: nowLocal,
           limit: 8,
-          preferredTodoIds: preferredTodoIds,
         );
 
         final locale = _localeFromTag(localeTag);
         final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
-        final semanticMatches =
-            _semanticMatchesFromPreferredTodoIds(preferredTodoIds);
-
-        final localTargets = candidates
-            .map(
-              (c) => TodoLinkTarget(
-                id: c.id,
-                title: c.title,
-                status: c.status,
-                dueLocal: c.dueLocalIso == null
-                    ? null
-                    : DateTime.tryParse(c.dueLocalIso!),
-              ),
-            )
-            .toList(growable: false);
-        final localParsedResult = LocalSemanticParser.parse(
+        var localParsedResult = _parseLocally(
           text: analysisText,
           nowLocal: nowLocal,
           locale: locale,
-          openTodoTargets: localTargets,
+          candidates: candidates,
           dayEndMinutes: dayEndMinutes,
           morningMinutes: resolvedMorningMinutes,
           firstDayOfWeekIndex: firstDayOfWeekIndex,
-          semanticMatches: semanticMatches,
         );
+
+        var preferredTodoIds = const <String>[];
+        if (_shouldRetrieveSemanticCandidates(localParsedResult)) {
+          try {
+            preferredTodoIds = await client
+                .retrieveTodoCandidateIds(
+                  query: analysisText,
+                  topK: 8,
+                )
+                .timeout(settings.hardTimeout);
+          } catch (_) {
+            preferredTodoIds = const <String>[];
+          }
+
+          if (preferredTodoIds.isNotEmpty) {
+            candidates = await store.listOpenTodoCandidates(
+              query: analysisText,
+              nowLocal: nowLocal,
+              limit: 8,
+              preferredTodoIds: preferredTodoIds,
+            );
+            localParsedResult = _parseLocally(
+              text: analysisText,
+              nowLocal: nowLocal,
+              locale: locale,
+              candidates: candidates,
+              dayEndMinutes: dayEndMinutes,
+              morningMinutes: resolvedMorningMinutes,
+              firstDayOfWeekIndex: firstDayOfWeekIndex,
+              semanticMatches:
+                  _semanticMatchesFromPreferredTodoIds(preferredTodoIds),
+            );
+          }
+        }
         final unresolvedFields = _unresolvedFields(localParsedResult);
         var parsed = AiSemanticParse.fromLocalResult(localParsedResult);
         try {
@@ -822,7 +827,8 @@ final class SemanticParseAutoActionsRunner {
             if (result.diagnostics.hasExplicitStatusUpdate) {
               add('new_status');
             }
-            if (result.diagnostics.hasDueSignal) {
+            if (result.diagnostics.hasDueSignal ||
+                result.diagnostics.temporalNeedsEnhancement) {
               add('due_local_iso');
             }
             break;
@@ -867,6 +873,53 @@ final class SemanticParseAutoActionsRunner {
       LocalSemanticParseKind.create => false,
       LocalSemanticParseKind.followup => false,
       LocalSemanticParseKind.none => result.diagnostics.localIntent != 'none',
+    };
+  }
+
+  static LocalSemanticParseResult _parseLocally({
+    required String text,
+    required DateTime nowLocal,
+    required Locale locale,
+    required List<SemanticParseTodoCandidate> candidates,
+    required int dayEndMinutes,
+    required int morningMinutes,
+    required int firstDayOfWeekIndex,
+    List<TodoThreadMatch> semanticMatches = const <TodoThreadMatch>[],
+  }) {
+    final localTargets = candidates
+        .map(
+          (c) => TodoLinkTarget(
+            id: c.id,
+            title: c.title,
+            status: c.status,
+            dueLocal: c.dueLocalIso == null
+                ? null
+                : DateTime.tryParse(c.dueLocalIso!),
+          ),
+        )
+        .toList(growable: false);
+
+    return LocalSemanticParser.parse(
+      text: text,
+      nowLocal: nowLocal,
+      locale: locale,
+      openTodoTargets: localTargets,
+      dayEndMinutes: dayEndMinutes,
+      morningMinutes: morningMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
+      semanticMatches: semanticMatches,
+    );
+  }
+
+  static bool _shouldRetrieveSemanticCandidates(
+      LocalSemanticParseResult result) {
+    if (result.kind != LocalSemanticParseKind.none) {
+      return false;
+    }
+    return switch (result.diagnostics.localIntent) {
+      'ambiguous_followup' => true,
+      'needs_enhancement' => result.diagnostics.semanticNeedsEnhancement,
+      _ => false,
     };
   }
 

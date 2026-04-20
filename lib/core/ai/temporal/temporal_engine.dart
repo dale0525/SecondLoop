@@ -45,7 +45,7 @@ final class TemporalEngine {
           mode: mode,
         ) ??
         TemporalLocalePluginRegistry.resolve(request);
-    final needsEnhancementHint =
+    final needsEnhancementHint = allowEnhancement &&
         TemporalLocalePluginRegistry.needsEnhancement(request);
 
     if (candidate == null ||
@@ -56,10 +56,13 @@ final class TemporalEngine {
         confidence: candidate?.confidence ?? 0,
         resolver: TemporalResolver.none,
         semantics: TemporalSemantics.none,
-        metadata: (candidate?.metadata ?? const TemporalMetadata()).copyWith(
-          normalizedExpression: normalizedText,
-          needsEnhancement:
-              candidate?.metadata.needsEnhancement ?? needsEnhancementHint,
+        metadata: _applyEnhancementPolicy(
+          (candidate?.metadata ?? const TemporalMetadata()).copyWith(
+            normalizedExpression: normalizedText,
+            needsEnhancement:
+                candidate?.metadata.needsEnhancement ?? needsEnhancementHint,
+          ),
+          allowEnhancement: allowEnhancement,
         ),
       );
     }
@@ -70,6 +73,7 @@ final class TemporalEngine {
       nowLocal: nowLocal,
       dayEndMinutes: dayEndMinutes,
       normalizedText: normalizedText,
+      allowEnhancement: allowEnhancement,
     );
   }
 
@@ -79,6 +83,7 @@ final class TemporalEngine {
     required DateTime nowLocal,
     required int dayEndMinutes,
     required String normalizedText,
+    required bool allowEnhancement,
   }) {
     switch (mode) {
       case TemporalMode.retrievalWindow:
@@ -99,15 +104,23 @@ final class TemporalEngine {
             semantics: candidate.semantics,
             startLocal: candidate.startLocal,
             endLocal: candidate.endLocal,
-            metadata: candidate.metadata.copyWith(
-              normalizedExpression:
-                  candidate.metadata.normalizedExpression ?? normalizedText,
+            metadata: _applyEnhancementPolicy(
+              candidate.metadata.copyWith(
+                normalizedExpression:
+                    candidate.metadata.normalizedExpression ?? normalizedText,
+              ),
+              allowEnhancement: allowEnhancement,
             ),
           );
         }
         final point = candidate.pointLocal;
         if (point == null) {
-          return _none(mode, normalizedText, candidate.metadata);
+          return _none(
+            mode,
+            normalizedText,
+            candidate.metadata,
+            allowEnhancement: allowEnhancement,
+          );
         }
         final start = DateTime(point.year, point.month, point.day);
         final end = start.add(const Duration(days: 1));
@@ -125,15 +138,23 @@ final class TemporalEngine {
           semantics: semantics,
           startLocal: start,
           endLocal: end,
-          metadata: candidate.metadata.copyWith(
-            normalizedExpression:
-                candidate.metadata.normalizedExpression ?? normalizedText,
+          metadata: _applyEnhancementPolicy(
+            candidate.metadata.copyWith(
+              normalizedExpression:
+                  candidate.metadata.normalizedExpression ?? normalizedText,
+            ),
+            allowEnhancement: allowEnhancement,
           ),
         );
       case TemporalMode.todoDue:
       case TemporalMode.todoFollowupDue:
         if (candidate.pointLocal == null) {
-          return _none(mode, normalizedText, candidate.metadata);
+          return _none(
+            mode,
+            normalizedText,
+            candidate.metadata,
+            allowEnhancement: allowEnhancement,
+          );
         }
         final point = candidate.pointLocal!;
         final dueAtLocal = candidate.hasExplicitTime
@@ -158,9 +179,12 @@ final class TemporalEngine {
           resolver: candidate.resolver,
           semantics: TemporalSemantics.pointInTime,
           dueAtLocal: adjustedDueAtLocal,
-          metadata: candidate.metadata.copyWith(
-            normalizedExpression:
-                candidate.metadata.normalizedExpression ?? normalizedText,
+          metadata: _applyEnhancementPolicy(
+            candidate.metadata.copyWith(
+              normalizedExpression:
+                  candidate.metadata.normalizedExpression ?? normalizedText,
+            ),
+            allowEnhancement: allowEnhancement,
           ),
         );
     }
@@ -207,18 +231,29 @@ final class TemporalEngine {
   }
 
   static TemporalResolution _none(
-    TemporalMode mode,
-    String normalizedText,
-    TemporalMetadata metadata,
-  ) {
+      TemporalMode mode, String normalizedText, TemporalMetadata metadata,
+      {required bool allowEnhancement}) {
     return TemporalResolution(
       mode: mode,
       confidence: 0,
       resolver: TemporalResolver.none,
       semantics: TemporalSemantics.none,
-      metadata: metadata.copyWith(
-        normalizedExpression: metadata.normalizedExpression ?? normalizedText,
+      metadata: _applyEnhancementPolicy(
+        metadata.copyWith(
+          normalizedExpression: metadata.normalizedExpression ?? normalizedText,
+        ),
+        allowEnhancement: allowEnhancement,
       ),
     );
+  }
+
+  static TemporalMetadata _applyEnhancementPolicy(
+    TemporalMetadata metadata, {
+    required bool allowEnhancement,
+  }) {
+    if (allowEnhancement || !metadata.needsEnhancement) {
+      return metadata;
+    }
+    return metadata.copyWith(needsEnhancement: false);
   }
 }

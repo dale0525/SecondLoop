@@ -86,7 +86,7 @@ final class LocalSemanticParser {
           timezone: '',
           firstDayOfWeek: firstDayOfWeekIndex,
           mode: TemporalMode.todoFollowupDue,
-          allowEnhancement: false,
+          allowEnhancement: true,
           dayEndMinutes: dayEndMinutes,
         );
         final dueForCreate = TemporalEngine.resolve(
@@ -96,7 +96,7 @@ final class LocalSemanticParser {
           timezone: '',
           firstDayOfWeek: firstDayOfWeekIndex,
           mode: TemporalMode.todoDue,
-          allowEnhancement: false,
+          allowEnhancement: true,
           dayEndMinutes: dayEndMinutes,
         );
         final looksLikeFollowupEdit = looksLikeTodoFollowupEdit(raw);
@@ -107,13 +107,14 @@ final class LocalSemanticParser {
             dueForCreate.dueAtLocal != null;
         final hasAutomationSignal =
             updateIntent.isExplicit || hasDueSignal || looksLikeFollowupEdit;
+        final hasFollowupDisambiguationSignal =
+            updateIntent.isExplicit || looksLikeFollowupEdit;
         final semanticNeedsEnhancement =
             !hasAutomationSignal && looksLikeTodoRelevantForSemanticParse(raw);
         final needsEnhancement =
             temporalNeedsEnhancement || semanticNeedsEnhancement;
-        final ambiguousFollowup = !temporalNeedsEnhancement &&
-            hasAutomationSignal &&
-            openTodoTargets.length > 1;
+        final ambiguousFollowup =
+            hasFollowupDisambiguationSignal && openTodoTargets.length > 1;
         return LocalSemanticParseResult(
           kind: LocalSemanticParseKind.none,
           confidence: ambiguousFollowup

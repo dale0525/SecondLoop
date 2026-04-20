@@ -291,6 +291,24 @@ void main() {
     expect(result.metadata.inferredCalendarSystem, 'chinese_lunar');
   });
 
+  test(
+      'todo_followup_due resolves next supported zh-CN holiday working-day phrase before the supported year window',
+      () {
+    final result = TemporalEngine.resolve(
+      text: '把报销改到节后第一个工作日',
+      nowLocal: DateTime(2025, 12, 20, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoFollowupDue,
+      allowEnhancement: false,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.resolver, TemporalResolver.localePlugin);
+    expect(result.dueAtLocal, DateTime(2026, 2, 24, 21, 0));
+  });
+
   test('retrieval_window treats 春节后 as a past-open window after the holiday',
       () {
     final now = DateTime(2026, 3, 1, 10, 0);
@@ -348,7 +366,28 @@ void main() {
     expect(result.endLocal, now);
   });
 
-  test('zh-CN holiday working-day expressions degrade outside supported years',
+  test(
+      'zh-CN holiday working-day expressions mark enhancement only when allowed',
+      () {
+    final result = TemporalEngine.resolve(
+      text: '把报销改到节后第一个工作日',
+      nowLocal: DateTime(2031, 2, 10, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      timezone: 'Asia/Shanghai',
+      firstDayOfWeek: 1,
+      mode: TemporalMode.todoFollowupDue,
+      allowEnhancement: true,
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.resolver, TemporalResolver.none);
+    expect(result.dueAtLocal, isNull);
+    expect(result.metadata.needsEnhancement, isTrue);
+    expect(result.metadata.inferredCalendarSystem, 'chinese_lunar');
+  });
+
+  test(
+      'zh-CN holiday working-day expressions suppress enhancement hints when disallowed',
       () {
     final result = TemporalEngine.resolve(
       text: '把报销改到节后第一个工作日',
@@ -363,7 +402,6 @@ void main() {
 
     expect(result.resolver, TemporalResolver.none);
     expect(result.dueAtLocal, isNull);
-    expect(result.metadata.needsEnhancement, isTrue);
-    expect(result.metadata.inferredCalendarSystem, 'chinese_lunar');
+    expect(result.metadata.needsEnhancement, isFalse);
   });
 }

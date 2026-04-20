@@ -34,4 +34,23 @@ void main() {
     expect(result.confidence, lessThan(0.86));
     expect(result.diagnostics.localIntent, 'ambiguous_followup');
   });
+
+  test(
+      'local parser keeps followup ambiguity even when temporal parsing needs enhancement',
+      () {
+    final result = LocalSemanticParser.parse(
+      text: '把这个改到节后第一个工作日',
+      nowLocal: DateTime(2031, 1, 20, 10, 0),
+      locale: const Locale('zh', 'CN'),
+      openTodoTargets: const <TodoLinkTarget>[
+        TodoLinkTarget(id: 'todo:1', title: '报销', status: 'open'),
+        TodoLinkTarget(id: 'todo:2', title: '回访', status: 'open'),
+      ],
+    );
+
+    expect(result.kind, LocalSemanticParseKind.none);
+    expect(result.confidence, lessThan(0.86));
+    expect(result.diagnostics.localIntent, 'ambiguous_followup');
+    expect(result.diagnostics.temporalNeedsEnhancement, isTrue);
+  });
 }
