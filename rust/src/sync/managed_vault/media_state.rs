@@ -253,9 +253,10 @@ pub(super) fn update_v2_pull_backfill_markers(
     scope_id: &str,
 ) -> Result<()> {
     let pending_work = pending_local_media_write_work(conn, db_key, scope_id)?;
-    let attachment_clean = has_local_attachments(conn)?
-        && !has_missing_local_attachment_bytes(conn, db_key, app_dir)?
-        && !pending_work.attachments;
+    let missing_attachment_bytes = has_missing_local_attachment_bytes(conn, db_key, app_dir)?;
+    let missing_artifact_blobs = has_missing_embedding_artifact_blobs(conn, app_dir)?;
+    let attachment_clean =
+        has_local_attachments(conn)? && !missing_attachment_bytes && !pending_work.attachments;
     let attachment_key = attachment_backfill_key(scope_id);
     if attachment_clean {
         super::super::kv_set_i64(conn, &attachment_backfill_key(scope_id), 1)?;
@@ -264,7 +265,7 @@ pub(super) fn update_v2_pull_backfill_markers(
     }
 
     let artifact_clean = has_ready_embedding_artifact_blobs(conn)?
-        && !has_missing_embedding_artifact_blobs(conn, app_dir)?
+        && !missing_artifact_blobs
         && !pending_work.artifacts;
     let artifact_key = artifact_backfill_key(scope_id);
     if artifact_clean {
@@ -274,10 +275,7 @@ pub(super) fn update_v2_pull_backfill_markers(
     }
 
     let clean_key = v2_pull_media_clean_key(scope_id);
-    if !pending_work.any()
-        && !has_missing_local_attachment_bytes(conn, db_key, app_dir)?
-        && !has_missing_embedding_artifact_blobs(conn, app_dir)?
-    {
+    if !pending_work.any() && !missing_attachment_bytes && !missing_artifact_blobs {
         super::super::kv_set_i64(conn, &clean_key, 1)?;
     } else {
         let _ = conn.execute("DELETE FROM kv WHERE key = ?1", params![clean_key])?;

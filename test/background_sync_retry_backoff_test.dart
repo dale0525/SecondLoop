@@ -71,6 +71,10 @@ void main() {
       isFalse,
     );
     expect(
+      BackgroundSync.isRetryableBackgroundSyncFailure(statusCode: 403),
+      isFalse,
+    );
+    expect(
       BackgroundSync.isRetryableBackgroundSyncFailure(
         message: 'SocketException: Failed host lookup',
       ),

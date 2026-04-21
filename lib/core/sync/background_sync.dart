@@ -704,14 +704,7 @@ final class BackgroundSync {
         return true;
       }
       if (statusCode >= 500) return true;
-      if (statusCode == 402) return false;
-      if (statusCode == 403) {
-        if (errorCode == 'grace_readonly' ||
-            errorCode == 'storage_quota_exceeded') {
-          return false;
-        }
-        return false;
-      }
+      if (statusCode == 402 || statusCode == 403) return false;
     }
 
     final normalized = (message ?? '').toLowerCase();
