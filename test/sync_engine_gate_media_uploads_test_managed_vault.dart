@@ -388,6 +388,88 @@ void registerSyncEngineGateMediaUploadManagedVaultTests() {
   });
 
   testWidgets(
+      'Managed-vault transient push failures do not clear an existing repair block',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    final config = SyncConfig.managedVault(
+      syncKey: syncKey,
+      vaultId: 'vault-1',
+      baseUrl: 'https://vault.example.com',
+    );
+    final scopeId = store.syncStateScopeId(config);
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('vault-1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(syncKey);
+    await store.writeCloudMediaBackupEnabled(false);
+    await store.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _ManagedVaultTransientPushFailureBackend();
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: _FakeCloudAuthController(),
+                child: SyncEngineGate(
+                  child: Builder(
+                    builder: (context) {
+                      engine = SyncEngineScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(engine, isNotNull);
+      expect(
+          engine!.writeGate.value.kind, SyncWriteGateKind.localRepairRequired);
+
+      engine!.writeGate.value = const SyncWriteGateState.open();
+      engine!.triggerPushNow();
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.managedVaultPushCalls == 0 &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.managedVaultPushCalls, greaterThanOrEqualTo(1));
+      expect(
+        await store.readBackgroundSyncRepairRequired(
+          backendType: SyncBackendType.managedVault,
+          scopeId: scopeId,
+        ),
+        isTrue,
+      );
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
+  testWidgets(
       'Managed-vault pull-side recovery blockers persist repair blocks and gate state',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

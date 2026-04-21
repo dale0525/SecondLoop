@@ -611,12 +611,13 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
             await _writeManagedVaultMediaUploadPending(config, true);
             return pushed;
           } catch (error) {
-            await _configStore.writeBackgroundSyncRepairRequired(
-              extractSyncHttpStatusCode(error) == 400 &&
-                  extractSyncErrorCode(error) == 'invalid_batch',
-              backendType: SyncBackendType.managedVault,
-              scopeId: scopeId,
-            );
+            if (shouldPersistManagedVaultBackgroundRepairBlock(error)) {
+              await _configStore.writeBackgroundSyncRepairRequired(
+                true,
+                backendType: SyncBackendType.managedVault,
+                scopeId: scopeId,
+              );
+            }
             rethrow;
           }
         }(),

@@ -452,6 +452,35 @@ final class _ManagedVaultTransientPullFailureBackend
   }
 }
 
+final class _ManagedVaultTransientPushFailureBackend
+    extends _ManagedVaultRecordingBackend {
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPushCalls++;
+    throw StateError(
+      'managed-vault v2 push failed: HTTP 503 {"error":"temporary"}',
+    );
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    managedVaultPullCalls++;
+    return 0;
+  }
+}
+
 final class _ManagedVaultTokenRecordingBackend extends TestAppBackend {
   final List<String> managedVaultPushTokens = <String>[];
 
