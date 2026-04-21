@@ -598,11 +598,19 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
               vaultId: config.remoteRoot,
               idToken: idToken,
             );
-            await _configStore.writeBackgroundSyncRepairRequired(
-              false,
-              backendType: SyncBackendType.managedVault,
-              scopeId: scopeId,
-            );
+            final shouldPreserveMediaRepairBlock =
+                await _readManagedVaultMediaUploadPending(config) &&
+                    await _configStore.readBackgroundSyncRepairRequired(
+                      backendType: SyncBackendType.managedVault,
+                      scopeId: scopeId,
+                    );
+            if (!shouldPreserveMediaRepairBlock) {
+              await _configStore.writeBackgroundSyncRepairRequired(
+                false,
+                backendType: SyncBackendType.managedVault,
+                scopeId: scopeId,
+              );
+            }
             await _configStore.writeBackgroundSyncBackoffState(
               null,
               backendType: SyncBackendType.managedVault,
