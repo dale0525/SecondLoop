@@ -75,11 +75,17 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     final syncLogsByBackend = <String, Object?>{};
     final syncBackoffByBackend = <String, Object?>{};
     SyncBackgroundResult? latestSyncLog;
+    final activeConfig = await store.loadConfiguredSync();
+    final activeScopeId =
+        activeConfig == null ? null : store.syncStateScopeId(activeConfig);
 
     for (final backendType in SyncBackendType.values) {
       final token = _backendTypeToken(backendType);
-      final log =
-          await store.readBackgroundSyncResult(backendType: backendType);
+      final log = await store.readBackgroundSyncResult(
+        backendType: backendType,
+        scopeId:
+            activeConfig?.backendType == backendType ? activeScopeId : null,
+      );
       if (log != null) {
         syncLogsByBackend[token] = _syncResultToDiagnosticsJson(log);
         if (latestSyncLog == null ||
@@ -88,8 +94,11 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
         }
       }
 
-      final backoff =
-          await store.readBackgroundSyncBackoffState(backendType: backendType);
+      final backoff = await store.readBackgroundSyncBackoffState(
+        backendType: backendType,
+        scopeId:
+            activeConfig?.backendType == backendType ? activeScopeId : null,
+      );
       if (backoff != null) {
         syncBackoffByBackend[token] = _syncBackoffToDiagnosticsJson(backoff);
       }

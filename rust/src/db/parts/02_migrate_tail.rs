@@ -712,6 +712,44 @@ ALTER TABLE semantic_parse_jobs
     Ok(())
 }
 
+fn migrate_from_v49_to_v50(conn: &Connection) -> Result<()> {
+    if sqlite_table_exists(conn, "cloud_media_backup")? {
+        conn.execute_batch(
+            r#"
+DROP TABLE IF EXISTS cloud_media_backup_v49_legacy;
+ALTER TABLE cloud_media_backup RENAME TO cloud_media_backup_v49_legacy;
+DROP INDEX IF EXISTS idx_cloud_media_backup_status_retry;
+"#,
+        )?;
+    }
+
+    conn.execute_batch(
+        r#"
+CREATE TABLE cloud_media_backup (
+  scope_id TEXT NOT NULL,
+  attachment_sha256 TEXT NOT NULL,
+  desired_variant TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at INTEGER,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (scope_id, attachment_sha256),
+  FOREIGN KEY(attachment_sha256) REFERENCES attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX idx_cloud_media_backup_status_retry
+  ON cloud_media_backup(scope_id, status, next_retry_at);
+"#,
+    )?;
+
+    if sqlite_table_exists(conn, "cloud_media_backup_v49_legacy")? {
+        conn.execute_batch("DROP TABLE cloud_media_backup_v49_legacy;")?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 50;")?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -959,6 +997,81 @@ CREATE TABLE semantic_parse_jobs (
             .expect("collect column names");
         assert!(column_names.contains(&"applied_prev_todo_due_at_ms".to_string()));
         assert!(column_names.contains(&"applied_due_changed".to_string()));
+    }
+
+    #[test]
+    fn v50_cloud_media_backup_migration_rebuilds_scope_primary_key() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE attachments (
+  sha256 TEXT PRIMARY KEY
+);
+CREATE TABLE cloud_media_backup (
+  attachment_sha256 TEXT PRIMARY KEY,
+  desired_variant TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at INTEGER,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL
+);
+INSERT INTO cloud_media_backup(
+  attachment_sha256,
+  desired_variant,
+  status,
+  attempts,
+  next_retry_at,
+  last_error,
+  updated_at
+) VALUES ('sha-1', 'original', 'pending', 0, NULL, NULL, 1234);
+INSERT INTO attachments(sha256) VALUES ('sha-1');
+PRAGMA user_version = 49;
+"#,
+        )
+        .expect("seed pre-v50 cloud_media_backup");
+
+        migrate_from_v49_to_v50(&conn).expect("run v50 migration");
+
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(cloud_media_backup)")
+            .expect("prepare table info");
+        let columns = stmt
+            .query_map([], |row| Ok((row.get::<_, String>(1)?, row.get::<_, i64>(5)?)))
+            .expect("query table info")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect columns");
+        assert!(
+            columns.iter().any(|(name, pk)| name == "scope_id" && *pk == 1),
+            "scope_id should be the first primary-key column"
+        );
+        assert!(
+            columns
+                .iter()
+                .any(|(name, pk)| name == "attachment_sha256" && *pk == 2),
+            "attachment_sha256 should be the second primary-key column"
+        );
+
+        let migrated: Vec<(String, String, String)> = conn
+            .prepare(
+                r#"SELECT scope_id, attachment_sha256, status
+                   FROM cloud_media_backup
+                   ORDER BY attachment_sha256 ASC"#,
+            )
+            .expect("prepare migrated rows")
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .expect("query migrated rows")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect migrated rows");
+        assert!(
+            migrated.is_empty(),
+            "v50 migration should drop legacy cloud media backup rows rather than risking a wrong scoped upload"
+        );
+
+        let user_version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("user_version");
+        assert_eq!(user_version, 50);
     }
 }
 

@@ -1,5 +1,23 @@
 part of 'native_backend.dart';
 
+@visibleForTesting
+int parseManagedVaultBlobRepairQueueDepthForTest(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map) {
+    throw const FormatException(
+      'Managed-vault diagnostics payload must be a JSON object.',
+    );
+  }
+  final depth = decoded['blob_repair_queue_depth'];
+  if (depth is! num) {
+    throw const FormatException(
+      'Managed-vault diagnostics payload missing blob_repair_queue_depth.',
+    );
+  }
+  final normalizedDepth = depth.toInt();
+  return normalizedDepth < 0 ? 0 : normalizedDepth;
+}
+
 mixin _NativeAppBackendSyncManagedVault on _NativeAppBackendAccess {
   @override
   Future<int> syncManagedVaultPush(
@@ -39,6 +57,20 @@ mixin _NativeAppBackendSyncManagedVault on _NativeAppBackendAccess {
       firebaseIdToken: idToken,
     );
     return pulled.toInt();
+  }
+
+  @override
+  Future<int> syncManagedVaultBlobRepairQueueDepth({
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    final appDir = await _getAppDir();
+    final raw = await rust_sync_diagnostics.syncManagedVaultCursorDiagnostics(
+      appDir: appDir,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+    );
+    return parseManagedVaultBlobRepairQueueDepthForTest(raw);
   }
 
   @override
@@ -111,6 +143,25 @@ mixin _NativeAppBackendSyncManagedVault on _NativeAppBackendAccess {
   }) async* {
     final appDir = await _getAppDir();
     yield* rust_sync_progress.syncManagedVaultPushOpsOnlyProgress(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+    );
+  }
+
+  @override
+  Stream<String> syncManagedVaultPushProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_sync_progress.syncManagedVaultPushProgress(
       appDir: appDir,
       key: key,
       syncKey: syncKey,

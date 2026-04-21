@@ -169,14 +169,20 @@ pub fn enqueue_cloud_media_backup(
     attachment_sha256: &str,
     desired_variant: &str,
     now_ms: i64,
+    scope_id: Option<&str>,
 ) -> Result<()> {
     let desired_variant = desired_variant.trim();
     if desired_variant.is_empty() {
         return Err(anyhow!("desired_variant is required"));
     }
 
-    upsert_cloud_media_backup_row(conn, attachment_sha256, desired_variant, now_ms)?;
+    let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    upsert_cloud_media_backup_row(conn, attachment_sha256, desired_variant, now_ms, &scope_id)?;
     Ok(())
+}
+
+fn normalize_cloud_media_backup_scope_id(scope_id: Option<&str>) -> String {
+    scope_id.unwrap_or("").trim().to_string()
 }
 
 fn upsert_cloud_media_backup_row(
@@ -184,10 +190,12 @@ fn upsert_cloud_media_backup_row(
     attachment_sha256: &str,
     desired_variant: &str,
     now_ms: i64,
+    scope_id: &str,
 ) -> Result<u64> {
     let affected = conn.execute(
         r#"
 INSERT INTO cloud_media_backup(
+  scope_id,
   attachment_sha256,
   desired_variant,
   status,
@@ -196,8 +204,8 @@ INSERT INTO cloud_media_backup(
   last_error,
   updated_at
 )
-VALUES (?1, ?2, 'pending', 0, NULL, NULL, ?3)
-ON CONFLICT(attachment_sha256) DO UPDATE SET
+VALUES (?1, ?2, ?3, 'pending', 0, NULL, NULL, ?4)
+ON CONFLICT(scope_id, attachment_sha256) DO UPDATE SET
   desired_variant = excluded.desired_variant,
   status = CASE
     WHEN cloud_media_backup.status = 'uploaded' THEN 'uploaded'
@@ -207,12 +215,15 @@ ON CONFLICT(attachment_sha256) DO UPDATE SET
   last_error = NULL,
   updated_at = excluded.updated_at
 "#,
-        params![attachment_sha256, desired_variant, now_ms],
+        params![scope_id, attachment_sha256, desired_variant, now_ms],
     )?;
     Ok(affected as u64)
 }
 
-fn prune_cloud_media_backup_rows_missing_local_bytes(conn: &Connection) -> Result<u64> {
+fn prune_cloud_media_backup_rows_missing_local_bytes(
+    conn: &Connection,
+    scope_id: &str,
+) -> Result<u64> {
     let Ok(app_dir) = app_dir_from_conn(conn) else {
         return Ok(0);
     };
@@ -222,10 +233,11 @@ fn prune_cloud_media_backup_rows_missing_local_bytes(conn: &Connection) -> Resul
 SELECT cmb.attachment_sha256, a.path
 FROM cloud_media_backup cmb
 LEFT JOIN attachments a ON a.sha256 = cmb.attachment_sha256
+WHERE cmb.scope_id = ?1
 "#,
     )?;
 
-    let mut rows = stmt.query([])?;
+    let mut rows = stmt.query(params![scope_id])?;
     let mut stale_attachment_sha256s = Vec::new();
     while let Some(row) = rows.next()? {
         let attachment_sha256: String = row.get(0)?;
@@ -243,8 +255,8 @@ LEFT JOIN attachments a ON a.sha256 = cmb.attachment_sha256
     let mut pruned = 0u64;
     for attachment_sha256 in stale_attachment_sha256s {
         pruned += conn.execute(
-            r#"DELETE FROM cloud_media_backup WHERE attachment_sha256 = ?1"#,
-            params![attachment_sha256],
+            r#"DELETE FROM cloud_media_backup WHERE scope_id = ?1 AND attachment_sha256 = ?2"#,
+            params![scope_id, attachment_sha256],
         )? as u64;
     }
     Ok(pruned)
@@ -254,13 +266,15 @@ pub fn backfill_cloud_media_backup_images(
     conn: &Connection,
     desired_variant: &str,
     now_ms: i64,
+    scope_id: Option<&str>,
 ) -> Result<u64> {
     let desired_variant = desired_variant.trim();
     if desired_variant.is_empty() {
         return Err(anyhow!("desired_variant is required"));
     }
 
-    let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn)?;
+    let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn, &scope_id)?;
 
     let Ok(app_dir) = app_dir_from_conn(conn) else {
         return Ok(0);
@@ -283,8 +297,13 @@ ORDER BY created_at ASC, sha256 ASC
             continue;
         }
 
-        affected +=
-            upsert_cloud_media_backup_row(conn, &attachment_sha256, desired_variant, now_ms)?;
+        affected += upsert_cloud_media_backup_row(
+            conn,
+            &attachment_sha256,
+            desired_variant,
+            now_ms,
+            &scope_id,
+        )?;
     }
 
     Ok(affected)
@@ -294,8 +313,10 @@ pub fn list_due_cloud_media_backups(
     conn: &Connection,
     now_ms: i64,
     limit: i64,
+    scope_id: Option<&str>,
 ) -> Result<Vec<CloudMediaBackup>> {
-    let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn)?;
+    let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn, &scope_id)?;
 
     let limit = limit.clamp(1, 500);
     let mut stmt = conn.prepare(
@@ -310,14 +331,15 @@ SELECT cmb.attachment_sha256,
        cmb.updated_at
 FROM cloud_media_backup cmb
 LEFT JOIN attachments a ON a.sha256 = cmb.attachment_sha256
-WHERE status != 'uploaded'
-  AND (next_retry_at IS NULL OR next_retry_at <= ?1)
+WHERE cmb.scope_id = ?1
+  AND status != 'uploaded'
+  AND (next_retry_at IS NULL OR next_retry_at <= ?2)
 ORDER BY cmb.updated_at ASC, cmb.attachment_sha256 ASC
-LIMIT ?2
+LIMIT ?3
 "#,
     )?;
 
-    let mut rows = stmt.query(params![now_ms, limit])?;
+    let mut rows = stmt.query(params![scope_id, now_ms, limit])?;
     let mut result = Vec::new();
     while let Some(row) = rows.next()? {
         result.push(CloudMediaBackup {
@@ -341,18 +363,22 @@ pub fn mark_cloud_media_backup_failed(
     next_retry_at_ms: i64,
     last_error: &str,
     now_ms: i64,
+    scope_id: Option<&str>,
 ) -> Result<()> {
+    let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
     conn.execute(
         r#"
 UPDATE cloud_media_backup
 SET status = 'failed',
-    attempts = ?2,
-    next_retry_at = ?3,
-    last_error = ?4,
-    updated_at = ?5
-WHERE attachment_sha256 = ?1
+    attempts = ?3,
+    next_retry_at = ?4,
+    last_error = ?5,
+    updated_at = ?6
+WHERE scope_id = ?1
+  AND attachment_sha256 = ?2
 "#,
         params![
+            scope_id,
             attachment_sha256,
             attempts,
             next_retry_at_ms,
@@ -367,31 +393,39 @@ pub fn mark_cloud_media_backup_uploaded(
     conn: &Connection,
     attachment_sha256: &str,
     now_ms: i64,
+    scope_id: Option<&str>,
 ) -> Result<()> {
+    let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
     conn.execute(
         r#"
 UPDATE cloud_media_backup
 SET status = 'uploaded',
     next_retry_at = NULL,
     last_error = NULL,
-    updated_at = ?2
-WHERE attachment_sha256 = ?1
+    updated_at = ?3
+WHERE scope_id = ?1
+  AND attachment_sha256 = ?2
 "#,
-        params![attachment_sha256, now_ms],
+        params![scope_id, attachment_sha256, now_ms],
     )?;
     Ok(())
 }
 
-pub fn cloud_media_backup_summary(conn: &Connection) -> Result<CloudMediaBackupSummary> {
-    let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn)?;
+pub fn cloud_media_backup_summary(
+    conn: &Connection,
+    scope_id: Option<&str>,
+) -> Result<CloudMediaBackupSummary> {
+    let scope_id = normalize_cloud_media_backup_scope_id(scope_id);
+    let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn, &scope_id)?;
 
     let mut pending = 0i64;
     let mut failed = 0i64;
     let mut uploaded = 0i64;
 
-    let mut stmt =
-        conn.prepare(r#"SELECT status, COUNT(*) FROM cloud_media_backup GROUP BY status"#)?;
-    let mut rows = stmt.query([])?;
+    let mut stmt = conn.prepare(
+        r#"SELECT status, COUNT(*) FROM cloud_media_backup WHERE scope_id = ?1 GROUP BY status"#,
+    )?;
+    let mut rows = stmt.query(params![scope_id.as_str()])?;
     while let Some(row) = rows.next()? {
         let status: String = row.get(0)?;
         let count: i64 = row.get(1)?;
@@ -405,8 +439,8 @@ pub fn cloud_media_backup_summary(conn: &Connection) -> Result<CloudMediaBackupS
 
     let last_uploaded_at_ms: Option<i64> = conn
         .query_row(
-            r#"SELECT MAX(updated_at) FROM cloud_media_backup WHERE status = 'uploaded'"#,
-            [],
+            r#"SELECT MAX(updated_at) FROM cloud_media_backup WHERE scope_id = ?1 AND status = 'uploaded'"#,
+            params![scope_id.as_str()],
             |row| row.get(0),
         )
         .optional()?
@@ -417,11 +451,12 @@ pub fn cloud_media_backup_summary(conn: &Connection) -> Result<CloudMediaBackupS
             r#"
 SELECT last_error, updated_at
 FROM cloud_media_backup
-WHERE last_error IS NOT NULL
+WHERE scope_id = ?1
+  AND last_error IS NOT NULL
 ORDER BY updated_at DESC
 LIMIT 1
 "#,
-            [],
+            params![scope_id.as_str()],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?

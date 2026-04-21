@@ -359,6 +359,20 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
   }
 
   @override
+  Future<int> requeueRunningSemanticParseJobs(
+    Uint8List key, {
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    final count = await rust_core.dbRequeueRunningSemanticParseJobs(
+      appDir: appDir,
+      key: key,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+    return count.toInt();
+  }
+
+  @override
   Future<bool> markSemanticParseJobCanceledIfCurrentAttempt(
     Uint8List key, {
     required String messageId,

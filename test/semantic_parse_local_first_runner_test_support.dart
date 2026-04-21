@@ -326,6 +326,7 @@ final class FakeSemanticParseStore implements SemanticParseAutoActionsStore {
       appliedTodoId: appliedTodoId,
       appliedTodoTitle: appliedTodoTitle,
       appliedPrevTodoStatus: appliedPrevTodoStatus,
+      appliedDueChanged: false,
       suggestedTags: null,
       suggestedTagConfidence: null,
       tagSuggestionState: null,

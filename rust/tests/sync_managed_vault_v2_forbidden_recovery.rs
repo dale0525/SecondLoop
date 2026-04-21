@@ -80,13 +80,23 @@ fn managed_vault_pull_recovers_from_forbidden_v2_requester_device_by_rotating_lo
     let addr = listener.local_addr().expect("local addr");
 
     let handle = thread::spawn(move || {
-        for step in 0..5 {
+        for step in 0..6 {
             let (mut stream, _) = listener.accept().expect("accept");
             let (method, path, body) = read_http_request(&mut stream);
-            let parsed: serde_json::Value =
-                serde_json::from_slice(&body).expect("parse request body");
+            let parsed = if body.is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::from_slice(&body).expect("parse request body")
+            };
             match (step, method.as_str(), path.as_str()) {
-                (0, "POST", "/v1/vaults/v1/devices") => {
+                (0, "POST", "/v2/vaults/v1/sync/pull") => {
+                    respond_json(
+                        &mut stream,
+                        "HTTP/1.1 404 Not Found",
+                        r#"{"error":"not_found"}"#,
+                    );
+                }
+                (1, "POST", "/v1/vaults/v1/devices") => {
                     state_clone
                         .lock()
                         .expect("lock")
@@ -101,14 +111,14 @@ fn managed_vault_pull_recovers_from_forbidden_v2_requester_device_by_rotating_lo
                         ),
                     );
                 }
-                (1, "POST", "/v1/vaults/v1/ops:pull_bin_v2") => {
+                (2, "POST", "/v1/vaults/v1/ops:pull_bin_v2") => {
                     respond_json(
                         &mut stream,
                         "HTTP/1.1 404 Not Found",
                         r#"{"error":"not_found"}"#,
                     );
                 }
-                (2, "POST", "/v1/vaults/v1/ops:pull_v2") => {
+                (3, "POST", "/v1/vaults/v1/ops:pull_v2") => {
                     state_clone.lock().expect("lock").first_pull_device_id =
                         parsed["device_id"].as_str().map(str::to_string);
                     respond_json(
@@ -117,7 +127,7 @@ fn managed_vault_pull_recovers_from_forbidden_v2_requester_device_by_rotating_lo
                         r#"{"error":"forbidden"}"#,
                     );
                 }
-                (3, "POST", "/v1/vaults/v1/devices") => {
+                (4, "POST", "/v1/vaults/v1/devices") => {
                     state_clone
                         .lock()
                         .expect("lock")
@@ -132,7 +142,7 @@ fn managed_vault_pull_recovers_from_forbidden_v2_requester_device_by_rotating_lo
                         ),
                     );
                 }
-                (4, "POST", "/v1/vaults/v1/ops:pull_v2") => {
+                (5, "POST", "/v1/vaults/v1/ops:pull_v2") => {
                     state_clone.lock().expect("lock").second_pull_device_id =
                         parsed["device_id"].as_str().map(str::to_string);
                     respond_json(
@@ -145,7 +155,7 @@ fn managed_vault_pull_recovers_from_forbidden_v2_requester_device_by_rotating_lo
                 _ => panic!("unexpected request: step={step} method={method} path={path}"),
             }
         }
-        panic!("expected exactly 5 requests");
+        panic!("expected exactly 6 requests");
     });
 
     let pulled = sync::managed_vault::pull(

@@ -18,6 +18,7 @@ import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_diagnostics.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../core/sync/sync_http_error.dart';
 import '../../core/sync/sync_key_manager.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
@@ -26,6 +27,8 @@ import '../../web_app/web_formal_settings_scope.dart';
 import '../media_backup/cloud_media_backup_runner.dart';
 
 part 'sync_settings_page_media_actions.dart';
+part 'sync_settings_page_managed_vault_save.dart';
+part 'sync_settings_page_managed_vault_sync.dart';
 part 'sync_settings_page_sync_actions.dart';
 
 int _coerceTimestampMs(Object value) {
@@ -166,23 +169,30 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     super.dispose();
   }
 
-  Future<CloudMediaBackupSummary>? _maybeLoadCloudMediaBackupSummary() {
+  Future<CloudMediaBackupSummary>? _maybeLoadCloudMediaBackupSummary({
+    String? scopeId,
+  }) {
     final backendScope =
         context.getInheritedWidgetOfExactType<AppBackendScope>();
     final sessionScope = context.getInheritedWidgetOfExactType<SessionScope>();
     if (backendScope == null || sessionScope == null) return null;
     try {
-      return backendScope.backend
-          .cloudMediaBackupSummary(sessionScope.sessionKey);
+      return backendScope.backend.cloudMediaBackupSummary(
+        sessionScope.sessionKey,
+        scopeId: scopeId,
+      );
     } on UnimplementedError {
       return null;
     }
   }
 
-  void _refreshCloudMediaBackupSummary() {
+  void _refreshCloudMediaBackupSummary({
+    String? scopeId,
+  }) {
     if (!mounted) return;
     setState(() {
-      _cloudMediaBackupSummary = _maybeLoadCloudMediaBackupSummary();
+      _cloudMediaBackupSummary =
+          _maybeLoadCloudMediaBackupSummary(scopeId: scopeId);
     });
   }
 
@@ -446,6 +456,21 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                           padding: const EdgeInsets.only(bottom: 12),
                           child: Text(
                             context.t.sync.cloudManagedVault.paymentRequired,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error),
+                          ),
+                        );
+                      }
+
+                      if (gate.kind == SyncWriteGateKind.localRepairRequired) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            context.t.sync.cloudManagedVault
+                                .localSyncDataRepairRequired,
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium

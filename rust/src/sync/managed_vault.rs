@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
@@ -13,6 +15,10 @@ mod artifacts;
 mod attachments;
 mod blob_repair;
 mod checkpoint;
+mod global_log_client;
+mod global_log_protocol;
+mod global_log_state;
+mod media_state;
 mod pending_apply;
 mod probe;
 mod progress;
@@ -27,13 +33,16 @@ mod v2_client;
 
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
+use media_state::{
+    artifact_backfill_key, attachment_backfill_key, has_missing_embedding_artifact_blobs,
+    has_missing_local_attachment_bytes, should_finalize_v2_pull_blob_backfill,
+    update_v2_pull_backfill_markers,
+};
 use pending_apply::{
     apply_pending_ops_until_stable, has_local_oplog_for_device, is_foreign_key_constraint_error,
     load_pending_apply_op_ids, pending_apply_key, rewind_since_for_unresolved_pending_devices,
     update_since_map,
 };
-pub use progress::{pull_with_progress, push_ops_only_with_progress};
-pub use pull_loop::pull;
 
 #[derive(Debug, Serialize)]
 struct RegisterDeviceRequest<'a> {
@@ -155,8 +164,76 @@ fn try_recover_pull_forbidden_by_rotating_device_id(
     })?;
     Ok(Some(next_device_id))
 }
+
 fn should_fallback_to_json_pull(status_code: u16) -> bool {
     matches!(status_code, 404 | 408 | 429) || (500..600).contains(&status_code)
+}
+
+fn v2_route_unavailable(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.contains("managed-vault v2 head route unavailable")
+        || message.contains("managed-vault v2 pull route unavailable")
+        || message.contains("managed-vault v2 push route unavailable")
+}
+
+fn finalize_v2_pull_blob_backfill(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+    applied_ops: u64,
+) -> Result<()> {
+    let scope_id = runtime::scope_id(base_url, vault_id);
+    let app_dir = super::app_dir_from_conn(conn)?;
+    let missing_attachments = has_missing_local_attachment_bytes(conn, db_key, app_dir.as_path())?;
+    let missing_artifacts = has_missing_embedding_artifact_blobs(conn, app_dir.as_path())?;
+    if !missing_attachments
+        && !missing_artifacts
+        && !should_finalize_v2_pull_blob_backfill(conn, &scope_id, applied_ops)?
+    {
+        return Ok(());
+    }
+    let _ = state_machine::transition(
+        conn,
+        &scope_id,
+        state_machine::ManagedVaultSyncState::BlobBackfill,
+    );
+
+    let http = runtime::client()?;
+    let download_ctx = attachments::AttachmentUploadContext {
+        conn,
+        db_key,
+        sync_key,
+        http: &http,
+        base_url,
+        vault_id,
+        id_token,
+        app_dir: app_dir.as_path(),
+    };
+    loop {
+        let downloaded_artifacts =
+            artifacts::download_missing_embedding_artifact_blobs(&download_ctx)?;
+        let repair_stats = blob_repair::process_pending_download_repairs(&download_ctx, 8)?;
+        let missing_attachments =
+            has_missing_local_attachment_bytes(conn, db_key, app_dir.as_path())?;
+        let missing_artifacts = has_missing_embedding_artifact_blobs(conn, app_dir.as_path())?;
+        if !missing_attachments && !missing_artifacts {
+            break;
+        }
+        if downloaded_artifacts == 0 && repair_stats.repaired == 0 {
+            break;
+        }
+    }
+    update_v2_pull_backfill_markers(conn, db_key, app_dir.as_path(), &scope_id)?;
+
+    let _ = state_machine::transition(
+        conn,
+        &scope_id,
+        state_machine::ManagedVaultSyncState::Completed,
+    );
+    Ok(())
 }
 
 pub fn push(
@@ -167,7 +244,44 @@ pub fn push(
     vault_id: &str,
     id_token: &str,
 ) -> Result<u64> {
-    push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true)
+    match global_log_client::push_v2(
+        conn, db_key, sync_key, base_url, vault_id, id_token, true, None,
+    ) {
+        Ok(pushed) => Ok(pushed),
+        Err(error) if v2_route_unavailable(&error) => {
+            push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub fn push_with_progress(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<u64> {
+    match global_log_client::push_v2(
+        conn,
+        db_key,
+        sync_key,
+        base_url,
+        vault_id,
+        id_token,
+        true,
+        Some(progress),
+    ) {
+        Ok(pushed) => Ok(pushed),
+        Err(error) if v2_route_unavailable(&error) => {
+            let pushed = push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, true)?;
+            progress(pushed, pushed);
+            Ok(pushed)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub fn push_ops_only(
@@ -178,7 +292,95 @@ pub fn push_ops_only(
     vault_id: &str,
     id_token: &str,
 ) -> Result<u64> {
-    push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, false)
+    match global_log_client::push_v2(
+        conn, db_key, sync_key, base_url, vault_id, id_token, false, None,
+    ) {
+        Ok(pushed) => Ok(pushed),
+        Err(error) if v2_route_unavailable(&error) => {
+            push_internal(conn, db_key, sync_key, base_url, vault_id, id_token, false)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub fn pull(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+) -> Result<u64> {
+    match global_log_client::pull_v2(conn, db_key, sync_key, base_url, vault_id, id_token, None) {
+        Ok(pulled) => {
+            finalize_v2_pull_blob_backfill(
+                conn, db_key, sync_key, base_url, vault_id, id_token, pulled,
+            )?;
+            Ok(pulled)
+        }
+        Err(error) if v2_route_unavailable(&error) => {
+            pull_loop::pull(conn, db_key, sync_key, base_url, vault_id, id_token)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+pub fn pull_with_progress(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<u64> {
+    match global_log_client::pull_v2(
+        conn,
+        db_key,
+        sync_key,
+        base_url,
+        vault_id,
+        id_token,
+        Some(progress),
+    ) {
+        Ok(pulled) => {
+            finalize_v2_pull_blob_backfill(
+                conn, db_key, sync_key, base_url, vault_id, id_token, pulled,
+            )?;
+            Ok(pulled)
+        }
+        Err(error) if v2_route_unavailable(&error) => progress::pull_with_progress(
+            conn, db_key, sync_key, base_url, vault_id, id_token, progress,
+        ),
+        Err(error) => Err(error),
+    }
+}
+
+pub fn push_ops_only_with_progress(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<u64> {
+    match global_log_client::push_v2(
+        conn,
+        db_key,
+        sync_key,
+        base_url,
+        vault_id,
+        id_token,
+        false,
+        Some(progress),
+    ) {
+        Ok(pushed) => Ok(pushed),
+        Err(error) if v2_route_unavailable(&error) => progress::push_ops_only_with_progress(
+            conn, db_key, sync_key, base_url, vault_id, id_token, progress,
+        ),
+        Err(error) => Err(error),
+    }
 }
 
 fn push_internal(
@@ -270,19 +472,15 @@ fn push_internal(
     };
 
     if upload_attachment_bytes {
-        let attachment_backfill_key =
-            format!("managed_vault.attachments.bytes_backfilled:{scope_id}");
+        let attachment_backfill_key = attachment_backfill_key(&scope_id);
+        let artifact_backfill_key = artifact_backfill_key(&scope_id);
         if super::kv_get_i64(conn, &attachment_backfill_key)?.unwrap_or(0) == 0 {
             attachments::upload_all_local_attachment_bytes(&upload_ctx)?;
-            super::kv_set_i64(conn, &attachment_backfill_key, 1)?;
         }
-
-        let artifact_backfill_key =
-            format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}");
         if super::kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0 {
             artifacts::upload_all_local_embedding_artifact_blobs(&upload_ctx)?;
-            super::kv_set_i64(conn, &artifact_backfill_key, 1)?;
         }
+        update_v2_pull_backfill_markers(conn, db_key, app_dir_path, &scope_id)?;
     }
 
     // Rare recovery path: if the remote has seqs this device doesn't agree with (e.g. device-id reuse),
@@ -383,8 +581,7 @@ fn push_internal(
             .values()
             .any(|action| matches!(action, PendingAttachmentAction::Upload { .. }))
         {
-            let _ =
-                crate::db::ensure_all_video_manifest_derivations(conn, db_key, upload_ctx.app_dir)?;
+            attachments::prepare_local_attachment_uploads(&upload_ctx)?;
         }
 
         for (sha256, action) in attachment_actions {

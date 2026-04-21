@@ -4,7 +4,9 @@ abstract class _NativeAppBackendAccess
     implements
         AppBackend,
         AttachmentsBackend,
-        AttachmentAnnotationMutationsBackend {
+        AttachmentAnnotationMutationsBackend,
+        AssistantCitationWriteBackend,
+        DetachedAskCompletionRecoveryBackend {
   Future<String> _getAppDir();
 
   DbListTodosFn get _dbListTodos;
@@ -189,6 +191,56 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
       key: key,
       todoId: todoId,
       newStatus: newStatus,
+      sourceMessageId: sourceMessageId,
+    );
+  }
+
+  @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
+    String? sourceMessageId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbTransitionTodo(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      newStatus: newStatus,
+      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
+      clearDueAtMs: clearDueAtMs,
+      reviewStage:
+          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
+      clearReviewStage: clearReviewStage,
+      nextReviewAtMs: nextReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(nextReviewAtMs),
+      clearNextReviewAtMs: clearNextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(lastReviewAtMs),
+      clearLastReviewAtMs: clearLastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualImportanceNudgeScore),
+      clearManualImportanceNudgeScore: clearManualImportanceNudgeScore,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualUrgencyNudgeScore),
+      clearManualUrgencyNudgeScore: clearManualUrgencyNudgeScore,
       sourceMessageId: sourceMessageId,
     );
   }

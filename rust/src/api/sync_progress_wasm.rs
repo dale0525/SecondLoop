@@ -83,3 +83,16 @@ pub fn sync_managed_vault_push_ops_only_progress(
 ) -> Result<()> {
     Err(unsupported())
 }
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_push_progress(
+    _app_dir: String,
+    _key: Vec<u8>,
+    _sync_key: Vec<u8>,
+    _base_url: String,
+    _vault_id: String,
+    _id_token: String,
+    _sink: StreamSink<String>,
+) -> Result<()> {
+    Err(unsupported())
+}

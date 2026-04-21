@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('payment_required from pull sets gate and clears after success', () {
+  test('payment_required from pull reopens after a successful pull', () {
     fakeAsync((async) {
       final runner = _PaymentRequiredPullRunner();
       final engine = SyncEngine(

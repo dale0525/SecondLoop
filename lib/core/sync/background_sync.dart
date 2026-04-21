@@ -13,11 +13,16 @@ import '../cloud/cloud_auth_scope.dart';
 import '../cloud/firebase_identity_toolkit.dart';
 import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
+import 'managed_vault_pending_write_work.dart';
 import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
 import 'sync_diagnostics.dart';
 import 'sync_engine.dart';
+import 'sync_http_error.dart';
 import 'sync_key_manager.dart';
+
+part 'background_sync_results.dart';
+part 'background_sync_scheduler.dart';
 
 const _kAppId = String.fromEnvironment(
   'SECONDLOOP_APP_ID',
@@ -182,14 +187,38 @@ final class BackgroundSync {
       await rescheduleIfNeeded();
       return true;
     }
+    final backgroundScopeId = store.syncStateScopeId(config);
 
     final backgroundDiagEnabled = await store.readSyncBackgroundDiagV1Enabled();
     final backoffEnabled = await store.readSyncBackoffV1Enabled();
+    final repairRequired = await store.readBackgroundSyncRepairRequired(
+      backendType: config.backendType,
+      scopeId: backgroundScopeId,
+    );
+    if (repairRequired) {
+      if (backgroundDiagEnabled) {
+        await _writeBackgroundResult(
+          store: store,
+          backendType: config.backendType,
+          scopeId: backgroundScopeId,
+          direction: SyncBackgroundDirection.push,
+          result: _BackgroundSyncOpResult.skipped(
+            durationMs: 0,
+            userMessage:
+                'Local sync data needs repair before cloud sync can continue.',
+          ),
+          retryCount: null,
+        );
+      }
+      await rescheduleIfNeeded();
+      return true;
+    }
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     if (backoffEnabled) {
       final backoffState = await store.readBackgroundSyncBackoffState(
         backendType: config.backendType,
+        scopeId: backgroundScopeId,
       );
       if (backoffState != null && nowMs < backoffState.nextAllowedAtMs) {
         await rescheduleIfNeeded();
@@ -244,25 +273,85 @@ final class BackgroundSync {
         }
       }
 
-      final pullResult = await _pullOnce(
+      var pushResult = await _pushOnce(
         backend: backend,
         sessionKey: sessionKey,
         config: config,
         managedVaultIdToken: idToken,
       );
-      final pushResult = await _pushOnce(
-        backend: backend,
-        sessionKey: sessionKey,
-        config: config,
-        managedVaultIdToken: idToken,
+      final recoveryAction = config.backendType == SyncBackendType.managedVault
+          ? managedVaultPushFailureRecoveryActionForStatus(
+              statusCode: pushResult.statusCode,
+              errorCode: pushResult.errorCode,
+            )
+          : ManagedVaultPushFailureRecoveryAction.none;
+      final shouldRunPull =
+          config.backendType != SyncBackendType.managedVault ||
+              switch (pushResult.status) {
+                _BackgroundOpStatus.success => true,
+                _BackgroundOpStatus.skipped => false,
+                _BackgroundOpStatus.failure =>
+                  shouldContinueManagedVaultPullAfterPushFailure(
+                    statusCode: pushResult.statusCode,
+                    errorCode: pushResult.errorCode,
+                  ),
+              };
+      var pullResult = shouldRunPull
+          ? await _pullOnce(
+              backend: backend,
+              sessionKey: sessionKey,
+              config: config,
+              managedVaultIdToken: idToken,
+            )
+          : _BackgroundSyncOpResult.skipped(
+              durationMs: 0,
+              userMessage:
+                  'Managed-vault pull skipped because push failed unrecoverably.',
+            );
+
+      if (config.backendType == SyncBackendType.managedVault &&
+          recoveryAction ==
+              ManagedVaultPushFailureRecoveryAction.pullThenRetryPush &&
+          pullResult.status == _BackgroundOpStatus.success) {
+        pushResult = await _pushOnce(
+          backend: backend,
+          sessionKey: sessionKey,
+          config: config,
+          managedVaultIdToken: idToken,
+        );
+        if (shouldRunManagedVaultFinalPullAfterRecoveryRetry(
+          recoveryAction: recoveryAction,
+          initialPullSucceeded: true,
+          retryPushSucceeded: pushResult.status == _BackgroundOpStatus.success,
+        )) {
+          pullResult = await _pullOnce(
+            backend: backend,
+            sessionKey: sessionKey,
+            config: config,
+            managedVaultIdToken: idToken,
+          );
+        }
+      }
+      await store.writeBackgroundSyncRepairRequired(
+        shouldBlockBackgroundSyncForResults(
+          backendType: config.backendType,
+          pushStatusCode: pushResult.statusCode,
+          pushErrorCode: pushResult.errorCode,
+          pushErrorMessage: pushResult.errorMessage,
+          pullStatusCode: pullResult.statusCode,
+          pullErrorCode: pullResult.errorCode,
+          pullErrorMessage: pullResult.errorMessage,
+        ),
+        backendType: config.backendType,
+        scopeId: backgroundScopeId,
       );
 
       final retryableFailure = switch ((
-        pullResult.retryable,
         pushResult.retryable,
+        pullResult.retryable,
       )) {
-        (true, _) => pullResult,
-        (_, true) => pushResult,
+        (true, _) => pushResult,
+        (_, true) => pullResult,
         _ => null,
       };
 
@@ -270,6 +359,7 @@ final class BackgroundSync {
           ? await _updateBackoffState(
               store: store,
               backendType: config.backendType,
+              scopeId: backgroundScopeId,
               nowMs: DateTime.now().millisecondsSinceEpoch,
               retryableFailure: retryableFailure,
             )
@@ -278,6 +368,7 @@ final class BackgroundSync {
         await store.writeBackgroundSyncBackoffState(
           null,
           backendType: config.backendType,
+          scopeId: backgroundScopeId,
         );
       }
 
@@ -285,6 +376,7 @@ final class BackgroundSync {
         await _writeBackgroundResult(
           store: store,
           backendType: config.backendType,
+          scopeId: backgroundScopeId,
           direction: SyncBackgroundDirection.pull,
           result: pullResult,
           retryCount: pullResult.retryable ? retryCount : null,
@@ -292,13 +384,39 @@ final class BackgroundSync {
         await _writeBackgroundResult(
           store: store,
           backendType: config.backendType,
+          scopeId: backgroundScopeId,
           direction: SyncBackgroundDirection.push,
           result: pushResult,
           retryCount: pushResult.retryable ? retryCount : null,
         );
       }
 
-      if (mediaUploadsEnabled) {
+      var managedVaultPendingUploads = false;
+      if (config.backendType == SyncBackendType.managedVault &&
+          backgroundScopeId.isNotEmpty) {
+        managedVaultPendingUploads =
+            await store.readManagedVaultMediaUploadPending(
+          scopeId: backgroundScopeId,
+        );
+        if (pushResult.status == _BackgroundOpStatus.success) {
+          managedVaultPendingUploads = true;
+          await store.writeManagedVaultMediaUploadPending(
+            scopeId: backgroundScopeId,
+            pending: true,
+          );
+        }
+      }
+
+      final allowManagedVaultMediaUploads =
+          config.backendType != SyncBackendType.managedVault ||
+              shouldRunManagedVaultMediaUploads(
+                pushSucceeded: pushResult.status == _BackgroundOpStatus.success,
+                pullSucceeded: pullResult.status == _BackgroundOpStatus.success,
+                statusCode: pushResult.statusCode,
+                errorCode: pushResult.errorCode,
+              );
+
+      if (mediaUploadsEnabled && allowManagedVaultMediaUploads) {
         final wifiOnly = await store.readCloudMediaBackupWifiOnly();
         switch (config.backendType) {
           case SyncBackendType.webdav:
@@ -308,6 +426,7 @@ final class BackgroundSync {
                 store: BackendCloudMediaBackupStore(
                   backend: backend,
                   sessionKey: sessionKey,
+                  scopeId: backgroundScopeId,
                 ),
                 client: WebDavCloudMediaBackupClient(
                   backend: backend,
@@ -324,37 +443,41 @@ final class BackgroundSync {
                 ),
                 getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
               );
-              await runner.runOnce(allowCellular: false);
+              try {
+                await runner.runOnce(allowCellular: false);
+              } catch (_) {
+                // Best-effort: media uploads should not mark the whole sync run as failed.
+              }
             }
             break;
           case SyncBackendType.managedVault:
-            final token = idToken;
-            if (token != null && token.trim().isNotEmpty) {
-              final runner = CloudMediaBackupRunner(
-                store: BackendCloudMediaBackupStore(
-                  backend: backend,
-                  sessionKey: sessionKey,
-                ),
-                client: ManagedVaultCloudMediaBackupClient(
-                  backend: backend,
-                  sessionKey: sessionKey,
-                  syncKey: config.syncKey,
-                  baseUrl: config.baseUrl ?? '',
-                  vaultId: config.remoteRoot,
-                  idToken: token,
-                ),
-                settings: CloudMediaBackupRunnerSettings(
-                  enabled: true,
-                  wifiOnly: wifiOnly,
-                ),
-                getNetwork: ConnectivityCloudMediaBackupNetworkProvider().call,
-              );
-              await runner.runOnce(allowCellular: false);
-            }
+            managedVaultPendingUploads =
+                await _runManagedVaultMediaUploadsBestEffort(
+              backend: backend,
+              store: store,
+              sessionKey: sessionKey,
+              config: config,
+              scopeId: backgroundScopeId,
+              managedVaultIdToken: idToken,
+              wifiOnly: wifiOnly,
+              fallbackPending: managedVaultPendingUploads,
+            );
             break;
           case SyncBackendType.localDir:
             break;
         }
+      } else if (config.backendType == SyncBackendType.managedVault &&
+          backgroundScopeId.isNotEmpty) {
+        managedVaultPendingUploads =
+            await _refreshManagedVaultMediaUploadPending(
+          backend: backend,
+          store: store,
+          sessionKey: sessionKey,
+          baseUrl: config.baseUrl ?? '',
+          vaultId: config.remoteRoot,
+          scopeId: backgroundScopeId,
+          fallbackPending: managedVaultPendingUploads,
+        );
       }
 
       final token = idToken;
@@ -395,6 +518,27 @@ final class BackgroundSync {
       SyncKeyManager.setSessionKey(null);
       cloudAuth?.dispose();
     }
+  }
+
+  @visibleForTesting
+  static Future<({int? statusCode, String? errorCode, bool retryable})>
+      pushOnceForTest({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required SyncConfig config,
+    required String? managedVaultIdToken,
+  }) async {
+    final result = await _pushOnce(
+      backend: backend,
+      sessionKey: sessionKey,
+      config: config,
+      managedVaultIdToken: managedVaultIdToken,
+    );
+    return (
+      statusCode: result.statusCode,
+      errorCode: result.errorCode,
+      retryable: result.retryable,
+    );
   }
 
   static Future<_BackgroundSyncOpResult> _pullOnce({
@@ -481,7 +625,7 @@ final class BackgroundSync {
             if (idToken == null || idToken.trim().isEmpty) {
               return -1;
             }
-            return backend.syncManagedVaultPushOpsOnly(
+            return backend.syncManagedVaultPush(
               sessionKey,
               config.syncKey,
               baseUrl: config.baseUrl ?? '',
@@ -529,6 +673,7 @@ final class BackgroundSync {
       userMessage: userReadableSyncErrorMessage(
         statusCode: statusCode,
         errorCode: errorCode,
+        errorMessage: errorMessage,
       ),
     );
   }
@@ -559,14 +704,7 @@ final class BackgroundSync {
         return true;
       }
       if (statusCode >= 500) return true;
-      if (statusCode == 402) return false;
-      if (statusCode == 403) {
-        if (errorCode == 'grace_readonly' ||
-            errorCode == 'storage_quota_exceeded') {
-          return false;
-        }
-        return false;
-      }
+      if (statusCode == 402 || statusCode == 403) return false;
     }
 
     final normalized = (message ?? '').toLowerCase();
@@ -580,10 +718,61 @@ final class BackgroundSync {
   }
 
   @visibleForTesting
+  static bool shouldBlockBackgroundSyncForFailure({
+    required SyncBackendType backendType,
+    int? statusCode,
+    String? errorCode,
+    String? errorMessage,
+  }) {
+    if (backendType != SyncBackendType.managedVault) return false;
+    return shouldBlockManagedVaultBackgroundSyncForFailure(
+      statusCode: statusCode,
+      errorCode: errorCode,
+      errorMessage: errorMessage,
+    );
+  }
+
+  @visibleForTesting
+  static bool shouldBlockBackgroundSyncForResults({
+    required SyncBackendType backendType,
+    int? pushStatusCode,
+    String? pushErrorCode,
+    String? pushErrorMessage,
+    int? pullStatusCode,
+    String? pullErrorCode,
+    String? pullErrorMessage,
+  }) {
+    return shouldBlockBackgroundSyncForFailure(
+          backendType: backendType,
+          statusCode: pushStatusCode,
+          errorCode: pushErrorCode,
+          errorMessage: pushErrorMessage,
+        ) ||
+        shouldBlockBackgroundSyncForFailure(
+          backendType: backendType,
+          statusCode: pullStatusCode,
+          errorCode: pullErrorCode,
+          errorMessage: pullErrorMessage,
+        );
+  }
+
+  @visibleForTesting
   static String userReadableSyncErrorMessage({
     int? statusCode,
     String? errorCode,
+    String? errorMessage,
   }) {
+    final recoveryBlockedReason =
+        extractManagedVaultRecoveryBlockedReason(errorMessage ?? '');
+    if (recoveryBlockedReason == 'local_unpushed_changes') {
+      return 'Local changes must upload successfully before cloud recovery can continue.';
+    }
+    if (recoveryBlockedReason == 'local_media_backfill_pending') {
+      return 'Local media must finish cloud backfill before cloud recovery can continue.';
+    }
+    if (statusCode == 400 && errorCode == 'invalid_batch') {
+      return 'Local sync data needs repair before cloud sync can continue.';
+    }
     if (statusCode == 401) {
       return 'Sign-in expired. Please sign in again.';
     }
@@ -605,9 +794,50 @@ final class BackgroundSync {
     return 'Sync failed. Retrying automatically when possible.';
   }
 
+  @visibleForTesting
+  static bool shouldRunManagedVaultMediaUploads({
+    required bool pushSucceeded,
+    required bool pullSucceeded,
+    int? statusCode,
+    String? errorCode,
+  }) {
+    if (!pushSucceeded) return false;
+    if (!pullSucceeded) return false;
+    if (statusCode == 402) return false;
+    return managedVaultPushFailureRecoveryActionForStatus(
+          statusCode: statusCode,
+          errorCode: errorCode,
+        ) !=
+        ManagedVaultPushFailureRecoveryAction.pullOnly;
+  }
+
+  @visibleForTesting
+  static bool shouldContinueManagedVaultPullAfterPushFailure({
+    int? statusCode,
+    String? errorCode,
+  }) {
+    return managedVaultPushFailureAllowsPullForStatus(
+      statusCode: statusCode,
+      errorCode: errorCode,
+    );
+  }
+
+  @visibleForTesting
+  static bool shouldRunManagedVaultFinalPullAfterRecoveryRetry({
+    required ManagedVaultPushFailureRecoveryAction recoveryAction,
+    required bool initialPullSucceeded,
+    required bool retryPushSucceeded,
+  }) {
+    return recoveryAction ==
+            ManagedVaultPushFailureRecoveryAction.pullThenRetryPush &&
+        initialPullSucceeded &&
+        retryPushSucceeded;
+  }
+
   static Future<int?> _updateBackoffState({
     required SyncConfigStore store,
     required SyncBackendType backendType,
+    required String scopeId,
     required int nowMs,
     required _BackgroundSyncOpResult? retryableFailure,
   }) async {
@@ -615,11 +845,13 @@ final class BackgroundSync {
       await store.writeBackgroundSyncBackoffState(
         null,
         backendType: backendType,
+        scopeId: scopeId,
       );
       return null;
     }
     final previous = await store.readBackgroundSyncBackoffState(
       backendType: backendType,
+      scopeId: scopeId,
     );
     final retryCount = (previous?.retryCount ?? 0) + 1;
     final delay = retryBackoffDelayForFailureCount(retryCount);
@@ -633,81 +865,118 @@ final class BackgroundSync {
         lastErrorCode: retryableFailure.errorCode,
       ),
       backendType: backendType,
+      scopeId: scopeId,
     );
     return retryCount;
   }
 
-  static Future<void> _writeBackgroundResult({
+  static Future<bool> _refreshManagedVaultMediaUploadPending({
+    required AppBackend backend,
     required SyncConfigStore store,
-    required SyncBackendType backendType,
-    required SyncBackgroundDirection direction,
-    required _BackgroundSyncOpResult result,
-    required int? retryCount,
+    required Uint8List sessionKey,
+    required String baseUrl,
+    required String vaultId,
+    required String scopeId,
+    required bool fallbackPending,
   }) async {
-    final status = switch (result.status) {
-      _BackgroundOpStatus.success => SyncBackgroundResultStatus.success,
-      _BackgroundOpStatus.skipped => SyncBackgroundResultStatus.skipped,
-      _BackgroundOpStatus.failure => SyncBackgroundResultStatus.failure,
-    };
-    await store.writeBackgroundSyncResult(
-      SyncBackgroundResult(
-        backendType: backendType,
-        direction: direction,
-        status: status,
-        timestampMs: DateTime.now().millisecondsSinceEpoch,
-        statusCode: result.statusCode,
-        errorCode: result.errorCode,
-        errorMessage: result.errorMessage,
-        userMessage: result.userMessage,
-        retryCount: retryCount,
-        durationMs: result.durationMs,
-      ),
-      backendType: backendType,
-    );
-  }
-}
-
-final class WorkmanagerBackgroundSyncScheduler
-    implements BackgroundSyncScheduler {
-  @override
-  Future<void> schedulePeriodicSync({required Duration frequency}) async {
+    var hasPendingUploads = fallbackPending;
     try {
-      if (defaultTargetPlatform == TargetPlatform.iOS) {
-        await Workmanager()
-            .cancelByUniqueName(BackgroundSync.workmanagerUniqueName);
-        await Workmanager().registerOneOffTask(
-          BackgroundSync.workmanagerUniqueName,
-          BackgroundSync.workmanagerTaskName,
-          initialDelay: frequency,
-          existingWorkPolicy: ExistingWorkPolicy.replace,
-          constraints: Constraints(
-            networkType: NetworkType.connected,
-          ),
-        );
-        return;
-      }
-
-      await Workmanager().registerPeriodicTask(
-        BackgroundSync.workmanagerUniqueName,
-        BackgroundSync.workmanagerTaskName,
-        existingWorkPolicy: ExistingWorkPolicy.replace,
-        frequency: frequency,
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-        ),
+      final summary = await backend.cloudMediaBackupSummary(
+        sessionKey,
+        scopeId: scopeId,
+      );
+      final blobRepairQueueDepth =
+          await backend.syncManagedVaultBlobRepairQueueDepth(
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+      );
+      hasPendingUploads = hasManagedVaultPendingWriteWork(
+        mediaSummary: summary,
+        blobRepairQueueDepth: blobRepairQueueDepth,
       );
     } catch (_) {
-      return;
+      hasPendingUploads = fallbackPending;
     }
+    await store.writeManagedVaultMediaUploadPending(
+      scopeId: scopeId,
+      pending: hasPendingUploads,
+    );
+    return hasPendingUploads;
   }
 
-  @override
-  Future<void> cancelPeriodicSync() async {
-    try {
-      await Workmanager()
-          .cancelByUniqueName(BackgroundSync.workmanagerUniqueName);
-    } catch (_) {
-      return;
+  static Future<bool> _runManagedVaultMediaUploadsBestEffort({
+    required AppBackend backend,
+    required SyncConfigStore store,
+    required Uint8List sessionKey,
+    required SyncConfig config,
+    required String scopeId,
+    required String? managedVaultIdToken,
+    required bool wifiOnly,
+    required bool fallbackPending,
+    Future<CloudMediaBackupNetwork> Function()? getNetwork,
+  }) async {
+    final token = managedVaultIdToken?.trim();
+    if (token != null && token.isNotEmpty) {
+      final runner = CloudMediaBackupRunner(
+        store: BackendCloudMediaBackupStore(
+          backend: backend,
+          sessionKey: sessionKey,
+          scopeId: scopeId,
+        ),
+        client: ManagedVaultCloudMediaBackupClient(
+          backend: backend,
+          sessionKey: sessionKey,
+          syncKey: config.syncKey,
+          baseUrl: config.baseUrl ?? '',
+          vaultId: config.remoteRoot,
+          idToken: token,
+        ),
+        settings: CloudMediaBackupRunnerSettings(
+          enabled: true,
+          wifiOnly: wifiOnly,
+        ),
+        getNetwork:
+            getNetwork ?? ConnectivityCloudMediaBackupNetworkProvider().call,
+      );
+      try {
+        await runner.runOnce(allowCellular: false);
+      } catch (_) {
+        // Best-effort: keep the sync run successful and preserve pending state below.
+      }
     }
+    return _refreshManagedVaultMediaUploadPending(
+      backend: backend,
+      store: store,
+      sessionKey: sessionKey,
+      baseUrl: config.baseUrl ?? '',
+      vaultId: config.remoteRoot,
+      scopeId: scopeId,
+      fallbackPending: fallbackPending,
+    );
+  }
+
+  @visibleForTesting
+  static Future<bool> runManagedVaultMediaUploadsBestEffortForTest({
+    required AppBackend backend,
+    required SyncConfigStore store,
+    required Uint8List sessionKey,
+    required SyncConfig config,
+    required String scopeId,
+    required String? managedVaultIdToken,
+    required bool wifiOnly,
+    required bool fallbackPending,
+    Future<CloudMediaBackupNetwork> Function()? getNetwork,
+  }) {
+    return _runManagedVaultMediaUploadsBestEffort(
+      backend: backend,
+      store: store,
+      sessionKey: sessionKey,
+      config: config,
+      scopeId: scopeId,
+      managedVaultIdToken: managedVaultIdToken,
+      wifiOnly: wifiOnly,
+      fallbackPending: fallbackPending,
+      getNetwork: getNetwork,
+    );
   }
 }

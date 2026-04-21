@@ -1036,7 +1036,7 @@ class SemanticParseJob {
     this.appliedTodoTitle,
     this.appliedPrevTodoStatus,
     this.appliedPrevTodoDueAtMs,
-    this.appliedDueChanged = false,
+    required this.appliedDueChanged,
     this.suggestedTags,
     this.suggestedTagConfidence,
     this.tagSuggestionState,

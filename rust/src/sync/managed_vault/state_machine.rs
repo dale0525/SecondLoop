@@ -62,6 +62,14 @@ pub(crate) fn transition(
     super::super::kv_set_string(conn, &state_key(scope_id), next.as_str())
 }
 
+pub(crate) fn clear_state(conn: &rusqlite::Connection, scope_id: &str) -> anyhow::Result<()> {
+    let _ = conn.execute(
+        r#"DELETE FROM kv WHERE key = ?1"#,
+        rusqlite::params![state_key(scope_id)],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,5 +85,16 @@ mod tests {
             load_state(&conn, "scope-a").expect("load"),
             Some(ManagedVaultSyncState::Rebootstrapping)
         );
+    }
+
+    #[test]
+    fn clear_state_removes_persisted_sync_state() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        transition(&conn, "scope-a", ManagedVaultSyncState::BlobBackfill).expect("seed state");
+
+        clear_state(&conn, "scope-a").expect("clear");
+
+        assert_eq!(load_state(&conn, "scope-a").expect("load"), None);
     }
 }

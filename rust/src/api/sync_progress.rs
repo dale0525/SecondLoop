@@ -233,3 +233,35 @@ pub fn sync_managed_vault_push_ops_only_progress(
     emit_result(&sink, pushed);
     Ok(())
 }
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_push_progress(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    id_token: String,
+    sink: StreamSink<String>,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+
+    let mut last: Option<(u64, u64)> = None;
+    let mut on_progress = |done: u64, total: u64| {
+        emit_progress(&sink, &mut last, done, total);
+    };
+
+    let pushed = sync::managed_vault::push_with_progress(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut on_progress,
+    )?;
+    emit_result(&sink, pushed);
+    Ok(())
+}

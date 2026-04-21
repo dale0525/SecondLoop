@@ -1,0 +1,750 @@
+use super::*;
+
+fn op_type_from_server_value(sync_key: &[u8; 32], value: &serde_json::Value) -> String {
+    let ciphertext = base64::engine::general_purpose::STANDARD
+        .decode(value["ciphertext_b64"].as_str().expect("ciphertext_b64"))
+        .expect("decode ciphertext");
+    let device_id = value["device_id"].as_str().expect("device_id");
+    let seq = value["seq"].as_i64().expect("seq");
+    let plaintext = secondloop_rust::crypto::decrypt_bytes(
+        sync_key,
+        &ciphertext,
+        format!("sync.ops:{device_id}:{seq}").as_bytes(),
+    )
+    .expect("decrypt op");
+    serde_json::from_slice::<serde_json::Value>(&plaintext)
+        .expect("parse op")
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .to_string()
+}
+
+#[test]
+fn managed_vault_v2_empty_remote_pull_does_not_persist_generation_state() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.generation_id.clear();
+        server.latest_global_seq = 0;
+        server.ops.clear();
+    }
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pulled = sync::managed_vault::pull(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("pull");
+    assert_eq!(pulled, 0);
+
+    let generation_key = format!(
+        "managed_vault_v2.generation_id:{}",
+        managed_vault_v2_scope_id(&base_url, &vault_id)
+    );
+    let generation: Option<String> = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            rusqlite::params![generation_key],
+            |row| row.get(0),
+        )
+        .optional()
+        .expect("load generation");
+    assert_eq!(generation, None);
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_counts_ops_applied_after_pending_dependency_resolves() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    {
+        let mut server = state.lock().expect("lock");
+        assert_eq!(server.ops.len(), 2, "expected conversation + message ops");
+        let mut conversation = None;
+        let mut message = None;
+        for value in &server.ops {
+            match op_type_from_server_value(&sync_key, value).as_str() {
+                "conversation.upsert.v1" => conversation = Some(value.clone()),
+                "message.insert.v1" => message = Some(value.clone()),
+                _ => {}
+            }
+        }
+        let mut conversation = conversation.expect("conversation op");
+        let mut message = message.expect("message op");
+        message["global_seq"] = serde_json::Value::from(1);
+        conversation["global_seq"] = serde_json::Value::from(2);
+        server.ops = vec![message, conversation];
+        server.latest_global_seq = 2;
+    }
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull");
+    assert_eq!(
+        pulled, 2,
+        "pending apply resolution should count toward pull total"
+    );
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
+    assert_eq!(msgs_b.len(), 1);
+    assert_eq!(msgs_b[0].content, "hello");
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_generation_rebuild_clears_stale_blob_repair_and_backfill_state() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.generation_id = "generation-new".to_string();
+        server.latest_global_seq = 0;
+        server.ops.clear();
+    }
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn.execute(
+        "INSERT INTO kv(key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![
+            format!("managed_vault_v2.generation_id:{scope_id}"),
+            "generation-old"
+        ],
+    )
+    .expect("seed old generation");
+    conn.execute(
+        "INSERT INTO kv(key, value) VALUES (?1, '1'), (?2, '1')
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![
+            format!("managed_vault.attachments.bytes_backfilled:{scope_id}"),
+            format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}"),
+        ],
+    )
+    .expect("seed backfill flags");
+    blob_repair::enqueue_blob_repair(
+        &conn,
+        &scope_id,
+        BlobRepairKind::UploadAttachment {
+            sha256: "stale-attachment".to_string(),
+        },
+    )
+    .expect("enqueue stale repair");
+    blob_repair::record_blob_repair_error(&conn, &scope_id, "stale repair error")
+        .expect("record stale repair error");
+
+    let pulled = sync::managed_vault::pull(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("pull should rebuild local state");
+    assert_eq!(pulled, 0);
+
+    let attachment_backfill: Option<String> = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            rusqlite::params![format!(
+                "managed_vault.attachments.bytes_backfilled:{scope_id}"
+            )],
+            |row| row.get(0),
+        )
+        .optional()
+        .expect("load attachment backfill");
+    assert_eq!(attachment_backfill, None);
+
+    let artifact_backfill: Option<String> = conn
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            rusqlite::params![format!(
+                "managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}"
+            )],
+            |row| row.get(0),
+        )
+        .optional()
+        .expect("load artifact backfill");
+    assert_eq!(artifact_backfill, None);
+
+    let diagnostics = blob_repair::load_blob_repair_diagnostics(&conn, &scope_id)
+        .expect("load blob repair diagnostics");
+    assert_eq!(diagnostics.queued_count, 0);
+    assert_eq!(diagnostics.last_error, None);
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_rejects_empty_page_that_claims_more_data() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.empty_pull_page_once_after_global_seq = Some(0);
+        server.empty_pull_page_has_more_once = true;
+        server.empty_pull_page_remote_latest_global_seq_once = Some(1);
+    }
+
+    let error = sync::managed_vault::pull(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+        .expect_err("pull should reject inconsistent empty page");
+    assert!(
+        error
+            .to_string()
+            .contains("empty page while more remote data is still advertised"),
+        "unexpected error: {error}",
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_rebuilds_after_non_contiguous_page() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+    let expected_last_applied = state.lock().expect("lock").latest_global_seq;
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn_b
+        .execute(
+            "INSERT INTO kv(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![
+                format!("managed_vault_v2.generation_id:{scope_id}"),
+                "generation-a"
+            ],
+        )
+        .expect("seed generation");
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.gap_pull_once_after_global_seq = Some(0);
+    }
+
+    let pulled =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull");
+    assert!(pulled > 0);
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
+    assert_eq!(msgs_b.len(), 1);
+    assert_eq!(msgs_b[0].content, "hello");
+    let last_applied: Option<String> = conn_b
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            rusqlite::params![format!(
+                "managed_vault_v2.last_applied_global_seq:{}",
+                managed_vault_v2_scope_id(&base_url, &vault_id)
+            )],
+            |row| row.get(0),
+        )
+        .optional()
+        .expect("load last_applied");
+    let expected_last_applied_text = expected_last_applied.to_string();
+    assert_eq!(
+        last_applied.as_deref(),
+        Some(expected_last_applied_text.as_str()),
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_fails_when_non_contiguous_page_repeats_after_rebuild() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn_b
+        .execute(
+            "INSERT INTO kv(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![
+                format!("managed_vault_v2.generation_id:{scope_id}"),
+                "generation-a"
+            ],
+        )
+        .expect("seed generation");
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.pull_page_size = Some(1);
+        server.queued_gap_pull_after_global_seq = vec![0, 1];
+    }
+
+    let error =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect_err("repeated non-contiguous recovery should fail");
+    assert!(
+        error
+            .to_string()
+            .contains("non-contiguous page persisted after local rebuild"),
+        "unexpected error: {error:#}"
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_generation_switch_resets_applied_count() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "old generation")
+        .expect("insert msg A");
+    let pushed_old =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push old generation");
+    assert!(pushed_old > 0);
+
+    let (old_generation_id, old_latest_global_seq, old_ops) = {
+        let server = state.lock().expect("lock");
+        (
+            server.generation_id.clone(),
+            server.latest_global_seq,
+            server.ops.clone(),
+        )
+    };
+    assert!(old_latest_global_seq > 0);
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.generation_id = "generation-b".to_string();
+        server.latest_global_seq = 0;
+        server.ops.clear();
+    }
+
+    let temp_c = tempfile::tempdir().expect("tempdir C");
+    let app_dir_c = temp_c.path().join("secondloop_c");
+    let key_c =
+        auth::init_master_password(&app_dir_c, "pw-c", KdfParams::for_test()).expect("init C");
+    let conn_c = db::open(&app_dir_c).expect("open C db");
+    let conv_c = db::create_conversation(&conn_c, &key_c, "Inbox").expect("create convo C");
+    db::insert_message(&conn_c, &key_c, &conv_c.id, "user", "new generation")
+        .expect("insert msg C");
+    let pushed_new =
+        sync::managed_vault::push(&conn_c, &key_c, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push new generation");
+    assert!(pushed_new > 0);
+
+    let (new_generation_id, new_latest_global_seq, new_ops) = {
+        let server = state.lock().expect("lock");
+        (
+            server.generation_id.clone(),
+            server.latest_global_seq,
+            server.ops.clone(),
+        )
+    };
+    assert_ne!(new_generation_id, old_generation_id);
+    assert!(new_latest_global_seq > 0);
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.generation_id = old_generation_id;
+        server.latest_global_seq = old_latest_global_seq;
+        server.ops = old_ops;
+        server.pull_page_size = Some(1);
+        server.switch_generation_once_after_global_seq = Some(1);
+        server.switch_generation_id = Some(new_generation_id);
+        server.switch_generation_latest_global_seq = Some(new_latest_global_seq);
+        server.switch_generation_ops = new_ops;
+    }
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull after generation switch");
+    assert_eq!(pulled, new_latest_global_seq as u64);
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
+    assert_eq!(msgs_b.len(), 1);
+    assert_eq!(msgs_b[0].content, "new generation");
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_rebuilds_after_reset_required_response() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+    let expected_last_applied = state.lock().expect("lock").latest_global_seq;
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn_b
+        .execute(
+            "INSERT INTO kv(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![
+                format!("managed_vault_v2.generation_id:{scope_id}"),
+                "generation-a"
+            ],
+        )
+        .expect("seed generation");
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.reset_required_once_after_global_seq = Some(0);
+    }
+
+    let pulled =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull");
+    assert!(pulled > 0);
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
+    assert_eq!(msgs_b.len(), 1);
+    assert_eq!(msgs_b[0].content, "hello");
+    let last_applied: Option<String> = conn_b
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            rusqlite::params![format!(
+                "managed_vault_v2.last_applied_global_seq:{}",
+                managed_vault_v2_scope_id(&base_url, &vault_id)
+            )],
+            |row| row.get(0),
+        )
+        .optional()
+        .expect("load last_applied");
+    let expected_last_applied_text = expected_last_applied.to_string();
+    assert_eq!(
+        last_applied.as_deref(),
+        Some(expected_last_applied_text.as_str()),
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_fails_when_reset_required_repeats_after_rebuild_progress() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn_b
+        .execute(
+            "INSERT INTO kv(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![
+                format!("managed_vault_v2.generation_id:{scope_id}"),
+                "generation-a"
+            ],
+        )
+        .expect("seed generation");
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.pull_page_size = Some(1);
+        server.queued_reset_required_after_global_seq = vec![0, 1];
+    }
+
+    let error =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect_err("repeated reset_required recovery should fail");
+    assert!(
+        error
+            .to_string()
+            .contains("reset_required persisted after local rebuild"),
+        "unexpected error: {error:#}"
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_pull_with_progress_resets_baseline_after_reset_required_response() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+    let expected_last_applied = state.lock().expect("lock").latest_global_seq;
+    assert_eq!(expected_last_applied, 2);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn_b
+        .execute(
+            "INSERT INTO kv(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![
+                format!("managed_vault_v2.generation_id:{scope_id}"),
+                "generation-a"
+            ],
+        )
+        .expect("seed generation");
+    conn_b
+        .execute(
+            "INSERT INTO kv(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![
+                format!("managed_vault_v2.last_applied_global_seq:{scope_id}"),
+                "1"
+            ],
+        )
+        .expect("seed stale last_applied");
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.reset_required_once_after_global_seq = Some(1);
+    }
+
+    let mut seen_progress = Vec::new();
+    let pulled = sync::managed_vault::pull_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| seen_progress.push((done, total)),
+    )
+    .expect("pull with progress");
+    assert!(pulled > 0);
+
+    assert!(
+        seen_progress.contains(&(0, expected_last_applied as u64)),
+        "expected progress to reset after rebuild, got {seen_progress:?}"
+    );
+    assert!(
+        !seen_progress.contains(&(0, 0)),
+        "reset_required should not report an empty total before the refreshed target is known: {seen_progress:?}"
+    );
+    assert_eq!(
+        seen_progress.last().copied(),
+        Some((expected_last_applied as u64, expected_last_applied as u64)),
+        "expected rebuilt pull to report full recovered total, got {seen_progress:?}"
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}

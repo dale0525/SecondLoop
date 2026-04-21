@@ -41,14 +41,24 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final now = DateTime.now().millisecondsSinceEpoch;
+      final syncKey = await _resolveSyncKeyForCurrentBackend(backend);
+      if (!mounted) return;
+      final scopeId = await _currentSyncStateScopeId(syncKey: syncKey);
       final enqueued = await backend.backfillCloudMediaBackupImages(
         sessionKey,
         desiredVariant: 'original',
         nowMs: now,
+        scopeId: scopeId,
       );
+      if (scopeId != null) {
+        await _store.writeCloudMediaBackupBackfillDone(
+          scopeId: scopeId,
+          done: true,
+        );
+      }
       if (!mounted) return;
       _showSnack(t.sync.mediaBackup.backfillEnqueued(count: enqueued));
-      _refreshCloudMediaBackupSummary();
+      _refreshCloudMediaBackupSummary(scopeId: scopeId);
     } catch (e) {
       if (!mounted) return;
       _showSnack(t.sync.mediaBackup.backfillFailed(error: '$e'));
@@ -70,9 +80,14 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
 
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
+      final cloudAuthController =
+          _effectiveBackendType == SyncBackendType.managedVault
+              ? CloudAuthScope.of(context).controller
+              : null;
 
-      final syncKey = await _loadOrCreateSyncKey();
+      final syncKey = await _resolveSyncKeyForCurrentBackend(backend);
       if (!mounted) return;
+      final scopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 
       CloudMediaBackupRunner? runner;
       switch (_effectiveBackendType) {
@@ -86,6 +101,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
             store: BackendCloudMediaBackupStore(
               backend: backend,
               sessionKey: sessionKey,
+              scopeId: scopeId,
             ),
             client: WebDavCloudMediaBackupClient(
               backend: backend,
@@ -108,9 +124,8 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
             _showSnack(t.sync.mediaBackup.notEnabled);
             return;
           }
-          final cloudAuth = CloudAuthScope.of(context).controller;
           final idToken = await readCloudAuthIdToken(
-            cloudAuth,
+            cloudAuthController!,
             mode: CloudAuthAccessMode.interactive,
           );
           if (!mounted) return;
@@ -119,7 +134,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
             return;
           }
 
-          final vaultId = cloudAuth.uid ?? '';
+          final vaultId = cloudAuthController.uid ?? '';
           final baseUrl = await _store.resolveManagedVaultBaseUrl();
           if (!mounted) return;
           if (baseUrl == null || baseUrl.trim().isEmpty) {
@@ -131,6 +146,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
             store: BackendCloudMediaBackupStore(
               backend: backend,
               sessionKey: sessionKey,
+              scopeId: scopeId,
             ),
             client: ManagedVaultCloudMediaBackupClient(
               backend: backend,
@@ -189,7 +205,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       } else {
         _showSnack(t.sync.mediaBackup.nothingToUpload);
       }
-      _refreshCloudMediaBackupSummary();
+      _refreshCloudMediaBackupSummary(scopeId: scopeId);
     } catch (e) {
       if (!mounted) return;
       _showSnack(t.sync.mediaBackup.uploadFailed(error: '$e'));

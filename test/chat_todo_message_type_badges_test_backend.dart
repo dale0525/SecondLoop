@@ -95,6 +95,7 @@ final class ChatTodoMessageTypeBadgesTestBackend extends TestAppBackend {
       appliedTodoId: existing.appliedTodoId,
       appliedTodoTitle: existing.appliedTodoTitle,
       appliedPrevTodoStatus: existing.appliedPrevTodoStatus,
+      appliedDueChanged: false,
       undoneAtMs: PlatformInt64Util.from(nowMs),
       createdAtMs: existing.createdAtMs,
       updatedAtMs: PlatformInt64Util.from(nowMs),

@@ -138,6 +138,7 @@ SemanticParseJob _job({
     appliedTodoId: todoId,
     appliedTodoTitle: todoTitle,
     appliedPrevTodoStatus: null,
+    appliedDueChanged: false,
     undoneAtMs: null,
     createdAtMs: PlatformInt64Util.from(0),
     updatedAtMs: PlatformInt64Util.from(0),

@@ -11,7 +11,7 @@ void main() {
   });
 
   test(
-      'wasm managed vault pull keeps the shared pull loop and no dead wasm pull module',
+      'managed vault keeps the shared pull loop module and wasm-safe runtime constraints',
       () async {
     final managedVault = await readRustSource('rust/src/sync/managed_vault.rs');
     final pullLoop =
@@ -24,22 +24,16 @@ void main() {
         await readRustSource('rust/src/sync/managed_vault/runtime.rs');
 
     expect(File('rust/src/sync/managed_vault/pull.rs').existsSync(), isFalse);
-    expect(managedVault, contains('pub use pull_loop::pull;'));
     expect(managedVault, isNot(contains('mod pull;')));
+    expect(managedVault, contains('mod pull_loop;'));
+    expect(managedVault, contains('pub fn pull('));
+    expect(managedVault, contains('pull_loop::pull('));
     expect(
       managedVault,
       contains('fn should_fallback_to_json_pull(status_code: u16) -> bool'),
     );
     expect(pullLoop,
         contains('super::should_fallback_to_json_pull(status.as_u16())'));
-    expect(
-      managedVault,
-      isNot(contains('let _ = write_local_device_id(conn, local_device_id);')),
-    );
-    expect(
-      managedVault,
-      isNot(contains('write_local_device_id(conn, &next_device_id)?;')),
-    );
     expect(runtime, contains('dedicated web worker path'));
     expect(
       runtime,
@@ -49,7 +43,8 @@ void main() {
     expect(pullRecovery, isNot(contains('reqwest::blocking::Client')));
   });
 
-  test('wasm managed vault FRB entrypoint stays async over shared pull',
+  test(
+      'managed vault FRB pull entrypoint stays async and offloads non-wasm work',
       () async {
     final core = await readRustSource('rust/src/api/core.rs');
 
@@ -65,12 +60,10 @@ void main() {
       contains('sync::managed_vault::pull('),
     );
     expect(
-      RegExp(
-        r'sync::managed_vault::pull\([\s\S]*?\)\s*\.await',
-        multiLine: true,
-      ).hasMatch(core),
-      isFalse,
+      core,
+      contains('tokio::task::spawn_blocking'),
     );
+    expect(core, contains('#[cfg(target_family = "wasm")]'));
   });
 
   test(

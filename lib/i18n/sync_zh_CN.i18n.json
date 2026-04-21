@@ -71,6 +71,9 @@
     "paymentRequired": "云同步已暂停。请续费订阅以继续同步。",
     "graceReadonlyUntil": "云同步处于只读状态（宽限期至 $until）。",
     "storageQuotaExceeded": "云端存储已满，已暂停上传。",
+    "localSyncDataRepairRequired": "本地同步数据需要先修复，之后才能继续云同步。",
+    "localChangesUploadRequired": "本地变更仍需先上传完成，之后才能继续云端恢复。",
+    "localMediaBackfillRequired": "本地媒体仍需先完成云端回填，之后才能继续恢复。",
     "serverUnavailable": "云同步暂时不可用，请稍后再试。",
     "storageQuotaExceededWithUsage": "云端存储已满（$used / $limit），已暂停上传。",
     "switchDialog": {

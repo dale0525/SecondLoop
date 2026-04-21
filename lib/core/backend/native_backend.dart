@@ -29,6 +29,7 @@ import '../../src/rust/api/todo_followup_generation.dart'
     as rust_todo_followup_generation;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
+import '../../src/rust/api/sync_diagnostics.dart' as rust_sync_diagnostics;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
 import '../../src/rust/db.dart';
 import '../../src/rust/frb_generated.dart';
@@ -37,6 +38,7 @@ import 'app_backend.dart';
 import 'attachments_backend.dart';
 import 'semantic_parse_attempt_aware_backend.dart';
 import 'semantic_parse_enhancement_backend.dart';
+import '../sync/sync_config_store.dart';
 import 'rust_external_library_resolver.dart';
 import 'serialized_rust_handler.dart';
 
@@ -2477,40 +2479,6 @@ class NativeAppBackend extends _NativeAppBackendAccess
     );
   }
 
-  Uri _taskPriorityAssessmentsUri(String gatewayBaseUrl, String cacheScopeKey) {
-    final base = gatewayBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
-    return Uri.parse('$base/v1/task-priority/assessments')
-        .replace(queryParameters: <String, String>{'scope': cacheScopeKey});
-  }
-
-  Future<String> _sendTaskPriorityAssessmentRequest(
-    String method, {
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String cacheScopeKey,
-    String? payloadJson,
-  }) async {
-    final http.Client client = createPlatformHttpClient();
-    try {
-      final uri = _taskPriorityAssessmentsUri(gatewayBaseUrl, cacheScopeKey);
-      final headers = <String, String>{
-        'authorization': 'Bearer $idToken',
-        'accept': 'application/json',
-        if (method == 'POST') 'content-type': 'application/json',
-      };
-      final response = method == 'GET'
-          ? await client.get(uri, headers: headers)
-          : await client.post(uri, headers: headers, body: payloadJson ?? '{}');
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw StateError(
-            'task_priority_assessment_http_${response.statusCode}');
-      }
-      return response.body;
-    } finally {
-      client.close();
-    }
-  }
-
   @override
   Future<String> fetchTaskPriorityAiAssessmentsCloudGateway(
     Uint8List key, {
@@ -3476,129 +3444,5 @@ class NativeAppBackend extends _NativeAppBackendAccess
       vaultId: vaultId,
       firebaseIdToken: idToken,
     );
-  }
-
-  @override
-  Future<AttachmentVariant> upsertAttachmentVariant(
-    Uint8List key, {
-    required String attachmentSha256,
-    required String variant,
-    required Uint8List bytes,
-    required String mimeType,
-  }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbUpsertAttachmentVariant(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      variant: variant,
-      bytes: bytes,
-      mimeType: mimeType,
-    );
-  }
-
-  @override
-  Future<Uint8List> readAttachmentVariantBytes(
-    Uint8List key, {
-    required String attachmentSha256,
-    required String variant,
-  }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbReadAttachmentVariantBytes(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      variant: variant,
-    );
-  }
-
-  @override
-  Future<void> enqueueCloudMediaBackup(
-    Uint8List key, {
-    required String attachmentSha256,
-    required String desiredVariant,
-    required int nowMs,
-  }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbEnqueueCloudMediaBackup(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      desiredVariant: desiredVariant,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
-  }
-
-  @override
-  Future<int> backfillCloudMediaBackupImages(
-    Uint8List key, {
-    required String desiredVariant,
-    required int nowMs,
-  }) async {
-    final appDir = await _getAppDir();
-    final affected = await rust_core.dbBackfillCloudMediaBackupImages(
-      appDir: appDir,
-      key: key,
-      desiredVariant: desiredVariant,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
-    return affected.toInt();
-  }
-
-  @override
-  Future<List<CloudMediaBackup>> listDueCloudMediaBackups(
-    Uint8List key, {
-    required int nowMs,
-    int limit = 100,
-  }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbListDueCloudMediaBackups(
-      appDir: appDir,
-      key: key,
-      nowMs: PlatformInt64Util.from(nowMs),
-      limit: limit,
-    );
-  }
-
-  @override
-  Future<void> markCloudMediaBackupFailed(
-    Uint8List key, {
-    required String attachmentSha256,
-    required int attempts,
-    required int nextRetryAtMs,
-    required String lastError,
-    required int nowMs,
-  }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbMarkCloudMediaBackupFailed(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      attempts: PlatformInt64Util.from(attempts),
-      nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
-      lastError: lastError,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
-  }
-
-  @override
-  Future<void> markCloudMediaBackupUploaded(
-    Uint8List key, {
-    required String attachmentSha256,
-    required int nowMs,
-  }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbMarkCloudMediaBackupUploaded(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
-  }
-
-  @override
-  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbCloudMediaBackupSummary(appDir: appDir, key: key);
   }
 }

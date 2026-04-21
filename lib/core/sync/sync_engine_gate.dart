@@ -1,5 +1,7 @@
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -9,9 +11,25 @@ import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
+import 'managed_vault_pending_write_work.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
+import 'sync_http_error.dart';
 import 'sync_result.dart';
+
+@visibleForTesting
+bool shouldApplySyncEngineGateWriteGateRehydration({
+  required int requestVersion,
+  required int latestVersion,
+  required SyncBackendType? expectedBackendType,
+  required SyncBackendType? activeBackendType,
+  required String? expectedScopeId,
+  required String? activeScopeId,
+}) {
+  return requestVersion == latestVersion &&
+      expectedBackendType == activeBackendType &&
+      expectedScopeId == activeScopeId;
+}
 
 final class SyncEngineGate extends StatefulWidget {
   const SyncEngineGate({required this.child, super.key});
@@ -28,16 +46,25 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
   final Connectivity _connectivity = Connectivity();
   SyncEngine? _engine;
   Object? _backendIdentity;
+  Object? _cloudAuthIdentity;
   Uint8List? _sessionKey;
+  int _engineGeneration = 0;
+  int _writeGateRehydrateVersion = 0;
+  SyncBackendType? _requestedSyncBackendType;
+  String? _requestedManagedVaultScopeId;
+  SyncBackendType? _activeSyncBackendType;
+  String? _activeManagedVaultScopeId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _configStore.changes.addListener(_handleConfigStoreChanged);
   }
 
   @override
   void dispose() {
+    _configStore.changes.removeListener(_handleConfigStoreChanged);
     WidgetsBinding.instance.removeObserver(this);
     _engine?.stop();
     super.dispose();
@@ -51,8 +78,8 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     switch (state) {
       case AppLifecycleState.resumed:
         engine.start();
-        engine.triggerPullNow();
         engine.triggerPushNow();
+        engine.triggerPullNow();
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -75,11 +102,13 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status;
 
     final shouldReuse = identical(_backendIdentity, backend) &&
+        identical(_cloudAuthIdentity, cloudAuth) &&
         _bytesEqual(_sessionKey, sessionKey);
     if (shouldReuse) {
-      if (subscriptionStatus == SubscriptionStatus.entitled) {
-        _engine?.writeGate.value = const SyncWriteGateState.open();
-      }
+      _maybeReopenWriteGateForEntitledSubscription(
+        engine: _engine,
+        subscriptionStatus: subscriptionStatus,
+      );
       return;
     }
 
@@ -101,15 +130,139 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
       pullJitter: const Duration(seconds: 5),
       pullOnStart: true,
     );
-    engine.start();
-    engine.triggerPullNow();
-    engine.triggerPushNow();
-
     _backendIdentity = backend;
+    _cloudAuthIdentity = cloudAuth;
     _sessionKey = Uint8List.fromList(sessionKey);
     _engine = engine;
+    final generation = ++_engineGeneration;
+    unawaited(
+      _initializeEngine(
+        engine: engine,
+        generation: generation,
+        subscriptionStatus: subscriptionStatus,
+      ),
+    );
+  }
 
-    if (subscriptionStatus == SubscriptionStatus.entitled) {
+  Future<void> _initializeEngine({
+    required SyncEngine engine,
+    required int generation,
+    required SubscriptionStatus? subscriptionStatus,
+  }) async {
+    final config = await _configStore.loadConfiguredSyncIfAutoEnabled();
+    if (!_isActiveEngine(engine, generation)) {
+      return;
+    }
+
+    await _rehydrateWriteGateForConfig(
+      engine: engine,
+      generation: generation,
+      config: config,
+      forceResetForScopeChange: true,
+    );
+    if (!_isActiveEngine(engine, generation)) return;
+
+    _maybeReopenWriteGateForEntitledSubscription(
+      engine: engine,
+      subscriptionStatus: subscriptionStatus,
+    );
+    engine.start();
+    engine.triggerPushNow();
+    engine.triggerPullNow();
+  }
+
+  bool _isActiveEngine(SyncEngine engine, int generation) {
+    return mounted &&
+        identical(_engine, engine) &&
+        _engineGeneration == generation;
+  }
+
+  void _handleConfigStoreChanged() {
+    final engine = _engine;
+    if (engine == null) return;
+    final generation = _engineGeneration;
+    unawaited(
+      _syncWriteGateForLatestConfig(engine: engine, generation: generation),
+    );
+  }
+
+  Future<void> _syncWriteGateForLatestConfig({
+    required SyncEngine engine,
+    required int generation,
+  }) async {
+    final config = await _configStore.loadConfiguredSyncIfAutoEnabled();
+    if (!_isActiveEngine(engine, generation)) return;
+    await _rehydrateWriteGateForConfig(
+      engine: engine,
+      generation: generation,
+      config: config,
+    );
+  }
+
+  Future<void> _rehydrateWriteGateForConfig({
+    required SyncEngine engine,
+    required int generation,
+    required SyncConfig? config,
+    bool forceResetForScopeChange = false,
+  }) async {
+    final backendType = config?.backendType;
+    final scopeId =
+        backendType == SyncBackendType.managedVault && config != null
+            ? _configStore.syncStateScopeId(config)
+            : null;
+    final requestVersion = ++_writeGateRehydrateVersion;
+    _requestedSyncBackendType = backendType;
+    _requestedManagedVaultScopeId = scopeId;
+
+    final backendChanged = _activeSyncBackendType != backendType;
+    final scopeChanged = _activeManagedVaultScopeId != scopeId;
+
+    var repairRequired = false;
+    if (backendType == SyncBackendType.managedVault && scopeId != null) {
+      repairRequired = await _configStore.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      );
+    }
+    if (!_isActiveEngine(engine, generation)) return;
+    if (!shouldApplySyncEngineGateWriteGateRehydration(
+      requestVersion: requestVersion,
+      latestVersion: _writeGateRehydrateVersion,
+      expectedBackendType: backendType,
+      activeBackendType: _requestedSyncBackendType,
+      expectedScopeId: scopeId,
+      activeScopeId: _requestedManagedVaultScopeId,
+    )) {
+      return;
+    }
+
+    _activeSyncBackendType = backendType;
+    _activeManagedVaultScopeId = scopeId;
+
+    if (repairRequired) {
+      engine.writeGate.value = const SyncWriteGateState.localRepairRequired();
+      return;
+    }
+
+    final shouldReopenClearedLocalRepairGate =
+        engine.writeGate.value.kind == SyncWriteGateKind.localRepairRequired;
+    if (forceResetForScopeChange ||
+        backendChanged ||
+        scopeChanged ||
+        shouldReopenClearedLocalRepairGate) {
+      engine.writeGate.value = const SyncWriteGateState.open();
+    }
+  }
+
+  void _maybeReopenWriteGateForEntitledSubscription({
+    required SyncEngine? engine,
+    required SubscriptionStatus? subscriptionStatus,
+  }) {
+    if (engine == null || subscriptionStatus != SubscriptionStatus.entitled) {
+      return;
+    }
+    final gateKind = engine.writeGate.value.kind;
+    if (gateKind == SyncWriteGateKind.paymentRequired) {
       engine.writeGate.value = const SyncWriteGateState.open();
     }
   }
@@ -175,6 +328,19 @@ final class SyncEngineScope extends InheritedWidget {
       engine != oldWidget.engine;
 }
 
+final class _CloudMediaBackupRunResult {
+  const _CloudMediaBackupRunResult({
+    required this.executed,
+    required this.hasPendingUploads,
+  });
+
+  const _CloudMediaBackupRunResult.skipped()
+      : this(executed: false, hasPendingUploads: false);
+
+  final bool executed;
+  final bool hasPendingUploads;
+}
+
 final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   _AppBackendSyncRunner({
     required this.backend,
@@ -189,6 +355,56 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   final SyncConfigStore _configStore;
   final Uint8List _sessionKey;
   final Future<String?> Function()? _idTokenGetter;
+
+  String _managedVaultMediaUploadScopeId(SyncConfig config) {
+    if (config.backendType != SyncBackendType.managedVault) return '';
+    return _configStore.syncStateScopeId(config);
+  }
+
+  String _cloudMediaBackupScopeId(SyncConfig config) {
+    if (config.backendType == SyncBackendType.localDir) return '';
+    return _configStore.syncStateScopeId(config);
+  }
+
+  Future<bool> _readManagedVaultMediaUploadPending(SyncConfig config) {
+    return _configStore.readManagedVaultMediaUploadPending(
+      scopeId: _managedVaultMediaUploadScopeId(config),
+    );
+  }
+
+  Future<void> _writeManagedVaultMediaUploadPending(
+    SyncConfig config,
+    bool pending,
+  ) {
+    return _configStore.writeManagedVaultMediaUploadPending(
+      scopeId: _managedVaultMediaUploadScopeId(config),
+      pending: pending,
+    );
+  }
+
+  Future<bool> _hasManagedVaultMediaUploadWork(SyncConfig config) async {
+    if (config.backendType != SyncBackendType.managedVault) return false;
+    final scopeId = _managedVaultMediaUploadScopeId(config);
+    try {
+      final summary = await backend.cloudMediaBackupSummary(
+        _sessionKey,
+        scopeId: scopeId,
+      );
+      final blobRepairQueueDepth =
+          await backend.syncManagedVaultBlobRepairQueueDepth(
+        baseUrl: config.baseUrl ?? '',
+        vaultId: config.remoteRoot,
+      );
+      return hasManagedVaultPendingWriteWork(
+        mediaSummary: summary,
+        blobRepairQueueDepth: blobRepairQueueDepth,
+      );
+    } catch (_) {
+      // Be conservative: if we cannot inspect the local queue, keep retrying on
+      // future pulls rather than risk dropping pending uploads forever.
+      return true;
+    }
+  }
 
   Future<CloudMediaBackupNetwork> _safeGetCloudMediaBackupNetwork({
     required bool wifiOnly,
@@ -207,9 +423,8 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   Future<void> _autoBackfillCloudMediaBackupIfNeeded(SyncConfig config) async {
     if (config.backendType == SyncBackendType.localDir) return;
 
-    final scopeId = _configStore.cloudMediaBackupBackfillScopeId(config);
+    final scopeId = _cloudMediaBackupScopeId(config);
     if (scopeId.isEmpty) return;
-
     final alreadyDone = await _configStore.readCloudMediaBackupBackfillDone(
       scopeId: scopeId,
     );
@@ -219,6 +434,7 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
       _sessionKey,
       desiredVariant: 'original',
       nowMs: DateTime.now().millisecondsSinceEpoch,
+      scopeId: scopeId,
     );
     await _configStore.writeCloudMediaBackupBackfillDone(
       scopeId: scopeId,
@@ -226,11 +442,15 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
     );
   }
 
-  Future<void> _runCloudMediaBackupIfEnabled(SyncConfig config) async {
-    if (config.backendType == SyncBackendType.localDir) return;
+  Future<_CloudMediaBackupRunResult> _runCloudMediaBackupIfEnabled(
+    SyncConfig config,
+  ) async {
+    if (config.backendType == SyncBackendType.localDir) {
+      return const _CloudMediaBackupRunResult.skipped();
+    }
 
     final enabled = await _configStore.readCloudMediaBackupEnabled();
-    if (!enabled) return;
+    if (!enabled) return const _CloudMediaBackupRunResult.skipped();
 
     final wifiOnly = await _configStore.readCloudMediaBackupWifiOnly();
 
@@ -243,13 +463,16 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
     final mediaStore = BackendCloudMediaBackupStore(
       backend: backend,
       sessionKey: _sessionKey,
+      scopeId: _cloudMediaBackupScopeId(config),
     );
 
     CloudMediaBackupRunner? runner;
     switch (config.backendType) {
       case SyncBackendType.webdav:
         final baseUrl = config.baseUrl;
-        if (baseUrl == null || baseUrl.trim().isEmpty) return;
+        if (baseUrl == null || baseUrl.trim().isEmpty) {
+          return const _CloudMediaBackupRunResult.skipped();
+        }
         runner = CloudMediaBackupRunner(
           store: mediaStore,
           client: WebDavCloudMediaBackupClient(
@@ -270,11 +493,15 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
         break;
       case SyncBackendType.managedVault:
         final getter = _idTokenGetter;
-        if (getter == null) return;
+        if (getter == null) return const _CloudMediaBackupRunResult.skipped();
         final idToken = await getter();
-        if (idToken == null || idToken.trim().isEmpty) return;
+        if (idToken == null || idToken.trim().isEmpty) {
+          return const _CloudMediaBackupRunResult.skipped();
+        }
         final baseUrl = config.baseUrl;
-        if (baseUrl == null || baseUrl.trim().isEmpty) return;
+        if (baseUrl == null || baseUrl.trim().isEmpty) {
+          return const _CloudMediaBackupRunResult.skipped();
+        }
         runner = CloudMediaBackupRunner(
           store: mediaStore,
           client: ManagedVaultCloudMediaBackupClient(
@@ -293,14 +520,46 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
         );
         break;
       case SyncBackendType.localDir:
-        return;
+        return const _CloudMediaBackupRunResult.skipped();
     }
 
     try {
       await runner.runOnce(allowCellular: false);
     } catch (_) {
       // Best-effort: media uploads should not block normal sync.
-      return;
+      return _CloudMediaBackupRunResult(
+        executed: true,
+        hasPendingUploads: config.backendType == SyncBackendType.managedVault,
+      );
+    }
+    if (config.backendType != SyncBackendType.managedVault) {
+      return const _CloudMediaBackupRunResult(
+        executed: true,
+        hasPendingUploads: false,
+      );
+    }
+    try {
+      final summary = await backend.cloudMediaBackupSummary(
+        _sessionKey,
+        scopeId: _managedVaultMediaUploadScopeId(config),
+      );
+      final blobRepairQueueDepth =
+          await backend.syncManagedVaultBlobRepairQueueDepth(
+        baseUrl: config.baseUrl ?? '',
+        vaultId: config.remoteRoot,
+      );
+      return _CloudMediaBackupRunResult(
+        executed: true,
+        hasPendingUploads: hasManagedVaultPendingWriteWork(
+          mediaSummary: summary,
+          blobRepairQueueDepth: blobRepairQueueDepth,
+        ),
+      );
+    } catch (_) {
+      return const _CloudMediaBackupRunResult(
+        executed: true,
+        hasPendingUploads: true,
+      );
     }
   }
 
@@ -330,15 +589,45 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
           if (getter == null) return 0;
           final idToken = await getter();
           if (idToken == null || idToken.trim().isEmpty) return 0;
-          final pushed = await backend.syncManagedVaultPushOpsOnly(
-            _sessionKey,
-            config.syncKey,
-            baseUrl: config.baseUrl ?? '',
-            vaultId: config.remoteRoot,
-            idToken: idToken,
-          );
-          await _runCloudMediaBackupIfEnabled(config);
-          return pushed;
+          final scopeId = _configStore.syncStateScopeId(config);
+          try {
+            final pushed = await backend.syncManagedVaultPush(
+              _sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              vaultId: config.remoteRoot,
+              idToken: idToken,
+            );
+            final shouldPreserveMediaRepairBlock =
+                await _readManagedVaultMediaUploadPending(config) &&
+                    await _configStore.readBackgroundSyncRepairRequired(
+                      backendType: SyncBackendType.managedVault,
+                      scopeId: scopeId,
+                    );
+            if (!shouldPreserveMediaRepairBlock) {
+              await _configStore.writeBackgroundSyncRepairRequired(
+                false,
+                backendType: SyncBackendType.managedVault,
+                scopeId: scopeId,
+              );
+            }
+            await _configStore.writeBackgroundSyncBackoffState(
+              null,
+              backendType: SyncBackendType.managedVault,
+              scopeId: scopeId,
+            );
+            await _writeManagedVaultMediaUploadPending(config, true);
+            return pushed;
+          } catch (error) {
+            if (shouldPersistManagedVaultBackgroundRepairBlock(error)) {
+              await _configStore.writeBackgroundSyncRepairRequired(
+                true,
+                backendType: SyncBackendType.managedVault,
+                scopeId: scopeId,
+              );
+            }
+            rethrow;
+          }
         }(),
     };
   }
@@ -365,16 +654,54 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
           if (getter == null) return 0;
           final idToken = await getter();
           if (idToken == null || idToken.trim().isEmpty) return 0;
-          return backend.syncManagedVaultPull(
-            _sessionKey,
-            config.syncKey,
-            baseUrl: config.baseUrl ?? '',
-            vaultId: config.remoteRoot,
-            idToken: idToken,
-          );
+          final scopeId = _configStore.syncStateScopeId(config);
+          try {
+            return await backend.syncManagedVaultPull(
+              _sessionKey,
+              config.syncKey,
+              baseUrl: config.baseUrl ?? '',
+              vaultId: config.remoteRoot,
+              idToken: idToken,
+            );
+          } catch (error) {
+            if (shouldPersistManagedVaultBackgroundRepairBlock(error)) {
+              await _configStore.writeBackgroundSyncRepairRequired(
+                true,
+                backendType: SyncBackendType.managedVault,
+                scopeId: scopeId,
+              );
+            }
+            rethrow;
+          }
         }(),
     };
-    await _runCloudMediaBackupIfEnabled(config);
+    switch (config.backendType) {
+      case SyncBackendType.webdav:
+        await _runCloudMediaBackupIfEnabled(config);
+        break;
+      case SyncBackendType.managedVault:
+        final persistedPending = await _readManagedVaultMediaUploadPending(
+          config,
+        );
+        final summaryPending = persistedPending
+            ? true
+            : await _hasManagedVaultMediaUploadWork(config);
+        if (summaryPending && !persistedPending) {
+          await _writeManagedVaultMediaUploadPending(config, true);
+        }
+        if (summaryPending) {
+          final mediaResult = await _runCloudMediaBackupIfEnabled(config);
+          if (mediaResult.executed) {
+            await _writeManagedVaultMediaUploadPending(
+              config,
+              mediaResult.hasPendingUploads,
+            );
+          }
+        }
+        break;
+      case SyncBackendType.localDir:
+        break;
+    }
     return applied;
   }
 

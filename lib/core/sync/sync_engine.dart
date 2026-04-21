@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show Listenable, ValueNotifier;
+import 'package:flutter/foundation.dart'
+    show Listenable, ValueNotifier, visibleForTesting;
 
+import 'managed_vault_sync_error_policy.dart';
 import 'sync_result.dart';
 
 enum SyncBackendType {
@@ -95,6 +97,7 @@ enum SyncWriteGateKind {
   graceReadOnly,
   paymentRequired,
   storageQuotaExceeded,
+  localRepairRequired,
 }
 
 final class SyncWriteGateState {
@@ -113,7 +116,7 @@ final class SyncWriteGateState {
           quotaLimitBytes: null,
         );
 
-  const SyncWriteGateState.graceReadOnly(int graceUntilMs)
+  const SyncWriteGateState.graceReadOnly([int? graceUntilMs])
       : this._(
           kind: SyncWriteGateKind.graceReadOnly,
           graceUntilMs: graceUntilMs,
@@ -139,6 +142,14 @@ final class SyncWriteGateState {
           quotaLimitBytes: limitBytes,
         );
 
+  const SyncWriteGateState.localRepairRequired()
+      : this._(
+          kind: SyncWriteGateKind.localRepairRequired,
+          graceUntilMs: null,
+          quotaUsedBytes: null,
+          quotaLimitBytes: null,
+        );
+
   final SyncWriteGateKind kind;
   final int? graceUntilMs;
   final int? quotaUsedBytes;
@@ -159,6 +170,8 @@ final class SyncWriteGateState {
 }
 
 final class SyncEngine {
+  static const int _maxManagedVaultRecoveryRetryPushes = 1;
+
   SyncEngine({
     required this.syncRunner,
     required this.loadConfig,
@@ -206,6 +219,9 @@ final class SyncEngine {
   Timer? _pushDebounceTimer;
   Timer? _pullTimer;
   int? _lastZeroApplyRefreshAtMs;
+  bool _pendingPullAfterPush = false;
+  bool _retryPushAfterRecoveryPull = false;
+  int _managedVaultRecoveryRetryPushes = 0;
 
   static int _defaultNowMs() => DateTime.now().millisecondsSinceEpoch;
 
@@ -259,6 +275,9 @@ final class SyncEngine {
       _pushQueued = false;
     }
     _pullQueued = false;
+    _pendingPullAfterPush = false;
+    _retryPushAfterRecoveryPull = false;
+    _managedVaultRecoveryRetryPushes = 0;
     _running = false;
     _stopAfterDrain = false;
   }
@@ -268,6 +287,7 @@ final class SyncEngine {
     if (gate.kind == SyncWriteGateKind.open) return false;
     if (gate.kind == SyncWriteGateKind.paymentRequired) return true;
     if (gate.kind == SyncWriteGateKind.storageQuotaExceeded) return true;
+    if (gate.kind == SyncWriteGateKind.localRepairRequired) return true;
     final untilMs = gate.graceUntilMs;
     if (untilMs == null) return true;
     if (nowMs >= untilMs) {
@@ -275,6 +295,11 @@ final class SyncEngine {
       return false;
     }
     return true;
+  }
+
+  bool _shouldReopenWriteGateAfterSuccessfulPull(SyncWriteGateState gate) {
+    return gate.kind == SyncWriteGateKind.paymentRequired ||
+        gate.kind == SyncWriteGateKind.storageQuotaExceeded;
   }
 
   void _setWriteGate(SyncWriteGateState next) {
@@ -339,7 +364,9 @@ final class SyncEngine {
     if (!_pushQueued && !_pullQueued) return;
 
     _busy = true;
-    unawaited(_runQueue().whenComplete(() => _busy = false));
+    Future<void>.microtask(
+      () => _runQueue().whenComplete(() => _busy = false),
+    );
   }
 
   Future<void> _runQueue() async {
@@ -354,14 +381,32 @@ final class SyncEngine {
             return;
           }
         }
-        if (_pullQueued) {
-          _pullQueued = false;
-          await _pullOnce();
-          continue;
+        final config = await loadConfig();
+        final backendType = config?.backendType;
+        if (backendType == SyncBackendType.managedVault &&
+            _pendingPullAfterPush &&
+            !_pullQueued) {
+          _pullQueued = true;
         }
-        if (_pushQueued) {
+        final prioritizePush = shouldPrioritizePushOverPullForTest(
+          pushQueued: _pushQueued,
+          pullQueued: _pullQueued,
+          pendingPullAfterPush: _pendingPullAfterPush,
+          retryPushAfterRecoveryPull: _retryPushAfterRecoveryPull,
+          backendType: backendType,
+        );
+        if (_pushQueued && (!_pullQueued || prioritizePush)) {
           _pushQueued = false;
           await _pushOnce();
+          continue;
+        }
+        if (_pullQueued) {
+          _pullQueued = false;
+          final requiredPull = _pendingPullAfterPush;
+          final succeeded = await _pullOnce();
+          if (requiredPull && !succeeded) {
+            return;
+          }
         }
       }
     } finally {
@@ -369,6 +414,21 @@ final class SyncEngine {
         _finishStop(preserveQueuedPush: preserveQueuedPushOnStop);
       }
     }
+  }
+
+  @visibleForTesting
+  static bool shouldPrioritizePushOverPullForTest({
+    required bool pushQueued,
+    required bool pullQueued,
+    required bool pendingPullAfterPush,
+    required bool retryPushAfterRecoveryPull,
+    required SyncBackendType? backendType,
+  }) {
+    if (!pushQueued || !pullQueued) return false;
+    if (backendType != SyncBackendType.managedVault) return false;
+    if (pendingPullAfterPush) return false;
+    if (retryPushAfterRecoveryPull) return false;
+    return true;
   }
 
   Future<void> _pushOnce() async {
@@ -386,6 +446,12 @@ final class SyncEngine {
 
       await syncRunner.push(config);
       if (backendType == SyncBackendType.managedVault) {
+        _managedVaultRecoveryRetryPushes = 0;
+        _retryPushAfterRecoveryPull = false;
+        if (_acceptsNewWork) {
+          _pullQueued = true;
+          _pendingPullAfterPush = true;
+        }
         _setWriteGate(const SyncWriteGateState.open());
       }
     } catch (e) {
@@ -395,50 +461,79 @@ final class SyncEngine {
         return;
       }
 
-      final message = e.toString();
-      final status =
-          RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message)?.group(1);
-      final code =
-          RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(message)?.group(1);
+      final statusCode = extractManagedVaultSyncHttpStatusCode(e);
+      final errorCode = extractManagedVaultSyncErrorCode(e);
       final graceUntilRaw =
-          RegExp(r'"grace_until_ms"\s*:\s*(\d+)').firstMatch(message)?.group(1);
+          RegExp(r'"grace_until_ms"\s*:\s*(\d+)').firstMatch('$e')?.group(1);
       final graceUntilMs =
           graceUntilRaw == null ? null : int.tryParse(graceUntilRaw);
       final usedRaw =
-          RegExp(r'"used_bytes"\s*:\s*(\d+)').firstMatch(message)?.group(1);
+          RegExp(r'"used_bytes"\s*:\s*(\d+)').firstMatch('$e')?.group(1);
       final usedBytes = usedRaw == null ? null : int.tryParse(usedRaw);
       final limitRaw =
-          RegExp(r'"limit_bytes"\s*:\s*(\d+)').firstMatch(message)?.group(1);
+          RegExp(r'"limit_bytes"\s*:\s*(\d+)').firstMatch('$e')?.group(1);
       final limitBytes = limitRaw == null ? null : int.tryParse(limitRaw);
 
-      if (status == '403' && code == 'grace_readonly' && graceUntilMs != null) {
+      if (statusCode == 400 && errorCode == 'invalid_batch') {
+        _setWriteGate(const SyncWriteGateState.localRepairRequired());
+      } else if (statusCode == 403 && errorCode == 'grace_readonly') {
         _setWriteGate(SyncWriteGateState.graceReadOnly(graceUntilMs));
-      } else if (status == '403' && code == 'storage_quota_exceeded') {
+      } else if (statusCode == 403 && errorCode == 'storage_quota_exceeded') {
         _setWriteGate(
           SyncWriteGateState.storageQuotaExceeded(
             usedBytes: usedBytes,
             limitBytes: limitBytes,
           ),
         );
-      } else if (status == '402') {
+      } else if (statusCode == 402) {
         _setWriteGate(const SyncWriteGateState.paymentRequired());
+      }
+
+      final recoveryAction = managedVaultPushFailureRecoveryActionForStatus(
+        statusCode: statusCode,
+        errorCode: errorCode,
+      );
+      if (_acceptsNewWork) {
+        if (recoveryAction == ManagedVaultPushFailureRecoveryAction.pullOnly) {
+          _pullQueued = true;
+        } else if (recoveryAction ==
+            ManagedVaultPushFailureRecoveryAction.pullThenRetryPush) {
+          final canRetryAfterPull = _managedVaultRecoveryRetryPushes <
+                  _maxManagedVaultRecoveryRetryPushes &&
+              !_retryPushAfterRecoveryPull;
+          if (canRetryAfterPull) {
+            _pullQueued = true;
+            _retryPushAfterRecoveryPull = true;
+          }
+        }
       }
 
       // Best-effort: avoid crashing the app on transient sync errors.
     }
   }
 
-  Future<void> _pullOnce() async {
+  Future<bool> _pullOnce() async {
     SyncConfig? config;
     try {
       config = await loadConfig();
-      if (!_running || config == null) return;
+      if (!_running || config == null) return true;
       final pullResult = await _pullWithResult(config);
 
+      _pendingPullAfterPush = false;
       if (config.backendType == SyncBackendType.managedVault &&
-          (writeGate.value.kind == SyncWriteGateKind.paymentRequired ||
-              writeGate.value.kind == SyncWriteGateKind.storageQuotaExceeded)) {
+          _shouldReopenWriteGateAfterSuccessfulPull(writeGate.value)) {
         _setWriteGate(const SyncWriteGateState.open());
+      }
+
+      if (config.backendType == SyncBackendType.managedVault &&
+          _retryPushAfterRecoveryPull &&
+          _acceptsNewWork) {
+        _retryPushAfterRecoveryPull = false;
+        _managedVaultRecoveryRetryPushes += 1;
+        _pushQueued = true;
+      } else if (config.backendType == SyncBackendType.managedVault &&
+          !_pendingPullAfterPush) {
+        _managedVaultRecoveryRetryPushes = 0;
       }
 
       if (pullResult.hasAppliedChanges) {
@@ -449,20 +544,28 @@ final class SyncEngine {
           _notifyChange();
         }
       }
+      return true;
     } catch (e) {
       if (config?.backendType != SyncBackendType.managedVault) {
         // Best-effort: avoid crashing the app on transient sync errors.
-        return;
+        return false;
       }
 
-      final message = e.toString();
-      final status =
-          RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message)?.group(1);
-      if (status == '402') {
+      final statusCode = extractManagedVaultSyncHttpStatusCode(e);
+      final errorCode = extractManagedVaultSyncErrorCode(e);
+      final recoveryBlockedReason = RegExp(
+        r'managed-vault v2 recovery blocked:\s*([a-z_]+)',
+      ).firstMatch(e.toString())?.group(1);
+      if (recoveryBlockedReason == 'local_unpushed_changes' ||
+          recoveryBlockedReason == 'local_media_backfill_pending' ||
+          (statusCode == 400 && errorCode == 'invalid_batch')) {
+        _setWriteGate(const SyncWriteGateState.localRepairRequired());
+      } else if (statusCode == 402) {
         _setWriteGate(const SyncWriteGateState.paymentRequired());
       }
 
       // Best-effort: avoid crashing the app on transient sync errors.
+      return false;
     } finally {}
   }
 

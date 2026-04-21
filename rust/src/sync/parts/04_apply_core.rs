@@ -23,6 +23,13 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "todo.upsert.v1" => apply_todo_upsert(conn, db_key, &op["payload"]),
         "todo.recurrence.upsert.v1" => apply_todo_recurrence_upsert(conn, &op["payload"]),
         "todo.delete.v1" => apply_todo_delete(conn, op),
+        "todo.checklist_item.upsert.v1" => {
+            apply_todo_checklist_item_upsert(conn, db_key, &op["payload"])
+        }
+        "todo.checklist_item.delete.v1" => apply_todo_checklist_item_delete(conn, &op["payload"]),
+        "todo.checklist_item.reorder.v1" => {
+            apply_todo_checklist_item_reorder(conn, &op["payload"])
+        }
         "todo.activity.append.v1" => apply_todo_activity_append(conn, db_key, &op["payload"]),
         "todo.activity.move.v1" => apply_todo_activity_move(conn, op),
         "todo.activity_attachment.link.v1" => {

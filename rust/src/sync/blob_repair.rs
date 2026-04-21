@@ -9,6 +9,7 @@ pub enum BlobRepairKind {
     DownloadArtifact { blob_ref: String },
     UploadAttachment { sha256: String },
     UploadArtifact { blob_ref: String },
+    DeleteAttachmentRemote { sha256: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -63,6 +64,12 @@ fn queue_key(scope_id: &str, kind: &BlobRepairKind) -> String {
         }
         BlobRepairKind::UploadArtifact { blob_ref } => {
             format!("{}upload_artifact:{blob_ref}", queue_prefix(scope_id))
+        }
+        BlobRepairKind::DeleteAttachmentRemote { sha256 } => {
+            format!(
+                "{}delete_attachment_remote:{sha256}",
+                queue_prefix(scope_id)
+            )
         }
     }
 }
@@ -160,10 +167,27 @@ fn load_queue_items(conn: &Connection, scope_id: &str) -> Result<Vec<(String, Bl
     Ok(items)
 }
 
+pub fn load_blob_repair_items(conn: &Connection, scope_id: &str) -> Result<Vec<BlobRepairItem>> {
+    Ok(load_queue_items(conn, scope_id)?
+        .into_iter()
+        .map(|(_, item)| item)
+        .collect())
+}
+
 pub fn process_blob_repairs(
     conn: &Connection,
     scope_id: &str,
     limit: usize,
+    mut handler: impl FnMut(&BlobRepairItem) -> Result<RepairAttemptOutcome>,
+) -> Result<BlobRepairProcessStats> {
+    process_blob_repairs_matching(conn, scope_id, limit, |_| true, |item| handler(item))
+}
+
+pub fn process_blob_repairs_matching(
+    conn: &Connection,
+    scope_id: &str,
+    limit: usize,
+    mut filter: impl FnMut(&BlobRepairItem) -> bool,
     mut handler: impl FnMut(&BlobRepairItem) -> Result<RepairAttemptOutcome>,
 ) -> Result<BlobRepairProcessStats> {
     if limit == 0 {
@@ -175,9 +199,17 @@ pub fn process_blob_repairs(
         });
     }
 
-    let items = load_queue_items(conn, scope_id)?;
+    let items: Vec<_> = load_queue_items(conn, scope_id)?
+        .into_iter()
+        .filter(|(_, item)| filter(item))
+        .collect();
     if items.is_empty() {
-        return Ok(BlobRepairProcessStats::default());
+        let diagnostics = load_blob_repair_diagnostics(conn, scope_id)?;
+        return Ok(BlobRepairProcessStats {
+            attempted: 0,
+            repaired: 0,
+            remaining: diagnostics.queued_count,
+        });
     }
 
     kv_set_i64(conn, &last_attempt_key(scope_id), now_ms())?;

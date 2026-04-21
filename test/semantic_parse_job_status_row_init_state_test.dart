@@ -33,6 +33,7 @@ void main() {
         appliedTodoId: 't1',
         appliedTodoTitle: 'Todo',
         appliedPrevTodoStatus: null,
+        appliedDueChanged: false,
         undoneAtMs: null,
         createdAtMs: PlatformInt64Util.from(0),
         updatedAtMs: PlatformInt64Util.from(0),

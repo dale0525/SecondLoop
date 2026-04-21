@@ -10,6 +10,7 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
+import 'package:secondloop/core/sync/sync_diagnostics.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
@@ -197,9 +198,9 @@ void main() {
     expect(find.byKey(const ValueKey('sync_save_progress_percent')),
         findsOneWidget);
 
-    pullCompleter.complete(0);
-    await tester.pumpAndSettle();
     pushCompleter.complete(0);
+    await tester.pumpAndSettle();
+    pullCompleter.complete(0);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
@@ -326,9 +327,16 @@ void main() {
     expect(find.byKey(const ValueKey('sync_save_progress_percent')),
         findsOneWidget);
 
-    pullCompleter.complete(0);
-    await tester.pumpAndSettle();
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+
     pushCompleter.complete(0);
+    await tester.pumpAndSettle();
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
+    );
+
+    pullCompleter.complete(0);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
@@ -372,6 +380,75 @@ void main() {
     final syncKey = await store.readSyncKey();
     expect(syncKey, isNotNull);
     expect(syncKey!.length, 32);
+  });
+
+  testWidgets('Managed Vault save still pulls when push is read-only blocked',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    final backend = _GraceReadOnlyManagedVaultSyncBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final engine = SyncEngine(
+      syncRunner: _FakeRunner(),
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        vaultId: 'uid_1',
+        baseUrl: 'https://vault.example.com',
+      ),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+    engine.start();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: SyncEngineScope(
+                  engine: engine,
+                  child: Scaffold(
+                    body: SyncSettingsPage(configStore: store),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(DropdownButtonFormField<SyncBackendType>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SecondLoop Cloud').last);
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
+    );
+    expect(find.textContaining('HTTP 403'), findsNothing);
+    expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    engine.stop();
   });
 
   testWidgets('Save auto-generates sync key when missing (SecondLoop Cloud)',
@@ -1000,6 +1077,350 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
   });
+
+  testWidgets(
+      'managed vault manual upload converges with pull before finishing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final pushCompleter = Completer<int>();
+    final pullCompleter = Completer<int>();
+    final backend = _DelayedManagedVaultSyncBackend(
+      pullCompleter: pullCompleter,
+      pushCompleter: pushCompleter,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pump();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
+
+    pushCompleter.complete(0);
+    await tester.pump();
+
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
+    );
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
+
+    pullCompleter.complete(0);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
+  });
+
+  testWidgets(
+      'managed vault manual upload retries push after pull recovers generation mismatch',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _GenerationMismatchRecoveryManagedVaultSyncBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+      ],
+    );
+    expect(find.text('Uploaded 1 changes'), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
+  });
+
+  testWidgets(
+      'managed vault manual upload notifies listeners after recovery pull',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _GenerationMismatchRecoveryManagedVaultSyncBackend();
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+    var notifications = 0;
+    engine.changes.addListener(() => notifications++);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: SyncEngineScope(
+                  engine: engine,
+                  child: Scaffold(
+                    body: SyncSettingsPage(configStore: store),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+      ],
+    );
+    expect(notifications, 1);
+    engine.stop();
+  });
+
+  testWidgets(
+      'managed vault manual upload clears background repair block after success',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    final scopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+    await store.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
+    await store.writeBackgroundSyncBackoffState(
+      const SyncBackgroundBackoffState(
+        backendType: SyncBackendType.managedVault,
+        retryCount: 3,
+        nextAllowedAtMs: 999999,
+        updatedAtMs: 999000,
+        lastStatusCode: 503,
+        lastErrorCode: 'server_error',
+      ),
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
+
+    final backend = _GenerationMismatchRecoveryManagedVaultSyncBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+      ],
+    );
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isFalse,
+    );
+    expect(
+      await store.readBackgroundSyncBackoffState(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isNull,
+    );
+  });
+
+  testWidgets(
+      'managed vault manual upload persists repair block when local changes still need upload',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    final scopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+
+    final backend =
+        _LocalUnpushedChangesRecoveryBlockedManagedVaultSyncBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isTrue,
+    );
+  });
 }
 
 Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
@@ -1479,6 +1900,7 @@ final class _DelayedManagedVaultSyncBackend extends _SyncSettingsBackend {
 
   final Completer<int> pullCompleter;
   final Completer<int> pushCompleter;
+  final List<String> calls = <String>[];
 
   @override
   Future<int> syncManagedVaultPull(
@@ -1487,18 +1909,120 @@ final class _DelayedManagedVaultSyncBackend extends _SyncSettingsBackend {
     required String baseUrl,
     required String vaultId,
     required String idToken,
-  }) async =>
-      pullCompleter.future;
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return pullCompleter.future;
+  }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
-  }) async =>
-      pushCompleter.future;
+  }) async {
+    calls.add('syncManagedVaultPush');
+    return pushCompleter.future;
+  }
+}
+
+final class _GraceReadOnlyManagedVaultSyncBackend extends _SyncSettingsBackend {
+  _GraceReadOnlyManagedVaultSyncBackend() : super(managedVaultPullResult: 0);
+
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
+  }
+}
+
+final class _GenerationMismatchRecoveryManagedVaultSyncBackend
+    extends _SyncSettingsBackend {
+  _GenerationMismatchRecoveryManagedVaultSyncBackend()
+      : super(managedVaultPullResult: 0);
+
+  final List<String> calls = <String>[];
+  var _firstPush = true;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    if (_firstPush) {
+      _firstPush = false;
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    return 1;
+  }
+}
+
+final class _LocalUnpushedChangesRecoveryBlockedManagedVaultSyncBackend
+    extends _SyncSettingsBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw StateError(
+      'managed-vault v2 recovery blocked: local_unpushed_changes',
+    );
+  }
+}
+
+final class _NoopSyncRunner implements SyncRunner {
+  @override
+  Future<int> push(SyncConfig config) async => 0;
+
+  @override
+  Future<int> pull(SyncConfig config) async => 0;
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {

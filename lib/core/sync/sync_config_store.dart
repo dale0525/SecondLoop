@@ -41,10 +41,12 @@ final class SyncConfigStore {
 
   static const _kPrefsBlobKey = SyncConfigMigrator.publicPrefsBlobKey;
   static const _kLegacyPrefsBlobKey = SyncConfigMigrator.legacyPrefsBlobKey;
+  static const _kStateRevisionKey = 'sync_config_state_revision_v1';
   static const prefsBlobKeyForTest = _kPrefsBlobKey;
   static const legacyPrefsBlobKeyForTest = _kLegacyPrefsBlobKey;
   static const syncSecretStoreVersionPrefsKeyForTest =
       SyncConfigMigrator.secretStoreVersionPrefsKey;
+  static final ValueNotifier<int> _changeCounter = ValueNotifier<int>(0);
 
   Future<void> _tail = Future<void>.value();
   Future<SharedPreferences>? _prefsFuture;
@@ -52,6 +54,9 @@ final class SyncConfigStore {
   bool _loaded = false;
   String? _lastRaw;
   Map<String, String> _cache = <String, String>{};
+  int _lastStateRevision = 0;
+
+  Listenable get changes => _changeCounter;
 
   static const kBackendType = 'sync_backend_type'; // webdav | localdir
   static const kAutoEnabled = 'sync_auto_enabled'; // 1 | 0
@@ -73,8 +78,12 @@ final class SyncConfigStore {
       'cloud_media_backup_wifi_only'; // 1|0
   static const _kCloudMediaBackupBackfillDonePrefix =
       'cloud_media_backup_backfill_done:';
+  static const _kManagedVaultMediaUploadPendingPrefix =
+      'managed_vault_media_upload_pending:';
   static const _kBackgroundSyncResultPrefix = 'sync_background_result:';
   static const _kBackgroundSyncBackoffPrefix = 'sync_background_backoff:';
+  static const _kBackgroundSyncRepairRequiredPrefix =
+      'sync_background_repair_required:';
   static const _kSyncRefreshV2Enabled = 'sync_refresh_v2_enabled'; // 1|0
   static const _kSyncBackgroundDiagV1Enabled =
       'sync_background_diag_v1_enabled'; // 1|0
@@ -195,7 +204,15 @@ final class SyncConfigStore {
     if (_scopeKey == null) {
       SyncKeyManager.cacheSyncKey(key);
     }
-    await _writeConfigUpdates({kSyncKeyB64: null});
+    await _writeConfigUpdates({kSyncKeyB64: null}, noteStateChangeIfNoop: true);
+  }
+
+  Future<void> clearSyncKey() async {
+    await _secretStore.clearSyncKey();
+    if (_scopeKey == null) {
+      SyncKeyManager.clearSyncKeyCache();
+    }
+    await _writeConfigUpdates({kSyncKeyB64: null}, noteStateChangeIfNoop: true);
   }
 
   Future<String?> readWebdavBaseUrl() async =>
@@ -247,7 +264,10 @@ final class SyncConfigStore {
 
   Future<void> writeWebdavPassword(String? password) async {
     await _secretStore.writeWebdavPassword(password);
-    await _writeConfigUpdates({kWebdavPassword: null});
+    await _writeConfigUpdates(
+      {kWebdavPassword: null},
+      noteStateChangeIfNoop: true,
+    );
   }
 
   Future<void> writeRecoveryEnvelopeJson(String? envelopeJson) async {
@@ -317,9 +337,8 @@ final class SyncConfigStore {
   Future<bool> readCloudMediaBackupBackfillDone({
     required String scopeId,
   }) async {
-    final trimmedScope = scopeId.trim();
-    if (trimmedScope.isEmpty) return false;
-    final key = '$_kCloudMediaBackupBackfillDonePrefix$trimmedScope';
+    final key = _syncStateKey(_kCloudMediaBackupBackfillDonePrefix, scopeId);
+    if (key == null) return false;
     final v = (await _loadConfigMap())[key];
     return v == '1';
   }
@@ -328,18 +347,242 @@ final class SyncConfigStore {
     required String scopeId,
     required bool done,
   }) async {
-    final trimmedScope = scopeId.trim();
-    if (trimmedScope.isEmpty) return;
-    final key = '$_kCloudMediaBackupBackfillDonePrefix$trimmedScope';
+    final key = _syncStateKey(_kCloudMediaBackupBackfillDonePrefix, scopeId);
+    if (key == null) return;
     await _writeConfigUpdates({key: done ? '1' : null});
+  }
+
+  Future<bool> readManagedVaultMediaUploadPending({
+    required String scopeId,
+  }) async {
+    final key = _syncStateKey(_kManagedVaultMediaUploadPendingPrefix, scopeId);
+    if (key == null) return false;
+    final raw = (await _loadConfigMap())[key];
+    return raw == '1';
+  }
+
+  Future<void> writeManagedVaultMediaUploadPending({
+    required String scopeId,
+    required bool pending,
+  }) async {
+    final key = _syncStateKey(_kManagedVaultMediaUploadPendingPrefix, scopeId);
+    if (key == null) return;
+    await _writeConfigUpdates({key: pending ? '1' : null});
   }
 
   Future<SyncBackgroundResult?> readBackgroundSyncResult({
     required SyncBackendType backendType,
+    String? scopeId,
   }) async {
-    final key =
-        '$_kBackgroundSyncResultPrefix${_backendTypeToken(backendType)}';
-    final raw = (await _loadConfigMap())[key];
+    final all = await _loadConfigMap();
+    if (scopeId != null && scopeId.trim().isNotEmpty) {
+      return _decodeBackgroundSyncResult(
+        all[_backgroundSyncScopedKey(
+          _kBackgroundSyncResultPrefix,
+          backendType,
+          scopeId: scopeId,
+        )],
+      );
+    }
+    return _readLatestBackgroundSyncValue(
+      all,
+      prefix: _kBackgroundSyncResultPrefix,
+      backendType: backendType,
+      decode: _decodeBackgroundSyncResult,
+      sortValue: (value) => value.timestampMs,
+    );
+  }
+
+  Future<void> writeBackgroundSyncResult(
+    SyncBackgroundResult? result, {
+    required SyncBackendType backendType,
+    String? scopeId,
+  }) async {
+    final key = _backgroundSyncScopedKey(
+      _kBackgroundSyncResultPrefix,
+      backendType,
+      scopeId: scopeId,
+    );
+    if (result == null) {
+      await _writeConfigUpdates({key: null});
+      return;
+    }
+    await _writeConfigUpdates({key: jsonEncode(result.toJson())});
+  }
+
+  Future<SyncBackgroundBackoffState?> readBackgroundSyncBackoffState({
+    required SyncBackendType backendType,
+    String? scopeId,
+  }) async {
+    final all = await _loadConfigMap();
+    if (scopeId != null && scopeId.trim().isNotEmpty) {
+      return _decodeBackgroundSyncBackoffState(
+        all[_backgroundSyncScopedKey(
+          _kBackgroundSyncBackoffPrefix,
+          backendType,
+          scopeId: scopeId,
+        )],
+      );
+    }
+    return _readLatestBackgroundSyncValue(
+      all,
+      prefix: _kBackgroundSyncBackoffPrefix,
+      backendType: backendType,
+      decode: _decodeBackgroundSyncBackoffState,
+      sortValue: (value) => value.updatedAtMs,
+    );
+  }
+
+  Future<void> writeBackgroundSyncBackoffState(
+    SyncBackgroundBackoffState? state, {
+    required SyncBackendType backendType,
+    String? scopeId,
+  }) async {
+    final key = _backgroundSyncScopedKey(
+      _kBackgroundSyncBackoffPrefix,
+      backendType,
+      scopeId: scopeId,
+    );
+    if (state == null) {
+      await _writeConfigUpdates({key: null});
+      return;
+    }
+    await _writeConfigUpdates({key: jsonEncode(state.toJson())});
+  }
+
+  Future<bool> readBackgroundSyncRepairRequired({
+    required SyncBackendType backendType,
+    String? scopeId,
+  }) async {
+    final all = await _loadConfigMap();
+    if (scopeId != null && scopeId.trim().isNotEmpty) {
+      return all[_backgroundSyncScopedKey(
+            _kBackgroundSyncRepairRequiredPrefix,
+            backendType,
+            scopeId: scopeId,
+          )] ==
+          '1';
+    }
+
+    final legacyKey = _backgroundSyncLegacyKey(
+      _kBackgroundSyncRepairRequiredPrefix,
+      backendType,
+    );
+    final scopedPrefix = '$legacyKey:';
+    if (all[legacyKey] == '1') return true;
+    for (final entry in all.entries) {
+      if (entry.key.startsWith(scopedPrefix) && entry.value == '1') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<void> writeBackgroundSyncRepairRequired(
+    bool required, {
+    required SyncBackendType backendType,
+    String? scopeId,
+  }) async {
+    final key = _backgroundSyncScopedKey(
+      _kBackgroundSyncRepairRequiredPrefix,
+      backendType,
+      scopeId: scopeId,
+    );
+    await _writeConfigUpdates({key: required ? '1' : null});
+  }
+
+  String syncStateScopeId(SyncConfig config) {
+    return syncStateScopeIdForFields(
+      backendType: config.backendType,
+      baseUrl: config.baseUrl,
+      localDir: config.localDir,
+      username: config.username,
+      remoteRoot: config.remoteRoot,
+      syncKey: config.syncKey,
+    );
+  }
+
+  String syncStateScopeIdForFields({
+    required SyncBackendType backendType,
+    String? baseUrl,
+    String? localDir,
+    String? username,
+    required String remoteRoot,
+    Uint8List? syncKey,
+  }) {
+    final backend = switch (backendType) {
+      SyncBackendType.webdav => 'webdav',
+      SyncBackendType.localDir => 'localdir',
+      SyncBackendType.managedVault => 'managedvault',
+    };
+
+    final raw = switch (backendType) {
+      SyncBackendType.webdav => [
+          backend,
+          baseUrl?.trim() ?? '',
+          username?.trim() ?? '',
+          remoteRoot.trim(),
+          _syncKeyFingerprint(syncKey),
+        ].join('|'),
+      SyncBackendType.localDir => [
+          backend,
+          localDir?.trim() ?? '',
+          remoteRoot.trim(),
+          _syncKeyFingerprint(syncKey),
+        ].join('|'),
+      SyncBackendType.managedVault => [
+          backend,
+          baseUrl?.trim() ?? '',
+          remoteRoot.trim(),
+          _syncKeyFingerprint(syncKey),
+        ].join('|'),
+    };
+    return base64Url.encode(utf8.encode(raw));
+  }
+
+  static String _syncKeyFingerprint(Uint8List? syncKey) {
+    if (syncKey == null || syncKey.isEmpty) return '';
+
+    final offsetBasis = BigInt.parse('cbf29ce484222325', radix: 16);
+    final prime = BigInt.parse('100000001b3', radix: 16);
+    final mask = BigInt.parse('ffffffffffffffff', radix: 16);
+    var hash = offsetBasis;
+    for (final byte in syncKey) {
+      hash ^= BigInt.from(byte);
+      hash = (hash * prime) & mask;
+    }
+    return hash.toRadixString(16).padLeft(16, '0');
+  }
+
+  static String _backendTypeToken(SyncBackendType backendType) {
+    return switch (backendType) {
+      SyncBackendType.webdav => 'webdav',
+      SyncBackendType.localDir => 'localdir',
+      SyncBackendType.managedVault => 'managedvault',
+    };
+  }
+
+  String _backgroundSyncScopedKey(
+    String prefix,
+    SyncBackendType backendType, {
+    String? scopeId,
+  }) {
+    final backendKey = _backgroundSyncLegacyKey(prefix, backendType);
+    final stateKey = _syncStateKey('$backendKey:', scopeId);
+    if (stateKey == null) {
+      return backendKey;
+    }
+    return stateKey;
+  }
+
+  String _backgroundSyncLegacyKey(
+    String prefix,
+    SyncBackendType backendType,
+  ) {
+    return '$prefix${_backendTypeToken(backendType)}';
+  }
+
+  SyncBackgroundResult? _decodeBackgroundSyncResult(String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
@@ -350,25 +593,7 @@ final class SyncConfigStore {
     }
   }
 
-  Future<void> writeBackgroundSyncResult(
-    SyncBackgroundResult? result, {
-    required SyncBackendType backendType,
-  }) async {
-    final key =
-        '$_kBackgroundSyncResultPrefix${_backendTypeToken(backendType)}';
-    if (result == null) {
-      await _writeConfigUpdates({key: null});
-      return;
-    }
-    await _writeConfigUpdates({key: jsonEncode(result.toJson())});
-  }
-
-  Future<SyncBackgroundBackoffState?> readBackgroundSyncBackoffState({
-    required SyncBackendType backendType,
-  }) async {
-    final key =
-        '$_kBackgroundSyncBackoffPrefix${_backendTypeToken(backendType)}';
-    final raw = (await _loadConfigMap())[key];
+  SyncBackgroundBackoffState? _decodeBackgroundSyncBackoffState(String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
@@ -379,41 +604,45 @@ final class SyncConfigStore {
     }
   }
 
-  Future<void> writeBackgroundSyncBackoffState(
-    SyncBackgroundBackoffState? state, {
+  T? _readLatestBackgroundSyncValue<T>(
+    Map<String, String> all, {
+    required String prefix,
     required SyncBackendType backendType,
-  }) async {
-    final key =
-        '$_kBackgroundSyncBackoffPrefix${_backendTypeToken(backendType)}';
-    if (state == null) {
-      await _writeConfigUpdates({key: null});
-      return;
+    required T? Function(String? raw) decode,
+    required int Function(T value) sortValue,
+  }) {
+    final legacyKey = _backgroundSyncLegacyKey(prefix, backendType);
+    final scopedPrefix = '$legacyKey:';
+    T? best;
+    int? bestSortValue;
+
+    void consider(String key) {
+      final decoded = decode(all[key]);
+      if (decoded == null) return;
+      final candidateSortValue = sortValue(decoded);
+      if (best == null ||
+          bestSortValue == null ||
+          candidateSortValue > bestSortValue!) {
+        best = decoded;
+        bestSortValue = candidateSortValue;
+      }
     }
-    await _writeConfigUpdates({key: jsonEncode(state.toJson())});
+
+    consider(legacyKey);
+    for (final key in all.keys) {
+      if (key.startsWith(scopedPrefix)) {
+        consider(key);
+      }
+    }
+    return best;
   }
 
-  String cloudMediaBackupBackfillScopeId(SyncConfig config) {
-    final backend = switch (config.backendType) {
-      SyncBackendType.webdav => 'webdav',
-      SyncBackendType.localDir => 'localdir',
-      SyncBackendType.managedVault => 'managedvault',
-    };
-
-    final raw = [
-      backend,
-      config.baseUrl?.trim() ?? '',
-      config.localDir?.trim() ?? '',
-      config.remoteRoot.trim(),
-    ].join('|');
-    return base64Url.encode(utf8.encode(raw));
-  }
-
-  static String _backendTypeToken(SyncBackendType backendType) {
-    return switch (backendType) {
-      SyncBackendType.webdav => 'webdav',
-      SyncBackendType.localDir => 'localdir',
-      SyncBackendType.managedVault => 'managedvault',
-    };
+  String? _syncStateKey(String prefix, String? scopeId) {
+    final normalizedScope = scopeId?.trim();
+    if (normalizedScope == null || normalizedScope.isEmpty) {
+      return null;
+    }
+    return '$prefix$normalizedScope';
   }
 
   Future<SyncConfig?> loadConfiguredSync() async {
@@ -501,9 +730,13 @@ final class SyncConfigStore {
     });
   }
 
-  Future<void> _writeConfigUpdates(Map<String, String?> updates) async {
+  Future<void> _writeConfigUpdates(
+    Map<String, String?> updates, {
+    bool noteStateChangeIfNoop = false,
+  }) async {
     await _serial(() async {
       await _ensureLoaded();
+      await _reloadIfChanged();
 
       var changed = false;
       for (final entry in updates.entries) {
@@ -519,16 +752,29 @@ final class SyncConfigStore {
         }
       }
 
-      if (!changed) return;
+      if (!changed) {
+        if (noteStateChangeIfNoop) {
+          await _bumpStateRevision();
+        }
+        return;
+      }
       await _persistCache();
     });
   }
 
   Future<void> clearAll() async {
     await _serial(() async {
+      await _ensureLoaded();
+      await _reloadIfChanged();
+
       final prefs = await _prefs();
+      final hadPublicState = _cache.isNotEmpty ||
+          _lastRaw != null ||
+          prefs.getInt(_stateRevisionPrefsKey) != null ||
+          prefs.getInt(_secretStoreVersionPrefsKey) != null;
       await prefs.remove(_prefsBlobKey);
       await prefs.remove(_legacyPrefsBlobKey);
+      await prefs.remove(_stateRevisionPrefsKey);
       await prefs.remove(_secretStoreVersionPrefsKey);
       await _secretStore.clearAll();
       if (_scopeKey == null) {
@@ -536,7 +782,11 @@ final class SyncConfigStore {
       }
       _lastRaw = null;
       _cache = <String, String>{};
+      _lastStateRevision = 0;
       _loaded = true;
+      if (hadPublicState) {
+        _notifyChanged();
+      }
     });
   }
 
@@ -553,16 +803,19 @@ final class SyncConfigStore {
 
     final prefs = await _prefs();
     final raw = _readRawConfigBlob(prefs);
-    if (raw == _lastRaw) return;
+    final stateRevision = prefs.getInt(_stateRevisionPrefsKey) ?? 0;
+    if (raw == _lastRaw && stateRevision == _lastStateRevision) return;
 
     if (raw == null || raw.trim().isEmpty) {
       _lastRaw = null;
       _cache = <String, String>{};
+      _lastStateRevision = stateRevision;
       return;
     }
 
     _lastRaw = raw;
     _cache = _migrator.decodeRawConfigMap(raw);
+    _lastStateRevision = stateRevision;
     await _migrateSensitiveFieldsFromPublicCacheIfNeeded();
     final hasPublicBlob =
         prefs.getString(_prefsBlobKey)?.trim().isNotEmpty == true;
@@ -577,6 +830,7 @@ final class SyncConfigStore {
     if (_loaded) return;
 
     final prefs = await _prefs();
+    _lastStateRevision = prefs.getInt(_stateRevisionPrefsKey) ?? 0;
     final raw = _readRawConfigBlob(prefs);
     if (raw == null || raw.trim().isEmpty) {
       final migrated = await _tryMigrateFromSecureStore();
@@ -720,17 +974,34 @@ final class SyncConfigStore {
       await prefs.remove(_prefsBlobKey);
       await prefs.remove(_legacyPrefsBlobKey);
       _lastRaw = null;
+      await _bumpStateRevision(prefs: prefs);
       return;
     }
     final raw = jsonEncode(_cache);
     await prefs.setString(_prefsBlobKey, raw);
     await prefs.remove(_legacyPrefsBlobKey);
     _lastRaw = raw;
+    await _bumpStateRevision(prefs: prefs);
+  }
+
+  void _notifyChanged() {
+    _changeCounter.value++;
+  }
+
+  Future<void> _bumpStateRevision({SharedPreferences? prefs}) async {
+    final resolvedPrefs = prefs ?? await _prefs();
+    final current = resolvedPrefs.getInt(_stateRevisionPrefsKey) ?? 0;
+    final next = current + 1;
+    await resolvedPrefs.setInt(_stateRevisionPrefsKey, next);
+    _lastStateRevision = next;
+    _notifyChanged();
   }
 
   String get _prefsBlobKey => _scopedKey(_kPrefsBlobKey);
 
   String get _legacyPrefsBlobKey => _scopedKey(_kLegacyPrefsBlobKey);
+
+  String get _stateRevisionPrefsKey => _scopedKey(_kStateRevisionKey);
 
   String get _secretStoreVersionPrefsKey =>
       _scopedKey(SyncConfigMigrator.secretStoreVersionPrefsKey);

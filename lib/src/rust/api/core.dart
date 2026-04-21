@@ -1250,29 +1250,37 @@ Future<void> dbEnqueueCloudMediaBackup(
         required List<int> key,
         required String attachmentSha256,
         required String desiredVariant,
-        required PlatformInt64 nowMs}) =>
+        required PlatformInt64 nowMs,
+        String? scopeId}) =>
     RustLib.instance.api.crateApiCoreDbEnqueueCloudMediaBackup(
         appDir: appDir,
         key: key,
         attachmentSha256: attachmentSha256,
         desiredVariant: desiredVariant,
-        nowMs: nowMs);
+        nowMs: nowMs,
+        scopeId: scopeId);
 
 Future<BigInt> dbBackfillCloudMediaBackupImages(
         {required String appDir,
         required List<int> key,
         required String desiredVariant,
-        required PlatformInt64 nowMs}) =>
+        required PlatformInt64 nowMs,
+        String? scopeId}) =>
     RustLib.instance.api.crateApiCoreDbBackfillCloudMediaBackupImages(
-        appDir: appDir, key: key, desiredVariant: desiredVariant, nowMs: nowMs);
+        appDir: appDir,
+        key: key,
+        desiredVariant: desiredVariant,
+        nowMs: nowMs,
+        scopeId: scopeId);
 
 Future<List<CloudMediaBackup>> dbListDueCloudMediaBackups(
         {required String appDir,
         required List<int> key,
         required PlatformInt64 nowMs,
-        required int limit}) =>
+        required int limit,
+        String? scopeId}) =>
     RustLib.instance.api.crateApiCoreDbListDueCloudMediaBackups(
-        appDir: appDir, key: key, nowMs: nowMs, limit: limit);
+        appDir: appDir, key: key, nowMs: nowMs, limit: limit, scopeId: scopeId);
 
 Future<void> dbMarkCloudMediaBackupFailed(
         {required String appDir,
@@ -1281,7 +1289,8 @@ Future<void> dbMarkCloudMediaBackupFailed(
         required PlatformInt64 attempts,
         required PlatformInt64 nextRetryAtMs,
         required String lastError,
-        required PlatformInt64 nowMs}) =>
+        required PlatformInt64 nowMs,
+        String? scopeId}) =>
     RustLib.instance.api.crateApiCoreDbMarkCloudMediaBackupFailed(
         appDir: appDir,
         key: key,
@@ -1289,23 +1298,26 @@ Future<void> dbMarkCloudMediaBackupFailed(
         attempts: attempts,
         nextRetryAtMs: nextRetryAtMs,
         lastError: lastError,
-        nowMs: nowMs);
+        nowMs: nowMs,
+        scopeId: scopeId);
 
 Future<void> dbMarkCloudMediaBackupUploaded(
         {required String appDir,
         required List<int> key,
         required String attachmentSha256,
-        required PlatformInt64 nowMs}) =>
+        required PlatformInt64 nowMs,
+        String? scopeId}) =>
     RustLib.instance.api.crateApiCoreDbMarkCloudMediaBackupUploaded(
         appDir: appDir,
         key: key,
         attachmentSha256: attachmentSha256,
-        nowMs: nowMs);
+        nowMs: nowMs,
+        scopeId: scopeId);
 
 Future<CloudMediaBackupSummary> dbCloudMediaBackupSummary(
-        {required String appDir, required List<int> key}) =>
-    RustLib.instance.api
-        .crateApiCoreDbCloudMediaBackupSummary(appDir: appDir, key: key);
+        {required String appDir, required List<int> key, String? scopeId}) =>
+    RustLib.instance.api.crateApiCoreDbCloudMediaBackupSummary(
+        appDir: appDir, key: key, scopeId: scopeId);
 
 Future<void> dbResetVaultDataPreservingLlmProfiles(
         {required String appDir, required List<int> key}) =>

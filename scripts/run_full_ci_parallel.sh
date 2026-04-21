@@ -104,7 +104,11 @@ handle_finished_job() {
 
   local status=0
   wait "${job_pid}" || status=$?
-  echo "ci: ${job_name} verification finished with status ${status}" >&2
+  if [[ ${status} -eq 143 && ${overall_status} -ne 0 ]]; then
+    echo "ci: ${job_name} verification cancelled after ${overall_status} failure" >&2
+  else
+    echo "ci: ${job_name} verification finished with status ${status}" >&2
+  fi
   cat "${job_log}"
 
   if [[ ${status} -ne 0 && ${overall_status} -eq 0 ]]; then
@@ -150,7 +154,7 @@ while [[ ${remaining_jobs} -gt 0 ]]; do
     continue
   fi
 
-  sleep 1
+  sleep 0.1
 done
 
 if [[ ${overall_status} -ne 0 ]]; then

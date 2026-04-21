@@ -112,10 +112,37 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return int.tryParse(statusText);
   }
 
+  Future<String?> _currentSyncStateScopeId({
+    required Uint8List? syncKey,
+  }) async {
+    final backendType = _effectiveBackendType;
+    final cloudUid = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
+    final remoteRoot = switch (backendType) {
+      SyncBackendType.managedVault =>
+        cloudUid == null || cloudUid.isEmpty ? '' : cloudUid,
+      _ => _requiredTrimmed(_remoteRootController),
+    };
+    if (remoteRoot.isEmpty) return null;
+    final baseUrl = switch (backendType) {
+      SyncBackendType.managedVault =>
+        (await _store.resolveManagedVaultBaseUrl())?.trim() ?? '',
+      _ => _optionalTrimmed(_baseUrlController),
+    };
+    return _store.syncStateScopeIdForFields(
+      backendType: backendType,
+      baseUrl: baseUrl,
+      localDir: _optionalTrimmed(_localDirController),
+      username: _optionalTrimmed(_usernameController),
+      remoteRoot: remoteRoot,
+      syncKey: syncKey,
+    );
+  }
+
   Future<void> _writeLastSyncLog({
     required SyncBackgroundDirection direction,
     required SyncBackgroundResultStatus status,
     required int durationMs,
+    required String? scopeId,
     int? statusCode,
     String? errorMessage,
     String? userMessage,
@@ -135,6 +162,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           durationMs: durationMs,
         ),
         backendType: _effectiveBackendType,
+        scopeId: scopeId,
       );
     } catch (_) {
       // Diagnostics persistence is best-effort and should never block sync UX.
@@ -313,6 +341,16 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return syncKey;
   }
 
+  Future<Uint8List> _resolveSyncKeyForCurrentBackend(AppBackend backend) async {
+    if (_effectiveBackendType != SyncBackendType.managedVault) {
+      return _loadOrCreateSyncKey();
+    }
+    if (_usesCloudSessionModel) {
+      return _loadOrCreateSyncKey();
+    }
+    return _deriveManagedVaultSyncKey(backend);
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     _setState(() => _busy = true);
@@ -448,6 +486,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             );
 
         var didSync = false;
+        final engine = SyncEngineScope.maybeOf(context);
         if (shouldSync) {
           final sessionScope =
               context.getInheritedWidgetOfExactType<SessionScope>();
@@ -500,6 +539,13 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         store: BackendCloudMediaBackupStore(
                           backend: backend,
                           sessionKey: sessionKey,
+                          scopeId: _store.syncStateScopeIdForFields(
+                            backendType: SyncBackendType.webdav,
+                            baseUrl: newWebdavBaseUrl,
+                            username: _optionalTrimmed(_usernameController),
+                            remoteRoot: newRemoteRoot,
+                            syncKey: activeSyncKey,
+                          ),
                         ),
                         client: WebDavCloudMediaBackupClient(
                           backend: backend,
@@ -573,129 +619,40 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                 didSync = true;
                 break;
               case SyncBackendType.managedVault:
-                final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
-                String? idToken;
-                try {
-                  idToken = await readCloudAuthIdToken(
-                    cloudAuth,
-                    mode: CloudAuthAccessMode.interactive,
-                  );
-                } catch (_) {
-                  idToken = null;
-                }
-                final vaultId = cloudAuth?.uid?.trim();
-                final baseUrl = await _store.resolveManagedVaultBaseUrl();
-
-                if (!mounted) break;
-                if (idToken == null ||
-                    idToken.trim().isEmpty ||
-                    vaultId == null ||
-                    vaultId.isEmpty ||
-                    baseUrl == null ||
-                    baseUrl.trim().isEmpty) {
-                  // If we can't get auth details, fall back to engine scheduling.
-                  break;
-                }
-
-                final baseUrlTrimmed = baseUrl.trim();
-                final idTokenTrimmed = idToken.trim();
-
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setBool(cloudSyncSwitchInProgressPrefsKey, true);
-                try {
-                  await _runSaveSyncWithProgress(
-                    run: (stage, progress) async {
-                      var stageProgress =
-                          _makeSmoothStageProgressReporter(progress);
-                      stage.value = t.sync.progressDialog.pulling;
-                      progress.value = 0.0;
-                      await _consumeRustProgressStream(
-                        backend.syncManagedVaultPullProgress(
-                          sessionKey,
-                          activeSyncKey,
-                          baseUrl: baseUrlTrimmed,
-                          vaultId: vaultId,
-                          idToken: idTokenTrimmed,
-                        ),
-                        onProgress: stageProgress.onProgress,
-                      );
-
-                      stageProgress =
-                          _makeSmoothStageProgressReporter(progress);
-                      stage.value = t.sync.progressDialog.pushing;
-                      progress.value = 0.0;
-                      await _consumeRustProgressStream(
-                        backend.syncManagedVaultPushOpsOnlyProgress(
-                          sessionKey,
-                          activeSyncKey,
-                          baseUrl: baseUrlTrimmed,
-                          vaultId: vaultId,
-                          idToken: idTokenTrimmed,
-                        ),
-                        onProgress: stageProgress.onProgress,
-                      );
-
-                      if (_cloudMediaBackupEnabled) {
-                        stage.value = t.sync.progressDialog.uploadingMedia;
-                        progress.value = null;
-
-                        final runner = CloudMediaBackupRunner(
-                          store: BackendCloudMediaBackupStore(
-                            backend: backend,
-                            sessionKey: sessionKey,
-                          ),
-                          client: ManagedVaultCloudMediaBackupClient(
-                            backend: backend,
-                            sessionKey: sessionKey,
-                            syncKey: activeSyncKey,
-                            baseUrl: baseUrlTrimmed,
-                            vaultId: vaultId,
-                            idToken: idTokenTrimmed,
-                          ),
-                          settings: CloudMediaBackupRunnerSettings(
-                            enabled: true,
-                            wifiOnly: _cloudMediaBackupWifiOnly,
-                          ),
-                          getNetwork:
-                              ConnectivityCloudMediaBackupNetworkProvider()
-                                  .call,
-                        );
-                        final result = await runner.runOnce(
-                          allowCellular: false,
-                          onBytesProgress: (doneBytes, totalBytes) {
-                            progress.value = totalBytes <= 0
-                                ? 1.0
-                                : (doneBytes / totalBytes).clamp(0.0, 1.0);
-                          },
-                        );
-                        if (result.needsCellularConfirmation) {
-                          progress.value = 1.0;
-                        }
-                      }
-
-                      stage.value = t.sync.progressDialog.finalizing;
-                      stageProgress.complete();
-                    },
-                  );
-                  didSync = true;
-                } finally {
-                  await prefs.setBool(cloudSyncSwitchInProgressPrefsKey, false);
-                }
+                didSync = await _runManagedVaultSaveSync(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: activeSyncKey,
+                  engine: engine,
+                );
                 break;
             }
           }
         }
 
         if (!mounted) return;
-        final engine = SyncEngineScope.maybeOf(context);
         engine?.start();
-        engine?.notifyExternalChange();
+        if (!(didSync && newBackendType == SyncBackendType.managedVault)) {
+          engine?.notifyExternalChange();
+        }
         if (!didSync) {
-          engine?.triggerPullNow();
           engine?.triggerPushNow();
+          engine?.triggerPullNow();
         }
       } catch (e) {
         if (!mounted) return;
+        if (backendType == SyncBackendType.managedVault) {
+          final details = inspectManagedVaultPushFailure(e);
+          if (details.writeGateState != null) {
+            return;
+          }
+          _showSnack(
+            t.sync.connectionFailed(
+              error: managedVaultUserFacingErrorMessage(e),
+            ),
+          );
+          return;
+        }
         _showSnack(t.sync.connectionFailed(error: '$e'));
       }
     } catch (e) {
@@ -718,112 +675,115 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
     final t = context.t;
     final stopwatch = Stopwatch()..start();
+    String? stateScopeId;
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final backendType = _effectiveBackendType;
+      final engine = SyncEngineScope.maybeOf(context);
 
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = backendType == SyncBackendType.managedVault
-          ? (_usesCloudSessionModel
-              ? await _loadOrCreateSyncKey()
-              : await _deriveManagedVaultSyncKey(backend))
-          : await _loadOrCreateSyncKey();
+      final syncKey = await _resolveSyncKeyForCurrentBackend(backend);
+      stateScopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 
       var pushed = 0;
+      var recoveredOnly = false;
+      var refreshedLocalState = false;
+      String? recoveredMessage;
       await _runSaveSyncWithProgress(
         progressKey: _SyncSettingsPageState._kManualSyncProgressKey,
         progressPercentKey:
             _SyncSettingsPageState._kManualSyncProgressPercentKey,
         run: (stage, progress) async {
-          var hasTotal = false;
+          final hasTotal = ValueNotifier(false);
           var runCompleted = false;
-          final progressReporter = _makeSmoothStageProgressReporter(
-            progress,
-            onHasTotal: () => hasTotal = true,
-          );
           stage.value = t.sync.progressDialog.pushing;
           progress.value = 0.0;
           unawaited(() async {
             await Future<void>.delayed(const Duration(milliseconds: 200));
             if (runCompleted) return;
-            if (hasTotal) return;
+            if (hasTotal.value) return;
             if (progress.value != 0.0) return;
             progress.value = null;
           }());
 
           try {
-            pushed = await (switch (backendType) {
-              SyncBackendType.webdav => _consumeRustProgressStream(
-                  backend.syncWebdavPushOpsOnlyProgress(
-                    sessionKey,
-                    syncKey,
-                    baseUrl: _requiredTrimmed(_baseUrlController),
-                    username: _optionalTrimmed(_usernameController),
-                    password: _optionalTrimmed(_passwordController),
-                    remoteRoot: _requiredTrimmed(_remoteRootController),
-                  ),
-                  onProgress: progressReporter.onProgress,
-                ),
-              SyncBackendType.localDir => _consumeRustProgressStream(
-                  backend.syncLocaldirPushProgress(
-                    sessionKey,
-                    syncKey,
-                    localDir: _requiredTrimmed(_localDirController),
-                    remoteRoot: _requiredTrimmed(_remoteRootController),
-                  ),
-                  onProgress: progressReporter.onProgress,
-                ),
-              SyncBackendType.managedVault => () async {
-                  final cloudAuth = CloudAuthScope.of(context).controller;
-                  final idToken = await readCloudAuthIdToken(
-                    cloudAuth,
-                    mode: CloudAuthAccessMode.interactive,
-                  );
-                  if (idToken == null || idToken.trim().isEmpty) {
-                    throw StateError('missing_id_token');
-                  }
-                  final vaultId = cloudAuth.uid ?? '';
-                  final baseUrl = await _store.resolveManagedVaultBaseUrl();
-                  if (baseUrl == null || baseUrl.trim().isEmpty) {
-                    throw StateError('missing_managed_vault_base_url');
-                  }
-                  return _consumeRustProgressStream(
-                    backend.syncManagedVaultPushOpsOnlyProgress(
+            if (backendType == SyncBackendType.managedVault) {
+              final result = await _runManagedVaultManualPushWithProgress(
+                backend: backend,
+                sessionKey: sessionKey,
+                syncKey: syncKey,
+                engine: engine,
+                stage: stage,
+                progress: progress,
+                hasTotal: hasTotal,
+              );
+              pushed = result.pushed;
+              recoveredOnly = result.recoveredOnly;
+              recoveredMessage = result.recoveredMessage;
+              refreshedLocalState = result.refreshedLocalState;
+            } else {
+              final progressReporter = _makeSmoothStageProgressReporter(
+                progress,
+                onHasTotal: () => hasTotal.value = true,
+              );
+              pushed = await (switch (backendType) {
+                SyncBackendType.webdav => _consumeRustProgressStream(
+                    backend.syncWebdavPushOpsOnlyProgress(
                       sessionKey,
                       syncKey,
-                      baseUrl: baseUrl,
-                      vaultId: vaultId,
-                      idToken: idToken,
+                      baseUrl: _requiredTrimmed(_baseUrlController),
+                      username: _optionalTrimmed(_usernameController),
+                      password: _optionalTrimmed(_passwordController),
+                      remoteRoot: _requiredTrimmed(_remoteRootController),
                     ),
                     onProgress: progressReporter.onProgress,
-                  );
-                }(),
-            });
-            stage.value = t.sync.progressDialog.finalizing;
-            progressReporter.complete();
+                  ),
+                SyncBackendType.localDir => _consumeRustProgressStream(
+                    backend.syncLocaldirPushProgress(
+                      sessionKey,
+                      syncKey,
+                      localDir: _requiredTrimmed(_localDirController),
+                      remoteRoot: _requiredTrimmed(_remoteRootController),
+                    ),
+                    onProgress: progressReporter.onProgress,
+                  ),
+                SyncBackendType.managedVault => throw UnimplementedError(),
+              });
+              stage.value = t.sync.progressDialog.finalizing;
+              progressReporter.complete();
+            }
           } finally {
             runCompleted = true;
           }
         },
       );
-      final successMessage = t.sync.pushedOps(count: pushed);
+      final successMessage = recoveredOnly
+          ? (recoveredMessage ?? t.sync.cloudManagedVault.serverUnavailable)
+          : t.sync.pushedOps(count: pushed);
       await _writeLastSyncLog(
         direction: SyncBackgroundDirection.push,
-        status: SyncBackgroundResultStatus.success,
+        status: recoveredOnly
+            ? SyncBackgroundResultStatus.skipped
+            : SyncBackgroundResultStatus.success,
         durationMs: stopwatch.elapsedMilliseconds,
+        scopeId: stateScopeId,
         userMessage: successMessage,
       );
+      if (mounted && refreshedLocalState) {
+        engine?.notifyExternalChange();
+      }
       _showSnack(successMessage);
     } catch (e) {
-      final errorMessage = '$e';
+      final errorMessage = managedVaultUserFacingErrorMessage(e);
       final failedMessage = t.sync.pushFailed(error: errorMessage);
       await _writeLastSyncLog(
         direction: SyncBackgroundDirection.push,
         status: SyncBackgroundResultStatus.failure,
         durationMs: stopwatch.elapsedMilliseconds,
+        scopeId: stateScopeId,
         statusCode: _extractHttpStatusCode(e),
         errorMessage: errorMessage,
         userMessage: failedMessage,
@@ -845,6 +805,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     final t = context.t;
     final stopwatch = Stopwatch()..start();
     final engine = SyncEngineScope.maybeOf(context);
+    String? stateScopeId;
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
@@ -853,11 +814,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = backendType == SyncBackendType.managedVault
-          ? (_usesCloudSessionModel
-              ? await _loadOrCreateSyncKey()
-              : await _deriveManagedVaultSyncKey(backend))
-          : await _loadOrCreateSyncKey();
+      final syncKey = await _resolveSyncKeyForCurrentBackend(backend);
+      stateScopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 
       var pulled = 0;
       await _runSaveSyncWithProgress(
@@ -943,6 +901,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         direction: SyncBackgroundDirection.pull,
         status: SyncBackgroundResultStatus.success,
         durationMs: stopwatch.elapsedMilliseconds,
+        scopeId: stateScopeId,
         userMessage: successMessage,
       );
       _showSnack(successMessage);
@@ -961,6 +920,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         direction: SyncBackgroundDirection.pull,
         status: SyncBackgroundResultStatus.failure,
         durationMs: stopwatch.elapsedMilliseconds,
+        scopeId: stateScopeId,
         statusCode: _extractHttpStatusCode(e),
         errorMessage: errorMessage,
         userMessage: failedMessage,

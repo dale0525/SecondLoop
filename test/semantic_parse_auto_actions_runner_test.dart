@@ -1462,6 +1462,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
       appliedTodoId: null,
       appliedTodoTitle: null,
       appliedPrevTodoStatus: null,
+      appliedDueChanged: false,
       suggestedTags: null,
       suggestedTagConfidence: null,
       tagSuggestionState: null,

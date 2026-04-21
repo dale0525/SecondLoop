@@ -187,6 +187,7 @@ SemanticParseJob _job({
     appliedTodoId: null,
     appliedTodoTitle: null,
     appliedPrevTodoStatus: null,
+    appliedDueChanged: false,
     suggestedTags: null,
     suggestedTagConfidence: null,
     tagSuggestionState: null,

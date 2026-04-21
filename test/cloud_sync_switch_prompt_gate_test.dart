@@ -12,6 +12,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/cloud_sync_switch_prompt_gate.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
+import 'package:secondloop/core/sync/sync_diagnostics.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
@@ -135,6 +136,62 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _Backend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.unknown);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    subscription.setStatus(SubscriptionStatus.entitled);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(await store.readRemoteRoot(), 'uid_1');
+    final syncKey = await store.readSyncKey();
+    expect(syncKey, isNotNull);
+    expect(syncKey, Uint8List.fromList(List<int>.filled(32, 9)));
+    expect(find.text('Enter your recovery passphrase and tap Save first.'),
+        findsNothing);
+  });
+
+  testWidgets(
+      'Switching to Cloud does not persist managed-vault config when bootstrap prerequisites are missing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final previousSyncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(previousSyncKey);
 
     final backend = _Backend();
     final cloudAuth = _FakeCloudAuthController();
@@ -168,13 +225,9 @@ void main() {
     await tester.tap(find.text('Switch'));
     await tester.pumpAndSettle();
 
-    expect(await store.readBackendType(), SyncBackendType.managedVault);
-    expect(await store.readRemoteRoot(), 'uid_1');
-    final syncKey = await store.readSyncKey();
-    expect(syncKey, isNotNull);
-    expect(syncKey, Uint8List.fromList(List<int>.filled(32, 9)));
-    expect(find.text('Enter your recovery passphrase and tap Save first.'),
-        findsNothing);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect(await store.readSyncKey(), previousSyncKey);
   });
 
   testWidgets(
@@ -242,7 +295,8 @@ void main() {
     );
   });
 
-  testWidgets('Switching to Cloud runs sync and shows progress first',
+  testWidgets(
+      'Switching to Cloud runs push before pull and shows progress first',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       // Consent should still be prompted after the sync completes.
@@ -255,7 +309,7 @@ void main() {
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
     await store.writeManagedVaultBaseUrl('https://vault.example.com');
 
-    final backend = _SyncingBackend();
+    final backend = _SuccessfulPushBackend();
     final cloudAuth = _FakeCloudAuthController();
     final subscription =
         _FakeSubscriptionController(SubscriptionStatus.entitled);
@@ -308,13 +362,15 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, contains('syncManagedVaultPull'));
-    expect(backend.calls, contains('syncManagedVaultPushOpsOnly'));
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
+    );
     expect(find.text('More AI features are now available'), findsOneWidget);
   });
 
   testWidgets(
-      'Switching to Cloud falls back to engine pull/push when progress sync fails',
+      'Switching to Cloud falls back to engine push/pull when progress sync fails',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': false,
@@ -381,6 +437,734 @@ void main() {
     expect(syncRunner.pullCalls, 1);
     expect(syncRunner.pushCalls, 1);
 
+    engine.stop();
+  });
+
+  testWidgets(
+      'Switching to Cloud rolls back config when initial sync fails unrecoverably',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final backend = _InvalidBatchPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(
+      find.textContaining(
+        'Local sync data needs repair before cloud sync can continue.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: store.syncStateScopeIdForFields(
+          backendType: SyncBackendType.managedVault,
+          baseUrl: 'https://vault.example.com',
+          remoteRoot: 'uid_1',
+          syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
+        ),
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets(
+      'Switching to Cloud rolls back config when push is read-only blocked',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _GraceReadOnlyPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        vaultId: 'uid_1',
+        baseUrl: 'https://vault.example.com',
+      ),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+    engine.start();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: SyncEngineScope(
+                engine: engine,
+                child: CloudAuthScope(
+                  controller: cloudAuth,
+                  child: SubscriptionScope(
+                    controller: subscription,
+                    child: CloudSyncSwitchPromptGate(
+                      configStore: store,
+                      child: const Scaffold(body: Text('home')),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
+    );
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+    expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
+    engine.stop();
+  });
+
+  testWidgets('Switching to Cloud clears background repair block after success',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+    final scopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+    await store.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
+    await store.writeBackgroundSyncBackoffState(
+      const SyncBackgroundBackoffState(
+        backendType: SyncBackendType.managedVault,
+        retryCount: 2,
+        nextAllowedAtMs: 999999,
+        updatedAtMs: 999000,
+        lastStatusCode: 503,
+        lastErrorCode: 'server_error',
+      ),
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
+
+    final backend = _SuccessfulManagedVaultBootstrapBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
+    );
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isFalse,
+    );
+    expect(
+      await store.readBackgroundSyncBackoffState(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isNull,
+    );
+  });
+
+  testWidgets(
+      'Switching to Cloud rolls back config when initial sync hits storage quota',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _StorageQuotaExceededPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(find.textContaining('Cloud storage is full'), findsOneWidget);
+  });
+
+  testWidgets(
+      'Switching to Cloud rolls back config when recovery is blocked by local unpushed changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _LocalUnpushedChangesRecoveryBlockedPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    final blockedScopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: blockedScopeId,
+      ),
+      isTrue,
+    );
+    expect(
+      find.textContaining(
+        'Local changes still need to upload before cloud recovery can continue.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'Switching to Cloud rolls back config when recovery is blocked by local media backfill',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _LocalMediaBackfillRecoveryBlockedPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    final blockedScopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: blockedScopeId,
+      ),
+      isTrue,
+    );
+    expect(
+      find.textContaining(
+        'Local media still needs cloud backfill before recovery can continue.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'Switching to Cloud transient push failures do not clear an existing repair block',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    final managedVaultSyncKey = Uint8List.fromList(List<int>.filled(32, 9));
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    final blockedScopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: managedVaultSyncKey,
+    );
+    await store.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+      scopeId: blockedScopeId,
+    );
+
+    final backend = _TransientManagedVaultPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: blockedScopeId,
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets(
+      'Switching to Cloud retries push after pull recovers generation mismatch',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final backend = _GenerationMismatchRecoveryPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        vaultId: 'uid_1',
+        baseUrl: 'https://vault.example.com',
+      ),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+    engine.start();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: SyncEngineScope(
+                engine: engine,
+                child: CloudAuthScope(
+                  controller: cloudAuth,
+                  child: SubscriptionScope(
+                    controller: subscription,
+                    child: CloudSyncSwitchPromptGate(
+                      configStore: store,
+                      child: const Scaffold(body: Text('home')),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+      ],
+    );
+    expect(find.textContaining('managed-vault push failed'), findsNothing);
+    engine.stop();
+  });
+
+  testWidgets(
+      'Switching to Cloud rolls back config when retry push fails after recovery pull',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final backend = _GenerationMismatchThenGraceReadOnlyPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        vaultId: 'uid_1',
+        baseUrl: 'https://vault.example.com',
+      ),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+    engine.start();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: SyncEngineScope(
+                engine: engine,
+                child: CloudAuthScope(
+                  controller: cloudAuth,
+                  child: SubscriptionScope(
+                    controller: subscription,
+                    child: CloudSyncSwitchPromptGate(
+                      configStore: store,
+                      child: const Scaffold(body: Text('home')),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+        'syncManagedVaultPush',
+      ],
+    );
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+    expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
+    engine.stop();
+  });
+
+  testWidgets(
+      'Switching to Cloud clears stale managed-vault write gate on success',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final backend = _SuccessfulPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => null,
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+    engine.writeGate.value =
+        const SyncWriteGateState.graceReadOnly(9999999999999);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: SyncEngineScope(
+                engine: engine,
+                child: CloudAuthScope(
+                  controller: cloudAuth,
+                  child: SubscriptionScope(
+                    controller: subscription,
+                    child: CloudSyncSwitchPromptGate(
+                      configStore: store,
+                      child: const Scaffold(body: Text('home')),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, contains('syncManagedVaultPush'));
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
     engine.stop();
   });
 }
@@ -641,7 +1425,7 @@ final class _Backend extends AppBackend {
       0;
 }
 
-final class _SyncingBackend extends _Backend {
+final class _SuccessfulPushBackend extends _Backend {
   final List<String> calls = <String>[];
 
   @override
@@ -653,20 +1437,18 @@ final class _SyncingBackend extends _Backend {
     required String idToken,
   }) async {
     calls.add('syncManagedVaultPull');
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    return 1;
+    return 0;
   }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
   }) async {
-    calls.add('syncManagedVaultPushOpsOnly');
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    calls.add('syncManagedVaultPush');
     return 1;
   }
 }
@@ -687,15 +1469,234 @@ final class _FailingPullBackend extends _Backend {
   }
 
   @override
-  Future<int> syncManagedVaultPushOpsOnly(
+  Future<int> syncManagedVaultPush(
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
   }) async {
-    calls.add('syncManagedVaultPushOpsOnly');
+    calls.add('syncManagedVaultPush');
     return 0;
+  }
+}
+
+final class _GraceReadOnlyPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
+  }
+}
+
+final class _StorageQuotaExceededPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"storage_quota_exceeded","used_bytes":10,"limit_bytes":9}',
+    );
+  }
+}
+
+final class _InvalidBatchPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw Exception(
+      'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"duplicate_client_op_id"}',
+    );
+  }
+}
+
+final class _SuccessfulManagedVaultBootstrapBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+}
+
+final class _LocalUnpushedChangesRecoveryBlockedPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw StateError(
+        'managed-vault v2 recovery blocked: local_unpushed_changes');
+  }
+}
+
+final class _LocalMediaBackfillRecoveryBlockedPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw StateError(
+      'managed-vault v2 recovery blocked: local_media_backfill_pending',
+    );
+  }
+}
+
+final class _TransientManagedVaultPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw Exception(
+      'managed-vault v2 push failed: HTTP 503 {"error":"temporary"}',
+    );
+  }
+}
+
+final class _GenerationMismatchRecoveryPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+  var _firstPush = true;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    if (_firstPush) {
+      _firstPush = false;
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    return 1;
+  }
+}
+
+final class _GenerationMismatchThenGraceReadOnlyPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+  var _pushCount = 0;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 0;
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    _pushCount += 1;
+    if (_pushCount == 1) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
   }
 }
 

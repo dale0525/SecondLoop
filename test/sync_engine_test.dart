@@ -349,6 +349,384 @@ void main() {
     });
   });
 
+  test('managed vault prioritizes queued push before queued pull', () {
+    fakeAsync((async) {
+      final runner = _OrderedRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPullNow();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test('managed vault local mutation converges with pull after push', () {
+    fakeAsync((async) {
+      final runner = _OrderedRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(milliseconds: 100),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.notifyLocalMutation();
+
+      async.elapse(const Duration(milliseconds: 100));
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test('managed vault retries push after pull recovers generation mismatch',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultRecoveryRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull', 'push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test(
+      'managed vault caps retry-after-recovery loops on repeated generation mismatch',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultRepeatedRecoveryRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 2);
+      expect(runner.pullCalls, 1);
+      expect(runner.calls, <String>['push', 'pull', 'push']);
+
+      engine.stop();
+    });
+  });
+
+  test('managed vault invalid_batch stops subsequent automatic pushes', () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultInvalidBatchRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(milliseconds: 10),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.notifyLocalMutation();
+      async.flushMicrotasks();
+      async.elapse(const Duration(milliseconds: 10));
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.notifyLocalMutation();
+      async.flushMicrotasks();
+      async.elapse(const Duration(milliseconds: 10));
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.stop();
+    });
+  });
+
+  test('managed vault recovery pull is not preempted by newly queued push work',
+      () async {
+    final recoveryDecisionStarted = Completer<void>();
+    final releaseRecoveryDecision = Completer<SyncConfig?>();
+    final runner = _ManagedVaultRecoveryOrderingRunner();
+    var loadConfigCalls = 0;
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () {
+        loadConfigCalls += 1;
+        if (loadConfigCalls == 2) {
+          recoveryDecisionStarted.complete();
+          return releaseRecoveryDecision.future;
+        }
+        return Future<SyncConfig?>.value(_managedVaultConfig());
+      },
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+
+    engine.start();
+    engine.triggerPushNow();
+
+    await recoveryDecisionStarted.future;
+    engine.notifyLocalMutation();
+    releaseRecoveryDecision.complete(_managedVaultConfig());
+
+    await runner.pullStarted.future;
+    expect(runner.calls.length, greaterThanOrEqualTo(2));
+    expect(runner.calls[0], 'push');
+    expect(runner.calls[1], 'pull');
+
+    runner.completePull(applied: 0);
+    await Future<void>.delayed(Duration.zero);
+    engine.stop();
+  });
+
+  test('managed vault recovery policy does not prioritize push over pull', () {
+    expect(
+      SyncEngine.shouldPrioritizePushOverPullForTest(
+        pushQueued: true,
+        pullQueued: true,
+        pendingPullAfterPush: false,
+        retryPushAfterRecoveryPull: true,
+        backendType: SyncBackendType.managedVault,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncEngine.shouldPrioritizePushOverPullForTest(
+        pushQueued: true,
+        pullQueued: true,
+        pendingPullAfterPush: false,
+        retryPushAfterRecoveryPull: false,
+        backendType: SyncBackendType.managedVault,
+      ),
+      isTrue,
+    );
+  });
+
+  test('managed vault successful pull reopens payment gate for later pushes',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultPaymentRecoveryRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push']);
+      expect(engine.writeGate.value.kind, SyncWriteGateKind.paymentRequired);
+
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull']);
+      expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull', 'push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test(
+      'managed vault successful pull reopens storage quota gate for later pushes',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultStorageQuotaRecoveryRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push']);
+      expect(
+        engine.writeGate.value.kind,
+        SyncWriteGateKind.storageQuotaExceeded,
+      );
+
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull']);
+      expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['push', 'pull', 'push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test('managed vault pull blocker flips gate to local repair required', () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultPullRecoveryBlockedRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+
+      expect(runner.calls, <String>['pull']);
+      expect(
+        engine.writeGate.value.kind,
+        SyncWriteGateKind.localRepairRequired,
+      );
+
+      engine.stop();
+    });
+  });
+
+  test(
+      'managed vault keeps retry-after-recovery intent across transient pull failures',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultRecoveryPullFailureRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+      expect(runner.calls, <String>['push', 'pull']);
+
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+      expect(runner.calls, <String>['push', 'pull', 'pull', 'push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test(
+      'managed vault keeps mandatory post-push pull queued across transient pull failures',
+      () {
+    fakeAsync((async) {
+      final runner = _ManagedVaultPostPushPullFailureRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _managedVaultConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+      );
+
+      engine.start();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+      expect(runner.calls, <String>['push', 'pull']);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+      expect(runner.calls, <String>['push', 'pull', 'pull', 'push', 'pull']);
+
+      engine.stop();
+    });
+  });
+
+  test(
+      'managed vault mandatory pull after push is not preempted by new push work',
+      () async {
+    final runner = _ManagedVaultPostPushPullOrderingRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => _managedVaultConfig(),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+
+    engine.start();
+    engine.triggerPushNow();
+
+    await runner.firstPushStarted.future;
+    engine.triggerPushNow();
+    runner.completeFirstPush(pushed: 1);
+
+    await runner.pullStarted.future;
+    expect(runner.calls.length, greaterThanOrEqualTo(2));
+    expect(runner.calls[0], 'push');
+    expect(runner.calls[1], 'pull');
+
+    runner.completePull(applied: 0);
+    await Future<void>.delayed(Duration.zero);
+    engine.stop();
+  });
+
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
     fakeAsync((async) {
       final runner = _HintPullRunner(
@@ -387,6 +765,12 @@ SyncConfig _webdavConfig() => SyncConfig.webdav(
       baseUrl: 'https://example.com/dav',
       username: 'u',
       password: 'p',
+    );
+
+SyncConfig _managedVaultConfig() => SyncConfig.managedVault(
+      syncKey: Uint8List.fromList(List<int>.filled(32, 2)),
+      vaultId: 'vault-1',
+      baseUrl: 'https://vault.example.com',
     );
 
 final class _FakeRunner implements SyncRunner {
@@ -459,5 +843,297 @@ final class _HintPullRunner implements SyncRunner, SyncPullResultRunner {
     if (_results.isEmpty) return const SyncPullResult(applied: 0);
     if (index >= _results.length) return _results.last;
     return _results[index];
+  }
+}
+
+final class _OrderedRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    return 0;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    return 0;
+  }
+}
+
+final class _ManagedVaultRecoveryRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  var _firstPush = true;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    if (_firstPush) {
+      _firstPush = false;
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    return 1;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    return 0;
+  }
+}
+
+final class _ManagedVaultInvalidBatchRunner implements SyncRunner {
+  int pushCalls = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    pushCalls += 1;
+    throw Exception(
+      'managed-vault v2 push failed: HTTP 400 {"error":"invalid_batch","reason":"duplicate_client_op_id"}',
+    );
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async => 0;
+}
+
+final class _ManagedVaultRepeatedRecoveryRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+  int pushCalls = 0;
+  int pullCalls = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    pushCalls += 1;
+    if (pushCalls <= 2) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    throw Exception('unexpected extra recovery push');
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    pullCalls += 1;
+    return 0;
+  }
+}
+
+final class _ManagedVaultRecoveryOrderingRunner
+    implements SyncRunner, SyncPullResultRunner {
+  final List<String> calls = <String>[];
+  final Completer<void> pullStarted = Completer<void>();
+  final Completer<SyncPullResult> _pullCompleter = Completer<SyncPullResult>();
+  var _firstPush = true;
+
+  void completePull({required int applied}) {
+    if (_pullCompleter.isCompleted) return;
+    _pullCompleter.complete(SyncPullResult(applied: applied));
+  }
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    if (_firstPush) {
+      _firstPush = false;
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    return 1;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    final result = await pullWithResult(config);
+    return result.applied;
+  }
+
+  @override
+  Future<SyncPullResult> pullWithResult(SyncConfig config) {
+    calls.add('pull');
+    if (!pullStarted.isCompleted) {
+      pullStarted.complete();
+    }
+    return _pullCompleter.future;
+  }
+}
+
+final class _ManagedVaultRecoveryPullFailureRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  var _pushCount = 0;
+  var _pullCount = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    _pushCount += 1;
+    if (_pushCount == 1) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 409 {"error":"generation_mismatch","remote_generation_id":"generation-reset","remote_latest_global_seq":0}',
+      );
+    }
+    return 1;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    _pullCount += 1;
+    if (_pullCount == 1) {
+      throw Exception(
+          'managed-vault v2 pull failed: HTTP 503 {"error":"temporary"}');
+    }
+    return 0;
+  }
+}
+
+final class _ManagedVaultPostPushPullFailureRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  var _pushCount = 0;
+  var _pullCount = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    _pushCount += 1;
+    return _pushCount;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    _pullCount += 1;
+    if (_pullCount == 1) {
+      throw Exception(
+        'managed-vault v2 pull failed: HTTP 503 {"error":"temporary"}',
+      );
+    }
+    return 0;
+  }
+}
+
+final class _ManagedVaultPaymentRecoveryRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  var _pushCount = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    _pushCount += 1;
+    if (_pushCount == 1) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 402 {"error":"payment_required"}',
+      );
+    }
+    return 1;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    return 0;
+  }
+}
+
+final class _ManagedVaultStorageQuotaRecoveryRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  var _pushCount = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    _pushCount += 1;
+    if (_pushCount == 1) {
+      throw Exception(
+        'managed-vault v2 push failed: HTTP 403 {"error":"storage_quota_exceeded","used_bytes":100,"limit_bytes":100}',
+      );
+    }
+    return 1;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    return 0;
+  }
+}
+
+final class _ManagedVaultPullRecoveryBlockedRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push');
+    return 0;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull');
+    throw StateError(
+      'managed-vault v2 recovery blocked: local_media_backfill_pending',
+    );
+  }
+}
+
+final class _ManagedVaultPostPushPullOrderingRunner
+    implements SyncRunner, SyncPullResultRunner {
+  final List<String> calls = <String>[];
+  final Completer<void> firstPushStarted = Completer<void>();
+  final Completer<void> pullStarted = Completer<void>();
+  Completer<int>? _firstPushCompleter;
+  Completer<SyncPullResult>? _pullCompleter;
+
+  void completeFirstPush({required int pushed}) {
+    final completer = _firstPushCompleter;
+    if (completer == null || completer.isCompleted) return;
+    completer.complete(pushed);
+  }
+
+  void completePull({required int applied}) {
+    final completer = _pullCompleter;
+    if (completer == null || completer.isCompleted) return;
+    completer.complete(SyncPullResult(applied: applied));
+  }
+
+  @override
+  Future<int> push(SyncConfig config) {
+    calls.add('push');
+    if (_firstPushCompleter == null) {
+      _firstPushCompleter = Completer<int>();
+      if (!firstPushStarted.isCompleted) {
+        firstPushStarted.complete();
+      }
+      return _firstPushCompleter!.future;
+    }
+    return Future<int>.value(1);
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    final result = await pullWithResult(config);
+    return result.applied;
+  }
+
+  @override
+  Future<SyncPullResult> pullWithResult(SyncConfig config) {
+    calls.add('pull');
+    _pullCompleter ??= Completer<SyncPullResult>();
+    if (!pullStarted.isCompleted) {
+      pullStarted.complete();
+    }
+    return _pullCompleter!.future;
   }
 }

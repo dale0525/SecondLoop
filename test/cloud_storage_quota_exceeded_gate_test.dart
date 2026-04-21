@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('storage_quota_exceeded blocks pushes and clears after pull', () {
+  test(
+      'storage_quota_exceeded blocks pushes until a successful manual pull reopens it',
+      () {
     fakeAsync((async) {
       final runner = _QuotaExceededRunner();
       final engine = SyncEngine(

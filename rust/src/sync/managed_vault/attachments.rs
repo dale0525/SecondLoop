@@ -8,6 +8,12 @@ use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
 use super::runtime::Client;
 
+fn is_not_found_io_error(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<std::io::Error>()
+        .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
+}
+
 fn resolve_attachment_group_metadata(
     conn: &Connection,
     attachment_sha256: &str,
@@ -50,6 +56,22 @@ pub(super) struct AttachmentUploadContext<'a> {
     pub(super) vault_id: &'a str,
     pub(super) id_token: &'a str,
     pub(super) app_dir: &'a Path,
+}
+
+pub(super) fn prepare_local_attachment_uploads(ctx: &AttachmentUploadContext<'_>) -> Result<()> {
+    match crate::db::ensure_all_video_manifest_derivations(ctx.conn, ctx.db_key, ctx.app_dir) {
+        Ok(_) => Ok(()),
+        Err(error) if is_not_found_io_error(&error) => {
+            let scope_id = super::runtime::scope_id(ctx.base_url, ctx.vault_id);
+            super::super::blob_repair::record_blob_repair_error(
+                ctx.conn,
+                &scope_id,
+                &error.to_string(),
+            )?;
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
 }
 
 pub(super) fn delete_remote_attachment_bytes(
@@ -104,7 +126,7 @@ pub fn upload_attachment_bytes(
         app_dir: app_dir.as_path(),
     };
 
-    let _ = crate::db::ensure_all_video_manifest_derivations(conn, db_key, app_dir.as_path())?;
+    prepare_local_attachment_uploads(&upload_ctx)?;
 
     upload_attachment_bytes_if_present(&upload_ctx, sha256, &mime_type, created_at_ms)
 }
@@ -177,7 +199,7 @@ pub fn download_attachment_bytes(
 }
 
 pub(super) fn upload_all_local_attachment_bytes(ctx: &AttachmentUploadContext<'_>) -> Result<u64> {
-    let _ = crate::db::ensure_all_video_manifest_derivations(ctx.conn, ctx.db_key, ctx.app_dir)?;
+    prepare_local_attachment_uploads(ctx)?;
 
     let mut stmt = ctx.conn.prepare(
         r#"SELECT sha256, mime_type, created_at FROM attachments ORDER BY created_at ASC, sha256 ASC"#,
@@ -219,10 +241,7 @@ pub(super) fn upload_attachment_bytes_if_present(
     let plaintext =
         match crate::db::read_attachment_bytes(ctx.conn, ctx.db_key, ctx.app_dir, sha256) {
             Ok(bytes) => bytes,
-            Err(e)
-                if e.downcast_ref::<std::io::Error>()
-                    .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound) =>
-            {
+            Err(e) if is_not_found_io_error(&e) => {
                 let scope_id = super::runtime::scope_id(ctx.base_url, ctx.vault_id);
                 super::super::blob_repair::enqueue_blob_repair(
                     ctx.conn,

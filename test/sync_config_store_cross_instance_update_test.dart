@@ -49,6 +49,98 @@ void main() {
     expect(await staleReader.readSyncBackoffV1Enabled(), isFalse);
   });
 
+  test(
+      'SyncConfigStore clears scoped repair blocks written by another instance',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final syncKey = Uint8List.fromList(List<int>.filled(32, 1));
+    final scopeId = SyncConfigStore().syncStateScopeId(
+      SyncConfig.managedVault(
+        syncKey: syncKey,
+        vaultId: 'vault-1',
+        baseUrl: 'https://vault.example.com',
+      ),
+    );
+
+    final staleClearer = SyncConfigStore();
+    await staleClearer.readAll();
+
+    final writer = SyncConfigStore();
+    await writer.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
+
+    expect(
+      await SyncConfigStore().readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isTrue,
+    );
+
+    await staleClearer.writeBackgroundSyncRepairRequired(
+      false,
+      backendType: SyncBackendType.managedVault,
+      scopeId: scopeId,
+    );
+
+    expect(
+      await SyncConfigStore().readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: scopeId,
+      ),
+      isFalse,
+    );
+  });
+
+  test('SyncConfigStore notifies listeners when sync key changes', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final listenerStore = SyncConfigStore();
+    var notifications = 0;
+    void onChange() => notifications += 1;
+
+    listenerStore.changes.addListener(onChange);
+    addTearDown(() => listenerStore.changes.removeListener(onChange));
+
+    final writer = SyncConfigStore();
+    await writer.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+
+    expect(notifications, 1);
+    expect(
+      await listenerStore.readSyncKey(),
+      Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+  });
+
+  test(
+      'SyncConfigStore notifies listeners when clearing persisted config from an unloaded instance',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final writer = SyncConfigStore();
+    await writer.writeBackendType(SyncBackendType.webdav);
+    await writer.writeAutoEnabled(true);
+    await writer.writeRemoteRoot('SecondLoop');
+    await writer.writeWebdavBaseUrl('https://example.com/dav');
+    await writer.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 3)));
+
+    final clearer = SyncConfigStore();
+    var notifications = 0;
+    void onChange() => notifications += 1;
+
+    clearer.changes.addListener(onChange);
+    addTearDown(() => clearer.changes.removeListener(onChange));
+
+    await clearer.clearAll();
+
+    expect(notifications, 1);
+    expect(await SyncConfigStore().loadConfiguredSyncIfAutoEnabled(), isNull);
+  });
+
   test('SyncConfigStore isolates scoped data between users', () async {
     SharedPreferences.setMockInitialValues({});
 

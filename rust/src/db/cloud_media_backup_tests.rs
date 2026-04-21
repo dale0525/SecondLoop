@@ -13,9 +13,16 @@ fn list_due_cloud_media_backups_includes_byte_len() {
         insert_attachment(&conn, &key, dir.path(), &bytes, "image/png").expect("insert attachment");
 
     let now_ms = 1_000i64;
-    enqueue_cloud_media_backup(&conn, &attachment.sha256, "original", now_ms).expect("enqueue");
+    enqueue_cloud_media_backup(
+        &conn,
+        &attachment.sha256,
+        "original",
+        now_ms,
+        Some("scope-a"),
+    )
+    .expect("enqueue");
 
-    let due = list_due_cloud_media_backups(&conn, now_ms, 10).expect("list due");
+    let due = list_due_cloud_media_backups(&conn, now_ms, 10, Some("scope-a")).expect("list due");
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].attachment_sha256, attachment.sha256);
     assert_eq!(due[0].byte_len, bytes.len() as i64);
@@ -44,10 +51,11 @@ fn backfill_cloud_media_backup_skips_attachments_without_local_bytes() {
     )
     .expect("insert remote-only attachment metadata");
 
-    let affected = backfill_cloud_media_backup_images(&conn, "original", 1_234).expect("backfill");
+    let affected = backfill_cloud_media_backup_images(&conn, "original", 1_234, Some("scope-a"))
+        .expect("backfill");
     assert_eq!(affected, 1, "only local attachments should be enqueued");
 
-    let due = list_due_cloud_media_backups(&conn, 1_234, 10).expect("list due");
+    let due = list_due_cloud_media_backups(&conn, 1_234, 10, Some("scope-a")).expect("list due");
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].attachment_sha256, local.sha256);
 }
@@ -71,7 +79,7 @@ fn cloud_media_backup_prunes_rows_without_local_bytes() {
     )
     .expect("insert remote-only attachment metadata");
 
-    enqueue_cloud_media_backup(&conn, "remote-only-sha", "original", 1_000)
+    enqueue_cloud_media_backup(&conn, "remote-only-sha", "original", 1_000, Some("scope-a"))
         .expect("enqueue backup");
     mark_cloud_media_backup_failed(
         &conn,
@@ -80,13 +88,14 @@ fn cloud_media_backup_prunes_rows_without_local_bytes() {
         1_000,
         "missing_local_attachment_bytes:remote-only-sha",
         1_000,
+        Some("scope-a"),
     )
     .expect("mark failed");
 
-    let due = list_due_cloud_media_backups(&conn, 1_000, 10).expect("list due");
+    let due = list_due_cloud_media_backups(&conn, 1_000, 10, Some("scope-a")).expect("list due");
     assert!(due.is_empty(), "missing local files should not stay due");
 
-    let summary = cloud_media_backup_summary(&conn).expect("summary");
+    let summary = cloud_media_backup_summary(&conn, Some("scope-a")).expect("summary");
     assert_eq!(summary.pending, 0);
     assert_eq!(summary.failed, 0);
     assert_eq!(summary.uploaded, 0);
@@ -116,8 +125,14 @@ fn purge_message_attachments_cleans_enrichment_and_backup_jobs() {
     enqueue_attachment_annotation(&conn, &attachment.sha256, "und", now_ms)
         .expect("enqueue annotation");
     enqueue_attachment_place(&conn, &attachment.sha256, "und", now_ms).expect("enqueue place");
-    enqueue_cloud_media_backup(&conn, &attachment.sha256, "original", now_ms)
-        .expect("enqueue backup");
+    enqueue_cloud_media_backup(
+        &conn,
+        &attachment.sha256,
+        "original",
+        now_ms,
+        Some("scope-a"),
+    )
+    .expect("enqueue backup");
 
     let deleted = purge_message_attachments(&conn, &key, &app_dir, &message.id).expect("purge");
     assert_eq!(deleted, 1);
@@ -143,6 +158,94 @@ fn purge_message_attachments_cleans_enrichment_and_backup_jobs() {
             .expect("count rows");
         assert_eq!(count, 0, "expected {table} rows to be removed");
     }
+}
+
+#[test]
+fn cloud_media_backup_scope_filters_due_rows_and_summary() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+    let key = [8u8; 32];
+
+    let attachment_a =
+        insert_attachment(&conn, &key, &app_dir, b"a", "image/png").expect("insert attachment a");
+    let attachment_b =
+        insert_attachment(&conn, &key, &app_dir, b"b", "image/png").expect("insert attachment b");
+
+    enqueue_cloud_media_backup(
+        &conn,
+        &attachment_a.sha256,
+        "original",
+        1_000,
+        Some("scope-a"),
+    )
+    .expect("enqueue scope a");
+    enqueue_cloud_media_backup(
+        &conn,
+        &attachment_b.sha256,
+        "original",
+        1_000,
+        Some("scope-b"),
+    )
+    .expect("enqueue scope b");
+
+    let due_a = list_due_cloud_media_backups(&conn, 1_000, 10, Some("scope-a")).expect("due a");
+    let due_b = list_due_cloud_media_backups(&conn, 1_000, 10, Some("scope-b")).expect("due b");
+    assert_eq!(due_a.len(), 1);
+    assert_eq!(due_a[0].attachment_sha256, attachment_a.sha256);
+    assert_eq!(due_b.len(), 1);
+    assert_eq!(due_b[0].attachment_sha256, attachment_b.sha256);
+
+    let summary_a = cloud_media_backup_summary(&conn, Some("scope-a")).expect("summary a");
+    let summary_b = cloud_media_backup_summary(&conn, Some("scope-b")).expect("summary b");
+    assert_eq!(summary_a.pending, 1);
+    assert_eq!(summary_b.pending, 1);
+}
+
+#[test]
+fn cloud_media_backup_scoped_reads_ignore_legacy_unscoped_rows() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+    let key = [6u8; 32];
+
+    let attachment =
+        insert_attachment(&conn, &key, &app_dir, b"legacy", "image/png").expect("insert");
+
+    conn.execute(
+        r#"INSERT INTO cloud_media_backup(
+               scope_id,
+               attachment_sha256,
+               desired_variant,
+               status,
+               attempts,
+               next_retry_at,
+               last_error,
+               updated_at
+           ) VALUES ('', ?1, 'original', 'pending', 0, NULL, NULL, 1234)"#,
+        params![attachment.sha256.as_str()],
+    )
+    .expect("seed legacy row");
+
+    let due = list_due_cloud_media_backups(&conn, 1_500, 10, Some("scope-a")).expect("list scoped");
+    assert!(
+        due.is_empty(),
+        "legacy unscoped rows must not leak into scoped queues"
+    );
+
+    let summary = cloud_media_backup_summary(&conn, Some("scope-a")).expect("summary");
+    assert_eq!(summary.pending, 0);
+
+    let scope_id: String = conn
+        .query_row(
+            r#"SELECT scope_id
+               FROM cloud_media_backup
+               WHERE attachment_sha256 = ?1"#,
+            params![attachment.sha256.as_str()],
+            |row| row.get(0),
+        )
+        .expect("load legacy scope");
+    assert_eq!(scope_id, "");
 }
 
 #[test]
