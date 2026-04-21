@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
+source "${repo_root}/scripts/pre_commit_common.sh"
 
 is_windows_env() {
   local uname_value
@@ -108,17 +109,6 @@ run_windows_batch_tool() {
   return "${status}"
 }
 
-run_flutter() {
-  local flutter_bin
-  flutter_bin="$(resolve_flutter_bin)"
-
-  if [[ "${flutter_bin}" == *.bat || "${flutter_bin}" == *.cmd ]]; then
-    run_windows_batch_tool flutter "${flutter_bin}" "$@"
-    return $?
-  fi
-
-  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
-}
-
+ensure_flutter_package_config
 mkdir -p .dart_tool/slang
-run_flutter pub run slang analyze --full --outdir=.dart_tool/slang
+run_flutter_tool pub run slang analyze --full --outdir=.dart_tool/slang

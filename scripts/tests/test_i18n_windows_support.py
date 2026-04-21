@@ -39,6 +39,20 @@ class I18nWindowsSupportTests(unittest.TestCase):
         self.assertIn(".fvm/flutter_sdk/bin/flutter.bat", script)
         self.assertIn("scripts/run_fvm_tool.ps1", script)
 
+    def test_analyze_script_reuses_pre_commit_common_helper(self) -> None:
+        script = I18N_ANALYZE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('source "${repo_root}/scripts/pre_commit_common.sh"', script)
+
+    def test_analyze_script_restores_package_config_before_running_slang(self) -> None:
+        script = I18N_ANALYZE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("ensure_flutter_package_config", script)
+        self.assertLess(
+            script.find("ensure_flutter_package_config"),
+            script.find("run_flutter_tool pub run slang analyze --full --outdir=.dart_tool/slang"),
+        )
+
     def test_i18n_scripts_forward_the_current_working_directory_on_windows(self) -> None:
         refresh_script = I18N_REFRESH_SCRIPT.read_text(encoding="utf-8")
         analyze_script = I18N_ANALYZE_SCRIPT.read_text(encoding="utf-8")
