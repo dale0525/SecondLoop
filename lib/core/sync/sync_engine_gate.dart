@@ -655,11 +655,13 @@ final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
               idToken: idToken,
             );
           } catch (error) {
-            await _configStore.writeBackgroundSyncRepairRequired(
-              shouldPersistManagedVaultBackgroundRepairBlock(error),
-              backendType: SyncBackendType.managedVault,
-              scopeId: scopeId,
-            );
+            if (shouldPersistManagedVaultBackgroundRepairBlock(error)) {
+              await _configStore.writeBackgroundSyncRepairRequired(
+                true,
+                backendType: SyncBackendType.managedVault,
+                scopeId: scopeId,
+              );
+            }
             rethrow;
           }
         }(),
