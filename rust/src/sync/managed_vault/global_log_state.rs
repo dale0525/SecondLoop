@@ -72,22 +72,24 @@ pub(super) fn write_last_pushed_local_seq(
 }
 
 pub(super) fn clear_v2_state(conn: &Connection, scope_id: &str) -> Result<()> {
-    conn.execute(
-        "DELETE FROM kv WHERE key IN (?1, ?2)",
-        params![generation_key(scope_id), last_applied_key(scope_id)],
-    )?;
-    conn.execute(
-        "DELETE FROM kv WHERE key LIKE ?1",
-        params![format!("managed_vault_v2.last_pushed_seq:{scope_id}:%")],
-    )?;
-    conn.execute(
-        "DELETE FROM kv WHERE key LIKE ?1",
-        params![format!(
-            "managed_vault.pending_apply:{}:%",
-            apply_scope_id(scope_id)
-        )],
-    )?;
-    Ok(())
+    super::with_immediate_transaction(conn, || {
+        conn.execute(
+            "DELETE FROM kv WHERE key IN (?1, ?2)",
+            params![generation_key(scope_id), last_applied_key(scope_id)],
+        )?;
+        conn.execute(
+            "DELETE FROM kv WHERE key LIKE ?1",
+            params![format!("managed_vault_v2.last_pushed_seq:{scope_id}:%")],
+        )?;
+        conn.execute(
+            "DELETE FROM kv WHERE key LIKE ?1",
+            params![format!(
+                "managed_vault.pending_apply:{}:%",
+                apply_scope_id(scope_id)
+            )],
+        )?;
+        Ok(())
+    })
 }
 
 fn clear_legacy_scope_state(conn: &Connection, scope_id: &str) -> Result<()> {
@@ -126,6 +128,64 @@ pub(super) fn rebuild_local_vault(conn: &Connection, scope_id: &str) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clear_v2_state_clears_v2_keys_inside_existing_transaction() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let scope_id = "scope-a";
+
+        conn.execute(
+            r#"INSERT INTO kv(key, value) VALUES (?1, ?2), (?3, ?4), (?5, ?6), (?7, ?8)"#,
+            params![
+                generation_key(scope_id),
+                "generation-a",
+                last_applied_key(scope_id),
+                "7",
+                last_pushed_key(scope_id, "device-a"),
+                "5",
+                format!(
+                    "managed_vault.pending_apply:{}:{}",
+                    apply_scope_id(scope_id),
+                    "op-a"
+                ),
+                "1",
+            ],
+        )
+        .expect("seed v2 sync state");
+
+        conn.execute_batch("BEGIN IMMEDIATE;").expect("begin");
+        clear_v2_state(&conn, scope_id).expect("clear v2 state");
+        conn.execute_batch("COMMIT;").expect("commit");
+
+        assert_eq!(
+            super::super::super::kv_get_string(&conn, &generation_key(scope_id))
+                .expect("read generation"),
+            None,
+        );
+        assert_eq!(
+            super::super::super::kv_get_string(&conn, &last_applied_key(scope_id))
+                .expect("read last applied"),
+            None,
+        );
+        assert_eq!(
+            super::super::super::kv_get_string(&conn, &last_pushed_key(scope_id, "device-a"))
+                .expect("read last pushed"),
+            None,
+        );
+        assert_eq!(
+            super::super::super::kv_get_string(
+                &conn,
+                &format!(
+                    "managed_vault.pending_apply:{}:{}",
+                    apply_scope_id(scope_id),
+                    "op-a"
+                ),
+            )
+            .expect("read pending apply"),
+            None,
+        );
+    }
 
     #[test]
     fn rebuild_local_vault_clears_legacy_sync_state_for_scope() {

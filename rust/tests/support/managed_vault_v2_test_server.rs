@@ -22,6 +22,7 @@ pub struct V2ServerState {
     pub invalid_batch_once: bool,
     pub partial_accept_count_once: Option<usize>,
     pub gap_pull_once_after_global_seq: Option<i64>,
+    pub queued_gap_pull_after_global_seq: Vec<i64>,
     pub reset_required_once_after_global_seq: Option<i64>,
     pub empty_pull_page_once_after_global_seq: Option<i64>,
     pub empty_pull_page_has_more_once: bool,
@@ -403,6 +404,35 @@ pub fn start_mock_v2_server() -> (
                         }
                         if state.gap_pull_once_after_global_seq == Some(after) {
                             state.gap_pull_once_after_global_seq = None;
+                            let gap_ops = state
+                                .ops
+                                .iter()
+                                .filter(|item| item["global_seq"].as_i64().unwrap_or(0) > after)
+                                .map(|item| {
+                                    let mut value = item.clone();
+                                    let current = value["global_seq"].as_i64().unwrap_or(0);
+                                    value["global_seq"] = serde_json::Value::from(current + 1);
+                                    value
+                                })
+                                .collect::<Vec<_>>();
+                            write_json_response(
+                                &mut stream,
+                                200,
+                                serde_json::json!({
+                                    "generation_id": state.generation_id,
+                                    "remote_latest_global_seq": state.latest_global_seq + 1,
+                                    "has_more": false,
+                                    "ops": gap_ops,
+                                }),
+                            );
+                            continue;
+                        }
+                        if state
+                            .queued_gap_pull_after_global_seq
+                            .first()
+                            .is_some_and(|queued_after| *queued_after == after)
+                        {
+                            state.queued_gap_pull_after_global_seq.remove(0);
                             let gap_ops = state
                                 .ops
                                 .iter()

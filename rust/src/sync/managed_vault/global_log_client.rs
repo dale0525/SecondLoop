@@ -728,6 +728,7 @@ pub(super) fn pull_v2(
     let mut last_applied = initial_last_applied;
     let mut reset_recovered = false;
     let mut generation_recovered = false;
+    let mut non_contiguous_recovered = false;
     let mut progress_reset_pending = false;
     loop {
         let request = GlobalLogPullRequest {
@@ -754,9 +755,6 @@ pub(super) fn pull_v2(
                 total_target = None;
                 reset_recovered = true;
                 progress_reset_pending = true;
-                if let Some(progress_fn) = progress.as_deref_mut() {
-                    progress_fn(0, total_target.unwrap_or(0));
-                }
                 continue;
             }
             GlobalLogPullRouteResult::Parsed(response) => response,
@@ -828,12 +826,18 @@ pub(super) fn pull_v2(
         }
 
         if !pull_page_is_contiguous(&response.ops, last_applied) {
+            if non_contiguous_recovered {
+                return Err(anyhow!(
+                    "managed-vault v2 pull non-contiguous page persisted after local rebuild: after_global_seq={last_applied}"
+                ));
+            }
             if local_generation.is_some() || last_applied > 0 {
                 rebuild_local_vault_if_safe(conn, db_key, &scope_id)?;
                 total_applied = 0;
                 last_applied = 0;
                 progress_baseline = 0;
                 total_target = None;
+                non_contiguous_recovered = true;
                 progress_reset_pending = true;
                 continue;
             }

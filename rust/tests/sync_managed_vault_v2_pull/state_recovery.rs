@@ -349,6 +349,70 @@ fn managed_vault_v2_pull_rebuilds_after_non_contiguous_page() {
 }
 
 #[test]
+fn managed_vault_v2_pull_fails_when_non_contiguous_page_repeats_after_rebuild() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn_b
+        .execute(
+            "INSERT INTO kv(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            rusqlite::params![
+                format!("managed_vault_v2.generation_id:{scope_id}"),
+                "generation-a"
+            ],
+        )
+        .expect("seed generation");
+
+    {
+        let mut server = state.lock().expect("lock");
+        server.pull_page_size = Some(1);
+        server.queued_gap_pull_after_global_seq = vec![0, 1];
+    }
+
+    let error =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect_err("repeated non-contiguous recovery should fail");
+    assert!(
+        error
+            .to_string()
+            .contains("non-contiguous page persisted after local rebuild"),
+        "unexpected error: {error:#}"
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_v2_pull_generation_switch_resets_applied_count() {
     let (base_url, stop_tx, state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();
@@ -606,6 +670,10 @@ fn managed_vault_v2_pull_with_progress_resets_baseline_after_reset_required_resp
     assert!(
         seen_progress.contains(&(0, expected_last_applied as u64)),
         "expected progress to reset after rebuild, got {seen_progress:?}"
+    );
+    assert!(
+        !seen_progress.contains(&(0, 0)),
+        "reset_required should not report an empty total before the refreshed target is known: {seen_progress:?}"
     );
     assert_eq!(
         seen_progress.last().copied(),
