@@ -196,9 +196,12 @@ final class _CloudSyncSwitchPromptGateState
     required String baseUrl,
     required String vaultId,
     required Uint8List syncKey,
-  }) {
-    return _store.writeBackgroundSyncRepairRequired(
-      shouldPersistManagedVaultBackgroundRepairBlock(error),
+  }) async {
+    if (!shouldPersistManagedVaultBackgroundRepairBlock(error)) {
+      return;
+    }
+    await _store.writeBackgroundSyncRepairRequired(
+      true,
       backendType: SyncBackendType.managedVault,
       scopeId: _store.syncStateScopeIdForFields(
         backendType: SyncBackendType.managedVault,

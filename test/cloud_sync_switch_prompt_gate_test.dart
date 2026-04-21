@@ -876,6 +876,76 @@ void main() {
   });
 
   testWidgets(
+      'Switching to Cloud transient push failures do not clear an existing repair block',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    final managedVaultSyncKey = Uint8List.fromList(List<int>.filled(32, 9));
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    final blockedScopeId = store.syncStateScopeIdForFields(
+      backendType: SyncBackendType.managedVault,
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      syncKey: managedVaultSyncKey,
+    );
+    await store.writeBackgroundSyncRepairRequired(
+      true,
+      backendType: SyncBackendType.managedVault,
+      scopeId: blockedScopeId,
+    );
+
+    final backend = _TransientManagedVaultPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: CloudAuthScope(
+                controller: cloudAuth,
+                child: SubscriptionScope(
+                  controller: subscription,
+                  child: CloudSyncSwitchPromptGate(
+                    configStore: store,
+                    child: const Scaffold(body: Text('home')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['syncManagedVaultPush']);
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(
+      await store.readBackgroundSyncRepairRequired(
+        backendType: SyncBackendType.managedVault,
+        scopeId: blockedScopeId,
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets(
       'Switching to Cloud retries push after pull recovers generation mismatch',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -1536,6 +1606,24 @@ final class _LocalMediaBackfillRecoveryBlockedPushBackend extends _Backend {
     calls.add('syncManagedVaultPush');
     throw StateError(
       'managed-vault v2 recovery blocked: local_media_backfill_pending',
+    );
+  }
+}
+
+final class _TransientManagedVaultPushBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw Exception(
+      'managed-vault v2 push failed: HTTP 503 {"error":"temporary"}',
     );
   }
 }
