@@ -470,6 +470,79 @@ fn managed_vault_v2_post_commit_missing_attachment_is_queued_for_repair_and_reco
 }
 
 #[test]
+fn managed_vault_v2_deleted_attachment_repair_does_not_jam_future_pushes() {
+    let (base_url, stop_tx, state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("create convo");
+    let message =
+        db::insert_message(&conn, &key, &conversation.id, "user", "hello").expect("insert msg");
+    let attachment = db::insert_attachment(&conn, &key, &app_dir, b"upload failure", "image/png")
+        .expect("insert attachment");
+    db::link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256).expect("link");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let scope_id = managed_vault_v2_scope_id(&base_url, &vault_id);
+    conn.execute(
+        "INSERT INTO kv(key, value) VALUES (?1, '1'), (?2, '1')
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![
+            format!("managed_vault.attachments.bytes_backfilled:{scope_id}"),
+            format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}"),
+        ],
+    )
+    .expect("seed backfill flags");
+
+    sync::blob_repair::enqueue_blob_repair(
+        &conn,
+        &scope_id,
+        sync::blob_repair::BlobRepairKind::UploadAttachment {
+            sha256: attachment.sha256.clone(),
+        },
+    )
+    .expect("seed upload repair");
+
+    let diagnostics = sync::blob_repair::load_blob_repair_diagnostics(&conn, &scope_id)
+        .expect("load diagnostics after queued repair");
+    assert_eq!(diagnostics.queued_count, 1);
+
+    let deleted = db::purge_message_attachments(&conn, &key, &app_dir, &message.id)
+        .expect("purge attachment before repair retry");
+    assert_eq!(deleted, 1);
+
+    let second_push =
+        sync::managed_vault::push(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("deleted attachment repair should be treated as done");
+    assert!(second_push > 0);
+
+    let diagnostics_after_retry = sync::blob_repair::load_blob_repair_diagnostics(&conn, &scope_id)
+        .expect("load diagnostics after deleted attachment retry");
+    assert_eq!(diagnostics_after_retry.queued_count, 0);
+    assert_eq!(diagnostics_after_retry.last_error, None);
+
+    let requests = state.lock().expect("lock").requests.join("\n\n");
+    assert!(requests.contains("/v2/vaults/v1/sync/push"));
+    assert!(
+        !requests.contains("PUT /v1/vaults/v1/attachments/"),
+        "deleted attachment repair should not attempt a remote upload: {requests}"
+    );
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_v2_post_commit_attachment_upload_failure_queues_repair_without_failing_push() {
     let (base_url, stop_tx, state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();

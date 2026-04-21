@@ -24,6 +24,7 @@ pub struct V2ServerState {
     pub gap_pull_once_after_global_seq: Option<i64>,
     pub queued_gap_pull_after_global_seq: Vec<i64>,
     pub reset_required_once_after_global_seq: Option<i64>,
+    pub queued_reset_required_after_global_seq: Vec<i64>,
     pub empty_pull_page_once_after_global_seq: Option<i64>,
     pub empty_pull_page_has_more_once: bool,
     pub empty_pull_page_remote_latest_global_seq_once: Option<i64>,
@@ -370,6 +371,24 @@ pub fn start_mock_v2_server() -> (
                         let mut state = state_clone.lock().expect("lock");
                         if state.reset_required_once_after_global_seq == Some(after) {
                             state.reset_required_once_after_global_seq = None;
+                            write_json_response(
+                                &mut stream,
+                                409,
+                                serde_json::json!({
+                                    "error": "reset_required",
+                                    "reason": "global_log_gap",
+                                    "remote_generation_id": state.generation_id,
+                                    "remote_latest_global_seq": state.latest_global_seq,
+                                }),
+                            );
+                            continue;
+                        }
+                        if state
+                            .queued_reset_required_after_global_seq
+                            .first()
+                            .is_some_and(|queued_after| *queued_after == after)
+                        {
+                            state.queued_reset_required_after_global_seq.remove(0);
                             write_json_response(
                                 &mut stream,
                                 409,

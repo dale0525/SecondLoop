@@ -1,4 +1,5 @@
 use anyhow::Result;
+use rusqlite::OptionalExtension;
 
 use super::attachments::AttachmentUploadContext;
 
@@ -52,11 +53,18 @@ fn process_pending_blob_repairs_with_filter(
                     }
                 }
                 crate::sync::blob_repair::BlobRepairKind::UploadAttachment { sha256 } => {
-                    let (mime_type, created_at_ms): (String, i64) = ctx.conn.query_row(
-                        r#"SELECT mime_type, created_at FROM attachments WHERE sha256 = ?1"#,
-                        rusqlite::params![sha256],
-                        |row| Ok((row.get(0)?, row.get(1)?)),
-                    )?;
+                    let maybe_attachment: Option<(String, i64)> = ctx
+                        .conn
+                        .query_row(
+                            r#"SELECT mime_type, created_at FROM attachments WHERE sha256 = ?1"#,
+                            rusqlite::params![sha256],
+                            |row| Ok((row.get(0)?, row.get(1)?)),
+                        )
+                        .optional()?;
+                    let Some((mime_type, created_at_ms)) = maybe_attachment else {
+                        crate::sync::blob_repair::clear_blob_repair_error(ctx.conn, &scope_id)?;
+                        return Ok(crate::sync::blob_repair::RepairAttemptOutcome::Done);
+                    };
                     match super::attachments::upload_attachment_bytes_if_present(
                         ctx,
                         sha256,

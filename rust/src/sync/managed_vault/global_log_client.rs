@@ -853,7 +853,6 @@ pub(super) fn pull_v2(
             .map(|item| item.global_seq)
             .unwrap_or(last_applied);
         super::global_log_state::write_last_applied_global_seq(conn, &scope_id, last_applied)?;
-        reset_recovered = false;
 
         if let Some(progress_fn) = progress.as_deref_mut() {
             let done = (last_applied - progress_baseline).max(0) as u64;
