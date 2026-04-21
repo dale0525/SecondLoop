@@ -350,6 +350,15 @@ fn maybe_collect_local_push_ops(
     })
 }
 
+fn has_remote_device_ops(conn: &Connection, device_id: &str) -> Result<bool> {
+    conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM oplog WHERE device_id != ?1 LIMIT 1)"#,
+        params![device_id],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
 fn apply_v2_pull_ops(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -609,6 +618,23 @@ pub(super) fn push_v2(
                     id_token,
                     app_dir: app_dir.as_ref().expect("managed-vault app_dir").as_path(),
                 };
+                let is_fresh_device_without_local_ops =
+                    last_pushed_seq == 0 && has_remote_device_ops(conn, &device_id)?;
+                if is_fresh_device_without_local_ops {
+                    let can_skip_fresh_device_push = super::probe::can_skip_fresh_device_full_push(
+                        conn, &http, base_url, vault_id, id_token, &device_id,
+                    )
+                    .unwrap_or(false);
+                    if let Some(progress_fn) = progress.as_deref_mut() {
+                        progress_fn(0, 0);
+                    }
+                    if !can_skip_fresh_device_push {
+                        let _ = super::attachments::upload_all_local_attachment_bytes(&upload_ctx)?;
+                        let _ = super::artifacts::upload_all_local_embedding_artifact_blobs(
+                            &upload_ctx,
+                        )?;
+                    }
+                }
                 let _ = super::blob_repair::process_pending_blob_repairs(&upload_ctx, 8)?;
             }
             if total_pushed > 0 {
