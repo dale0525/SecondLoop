@@ -150,7 +150,7 @@ while [[ ${remaining_jobs} -gt 0 ]]; do
     continue
   fi
 
-  sleep 1
+  sleep 0.1
 done
 
 if [[ ${overall_status} -ne 0 ]]; then

@@ -543,10 +543,13 @@ final class SyncConfigStore {
   static String _syncKeyFingerprint(Uint8List? syncKey) {
     if (syncKey == null || syncKey.isEmpty) return '';
 
-    var hash = 0xcbf29ce484222325;
+    final offsetBasis = BigInt.parse('cbf29ce484222325', radix: 16);
+    final prime = BigInt.parse('100000001b3', radix: 16);
+    final mask = BigInt.parse('ffffffffffffffff', radix: 16);
+    var hash = offsetBasis;
     for (final byte in syncKey) {
-      hash ^= byte;
-      hash = (hash * 0x100000001b3) & 0xffffffffffffffff;
+      hash ^= BigInt.from(byte);
+      hash = (hash * prime) & mask;
     }
     return hash.toRadixString(16).padLeft(16, '0');
   }
@@ -611,13 +614,15 @@ final class SyncConfigStore {
     final legacyKey = _backgroundSyncLegacyKey(prefix, backendType);
     final scopedPrefix = '$legacyKey:';
     T? best;
-    var bestSortValue = -0x7fffffffffffffff;
+    int? bestSortValue;
 
     void consider(String key) {
       final decoded = decode(all[key]);
       if (decoded == null) return;
       final candidateSortValue = sortValue(decoded);
-      if (best == null || candidateSortValue > bestSortValue) {
+      if (best == null ||
+          bestSortValue == null ||
+          candidateSortValue > bestSortValue!) {
         best = decoded;
         bestSortValue = candidateSortValue;
       }
