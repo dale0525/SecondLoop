@@ -88,6 +88,14 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
     return resetSignals.any(text.contains);
   }
 
+  bool _shouldAllowPassThroughForBootstrapError(Object error) {
+    final text = error.toString().trim().toLowerCase();
+    if (text.isEmpty) return false;
+    return text.contains(
+      'managed-vault sync xhr must run in a dedicated web worker',
+    );
+  }
+
   @override
   void dispose() {
     _blockingTimeoutTimer?.cancel();
@@ -132,6 +140,13 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
     } catch (error) {
       if (!mounted) return;
       _blockingTimeoutTimer?.cancel();
+      if (_shouldAllowPassThroughForBootstrapError(error)) {
+        setState(() {
+          _bootstrapCompleted = true;
+          _allowPassThrough = true;
+        });
+        return;
+      }
       setState(() {
         _bootstrapCompleted = true;
         _bootstrapError = error;
