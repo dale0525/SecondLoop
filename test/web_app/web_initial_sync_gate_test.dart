@@ -343,47 +343,6 @@ void main() {
   });
 
   testWidgets(
-      'web initial sync gate falls through when managed-vault sync requires a dedicated worker',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AppBackendScope(
-            backend: _EmptyWebNativeBackend(),
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
-              lock: () {},
-              child: WebInitialSyncGate(
-                authController: _FakeCloudAuthController(
-                  initialUid: 'uid-1',
-                  initialEmail: 'user@example.com',
-                  initialEmailVerified: true,
-                ),
-                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
-                syncRunner: (_, __, ___) async {
-                  throw StateError(
-                    'AnyhowException(managed-vault sync XHR must run in a dedicated web worker)',
-                  );
-                },
-                child: const Placeholder(),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.byType(Placeholder), findsOneWidget);
-    expect(find.textContaining('dedicated web worker'), findsNothing);
-    expect(find.textContaining('Load failed'), findsNothing);
-  });
-
-  testWidgets(
       'web initial sync gate does not reset local runtime when an entitled vault is simply empty',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

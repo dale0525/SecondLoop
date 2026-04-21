@@ -95,7 +95,6 @@ async fn api_sync_managed_vault_pull_can_run_inside_async_context() {
         "v1".to_string(),
         "token".to_string(),
     )
-    .await
     .expect("pull succeeds inside async context");
 
     assert_eq!(pulled, 0);

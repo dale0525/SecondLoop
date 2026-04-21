@@ -3902,7 +3902,7 @@ pub fn sync_managed_vault_push_ops_only(
 }
 
 #[flutter_rust_bridge::frb]
-pub async fn sync_managed_vault_pull(
+pub fn sync_managed_vault_pull(
     app_dir: String,
     key: Vec<u8>,
     sync_key: Vec<u8>,
@@ -3914,33 +3914,41 @@ pub async fn sync_managed_vault_pull(
     let sync_key = sync_key_from_bytes(sync_key)?;
     #[cfg(not(target_family = "wasm"))]
     {
-        return tokio::task::spawn_blocking(move || {
-            let conn = db::open(Path::new(&app_dir))?;
-            sync::managed_vault::pull(
-                &conn,
-                &key,
-                &sync_key,
-                &base_url,
-                &vault_id,
-                &firebase_id_token,
-            )
-        })
-        .await
-        .map_err(|error| anyhow!("sync_managed_vault_pull task failed: {error}"))?;
+        if let Ok(runtime_handle) = tokio::runtime::Handle::try_current() {
+            let app_dir_for_runtime = app_dir.clone();
+            let key_for_runtime = key;
+            let sync_key_for_runtime = sync_key;
+            let base_url_for_runtime = base_url.clone();
+            let vault_id_for_runtime = vault_id.clone();
+            let firebase_id_token_for_runtime = firebase_id_token.clone();
+            return tokio::task::block_in_place(|| {
+                runtime_handle.block_on(async move {
+                    tokio::task::spawn_blocking(move || {
+                        let conn = db::open(Path::new(&app_dir_for_runtime))?;
+                        sync::managed_vault::pull(
+                            &conn,
+                            &key_for_runtime,
+                            &sync_key_for_runtime,
+                            &base_url_for_runtime,
+                            &vault_id_for_runtime,
+                            &firebase_id_token_for_runtime,
+                        )
+                    })
+                    .await
+                    .map_err(|error| anyhow!("sync_managed_vault_pull task failed: {error}"))?
+                })
+            });
+        }
     }
-
-    #[cfg(target_family = "wasm")]
-    {
-        let conn = db::open(Path::new(&app_dir))?;
-        sync::managed_vault::pull(
-            &conn,
-            &key,
-            &sync_key,
-            &base_url,
-            &vault_id,
-            &firebase_id_token,
-        )
-    }
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::pull(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &firebase_id_token,
+    )
 }
 
 #[flutter_rust_bridge::frb]
