@@ -7,6 +7,9 @@ import 'package:flutter/widgets.dart';
 import 'ai_routing.dart';
 import 'embeddings_source_prefs.dart';
 import 'semantic_parse_edit_policy.dart';
+import 'local_semantic_parse_result.dart';
+import 'local_semantic_parser.dart';
+import 'todo_followup_task_classifier.dart';
 import 'todo_checklist_suggestions_ai.dart';
 import '../../features/actions/review/review_backoff.dart';
 import '../../features/actions/settings/actions_settings_store.dart';
@@ -18,14 +21,14 @@ import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart' as rust_semantic;
 import '../backend/app_backend.dart';
 import '../backend/attachments_backend.dart';
-import '../backend/knowledge_index_models.dart';
-import '../backend/knowledge_viewer_backend.dart';
 import '../backend/native_backend.dart';
 import '../backend/semantic_parse_attempt_aware_backend.dart';
+import '../backend/semantic_parse_enhancement_backend.dart';
 import 'semantic_parse.dart';
 
 part 'semantic_parse_auto_actions_runner_store.dart';
 part 'semantic_parse_auto_actions_runner_client.dart';
+part 'semantic_parse_auto_actions_runner_parse_policy.dart';
 
 final class SemanticParseAutoActionJob {
   const SemanticParseAutoActionJob({
@@ -195,7 +198,8 @@ abstract class SemanticParseAutoActionsStore {
     required int expectedAttemptId,
     required String todoId,
     String? todoTitle,
-    required String newStatus,
+    String? newStatus,
+    int? dueAtMs,
     List<String>? pendingSuggestedTags,
     List<String>? autoApplySuggestedTags,
     double? suggestedTagConfidence,
@@ -242,12 +246,30 @@ abstract class SemanticParseAutoActionsClient {
     required int topK,
   });
 
+  Future<List<TodoThreadMatch>> retrieveTodoCandidateMatches({
+    required String query,
+    required int topK,
+  }) async {
+    final ids = await retrieveTodoCandidateIds(query: query, topK: topK);
+    final out = <TodoThreadMatch>[];
+    final seen = <String>{};
+    for (final rawId in ids) {
+      final todoId = rawId.trim();
+      if (todoId.isEmpty || !seen.add(todoId)) continue;
+      out.add(TodoThreadMatch(todoId: todoId, distance: 1.0));
+      if (out.length >= topK) break;
+    }
+    return out;
+  }
+
   Future<String> parseMessageActionJson({
     required String text,
     required String nowLocalIso,
     required String localeTag,
     required int dayEndMinutes,
     required List<SemanticParseTodoCandidate> candidates,
+    required String localResultJson,
+    required List<String> unresolvedFields,
     required Duration timeout,
   });
 
@@ -383,66 +405,101 @@ final class SemanticParseAutoActionsRunner {
         }
         didUpdateJobs = true;
 
-        List<String> preferredTodoIds = const <String>[];
-        try {
-          preferredTodoIds = await client
-              .retrieveTodoCandidateIds(
-                query: analysisText,
-                topK: 8,
-              )
-              .timeout(settings.hardTimeout);
-        } catch (_) {
-          preferredTodoIds = const <String>[];
-        }
-
-        final candidates = await store.listOpenTodoCandidates(
+        var candidates = await store.listOpenTodoCandidates(
           query: analysisText,
           nowLocal: nowLocal,
           limit: 8,
-          preferredTodoIds: preferredTodoIds,
         );
 
         final locale = _localeFromTag(localeTag);
         final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
+        var localParsedResult = _parseLocally(
+          text: analysisText,
+          nowLocal: nowLocal,
+          locale: locale,
+          candidates: candidates,
+          dayEndMinutes: dayEndMinutes,
+          morningMinutes: resolvedMorningMinutes,
+          firstDayOfWeekIndex: firstDayOfWeekIndex,
+        );
 
-        AiSemanticDecision? parsed;
+        var preferredMatches = const <TodoThreadMatch>[];
+        var preferredTodoIds = const <String>[];
+        if (_shouldRetrieveSemanticCandidates(localParsedResult)) {
+          try {
+            preferredMatches = await client
+                .retrieveTodoCandidateMatches(
+                  query: analysisText,
+                  topK: 8,
+                )
+                .timeout(settings.hardTimeout);
+            preferredTodoIds =
+                _preferredTodoIdsFromSemanticMatches(preferredMatches);
+          } catch (_) {
+            preferredMatches = const <TodoThreadMatch>[];
+            preferredTodoIds = const <String>[];
+          }
+
+          if (preferredTodoIds.isNotEmpty) {
+            candidates = await store.listOpenTodoCandidates(
+              query: analysisText,
+              nowLocal: nowLocal,
+              limit: 8,
+              preferredTodoIds: preferredTodoIds,
+            );
+            localParsedResult = _parseLocally(
+              text: analysisText,
+              nowLocal: nowLocal,
+              locale: locale,
+              candidates: candidates,
+              dayEndMinutes: dayEndMinutes,
+              morningMinutes: resolvedMorningMinutes,
+              firstDayOfWeekIndex: firstDayOfWeekIndex,
+              semanticMatches: preferredMatches,
+            );
+          }
+        }
+        final unresolvedFields = _unresolvedFields(localParsedResult);
+        var parsed = AiSemanticParse.fromLocalResult(localParsedResult);
         try {
-          final json = await client
-              .parseMessageActionJson(
-                text: analysisText,
-                nowLocalIso: nowLocal.toIso8601String(),
-                localeTag: localeTag,
-                dayEndMinutes: dayEndMinutes,
-                candidates: candidates,
-                timeout: settings.hardTimeout,
-              )
-              .timeout(settings.hardTimeout);
+          if (_shouldRequestEnhancement(
+            localParsedResult,
+            minAutoConfidence: settings.minAutoConfidence,
+          )) {
+            final json = await client
+                .parseMessageActionJson(
+                  text: analysisText,
+                  nowLocalIso: nowLocal.toIso8601String(),
+                  localeTag: localeTag,
+                  dayEndMinutes: dayEndMinutes,
+                  candidates: candidates,
+                  localResultJson: _localResultJson(localParsedResult),
+                  unresolvedFields: unresolvedFields,
+                  timeout: settings.hardTimeout,
+                )
+                .timeout(settings.hardTimeout);
 
-          parsed = AiSemanticParse.tryParseMessageAction(
-            json,
-            nowLocal: nowLocal,
-            locale: locale,
-            dayEndMinutes: dayEndMinutes,
-            morningMinutes: resolvedMorningMinutes,
-            firstDayOfWeekIndex: firstDayOfWeekIndex,
-          );
-          if (parsed == null) {
-            throw StateError('invalid_json');
+            final remoteParsed = AiSemanticParse.tryParseMessageAction(
+              json,
+              nowLocal: nowLocal,
+              locale: locale,
+              dayEndMinutes: dayEndMinutes,
+              morningMinutes: resolvedMorningMinutes,
+              firstDayOfWeekIndex: firstDayOfWeekIndex,
+            );
+            if (remoteParsed == null) {
+              throw StateError('invalid_json');
+            }
+            parsed = _mergeEnhancedDecision(
+              localResult: localParsedResult,
+              remoteParsed: remoteParsed,
+              unresolvedFields: unresolvedFields,
+            );
           }
         } catch (error) {
           if (_shouldRetryRemoteParseError(error)) {
             rethrow;
           }
-          final localDecision = _resolveLocallyWhenRemoteFails(
-            analysisText,
-            locale: locale,
-            nowLocal: nowLocal,
-            dayEndMinutes: dayEndMinutes,
-            morningMinutes: resolvedMorningMinutes,
-            firstDayOfWeekIndex: firstDayOfWeekIndex,
-            candidates: candidates,
-          );
-          parsed = AiSemanticDecision(decision: localDecision, confidence: 1.0);
         }
 
         final refreshedMessageInput =
@@ -590,6 +647,7 @@ final class SemanticParseAutoActionsRunner {
           case MessageActionFollowUpDecision(
               :final todoId,
               :final newStatus,
+              :final dueAtLocal,
             ):
             if (!await _isStillRunningAttempt(
               messageId: job.messageId,
@@ -597,11 +655,62 @@ final class SemanticParseAutoActionsRunner {
             )) {
               continue;
             }
-            final candidateTitle = candidates
+            final candidate = candidates
                 .where((c) => c.id == todoId)
-                .map((c) => c.title)
-                .cast<String?>()
+                .cast<SemanticParseTodoCandidate?>()
                 .firstWhere((_) => true, orElse: () => null);
+            final candidateTitle = candidate?.title;
+            if (candidate == null || candidateTitle == null) {
+              final appliedTagIds =
+                  await store.completeNoActionIfCurrentAttempt(
+                messageId: job.messageId,
+                expectedAttemptId: attemptId,
+                pendingSuggestedTags: pendingSuggestedTags,
+                autoApplySuggestedTags: autoApplySuggestedTags,
+                suggestedTagConfidence: suggestedTagConfidence,
+                nowMs: nowMs,
+              );
+              if (appliedTagIds == null) {
+                continue;
+              }
+              if (appliedTagIds.isNotEmpty) {
+                didMutateAny = true;
+              }
+              continue;
+            }
+
+            final requestedDueAtMs = dueAtLocal?.toUtc().millisecondsSinceEpoch;
+            final candidateDueAtMs = candidate.dueLocalIso == null
+                ? null
+                : DateTime.tryParse(candidate.dueLocalIso!)
+                    ?.toUtc()
+                    .millisecondsSinceEpoch;
+            final requestsStatusChange = newStatus != null;
+            final requestsDueChange = requestedDueAtMs != null;
+            final statusAlreadyMatches =
+                !requestsStatusChange || newStatus == candidate.status;
+            final dueAlreadyMatches =
+                !requestsDueChange || requestedDueAtMs == candidateDueAtMs;
+            if ((requestsStatusChange || requestsDueChange) &&
+                statusAlreadyMatches &&
+                dueAlreadyMatches) {
+              final appliedTagIds =
+                  await store.completeNoActionIfCurrentAttempt(
+                messageId: job.messageId,
+                expectedAttemptId: attemptId,
+                pendingSuggestedTags: pendingSuggestedTags,
+                autoApplySuggestedTags: autoApplySuggestedTags,
+                suggestedTagConfidence: suggestedTagConfidence,
+                nowMs: nowMs,
+              );
+              if (appliedTagIds == null) {
+                continue;
+              }
+              if (appliedTagIds.isNotEmpty) {
+                didMutateAny = true;
+              }
+              continue;
+            }
 
             final didFinalize = await store.completeFollowupIfCurrentAttempt(
               messageId: job.messageId,
@@ -609,6 +718,7 @@ final class SemanticParseAutoActionsRunner {
               todoId: todoId,
               todoTitle: candidateTitle,
               newStatus: newStatus,
+              dueAtMs: requestedDueAtMs,
               pendingSuggestedTags: pendingSuggestedTags,
               autoApplySuggestedTags: autoApplySuggestedTags,
               suggestedTagConfidence: suggestedTagConfidence,
@@ -667,42 +777,35 @@ final class SemanticParseAutoActionsRunner {
   static Locale _localeFromTag(String tag) {
     final normalized = tag.trim();
     if (normalized.isEmpty) return const Locale('en');
-    final parts = normalized.split(RegExp(r'[-_]'));
-    final language = parts.isNotEmpty ? parts[0] : 'en';
-    final country = parts.length > 1 ? parts[1] : null;
-    return Locale(language, country);
-  }
-
-  static MessageActionDecision _resolveLocallyWhenRemoteFails(
-    String text, {
-    required Locale locale,
-    required DateTime nowLocal,
-    required int dayEndMinutes,
-    required int morningMinutes,
-    required int firstDayOfWeekIndex,
-    required List<SemanticParseTodoCandidate> candidates,
-  }) {
-    final targets = candidates
-        .map(
-          (c) => TodoLinkTarget(
-            id: c.id,
-            title: c.title,
-            status: c.status,
-            dueLocal: c.dueLocalIso == null
-                ? null
-                : DateTime.tryParse(c.dueLocalIso!),
-          ),
-        )
+    final parts = normalized
+        .split(RegExp(r'[-_]'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
         .toList(growable: false);
+    if (parts.isEmpty) {
+      return const Locale('en');
+    }
 
-    return MessageActionResolver.resolve(
-      text,
-      locale: locale,
-      nowLocal: nowLocal,
-      dayEndMinutes: dayEndMinutes,
-      morningMinutes: morningMinutes,
-      firstDayOfWeekIndex: firstDayOfWeekIndex,
-      openTodoTargets: targets,
+    String? scriptCode;
+    String? countryCode;
+    for (final part in parts.skip(1)) {
+      if (scriptCode == null && RegExp(r'^[A-Za-z]{4}$').hasMatch(part)) {
+        scriptCode =
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}';
+        continue;
+      }
+      if (countryCode == null &&
+          (RegExp(r'^[A-Za-z]{2}$').hasMatch(part) ||
+              RegExp(r'^\d{3}$').hasMatch(part))) {
+        countryCode = part.toUpperCase();
+        continue;
+      }
+    }
+
+    return Locale.fromSubtags(
+      languageCode: parts.first.toLowerCase(),
+      scriptCode: scriptCode,
+      countryCode: countryCode,
     );
   }
 

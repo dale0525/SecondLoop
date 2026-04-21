@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/ai/semantic_parse_auto_actions_runner.dart';
+import 'package:secondloop/features/actions/todo/todo_thread_match.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
@@ -137,7 +138,8 @@ final class _ClaimConflictStore implements SemanticParseAutoActionsStore {
     required int expectedAttemptId,
     required String todoId,
     String? todoTitle,
-    required String newStatus,
+    String? newStatus,
+    int? dueAtMs,
     List<String>? pendingSuggestedTags,
     List<String>? autoApplySuggestedTags,
     double? suggestedTagConfidence,
@@ -200,12 +202,21 @@ final class _UnusedClient implements SemanticParseAutoActionsClient {
       throw UnimplementedError();
 
   @override
+  Future<List<TodoThreadMatch>> retrieveTodoCandidateMatches({
+    required String query,
+    required int topK,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<String> parseMessageActionJson({
     required String text,
     required String nowLocalIso,
     required String localeTag,
     required int dayEndMinutes,
     required List<SemanticParseTodoCandidate> candidates,
+    required String localResultJson,
+    required List<String> unresolvedFields,
     required Duration timeout,
   }) async =>
       throw UnimplementedError();

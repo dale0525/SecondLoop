@@ -10,6 +10,11 @@ pub use brok::{brok_embeddings_url, BrokEmbedder};
 pub mod cloud_gateway;
 pub use cloud_gateway::CloudGatewayEmbedder;
 
+pub mod batch;
+
+#[cfg(test)]
+mod batch_tests;
+
 #[cfg(all(
     any(target_os = "windows", target_os = "macos", target_os = "linux"),
     not(frb_expand)

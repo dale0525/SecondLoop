@@ -8,10 +8,6 @@ abstract class _NativeAppBackendAccess
         AssistantCitationWriteBackend,
         DetachedAskCompletionRecoveryBackend {
   Future<String> _getAppDir();
-  SecureBlobStore get _secureBlobStore;
-  DbInsertMessageFn get _dbInsertMessage;
-  bool get _isMacNoKeychain;
-  String _scopedPrefsKey(String key);
 
   DbListTodosFn get _dbListTodos;
   DbGetTodoByIdFn get _dbGetTodoById;

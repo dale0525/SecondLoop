@@ -6,7 +6,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/app_bootstrap.dart';
 import '../core/ai/embeddings_index_gate.dart';
-import '../core/ai/knowledge_index_gate.dart';
 import '../core/ai/message_embeddings_index_gate.dart';
 import '../core/ai/semantic_parse_auto_actions_gate.dart';
 import '../core/ai/todo_followup_generation_gate.dart';
@@ -357,26 +356,23 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                                             child:
                                                                 TodoFollowupGenerationGate(
                                                               child:
-                                                                  KnowledgeIndexGate(
+                                                                  MessageEmbeddingsIndexGate(
                                                                 child:
-                                                                    MessageEmbeddingsIndexGate(
+                                                                    EmbeddingsIndexGate(
                                                                   child:
-                                                                      EmbeddingsIndexGate(
+                                                                      CloudSyncSwitchPromptGate(
+                                                                    navigatorKey:
+                                                                        _navigatorKey,
                                                                     child:
-                                                                        CloudSyncSwitchPromptGate(
-                                                                      navigatorKey:
-                                                                          _navigatorKey,
+                                                                        ShareIngestGate(
                                                                       child:
-                                                                          ShareIngestGate(
+                                                                          QuickCaptureOverlay(
+                                                                        navigatorKey:
+                                                                            _navigatorKey,
                                                                         child:
-                                                                            QuickCaptureOverlay(
-                                                                          navigatorKey:
-                                                                              _navigatorKey,
+                                                                            FirstLaunchWelcomeGate(
                                                                           child:
-                                                                              FirstLaunchWelcomeGate(
-                                                                            child:
-                                                                                child ?? const SizedBox.shrink(),
-                                                                          ),
+                                                                              child ?? const SizedBox.shrink(),
                                                                         ),
                                                                       ),
                                                                     ),

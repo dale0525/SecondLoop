@@ -66,6 +66,7 @@ final class CloudWebBackend extends AppBackend
   final List<Conversation> _conversations = <Conversation>[];
   final Map<String, List<Message>> _messagesByConversation =
       <String, List<Message>>{};
+  final Map<String, Event> _eventsById = <String, Event>{};
   @override
   final Map<String, Attachment> _attachmentsBySha = <String, Attachment>{};
   final Map<String, Uint8List> _attachmentBytesBySha = <String, Uint8List>{};
@@ -128,9 +129,22 @@ final class CloudWebBackend extends AppBackend
     }
   }
 
+  int _compareEventOrder(Event left, Event right) {
+    final byStart = left.startAtMs.compareTo(right.startAtMs);
+    if (byStart != 0) {
+      return byStart;
+    }
+    final byEnd = left.endAtMs.compareTo(right.endAtMs);
+    if (byEnd != 0) {
+      return byEnd;
+    }
+    return left.id.compareTo(right.id);
+  }
+
   void clearWebSessionState() {
     _conversations.clear();
     _messagesByConversation.clear();
+    _eventsById.clear();
     _attachmentsBySha.clear();
     _attachmentBytesBySha.clear();
     _attachmentShasByMessageId.clear();
@@ -255,6 +269,44 @@ final class CloudWebBackend extends AppBackend
     );
     _messageBucket(conversation.id);
     return _replaceConversation(conversation);
+  }
+
+  @override
+  Future<List<Event>> listEvents(Uint8List key) async {
+    final events = _eventsById.values.toList(growable: false)
+      ..sort(_compareEventOrder);
+    return events;
+  }
+
+  @override
+  Future<Event?> getEventById(Uint8List key, String eventId) async {
+    return _eventsById[eventId];
+  }
+
+  @override
+  Future<Event> upsertEvent(
+    Uint8List key, {
+    required String id,
+    required String title,
+    required int startAtMs,
+    required int endAtMs,
+    required String tz,
+    String? sourceEntryId,
+  }) async {
+    final now = _touchNow();
+    final existing = _eventsById[id];
+    final event = Event(
+      id: id,
+      title: title,
+      startAtMs: _asPlatformInt64(startAtMs),
+      endAtMs: _asPlatformInt64(endAtMs),
+      tz: tz,
+      sourceEntryId: sourceEntryId,
+      createdAtMs: existing?.createdAtMs ?? _asPlatformInt64(now),
+      updatedAtMs: _asPlatformInt64(now),
+    );
+    _eventsById[id] = event;
+    return event;
   }
 
   @override

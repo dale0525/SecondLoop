@@ -104,12 +104,15 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
             if (!mounted) return;
 
             final locale = Localizations.localeOf(context);
+            final firstDayOfWeekIndex =
+                MaterialLocalizations.of(context).firstDayOfWeekIndex;
             final nowLocal = DateTime.now();
             final timeResolution = LocalTimeResolver.resolve(
               trimmed,
               nowLocal,
               locale: locale,
               dayEndMinutes: settings.dayEndMinutes,
+              firstDayOfWeekIndex: firstDayOfWeekIndex,
             );
             if (timeResolution != null &&
                 timeResolution.candidates.length == 1) {

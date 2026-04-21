@@ -10,7 +10,7 @@ use tar::Archive;
 use zip::ZipArchive;
 
 use super::{Embedder, DEFAULT_EMBED_DIM, PRODUCTION_MODEL_NAME};
-use crate::knowledge::embedding_batch::{
+use crate::embedding::batch::{
     average_piece_embeddings, batch_prepared_embedding_inputs, ensure_non_empty_embedding_results,
     prepare_embedding_inputs, EmbeddingBatchPolicy,
 };

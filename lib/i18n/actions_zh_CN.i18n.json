@@ -33,7 +33,9 @@
   "todoLink": {
     "title": "要更新哪个待办？",
     "subtitle": "默认标记为：$status",
-    "updated": "已更新「$title」为：$status"
+    "updated": "已更新「$title」为：$status",
+    "updatedDue": "已更新「$title」的时间",
+    "updatedStatusAndDue": "已更新「$title」的状态和时间"
   },
   "todoNoteLink": {
     "action": "关联到待办",

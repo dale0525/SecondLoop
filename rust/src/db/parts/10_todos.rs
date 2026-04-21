@@ -1029,7 +1029,11 @@ pub fn dismiss_all_todo_checklist_suggestions(
 }
 
 #[allow(clippy::type_complexity)]
-fn get_todo_activity_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<TodoActivity> {
+pub fn get_todo_activity_by_id(
+    conn: &Connection,
+    key: &[u8; 32],
+    id: &str,
+) -> Result<TodoActivity> {
     let (
         todo_id,
         activity_type,

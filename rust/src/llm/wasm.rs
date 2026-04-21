@@ -7,6 +7,7 @@ pub struct ChatDelta {
     pub done: bool,
 }
 
+#[allow(dead_code)]
 pub mod request_limiter {
     #[derive(Default)]
     pub(crate) struct RemoteLlmRequestGuard;

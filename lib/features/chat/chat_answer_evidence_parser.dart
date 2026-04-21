@@ -15,8 +15,6 @@ ChatAnswerEvidence? parseChatAnswerEvidence(String? citationsJson) {
   if (decoded is! Map) return null;
 
   final directSources = <ChatAnswerEvidenceDirectSource>[];
-  final memoryCards = <ChatAnswerEvidenceMemoryCard>[];
-
   final directRaw = decoded['direct_sources'];
   if (directRaw is List) {
     for (final item in directRaw) {
@@ -27,21 +25,8 @@ ChatAnswerEvidence? parseChatAnswerEvidence(String? citationsJson) {
     }
   }
 
-  final memoryRaw = decoded['memory_cards'];
-  if (memoryRaw is List) {
-    for (final item in memoryRaw) {
-      final parsed = _parseMemoryCard(item);
-      if (parsed != null) {
-        memoryCards.add(parsed);
-      }
-    }
-  }
-
-  final evidence = ChatAnswerEvidence(
-    directSources: directSources,
-    memoryCards: memoryCards,
-  );
-  return evidence.hasEvidence ? evidence : null;
+  if (directSources.isEmpty) return null;
+  return ChatAnswerEvidence(directSources: directSources);
 }
 
 ChatAnswerEvidenceDirectSource? _parseDirectSource(Object? raw) {
@@ -67,28 +52,6 @@ ChatAnswerEvidenceDirectSource? _parseDirectSource(Object? raw) {
   );
 }
 
-ChatAnswerEvidenceMemoryCard? _parseMemoryCard(Object? raw) {
-  if (raw is! Map) return null;
-  final documentId = _readString(raw['document_id']);
-  if (documentId == null) return null;
-  return ChatAnswerEvidenceMemoryCard(
-    documentId: documentId,
-    title: _readString(raw['title']),
-    summary: _readString(raw['summary']),
-    body: _readString(raw['body']),
-    sourceKind: _readString(raw['source_kind']) ?? '',
-    role: _readString(raw['role']) ?? '',
-    createdAtMs: _readInt(raw['created_at_ms']) ?? 0,
-    updatedAtMs: _readInt(raw['updated_at_ms']) ?? 0,
-    status: _readString(raw['status']) ?? 'inferred',
-    sourceCount: _readInt(raw['source_count']) ?? 0,
-    whyUsed: _readString(raw['why_used']),
-    useForAskAi: _readBool(raw['use_for_ask_ai']) ?? true,
-    isDeleted: _readBool(raw['is_deleted']) ?? false,
-    markedInaccurate: _readBool(raw['marked_inaccurate']) ?? false,
-  );
-}
-
 String? _readString(Object? value) {
   if (value is! String) return null;
   final trimmed = value.trim();
@@ -98,10 +61,5 @@ String? _readString(Object? value) {
 int? _readInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
-  return null;
-}
-
-bool? _readBool(Object? value) {
-  if (value is bool) return value;
   return null;
 }

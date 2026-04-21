@@ -1,6 +1,7 @@
 part of 'native_backend.dart';
 
-mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess {
+mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
+    implements SemanticParseEnhancementBackend {
   @override
   Stream<String> askAiStream(
     Uint8List key,
@@ -438,6 +439,66 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess {
       nowLocalIso: nowLocalIso,
       locale: locale.toLanguageTag(),
       dayEndMinutes: dayEndMinutes,
+      candidates: candidates,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+    );
+  }
+
+  @override
+  Future<String> semanticParseMessageActionEnhancement(
+    Uint8List key, {
+    required String text,
+    required String nowLocalIso,
+    required Locale locale,
+    required int dayEndMinutes,
+    required String localResultJson,
+    required List<String> unresolvedFields,
+    required List<TodoCandidate> candidates,
+  }) async {
+    final appDir = await _getAppDir();
+    final localDay = NativeAppBackend._formatLocalDayKey(DateTime.now());
+    return rust_semantic_parse_enhancement
+        .aiSemanticParseMessageActionEnhancement(
+      appDir: appDir,
+      key: key,
+      text: text,
+      nowLocalIso: nowLocalIso,
+      locale: locale.toLanguageTag(),
+      dayEndMinutes: dayEndMinutes,
+      localResultJson: localResultJson,
+      unresolvedFields: unresolvedFields,
+      candidates: candidates,
+      localDay: localDay,
+    );
+  }
+
+  @override
+  Future<String> semanticParseMessageActionEnhancementCloudGateway(
+    Uint8List key, {
+    required String text,
+    required String nowLocalIso,
+    required Locale locale,
+    required int dayEndMinutes,
+    required String localResultJson,
+    required List<String> unresolvedFields,
+    required List<TodoCandidate> candidates,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_semantic_parse_enhancement
+        .aiSemanticParseMessageActionEnhancementCloudGateway(
+      appDir: appDir,
+      key: key,
+      text: text,
+      nowLocalIso: nowLocalIso,
+      locale: locale.toLanguageTag(),
+      dayEndMinutes: dayEndMinutes,
+      localResultJson: localResultJson,
+      unresolvedFields: unresolvedFields,
       candidates: candidates,
       gatewayBaseUrl: gatewayBaseUrl,
       firebaseIdToken: idToken,

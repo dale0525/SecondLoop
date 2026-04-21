@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use lopdf::Document;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use std::collections::HashSet;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use std::path::{Path, PathBuf};
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -38,13 +41,15 @@ use std::time::{Duration, Instant};
 
 const MAX_FULL_TEXT_BYTES: usize = 256 * 1024;
 const MAX_EXCERPT_TEXT_BYTES: usize = 8 * 1024;
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 const OCR_MODEL_DIR_ENV: &str = "SECONDLOOP_OCR_MODEL_DIR";
-
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 const DET_MODEL_ALIASES: [&str; 3] = [
     "ch_PP-OCRv5_mobile_det.onnx",
     "ch_PP-OCRv4_det_infer.onnx",
     "ch_PP-OCRv3_det_infer.onnx",
 ];
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 const CLS_MODEL_ALIASES: [&str; 1] = ["ch_ppocr_mobile_v2.0_cls_infer.onnx"];
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]

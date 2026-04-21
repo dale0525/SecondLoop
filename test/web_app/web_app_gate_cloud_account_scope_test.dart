@@ -11,7 +11,9 @@ import 'package:secondloop/core/subscription/creem_billing_client.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
+import 'package:secondloop/web_app/web_entry_intent.dart';
 import 'package:secondloop/web_app/web_formal_settings_scope.dart';
 
 import '../test_i18n.dart';
@@ -21,6 +23,8 @@ void main() {
   testWidgets(
       'settings cloud account page reuses web billing adapters from the gate',
       (tester) async {
+    LocaleSettings.setLocale(AppLocale.en);
+    addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
     SharedPreferences.setMockInitialValues({});
     final service = _FakeWebAppService(
       subscription: WebSubscriptionState.entitled,
@@ -30,6 +34,7 @@ void main() {
       wrapWithI18n(
         MaterialApp(
           home: WebAppGate(
+            entryIntent: WebEntryIntent.manage,
             authController: _FakeCloudAuthController(
               uid: 'uid-1',
               email: 'user@example.com',
@@ -40,21 +45,21 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Settings'));
-    await tester.pump();
-    await tester.pump();
+    final cloudAccountTile = find.text(t.settings.cloudAccount.title);
+    await tester.dragUntilVisible(
+      cloudAccountTile,
+      find.byType(ListView).first,
+      const Offset(0, -240),
+    );
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Cloud account'));
-    await tester.pump();
-    await tester.pump();
+    await tester.tap(cloudAccountTile);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('cloud_manage_subscription')));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(service.openPortalCount, 1);
   });

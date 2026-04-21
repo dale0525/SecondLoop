@@ -1,5 +1,8 @@
 import 'package:flutter/widgets.dart';
 
+import '../../../core/ai/temporal/temporal_engine.dart';
+import '../../../core/ai/temporal/temporal_resolution.dart';
+
 class DueCandidate {
   const DueCandidate({
     required this.dueAtLocal,
@@ -430,9 +433,68 @@ class LocalTimeResolver {
     DateTime nowLocal, {
     required Locale locale,
     required int dayEndMinutes,
+    int firstDayOfWeekIndex = 1,
   }) {
     final normalized = text.trim();
     if (normalized.isEmpty) return null;
+
+    final engineResolution = TemporalEngine.resolve(
+      text: normalized,
+      nowLocal: nowLocal,
+      locale: locale,
+      timezone: '',
+      firstDayOfWeek: firstDayOfWeekIndex,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: false,
+      dayEndMinutes: dayEndMinutes,
+    );
+    if (engineResolution.dueAtLocal != null) {
+      final normalizedExpression =
+          engineResolution.metadata.normalizedExpression ?? normalized;
+      final kind = switch (normalizedExpression) {
+        final value
+            when value.contains('明天') ||
+                value.contains('今天') ||
+                value.contains('today') ||
+                value.contains('tomorrow') ||
+                value.contains('昨天') ||
+                value.contains('yesterday') =>
+          'relative_day',
+        final value
+            when value.contains('周') ||
+                value.contains('weekday') ||
+                _looksLikeWeekdayExpression(value) =>
+          'weekday',
+        final value
+            when value.contains('月初') || value.contains('month start') =>
+          'month_start',
+        final value when value.contains('月底') || value.contains('month end') =>
+          'month_end',
+        final value when value.contains('年底') || value.contains('year end') =>
+          'year_end',
+        final value when value.contains('圣诞节') || value.contains('christmas') =>
+          'holiday',
+        final value
+            when value.contains('-') ||
+                value.contains('/') ||
+                value.contains('月') =>
+          'date',
+        _ => 'temporal_engine',
+      };
+      return LocalTimeResolution(
+        kind: kind,
+        matchedText:
+            engineResolution.metadata.normalizedExpression ?? normalized,
+        candidates: <DueCandidate>[
+          DueCandidate(
+            dueAtLocal: engineResolution.dueAtLocal!,
+            label: engineResolution.metadata.inferredTimeOfDay == null
+                ? _formatDateLabel(engineResolution.dueAtLocal!, locale)
+                : _formatDateTimeLabel(engineResolution.dueAtLocal!, locale),
+          ),
+        ],
+      );
+    }
 
     final lower = normalized.toLowerCase();
     final dayEnd = _atDayEnd(nowLocal, dayEndMinutes);
@@ -563,6 +625,43 @@ class LocalTimeResolver {
     }
 
     // 4) Weekday anchor (Mon..Sun)
+    final scopedWeekday = _matchWeekScopedWeekdayToken(normalized, lower);
+    if (scopedWeekday != null) {
+      final thisWeekStart = _startOfWeek(nowLocal, firstDayOfWeekIndex);
+      final weekStart = thisWeekStart.add(
+        Duration(days: scopedWeekday.offsetWeeks * 7),
+      );
+      final firstWeekday = _firstWeekdayFromIndex(firstDayOfWeekIndex);
+      final weekdayOffset = (scopedWeekday.weekday - firstWeekday + 7) % 7;
+      final day = weekStart.add(Duration(days: weekdayOffset));
+      final due = timeOfDay == null
+          ? _atDayEnd(day, dayEndMinutes)
+          : DateTime(
+              day.year,
+              day.month,
+              day.day,
+              timeOfDay.hour,
+              timeOfDay.minute,
+            );
+      final startOfToday =
+          DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+      if (day.isBefore(startOfToday) || due.isBefore(nowLocal)) {
+        return null;
+      }
+      return LocalTimeResolution(
+        kind: 'weekday',
+        matchedText: scopedWeekday.token,
+        candidates: [
+          DueCandidate(
+            dueAtLocal: due,
+            label: timeOfDay == null
+                ? _formatWeekdayLabel(due, locale)
+                : _formatDateTimeLabel(due, locale),
+          ),
+        ],
+      );
+    }
+
     final weekdayMatch = _matchWeekdayToken(normalized, lower);
     if (weekdayMatch != null) {
       final next = _nextWeekdayOnOrAfter(nowLocal, weekdayMatch.weekday);
@@ -750,6 +849,43 @@ class LocalTimeResolver {
     return null;
   }
 
+  static ({String token, int weekday, int offsetWeeks})?
+      _matchWeekScopedWeekdayToken(String original, String lower) {
+    const weekTokens = <({String token, int offsetWeeks})>[
+      (token: '本周', offsetWeeks: 0),
+      (token: '本週', offsetWeeks: 0),
+      (token: '这周', offsetWeeks: 0),
+      (token: '這週', offsetWeeks: 0),
+      (token: '这星期', offsetWeeks: 0),
+      (token: '這星期', offsetWeeks: 0),
+      (token: '下周', offsetWeeks: 1),
+      (token: '下週', offsetWeeks: 1),
+      (token: '下星期', offsetWeeks: 1),
+      (token: '上周', offsetWeeks: -1),
+      (token: '上週', offsetWeeks: -1),
+      (token: '上星期', offsetWeeks: -1),
+    ];
+
+    for (final week in weekTokens) {
+      final weekIndex = original.indexOf(week.token);
+      if (weekIndex == -1 && !lower.contains(week.token.toLowerCase())) {
+        continue;
+      }
+      for (final entry in _weekdayTokens) {
+        final token = _matchToken(original, lower, entry.tokens);
+        if (token == null) continue;
+        final tokenIndex = original.indexOf(token);
+        if (tokenIndex == -1 || tokenIndex <= weekIndex) continue;
+        return (
+          token: original.substring(weekIndex, tokenIndex + token.length),
+          weekday: entry.weekday,
+          offsetWeeks: week.offsetWeeks,
+        );
+      }
+    }
+    return null;
+  }
+
   static bool looksLikeReviewIntent(String text) {
     final normalized = text.trim();
     if (normalized.isEmpty) return false;
@@ -803,6 +939,79 @@ class LocalTimeResolver {
       return (token: token, weekday: entry.weekday);
     }
     return null;
+  }
+
+  static DateTime _startOfWeek(DateTime nowLocal, int firstDayOfWeekIndex) {
+    final firstWeekday = _firstWeekdayFromIndex(firstDayOfWeekIndex);
+    final base = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+    final delta = (base.weekday - firstWeekday + 7) % 7;
+    return base.subtract(Duration(days: delta));
+  }
+
+  static int _firstWeekdayFromIndex(int firstDayOfWeekIndex) {
+    if (firstDayOfWeekIndex == 0) return DateTime.sunday;
+    return firstDayOfWeekIndex.clamp(DateTime.monday, DateTime.saturday);
+  }
+
+  static bool _looksLikeWeekdayExpression(String value) {
+    const weekdayTokens = <String>{
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+      '月曜',
+      '月曜日',
+      '火曜',
+      '火曜日',
+      '水曜',
+      '水曜日',
+      '木曜',
+      '木曜日',
+      '金曜',
+      '金曜日',
+      '土曜',
+      '土曜日',
+      '日曜',
+      '日曜日',
+      '월요일',
+      '화요일',
+      '수요일',
+      '목요일',
+      '금요일',
+      '토요일',
+      '일요일',
+      'lunes',
+      'martes',
+      'miércoles',
+      'miercoles',
+      'jueves',
+      'viernes',
+      'sábado',
+      'sabado',
+      'domingo',
+      'lundi',
+      'mardi',
+      'mercredi',
+      'jeudi',
+      'vendredi',
+      'samedi',
+      'dimanche',
+      'montag',
+      'dienstag',
+      'mittwoch',
+      'donnerstag',
+      'freitag',
+      'samstag',
+      'sonntag',
+    };
+
+    for (final token in weekdayTokens) {
+      if (value.contains(token)) return true;
+    }
+    return false;
   }
 
   static ({int hour, int minute, String matchedText})? _parseTimeOfDay(

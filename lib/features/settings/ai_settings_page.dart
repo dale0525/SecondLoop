@@ -22,7 +22,6 @@ import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import 'cloud_account_page.dart';
 import 'embedding_profiles_page.dart';
-import 'knowledge_index_status_card.dart';
 import 'llm_profiles_page.dart';
 import 'media_annotation_settings_page.dart';
 import 'ai_ask_ai_settings_page.dart';

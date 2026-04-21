@@ -456,11 +456,27 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
           break;
         case 'followup':
           final prev = widget.job.appliedPrevTodoStatus?.trim();
-          if (prev == null || prev.isEmpty) return;
-          await backend.setTodoStatus(
+          final prevDueAtMs = widget.job.appliedPrevTodoDueAtMs?.toInt();
+          final dueChanged = widget.job.appliedDueChanged;
+          if ((prev == null || prev.isEmpty) && !dueChanged) return;
+
+          final todos = await backend.listTodos(sessionKey);
+          Todo? current;
+          for (final todo in todos) {
+            if (todo.id == todoId) {
+              current = todo;
+              break;
+            }
+          }
+          if (current == null) return;
+
+          await backend.transitionTodo(
             sessionKey,
-            todoId: todoId,
-            newStatus: prev,
+            todoId: current.id,
+            dueAtMs: prevDueAtMs,
+            clearDueAtMs: dueChanged && prevDueAtMs == null,
+            newStatus: (prev != null && prev.isNotEmpty) ? prev : null,
+            sourceMessageId: widget.message.id,
           );
           break;
       }

@@ -7,30 +7,21 @@ use crate::embedding::Embedder;
 use crate::llm::ChatDelta;
 use crate::message_citations::{
     append_message_citation_if_missing as append_message_citation, AnswerEvidenceDirectSource,
-    AnswerEvidenceMemoryCard,
 };
 
+mod actions_context;
 mod active_embeddings;
 mod attachment_resources;
 mod citations_prompt;
 mod context_selection;
 mod evidence;
+#[cfg(test)]
 mod fallback;
 mod history;
 #[cfg(test)]
-mod knowledge_ask_ai_tests;
-mod knowledge_contexts;
-#[cfg(test)]
-mod knowledge_contexts_page_tests;
-#[cfg(test)]
-mod knowledge_contexts_refresh_tests;
-#[cfg(test)]
-mod knowledge_contexts_scope_tests;
-#[cfg(test)]
-mod knowledge_contexts_tests;
-#[cfg(test)]
 mod tests;
 
+use actions_context::{build_actions_context, build_actions_context_in_range};
 use attachment_resources::{
     collect_attachment_resources_by_embedding, collect_attachment_resources_default,
 };
@@ -38,10 +29,14 @@ use citations_prompt::{build_prompt as build_prompt_base, build_prompt_with_acti
 use context_selection::{ContextItem, ContextSource};
 use evidence::{
     build_attachment_direct_source, build_attachment_resource_direct_source,
-    build_external_document_direct_source, build_message_direct_source,
+    build_message_direct_source, build_todo_direct_source,
     encode_context_evidence_json_for_question,
 };
 use history::{build_recent_conversation_history, build_recent_conversation_history_in_range};
+
+#[cfg(test)]
+use actions_context::{should_include_actions_context, should_include_actions_context_in_range};
+
 const DETACHED_ASK_REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
 
 #[cfg(test)]
@@ -77,27 +72,6 @@ pub struct AskAiResult {
     pub assistant_message_id: String,
 }
 
-#[cfg(test)]
-pub(crate) fn try_build_knowledge_contexts_for_tests(
-    conn: &Connection,
-    key: &[u8; 32],
-    question: &str,
-    top_k: usize,
-    focus: Focus,
-    conversation_id: &str,
-    time_window: Option<(i64, i64)>,
-) -> Result<Vec<String>> {
-    knowledge_contexts::try_build_knowledge_contexts(
-        conn,
-        key,
-        question,
-        top_k,
-        focus,
-        conversation_id,
-        time_window,
-    )
-}
-
 pub trait AnswerProvider {
     fn stream_answer(
         &self,
@@ -110,166 +84,37 @@ pub trait AnswerProvider {
 struct ContextWithEvidence {
     text: String,
     direct_sources: Vec<AnswerEvidenceDirectSource>,
-    memory_cards: Vec<AnswerEvidenceMemoryCard>,
-}
-
-fn now_ms() -> i64 {
-    crate::platform::time::now_ms()
-}
-
-fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
-    let q = question.trim().to_lowercase();
-    if q.is_empty() {
-        return None;
-    }
-
-    let is_today = q.contains("today")
-        || q.contains("tonight")
-        || q.contains("today's")
-        || question.contains("今天")
-        || question.contains("今日");
-
-    let is_this_week = q.contains("this week")
-        || q.contains("week agenda")
-        || q.contains("weekly agenda")
-        || q.contains("this week's")
-        || question.contains("本周")
-        || question.contains("这周")
-        || question.contains("這週");
-
-    let is_agenda = q.contains("agenda")
-        || q.contains("schedule")
-        || q.contains("calendar")
-        || question.contains("日程")
-        || question.contains("行程")
-        || question.contains("安排");
-    let has_timeframe = is_today
-        || is_this_week
-        || q.contains("tomorrow")
-        || q.contains("next week")
-        || question.contains("明天")
-        || question.contains("本周")
-        || question.contains("这周")
-        || question.contains("這週")
-        || question.contains("今天")
-        || question.contains("今日");
-    let has_explicit_agenda_intent = q.contains("agenda")
-        || q.contains("schedule")
-        || q.contains("calendar")
-        || q.contains("todo")
-        || q.contains("to-do")
-        || q.contains("priority")
-        || q.contains("priorities")
-        || q.contains("what should i do")
-        || q.contains("what do i need to do")
-        || q.contains("what's on my schedule")
-        || q.contains("what is on my schedule")
-        || q.contains("what's on my calendar")
-        || q.contains("what is on my calendar")
-        || q.contains("upcoming")
-        || q.contains("due today")
-        || question.contains("待办")
-        || question.contains("待辦")
-        || question.contains("日程")
-        || question.contains("行程")
-        || question.contains("提醒")
-        || question.contains("优先级")
-        || question.contains("優先級")
-        || question.contains("要做")
-        || question.contains("有哪些事");
-    let has_generic_task_words = q.contains("task")
-        || q.contains("tasks")
-        || question.contains("任务")
-        || question.contains("任務")
-        || question.contains("计划")
-        || question.contains("計劃");
-    if !(has_explicit_agenda_intent || (has_generic_task_words && has_timeframe)) {
-        return None;
-    }
-    if is_today {
-        return Some(now_ms.saturating_add(36 * 60 * 60 * 1000));
-    }
-    if is_this_week {
-        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
-    }
-    if is_agenda {
-        return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
-    }
-
-    None
-}
-
-fn should_include_actions_context(question: &str) -> bool {
-    agenda_horizon_ms(question, 0).is_some()
-}
-
-fn build_actions_context(
-    conn: &Connection,
-    key: &[u8; 32],
-    question: &str,
-) -> Result<Option<String>> {
-    if !should_include_actions_context(question) {
-        return Ok(None);
-    }
-
-    let now = now_ms();
-    let horizon = agenda_horizon_ms(question, now).unwrap_or(now);
-    let mut lines: Vec<String> = Vec::new();
-
-    for todo in db::list_todos(conn, key)? {
-        if todo.status == "done" || todo.status == "dismissed" {
-            continue;
-        }
-
-        let due = todo.due_at_ms;
-        let review = todo.next_review_at_ms;
-        let is_due = due.is_some_and(|ms| ms <= horizon);
-        let is_review_due = review.is_some_and(|ms| ms <= horizon);
-        if !is_due && !is_review_due {
-            continue;
-        }
-
-        let mut item = format!("TODO [{}] {}", todo.status, todo.title);
-        if let Some(ms) = due {
-            item.push_str(&format!(" (due_at_ms={ms})"));
-        }
-        if let Some(ms) = review {
-            item.push_str(&format!(" (next_review_at_ms={ms})"));
-        }
-        lines.push(item);
-    }
-
-    for event in db::list_events(conn, key)? {
-        if event.end_at_ms < now {
-            continue;
-        }
-        if event.start_at_ms > horizon {
-            continue;
-        }
-        lines.push(format!(
-            "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
-            event.title, event.start_at_ms, event.end_at_ms, event.tz
-        ));
-    }
-
-    if lines.is_empty() {
-        return Ok(None);
-    }
-
-    let mut out = String::new();
-    out.push_str("Upcoming actions (from local todos/events):\n");
-    for line in lines.into_iter().take(40) {
-        out.push_str("- ");
-        out.push_str(&line);
-        out.push('\n');
-    }
-    Ok(Some(out))
 }
 
 fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -> Result<String> {
     let todo = db::get_todo(conn, key, todo_id)?;
     let activities = db::list_todo_activities(conn, key, todo_id)?;
 
+    build_todo_thread_context_from_activities(&todo, activities)
+}
+
+fn build_todo_thread_context_in_range(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    time_start_ms: i64,
+    time_end_ms: i64,
+) -> Result<String> {
+    let todo = db::get_todo(conn, key, todo_id)?;
+    let activities = db::list_todo_activities(conn, key, todo_id)?
+        .into_iter()
+        .filter(|activity| {
+            activity.created_at_ms >= time_start_ms && activity.created_at_ms < time_end_ms
+        })
+        .collect::<Vec<_>>();
+
+    build_todo_thread_context_from_activities(&todo, activities)
+}
+
+fn build_todo_thread_context_from_activities(
+    todo: &db::Todo,
+    activities: Vec<db::TodoActivity>,
+) -> Result<String> {
     let mut out = String::new();
     out.push_str(&format!("TODO_THREAD todo_id={}\n", todo.id));
 
@@ -449,15 +294,6 @@ pub fn ask_ai_with_provider(
     let similar_todos = db::search_similar_todo_threads_default(conn, key, question, top_k)?;
     let attachment_resources =
         collect_attachment_resources_default(conn, key, question, top_k).unwrap_or_default();
-    let app_dir = db::app_dir_from_conn(conn).ok();
-    let external_chunks = app_dir
-        .as_ref()
-        .map(|app_dir| {
-            db::search_similar_external_document_chunks_default(app_dir, key, question, top_k)
-                .unwrap_or_default()
-        })
-        .unwrap_or_default();
-
     let mut contexts_with_distance: Vec<(f64, ContextWithEvidence)> = Vec::new();
     for sm in similar_messages {
         let context = db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
@@ -471,7 +307,6 @@ pub fn ask_ai_with_provider(
             ContextWithEvidence {
                 text: context,
                 direct_sources,
-                memory_cards: Vec::new(),
             },
         ));
     }
@@ -480,16 +315,20 @@ pub fn ask_ai_with_provider(
         if !seen_todos.insert(st.todo_id.clone()) {
             continue;
         }
+        let todo = match db::get_todo(conn, key, &st.todo_id) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
         let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
             Ok(v) => v,
             Err(_) => continue,
         };
+        let direct_source = build_todo_direct_source(&todo, &ctx, todo.created_at_ms);
         contexts_with_distance.push((
             st.distance,
             ContextWithEvidence {
                 text: ctx,
-                direct_sources: Vec::new(),
-                memory_cards: Vec::new(),
+                direct_sources: vec![direct_source],
             },
         ));
     }
@@ -513,36 +352,8 @@ pub fn ask_ai_with_provider(
                     &chunk.text,
                     chunk.created_at_ms,
                 )],
-                memory_cards: Vec::new(),
             },
         ));
-    }
-    if let Some(app_dir) = app_dir.as_ref() {
-        for chunk in external_chunks {
-            let context = match db::build_external_document_chunk_rag_context(
-                app_dir,
-                key,
-                &chunk.doc_id,
-                chunk.chunk_index,
-            ) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            contexts_with_distance.push((
-                chunk.distance,
-                ContextWithEvidence {
-                    text: context,
-                    direct_sources: vec![build_external_document_direct_source(
-                        &chunk.doc_id,
-                        chunk.chunk_index,
-                        &chunk.title,
-                        &chunk.snippet,
-                        chunk.created_at_ms,
-                    )],
-                    memory_cards: Vec::new(),
-                },
-            ));
-        }
     }
     contexts_with_distance
         .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -551,9 +362,9 @@ pub fn ask_ai_with_provider(
         .into_iter()
         .map(|(_, ctx)| ctx)
         .collect();
-    let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
-    let attachment_direct_sources = attachment_resources
+    let actions = build_actions_context(conn, key, question)?;
+    let mut attachment_direct_sources = attachment_resources
         .resources
         .iter()
         .map(|resource| {
@@ -564,13 +375,16 @@ pub fn ask_ai_with_provider(
             )
         })
         .collect::<Vec<_>>();
+    if let Some(action_context) = actions.as_ref() {
+        attachment_direct_sources.extend(action_context.direct_sources.iter().cloned());
+    }
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        actions.as_deref(),
+        actions.as_ref().map(|bundle| bundle.text.as_str()),
         history.as_deref(),
         attachment_resources.catalog_markdown.as_deref(),
     );
@@ -668,23 +482,6 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                 )
             })
             .collect();
-        let app_dir = db::app_dir_from_conn(conn).ok();
-        let external_chunks = app_dir
-            .as_ref()
-            .map(|app_dir| {
-                let _ =
-                    db::process_pending_external_document_embeddings(app_dir, key, embedder, 1024);
-                db::search_similar_external_document_chunks_by_embedding(
-                    app_dir,
-                    key,
-                    embedder.model_name(),
-                    &query_vector,
-                    top_k,
-                )
-                .unwrap_or_default()
-            })
-            .unwrap_or_default();
-
         let mut contexts_with_distance: Vec<(f64, ContextWithEvidence)> = Vec::new();
         for sm in similar_messages {
             let context =
@@ -699,7 +496,6 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                 ContextWithEvidence {
                     text: context,
                     direct_sources,
-                    memory_cards: Vec::new(),
                 },
             ));
         }
@@ -708,16 +504,20 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             if !seen_todos.insert(st.todo_id.clone()) {
                 continue;
             }
+            let todo = match db::get_todo(conn, key, &st.todo_id) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
             let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
                 Ok(v) => v,
                 Err(_) => continue,
             };
+            let direct_source = build_todo_direct_source(&todo, &ctx, todo.created_at_ms);
             contexts_with_distance.push((
                 st.distance,
                 ContextWithEvidence {
                     text: ctx,
-                    direct_sources: Vec::new(),
-                    memory_cards: Vec::new(),
+                    direct_sources: vec![direct_source],
                 },
             ));
         }
@@ -741,36 +541,8 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                         &chunk.text,
                         chunk.created_at_ms,
                     )],
-                    memory_cards: Vec::new(),
                 },
             ));
-        }
-        if let Some(app_dir) = app_dir.as_ref() {
-            for chunk in external_chunks {
-                let context = match db::build_external_document_chunk_rag_context(
-                    app_dir,
-                    key,
-                    &chunk.doc_id,
-                    chunk.chunk_index,
-                ) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                contexts_with_distance.push((
-                    chunk.distance,
-                    ContextWithEvidence {
-                        text: context,
-                        direct_sources: vec![build_external_document_direct_source(
-                            &chunk.doc_id,
-                            chunk.chunk_index,
-                            &chunk.title,
-                            &chunk.snippet,
-                            chunk.created_at_ms,
-                        )],
-                        memory_cards: Vec::new(),
-                    },
-                ));
-            }
         }
         contexts_with_distance
             .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -782,15 +554,18 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
 
         resources_catalog = attachment_resources.catalog_markdown;
     }
-    let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
+    let actions = build_actions_context(conn, key, question)?;
+    if let Some(action_context) = actions.as_ref() {
+        attachment_direct_sources.extend(action_context.direct_sources.iter().cloned());
+    }
     let prompt = build_prompt_with_actions_and_history(
         question,
         &contexts
             .iter()
             .map(|ctx| ctx.text.clone())
             .collect::<Vec<_>>(),
-        actions.as_deref(),
+        actions.as_ref().map(|bundle| bundle.text.as_str()),
         history.as_deref(),
         resources_catalog.as_deref(),
     );

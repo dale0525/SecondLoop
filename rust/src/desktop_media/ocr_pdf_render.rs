@@ -230,6 +230,7 @@ pub fn render_pdf_to_long_image_payload(
     ))
 }
 
+#[cfg_attr(target_family = "wasm", allow(dead_code))]
 pub(super) fn resolve_page_window(
     page_numbers: &[u32],
     start_page: u32,

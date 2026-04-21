@@ -5,42 +5,25 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/backend/app_backend.dart';
-import '../../core/backend/knowledge_backend.dart';
-import '../../core/backend/knowledge_viewer_backend.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/knowledge/models.dart';
+import '../../src/rust/db.dart';
 import '../../ui/sl_markdown_style.dart';
 import '../actions/assistant_message_actions.dart';
+import '../actions/calendar/event_deeplink.dart';
+import '../actions/calendar/event_viewer_page.dart';
+import '../actions/todo/todo_deeplink.dart';
+import '../actions/todo/todo_detail_page.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
-import '../knowledge_viewer/knowledge_document_viewer.dart';
-import '../knowledge_viewer/knowledge_document_viewer_page.dart';
-import '../memory/memory_detail_page.dart';
 import 'chat_answer_citation_controller.dart';
-import 'chat_answer_evidence_models.dart';
 import 'chat_answer_evidence_parser.dart';
-import 'chat_answer_evidence_sheet.dart';
 import 'chat_markdown_link_handler.dart';
-import 'knowledge_page_memory_card_helpers.dart';
-import 'knowledge_document_deeplink.dart';
 import 'message_deeplink.dart';
-import 'page_backed_evidence_actions.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
-
-const _kMessageKnowledgeViewerCharThreshold = 3200;
-const _kMessageKnowledgeViewerLineThreshold = 120;
-
-bool _shouldUseMessageKnowledgeViewer(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return false;
-  if (trimmed.length >= _kMessageKnowledgeViewerCharThreshold) return true;
-  final lineCount = '\n'.allMatches(trimmed).length + 1;
-  return lineCount >= _kMessageKnowledgeViewerLineThreshold;
-}
 
 class MessageViewerPage extends StatelessWidget {
   const MessageViewerPage({
@@ -127,6 +110,60 @@ class MessageViewerPage extends StatelessWidget {
     return true;
   }
 
+  Future<bool> _openInAppTodo(BuildContext context, String href) async {
+    final parsed = parseTodoDeepLink(href);
+    if (parsed == null) return false;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (sessionKey == null) return false;
+
+    Todo? todo;
+    try {
+      todo = await backend.getTodoById(sessionKey, parsed.todoId);
+    } catch (_) {
+      todo = null;
+    }
+    if (todo == null || !context.mounted) return false;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          TodoDetailPage(initialTodo: todo!),
+        ),
+      ),
+    );
+    return true;
+  }
+
+  Future<bool> _openInAppEvent(BuildContext context, String href) async {
+    final parsed = parseEventDeepLink(href);
+    if (parsed == null) return false;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (sessionKey == null) return false;
+
+    Event? event;
+    try {
+      event = await backend.getEventById(sessionKey, parsed.eventId);
+    } catch (_) {
+      event = null;
+    }
+    if (event == null || !context.mounted) return false;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          EventViewerPage(event: event!),
+        ),
+      ),
+    );
+    return true;
+  }
+
   Future<bool> _openInAppMessage(BuildContext context, String href) async {
     final parsed = parseMessageDeepLink(href);
     if (parsed == null) return false;
@@ -139,216 +176,34 @@ class MessageViewerPage extends StatelessWidget {
     return true;
   }
 
-  Future<void> _disableMemoryFromEvidence(
-    BuildContext context,
-    String documentId,
-  ) async {
-    final pagesBackend =
-        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (documentId.startsWith('page:') &&
-        pagesBackend != null &&
-        sessionKey != null) {
-      await disablePageBackedEvidenceMemoryCard(
-        pagesBackend,
-        sessionKey,
-        pageId: documentId,
-      );
-      return;
-    }
-    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
-    final viewerBackend =
-        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    if (backend == null || viewerBackend == null || sessionKey == null) return;
-    final document = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: documentId,
-    );
-    final feedback = document.document.memoryFeedback;
-    await backend.upsertKnowledgeMemoryFeedback(
-      sessionKey,
-      documentId: documentId,
-      status: feedback.status,
-      useForAskAi: false,
-      isDeleted: feedback.isDeleted,
-      markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: feedback.correctedTitle,
-      correctedSummary: feedback.correctedSummary,
-    );
-  }
-
-  Future<void> _deleteMemoryFromEvidence(
-    BuildContext context,
-    String documentId,
-  ) async {
-    final pagesBackend =
-        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (documentId.startsWith('page:') &&
-        pagesBackend != null &&
-        sessionKey != null) {
-      await removePageBackedEvidenceMemoryCard(
-        pagesBackend,
-        sessionKey,
-        pageId: documentId,
-      );
-      return;
-    }
-    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
-    final viewerBackend =
-        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    if (backend == null || viewerBackend == null || sessionKey == null) return;
-    final document = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: documentId,
-    );
-    final feedback = document.document.memoryFeedback;
-    await backend.upsertKnowledgeMemoryFeedback(
-      sessionKey,
-      documentId: documentId,
-      status: feedback.status,
-      useForAskAi: feedback.useForAskAi,
-      isDeleted: true,
-      markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: feedback.correctedTitle,
-      correctedSummary: feedback.correctedSummary,
-    );
-  }
-
-  Future<ChatAnswerEvidenceMemoryCard?> _correctMemoryFromEvidence(
-    BuildContext context,
-    ChatAnswerEvidenceMemoryCard card, {
-    required String title,
-    required String summary,
-  }) async {
-    final pagesBackend =
-        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (card.documentId.startsWith('page:') &&
-        pagesBackend != null &&
-        sessionKey != null) {
-      return correctPageBackedEvidenceMemoryCard(
-        pagesBackend,
-        sessionKey,
-        card,
-        title: title,
-        summary: summary,
-      );
-    }
-    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
-    final viewerBackend =
-        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    if (backend == null || viewerBackend == null || sessionKey == null) {
-      return null;
-    }
-    final document = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: card.documentId,
-    );
-    final feedback = document.document.memoryFeedback;
-    await backend.upsertKnowledgeMemoryFeedback(
-      sessionKey,
-      documentId: card.documentId,
-      status: KnowledgeMemoryStatus.confirmed,
-      useForAskAi: feedback.useForAskAi,
-      isDeleted: false,
-      markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: title,
-      correctedSummary: summary,
-    );
-    final refreshed = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: card.documentId,
-    );
-    return _memoryCardFromViewerDocument(card, refreshed.document);
-  }
-
-  Future<ChatAnswerEvidenceMemoryCard?> _refreshMemoryFromEvidence(
-    BuildContext context,
-    ChatAnswerEvidenceMemoryCard card,
-  ) async {
-    final pagesBackend =
-        maybeKnowledgePagesBackendFor(AppBackendScope.of(context));
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (card.documentId.startsWith('page:') &&
-        pagesBackend != null &&
-        sessionKey != null) {
-      return refreshPageBackedEvidenceMemoryCard(
-        pagesBackend,
-        sessionKey,
-        card,
-      );
-    }
-    final viewerBackend =
-        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
-    if (viewerBackend == null || sessionKey == null) {
-      return card;
-    }
-    final refreshed = await viewerBackend.getKnowledgeViewerDocument(
-      sessionKey,
-      documentId: card.documentId,
-    );
-    return _memoryCardFromViewerDocument(card, refreshed.document);
-  }
-
-  ChatAnswerEvidenceMemoryCard _memoryCardFromViewerDocument(
-    ChatAnswerEvidenceMemoryCard card,
-    ContentKnowledgeDocument document,
-  ) {
-    final memoryDisplay = document.memoryDisplay;
-    return card.copyWith(
-      title: document.title,
-      summary: document.summary,
-      body: document.rawText,
-      status: (memoryDisplay?.status ??
-              document.memoryFeedback.status ??
-              KnowledgeMemoryStatus.confirmed)
-          .name,
-      sourceCount: memoryDisplay?.sourceCount.toInt() ?? card.sourceCount,
-      updatedAtMs: document.updatedAtMs.toInt(),
-      useForAskAi: document.memoryFeedback.useForAskAi,
-      isDeleted: document.memoryFeedback.isDeleted,
-      markedInaccurate: document.memoryFeedback.markedInaccurate,
-    );
-  }
-
-  Future<bool> _openInAppKnowledgeDocument(
+  Future<void> _showUnsupportedSecondLoopLink(
     BuildContext context,
     String href,
   ) async {
-    final parsed = parseKnowledgeDocumentDeepLink(href);
-    if (parsed == null) return false;
-    if (maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) == null) {
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      messenger?.showSnackBar(
-        SnackBar(
-          content: Text(
-            context.t.errors.loadFailed(
-              error: 'knowledge_viewer_backend_unavailable',
-            ),
-          ),
-          duration: const Duration(seconds: 3),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          context.t.errors.loadFailed(error: 'unsupported_secondloop_link'),
         ),
-      );
-      return true;
-    }
-
-    await KnowledgeDocumentViewerPage.openDocumentId(
-      context,
-      documentId: parsed.documentId,
-      initialHighlightedUnitId: parsed.unitId,
+        duration: const Duration(seconds: 3),
+      ),
     );
-    return true;
   }
 
   Future<bool> _openInAppLink(BuildContext context, String href) async {
-    if (await _openInAppAttachment(context, href)) {
+    if (await _openInAppTodo(context, href)) {
       return true;
     }
     if (!context.mounted) {
       return false;
     }
-    if (await _openInAppKnowledgeDocument(context, href)) {
+    if (await _openInAppEvent(context, href)) {
+      return true;
+    }
+    if (!context.mounted) {
+      return false;
+    }
+    if (await _openInAppAttachment(context, href)) {
       return true;
     }
     if (!context.mounted) {
@@ -357,101 +212,11 @@ class MessageViewerPage extends StatelessWidget {
     return _openInAppMessage(context, href);
   }
 
-  Future<void> _openMemoryCard(BuildContext context, String documentId) {
-    return MemoryDetailPage.openDocumentId(context, documentId: documentId);
-  }
-
-  Future<_ResolvedMessageKnowledgeDocument?> _resolveKnowledgeDocument(
-    BuildContext context,
-  ) async {
-    final normalizedMessageId = messageId?.trim() ?? '';
-    if (normalizedMessageId.isEmpty) return null;
-    if (!_shouldUseMessageKnowledgeViewer(content)) return null;
-
-    final backend = AppBackendScope.maybeOf(context);
-    final viewerBackend =
-        backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-    if (viewerBackend == null || sessionKey == null) return null;
-
-    final documentId = 'message:$normalizedMessageId';
-    try {
-      final document = await viewerBackend.getKnowledgeViewerDocument(
-        sessionKey,
-        documentId: documentId,
-      );
-      return _ResolvedMessageKnowledgeDocument(
-        documentId: documentId,
-        document: document,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
   Widget _buildMarkdownBody(
     BuildContext context, {
     required String normalized,
     required ChatAnswerCitationController citationController,
   }) {
-    final backend = AppBackendScope.maybeOf(context);
-    final viewerBackend =
-        backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
-    final knowledgeBackend =
-        backend == null ? null : maybeKnowledgeBackendFor(backend);
-    final pagesBackend =
-        backend == null ? null : maybeKnowledgePagesBackendFor(backend);
-    final hasPagesBackend = pagesBackend != null;
-    final hasViewerBackend = viewerBackend != null;
-    final hasKnowledgeBackend = knowledgeBackend != null;
-    Future<void> openMemoryCard(String documentId) {
-      return _openMemoryCard(context, documentId);
-    }
-
-    bool canOpenMemoryCard(String documentId) {
-      return canOpenEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> correctMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-      String title,
-      String summary,
-    ) {
-      return _correctMemoryFromEvidence(
-        context,
-        card,
-        title: title,
-        summary: summary,
-      );
-    }
-
-    bool canMutateMemoryCard(String documentId) {
-      return canMutateEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasKnowledgeBackend: hasKnowledgeBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> refreshMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-    ) {
-      return _refreshMemoryFromEvidence(context, card);
-    }
-
-    Future<void> disableMemoryCard(String documentId) {
-      return _disableMemoryFromEvidence(context, documentId);
-    }
-
-    Future<void> deleteMemoryCard(String documentId) {
-      return _deleteMemoryFromEvidence(context, documentId);
-    }
-
     final previewTheme = resolveChatMarkdownTheme(
         ChatMarkdownThemePreset.studio, Theme.of(context));
     return Markdown(
@@ -473,15 +238,6 @@ class MessageViewerPage extends StatelessWidget {
             context,
             href: href,
             onOpenDirectSource: (target) => _openInAppLink(context, target),
-            onOpenMemoryCard: openMemoryCard,
-            canOpenMemoryCard: canOpenMemoryCard,
-            onCorrectMemoryCard: correctMemoryCard,
-            canCorrectMemoryCard: canMutateMemoryCard,
-            onRefreshMemoryCard: refreshMemoryCard,
-            onDisableMemoryCard: disableMemoryCard,
-            canDisableMemoryCard: canMutateMemoryCard,
-            onDeleteMemoryCard: deleteMemoryCard,
-            canDeleteMemoryCard: canMutateMemoryCard,
           );
           if (handledCitation) {
             return;
@@ -489,6 +245,8 @@ class MessageViewerPage extends StatelessWidget {
           await handleChatMarkdownTapLink(
             href,
             handleInApp: (target) => _openInAppLink(context, target),
+            handleUnsupportedSecondLoopLink: (target) =>
+                _showUnsupportedSecondLoopLink(context, target),
           );
         },
       ),
@@ -497,62 +255,9 @@ class MessageViewerPage extends StatelessWidget {
           handleChatMarkdownTapLink(
             href,
             handleInApp: (target) => _openInAppLink(context, target),
+            handleUnsupportedSecondLoopLink: (target) =>
+                _showUnsupportedSecondLoopLink(context, target),
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBody(
-    BuildContext context, {
-    required String normalized,
-    required ChatAnswerCitationController citationController,
-  }) {
-    if (!_shouldUseMessageKnowledgeViewer(content) ||
-        (messageId?.trim().isEmpty ?? true)) {
-      return _buildMarkdownBody(
-        context,
-        normalized: normalized,
-        citationController: citationController,
-      );
-    }
-
-    return FutureBuilder<_ResolvedMessageKnowledgeDocument?>(
-      future: _resolveKnowledgeDocument(context),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
-
-        final resolved = snapshot.data;
-        if (resolved == null) {
-          return _buildMarkdownBody(
-            context,
-            normalized: normalized,
-            citationController: citationController,
-          );
-        }
-
-        final backend = AppBackendScope.maybeOf(context);
-        final viewerBackend =
-            backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
-        final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-        if (viewerBackend == null || sessionKey == null) {
-          return _buildMarkdownBody(
-            context,
-            normalized: normalized,
-            citationController: citationController,
-          );
-        }
-
-        return KnowledgeDocumentViewer(
-          backend: viewerBackend,
-          sessionKey: sessionKey,
-          documentId: resolved.documentId,
-          initialDocument: resolved.document,
-          fallbackText: normalized,
         );
       },
     );
@@ -561,64 +266,6 @@ class MessageViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = sanitizeChatMarkdown(content);
-    final backend = AppBackendScope.maybeOf(context);
-    final viewerBackend =
-        backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
-    final knowledgeBackend =
-        backend == null ? null : maybeKnowledgeBackendFor(backend);
-    final pagesBackend =
-        backend == null ? null : maybeKnowledgePagesBackendFor(backend);
-    final hasPagesBackend = pagesBackend != null;
-    final hasViewerBackend = viewerBackend != null;
-    final hasKnowledgeBackend = knowledgeBackend != null;
-    Future<void> openMemoryCard(String documentId) {
-      return _openMemoryCard(context, documentId);
-    }
-
-    bool canOpenMemoryCard(String documentId) {
-      return canOpenEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> correctMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-      String title,
-      String summary,
-    ) {
-      return _correctMemoryFromEvidence(
-        context,
-        card,
-        title: title,
-        summary: summary,
-      );
-    }
-
-    bool canMutateMemoryCard(String documentId) {
-      return canMutateEvidenceMemoryCard(
-        documentId,
-        hasPagesBackend: hasPagesBackend,
-        hasKnowledgeBackend: hasKnowledgeBackend,
-        hasViewerBackend: hasViewerBackend,
-      );
-    }
-
-    Future<ChatAnswerEvidenceMemoryCard?> refreshMemoryCard(
-      ChatAnswerEvidenceMemoryCard card,
-    ) {
-      return _refreshMemoryFromEvidence(context, card);
-    }
-
-    Future<void> disableMemoryCard(String documentId) {
-      return _disableMemoryFromEvidence(context, documentId);
-    }
-
-    Future<void> deleteMemoryCard(String documentId) {
-      return _deleteMemoryFromEvidence(context, documentId);
-    }
-
     final citationController = ChatAnswerCitationController(
       parseChatAnswerEvidence(citationsJson),
     );
@@ -662,64 +309,16 @@ class MessageViewerPage extends StatelessWidget {
                   onOpenSources: () => unawaited(
                     citationController.openEvidence(
                       context,
-                      initialTab: ChatAnswerEvidenceTab.directSources,
+                      canOpenDirectSource: canOpenChatMarkdownHref,
                       onOpenDirectSource: (href) =>
                           _openInAppLink(context, href),
-                      onOpenMemoryCard: openMemoryCard,
-                      canOpenMemoryCard: canOpenMemoryCard,
-                      canOpenDirectSource: (href) =>
-                          _canOpenDirectSourceHref(context, href),
-                      onCorrectMemoryCard: correctMemoryCard,
-                      canCorrectMemoryCard: canMutateMemoryCard,
-                      onRefreshMemoryCard: refreshMemoryCard,
-                      onDisableMemoryCard: disableMemoryCard,
-                      canDisableMemoryCard: canMutateMemoryCard,
-                      onDeleteMemoryCard: deleteMemoryCard,
-                      canDeleteMemoryCard: canMutateMemoryCard,
-                    ),
-                  ),
-                  onOpenMemory: () => unawaited(
-                    citationController.openEvidence(
-                      context,
-                      initialTab: ChatAnswerEvidenceTab.memoryCards,
-                      onOpenDirectSource: (href) =>
-                          _openInAppLink(context, href),
-                      onOpenMemoryCard: openMemoryCard,
-                      canOpenMemoryCard: canOpenMemoryCard,
-                      canOpenDirectSource: (href) =>
-                          _canOpenDirectSourceHref(context, href),
-                      onCorrectMemoryCard: correctMemoryCard,
-                      canCorrectMemoryCard: canMutateMemoryCard,
-                      onRefreshMemoryCard: refreshMemoryCard,
-                      onDisableMemoryCard: disableMemoryCard,
-                      canDisableMemoryCard: canMutateMemoryCard,
-                      onDeleteMemoryCard: deleteMemoryCard,
-                      canDeleteMemoryCard: canMutateMemoryCard,
-                    ),
-                  ),
-                  onOpenEvidence: () => unawaited(
-                    citationController.openEvidence(
-                      context,
-                      onOpenDirectSource: (href) =>
-                          _openInAppLink(context, href),
-                      onOpenMemoryCard: openMemoryCard,
-                      canOpenMemoryCard: canOpenMemoryCard,
-                      canOpenDirectSource: (href) =>
-                          _canOpenDirectSourceHref(context, href),
-                      onCorrectMemoryCard: correctMemoryCard,
-                      canCorrectMemoryCard: canMutateMemoryCard,
-                      onRefreshMemoryCard: refreshMemoryCard,
-                      onDisableMemoryCard: disableMemoryCard,
-                      canDisableMemoryCard: canMutateMemoryCard,
-                      onDeleteMemoryCard: deleteMemoryCard,
-                      canDeleteMemoryCard: canMutateMemoryCard,
                     ),
                   ),
                 ),
               ),
             ),
           Expanded(
-            child: _buildBody(
+            child: _buildMarkdownBody(
               context,
               normalized: normalized,
               citationController: citationController,
@@ -729,21 +328,4 @@ class MessageViewerPage extends StatelessWidget {
       ),
     );
   }
-}
-
-final class _ResolvedMessageKnowledgeDocument {
-  const _ResolvedMessageKnowledgeDocument({
-    required this.documentId,
-    required this.document,
-  });
-
-  final String documentId;
-  final KnowledgeViewerDocument document;
-}
-
-bool _canOpenDirectSourceHref(BuildContext context, String href) {
-  if (parseKnowledgeDocumentDeepLink(href) != null) {
-    return maybeKnowledgeViewerBackendFor(AppBackendScope.of(context)) != null;
-  }
-  return true;
 }

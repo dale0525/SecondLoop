@@ -34,9 +34,19 @@ final class BackendSemanticParseAutoActionsClient
     required String query,
     required int topK,
   }) async {
+    final matches =
+        await retrieveTodoCandidateMatches(query: query, topK: topK);
+    return matches.map((match) => match.todoId).toList(growable: false);
+  }
+
+  @override
+  Future<List<TodoThreadMatch>> retrieveTodoCandidateMatches({
+    required String query,
+    required int topK,
+  }) async {
     final trimmedQuery = query.trim();
     if (trimmedQuery.isEmpty || topK <= 0) {
-      return const <String>[];
+      return const <TodoThreadMatch>[];
     }
 
     for (final route in _embeddingsRouteFallbackOrder()) {
@@ -47,13 +57,13 @@ final class BackendSemanticParseAutoActionsClient
           topK,
           route,
         );
-        return _extractTodoIds(matches, topK);
+        return _extractTodoMatches(matches, topK);
       } catch (_) {
         continue;
       }
     }
 
-    return const <String>[];
+    return const <TodoThreadMatch>[];
   }
 
   List<EmbeddingsSourceRouteKind> _embeddingsRouteFallbackOrder() {
@@ -74,17 +84,20 @@ final class BackendSemanticParseAutoActionsClient
     };
   }
 
-  List<String> _extractTodoIds(List<TodoThreadMatch> matches, int topK) {
+  List<TodoThreadMatch> _extractTodoMatches(
+    List<TodoThreadMatch> matches,
+    int topK,
+  ) {
     if (matches.isEmpty) {
-      return const <String>[];
+      return const <TodoThreadMatch>[];
     }
 
-    final out = <String>[];
+    final out = <TodoThreadMatch>[];
     final seen = <String>{};
     for (final match in matches) {
       final todoId = match.todoId.trim();
       if (todoId.isEmpty || !seen.add(todoId)) continue;
-      out.add(todoId);
+      out.add(TodoThreadMatch(todoId: todoId, distance: match.distance));
       if (out.length >= topK) break;
     }
     return out;
@@ -158,6 +171,8 @@ final class BackendSemanticParseAutoActionsClient
     required String localeTag,
     required int dayEndMinutes,
     required List<SemanticParseTodoCandidate> candidates,
+    required String localResultJson,
+    required List<String> unresolvedFields,
     required Duration timeout,
   }) async {
     final locale = SemanticParseAutoActionsRunner._localeFromTag(localeTag);
@@ -173,26 +188,59 @@ final class BackendSemanticParseAutoActionsClient
         )
         .toList(growable: false);
 
-    final future = askAiRoute == AskAiRouteKind.cloudGateway
-        ? _backend.semanticParseMessageActionCloudGateway(
-            _sessionKey,
-            text: text,
-            nowLocalIso: nowLocalIso,
-            locale: locale,
-            dayEndMinutes: dayEndMinutes,
-            candidates: rustCandidates,
-            gatewayBaseUrl: gatewayBaseUrl,
-            idToken: idToken,
-            modelName: modelName,
-          )
-        : _backend.semanticParseMessageAction(
-            _sessionKey,
-            text: text,
-            nowLocalIso: nowLocalIso,
-            locale: locale,
-            dayEndMinutes: dayEndMinutes,
-            candidates: rustCandidates,
-          );
+    final future = switch ((_backend, askAiRoute)) {
+      (
+        final SemanticParseEnhancementBackend enhancementBackend,
+        AskAiRouteKind.cloudGateway,
+      ) =>
+        enhancementBackend.semanticParseMessageActionEnhancementCloudGateway(
+          _sessionKey,
+          text: text,
+          nowLocalIso: nowLocalIso,
+          locale: locale,
+          dayEndMinutes: dayEndMinutes,
+          localResultJson: localResultJson,
+          unresolvedFields: unresolvedFields,
+          candidates: rustCandidates,
+          gatewayBaseUrl: gatewayBaseUrl,
+          idToken: idToken,
+          modelName: modelName,
+        ),
+      (
+        final SemanticParseEnhancementBackend enhancementBackend,
+        _,
+      ) =>
+        enhancementBackend.semanticParseMessageActionEnhancement(
+          _sessionKey,
+          text: text,
+          nowLocalIso: nowLocalIso,
+          locale: locale,
+          dayEndMinutes: dayEndMinutes,
+          localResultJson: localResultJson,
+          unresolvedFields: unresolvedFields,
+          candidates: rustCandidates,
+        ),
+      (_, AskAiRouteKind.cloudGateway) =>
+        _backend.semanticParseMessageActionCloudGateway(
+          _sessionKey,
+          text: text,
+          nowLocalIso: nowLocalIso,
+          locale: locale,
+          dayEndMinutes: dayEndMinutes,
+          candidates: rustCandidates,
+          gatewayBaseUrl: gatewayBaseUrl,
+          idToken: idToken,
+          modelName: modelName,
+        ),
+      _ => _backend.semanticParseMessageAction(
+          _sessionKey,
+          text: text,
+          nowLocalIso: nowLocalIso,
+          locale: locale,
+          dayEndMinutes: dayEndMinutes,
+          candidates: rustCandidates,
+        ),
+    };
 
     return future.timeout(timeout);
   }

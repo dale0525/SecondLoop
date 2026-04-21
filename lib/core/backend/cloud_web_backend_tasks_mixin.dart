@@ -137,6 +137,11 @@ mixin _CloudWebBackendTasksMixin
   }
 
   @override
+  Future<Todo?> getTodoById(Uint8List key, String todoId) async {
+    return _todosById[todoId];
+  }
+
+  @override
   Future<List<Todo>> listTodosCreatedInRange(
     Uint8List key, {
     required int startAtMsInclusive,

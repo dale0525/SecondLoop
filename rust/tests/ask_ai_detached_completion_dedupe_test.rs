@@ -6,7 +6,8 @@ use secondloop_rust::{auth, db, rag};
 const STREAM_REQUEST_ID: &str = "req_stream_completion_is_claimed";
 const PARTIAL_CLAIM_REQUEST_ID: &str = "req_partial_claim_needs_completion";
 const CROSS_CONVERSATION_REQUEST_ID: &str = "req_shared_across_conversations";
-const DETACHED_CITATIONS_JSON: &str = r#"{"direct_sources":[{"id":"message:history-1","href":"secondloop://message/history-1"}],"memory_cards":[]}"#;
+const DETACHED_CITATIONS_JSON: &str =
+    r#"{"direct_sources":[{"id":"message:history-1","href":"secondloop://message/history-1"}]}"#;
 
 struct FakeProviderWithRequestId {
     request_id: &'static str,

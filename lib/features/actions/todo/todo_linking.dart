@@ -32,6 +32,38 @@ class TodoUpdateIntent {
   final bool isExplicit;
 }
 
+const Set<String> kDeicticOnlyTodoTitles = <String>{
+  'this',
+  'that',
+  'it',
+  'this one',
+  'that one',
+  'the task',
+  'task',
+  'todo',
+  '这个',
+  '這個',
+  '这个事',
+  '這個事',
+  '这件事',
+  '這件事',
+  '这个任务',
+  '這個任務',
+  '这个待办',
+  '這個待辦',
+  '它',
+  '此项',
+  '此項',
+  '该项',
+  '該項',
+};
+
+bool isDeicticOnlyTodoTitle(String text) {
+  final normalized = text.trim().toLowerCase();
+  if (normalized.isEmpty) return true;
+  return kDeicticOnlyTodoTitles.contains(normalized);
+}
+
 TodoUpdateIntent inferTodoUpdateIntent(String text) {
   final t = text.trim().toLowerCase();
   if (t.isEmpty) {
@@ -173,6 +205,59 @@ TodoUpdateIntent inferTodoUpdateIntent(String text) {
 
   // Default: treat as a progress update, but not explicit.
   return const TodoUpdateIntent(newStatus: 'in_progress', isExplicit: false);
+}
+
+bool looksLikeTodoFollowupEdit(String text) {
+  final normalized = text.trim().toLowerCase();
+  if (normalized.isEmpty) return false;
+
+  const editCues = <String>[
+    '改到',
+    '改成',
+    '改为',
+    '改下',
+    '改一下',
+    '延期',
+    '延后',
+    '推迟',
+    '推后',
+    '顺延',
+    '挪到',
+    'move ',
+    'move it',
+    'move this',
+    'move to',
+    'change ',
+    'change it',
+    'change this',
+    'change to',
+    'reschedule',
+    'postpone',
+    'push to',
+    'push it',
+    'push this',
+    'déplacer',
+    'reporter',
+    'repousser',
+    'reprogrammer',
+    'verschieben',
+    'verlegen',
+    'umplanen',
+    'verschiebe',
+    '変更',
+    '延期',
+    '移す',
+    'ずらす',
+    '変更する',
+    '옮기',
+    '변경',
+    '미루',
+    '재조정',
+  ];
+
+  return editCues.any(
+    (cue) => cue.isNotEmpty && normalized.contains(cue),
+  );
 }
 
 List<TodoLinkCandidate> rankTodoCandidates(

@@ -104,6 +104,77 @@ void main() {
     expect(res.candidates.single.dueAtLocal, DateTime(2026, 1, 26, 21, 0));
   });
 
+  test('resolves same-day weekday (zh) to today at day end', () {
+    final now = DateTime(2026, 2, 4, 10, 0); // Wednesday
+    final res = LocalTimeResolver.resolve(
+      '周三报销',
+      now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(res, isNotNull);
+    expect(res!.kind, 'weekday');
+    expect(res.candidates.single.dueAtLocal, DateTime(2026, 2, 4, 21, 0));
+  });
+
+  test('resolves same-day weekday after day end (zh) to next week', () {
+    final now = DateTime(2026, 4, 20, 22, 0); // Monday after day end
+    final res = LocalTimeResolver.resolve(
+      '周一报销',
+      now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(res, isNotNull);
+    expect(res!.kind, 'weekday');
+    expect(res.candidates.single.dueAtLocal, DateTime(2026, 4, 27, 21, 0));
+  });
+
+  test('resolves next-week weekday (zh) to the following week', () {
+    final now = DateTime(2026, 2, 2, 10, 0); // Monday
+    final res = LocalTimeResolver.resolve(
+      '下周二报销',
+      now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(res, isNotNull);
+    expect(res!.kind, 'weekday');
+    expect(res.matchedText, '下周二');
+    expect(res.candidates.single.dueAtLocal, DateTime(2026, 2, 10, 21, 0));
+  });
+
+  test('resolves this-week weekday with Sunday-first locales', () {
+    final now = DateTime(2026, 2, 8, 10, 0); // Sunday
+    final res = LocalTimeResolver.resolve(
+      'this week monday',
+      now,
+      locale: const Locale('en', 'US'),
+      dayEndMinutes: 21 * 60,
+      firstDayOfWeekIndex: 0,
+    );
+
+    expect(res, isNotNull);
+    expect(res!.kind, 'weekday');
+    expect(res.candidates.single.dueAtLocal, DateTime(2026, 2, 9, 21, 0));
+  });
+
+  test('does not resolve past current-week weekday into a due candidate', () {
+    final now = DateTime(2026, 2, 4, 10, 0); // Wednesday
+    final res = LocalTimeResolver.resolve(
+      '本周一报销',
+      now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+      firstDayOfWeekIndex: 1,
+    );
+
+    expect(res, isNull);
+  });
+
   test('resolves time-only (zh) into today/tomorrow candidates', () {
     final now = DateTime(2026, 1, 24, 12, 0);
     final res = LocalTimeResolver.resolve(

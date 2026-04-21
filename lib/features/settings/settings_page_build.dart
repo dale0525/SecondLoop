@@ -453,29 +453,6 @@ extension _SettingsPageBuild on _SettingsPageState {
               ),
               onTap: _busy ? null : _runOplogMaintenanceDebug,
             ),
-            ListTile(
-              title: Text(context.t.settings.debugSemanticSearch.title),
-              subtitle: Text(context.t.settings.debugSemanticSearch.subtitle),
-              onTap: () {
-                pushPageWithInheritedScopes(
-                  Navigator.of(context),
-                  context,
-                  const SemanticSearchDebugPage(),
-                );
-              },
-            ),
-            ListTile(
-              key: const ValueKey('settings_debug_knowledge_index'),
-              title: Text(context.t.settings.knowledgeIndex.title),
-              subtitle: Text(context.t.settings.knowledgeIndex.subtitle),
-              onTap: () {
-                pushPageWithInheritedScopes(
-                  Navigator.of(context),
-                  context,
-                  const KnowledgeIndexDebugPage(),
-                );
-              },
-            ),
           ]),
         ],
       ],

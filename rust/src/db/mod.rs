@@ -4,7 +4,9 @@
 include!("parts/01_prelude.rs");
 include!("parts/01_kv_and_oplog.rs");
 include!("parts/02_migrate.rs");
+include!("parts/02_migrate_mid.rs");
 include!("parts/02_migrate_tail.rs");
+include!("parts/02_migrate_recent.rs");
 include!("parts/13_content_enrichment_kv.rs");
 include!("parts/03_conversations_messages.rs");
 include!("parts/04_profiles_llm_usage.rs");
@@ -37,7 +39,6 @@ include!("parts/24_external_readonly_import_parser.rs");
 include!("parts/24_external_readonly_import.rs");
 include!("parts/25_external_readonly_search.rs");
 include!("parts/26_external_readonly_phase_b.rs");
-include!("parts/27_knowledge_index.rs");
 include!("parts/28_migration_archive.rs");
 include!("parts/29_migration_archive_runtime.rs");
 include!("parts/30_todo_followup_suggestions.rs");
@@ -45,6 +46,9 @@ include!("parts/31_todo_followup_generation_jobs.rs");
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;
+
+#[cfg(test)]
+mod semantic_parse_jobs_noop_tests;
 
 #[cfg(test)]
 mod cloud_media_backup_tests;
@@ -71,12 +75,6 @@ mod external_import_tests;
 mod external_import_phase_b_tests;
 
 #[cfg(test)]
-mod knowledge_index_tests;
-
-#[cfg(test)]
-mod knowledge_compat_tests;
-
-#[cfg(test)]
 mod embedding_artifact_tests;
 
 #[cfg(test)]
@@ -84,3 +82,6 @@ mod migration_archive_tests;
 
 #[cfg(test)]
 mod checklist_schema_tests;
+
+#[cfg(test)]
+mod sqlite_open_pragmas_tests;

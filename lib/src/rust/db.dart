@@ -1014,6 +1014,8 @@ class SemanticParseJob {
   final String? appliedTodoId;
   final String? appliedTodoTitle;
   final String? appliedPrevTodoStatus;
+  final PlatformInt64? appliedPrevTodoDueAtMs;
+  final bool appliedDueChanged;
   final List<String>? suggestedTags;
   final double? suggestedTagConfidence;
   final String? tagSuggestionState;
@@ -1033,6 +1035,8 @@ class SemanticParseJob {
     this.appliedTodoId,
     this.appliedTodoTitle,
     this.appliedPrevTodoStatus,
+    this.appliedPrevTodoDueAtMs,
+    required this.appliedDueChanged,
     this.suggestedTags,
     this.suggestedTagConfidence,
     this.tagSuggestionState,
@@ -1054,6 +1058,8 @@ class SemanticParseJob {
       appliedTodoId.hashCode ^
       appliedTodoTitle.hashCode ^
       appliedPrevTodoStatus.hashCode ^
+      appliedPrevTodoDueAtMs.hashCode ^
+      appliedDueChanged.hashCode ^
       suggestedTags.hashCode ^
       suggestedTagConfidence.hashCode ^
       tagSuggestionState.hashCode ^
@@ -1077,6 +1083,8 @@ class SemanticParseJob {
           appliedTodoId == other.appliedTodoId &&
           appliedTodoTitle == other.appliedTodoTitle &&
           appliedPrevTodoStatus == other.appliedPrevTodoStatus &&
+          appliedPrevTodoDueAtMs == other.appliedPrevTodoDueAtMs &&
+          appliedDueChanged == other.appliedDueChanged &&
           suggestedTags == other.suggestedTags &&
           suggestedTagConfidence == other.suggestedTagConfidence &&
           tagSuggestionState == other.tagSuggestionState &&

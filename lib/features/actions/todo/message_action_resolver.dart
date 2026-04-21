@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 
 import '../../../core/ai/semantic_parse_edit_policy.dart';
+import '../../../core/ai/temporal/temporal_engine.dart';
+import '../../../core/ai/temporal/temporal_resolution.dart';
 import '../time/time_resolver.dart';
 import 'todo_linking.dart';
 import 'todo_thread_match.dart';
@@ -18,11 +20,13 @@ final class MessageActionNoneDecision extends MessageActionDecision {
 final class MessageActionFollowUpDecision extends MessageActionDecision {
   const MessageActionFollowUpDecision({
     required this.todoId,
-    required this.newStatus,
+    this.newStatus,
+    this.dueAtLocal,
   });
 
   final String todoId;
-  final String newStatus; // "in_progress" | "done" | "dismissed"
+  final String? newStatus; // "in_progress" | "done" | "dismissed"
+  final DateTime? dueAtLocal;
 }
 
 final class MessageActionRecurrenceRule {
@@ -57,9 +61,25 @@ final class MessageActionCreateDecision extends MessageActionDecision {
 }
 
 class MessageActionResolver {
+  static const String _dateDigits = r'0-9\uFF10-\uFF19';
   static final RegExp _todoPrefix =
       RegExp(r'^\s*todo\s*[:：]\s*(.+)$', caseSensitive: false);
   static final RegExp _checkboxPrefix = RegExp(r'^\s*[-*]\s*\[\s*\]\s*(.+)$');
+  static final RegExp _isoDate = RegExp(
+    '(?<![$_dateDigits])'
+    '[$_dateDigits]{4}\\s*[-‐‑–—−－]\\s*[$_dateDigits]{1,2}\\s*[-‐‑–—−－]\\s*[$_dateDigits]{1,2}'
+    '(?![$_dateDigits])',
+  );
+  static final RegExp _slashDate = RegExp(
+    '(?<![$_dateDigits])'
+    '[$_dateDigits]{1,2}\\s*[\\/／]\\s*[$_dateDigits]{1,2}(?:\\s*[\\/／]\\s*[$_dateDigits]{2,4})?'
+    '(?![$_dateDigits])',
+  );
+  static final RegExp _cjkMonthDay = RegExp(
+    '(?<![$_dateDigits])'
+    '[$_dateDigits]{1,2}\\s*(?:月|월)\\s*[$_dateDigits]{1,2}\\s*(?:日|号|號|일)'
+    '(?![$_dateDigits])',
+  );
   static final RegExp _time24h = RegExp(r'\b([01]?\d|2[0-3]):([0-5]\d)\b');
   static final RegExp _timeAmPm =
       RegExp(r'\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b', caseSensitive: false);
@@ -245,7 +265,6 @@ class MessageActionResolver {
   }) {
     final ranked =
         rankTodoCandidates(query, targets, nowLocal: nowLocal, limit: limit);
-    if (ranked.isEmpty) return ranked;
 
     final targetsById = <String, TodoLinkTarget>{};
     for (final t in targets) {
@@ -300,6 +319,9 @@ class MessageActionResolver {
           RegExp(RegExp.escape(matched), caseSensitive: false), ' ');
     }
 
+    out = out.replaceAll(_isoDate, ' ');
+    out = out.replaceAll(_slashDate, ' ');
+    out = out.replaceAll(_cjkMonthDay, ' ');
     out = out.replaceAll(_time24h, ' ');
     out = out.replaceAll(_timeAmPm, ' ');
     out = out.replaceAll(_timeZh, ' ');
@@ -307,6 +329,54 @@ class MessageActionResolver {
     out = out.replaceAll(RegExp(r'\s+'), ' ').trim();
     out = out.replaceAll(RegExp(r'^[,，:：\-–—\s]+'), '').trim();
     return out;
+  }
+
+  static String _stripCreateEditDecorations(String text) {
+    var out = text.trim();
+    if (out.isEmpty) return out;
+
+    out = out.replaceAll(
+      RegExp(r'^(?:把|將|将)\s*', caseSensitive: false),
+      '',
+    );
+    out = out.replaceAll(
+      RegExp(
+        r'\s*(?:改到|改成|改为|改為|改下|改一下|延期|延后|延後|推迟|推遲|推后|推後|顺延|順延|挪到|to|until|for|on)\s*$',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    out = out.replaceAll(RegExp(r'^[,，:：\-–—\s]+'), '').trim();
+    out = out.replaceAll(RegExp(r'[，,。.!！?？]+$'), '').trim();
+    final deicticWithoutLeadingVerb = out.replaceAll(
+      RegExp(
+        r'^(?:change|move|push|postpone|reschedule)\s+',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    if (_looksLikeDeicticOnlyTitle(deicticWithoutLeadingVerb)) {
+      return deicticWithoutLeadingVerb;
+    }
+    return out;
+  }
+
+  static bool _looksLikeDeicticOnlyTitle(String text) {
+    return isDeicticOnlyTodoTitle(text);
+  }
+
+  static bool _canTreatEditPhraseAsCreate(
+    String raw, {
+    required LocalTimeResolution? time,
+    required MessageActionRecurrenceRule? recurrenceRule,
+  }) {
+    var title = _stripTimeDecorations(raw, time);
+    title = _stripRecurrenceDecorations(title);
+    title = _stripCreateEditDecorations(title);
+    if (recurrenceRule != null) {
+      title = _cleanupRecurringTitleArtifacts(title);
+    }
+    return title.isNotEmpty && !_looksLikeDeicticOnlyTitle(title);
   }
 
   static int _firstWeekdayFromIndex(int firstDayOfWeekIndex) {
@@ -405,6 +475,19 @@ class MessageActionResolver {
 
     final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
     final updateIntent = inferTodoUpdateIntent(raw);
+    final followupEditCue = looksLikeTodoFollowupEdit(raw);
+    final followupTemporal = TemporalEngine.resolve(
+      text: raw,
+      nowLocal: nowLocal,
+      locale: locale,
+      timezone: '',
+      firstDayOfWeek: firstDayOfWeekIndex,
+      mode: TemporalMode.todoFollowupDue,
+      allowEnhancement: false,
+      dayEndMinutes: dayEndMinutes,
+    );
+    final followupDueAtLocal =
+        followupEditCue ? followupTemporal.dueAtLocal : null;
 
     // Follow-up (existing todo)
     if (openTodoTargets.isNotEmpty) {
@@ -421,14 +504,17 @@ class MessageActionResolver {
         final secondScore = ranked.length > 1 ? ranked[1].score : 0;
         final highConfidence = top.score >= 3200 ||
             (top.score >= 2400 && (top.score - secondScore) >= 900) ||
-            (updateIntent.isExplicit &&
+            ((updateIntent.isExplicit ||
+                    (followupEditCue && followupDueAtLocal != null)) &&
                 top.score >= 1600 &&
                 (top.score - secondScore) >= 500);
 
-        if (highConfidence) {
+        if (highConfidence &&
+            (updateIntent.isExplicit || followupDueAtLocal != null)) {
           return MessageActionFollowUpDecision(
             todoId: top.target.id,
-            newStatus: updateIntent.newStatus,
+            newStatus: updateIntent.isExplicit ? updateIntent.newStatus : null,
+            dueAtLocal: followupDueAtLocal,
           );
         }
       }
@@ -438,27 +524,50 @@ class MessageActionResolver {
       return const MessageActionNoneDecision();
     }
 
-    // Create (new todo)
     final recurrenceRule = _detectRecurrenceRule(raw);
+    final dueResolution = TemporalEngine.resolve(
+      text: raw,
+      nowLocal: nowLocal,
+      locale: locale,
+      timezone: '',
+      firstDayOfWeek: firstDayOfWeekIndex,
+      mode: TemporalMode.todoDue,
+      allowEnhancement: false,
+      dayEndMinutes: dayEndMinutes,
+    );
     final time = LocalTimeResolver.resolve(
       raw,
       nowLocal,
       locale: locale,
       dayEndMinutes: dayEndMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
+
+    if ((followupEditCue ||
+            updateIntent.isExplicit ||
+            followupDueAtLocal != null) &&
+        !_canTreatEditPhraseAsCreate(
+          raw,
+          time: time,
+          recurrenceRule: recurrenceRule,
+        )) {
+      return const MessageActionNoneDecision();
+    }
 
     final structuredTitle = _extractStructuredTitle(raw);
     if (structuredTitle != null) {
-      final dueAtLocal = time?.candidates.length == 1
-          ? time!.candidates.single.dueAtLocal
-          : recurrenceRule == null
-              ? null
-              : _fallbackDueAtForRecurring(
-                  nowLocal,
-                  recurrenceRule,
-                  morningMinutes: resolvedMorningMinutes,
-                  firstDayOfWeekIndex: firstDayOfWeekIndex,
-                );
+      final dueAtLocal = dueResolution.dueAtLocal ??
+          ((time?.candidates.length == 1
+                  ? time!.candidates.single.dueAtLocal
+                  : null) ??
+              (recurrenceRule == null
+                  ? null
+                  : _fallbackDueAtForRecurring(
+                      nowLocal,
+                      recurrenceRule,
+                      morningMinutes: resolvedMorningMinutes,
+                      firstDayOfWeekIndex: firstDayOfWeekIndex,
+                    )));
       var title = _stripRecurrenceDecorations(structuredTitle);
       if (recurrenceRule != null) {
         title = _cleanupRecurringTitleArtifacts(title);
@@ -479,25 +588,32 @@ class MessageActionResolver {
     }
 
     if (time == null && recurrenceRule == null) {
-      return const MessageActionNoneDecision();
+      if (dueResolution.dueAtLocal == null) {
+        return const MessageActionNoneDecision();
+      }
     }
 
-    final dueAtLocal = time != null && time.candidates.length == 1
-        ? time.candidates.single.dueAtLocal
-        : recurrenceRule == null
-            ? null
-            : _fallbackDueAtForRecurring(
-                nowLocal,
-                recurrenceRule,
-                morningMinutes: resolvedMorningMinutes,
-                firstDayOfWeekIndex: firstDayOfWeekIndex,
-              );
-    if (time != null && time.candidates.length != 1 && recurrenceRule == null) {
+    final dueAtLocal = dueResolution.dueAtLocal ??
+        (time != null && time.candidates.length == 1
+            ? time.candidates.single.dueAtLocal
+            : recurrenceRule == null
+                ? null
+                : _fallbackDueAtForRecurring(
+                    nowLocal,
+                    recurrenceRule,
+                    morningMinutes: resolvedMorningMinutes,
+                    firstDayOfWeekIndex: firstDayOfWeekIndex,
+                  ));
+    if (dueResolution.dueAtLocal == null &&
+        time != null &&
+        time.candidates.length != 1 &&
+        recurrenceRule == null) {
       return const MessageActionNoneDecision();
     }
 
     var title = _stripTimeDecorations(raw, time);
     title = _stripRecurrenceDecorations(title);
+    title = _stripCreateEditDecorations(title);
     if (recurrenceRule != null) {
       title = _cleanupRecurringTitleArtifacts(title);
     }

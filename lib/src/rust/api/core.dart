@@ -610,6 +610,13 @@ Future<List<Event>> dbListEvents(
         {required String appDir, required List<int> key}) =>
     RustLib.instance.api.crateApiCoreDbListEvents(appDir: appDir, key: key);
 
+Future<Event?> dbGetEventById(
+        {required String appDir,
+        required List<int> key,
+        required String eventId}) =>
+    RustLib.instance.api
+        .crateApiCoreDbGetEventById(appDir: appDir, key: key, eventId: eventId);
+
 Future<void> dbEditMessage(
         {required String appDir,
         required List<int> key,

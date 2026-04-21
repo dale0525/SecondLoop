@@ -32,6 +32,7 @@ fn state_key(scope_id: &str) -> String {
     format!("managed_vault.state:{scope_id}")
 }
 
+#[cfg_attr(target_family = "wasm", allow(dead_code))]
 pub(crate) fn load_state(
     conn: &rusqlite::Connection,
     scope_id: &str,

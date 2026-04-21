@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/features/chat/chat_answer_evidence_parser.dart';
 
 void main() {
-  test('parseChatAnswerEvidence parses direct sources and memory cards', () {
+  test('parseChatAnswerEvidence reads direct sources payloads', () {
     const raw = '''
 {
   "direct_sources": [
@@ -21,20 +21,6 @@ void main() {
       "created_at_ms": 1,
       "updated_at_ms": 2
     }
-  ],
-  "memory_cards": [
-    {
-      "document_id": "generated:preference:response-language",
-      "title": "Response language",
-      "summary": "User prefers Chinese.",
-      "source_kind": "summary",
-      "role": "summary",
-      "created_at_ms": 3,
-      "updated_at_ms": 4,
-      "status": "confirmed",
-      "source_count": 2,
-      "why_used": "用中文总结一下最近变化"
-    }
   ]
 }
 ''';
@@ -43,7 +29,6 @@ void main() {
 
     expect(evidence, isNotNull);
     expect(evidence!.directSources, hasLength(1));
-    expect(evidence.memoryCards, hasLength(1));
     expect(
       evidence.directSources.single.displayTitle,
       'Kickoff notes',
@@ -59,18 +44,32 @@ void main() {
       evidence.chipLabelForHref('secondloop://message/history-1'),
       '[1]',
     );
-    expect(
-      evidence.memoryCards.single.displaySummary,
-      'User prefers Chinese.',
-    );
-    expect(evidence.memoryCards.single.status, 'confirmed');
-    expect(evidence.memoryCards.single.whyUsed, '用中文总结一下最近变化');
   });
 
-  test('parseChatAnswerEvidence returns null for invalid payload', () {
+  test(
+      'parseChatAnswerEvidence returns null for invalid or legacy-only payload',
+      () {
+    const legacyOnly = '''
+{
+  "memory_cards": [
+    {
+      "document_id": "page:preferences",
+      "title": "Preferences",
+      "summary": "Reply in Chinese.",
+      "source_kind": "summary",
+      "role": "summary",
+      "created_at_ms": 3,
+      "updated_at_ms": 4,
+      "status": "confirmed",
+      "source_count": 2
+    }
+  ]
+}
+''';
+
     expect(parseChatAnswerEvidence('not-json'), isNull);
-    expect(parseChatAnswerEvidence('{"direct_sources":[],"memory_cards":[]}'),
-        isNull);
+    expect(parseChatAnswerEvidence('{"direct_sources":[]}'), isNull);
+    expect(parseChatAnswerEvidence(legacyOnly), isNull);
   });
 
   test('parseChatAnswerEvidence aggregates duplicate href citations', () {
@@ -93,8 +92,7 @@ void main() {
       "snippet": "Second excerpt",
       "unit_id": "unit-b"
     }
-  ],
-  "memory_cards": []
+  ]
 }
 ''';
 

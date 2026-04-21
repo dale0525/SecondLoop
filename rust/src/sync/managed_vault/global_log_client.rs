@@ -593,7 +593,6 @@ pub(super) fn push_v2(
     let endpoint = super::runtime::url(base_url, &format!("/v2/vaults/{vault_id}/sync/push"))?;
 
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
-    crate::db::backfill_knowledge_memory_feedback_oplog_if_needed(conn, db_key)?;
     let app_dir = if upload_attachment_bytes {
         Some(super::super::app_dir_from_conn(conn)?)
     } else {

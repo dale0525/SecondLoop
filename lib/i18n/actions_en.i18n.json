@@ -33,7 +33,9 @@
   "todoLink": {
     "title": "Update a task?",
     "subtitle": "Mark as: $status",
-    "updated": "Updated \"$title\" → $status"
+    "updated": "Updated \"$title\" → $status",
+    "updatedDue": "Updated due date for \"$title\"",
+    "updatedStatusAndDue": "Updated status and due date for \"$title\""
   },
   "todoNoteLink": {
     "action": "Link to task",

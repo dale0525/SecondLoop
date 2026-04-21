@@ -1,18 +1,18 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/attachments_backend.dart';
-import 'package:secondloop/core/backend/knowledge_viewer_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/actions/calendar/event_deeplink.dart';
+import 'package:secondloop/features/actions/calendar/event_viewer_page.dart';
+import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
+import 'package:secondloop/features/chat/chat_markdown_link_handler.dart';
 import 'package:secondloop/features/chat/chat_markdown_preview.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/features/chat/message_deeplink.dart';
-import 'package:secondloop/features/knowledge_viewer/knowledge_document_viewer_page.dart';
 import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/src/rust/knowledge/models.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -40,6 +40,26 @@ void main() {
 
     expect(parsed, isNotNull);
     expect(parsed!.messageId, 'history-1');
+  });
+
+  test('parseEventDeepLink parses secondloop event deeplinks', () {
+    final parsed = parseEventDeepLink(
+      'secondloop://event/event:budget-review?ignored=true',
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed!.eventId, 'event:budget-review');
+  });
+
+  test('canOpenChatMarkdownHref accepts supported event deeplinks', () {
+    expect(
+      canOpenChatMarkdownHref('secondloop://event/event:budget-review'),
+      isTrue,
+    );
+    expect(
+      canOpenChatMarkdownHref('secondloop://message/history-1'),
+      isTrue,
+    );
   });
 
   test(
@@ -233,8 +253,314 @@ secondloop://message/history-1
     );
   });
 
-  testWidgets('chat deeplink preserves knowledge document unit targeting',
+  testWidgets('chat secondloop event link opens event viewer', (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm1',
+          conversationId: 'loop_home',
+          role: 'assistant',
+          content:
+              'See [Budget review](secondloop://event/event:budget-review)',
+          createdAtMs: 2,
+          isMemory: false,
+        ),
+      ],
+      events: const [
+        Event(
+          id: 'event:budget-review',
+          title: 'Budget review with Alice',
+          startAtMs: 1000,
+          endAtMs: 2000,
+          tz: 'UTC',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Budget review', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(EventViewerPage), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('event_viewer_page')),
+        matching: find.text('Budget review with Alice'),
+      ),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('chat secondloop todo link opens todo detail via get-by-id',
       (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm1',
+          conversationId: 'loop_home',
+          role: 'assistant',
+          content:
+              'See [Launch checklist](secondloop://todo/todo:launch-checklist)',
+          createdAtMs: 2,
+          isMemory: false,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 'todo:launch-checklist',
+          title: 'Launch checklist',
+          status: 'open',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        ),
+      ],
+      throwOnListTodos: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.textContaining('Launch checklist', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(TodoDetailPage), findsOneWidget);
+    expect(find.text('Launch checklist'), findsWidgets);
+  });
+
+  testWidgets('chat secondloop event link opens event viewer via get-by-id',
+      (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm1',
+          conversationId: 'loop_home',
+          role: 'assistant',
+          content:
+              'See [Budget review](secondloop://event/event:budget-review)',
+          createdAtMs: 2,
+          isMemory: false,
+        ),
+      ],
+      events: const [
+        Event(
+          id: 'event:budget-review',
+          title: 'Budget review with Alice',
+          startAtMs: 1000,
+          endAtMs: 2000,
+          tz: 'UTC',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        ),
+      ],
+      throwOnListEvents: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Budget review', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(EventViewerPage), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('event_viewer_page')),
+        matching: find.text('Budget review with Alice'),
+      ),
+      findsWidgets,
+    );
+  });
+
+  testWidgets(
+      'chat missing secondloop event link falls back to unsupported snackbar',
+      (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm1',
+          conversationId: 'loop_home',
+          role: 'assistant',
+          content:
+              'See [Budget review](secondloop://event/event:missing-review)',
+          createdAtMs: 2,
+          isMemory: false,
+        ),
+      ],
+      throwOnListEvents: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.textContaining('Budget review', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.byType(EventViewerPage), findsNothing);
+    expect(find.text('Load failed: unsupported_secondloop_link'), findsOne);
+  });
+
+  testWidgets(
+      'chat missing secondloop todo link falls back to unsupported snackbar',
+      (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm1',
+          conversationId: 'loop_home',
+          role: 'assistant',
+          content:
+              'See [Launch checklist](secondloop://todo/todo:missing-checklist)',
+          createdAtMs: 2,
+          isMemory: false,
+        ),
+      ],
+      throwOnListTodos: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.textContaining('Launch checklist', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.byType(TodoDetailPage), findsNothing);
+    expect(find.text('Load failed: unsupported_secondloop_link'), findsOne);
+  });
+
+  testWidgets('chat ignores knowledge-document deeplinks after removal',
+      (tester) async {
+    final launchedUrls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'launch') {
+        launchedUrls.add((call.arguments as Map)['url'] as String);
+      }
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
     final backend = _Backend(
       initialMessages: const [
         Message(
@@ -278,69 +604,28 @@ secondloop://message/history-1
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
 
-    final page = tester.widget<KnowledgeDocumentViewerPage>(
-      find.byType(KnowledgeDocumentViewerPage),
-    );
-    expect(page.documentId, 'external:doc-1');
-    expect(page.initialHighlightedUnitId, 'external:doc-1:chunk:0007');
+    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.textContaining('budget note', findRichText: true), findsOne);
+    expect(launchedUrls, isEmpty);
+    expect(find.text('Load failed: unsupported_secondloop_link'), findsOne);
   });
 }
 
-final class _Backend extends TestAppBackend
-    implements AttachmentsBackend, KnowledgeViewerBackend {
-  _Backend({required List<Message> initialMessages})
-      : super(initialMessages: initialMessages);
+final class _Backend extends TestAppBackend implements AttachmentsBackend {
+  _Backend({
+    required List<Message> initialMessages,
+    List<Event> events = const <Event>[],
+    List<Todo> todos = const <Todo>[],
+    this.throwOnListEvents = false,
+    this.throwOnListTodos = false,
+  })  : _events = List<Event>.from(events),
+        _todos = List<Todo>.from(todos),
+        super(initialMessages: initialMessages);
 
-  final KnowledgeViewerDocument _viewerDocument = const KnowledgeViewerDocument(
-    document: ContentKnowledgeDocument(
-      documentId: 'external:doc-1',
-      originType: KnowledgeOriginType.importedExternal,
-      sourceKind: KnowledgeSourceKind.readableText,
-      role: KnowledgeRole.evidence,
-      language: 'en',
-      qualityScore: 0.9,
-      createdAtMs: 1,
-      updatedAtMs: 1,
-      versions: KnowledgeVersionSet(
-        schemaVersion: 1,
-        normalizationVersion: 1,
-        segmentationVersion: 1,
-        embeddingPolicyVersion: 1,
-        retrievalPolicyVersion: 1,
-      ),
-      anchors: KnowledgeAnchorSet(),
-      title: 'Budget note',
-      summary: 'Budget summary',
-      rawText: 'Budget note body',
-      normalizedText: 'budget note body',
-      memoryFeedback: KnowledgeMemoryFeedback(
-        useForAskAi: true,
-        isDeleted: false,
-        markedInaccurate: false,
-      ),
-    ),
-    totalUnits: 1,
-    sectionCount: 0,
-    chunkCount: 1,
-  );
-
-  final KnowledgeUnit _viewerUnit = const KnowledgeUnit(
-    unitId: 'external:doc-1:chunk:0007',
-    documentId: 'external:doc-1',
-    parentUnitId: null,
-    unitKind: KnowledgeUnitKind.chunk,
-    sourceKind: KnowledgeSourceKind.readableText,
-    role: KnowledgeRole.evidence,
-    ordinal: 7,
-    tokenCount: 4,
-    rawText: 'Budget note body',
-    normalizedText: 'budget note body',
-    anchors: KnowledgeAnchorSet(),
-    prevUnitId: null,
-    nextUnitId: null,
-    createdAtMs: 1,
-    updatedAtMs: 1,
-  );
+  final List<Event> _events;
+  final List<Todo> _todos;
+  final bool throwOnListEvents;
+  final bool throwOnListTodos;
 
   @override
   Future<Attachment?> readAttachmentBySha256(String attachmentSha256) async =>
@@ -396,62 +681,38 @@ final class _Backend extends TestAppBackend
       null;
 
   @override
-  Future<KnowledgeViewerDocument> getKnowledgeViewerDocument(
-    Uint8List key, {
-    required String documentId,
-  }) async {
-    if (documentId != _viewerDocument.document.documentId) {
-      throw StateError('unexpected document id: $documentId');
+  Future<List<Event>> listEvents(Uint8List key) async {
+    if (throwOnListEvents) {
+      throw StateError('listEvents should not be used');
     }
-    return _viewerDocument;
+    return List<Event>.from(_events);
   }
 
   @override
-  Future<KnowledgeViewerPage> listKnowledgeViewerUnits(
-    Uint8List key, {
-    required String documentId,
-    KnowledgeUnitKind? unitKind,
-    int limit = 100,
-    int offset = 0,
-  }) async {
-    return KnowledgeViewerPage(
-      documentId: 'external:doc-1',
-      unitKind: KnowledgeUnitKind.chunk,
-      offset: 0,
-      limit: 100,
-      total: 1,
-      units: <KnowledgeUnit>[
-        _viewerUnit,
-      ],
-    );
+  Future<Event?> getEventById(Uint8List key, String eventId) async {
+    for (final event in _events) {
+      if (event.id == eventId) {
+        return event;
+      }
+    }
+    return null;
   }
 
   @override
-  Future<List<KnowledgeUnit>> listKnowledgeUnitsAroundAnchor(
-    Uint8List key, {
-    required String documentId,
-    required KnowledgeAnchorSet anchor,
-    int before = 2,
-    int after = 3,
-  }) async =>
-      <KnowledgeUnit>[_viewerUnit];
+  Future<List<Todo>> listTodos(Uint8List key) async {
+    if (throwOnListTodos) {
+      throw StateError('listTodos should not be used');
+    }
+    return List<Todo>.from(_todos);
+  }
 
   @override
-  Future<List<KnowledgeSearchResult>> searchKnowledge(
-    Uint8List key, {
-    required String query,
-    String? conversationId,
-    String? documentId,
-    int limit = 20,
-  }) async =>
-      const <KnowledgeSearchResult>[];
-
-  @override
-  Future<List<KnowledgeSearchResult>> searchKnowledgeDocumentUnits(
-    Uint8List key, {
-    required String documentId,
-    required String query,
-    int limit = 20,
-  }) async =>
-      const <KnowledgeSearchResult>[];
+  Future<Todo?> getTodoById(Uint8List key, String todoId) async {
+    for (final todo in _todos) {
+      if (todo.id == todoId) {
+        return todo;
+      }
+    }
+    return null;
+  }
 }

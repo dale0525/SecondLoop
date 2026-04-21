@@ -105,8 +105,7 @@ pub fn open_external_readonly_db(app_dir: &Path) -> Result<Connection> {
     )?;
     vector::register_sqlite_vec()?;
     let conn = Connection::open(external_readonly_db_path(app_dir))?;
-    conn.busy_timeout(Duration::from_millis(5_000))?;
-    conn.pragma_update(None, "journal_mode", "WAL")?;
+    apply_sqlite_open_pragmas(&conn)?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
     migrate_external_readonly_db(&conn)?;
     Ok(conn)

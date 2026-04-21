@@ -115,7 +115,14 @@ abstract class AppBackend with _AppBackendSemanticAndSyncMixin {
   }
 
   Future<Todo?> getTodoById(Uint8List key, String todoId) {
-    throw UnimplementedError('getTodoById');
+    return listTodos(key).then((todos) {
+      for (final todo in todos) {
+        if (todo.id == todoId) {
+          return todo;
+        }
+      }
+      return null;
+    });
   }
 
   Future<List<Todo>> listTodosCreatedInRange(
@@ -502,6 +509,17 @@ abstract class AppBackend with _AppBackendSemanticAndSyncMixin {
 
   Future<List<Event>> listEvents(Uint8List key) {
     throw UnimplementedError('listEvents');
+  }
+
+  Future<Event?> getEventById(Uint8List key, String eventId) {
+    return listEvents(key).then((events) {
+      for (final event in events) {
+        if (event.id == eventId) {
+          return event;
+        }
+      }
+      return null;
+    });
   }
 
   Future<Event> upsertEvent(

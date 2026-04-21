@@ -684,11 +684,40 @@ ALTER TABLE knowledge_pages
 }
 
 fn migrate_from_v48_to_v49(conn: &Connection) -> Result<()> {
+    if !table_has_column(
+        conn,
+        "semantic_parse_jobs",
+        "applied_prev_todo_due_at_ms",
+    )? {
+        execute_batch_allowing_duplicate_columns(
+            conn,
+            r#"
+ALTER TABLE semantic_parse_jobs
+  ADD COLUMN applied_prev_todo_due_at_ms INTEGER;
+"#,
+        )?;
+    }
+
+    if !table_has_column(conn, "semantic_parse_jobs", "applied_due_changed")? {
+        execute_batch_allowing_duplicate_columns(
+            conn,
+            r#"
+ALTER TABLE semantic_parse_jobs
+  ADD COLUMN applied_due_changed INTEGER NOT NULL DEFAULT 0;
+"#,
+        )?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 49;")?;
+    Ok(())
+}
+
+fn migrate_from_v49_to_v50(conn: &Connection) -> Result<()> {
     if sqlite_table_exists(conn, "cloud_media_backup")? {
         conn.execute_batch(
             r#"
-DROP TABLE IF EXISTS cloud_media_backup_v48_legacy;
-ALTER TABLE cloud_media_backup RENAME TO cloud_media_backup_v48_legacy;
+DROP TABLE IF EXISTS cloud_media_backup_v49_legacy;
+ALTER TABLE cloud_media_backup RENAME TO cloud_media_backup_v49_legacy;
 DROP INDEX IF EXISTS idx_cloud_media_backup_status_retry;
 "#,
         )?;
@@ -713,11 +742,11 @@ CREATE INDEX idx_cloud_media_backup_status_retry
 "#,
     )?;
 
-    if sqlite_table_exists(conn, "cloud_media_backup_v48_legacy")? {
-        conn.execute_batch("DROP TABLE cloud_media_backup_v48_legacy;")?;
+    if sqlite_table_exists(conn, "cloud_media_backup_v49_legacy")? {
+        conn.execute_batch("DROP TABLE cloud_media_backup_v49_legacy;")?;
     }
 
-    conn.execute_batch("PRAGMA user_version = 49;")?;
+    conn.execute_batch("PRAGMA user_version = 50;")?;
     Ok(())
 }
 
@@ -933,7 +962,45 @@ CREATE TABLE knowledge_pages (
     }
 
     #[test]
-    fn v49_cloud_media_backup_migration_rebuilds_scope_primary_key() {
+    fn v49_semantic_parse_jobs_migration_adds_due_undo_columns() {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(
+            r#"
+CREATE TABLE semantic_parse_jobs (
+  message_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  attempt_id INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at_ms INTEGER,
+  last_error TEXT,
+  applied_action_kind TEXT,
+  applied_todo_id TEXT,
+  applied_todo_title BLOB,
+  applied_prev_todo_status TEXT,
+  undone_at_ms INTEGER,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+"#,
+        )
+        .expect("seed pre-v49 semantic_parse_jobs");
+
+        migrate_from_v48_to_v49(&conn).expect("rerun v49 migration");
+
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(semantic_parse_jobs)")
+            .expect("prepare table info");
+        let column_names = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query table info")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect column names");
+        assert!(column_names.contains(&"applied_prev_todo_due_at_ms".to_string()));
+        assert!(column_names.contains(&"applied_due_changed".to_string()));
+    }
+
+    #[test]
+    fn v50_cloud_media_backup_migration_rebuilds_scope_primary_key() {
         let conn = Connection::open_in_memory().expect("open in memory");
         conn.execute_batch(
             r#"
@@ -959,12 +1026,12 @@ INSERT INTO cloud_media_backup(
   updated_at
 ) VALUES ('sha-1', 'original', 'pending', 0, NULL, NULL, 1234);
 INSERT INTO attachments(sha256) VALUES ('sha-1');
-PRAGMA user_version = 48;
+PRAGMA user_version = 49;
 "#,
         )
-        .expect("seed pre-v49 cloud_media_backup");
+        .expect("seed pre-v50 cloud_media_backup");
 
-        migrate_from_v48_to_v49(&conn).expect("run v49 migration");
+        migrate_from_v49_to_v50(&conn).expect("run v50 migration");
 
         let mut stmt = conn
             .prepare("PRAGMA table_info(cloud_media_backup)")
@@ -998,13 +1065,13 @@ PRAGMA user_version = 48;
             .expect("collect migrated rows");
         assert!(
             migrated.is_empty(),
-            "v49 migration should drop legacy cloud media backup rows rather than risking a wrong scoped upload"
+            "v50 migration should drop legacy cloud media backup rows rather than risking a wrong scoped upload"
         );
 
         let user_version: i64 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .expect("user_version");
-        assert_eq!(user_version, 49);
+        assert_eq!(user_version, 50);
     }
 }
 

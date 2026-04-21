@@ -73,6 +73,19 @@ void main() {
     expect(pixi, contains('--import-memory'));
   });
 
+  test(
+      'preview frb web build task overrides flutter_rust_bridge atomics default',
+      () {
+    final pixi = File('pixi.toml').readAsStringSync();
+
+    expect(pixi, contains('frb-build-web-preview'));
+    expect(
+      pixi,
+      contains('+bulk-memory,+mutable-globals'),
+    );
+    expect(pixi, contains('-Aunstable-features'));
+  });
+
   test('sqlite wasm C build enables atomics and bulk-memory', () {
     final buildRs =
         File('third_party/sqlite-wasm-rs-patched/build.rs').readAsStringSync();

@@ -137,6 +137,38 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+
+  test('store uses atomic followup completion for due-only updates', () async {
+    final backend = _AtomicFollowupBackend(
+      jobsByMessageId: <String, SemanticParseJob>{
+        'msg:running': _job(
+          messageId: 'msg:running',
+          status: 'running',
+          attemptId: 11,
+        ),
+      },
+    );
+    final store = BackendSemanticParseAutoActionsStore(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+
+    final applied = await store.completeFollowupIfCurrentAttempt(
+      messageId: 'msg:running',
+      expectedAttemptId: 11,
+      todoId: 'todo-1',
+      todoTitle: 'Todo',
+      newStatus: null,
+      dueAtMs: 12345,
+      nowMs: 1000,
+    );
+
+    expect(applied, isTrue);
+    expect(backend.completeFollowupCalls, 1);
+    expect(backend.lastNewStatus, isNull);
+    expect(backend.lastDueAtMs, 12345);
+    expect(backend.updateTodoDueCalls, 0);
+  });
 }
 
 SemanticParseJob _job({
@@ -155,6 +187,7 @@ SemanticParseJob _job({
     appliedTodoId: null,
     appliedTodoTitle: null,
     appliedPrevTodoStatus: null,
+    appliedDueChanged: false,
     suggestedTags: null,
     suggestedTagConfidence: null,
     tagSuggestionState: null,
@@ -276,7 +309,8 @@ final class _ThrowingClaimBackend extends AppBackend
     required int expectedAttemptId,
     required String todoId,
     String? todoTitle,
-    required String newStatus,
+    String? newStatus,
+    int? dueAtMs,
     List<String>? pendingSuggestedTags,
     List<String>? autoApplySuggestedTags,
     double? suggestedTagConfidence,
@@ -351,6 +385,192 @@ final class _NonAttemptAwareBackend extends AppBackend {
         .whereType<SemanticParseJob>()
         .toList(growable: false);
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _AtomicFollowupBackend extends AppBackend
+    implements SemanticParseAttemptAwareBackend {
+  _AtomicFollowupBackend({required this.jobsByMessageId});
+
+  final Map<String, SemanticParseJob> jobsByMessageId;
+  int completeFollowupCalls = 0;
+  int updateTodoDueCalls = 0;
+  String? lastNewStatus;
+  int? lastDueAtMs;
+
+  @override
+  Future<List<SemanticParseJob>> listSemanticParseJobsByMessageIds(
+    Uint8List key, {
+    required List<String> messageIds,
+  }) async {
+    return messageIds
+        .map((id) => jobsByMessageId[id])
+        .whereType<SemanticParseJob>()
+        .toList(growable: false);
+  }
+
+  @override
+  Future<bool> completeSemanticParseFollowupIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    String? todoTitle,
+    String? newStatus,
+    int? dueAtMs,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    completeFollowupCalls += 1;
+    lastNewStatus = newStatus;
+    lastDueAtMs = dueAtMs;
+    return true;
+  }
+
+  @override
+  Future<Todo> updateTodoDueWithScope(
+    Uint8List key, {
+    required String todoId,
+    required int dueAtMs,
+    required TodoRecurrenceEditScope scope,
+  }) async {
+    updateTodoDueCalls += 1;
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<int?> claimSemanticParseJobRunning(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async =>
+      null;
+
+  @override
+  Future<bool> markSemanticParseJobFailedIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async =>
+      false;
+
+  @override
+  Future<bool> markSemanticParseJobSucceededIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String appliedActionKind,
+    String? appliedTodoId,
+    String? appliedTodoTitle,
+    String? appliedPrevTodoStatus,
+    List<String>? suggestedTags,
+    double? suggestedTagConfidence,
+    String? tagSuggestionState,
+    List<String>? appliedTagIds,
+    required int nowMs,
+  }) async =>
+      false;
+
+  @override
+  Future<bool> markSemanticParseJobCanceledIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required int nowMs,
+  }) async =>
+      false;
+
+  @override
+  Future<List<String>?> completeSemanticParseNoActionIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async =>
+      null;
+
+  @override
+  Future<bool> completeSemanticParseCreateIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required String title,
+    required String status,
+    int? dueAtMs,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? recurrenceRuleJson,
+    String? followupTaskTypeHint,
+    required List<String> checklistSuggestions,
+    required String checklistSource,
+    String? checklistGenerationKey,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async =>
+      false;
+
+  @override
+  Future<List<String>> applySemanticParseTagsIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required List<String> suggestedTags,
+  }) async =>
+      const <String>[];
+
+  @override
+  Future<String?> upsertTodoFromSemanticParseIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? taskTypeHint,
+    String? recurrenceRuleJson,
+    required int nowMs,
+  }) async =>
+      null;
+
+  @override
+  Future<void> upsertGeneratedTodoChecklistSuggestionsIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required List<String> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {}
+
+  @override
+  Future<String?> setTodoStatusFromSemanticParseIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required String newStatus,
+  }) async =>
+      null;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
