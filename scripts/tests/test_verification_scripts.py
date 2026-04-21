@@ -44,7 +44,8 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("`pixi run ci`", contributing)
         self.assertIn("run in parallel locally", contributing)
         self.assertIn("scoped pre-push", contributing)
-        self.assertIn("Python tooling-only changes", contributing)
+        self.assertIn("Tooling-scoped script / Python changes", contributing)
+        self.assertIn("maintenance scripts under `scripts/*`", contributing)
 
     def test_parallel_ci_wrapper_runs_flutter_and_rust_scopes(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(

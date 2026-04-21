@@ -53,6 +53,49 @@ is_tooling_python_file() {
   esac
 }
 
+is_gate_script_file() {
+  local path="$1"
+  case "${path}" in
+    scripts/install_git_hooks.sh | \
+      scripts/pre_commit_common.sh | \
+      scripts/pre_commit_check_mode.sh | \
+      scripts/pre_commit_commit_mode.sh | \
+      scripts/run_bash.ps1 | \
+      scripts/run_flutter_ci_local.sh | \
+      scripts/run_flutter_test_shard.sh | \
+      scripts/run_flutter_web_ci_local.sh | \
+      scripts/run_full_ci_parallel.sh | \
+      scripts/run_full_rust_ci_local.sh | \
+      scripts/run_python_tooling_checks.sh | \
+      scripts/run_rust_builder_package_tests.sh | \
+      scripts/select_flutter_test_targets.sh | \
+      scripts/verify_changed.sh | \
+      scripts/verify_full.sh)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+needs_tooling_checks_for_path() {
+  local path="$1"
+  if is_tooling_python_file "${path}"; then
+    return 0
+  fi
+
+  case "${path}" in
+    scripts/*)
+      is_gate_script_file "${path}" && return 1
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 requires_full_verification() {
   local path="$1"
   case "${path}" in
@@ -63,8 +106,8 @@ requires_full_verification() {
       return 0
       ;;
     scripts/*)
-      is_tooling_python_file "${path}" && return 1
-      return 0
+      is_gate_script_file "${path}" && return 0
+      return 1
       ;;
     tools/*.dart)
       return 0
@@ -138,12 +181,12 @@ if [[ ${#push_changed_files[@]} -eq 0 ]]; then
   exit 0
 fi
 
-needs_tooling_python=0
+needs_tooling_checks=0
 needs_full_verification=0
 
 for file in "${push_changed_files[@]}"; do
-  if is_tooling_python_file "${file}"; then
-    needs_tooling_python=1
+  if needs_tooling_checks_for_path "${file}"; then
+    needs_tooling_checks=1
   fi
 
   if requires_full_verification "${file}"; then
@@ -157,8 +200,8 @@ if [[ ${needs_full_verification} -ne 0 ]]; then
   exit $?
 fi
 
-if [[ ${needs_tooling_python} -ne 0 ]]; then
-  echo "pre-push: tooling-python-only changes detected; running lightweight tooling checks." >&2
+if [[ ${needs_tooling_checks} -ne 0 ]]; then
+  echo "pre-push: tooling-scoped changes detected; running lightweight tooling checks." >&2
   bash scripts/run_python_tooling_checks.sh
   exit $?
 fi

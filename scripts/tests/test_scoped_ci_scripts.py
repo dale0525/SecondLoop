@@ -325,6 +325,66 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertEqual((repo_root / "hook.log").read_text(encoding="utf-8").strip(), "tooling")
 
+    def test_pre_push_runs_tooling_checks_for_maintenance_shell_scripts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root, "main")
+            self._write_pre_push_fixture_scripts(repo_root)
+
+            self._commit_file(repo_root, "README.md", "base\n", "base")
+
+            result = self._run(["git", "checkout", "-b", "feature"], cwd=repo_root)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            self._commit_file(
+                repo_root,
+                "scripts/clean_unused_cache.sh",
+                "#!/usr/bin/env bash\nset -euo pipefail\n",
+                "maintenance script change",
+            )
+
+            head_sha = self._run(["git", "rev-parse", "HEAD"], cwd=repo_root)
+            self.assertEqual(head_sha.returncode, 0, msg=head_sha.stderr)
+
+            result = self._run(
+                ["bash", ".githooks/pre-push"],
+                cwd=repo_root,
+                input_text=f"refs/heads/feature {head_sha.stdout.strip()} refs/heads/feature {'0' * 40}\n",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertEqual((repo_root / "hook.log").read_text(encoding="utf-8").strip(), "tooling")
+
+    def test_pre_push_runs_full_verification_for_gate_shell_scripts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root, "main")
+            self._write_pre_push_fixture_scripts(repo_root)
+
+            self._commit_file(repo_root, "README.md", "base\n", "base")
+
+            result = self._run(["git", "checkout", "-b", "feature"], cwd=repo_root)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            self._commit_file(
+                repo_root,
+                "scripts/verify_changed.sh",
+                "#!/usr/bin/env bash\nset -euo pipefail\n",
+                "gate script change",
+            )
+
+            head_sha = self._run(["git", "rev-parse", "HEAD"], cwd=repo_root)
+            self.assertEqual(head_sha.returncode, 0, msg=head_sha.stderr)
+
+            result = self._run(
+                ["bash", ".githooks/pre-push"],
+                cwd=repo_root,
+                input_text=f"refs/heads/feature {head_sha.stdout.strip()} refs/heads/feature {'0' * 40}\n",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertEqual((repo_root / "hook.log").read_text(encoding="utf-8").strip(), "full")
+
     def test_pre_push_runs_full_verification_for_uncovered_python_tools(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)

@@ -260,11 +260,12 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn('bash scripts/run_full_ci_parallel.sh', script)
         self.assertIn('bash scripts/run_python_tooling_checks.sh', script)
-        self.assertIn('tooling-python-only changes detected', script)
+        self.assertIn('tooling-scoped changes detected', script)
         self.assertIn('running full verification for pushed changes', script)
         self.assertIn('delete-only push detected', script)
         self.assertIn('scripts/tests/**/*.py', script)
         self.assertIn('tools/**/*.py', script)
+        self.assertIn('is_gate_script_file()', script)
 
     def test_verify_changed_script_delegates_to_pre_commit_check_mode(self) -> None:
         script = VERIFY_CHANGED_SCRIPT.read_text(encoding="utf-8")
