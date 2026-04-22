@@ -52,14 +52,14 @@
     }
   },
   "localCache": {
-    "button": "Clear local storage",
+    "button": "Delete local cache",
     "subtitle": "Deletes cached attachment files on this device (remote copies are kept and can be re-downloaded). Make sure sync/upload has completed.",
-    "cleared": "Cleared local cache",
-    "failed": "Clear failed: $error",
+    "cleared": "Deleted local cache",
+    "failed": "Delete failed: $error",
     "dialog": {
-      "title": "Clear local storage?",
+      "title": "Delete local cache?",
       "message": "This deletes cached photos and files on this device to save space. Your remote sync storage keeps a copy; items will be re-downloaded on demand when viewed again.",
-      "confirm": "Clear"
+      "confirm": "Delete"
     }
   },
   "localData": {
@@ -70,6 +70,16 @@
     "dialog": {
       "title": "Delete local data?",
       "message": "This deletes all synced local data on this device, including messages, attachments, and embeddings. Your sync settings are kept, and a later Download will fully replace local data from remote again.",
+      "confirm": "Delete"
+    }
+  },
+  "allData": {
+    "button": "Delete all data",
+    "deleted": "Deleted local and remote data",
+    "failed": "Delete failed: $error",
+    "dialog": {
+      "title": "Delete all data?",
+      "message": "This deletes all synced local data on this device and clears all remote data for the current sync backend, including WebDAV, local folder sync, or SecondLoop Cloud. Your sync settings are kept.",
       "confirm": "Delete"
     }
   },

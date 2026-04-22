@@ -52,14 +52,14 @@
     }
   },
   "localCache": {
-    "button": "清理本地存储",
+    "button": "删除本地缓存",
     "subtitle": "删除本机缓存的附件文件（远端保留，需要时可重新下载）。请确保已完成同步/上传。",
-    "cleared": "已清理本地缓存",
-    "failed": "清理失败：$error",
+    "cleared": "已删除本地缓存",
+    "failed": "删除失败：$error",
     "dialog": {
-      "title": "清理本地存储？",
+      "title": "删除本地缓存？",
       "message": "这将删除本机缓存的照片与文件，以节省本地空间。远端同步存储会保留副本；之后查看时会按需重新下载。",
-      "confirm": "清理"
+      "confirm": "删除"
     }
   },
   "localData": {
@@ -70,6 +70,16 @@
     "dialog": {
       "title": "删除本地数据？",
       "message": "这会删除当前设备上所有会参与同步的本地数据，包括消息、附件和 embedding。你的同步设置会保留；之后点击“下载”会再次用远端数据完整替换本地。",
+      "confirm": "删除"
+    }
+  },
+  "allData": {
+    "button": "删除所有数据",
+    "deleted": "已删除本地和远端数据",
+    "failed": "删除失败：$error",
+    "dialog": {
+      "title": "删除所有数据？",
+      "message": "这会删除当前设备上的所有同步本地数据，并清空当前同步方式对应的全部远端数据，包括 WebDAV、本机文件夹同步或 SecondLoop Cloud。你的同步设置会保留。",
       "confirm": "删除"
     }
   },

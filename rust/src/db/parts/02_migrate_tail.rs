@@ -1159,6 +1159,7 @@ DELETE FROM kv WHERE key != 'embedding.active_model_name';
             conn.execute_batch("COMMIT;")?;
             if let Some(app_dir) = app_dir {
                 let _ = best_effort_remove_dir_all(&app_dir.join("attachments"));
+                let _ = fs::create_dir_all(app_dir.join("attachments"));
             }
             Ok(())
         }

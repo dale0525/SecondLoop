@@ -29,6 +29,7 @@ import '../media_backup/cloud_media_backup_runner.dart';
 part 'sync_settings_page_media_actions.dart';
 part 'sync_settings_page_managed_vault_save.dart';
 part 'sync_settings_page_managed_vault_sync.dart';
+part 'sync_settings_page_delete_actions.dart';
 part 'sync_settings_page_sync_actions.dart';
 
 int _coerceTimestampMs(Object value) {
@@ -934,31 +935,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                       );
                     },
                   ),
-                if (!usesCloudSessionModel) ...[
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _busy || !canClearLocalCache
-                        ? null
-                        : _clearLocalAttachmentCache,
-                    icon: const Icon(Icons.delete_sweep_outlined),
-                    label: Text(context.t.sync.localCache.button),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    context.t.sync.localCache.subtitle,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _deleteLocalSyncData,
-                  icon: const Icon(Icons.delete_forever_outlined),
-                  label: Text(context.t.sync.localData.button),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  context.t.sync.localData.subtitle,
-                  style: Theme.of(context).textTheme.bodySmall,
+                _buildDeleteActionsRow(
+                  canClearLocalCache: canClearLocalCache,
                 ),
               ],
             ),

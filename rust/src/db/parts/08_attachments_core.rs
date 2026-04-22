@@ -315,6 +315,7 @@ pub fn purge_message_attachments(
 
 pub fn clear_local_attachment_cache(conn: &Connection, app_dir: &Path) -> Result<()> {
     best_effort_remove_dir_all(&app_dir.join("attachments"))?;
+    fs::create_dir_all(app_dir.join("attachments"))?;
     let _ = conn.execute(r#"DELETE FROM attachment_variants"#, []);
     Ok(())
 }
@@ -896,4 +897,43 @@ WHERE attachment_sha256 = ?1
         ],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod attachment_cache_tests {
+    use std::fs;
+
+    #[test]
+    fn clear_local_attachment_cache_recreates_attachments_dir() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let attachments_dir = dir.path().join("attachments");
+        let attachment_file = attachments_dir.join("stale.bin");
+
+        fs::create_dir_all(&attachments_dir).expect("create attachments dir");
+        fs::write(&attachment_file, b"stale").expect("write attachment file");
+
+        super::clear_local_attachment_cache(&conn, dir.path())
+            .expect("clear local attachment cache");
+
+        assert!(attachments_dir.is_dir());
+        assert!(!attachment_file.exists());
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_recreates_attachments_dir() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let attachments_dir = dir.path().join("attachments");
+        let attachment_file = attachments_dir.join("stale.bin");
+
+        fs::create_dir_all(&attachments_dir).expect("create attachments dir");
+        fs::write(&attachment_file, b"stale").expect("write attachment file");
+
+        crate::db::reset_vault_data_preserving_llm_profiles(&conn)
+            .expect("reset vault data");
+
+        assert!(attachments_dir.is_dir());
+        assert!(!attachment_file.exists());
+    }
 }

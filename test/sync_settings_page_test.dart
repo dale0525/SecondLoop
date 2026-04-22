@@ -1454,9 +1454,6 @@ void main() {
     final deleteButton = find.text('Delete local data');
     await _ensureListItemVisible(tester, deleteButton);
     expect(deleteButton, findsOneWidget);
-    expect(find.textContaining('messages, attachments, and embeddings'),
-        findsOneWidget);
-
     await tester.tap(deleteButton);
     await tester.pumpAndSettle();
 
