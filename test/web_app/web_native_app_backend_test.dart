@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/src/rust/db.dart';
 import 'package:secondloop/web_app/web_app_service.dart';
 import 'package:secondloop/web_app/web_formal_settings_adapters.dart';
 import 'package:secondloop/web_app/web_native_app_backend.dart';
@@ -157,6 +158,103 @@ void main() {
     expect(jsonDecode(fetched)['scope'], 'scope-1');
     expect(service.upsertedIdToken, 'token-1');
     expect(service.upsertedPayload?['scope'], 'scope-1');
+  });
+
+  test('WebNativeAppBackend bridges cloud chat through WebAppService',
+      () async {
+    final service = _CloudChatBridgeService();
+    final backend = _CloudChatBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final events = await backend
+        .askAiStreamCloudGateway(
+          Uint8List(32),
+          'conversation-1',
+          question: 'Summarize this',
+          gatewayBaseUrl: kWebFormalSettingsBaseUrl,
+          idToken: 'token-1',
+          modelName: 'cloud',
+        )
+        .toList();
+
+    expect(events, <String>['web reply']);
+    expect(service.idToken, 'token-1');
+    expect(service.messages, <Map<String, String>>[
+      <String, String>{'role': 'user', 'content': 'Summarize this'},
+    ]);
+  });
+
+  test(
+      'WebNativeAppBackend bridges task-priority rerank chat through WebAppService',
+      () async {
+    final service = _CloudChatBridgeService(reply: 'reranked');
+    final backend = WebNativeAppBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final reply = await backend.taskPriorityRerankAiCloudGateway(
+      Uint8List(32),
+      prompt: 'rank todos',
+      gatewayBaseUrl: kWebFormalSettingsBaseUrl,
+      idToken: 'token-2',
+      modelName: 'cloud',
+    );
+
+    expect(reply, 'reranked');
+    expect(service.idToken, 'token-2');
+    expect(service.messages, <Map<String, String>>[
+      <String, String>{'role': 'user', 'content': 'rank todos'},
+    ]);
+  });
+
+  test(
+      'WebNativeAppBackend bridges managed-vault pull for real website proxy URL',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final pulled = await backend.syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: 'https://site.secondloop.app/api/app/vault-proxy',
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pulled, 1);
+    expect(service.afterGlobalSeqs, <int>[0]);
+    expect(backend.appliedPages, hasLength(1));
+    expect(backend.finalizedAppliedOps, <int>[1]);
   });
 
   test('WebNativeAppBackend pulls managed-vault pages through WebAppService',
@@ -694,6 +792,82 @@ final class _TaskPriorityBridgeService extends WebAppService {
   }) async {
     upsertedIdToken = idToken;
     upsertedPayload = payload;
+  }
+}
+
+final class _CloudChatBridgeService extends WebAppService {
+  _CloudChatBridgeService({this.reply = 'web reply'});
+
+  final String reply;
+  String? idToken;
+  List<Map<String, String>>? messages;
+
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription({
+    required String idToken,
+  }) async {
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.entitled,
+      canManageSubscription: true,
+    );
+  }
+
+  @override
+  Future<String> sendChat({
+    required String idToken,
+    required List<Map<String, String>> messages,
+  }) async {
+    this.idToken = idToken;
+    this.messages = List<Map<String, String>>.from(messages);
+    return reply;
+  }
+}
+
+final class _CloudChatBridgeBackend extends WebNativeAppBackend {
+  _CloudChatBridgeBackend({
+    required super.appDirProvider,
+    required super.secureStorage,
+    required super.rustLibInit,
+    required super.webAppService,
+  });
+
+  final List<Map<String, String>> storedMessages = <Map<String, String>>[];
+
+  @override
+  Future<Message> insertMessage(
+    Uint8List key,
+    String conversationId, {
+    required String role,
+    required String content,
+    bool isMemory = false,
+  }) async {
+    storedMessages.add(<String, String>{'role': role, 'content': content});
+    return Message(
+      id: 'message-${storedMessages.length - 1}',
+      conversationId: conversationId,
+      role: role,
+      content: content,
+      createdAtMs: PlatformInt64Util.from(0),
+      isMemory: isMemory,
+    );
+  }
+
+  @override
+  Future<List<Message>> listMessages(
+    Uint8List key,
+    String conversationId,
+  ) async {
+    return storedMessages.asMap().entries.map((entry) {
+      final message = entry.value;
+      return Message(
+        id: 'message-${entry.key}',
+        conversationId: conversationId,
+        role: message['role']!,
+        content: message['content']!,
+        createdAtMs: PlatformInt64Util.from(0),
+        isMemory: false,
+      );
+    }).toList(growable: false);
   }
 }
 

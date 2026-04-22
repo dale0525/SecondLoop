@@ -62,7 +62,56 @@ class WebNativeAppBackend extends NativeAppBackend {
   }
 
   bool _shouldBridgeManagedVaultPull(String baseUrl) {
-    return _webAppService != null && isWebFormalSettingsBaseUrl(baseUrl);
+    return _webAppService != null && isWebManagedVaultBridgeBaseUrl(baseUrl);
+  }
+
+  List<Map<String, String>> _encodeChatMessages(List<dynamic> messages) {
+    return messages
+        .map(
+          (message) => <String, String>{
+            'role': '${message.role}',
+            'content': '${message.content}',
+          },
+        )
+        .toList(growable: false);
+  }
+
+  Future<String> _sendCloudChatRequest(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required String idToken,
+  }) async {
+    await insertMessage(
+      key,
+      conversationId,
+      role: 'user',
+      content: question,
+    );
+    final history = await listMessages(key, conversationId);
+    final reply = await _webAppService!.sendChat(
+      idToken: idToken,
+      messages: _encodeChatMessages(history),
+    );
+    await insertMessage(
+      key,
+      conversationId,
+      role: 'assistant',
+      content: reply,
+    );
+    return reply;
+  }
+
+  Future<String> _sendPromptOnlyCloudChat({
+    required String prompt,
+    required String idToken,
+  }) {
+    return _webAppService!.sendChat(
+      idToken: idToken,
+      messages: <Map<String, String>>[
+        <String, String>{'role': 'user', 'content': prompt},
+      ],
+    );
   }
 
   factory WebNativeAppBackend.withDefaults({
@@ -392,6 +441,174 @@ class WebNativeAppBackend extends NativeAppBackend {
         return totalApplied;
       }
     }
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGateway(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async* {
+    if (!_shouldBridgeCloudGateway(gatewayBaseUrl)) {
+      yield* super.askAiStreamCloudGateway(
+        key,
+        conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+      );
+      return;
+    }
+
+    yield await _sendCloudChatRequest(
+      key,
+      conversationId,
+      question: question,
+      idToken: idToken,
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayWithEmbeddings(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String embeddingsModelName,
+  }) async* {
+    if (!_shouldBridgeCloudGateway(gatewayBaseUrl)) {
+      yield* super.askAiStreamCloudGatewayWithEmbeddings(
+        key,
+        conversationId,
+        question: question,
+        topK: topK,
+        thisThreadOnly: thisThreadOnly,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+        embeddingsModelName: embeddingsModelName,
+      );
+      return;
+    }
+
+    yield await _sendCloudChatRequest(
+      key,
+      conversationId,
+      question: question,
+      idToken: idToken,
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) {
+    return askAiStreamCloudGateway(
+      key,
+      conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      modelName: modelName,
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int timeStartMs,
+    required int timeEndMs,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String embeddingsModelName,
+  }) {
+    return askAiStreamCloudGatewayWithEmbeddings(
+      key,
+      conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      modelName: modelName,
+      embeddingsModelName: embeddingsModelName,
+    );
+  }
+
+  @override
+  Future<String> taskPriorityRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    if (!_shouldBridgeCloudGateway(gatewayBaseUrl)) {
+      return super.taskPriorityRerankAiCloudGateway(
+        key,
+        prompt: prompt,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+      );
+    }
+
+    return _sendPromptOnlyCloudChat(
+      prompt: prompt,
+      idToken: idToken,
+    );
+  }
+
+  @override
+  Future<String> todoFollowupRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    if (!_shouldBridgeCloudGateway(gatewayBaseUrl)) {
+      return super.todoFollowupRerankAiCloudGateway(
+        key,
+        prompt: prompt,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+      );
+    }
+
+    return _sendPromptOnlyCloudChat(
+      prompt: prompt,
+      idToken: idToken,
+    );
   }
 
   @override
