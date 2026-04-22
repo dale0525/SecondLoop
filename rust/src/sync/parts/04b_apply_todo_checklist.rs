@@ -92,18 +92,7 @@ fn apply_todo_checklist_item_upsert(
         &todo_checklist_item_content_aad_for_sync(item_id),
     )?;
 
-    let todo_exists: Option<i64> = conn
-        .query_row(
-            r#"SELECT 1 FROM todos WHERE id = ?1"#,
-            params![todo_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    if todo_exists.is_none() {
-        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
-    }
-
-    let upsert_result = conn.execute(
+    conn.execute(
         r#"
 INSERT INTO todo_checklist_items(id, todo_id, content, is_done, sort_order, created_at_ms, updated_at_ms)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
@@ -136,13 +125,7 @@ ON CONFLICT(id) DO UPDATE SET
             created_at_ms,
             effective_updated_at_ms,
         ],
-    );
-
-    if todo_exists.is_none() {
-        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
-    }
-
-    upsert_result?;
+    )?;
     Ok(())
 }
 
@@ -306,28 +289,7 @@ fn apply_todo_checklist_suggestion_upsert(
         &todo_checklist_suggestion_content_aad_for_sync(suggestion_id),
     )?;
 
-    let todo_exists: Option<i64> = conn
-        .query_row(
-            r#"SELECT 1 FROM todos WHERE id = ?1"#,
-            params![todo_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    let applied_item_exists: Option<i64> = match applied_checklist_item_id {
-        Some(item_id) => conn
-            .query_row(
-                r#"SELECT 1 FROM todo_checklist_items WHERE id = ?1"#,
-                params![item_id],
-                |row| row.get(0),
-            )
-            .optional()?,
-        None => Some(1),
-    };
-    if todo_exists.is_none() || applied_item_exists.is_none() {
-        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
-    }
-
-    let upsert_result = conn.execute(
+    conn.execute(
         r#"
 INSERT INTO todo_checklist_suggestions(
   id, todo_id, content, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id
@@ -382,13 +344,7 @@ ON CONFLICT(id) DO UPDATE SET
             dismissed_at_ms,
             applied_checklist_item_id,
         ],
-    );
-
-    if todo_exists.is_none() || applied_item_exists.is_none() {
-        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
-    }
-
-    upsert_result?;
+    )?;
     Ok(())
 }
 
@@ -425,18 +381,7 @@ fn apply_todo_checklist_suggestion_apply(
         return Ok(());
     }
 
-    let applied_item_exists: Option<i64> = conn
-        .query_row(
-            r#"SELECT 1 FROM todo_checklist_items WHERE id = ?1"#,
-            params![applied_checklist_item_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    if applied_item_exists.is_none() {
-        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
-    }
-
-    let update_result = conn.execute(
+    conn.execute(
         r#"UPDATE todo_checklist_suggestions
            SET state = ?3,
                updated_at_ms = ?4,
@@ -452,13 +397,7 @@ fn apply_todo_checklist_suggestion_apply(
             updated_at_ms,
             applied_checklist_item_id,
         ],
-    );
-
-    if applied_item_exists.is_none() {
-        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
-    }
-
-    update_result?;
+    )?;
     Ok(())
 }
 

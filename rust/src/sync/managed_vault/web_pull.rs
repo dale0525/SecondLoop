@@ -217,6 +217,33 @@ pub fn finalize_web_pull(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::engine::general_purpose::STANDARD as B64_STD;
+    use base64::Engine as _;
+
+    fn encrypted_pull_op(
+        sync_key: &[u8; 32],
+        global_seq: i64,
+        device_id: &str,
+        seq: i64,
+        op_json: serde_json::Value,
+    ) -> super::super::global_log_protocol::GlobalLogPullOp {
+        let plaintext = serde_json::to_vec(&op_json).expect("serialize op");
+        let ciphertext = crate::crypto::encrypt_bytes(
+            sync_key,
+            &plaintext,
+            format!("sync.ops:{device_id}:{seq}").as_bytes(),
+        )
+        .expect("encrypt op");
+        let op_id = op_json["op_id"].as_str().expect("op_id").to_string();
+        super::super::global_log_protocol::GlobalLogPullOp {
+            global_seq,
+            device_id: device_id.to_string(),
+            seq,
+            op_id: op_id.clone(),
+            client_op_id: op_id,
+            ciphertext_b64: B64_STD.encode(ciphertext),
+        }
+    }
 
     #[test]
     fn apply_web_pull_page_recovers_generation_mismatch_by_requesting_retry() {
@@ -371,5 +398,83 @@ mod tests {
             super::super::state_machine::load_state(&conn, &scope_id).expect("load state"),
             Some(super::super::state_machine::ManagedVaultSyncState::Completed),
         );
+    }
+
+    #[test]
+    fn apply_web_pull_page_replays_out_of_order_checklist_suggestion_ops_via_pending_apply() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let base_url = "https://service-vault.secondloop.app";
+        let vault_id = "vault-1";
+        let sync_key = [9; 32];
+
+        let suggestion_op = serde_json::json!({
+            "op_id": "op-suggestion-1",
+            "device_id": "device-a",
+            "seq": 1,
+            "ts_ms": 20i64,
+            "type": "todo.checklist_suggestion.upsert.v1",
+            "payload": {
+                "suggestion_id": "suggestion-1",
+                "todo_id": "todo-1",
+                "content": "Draft checklist item",
+                "sort_order": 0,
+                "state": crate::db::TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
+                "source": "semantic_parse",
+                "generation_key": "gen-1",
+                "created_at_ms": 20i64,
+                "updated_at_ms": 20i64,
+                "dismissed_at_ms": serde_json::Value::Null,
+                "applied_checklist_item_id": serde_json::Value::Null,
+            }
+        });
+        let todo_op = serde_json::json!({
+            "op_id": "op-todo-1",
+            "device_id": "device-b",
+            "seq": 1,
+            "ts_ms": 21i64,
+            "type": "todo.upsert.v1",
+            "payload": {
+                "todo_id": "todo-1",
+                "title": "Checklist sync todo",
+                "status": "open",
+                "due_at_ms": serde_json::Value::Null,
+                "source_entry_id": serde_json::Value::Null,
+                "created_at_ms": 10i64,
+                "updated_at_ms": 21i64,
+                "review_stage": 0,
+                "next_review_at_ms": serde_json::Value::Null,
+                "last_review_at_ms": serde_json::Value::Null,
+                "manual_importance_nudge_score": 0,
+                "manual_urgency_nudge_score": 0,
+            }
+        });
+
+        let result = apply_web_pull_page(
+            &conn,
+            &[7; 32],
+            &sync_key,
+            base_url,
+            vault_id,
+            WebPullPage {
+                generation_id: "generation-a".to_string(),
+                remote_latest_global_seq: 2,
+                has_more: false,
+                ops: vec![
+                    encrypted_pull_op(&sync_key, 1, "device-a", 1, suggestion_op),
+                    encrypted_pull_op(&sync_key, 2, "device-b", 1, todo_op),
+                ],
+            },
+        )
+        .expect("apply page");
+
+        assert_eq!(result.applied_count, 2);
+        assert_eq!(result.last_applied_global_seq, 2);
+
+        let suggestions = crate::db::list_todo_checklist_suggestions(&conn, &[7; 32], "todo-1")
+            .expect("list suggestions");
+        assert_eq!(suggestions.len(), 1);
+        assert_eq!(suggestions[0].id, "suggestion-1");
+        assert_eq!(suggestions[0].content, "Draft checklist item");
     }
 }
