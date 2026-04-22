@@ -25,11 +25,15 @@ class ManagedVaultV2PullApplyResult extends ManagedVaultV2PullState {
     required this.appliedCount,
     required this.remoteLatestGlobalSeq,
     required this.hasMore,
+    this.retryRequired = false,
+    this.recoveryReason,
   });
 
   final int appliedCount;
   final int remoteLatestGlobalSeq;
   final bool hasMore;
+  final bool retryRequired;
+  final String? recoveryReason;
 }
 
 class WebNativeAppBackend extends NativeAppBackend {
@@ -138,7 +142,111 @@ class WebNativeAppBackend extends NativeAppBackend {
       remoteLatestGlobalSeq:
           (decoded['remote_latest_global_seq'] as num?)?.toInt() ?? 0,
       hasMore: decoded['has_more'] == true,
+      retryRequired: decoded['retry_required'] == true,
+      recoveryReason: '${decoded['recovery_reason'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${decoded['recovery_reason']}',
     );
+  }
+
+  ManagedVaultV2PullState recoverManagedVaultV2PullState(
+    Uint8List key, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) {
+    final decoded = jsonDecode(
+      rust_web_sync.syncManagedVaultRecoverWebPullState(
+        appDir: appDir,
+        key: key,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+      ),
+    );
+    if (decoded is! Map) {
+      throw const FormatException('invalid_managed_vault_recovered_pull_state');
+    }
+    return ManagedVaultV2PullState(
+      generationId: '${decoded['generation_id'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${decoded['generation_id']}',
+      lastAppliedGlobalSeq:
+          (decoded['last_applied_global_seq'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  void finalizeManagedVaultV2Pull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required int appliedOps,
+  }) {
+    rust_web_sync.syncManagedVaultFinalizeWebPull(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      firebaseIdToken: idToken,
+      appliedOps: BigInt.from(appliedOps),
+    );
+  }
+
+  bool _isManagedVaultPullResetRequired(Object error) {
+    return error is WebAppHttpException &&
+        error.statusCode == 409 &&
+        error.code == 'reset_required';
+  }
+
+  Map<String, Object?> _decodeManagedVaultErrorBody(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return decoded.map((key, value) => MapEntry('$key', value));
+      }
+    } on FormatException {
+      // Fall through to the empty payload when the upstream body is not JSON.
+    }
+    return const <String, Object?>{};
+  }
+
+  StateError _persistentManagedVaultPullRecoveryError({
+    required String reason,
+    required ManagedVaultV2PullState state,
+    WebManagedVaultPullPage? page,
+    WebAppHttpException? error,
+  }) {
+    switch (reason) {
+      case 'reset_required':
+        final body = error == null
+            ? const <String, Object?>{}
+            : _decodeManagedVaultErrorBody(error.body);
+        return StateError(
+          'managed-vault v2 pull reset_required persisted after local rebuild: '
+          'reason=${body['reason']} '
+          'remote_generation_id=${body['remote_generation_id']} '
+          'remote_latest_global_seq=${body['remote_latest_global_seq']}',
+        );
+      case 'generation_mismatch':
+        return StateError(
+          'managed-vault v2 pull generation mismatch persisted after local rebuild: '
+          'local_generation_id=${state.generationId} '
+          'remote_generation_id=${page?.generationId}',
+        );
+      case 'non_contiguous':
+        return StateError(
+          'managed-vault v2 pull non-contiguous page persisted after local rebuild: '
+          'after_global_seq=${state.lastAppliedGlobalSeq}',
+        );
+      default:
+        return StateError('managed_vault_pull_recovery_persisted:$reason');
+    }
   }
 
   @override
@@ -167,12 +275,38 @@ class WebNativeAppBackend extends NativeAppBackend {
       vaultId: vaultId,
     );
     var totalApplied = 0;
+    var resetRecovered = false;
+    var generationRecovered = false;
+    var nonContiguousRecovered = false;
     while (true) {
-      final page = await webAppService.fetchManagedVaultPullPage(
-        idToken: idToken,
-        vaultId: vaultId,
-        afterGlobalSeq: state.lastAppliedGlobalSeq,
-      );
+      late final WebManagedVaultPullPage page;
+      try {
+        page = await webAppService.fetchManagedVaultPullPage(
+          idToken: idToken,
+          vaultId: vaultId,
+          afterGlobalSeq: state.lastAppliedGlobalSeq,
+        );
+      } on WebAppHttpException catch (error) {
+        if (!_isManagedVaultPullResetRequired(error)) {
+          rethrow;
+        }
+        if (resetRecovered) {
+          throw _persistentManagedVaultPullRecoveryError(
+            reason: 'reset_required',
+            state: state,
+            error: error,
+          );
+        }
+        state = recoverManagedVaultV2PullState(
+          key,
+          appDir: appDir,
+          baseUrl: baseUrl,
+          vaultId: vaultId,
+        );
+        totalApplied = 0;
+        resetRecovered = true;
+        continue;
+      }
       final result = applyManagedVaultV2PullPage(
         key,
         syncKey,
@@ -181,9 +315,45 @@ class WebNativeAppBackend extends NativeAppBackend {
         vaultId: vaultId,
         page: page,
       );
+      if (result.retryRequired) {
+        switch (result.recoveryReason) {
+          case 'generation_mismatch':
+            if (generationRecovered) {
+              throw _persistentManagedVaultPullRecoveryError(
+                reason: 'generation_mismatch',
+                state: state,
+                page: page,
+              );
+            }
+            generationRecovered = true;
+            break;
+          case 'non_contiguous':
+            if (nonContiguousRecovered) {
+              throw _persistentManagedVaultPullRecoveryError(
+                reason: 'non_contiguous',
+                state: state,
+                page: page,
+              );
+            }
+            nonContiguousRecovered = true;
+            break;
+        }
+        totalApplied = 0;
+        state = result;
+        continue;
+      }
       totalApplied += result.appliedCount;
       state = result;
-      if (!page.hasMore) {
+      if (!result.hasMore) {
+        finalizeManagedVaultV2Pull(
+          key,
+          syncKey,
+          appDir: appDir,
+          baseUrl: baseUrl,
+          vaultId: vaultId,
+          idToken: idToken,
+          appliedOps: totalApplied,
+        );
         return totalApplied;
       }
     }

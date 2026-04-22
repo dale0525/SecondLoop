@@ -1761,6 +1761,21 @@ abstract class RustLibApi extends BaseApi {
       required String vaultId,
       required String responseJson});
 
+  bool crateApiWebSyncSyncManagedVaultFinalizeWebPull(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String firebaseIdToken,
+      required BigInt appliedOps});
+
+  String crateApiWebSyncSyncManagedVaultRecoverWebPullState(
+      {required String appDir,
+      required List<int> key,
+      required String baseUrl,
+      required String vaultId});
+
   String crateApiWebSyncSyncManagedVaultReadWebPullState(
       {required String appDir,
       required String baseUrl,
@@ -11771,6 +11786,91 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "responseJson"
         ],
       );
+
+  @override
+  bool crateApiWebSyncSyncManagedVaultFinalizeWebPull(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String firebaseIdToken,
+      required BigInt appliedOps}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(firebaseIdToken, serializer);
+        sse_encode_u_64(appliedOps, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 252)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiWebSyncSyncManagedVaultFinalizeWebPullConstMeta,
+      argValues: [
+        appDir,
+        key,
+        syncKey,
+        baseUrl,
+        vaultId,
+        firebaseIdToken,
+        appliedOps,
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiWebSyncSyncManagedVaultFinalizeWebPullConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_managed_vault_finalize_web_pull",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "baseUrl",
+          "vaultId",
+          "firebaseIdToken",
+          "appliedOps"
+        ],
+      );
+
+  @override
+  String crateApiWebSyncSyncManagedVaultRecoverWebPullState(
+      {required String appDir,
+      required List<int> key,
+      required String baseUrl,
+      required String vaultId}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 253)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiWebSyncSyncManagedVaultRecoverWebPullStateConstMeta,
+      argValues: [appDir, key, baseUrl, vaultId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiWebSyncSyncManagedVaultRecoverWebPullStateConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_recover_web_pull_state",
+            argNames: ["appDir", "key", "baseUrl", "vaultId"],
+          );
 
   @override
   String crateApiWebSyncSyncManagedVaultReadWebPullState(

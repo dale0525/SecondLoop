@@ -39,3 +39,42 @@ pub fn sync_managed_vault_apply_web_pull_page(
     )?;
     Ok(serde_json::to_string(&result)?)
 }
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn sync_managed_vault_recover_web_pull_state(
+    app_dir: String,
+    key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+) -> Result<String> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let state =
+        sync::managed_vault::recover_web_pull_state_if_safe(&conn, &key, &base_url, &vault_id)?;
+    Ok(serde_json::to_string(&state)?)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn sync_managed_vault_finalize_web_pull(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    firebase_id_token: String,
+    applied_ops: u64,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let sync_key = key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::finalize_web_pull(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &firebase_id_token,
+        applied_ops,
+    )?;
+    Ok(true)
+}

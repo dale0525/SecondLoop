@@ -458,7 +458,11 @@ fn has_local_unpushed_changes(conn: &Connection, scope_id: &str) -> Result<bool>
     .map_err(Into::into)
 }
 
-fn rebuild_local_vault_if_safe(conn: &Connection, db_key: &[u8; 32], scope_id: &str) -> Result<()> {
+pub(super) fn rebuild_local_vault_if_safe(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    scope_id: &str,
+) -> Result<()> {
     if super::media_state::has_pending_local_media_write_work(conn, db_key, scope_id)? {
         return Err(anyhow!(
             "managed-vault v2 recovery blocked: local_media_backfill_pending"

@@ -29,3 +29,28 @@ String syncManagedVaultApplyWebPullPage(
         baseUrl: baseUrl,
         vaultId: vaultId,
         responseJson: responseJson);
+
+String syncManagedVaultRecoverWebPullState(
+        {required String appDir,
+        required List<int> key,
+        required String baseUrl,
+        required String vaultId}) =>
+    RustLib.instance.api.crateApiWebSyncSyncManagedVaultRecoverWebPullState(
+        appDir: appDir, key: key, baseUrl: baseUrl, vaultId: vaultId);
+
+bool syncManagedVaultFinalizeWebPull(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        required String vaultId,
+        required String firebaseIdToken,
+        required BigInt appliedOps}) =>
+    RustLib.instance.api.crateApiWebSyncSyncManagedVaultFinalizeWebPull(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        firebaseIdToken: firebaseIdToken,
+        appliedOps: appliedOps);
