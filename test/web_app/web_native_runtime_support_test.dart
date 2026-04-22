@@ -3,10 +3,20 @@ import 'package:secondloop/web_app/web_native_runtime_support.dart';
 
 void main() {
   test(
-      'resolveWebNativeRuntimeSupport requires shared-memory capability and build opt-out',
+      'resolveWebNativeRuntimeSupport requires explicit opt-in and browser capabilities',
       () {
     expect(
       resolveWebNativeRuntimeSupport(
+        runtimeOptIn: false,
+        browserCapability: true,
+        sharedMemoryCapability: true,
+        disableOverride: false,
+      ),
+      isFalse,
+    );
+    expect(
+      resolveWebNativeRuntimeSupport(
+        runtimeOptIn: true,
         browserCapability: true,
         sharedMemoryCapability: true,
         disableOverride: false,
@@ -15,6 +25,7 @@ void main() {
     );
     expect(
       resolveWebNativeRuntimeSupport(
+        runtimeOptIn: true,
         browserCapability: false,
         sharedMemoryCapability: true,
         disableOverride: false,
@@ -23,6 +34,7 @@ void main() {
     );
     expect(
       resolveWebNativeRuntimeSupport(
+        runtimeOptIn: true,
         browserCapability: true,
         sharedMemoryCapability: false,
         disableOverride: false,
@@ -31,6 +43,7 @@ void main() {
     );
     expect(
       resolveWebNativeRuntimeSupport(
+        runtimeOptIn: true,
         browserCapability: true,
         sharedMemoryCapability: true,
         disableOverride: true,

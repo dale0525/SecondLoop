@@ -133,6 +133,30 @@ void main() {
     expect(backendScope.backend, isA<CloudWebBackend>());
     expect(find.byType(CloudAccountPanel), findsNothing);
   });
+
+  testWidgets(
+      'web app defaults to cloud backend until web native runtime is explicitly enabled',
+      (tester) async {
+    await tester.pumpWidget(
+      SecondLoopWebApp(
+        configLoader: () async =>
+            const WebAppConfig(firebaseWebApiKey: 'firebase-key'),
+        serviceFactory: (config) => _FakeWebAppService(
+          subscription: WebSubscriptionState.entitled,
+        ),
+        authControllerFactory: (config) => _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final backendScope =
+        tester.widget<AppBackendScope>(find.byType(AppBackendScope).first);
+    expect(backendScope.backend, isA<CloudWebBackend>());
+  });
 }
 
 final class _FakeCloudAuthController extends ChangeNotifier
