@@ -518,10 +518,11 @@ void main() {
   });
 
   test(
-      'WebNativeAppBackend preserves applied-op count across reset-required recovery',
+      'WebNativeAppBackend resets applied-op count after reset-required recovery rebuilds local state',
       () async {
     final service = _ManagedVaultPullBridgeService(
-      pages: <WebManagedVaultPullPage>[
+      pages: <WebManagedVaultPullPage>[],
+      responses: <Object>[
         const WebManagedVaultPullPage(
           generationId: 'generation-1',
           remoteLatestGlobalSeq: 2,
@@ -537,6 +538,12 @@ void main() {
             ),
           ],
         ),
+        const WebAppHttpException(
+          statusCode: 409,
+          code: 'reset_required',
+          body:
+              '{"error":"reset_required","reason":"global_log_gap","remote_generation_id":"generation-1","remote_latest_global_seq":2}',
+        ),
         const WebManagedVaultPullPage(
           generationId: 'generation-1',
           remoteLatestGlobalSeq: 2,
@@ -551,14 +558,6 @@ void main() {
               ciphertextB64: 'BAUG',
             ),
           ],
-        ),
-      ],
-      failures: <Object>[
-        const WebAppHttpException(
-          statusCode: 409,
-          code: 'reset_required',
-          body:
-              '{"error":"reset_required","reason":"global_log_gap","remote_generation_id":"generation-1","remote_latest_global_seq":2}',
         ),
       ],
     );
@@ -585,9 +584,9 @@ void main() {
       idToken: 'token-1',
     );
 
-    expect(pulled, 2);
+    expect(pulled, 1);
     expect(service.afterGlobalSeqs, <int>[0, 1, 1]);
-    expect(backend.finalizedAppliedOps, <int>[2]);
+    expect(backend.finalizedAppliedOps, <int>[1]);
   });
 
   test('WebNativeAppBackend reports incremental managed-vault pull progress',
@@ -875,11 +874,14 @@ final class _ManagedVaultPullBridgeService extends WebAppService {
   _ManagedVaultPullBridgeService({
     required List<WebManagedVaultPullPage> pages,
     List<Object> failures = const <Object>[],
+    List<Object>? responses,
   })  : _pages = List<WebManagedVaultPullPage>.from(pages),
-        _failures = List<Object>.from(failures);
+        _failures = List<Object>.from(failures),
+        _responses = responses == null ? null : List<Object>.from(responses);
 
   final List<WebManagedVaultPullPage> _pages;
   final List<Object> _failures;
+  final List<Object>? _responses;
   final List<int> afterGlobalSeqs = <int>[];
   final List<String> idTokens = <String>[];
 
@@ -902,6 +904,15 @@ final class _ManagedVaultPullBridgeService extends WebAppService {
   }) async {
     idTokens.add(idToken);
     afterGlobalSeqs.add(afterGlobalSeq);
+    final responses = _responses;
+    if (responses != null) {
+      if (responses.isEmpty) {
+        throw StateError('unexpected_pull_page_request');
+      }
+      final next = responses.removeAt(0);
+      if (next is WebManagedVaultPullPage) return next;
+      throw next;
+    }
     if (_failures.isNotEmpty) {
       throw _failures.removeAt(0);
     }

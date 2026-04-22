@@ -357,6 +357,7 @@ class WebNativeAppBackend extends NativeAppBackend {
           baseUrl: baseUrl,
           vaultId: vaultId,
         );
+        totalApplied = 0;
         progressBaseline = state.lastAppliedGlobalSeq;
         totalTarget = null;
         resetRecovered = true;
@@ -405,6 +406,7 @@ class WebNativeAppBackend extends NativeAppBackend {
             break;
         }
         state = result;
+        totalApplied = 0;
         progressBaseline = state.lastAppliedGlobalSeq;
         totalTarget = null;
         progressResetPending = true;
