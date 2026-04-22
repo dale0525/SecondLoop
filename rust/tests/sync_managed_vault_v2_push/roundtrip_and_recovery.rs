@@ -199,6 +199,7 @@ fn managed_vault_v2_progress_paths_propagate_second_device_changes_to_third_devi
         .any(|(done, total)| done == total && *done > 0));
 
     let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
     db::insert_message(&conn_b, &key_b, &convs_b[0].id, "user", "hello from B")
         .expect("insert msg B");
     let mut push_progress_b = Vec::new();
