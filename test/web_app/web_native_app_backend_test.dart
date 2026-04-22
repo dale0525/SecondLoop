@@ -205,7 +205,7 @@ void main() {
     final pulled = await backend.syncManagedVaultPull(
       Uint8List(32),
       Uint8List(32),
-      baseUrl: 'https://service-vault.secondloop.app',
+      baseUrl: kWebFormalSettingsBaseUrl,
       vaultId: 'vault-123',
       idToken: 'token-1',
     );
@@ -217,6 +217,51 @@ void main() {
     expect(backend.appliedPages.first.ops.single.opId, 'op-1');
     expect(backend.appliedPages.last.ops.single.opId, 'op-2');
     expect(backend.finalizedAppliedOps, <int>[2]);
+  });
+
+  test(
+      'WebNativeAppBackend only bridges managed-vault pull for web formal settings base URL',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    await expectLater(
+      () => backend.syncManagedVaultPull(
+        Uint8List(32),
+        Uint8List(32),
+        baseUrl: 'https://service-vault.secondloop.app',
+        vaultId: 'vault-123',
+        idToken: 'token-1',
+      ),
+      throwsA(anything),
+    );
+
+    expect(service.afterGlobalSeqs, isEmpty);
+    expect(backend.appliedPages, isEmpty);
+    expect(backend.finalizedAppliedOps, isEmpty);
   });
 
   test(
@@ -261,7 +306,7 @@ void main() {
     final pulled = await backend.syncManagedVaultPull(
       Uint8List(32),
       Uint8List(32),
-      baseUrl: 'https://service-vault.secondloop.app',
+      baseUrl: kWebFormalSettingsBaseUrl,
       vaultId: 'vault-123',
       idToken: 'token-1',
     );
@@ -313,7 +358,7 @@ void main() {
     final pulled = await backend.syncManagedVaultPull(
       Uint8List(32),
       Uint8List(32),
-      baseUrl: 'https://service-vault.secondloop.app',
+      baseUrl: kWebFormalSettingsBaseUrl,
       vaultId: 'vault-123',
       idToken: 'token-1',
     );
@@ -358,7 +403,7 @@ void main() {
       () => backend.syncManagedVaultPull(
         Uint8List(32),
         Uint8List(32),
-        baseUrl: 'https://service-vault.secondloop.app',
+        baseUrl: kWebFormalSettingsBaseUrl,
         vaultId: 'vault-123',
         idToken: 'token-1',
       ),
@@ -372,6 +417,79 @@ void main() {
     );
     expect(service.afterGlobalSeqs, <int>[8, 0]);
     expect(backend.finalizedAppliedOps, isEmpty);
+  });
+
+  test(
+      'WebNativeAppBackend preserves applied-op count across reset-required recovery',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: true,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 2,
+              deviceId: 'device-a',
+              seq: 12,
+              opId: 'op-2',
+              clientOpId: 'op-2',
+              ciphertextB64: 'BAUG',
+            ),
+          ],
+        ),
+      ],
+      failures: <Object>[
+        const WebAppHttpException(
+          statusCode: 409,
+          code: 'reset_required',
+          body:
+              '{"error":"reset_required","reason":"global_log_gap","remote_generation_id":"generation-1","remote_latest_global_seq":2}',
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+    backend.seedPullState(
+      generationId: 'generation-1',
+      lastAppliedGlobalSeq: 0,
+    );
+    backend.seedRecoveredPullState(
+      generationId: 'generation-1',
+      lastAppliedGlobalSeq: 1,
+    );
+
+    final pulled = await backend.syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pulled, 2);
+    expect(service.afterGlobalSeqs, <int>[0, 1, 1]);
+    expect(backend.finalizedAppliedOps, <int>[2]);
   });
 
   test('WebNativeAppBackend reports incremental managed-vault pull progress',
@@ -421,7 +539,7 @@ void main() {
         .syncManagedVaultPullProgress(
           Uint8List(32),
           Uint8List(32),
-          baseUrl: 'https://service-vault.secondloop.app',
+          baseUrl: kWebFormalSettingsBaseUrl,
           vaultId: 'vault-123',
           idToken: 'token-1',
         )
@@ -472,7 +590,7 @@ void main() {
         .syncManagedVaultPull(
       Uint8List(32),
       Uint8List(32),
-      baseUrl: 'https://service-vault.secondloop.app',
+      baseUrl: kWebFormalSettingsBaseUrl,
       vaultId: 'vault-123',
       idToken: 'token-1',
     )
@@ -638,6 +756,8 @@ final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
   final Completer<void>? _finalizeCompleter;
   int _lastAppliedGlobalSeq = 0;
   String? _generationId;
+  int _recoveredLastAppliedGlobalSeq = 0;
+  String? _recoveredGenerationId;
   int recoveryCalls = 0;
 
   void seedPullState({
@@ -648,12 +768,20 @@ final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
     _lastAppliedGlobalSeq = lastAppliedGlobalSeq;
   }
 
+  void seedRecoveredPullState({
+    String? generationId,
+    required int lastAppliedGlobalSeq,
+  }) {
+    _recoveredGenerationId = generationId;
+    _recoveredLastAppliedGlobalSeq = lastAppliedGlobalSeq;
+  }
+
   @override
-  ManagedVaultV2PullState readManagedVaultV2PullState({
+  Future<ManagedVaultV2PullState> readManagedVaultV2PullState({
     required String appDir,
     required String baseUrl,
     required String vaultId,
-  }) {
+  }) async {
     return ManagedVaultV2PullState(
       generationId: _generationId,
       lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
@@ -661,14 +789,14 @@ final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
   }
 
   @override
-  ManagedVaultV2PullApplyResult applyManagedVaultV2PullPage(
+  Future<ManagedVaultV2PullApplyResult> applyManagedVaultV2PullPage(
     Uint8List key,
     Uint8List syncKey, {
     required String appDir,
     required String baseUrl,
     required String vaultId,
     required WebManagedVaultPullPage page,
-  }) {
+  }) async {
     if (_recoveryReasons.isNotEmpty) {
       final recoveryReason = _recoveryReasons.removeAt(0);
       _generationId = null;
@@ -698,15 +826,15 @@ final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
   }
 
   @override
-  ManagedVaultV2PullState recoverManagedVaultV2PullState(
+  Future<ManagedVaultV2PullState> recoverManagedVaultV2PullState(
     Uint8List key, {
     required String appDir,
     required String baseUrl,
     required String vaultId,
-  }) {
+  }) async {
     recoveryCalls += 1;
-    _generationId = null;
-    _lastAppliedGlobalSeq = 0;
+    _generationId = _recoveredGenerationId;
+    _lastAppliedGlobalSeq = _recoveredLastAppliedGlobalSeq;
     return ManagedVaultV2PullState(
       generationId: _generationId,
       lastAppliedGlobalSeq: _lastAppliedGlobalSeq,

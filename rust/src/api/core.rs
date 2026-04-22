@@ -3915,29 +3915,34 @@ pub fn sync_managed_vault_pull(
     #[cfg(not(target_family = "wasm"))]
     {
         if let Ok(runtime_handle) = tokio::runtime::Handle::try_current() {
-            let app_dir_for_runtime = app_dir.clone();
-            let key_for_runtime = key;
-            let sync_key_for_runtime = sync_key;
-            let base_url_for_runtime = base_url.clone();
-            let vault_id_for_runtime = vault_id.clone();
-            let firebase_id_token_for_runtime = firebase_id_token.clone();
-            return tokio::task::block_in_place(|| {
-                runtime_handle.block_on(async move {
-                    tokio::task::spawn_blocking(move || {
-                        let conn = db::open(Path::new(&app_dir_for_runtime))?;
-                        sync::managed_vault::pull(
-                            &conn,
-                            &key_for_runtime,
-                            &sync_key_for_runtime,
-                            &base_url_for_runtime,
-                            &vault_id_for_runtime,
-                            &firebase_id_token_for_runtime,
-                        )
+            let run_pull = move || {
+                let conn = db::open(Path::new(&app_dir))?;
+                sync::managed_vault::pull(
+                    &conn,
+                    &key,
+                    &sync_key,
+                    &base_url,
+                    &vault_id,
+                    &firebase_id_token,
+                )
+            };
+            return match runtime_handle.runtime_flavor() {
+                tokio::runtime::RuntimeFlavor::MultiThread => tokio::task::block_in_place(|| {
+                    runtime_handle.block_on(async move {
+                        tokio::task::spawn_blocking(run_pull)
+                            .await
+                            .map_err(|error| {
+                                anyhow!("sync_managed_vault_pull task failed: {error}")
+                            })?
                     })
-                    .await
-                    .map_err(|error| anyhow!("sync_managed_vault_pull task failed: {error}"))?
-                })
-            });
+                }),
+                tokio::runtime::RuntimeFlavor::CurrentThread => std::thread::spawn(run_pull)
+                    .join()
+                    .map_err(|_| anyhow!("sync_managed_vault_pull task panicked"))?,
+                _ => std::thread::spawn(run_pull)
+                    .join()
+                    .map_err(|_| anyhow!("sync_managed_vault_pull task panicked"))?,
+            };
         }
     }
     let conn = db::open(Path::new(&app_dir))?;

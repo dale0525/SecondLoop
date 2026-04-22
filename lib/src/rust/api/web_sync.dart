@@ -8,14 +8,14 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `key_from_bytes`
 
-String syncManagedVaultReadWebPullState(
+Future<String> syncManagedVaultReadWebPullState(
         {required String appDir,
         required String baseUrl,
         required String vaultId}) =>
     RustLib.instance.api.crateApiWebSyncSyncManagedVaultReadWebPullState(
         appDir: appDir, baseUrl: baseUrl, vaultId: vaultId);
 
-String syncManagedVaultApplyWebPullPage(
+Future<String> syncManagedVaultApplyWebPullPage(
         {required String appDir,
         required List<int> key,
         required List<int> syncKey,
@@ -30,7 +30,7 @@ String syncManagedVaultApplyWebPullPage(
         vaultId: vaultId,
         responseJson: responseJson);
 
-String syncManagedVaultRecoverWebPullState(
+Future<String> syncManagedVaultRecoverWebPullState(
         {required String appDir,
         required List<int> key,
         required String baseUrl,

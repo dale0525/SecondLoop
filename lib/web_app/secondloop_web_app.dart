@@ -69,6 +69,14 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
   }
 
   Future<WebAppBootstrapData> _bootstrap() async {
+    final supportsNativeRuntime =
+        (widget.webNativeRuntimeSupported ?? browserSupportsWebNativeRuntime)();
+    if (!supportsNativeRuntime) {
+      throw UnsupportedError(
+        'web native runtime is required for /app and needs '
+        'SharedArrayBuffer with cross-origin isolation support',
+      );
+    }
     final config =
         await (widget.configLoader ?? WebAppServiceHttp.loadConfig)();
     final service = (widget.serviceFactory ??
@@ -86,16 +94,6 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
     } catch (_) {
       // Allow the app to continue booting so the gate can render sign-in and
       // retry paths even if the initial profile refresh fails.
-    }
-    final supportsNativeRuntime =
-        (widget.webNativeRuntimeSupported ?? browserSupportsWebNativeRuntime)();
-    if (!supportsNativeRuntime) {
-      service.close();
-      _disposeAuthController(authController);
-      throw UnsupportedError(
-        'web native runtime is required for /app and needs '
-        'SharedArrayBuffer with cross-origin isolation support',
-      );
     }
     if (!mounted) {
       service.close();

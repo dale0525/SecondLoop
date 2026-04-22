@@ -131,8 +131,40 @@ void main() {
     expect(find.byType(AppBackendScope), findsNothing);
     expect(find.byType(CloudAccountPanel), findsNothing);
     expect(find.textContaining('native runtime'), findsOneWidget);
-    expect(service.closeCount, 1);
-    expect(authController.disposeCount, 1);
+    expect(service.closeCount, 0);
+    expect(authController.disposeCount, 0);
+  });
+
+  testWidgets(
+      'web app fails fast before config and auth bootstrap when native runtime is unsupported',
+      (tester) async {
+    var configLoads = 0;
+    var serviceFactoryCalls = 0;
+    var authFactoryCalls = 0;
+
+    await tester.pumpWidget(
+      SecondLoopWebApp(
+        configLoader: () async {
+          configLoads += 1;
+          return const WebAppConfig(firebaseWebApiKey: 'firebase-key');
+        },
+        serviceFactory: (config) {
+          serviceFactoryCalls += 1;
+          return _FakeWebAppService();
+        },
+        authControllerFactory: (config) {
+          authFactoryCalls += 1;
+          return _FakeCloudAuthController();
+        },
+        webNativeRuntimeSupported: () => false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('native runtime'), findsOneWidget);
+    expect(configLoads, 0);
+    expect(serviceFactoryCalls, 0);
+    expect(authFactoryCalls, 0);
   });
 
   testWidgets(

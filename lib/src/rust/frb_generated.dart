@@ -1753,7 +1753,7 @@ abstract class RustLibApi extends BaseApi {
           required PlatformInt64 nowMs,
           required int limit});
 
-  String crateApiWebSyncSyncManagedVaultApplyWebPullPage(
+  Future<String> crateApiWebSyncSyncManagedVaultApplyWebPullPage(
       {required String appDir,
       required List<int> key,
       required List<int> syncKey,
@@ -1770,12 +1770,12 @@ abstract class RustLibApi extends BaseApi {
       required String firebaseIdToken,
       required BigInt appliedOps});
 
-  String crateApiWebSyncSyncManagedVaultReadWebPullState(
+  Future<String> crateApiWebSyncSyncManagedVaultReadWebPullState(
       {required String appDir,
       required String baseUrl,
       required String vaultId});
 
-  String crateApiWebSyncSyncManagedVaultRecoverWebPullState(
+  Future<String> crateApiWebSyncSyncManagedVaultRecoverWebPullState(
       {required String appDir,
       required List<int> key,
       required String baseUrl,
@@ -11746,15 +11746,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  String crateApiWebSyncSyncManagedVaultApplyWebPullPage(
+  Future<String> crateApiWebSyncSyncManagedVaultApplyWebPullPage(
       {required String appDir,
       required List<int> key,
       required List<int> syncKey,
       required String baseUrl,
       required String vaultId,
       required String responseJson}) {
-    return handler.executeSync(SyncTask(
-      callFfi: () {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
@@ -11762,7 +11762,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         sse_encode_String(responseJson, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 250)!;
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 250, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11842,17 +11843,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  String crateApiWebSyncSyncManagedVaultReadWebPullState(
+  Future<String> crateApiWebSyncSyncManagedVaultReadWebPullState(
       {required String appDir,
       required String baseUrl,
       required String vaultId}) {
-    return handler.executeSync(SyncTask(
-      callFfi: () {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(appDir, serializer);
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 252)!;
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 252, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11871,19 +11873,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  String crateApiWebSyncSyncManagedVaultRecoverWebPullState(
+  Future<String> crateApiWebSyncSyncManagedVaultRecoverWebPullState(
       {required String appDir,
       required List<int> key,
       required String baseUrl,
       required String vaultId}) {
-    return handler.executeSync(SyncTask(
-      callFfi: () {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 253)!;
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 253, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,

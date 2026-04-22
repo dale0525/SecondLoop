@@ -10,7 +10,7 @@ fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
         .map_err(|_| anyhow::anyhow!("invalid_key_length"))
 }
 
-#[flutter_rust_bridge::frb(sync)]
+#[flutter_rust_bridge::frb]
 pub fn sync_managed_vault_read_web_pull_state(
     app_dir: String,
     base_url: String,
@@ -21,7 +21,7 @@ pub fn sync_managed_vault_read_web_pull_state(
     Ok(serde_json::to_string(&state)?)
 }
 
-#[flutter_rust_bridge::frb(sync)]
+#[flutter_rust_bridge::frb]
 pub fn sync_managed_vault_apply_web_pull_page(
     app_dir: String,
     key: Vec<u8>,
@@ -40,7 +40,7 @@ pub fn sync_managed_vault_apply_web_pull_page(
     Ok(serde_json::to_string(&result)?)
 }
 
-#[flutter_rust_bridge::frb(sync)]
+#[flutter_rust_bridge::frb]
 pub fn sync_managed_vault_recover_web_pull_state(
     app_dir: String,
     key: Vec<u8>,

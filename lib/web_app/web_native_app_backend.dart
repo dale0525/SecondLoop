@@ -61,6 +61,10 @@ class WebNativeAppBackend extends NativeAppBackend {
     return _webAppService != null && isWebFormalSettingsBaseUrl(gatewayBaseUrl);
   }
 
+  bool _shouldBridgeManagedVaultPull(String baseUrl) {
+    return _webAppService != null && isWebFormalSettingsBaseUrl(baseUrl);
+  }
+
   factory WebNativeAppBackend.withDefaults({
     required AppDirProvider appDirProvider,
     String? storageScope,
@@ -74,13 +78,13 @@ class WebNativeAppBackend extends NativeAppBackend {
     );
   }
 
-  ManagedVaultV2PullState readManagedVaultV2PullState({
+  Future<ManagedVaultV2PullState> readManagedVaultV2PullState({
     required String appDir,
     required String baseUrl,
     required String vaultId,
-  }) {
+  }) async {
     final decoded = jsonDecode(
-      rust_web_sync.syncManagedVaultReadWebPullState(
+      await rust_web_sync.syncManagedVaultReadWebPullState(
         appDir: appDir,
         baseUrl: baseUrl,
         vaultId: vaultId,
@@ -98,16 +102,16 @@ class WebNativeAppBackend extends NativeAppBackend {
     );
   }
 
-  ManagedVaultV2PullApplyResult applyManagedVaultV2PullPage(
+  Future<ManagedVaultV2PullApplyResult> applyManagedVaultV2PullPage(
     Uint8List key,
     Uint8List syncKey, {
     required String appDir,
     required String baseUrl,
     required String vaultId,
     required WebManagedVaultPullPage page,
-  }) {
+  }) async {
     final decoded = jsonDecode(
-      rust_web_sync.syncManagedVaultApplyWebPullPage(
+      await rust_web_sync.syncManagedVaultApplyWebPullPage(
         appDir: appDir,
         key: key,
         syncKey: syncKey,
@@ -150,14 +154,14 @@ class WebNativeAppBackend extends NativeAppBackend {
     );
   }
 
-  ManagedVaultV2PullState recoverManagedVaultV2PullState(
+  Future<ManagedVaultV2PullState> recoverManagedVaultV2PullState(
     Uint8List key, {
     required String appDir,
     required String baseUrl,
     required String vaultId,
-  }) {
+  }) async {
     final decoded = jsonDecode(
-      rust_web_sync.syncManagedVaultRecoverWebPullState(
+      await rust_web_sync.syncManagedVaultRecoverWebPullState(
         appDir: appDir,
         key: key,
         baseUrl: baseUrl,
@@ -266,7 +270,7 @@ class WebNativeAppBackend extends NativeAppBackend {
     void Function(int done, int total)? onProgress,
   }) async {
     final appDir = await _resolveAppDir();
-    var state = readManagedVaultV2PullState(
+    var state = await readManagedVaultV2PullState(
       appDir: appDir,
       baseUrl: baseUrl,
       vaultId: vaultId,
@@ -298,20 +302,19 @@ class WebNativeAppBackend extends NativeAppBackend {
             error: error,
           );
         }
-        state = recoverManagedVaultV2PullState(
+        state = await recoverManagedVaultV2PullState(
           key,
           appDir: appDir,
           baseUrl: baseUrl,
           vaultId: vaultId,
         );
-        totalApplied = 0;
         progressBaseline = state.lastAppliedGlobalSeq;
         totalTarget = null;
         resetRecovered = true;
         progressResetPending = true;
         continue;
       }
-      final result = applyManagedVaultV2PullPage(
+      final result = await applyManagedVaultV2PullPage(
         key,
         syncKey,
         appDir: appDir,
@@ -352,7 +355,6 @@ class WebNativeAppBackend extends NativeAppBackend {
             nonContiguousRecovered = true;
             break;
         }
-        totalApplied = 0;
         state = result;
         progressBaseline = state.lastAppliedGlobalSeq;
         totalTarget = null;
@@ -401,7 +403,7 @@ class WebNativeAppBackend extends NativeAppBackend {
     required String idToken,
   }) async {
     final webAppService = _webAppService;
-    if (webAppService == null) {
+    if (!_shouldBridgeManagedVaultPull(baseUrl)) {
       return super.syncManagedVaultPull(
         key,
         syncKey,
@@ -412,7 +414,7 @@ class WebNativeAppBackend extends NativeAppBackend {
     }
 
     return _syncManagedVaultPullThroughWebAppService(
-      webAppService,
+      webAppService!,
       key,
       syncKey,
       baseUrl: baseUrl,
@@ -430,12 +432,12 @@ class WebNativeAppBackend extends NativeAppBackend {
     required String idToken,
   }) async* {
     final webAppService = _webAppService;
-    if (webAppService != null) {
+    if (_shouldBridgeManagedVaultPull(baseUrl)) {
       final controller = StreamController<String>();
       unawaited(() async {
         try {
           final pulled = await _syncManagedVaultPullThroughWebAppService(
-            webAppService,
+            webAppService!,
             key,
             syncKey,
             baseUrl: baseUrl,
