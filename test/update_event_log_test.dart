@@ -39,9 +39,11 @@ void main() {
   test('SharedPrefsUpdateEventLogger stores and trims recent entries',
       () async {
     SharedPreferences.setMockInitialValues({});
-    final logger = SharedPrefsUpdateEventLogger();
+    final logger = SharedPrefsUpdateEventLogger(
+      nowUtc: () => DateTime.utc(2026, 3, 14, 0, 0, 30),
+    );
 
-    for (var index = 0; index < 55; index += 1) {
+    for (var index = 0; index < 25; index += 1) {
       await logger.record(
         UpdateEventRecord(
           type: UpdateEventType.checkStarted,
@@ -53,15 +55,46 @@ void main() {
     }
 
     final recent = await logger.readRecent();
-    expect(recent, hasLength(50));
+    expect(recent, hasLength(20));
     expect(recent.first.currentVersion, '1.0.5');
-    expect(recent.last.currentVersion, '1.0.54');
+    expect(recent.last.currentVersion, '1.0.24');
+  });
+
+  test('SharedPrefsUpdateEventLogger drops stale entries when reading',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final logger = SharedPrefsUpdateEventLogger(
+      nowUtc: () => DateTime.utc(2026, 3, 14, 12),
+    );
+
+    await logger.record(
+      UpdateEventRecord(
+        type: UpdateEventType.checkSucceeded,
+        timestampUtc: DateTime.utc(2026, 3, 1, 12),
+        platform: AppUpdatePlatform.macos,
+        currentVersion: '1.0.0+1',
+      ),
+    );
+    await logger.record(
+      UpdateEventRecord(
+        type: UpdateEventType.checkSucceeded,
+        timestampUtc: DateTime.utc(2026, 3, 10, 12),
+        platform: AppUpdatePlatform.macos,
+        currentVersion: '1.0.0+2',
+      ),
+    );
+
+    final recent = await logger.readRecent();
+    expect(recent, hasLength(1));
+    expect(recent.single.currentVersion, '1.0.0+2');
   });
 
   test('SharedPrefsUpdateEventLogger round-trips pending apply dispatch event',
       () async {
     SharedPreferences.setMockInitialValues({});
-    final logger = SharedPrefsUpdateEventLogger();
+    final logger = SharedPrefsUpdateEventLogger(
+      nowUtc: () => DateTime.utc(2026, 3, 27, 8, 30),
+    );
 
     await logger.record(
       UpdateEventRecord(
