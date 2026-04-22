@@ -404,6 +404,14 @@ class WebNativeAppBackend extends NativeAppBackend {
             }
             nonContiguousRecovered = true;
             break;
+          case null:
+            throw StateError(
+              'managed_vault_pull_unexpected_retry_reason:null',
+            );
+          default:
+            throw StateError(
+              'managed_vault_pull_unexpected_retry_reason:${result.recoveryReason}',
+            );
         }
         state = result;
         totalApplied = 0;

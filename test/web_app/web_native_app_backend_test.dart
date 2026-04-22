@@ -517,6 +517,51 @@ void main() {
     expect(backend.finalizedAppliedOps, isEmpty);
   });
 
+  test('WebNativeAppBackend throws on unexpected managed-vault retry reason',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-2',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      recoveryReasons: <String>['unexpected_reason'],
+    );
+    backend.seedPullState(
+      generationId: 'generation-1',
+      lastAppliedGlobalSeq: 8,
+    );
+
+    await expectLater(
+      () => backend.syncManagedVaultPull(
+        Uint8List(32),
+        Uint8List(32),
+        baseUrl: kWebFormalSettingsBaseUrl,
+        vaultId: 'vault-123',
+        idToken: 'token-1',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains(
+              'managed_vault_pull_unexpected_retry_reason:unexpected_reason'),
+        ),
+      ),
+    );
+    expect(service.afterGlobalSeqs, <int>[8]);
+    expect(backend.finalizedAppliedOps, isEmpty);
+  });
+
   test(
       'WebNativeAppBackend resets applied-op count after reset-required recovery rebuilds local state',
       () async {

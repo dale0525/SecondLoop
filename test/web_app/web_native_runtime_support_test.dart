@@ -25,4 +25,33 @@ void main() {
       isFalse,
     );
   });
+
+  test('legacy web native runtime defines fail fast', () {
+    expect(
+      () => validateNoLegacyWebNativeRuntimeOverrides(
+        disableOverrideDefined: true,
+        enableOverrideDefined: false,
+      ),
+      throwsA(
+        isA<UnsupportedError>().having(
+          (error) => error.message,
+          'message',
+          contains('SECONDLOOP_DISABLE_WEB_NATIVE_RUNTIME'),
+        ),
+      ),
+    );
+    expect(
+      () => validateNoLegacyWebNativeRuntimeOverrides(
+        disableOverrideDefined: false,
+        enableOverrideDefined: true,
+      ),
+      throwsA(
+        isA<UnsupportedError>().having(
+          (error) => error.message,
+          'message',
+          contains('SECONDLOOP_ENABLE_WEB_NATIVE_RUNTIME'),
+        ),
+      ),
+    );
+  });
 }
