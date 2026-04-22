@@ -254,4 +254,53 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       if (mounted) _setState(() => _busy = false);
     }
   }
+
+  Future<void> _deleteLocalSyncData() async {
+    if (_busy) return;
+
+    final t = context.t;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(t.sync.localData.dialog.title),
+          content: Text(t.sync.localData.dialog.message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.common.actions.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(t.sync.localData.dialog.confirm),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    if (confirmed != true) return;
+
+    _setState(() => _busy = true);
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final engine = SyncEngineScope.maybeOf(context);
+
+      await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+
+      if (!mounted) return;
+      engine?.notifyExternalChange();
+      _showSnack(t.sync.localData.deleted);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(t.sync.localData.failed(error: '$e'));
+    } finally {
+      if (mounted) {
+        _setState(() => _busy = false);
+      } else {
+        _busy = false;
+      }
+    }
+  }
 }

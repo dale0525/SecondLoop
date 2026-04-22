@@ -949,6 +949,17 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _deleteLocalSyncData,
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  label: Text(context.t.sync.localData.button),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  context.t.sync.localData.subtitle,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
