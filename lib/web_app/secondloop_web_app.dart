@@ -89,18 +89,20 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
     }
     final supportsNativeRuntime =
         (widget.webNativeRuntimeSupported ?? browserSupportsWebNativeRuntime)();
+    if (!supportsNativeRuntime) {
+      service.close();
+      _disposeAuthController(authController);
+      throw UnsupportedError(
+        'web native runtime is required for /app and needs '
+        'SharedArrayBuffer with cross-origin isolation support',
+      );
+    }
     if (!mounted) {
       service.close();
       _disposeAuthController(authController);
     } else {
       _bootstrappedService = service;
       _bootstrappedAuthController = authController;
-    }
-    if (!supportsNativeRuntime) {
-      throw UnsupportedError(
-        'web native runtime is required for /app and needs '
-        'SharedArrayBuffer with cross-origin isolation support',
-      );
     }
     return WebAppBootstrapData(
       authController: authController,

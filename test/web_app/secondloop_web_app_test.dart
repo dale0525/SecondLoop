@@ -110,18 +110,19 @@ void main() {
 
   testWidgets('web app fails bootstrap when native web runtime is unsupported',
       (tester) async {
+    final service = _DisposableFakeWebAppService();
+    final authController = _FakeCloudAuthController(
+      initialUid: 'uid-1',
+      initialEmail: 'user@example.com',
+      initialEmailVerified: true,
+    );
+
     await tester.pumpWidget(
       SecondLoopWebApp(
         configLoader: () async =>
             const WebAppConfig(firebaseWebApiKey: 'firebase-key'),
-        serviceFactory: (config) => _FakeWebAppService(
-          subscription: WebSubscriptionState.entitled,
-        ),
-        authControllerFactory: (config) => _FakeCloudAuthController(
-          initialUid: 'uid-1',
-          initialEmail: 'user@example.com',
-          initialEmailVerified: true,
-        ),
+        serviceFactory: (config) => service,
+        authControllerFactory: (config) => authController,
         webNativeRuntimeSupported: () => false,
       ),
     );
@@ -130,6 +131,8 @@ void main() {
     expect(find.byType(AppBackendScope), findsNothing);
     expect(find.byType(CloudAccountPanel), findsNothing);
     expect(find.textContaining('native runtime'), findsOneWidget);
+    expect(service.closeCount, 1);
+    expect(authController.disposeCount, 1);
   });
 
   testWidgets(

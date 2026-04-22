@@ -240,6 +240,12 @@ class WebNativeAppBackend extends NativeAppBackend {
           'local_generation_id=${state.generationId} '
           'remote_generation_id=${page?.generationId}',
         );
+      case 'empty_remote_state':
+        return StateError(
+          'managed-vault v2 pull empty_remote_state persisted after local rebuild: '
+          'local_generation_id=${state.generationId} '
+          'after_global_seq=${state.lastAppliedGlobalSeq}',
+        );
       case 'non_contiguous':
         return StateError(
           'managed-vault v2 pull non-contiguous page persisted after local rebuild: '
@@ -267,6 +273,7 @@ class WebNativeAppBackend extends NativeAppBackend {
     );
     var totalApplied = 0;
     var resetRecovered = false;
+    var emptyRemoteStateRecovered = false;
     var generationRecovered = false;
     var nonContiguousRecovered = false;
     var progressBaseline = state.lastAppliedGlobalSeq;
@@ -314,6 +321,16 @@ class WebNativeAppBackend extends NativeAppBackend {
       );
       if (result.retryRequired) {
         switch (result.recoveryReason) {
+          case 'empty_remote_state':
+            if (emptyRemoteStateRecovered) {
+              throw _persistentManagedVaultPullRecoveryError(
+                reason: 'empty_remote_state',
+                state: state,
+                page: page,
+              );
+            }
+            emptyRemoteStateRecovered = true;
+            break;
           case 'generation_mismatch':
             if (generationRecovered) {
               throw _persistentManagedVaultPullRecoveryError(

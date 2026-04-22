@@ -324,6 +324,56 @@ void main() {
     expect(backend.finalizedAppliedOps, <int>[1]);
   });
 
+  test('WebNativeAppBackend stops after empty-remote-state recovery repeats',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: '',
+          remoteLatestGlobalSeq: 0,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[],
+        ),
+        const WebManagedVaultPullPage(
+          generationId: '',
+          remoteLatestGlobalSeq: 0,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      recoveryReasons: <String>['empty_remote_state', 'empty_remote_state'],
+    );
+    backend.seedPullState(
+      generationId: 'generation-1',
+      lastAppliedGlobalSeq: 8,
+    );
+
+    await expectLater(
+      () => backend.syncManagedVaultPull(
+        Uint8List(32),
+        Uint8List(32),
+        baseUrl: 'https://service-vault.secondloop.app',
+        vaultId: 'vault-123',
+        idToken: 'token-1',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('empty_remote_state'),
+        ),
+      ),
+    );
+    expect(service.afterGlobalSeqs, <int>[8, 0]);
+    expect(backend.finalizedAppliedOps, isEmpty);
+  });
+
   test('WebNativeAppBackend reports incremental managed-vault pull progress',
       () async {
     final service = _ManagedVaultPullBridgeService(
