@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/i18n/locale_prefs.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/web_app/secondloop_web_app.dart';
 import 'package:secondloop/web_app/web_app_service.dart';
+import 'package:secondloop/web_app/web_native_app_backend.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
 
 void main() {
@@ -108,8 +108,67 @@ void main() {
     expect(service.closeCount, 1);
   });
 
+  testWidgets('web app fails bootstrap when native web runtime is unsupported',
+      (tester) async {
+    final service = _DisposableFakeWebAppService();
+    final authController = _FakeCloudAuthController(
+      initialUid: 'uid-1',
+      initialEmail: 'user@example.com',
+      initialEmailVerified: true,
+    );
+
+    await tester.pumpWidget(
+      SecondLoopWebApp(
+        configLoader: () async =>
+            const WebAppConfig(firebaseWebApiKey: 'firebase-key'),
+        serviceFactory: (config) => service,
+        authControllerFactory: (config) => authController,
+        webNativeRuntimeSupported: () => false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppBackendScope), findsNothing);
+    expect(find.byType(CloudAccountPanel), findsNothing);
+    expect(find.textContaining('native runtime'), findsOneWidget);
+    expect(service.closeCount, 0);
+    expect(authController.disposeCount, 0);
+  });
+
   testWidgets(
-      'web app falls back to cloud backend when native web runtime is unsupported',
+      'web app fails fast before config and auth bootstrap when native runtime is unsupported',
+      (tester) async {
+    var configLoads = 0;
+    var serviceFactoryCalls = 0;
+    var authFactoryCalls = 0;
+
+    await tester.pumpWidget(
+      SecondLoopWebApp(
+        configLoader: () async {
+          configLoads += 1;
+          return const WebAppConfig(firebaseWebApiKey: 'firebase-key');
+        },
+        serviceFactory: (config) {
+          serviceFactoryCalls += 1;
+          return _FakeWebAppService();
+        },
+        authControllerFactory: (config) {
+          authFactoryCalls += 1;
+          return _FakeCloudAuthController();
+        },
+        webNativeRuntimeSupported: () => false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('native runtime'), findsOneWidget);
+    expect(configLoads, 0);
+    expect(serviceFactoryCalls, 0);
+    expect(authFactoryCalls, 0);
+  });
+
+  testWidgets(
+      'web app defaults to native backend when web native runtime is available',
       (tester) async {
     await tester.pumpWidget(
       SecondLoopWebApp(
@@ -123,15 +182,13 @@ void main() {
           initialEmail: 'user@example.com',
           initialEmailVerified: true,
         ),
-        webNativeRuntimeSupported: () => false,
       ),
     );
     await tester.pumpAndSettle();
 
     final backendScope =
         tester.widget<AppBackendScope>(find.byType(AppBackendScope).first);
-    expect(backendScope.backend, isA<CloudWebBackend>());
-    expect(find.byType(CloudAccountPanel), findsNothing);
+    expect(backendScope.backend, isA<WebNativeAppBackend>());
   });
 }
 

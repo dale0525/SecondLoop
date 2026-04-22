@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/src/rust/db.dart';
 import 'package:secondloop/web_app/web_app_service.dart';
 import 'package:secondloop/web_app/web_formal_settings_adapters.dart';
 import 'package:secondloop/web_app/web_native_app_backend.dart';
@@ -157,6 +159,596 @@ void main() {
     expect(service.upsertedIdToken, 'token-1');
     expect(service.upsertedPayload?['scope'], 'scope-1');
   });
+
+  test('WebNativeAppBackend bridges cloud chat through WebAppService',
+      () async {
+    final service = _CloudChatBridgeService();
+    final backend = _CloudChatBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final events = await backend
+        .askAiStreamCloudGateway(
+          Uint8List(32),
+          'conversation-1',
+          question: 'Summarize this',
+          gatewayBaseUrl: kWebFormalSettingsBaseUrl,
+          idToken: 'token-1',
+          modelName: 'cloud',
+        )
+        .toList();
+
+    expect(events, <String>['web reply']);
+    expect(service.idToken, 'token-1');
+    expect(service.messages, <Map<String, String>>[
+      <String, String>{'role': 'user', 'content': 'Summarize this'},
+    ]);
+  });
+
+  test(
+      'WebNativeAppBackend bridges task-priority rerank chat through WebAppService',
+      () async {
+    final service = _CloudChatBridgeService(reply: 'reranked');
+    final backend = WebNativeAppBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final reply = await backend.taskPriorityRerankAiCloudGateway(
+      Uint8List(32),
+      prompt: 'rank todos',
+      gatewayBaseUrl: kWebFormalSettingsBaseUrl,
+      idToken: 'token-2',
+      modelName: 'cloud',
+    );
+
+    expect(reply, 'reranked');
+    expect(service.idToken, 'token-2');
+    expect(service.messages, <Map<String, String>>[
+      <String, String>{'role': 'user', 'content': 'rank todos'},
+    ]);
+  });
+
+  test(
+      'WebNativeAppBackend bridges managed-vault pull for real website proxy URL',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final pulled = await backend.syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: 'https://site.secondloop.app/api/app/vault-proxy',
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pulled, 1);
+    expect(service.afterGlobalSeqs, <int>[0]);
+    expect(backend.appliedPages, hasLength(1));
+    expect(backend.finalizedAppliedOps, <int>[1]);
+  });
+
+  test('WebNativeAppBackend pulls managed-vault pages through WebAppService',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: true,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 2,
+              deviceId: 'device-a',
+              seq: 12,
+              opId: 'op-2',
+              clientOpId: 'op-2',
+              ciphertextB64: 'BAUG',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final pulled = await backend.syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pulled, 2);
+    expect(service.afterGlobalSeqs, <int>[0, 1]);
+    expect(service.idTokens, <String>['token-1', 'token-1']);
+    expect(backend.appliedPages, hasLength(2));
+    expect(backend.appliedPages.first.ops.single.opId, 'op-1');
+    expect(backend.appliedPages.last.ops.single.opId, 'op-2');
+    expect(backend.finalizedAppliedOps, <int>[2]);
+  });
+
+  test(
+      'WebNativeAppBackend only bridges managed-vault pull for web formal settings base URL',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    await expectLater(
+      () => backend.syncManagedVaultPull(
+        Uint8List(32),
+        Uint8List(32),
+        baseUrl: 'https://service-vault.secondloop.app',
+        vaultId: 'vault-123',
+        idToken: 'token-1',
+      ),
+      throwsA(anything),
+    );
+
+    expect(service.afterGlobalSeqs, isEmpty);
+    expect(backend.appliedPages, isEmpty);
+    expect(backend.finalizedAppliedOps, isEmpty);
+  });
+
+  test(
+      'WebNativeAppBackend retries reset-required web pull after safe recovery',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-2',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 21,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+      ],
+      failures: <Object>[
+        const WebAppHttpException(
+          statusCode: 409,
+          code: 'reset_required',
+          body:
+              '{"error":"reset_required","reason":"global_log_gap","remote_generation_id":"generation-2","remote_latest_global_seq":1}',
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+    backend.seedPullState(
+        generationId: 'generation-1', lastAppliedGlobalSeq: 8);
+
+    final pulled = await backend.syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pulled, 1);
+    expect(service.afterGlobalSeqs, <int>[8, 0]);
+    expect(backend.recoveryCalls, 1);
+    expect(backend.finalizedAppliedOps, <int>[1]);
+  });
+
+  test(
+      'WebNativeAppBackend retries generation-mismatch apply after safe recovery',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-2',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[],
+        ),
+        const WebManagedVaultPullPage(
+          generationId: 'generation-2',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 22,
+              opId: 'op-2',
+              clientOpId: 'op-2',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      recoveryReasons: <String>['generation_mismatch'],
+    );
+    backend.seedPullState(
+        generationId: 'generation-1', lastAppliedGlobalSeq: 8);
+
+    final pulled = await backend.syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pulled, 1);
+    expect(service.afterGlobalSeqs, <int>[8, 0]);
+    expect(backend.recoveryCalls, 0);
+    expect(backend.finalizedAppliedOps, <int>[1]);
+  });
+
+  test('WebNativeAppBackend stops after empty-remote-state recovery repeats',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: '',
+          remoteLatestGlobalSeq: 0,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[],
+        ),
+        const WebManagedVaultPullPage(
+          generationId: '',
+          remoteLatestGlobalSeq: 0,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      recoveryReasons: <String>['empty_remote_state', 'empty_remote_state'],
+    );
+    backend.seedPullState(
+      generationId: 'generation-1',
+      lastAppliedGlobalSeq: 8,
+    );
+
+    await expectLater(
+      () => backend.syncManagedVaultPull(
+        Uint8List(32),
+        Uint8List(32),
+        baseUrl: kWebFormalSettingsBaseUrl,
+        vaultId: 'vault-123',
+        idToken: 'token-1',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('empty_remote_state'),
+        ),
+      ),
+    );
+    expect(service.afterGlobalSeqs, <int>[8, 0]);
+    expect(backend.finalizedAppliedOps, isEmpty);
+  });
+
+  test('WebNativeAppBackend throws on unexpected managed-vault retry reason',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-2',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      recoveryReasons: <String>['unexpected_reason'],
+    );
+    backend.seedPullState(
+      generationId: 'generation-1',
+      lastAppliedGlobalSeq: 8,
+    );
+
+    await expectLater(
+      () => backend.syncManagedVaultPull(
+        Uint8List(32),
+        Uint8List(32),
+        baseUrl: kWebFormalSettingsBaseUrl,
+        vaultId: 'vault-123',
+        idToken: 'token-1',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains(
+              'managed_vault_pull_unexpected_retry_reason:unexpected_reason'),
+        ),
+      ),
+    );
+    expect(service.afterGlobalSeqs, <int>[8]);
+    expect(backend.finalizedAppliedOps, isEmpty);
+  });
+
+  test(
+      'WebNativeAppBackend resets applied-op count after reset-required recovery rebuilds local state',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[],
+      responses: <Object>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: true,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+        const WebAppHttpException(
+          statusCode: 409,
+          code: 'reset_required',
+          body:
+              '{"error":"reset_required","reason":"global_log_gap","remote_generation_id":"generation-1","remote_latest_global_seq":2}',
+        ),
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 2,
+              deviceId: 'device-a',
+              seq: 12,
+              opId: 'op-2',
+              clientOpId: 'op-2',
+              ciphertextB64: 'BAUG',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+    backend.seedPullState(
+      generationId: 'generation-1',
+      lastAppliedGlobalSeq: 0,
+    );
+    backend.seedRecoveredPullState(
+      generationId: 'generation-1',
+      lastAppliedGlobalSeq: 1,
+    );
+
+    final pulled = await backend.syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pulled, 1);
+    expect(service.afterGlobalSeqs, <int>[0, 1, 1]);
+    expect(backend.finalizedAppliedOps, <int>[1]);
+  });
+
+  test('WebNativeAppBackend reports incremental managed-vault pull progress',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: true,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 2,
+              deviceId: 'device-a',
+              seq: 12,
+              opId: 'op-2',
+              clientOpId: 'op-2',
+              ciphertextB64: 'BAUG',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final events = await backend
+        .syncManagedVaultPullProgress(
+          Uint8List(32),
+          Uint8List(32),
+          baseUrl: kWebFormalSettingsBaseUrl,
+          vaultId: 'vault-123',
+          idToken: 'token-1',
+        )
+        .toList();
+
+    expect(
+      events,
+      <String>[
+        '{"type":"progress","done":1,"total":2}',
+        '{"type":"progress","done":2,"total":2}',
+        '{"type":"result","count":2}',
+      ],
+    );
+  });
+
+  test('WebNativeAppBackend awaits async managed-vault pull finalization',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+      ],
+    );
+    final finalizeCompleter = Completer<void>();
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      finalizeCompleter: finalizeCompleter,
+    );
+
+    var completed = false;
+    final future = backend
+        .syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    )
+        .then((_) {
+      completed = true;
+    });
+
+    await Future<void>.delayed(Duration.zero);
+    expect(backend.finalizedAppliedOps, <int>[1]);
+    expect(completed, isFalse);
+
+    finalizeCompleter.complete();
+    await future;
+
+    expect(completed, isTrue);
+  });
 }
 
 final class _ProgressWrappingBackend extends WebNativeAppBackend {
@@ -244,5 +836,252 @@ final class _TaskPriorityBridgeService extends WebAppService {
   }) async {
     upsertedIdToken = idToken;
     upsertedPayload = payload;
+  }
+}
+
+final class _CloudChatBridgeService extends WebAppService {
+  _CloudChatBridgeService({this.reply = 'web reply'});
+
+  final String reply;
+  String? idToken;
+  List<Map<String, String>>? messages;
+
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription({
+    required String idToken,
+  }) async {
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.entitled,
+      canManageSubscription: true,
+    );
+  }
+
+  @override
+  Future<String> sendChat({
+    required String idToken,
+    required List<Map<String, String>> messages,
+  }) async {
+    this.idToken = idToken;
+    this.messages = List<Map<String, String>>.from(messages);
+    return reply;
+  }
+}
+
+final class _CloudChatBridgeBackend extends WebNativeAppBackend {
+  _CloudChatBridgeBackend({
+    required super.appDirProvider,
+    required super.secureStorage,
+    required super.rustLibInit,
+    required super.webAppService,
+  });
+
+  final List<Map<String, String>> storedMessages = <Map<String, String>>[];
+
+  @override
+  Future<Message> insertMessage(
+    Uint8List key,
+    String conversationId, {
+    required String role,
+    required String content,
+    bool isMemory = false,
+  }) async {
+    storedMessages.add(<String, String>{'role': role, 'content': content});
+    return Message(
+      id: 'message-${storedMessages.length - 1}',
+      conversationId: conversationId,
+      role: role,
+      content: content,
+      createdAtMs: PlatformInt64Util.from(0),
+      isMemory: isMemory,
+    );
+  }
+
+  @override
+  Future<List<Message>> listMessages(
+    Uint8List key,
+    String conversationId,
+  ) async {
+    return storedMessages.asMap().entries.map((entry) {
+      final message = entry.value;
+      return Message(
+        id: 'message-${entry.key}',
+        conversationId: conversationId,
+        role: message['role']!,
+        content: message['content']!,
+        createdAtMs: PlatformInt64Util.from(0),
+        isMemory: false,
+      );
+    }).toList(growable: false);
+  }
+}
+
+final class _ManagedVaultPullBridgeService extends WebAppService {
+  _ManagedVaultPullBridgeService({
+    required List<WebManagedVaultPullPage> pages,
+    List<Object> failures = const <Object>[],
+    List<Object>? responses,
+  })  : _pages = List<WebManagedVaultPullPage>.from(pages),
+        _failures = List<Object>.from(failures),
+        _responses = responses == null ? null : List<Object>.from(responses);
+
+  final List<WebManagedVaultPullPage> _pages;
+  final List<Object> _failures;
+  final List<Object>? _responses;
+  final List<int> afterGlobalSeqs = <int>[];
+  final List<String> idTokens = <String>[];
+
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription({
+    required String idToken,
+  }) async {
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.entitled,
+      canManageSubscription: true,
+    );
+  }
+
+  @override
+  Future<WebManagedVaultPullPage> fetchManagedVaultPullPage({
+    required String idToken,
+    required String vaultId,
+    required int afterGlobalSeq,
+    int limit = 500,
+  }) async {
+    idTokens.add(idToken);
+    afterGlobalSeqs.add(afterGlobalSeq);
+    final responses = _responses;
+    if (responses != null) {
+      if (responses.isEmpty) {
+        throw StateError('unexpected_pull_page_request');
+      }
+      final next = responses.removeAt(0);
+      if (next is WebManagedVaultPullPage) return next;
+      throw next;
+    }
+    if (_failures.isNotEmpty) {
+      throw _failures.removeAt(0);
+    }
+    if (_pages.isEmpty) {
+      throw StateError('unexpected_pull_page_request');
+    }
+    return _pages.removeAt(0);
+  }
+}
+
+final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
+  _ManagedVaultPullBridgeBackend({
+    required super.appDirProvider,
+    required super.secureStorage,
+    required super.rustLibInit,
+    required super.webAppService,
+    List<String> recoveryReasons = const <String>[],
+    Completer<void>? finalizeCompleter,
+  })  : _recoveryReasons = List<String>.from(recoveryReasons),
+        _finalizeCompleter = finalizeCompleter;
+
+  final List<WebManagedVaultPullPage> appliedPages =
+      <WebManagedVaultPullPage>[];
+  final List<int> finalizedAppliedOps = <int>[];
+  final List<String> _recoveryReasons;
+  final Completer<void>? _finalizeCompleter;
+  int _lastAppliedGlobalSeq = 0;
+  String? _generationId;
+  int _recoveredLastAppliedGlobalSeq = 0;
+  String? _recoveredGenerationId;
+  int recoveryCalls = 0;
+
+  void seedPullState({
+    String? generationId,
+    required int lastAppliedGlobalSeq,
+  }) {
+    _generationId = generationId;
+    _lastAppliedGlobalSeq = lastAppliedGlobalSeq;
+  }
+
+  void seedRecoveredPullState({
+    String? generationId,
+    required int lastAppliedGlobalSeq,
+  }) {
+    _recoveredGenerationId = generationId;
+    _recoveredLastAppliedGlobalSeq = lastAppliedGlobalSeq;
+  }
+
+  @override
+  Future<ManagedVaultV2PullState> readManagedVaultV2PullState({
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    return ManagedVaultV2PullState(
+      generationId: _generationId,
+      lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+    );
+  }
+
+  @override
+  Future<ManagedVaultV2PullApplyResult> applyManagedVaultV2PullPage(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required WebManagedVaultPullPage page,
+  }) async {
+    if (_recoveryReasons.isNotEmpty) {
+      final recoveryReason = _recoveryReasons.removeAt(0);
+      _generationId = null;
+      _lastAppliedGlobalSeq = 0;
+      return ManagedVaultV2PullApplyResult(
+        appliedCount: 0,
+        generationId: _generationId,
+        lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+        remoteLatestGlobalSeq: page.remoteLatestGlobalSeq,
+        hasMore: page.hasMore,
+        retryRequired: true,
+        recoveryReason: recoveryReason,
+      );
+    }
+    appliedPages.add(page);
+    _generationId = page.generationId;
+    if (page.ops.isNotEmpty) {
+      _lastAppliedGlobalSeq = page.ops.last.globalSeq;
+    }
+    return ManagedVaultV2PullApplyResult(
+      appliedCount: page.ops.length,
+      generationId: _generationId,
+      lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+      remoteLatestGlobalSeq: page.remoteLatestGlobalSeq,
+      hasMore: page.hasMore,
+    );
+  }
+
+  @override
+  Future<ManagedVaultV2PullState> recoverManagedVaultV2PullState(
+    Uint8List key, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    recoveryCalls += 1;
+    _generationId = _recoveredGenerationId;
+    _lastAppliedGlobalSeq = _recoveredLastAppliedGlobalSeq;
+    return ManagedVaultV2PullState(
+      generationId: _generationId,
+      lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+    );
+  }
+
+  @override
+  Future<void> finalizeManagedVaultV2Pull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required int appliedOps,
+  }) async {
+    finalizedAppliedOps.add(appliedOps);
+    await _finalizeCompleter?.future;
   }
 }

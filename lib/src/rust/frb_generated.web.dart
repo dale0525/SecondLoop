@@ -26,6 +26,7 @@ import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
 import 'api/todo_followup_generation.dart';
+import 'api/web_sync.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'db.dart';

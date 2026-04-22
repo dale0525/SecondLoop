@@ -62,6 +62,17 @@
       "confirm": "清理"
     }
   },
+  "localData": {
+    "button": "删除本地数据",
+    "subtitle": "删除当前设备上所有会参与同步的本地数据，包括消息、附件和 embedding。同步设置会保留；之后点击“下载”会再次用远端数据完整替换本地。",
+    "deleted": "已删除本地同步数据",
+    "failed": "删除失败：$error",
+    "dialog": {
+      "title": "删除本地数据？",
+      "message": "这会删除当前设备上所有会参与同步的本地数据，包括消息、附件和 embedding。你的同步设置会保留；之后点击“下载”会再次用远端数据完整替换本地。",
+      "confirm": "删除"
+    }
+  },
   "backendLabel": "同步方式",
   "backendWebdav": "WebDAV（你自己的服务器）",
   "backendLocalDir": "本机文件夹（桌面端）",

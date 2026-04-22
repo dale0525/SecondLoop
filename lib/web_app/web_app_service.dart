@@ -88,6 +88,38 @@ class WebVaultAttachmentItem {
   bool get needsAppProcessing => needsAppProcessingInWeb(mimeType);
 }
 
+class WebManagedVaultPullOp {
+  const WebManagedVaultPullOp({
+    required this.globalSeq,
+    required this.deviceId,
+    required this.seq,
+    required this.opId,
+    required this.clientOpId,
+    required this.ciphertextB64,
+  });
+
+  final int globalSeq;
+  final String deviceId;
+  final int seq;
+  final String opId;
+  final String clientOpId;
+  final String ciphertextB64;
+}
+
+class WebManagedVaultPullPage {
+  const WebManagedVaultPullPage({
+    required this.generationId,
+    required this.remoteLatestGlobalSeq,
+    required this.hasMore,
+    required this.ops,
+  });
+
+  final String generationId;
+  final int remoteLatestGlobalSeq;
+  final bool hasMore;
+  final List<WebManagedVaultPullOp> ops;
+}
+
 abstract class WebAppService {
   Future<WebSubscriptionSnapshot> fetchSubscription({required String idToken});
 
@@ -148,6 +180,15 @@ abstract class WebAppService {
     required String sha256,
   }) async =>
       const <int>[];
+
+  Future<WebManagedVaultPullPage> fetchManagedVaultPullPage({
+    required String idToken,
+    required String vaultId,
+    required int afterGlobalSeq,
+    int limit = 500,
+  }) async {
+    throw UnsupportedError('managed_vault_pull_page_not_available');
+  }
 
   void close() {}
 }
@@ -278,6 +319,54 @@ class WebAppServiceHttp extends WebAppService {
     final streamed = await _client.send(request);
     final response = await http.Response.fromStream(streamed);
     return _decodeJsonResponse(response);
+  }
+
+  WebManagedVaultPullPage _parseManagedVaultPullPage(Object? decoded) {
+    if (decoded is! Map) {
+      throw const FormatException('invalid_managed_vault_pull_page');
+    }
+
+    int parseInt(Object? value, String field) {
+      if (value is num) return value.toInt();
+      throw FormatException('invalid_$field');
+    }
+
+    String parseString(Object? value, String field) {
+      final normalized = '${value ?? ''}'.trim();
+      if (normalized.isEmpty) {
+        throw FormatException('invalid_$field');
+      }
+      return normalized;
+    }
+
+    final rawOps = decoded['ops'];
+    if (rawOps is! List) {
+      throw const FormatException('invalid_managed_vault_pull_ops');
+    }
+
+    final ops = rawOps.map((item) {
+      if (item is! Map) {
+        throw const FormatException('invalid_managed_vault_pull_op');
+      }
+      return WebManagedVaultPullOp(
+        globalSeq: parseInt(item['global_seq'], 'global_seq'),
+        deviceId: parseString(item['device_id'], 'device_id'),
+        seq: parseInt(item['seq'], 'seq'),
+        opId: parseString(item['op_id'], 'op_id'),
+        clientOpId: parseString(item['client_op_id'], 'client_op_id'),
+        ciphertextB64: parseString(item['ciphertext_b64'], 'ciphertext_b64'),
+      );
+    }).toList(growable: false);
+
+    return WebManagedVaultPullPage(
+      generationId: '${decoded['generation_id'] ?? ''}'.trim(),
+      remoteLatestGlobalSeq: parseInt(
+        decoded['remote_latest_global_seq'],
+        'remote_latest_global_seq',
+      ),
+      hasMore: _parseBool(decoded['has_more']) ?? false,
+      ops: ops,
+    );
   }
 
   Map<String, dynamic> _decodeJsonResponse(http.Response response) {
@@ -528,6 +617,28 @@ class WebAppServiceHttp extends WebAppService {
       throw StateError('attachment_too_large_for_web');
     }
     return response.bodyBytes;
+  }
+
+  @override
+  Future<WebManagedVaultPullPage> fetchManagedVaultPullPage({
+    required String idToken,
+    required String vaultId,
+    required int afterGlobalSeq,
+    int limit = 500,
+  }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
+    final json = await _sendJson(
+      '/api/app/vault-proxy/v2/vaults/$vaultId/sync/pull',
+      idToken,
+      body: <String, Object?>{
+        'after_global_seq': afterGlobalSeq,
+        'limit': limit,
+      },
+      headers: _vaultHeaders(vaultId),
+    );
+    return _parseManagedVaultPullPage(json);
   }
 
   @override

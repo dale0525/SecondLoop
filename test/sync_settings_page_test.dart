@@ -1421,6 +1421,110 @@ void main() {
       isTrue,
     );
   });
+
+  testWidgets('delete local data confirms before resetting synced local data',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _ResetLocalDataSyncSettingsBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: Scaffold(
+                body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final deleteButton = find.text('Delete local data');
+    await _ensureListItemVisible(tester, deleteButton);
+    expect(deleteButton, findsOneWidget);
+    expect(find.textContaining('messages, attachments, and embeddings'),
+        findsOneWidget);
+
+    await tester.tap(deleteButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete local data?'), findsOneWidget);
+    expect(backend.resetCalls, 0);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete local data?'), findsNothing);
+    expect(backend.resetCalls, 0);
+  });
+
+  testWidgets(
+      'delete local data resets synced local data and notifies listeners after confirmation',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _ResetLocalDataSyncSettingsBackend();
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+    var notifications = 0;
+    engine.changes.addListener(() => notifications++);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: SyncEngineScope(
+                engine: engine,
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final deleteButton = find.text('Delete local data');
+    await _ensureListItemVisible(tester, deleteButton);
+    await tester.tap(deleteButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete local data?'), findsNothing);
+    expect(backend.resetCalls, 1);
+    expect(notifications, 1);
+    expect(find.text('Local synced data deleted'), findsOneWidget);
+
+    engine.stop();
+  });
 }
 
 Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
@@ -1770,6 +1874,15 @@ class _SyncSettingsBackend extends AppBackend {
     required String idToken,
   }) async =>
       managedVaultPullResult;
+}
+
+final class _ResetLocalDataSyncSettingsBackend extends _SyncSettingsBackend {
+  int resetCalls = 0;
+
+  @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
+    resetCalls += 1;
+  }
 }
 
 final class _ManualPullUpdatesMessagesBackend extends _SyncSettingsBackend {

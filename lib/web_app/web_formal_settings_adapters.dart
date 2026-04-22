@@ -14,12 +14,22 @@ import 'web_app_service.dart';
 // never resolves; every request using this base URL is intercepted inside
 // `WebFormalSettingsHttpClient.send` before any network call can happen.
 const String kWebFormalSettingsBaseUrl = 'https://web.secondloop.invalid/';
+const String kWebManagedVaultProxyPath = '/api/app/vault-proxy';
 
 bool isWebFormalSettingsBaseUrl(String baseUrl) {
   final normalizedBaseUrl = baseUrl.trim().replaceFirst(RegExp(r'/+$'), '');
   final normalizedSentinel =
       kWebFormalSettingsBaseUrl.replaceFirst(RegExp(r'/+$'), '');
   return normalizedBaseUrl == normalizedSentinel;
+}
+
+bool isWebManagedVaultBridgeBaseUrl(String baseUrl) {
+  if (isWebFormalSettingsBaseUrl(baseUrl)) return true;
+  final normalizedBaseUrl = baseUrl.trim().replaceFirst(RegExp(r'/+$'), '');
+  if (normalizedBaseUrl.isEmpty) return false;
+  final uri = Uri.tryParse(normalizedBaseUrl);
+  if (uri == null) return false;
+  return uri.path.replaceFirst(RegExp(r'/+$'), '') == kWebManagedVaultProxyPath;
 }
 
 final class WebAppBillingClient implements BillingClient {

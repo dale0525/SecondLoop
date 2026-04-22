@@ -35,3 +35,4 @@ pub mod sync_progress;
 pub mod sync_progress;
 pub mod tags;
 pub mod todo_followup_generation;
+pub mod web_sync;

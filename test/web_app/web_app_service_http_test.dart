@@ -76,6 +76,73 @@ void main() {
     }
   });
 
+  test('managed-vault v2 pull page uses proxy path and parses response',
+      () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({
+          'generation_id': 'generation-1',
+          'remote_latest_global_seq': 2,
+          'has_more': false,
+          'ops': [
+            {
+              'global_seq': 1,
+              'device_id': 'device-a',
+              'seq': 13,
+              'op_id': 'op-1',
+              'client_op_id': 'op-1',
+              'ciphertext_b64': 'AQID',
+            },
+            {
+              'global_seq': 2,
+              'device_id': 'device-a',
+              'seq': 14,
+              'op_id': 'op-2',
+              'client_op_id': 'op-2',
+              'ciphertext_b64': 'BAUG',
+            },
+          ],
+        }),
+        200,
+        headers: const <String, String>{
+          'content-type': 'application/json; charset=utf-8',
+        },
+      );
+    });
+
+    final service = WebAppServiceHttp(client: client);
+    final page = await service.fetchManagedVaultPullPage(
+      idToken: 'token',
+      vaultId: 'vault-123',
+      afterGlobalSeq: 0,
+    );
+
+    expect(captured, isNotNull);
+    final request = captured! as http.Request;
+    expect(request.method, 'POST');
+    expect(
+      request.url.path,
+      '/api/app/vault-proxy/v2/vaults/vault-123/sync/pull',
+    );
+    expect(request.headers['authorization'], 'Bearer token');
+    expect(request.headers['x-secondloop-vault-id'], 'vault-123');
+    expect(
+      jsonDecode(request.body),
+      <String, Object?>{
+        'after_global_seq': 0,
+        'limit': 500,
+      },
+    );
+    expect(page.generationId, 'generation-1');
+    expect(page.remoteLatestGlobalSeq, 2);
+    expect(page.hasMore, isFalse);
+    expect(page.ops, hasLength(2));
+    expect(page.ops.first.globalSeq, 1);
+    expect(page.ops.last.opId, 'op-2');
+  });
+
   test('vault attachment bytes request includes auth and vault headers',
       () async {
     http.BaseRequest? captured;

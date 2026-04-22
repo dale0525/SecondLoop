@@ -30,6 +30,15 @@ fn apply_op(conn: &Connection, db_key: &[u8; 32], op: &serde_json::Value) -> Res
         "todo.checklist_item.reorder.v1" => {
             apply_todo_checklist_item_reorder(conn, &op["payload"])
         }
+        "todo.checklist_suggestion.upsert.v1" => {
+            apply_todo_checklist_suggestion_upsert(conn, db_key, &op["payload"])
+        }
+        "todo.checklist_suggestion.apply.v1" => {
+            apply_todo_checklist_suggestion_apply(conn, &op["payload"])
+        }
+        "todo.checklist_suggestion.dismiss.v1" => {
+            apply_todo_checklist_suggestion_dismiss(conn, &op["payload"])
+        }
         "todo.activity.append.v1" => apply_todo_activity_append(conn, db_key, &op["payload"]),
         "todo.activity.move.v1" => apply_todo_activity_move(conn, op),
         "todo.activity_attachment.link.v1" => {

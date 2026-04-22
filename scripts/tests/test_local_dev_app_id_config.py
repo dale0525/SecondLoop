@@ -19,6 +19,7 @@ NOTIFICATION_SCHEDULER_DART = (
     REPO_ROOT / "lib/core/notifications/review_reminder_notification_scheduler.dart"
 )
 SYNC_DESKTOP_RUNTIME_TOOL = REPO_ROOT / "tools/sync_desktop_runtime_to_appdir.dart"
+RESET_LOCAL_DEV_DATA_SCRIPT = REPO_ROOT / "scripts/reset_local_dev_data.py"
 RUN_WINDOWS_SCRIPT = REPO_ROOT / "scripts/run_windows.ps1"
 WINDOWS_CMAKE = REPO_ROOT / "windows/runner/CMakeLists.txt"
 WINDOWS_MAIN = REPO_ROOT / "windows/runner/main.cpp"
@@ -191,6 +192,16 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
         tool = SYNC_DESKTOP_RUNTIME_TOOL.read_text(encoding="utf-8")
 
         self.assertIn("Platform.environment['SECONDLOOP_APP_NAME']", tool)
+
+    def test_reset_local_dev_data_task_uses_dedicated_script(self) -> None:
+        pixi_config = self._load_pixi_config()
+
+        command = pixi_config["tasks"]["reset-local-dev-data"]
+
+        self.assertEqual(command, "python scripts/reset_local_dev_data.py")
+
+    def test_reset_local_dev_data_script_exists(self) -> None:
+        self.assertTrue(RESET_LOCAL_DEV_DATA_SCRIPT.exists())
 
 
 if __name__ == "__main__":

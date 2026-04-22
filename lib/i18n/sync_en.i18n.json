@@ -62,6 +62,17 @@
       "confirm": "Clear"
     }
   },
+  "localData": {
+    "button": "Delete local data",
+    "subtitle": "Deletes synced local data on this device, including messages, attachments, and embeddings. Your sync settings are kept; Download will fully replace local data from remote again.",
+    "deleted": "Local synced data deleted",
+    "failed": "Delete failed: $error",
+    "dialog": {
+      "title": "Delete local data?",
+      "message": "This deletes all synced local data on this device, including messages, attachments, and embeddings. Your sync settings are kept, and a later Download will fully replace local data from remote again.",
+      "confirm": "Delete"
+    }
+  },
   "backendLabel": "Sync method",
   "backendWebdav": "WebDAV (your server)",
   "backendLocalDir": "Folder on this computer (desktop)",

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
-import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
@@ -158,7 +157,6 @@ Widget _buildApp({
   required ObservableCloudAuthController controller,
   required WebAppService service,
   AppBackend? backend,
-  CloudWebBackend? chatBackend,
   Locale? locale,
   WebEntryIntent entryIntent = WebEntryIntent.open,
   String managedVaultBaseUrl = '',
@@ -174,7 +172,6 @@ Widget _buildApp({
         service: service,
         backend:
             backend ?? (injectTestBackend ? _FakeUnlockedWebBackend() : null),
-        chatBackend: chatBackend,
         entryIntent: entryIntent,
         managedVaultBaseUrl: managedVaultBaseUrl,
         syncDefaultsPrimer: syncDefaultsPrimer,

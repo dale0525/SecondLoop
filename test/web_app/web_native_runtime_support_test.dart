@@ -2,14 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/web_app/web_native_runtime_support.dart';
 
 void main() {
-  test(
-      'resolveWebNativeRuntimeSupport requires shared-memory capability and build opt-out',
-      () {
+  test('resolveWebNativeRuntimeSupport requires browser capabilities', () {
     expect(
       resolveWebNativeRuntimeSupport(
         browserCapability: true,
         sharedMemoryCapability: true,
-        disableOverride: false,
       ),
       isTrue,
     );
@@ -17,7 +14,6 @@ void main() {
       resolveWebNativeRuntimeSupport(
         browserCapability: false,
         sharedMemoryCapability: true,
-        disableOverride: false,
       ),
       isFalse,
     );
@@ -25,17 +21,37 @@ void main() {
       resolveWebNativeRuntimeSupport(
         browserCapability: true,
         sharedMemoryCapability: false,
-        disableOverride: false,
       ),
       isFalse,
     );
+  });
+
+  test('legacy web native runtime defines fail fast', () {
     expect(
-      resolveWebNativeRuntimeSupport(
-        browserCapability: true,
-        sharedMemoryCapability: true,
-        disableOverride: true,
+      () => validateNoLegacyWebNativeRuntimeOverrides(
+        disableOverrideDefined: true,
+        enableOverrideDefined: false,
       ),
-      isFalse,
+      throwsA(
+        isA<UnsupportedError>().having(
+          (error) => error.message,
+          'message',
+          contains('SECONDLOOP_DISABLE_WEB_NATIVE_RUNTIME'),
+        ),
+      ),
+    );
+    expect(
+      () => validateNoLegacyWebNativeRuntimeOverrides(
+        disableOverrideDefined: false,
+        enableOverrideDefined: true,
+      ),
+      throwsA(
+        isA<UnsupportedError>().having(
+          (error) => error.message,
+          'message',
+          contains('SECONDLOOP_ENABLE_WEB_NATIVE_RUNTIME'),
+        ),
+      ),
     );
   });
 }

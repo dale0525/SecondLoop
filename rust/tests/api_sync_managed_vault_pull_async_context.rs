@@ -56,8 +56,7 @@ fn respond_json(stream: &mut TcpStream, status_line: &str, body: &str) {
         .expect("write json response");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn api_sync_managed_vault_pull_can_run_inside_async_context() {
+fn run_pull_inside_async_context() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let addr = listener.local_addr().expect("local addr");
 
@@ -95,9 +94,18 @@ async fn api_sync_managed_vault_pull_can_run_inside_async_context() {
         "v1".to_string(),
         "token".to_string(),
     )
-    .await
     .expect("pull succeeds inside async context");
 
     assert_eq!(pulled, 0);
     handle.join().expect("join");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn api_sync_managed_vault_pull_can_run_inside_multi_thread_async_context() {
+    run_pull_inside_async_context();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn api_sync_managed_vault_pull_can_run_inside_current_thread_async_context() {
+    run_pull_inside_async_context();
 }

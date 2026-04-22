@@ -30,6 +30,7 @@ mod reseed;
 mod runtime;
 pub(crate) mod state_machine;
 mod v2_client;
+mod web_pull;
 
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
@@ -42,6 +43,10 @@ use pending_apply::{
     apply_pending_ops_until_stable, has_local_oplog_for_device, is_foreign_key_constraint_error,
     load_pending_apply_op_ids, pending_apply_key, rewind_since_for_unresolved_pending_devices,
     update_since_map,
+};
+pub use web_pull::{
+    apply_web_pull_page, finalize_web_pull, read_web_pull_state, recover_web_pull_state_if_safe,
+    WebPullApplyResult, WebPullPage, WebPullState,
 };
 
 #[derive(Debug, Serialize)]
@@ -176,7 +181,7 @@ fn v2_route_unavailable(error: &anyhow::Error) -> bool {
         || message.contains("managed-vault v2 push route unavailable")
 }
 
-fn finalize_v2_pull_blob_backfill(
+pub(super) fn finalize_v2_pull_blob_backfill(
     conn: &Connection,
     db_key: &[u8; 32],
     sync_key: &[u8; 32],

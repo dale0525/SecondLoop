@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../core/backend/app_backend.dart';
-import '../core/backend/cloud_web_backend.dart';
 import '../core/cloud/cloud_auth_access.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/session/session_scope.dart';
@@ -144,9 +143,6 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
     AppBackend backend,
     Uint8List sessionKey,
   ) async {
-    if (backend is CloudWebBackend) {
-      return;
-    }
     final uid = widget.authController.uid?.trim() ?? '';
     final baseUrl = widget.managedVaultBaseUrl.trim();
     if (uid.isEmpty || baseUrl.isEmpty) return;
