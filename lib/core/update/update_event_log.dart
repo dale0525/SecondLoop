@@ -149,9 +149,7 @@ final class SharedPrefsUpdateEventLogger implements UpdateEventLogger {
   @override
   Future<List<UpdateEventRecord>> readRecent() async {
     final prefs = await SharedPreferences.getInstance();
-    final pruned = _prune(_decodeList(prefs.getString(prefsKey)));
-    await _writePruned(prefs, pruned);
-    return pruned;
+    return _prune(_decodeList(prefs.getString(prefsKey)));
   }
 
   List<UpdateEventRecord> _decodeList(String? raw) {

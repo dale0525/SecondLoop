@@ -1,11 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64_URL;
 use base64::Engine as _;
-use reqwest::blocking::Client;
+use reqwest::blocking::{Client, ClientBuilder};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +14,7 @@ use crate::db;
 
 type RemoteDeviceSeqMap = BTreeMap<String, i64>;
 type RemoteDeviceSeqMapProbeResult = (Option<RemoteDeviceSeqMap>, Option<String>);
+const DIAGNOSTICS_HTTP_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Serialize)]
 struct DiagnosticsRegisterDeviceRequest<'a> {
@@ -67,8 +69,19 @@ struct ManagedVaultCursorRemoteDiagnostics {
 }
 
 fn client() -> Result<Client> {
-    static CLIENT: OnceLock<Client> = OnceLock::new();
-    Ok(CLIENT.get_or_init(Client::new).clone())
+    static CLIENT: OnceLock<Result<Client, String>> = OnceLock::new();
+    match CLIENT.get_or_init(|| build_client(DIAGNOSTICS_HTTP_TIMEOUT).map_err(|e| e.to_string())) {
+        Ok(client) => Ok(client.clone()),
+        Err(err) => Err(anyhow!("create diagnostics http client failed: {err}")),
+    }
+}
+
+fn build_client(timeout: Duration) -> Result<Client> {
+    ClientBuilder::new()
+        .connect_timeout(timeout)
+        .timeout(timeout)
+        .build()
+        .map_err(Into::into)
 }
 
 fn url(base_url: &str, path: &str) -> Result<String> {
@@ -404,6 +417,7 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::thread;
+    use std::time::{Duration, Instant};
 
     fn respond_json(stream: &mut TcpStream, status: &str, body: &str) {
         let response = format!(
@@ -564,6 +578,28 @@ mod tests {
         assert_eq!(
             diagnostics.remote_device_seq_map_source.as_deref(),
             Some("max")
+        );
+    }
+
+    #[test]
+    fn sync_managed_vault_cursor_diagnostics_v2_head_probe_times_out_quickly() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("local addr");
+        let server = thread::spawn(move || {
+            let (_stream, _) = listener.accept().expect("accept");
+            thread::sleep(Duration::from_secs(2));
+        });
+
+        let started = Instant::now();
+        let result = probe_managed_vault_v2_head(&format!("http://{addr}"), "test-vault", "token");
+        let elapsed = started.elapsed();
+
+        server.join().expect("join");
+
+        assert!(result.is_err());
+        assert!(
+            elapsed < Duration::from_millis(1500),
+            "expected timeout before 1500ms, got {elapsed:?}"
         );
     }
 }
