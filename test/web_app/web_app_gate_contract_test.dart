@@ -63,20 +63,7 @@ void main() {
     expect(source, isNot(contains('_WebAppShellRailTitle')));
   });
 
-  test('web attachment viewer helper still guards auth and context gaps', () {
-    final source =
-        File('lib/web_app/web_app_gate_helpers.dart').readAsStringSync();
-
-    expect(
-        source, contains('final idToken = await authController.getIdToken();'));
-    expect(source,
-        contains('final vaultId = webVaultIdForController(authController);'));
-    expect(source, contains('if (!context.mounted) return;'));
-    expect(source,
-        contains('final bytes = await service.fetchVaultAttachmentBytes('));
-    expect(source, contains('final attachmentBytes ='));
-    expect(source,
-        contains('bytes is Uint8List ? bytes : Uint8List.fromList(bytes)'));
-    expect(source, contains('bytes: attachmentBytes,'));
+  test('obsolete web fallback helpers are removed', () {
+    expect(File('lib/web_app/web_app_gate_helpers.dart').existsSync(), isFalse);
   });
 }

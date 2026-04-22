@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
-import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
@@ -86,7 +85,6 @@ class _FakeWebAppService extends WebAppService {
 Widget _buildApp({
   required ObservableCloudAuthController controller,
   required WebAppService service,
-  CloudWebBackend? chatBackend,
   WebEntryIntent entryIntent = WebEntryIntent.open,
 }) {
   return wrapWithI18n(
@@ -94,7 +92,6 @@ Widget _buildApp({
       home: WebAppGate(
         authController: controller,
         service: service,
-        chatBackend: chatBackend,
         defaultBackendBuilder: () => _FakeUnlockedWebBackend(),
         entryIntent: entryIntent,
       ),

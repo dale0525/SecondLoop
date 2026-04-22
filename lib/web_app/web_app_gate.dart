@@ -7,7 +7,6 @@ import '../app/router.dart';
 import '../core/app_bootstrap.dart';
 import '../core/ai/ai_routing.dart';
 import '../core/backend/app_backend.dart';
-import '../core/backend/cloud_web_backend.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/cloud/cloud_auth_scope.dart';
 import '../core/cloud/cloud_usage_client.dart';
@@ -38,7 +37,6 @@ class WebAppGate extends StatefulWidget {
     required this.authController,
     required this.service,
     this.backend,
-    this.chatBackend,
     this.defaultBackendBuilder,
     this.entryIntent = WebEntryIntent.open,
     this.managedVaultBaseUrl = '',
@@ -50,7 +48,6 @@ class WebAppGate extends StatefulWidget {
   final ObservableCloudAuthController authController;
   final WebAppService service;
   final AppBackend? backend;
-  final CloudWebBackend? chatBackend;
   final AppBackend Function()? defaultBackendBuilder;
   final WebEntryIntent entryIntent;
   final String managedVaultBaseUrl;
@@ -85,9 +82,6 @@ class _WebAppGateState extends State<WebAppGate> {
   }
 
   void _resetSessionScopedState() {
-    if (_appBackend case final CloudWebBackend backend) {
-      backend.clearWebSessionState();
-    }
     _subscriptionController.reset();
     _canAccessMainShell = false;
     _mainShellUid = null;
@@ -95,11 +89,9 @@ class _WebAppGateState extends State<WebAppGate> {
 
   void _createInjectedDependencies() {
     final uid = _normalizedUid();
-    _usesManagedWebNativeBackend = widget.backend == null &&
-        widget.chatBackend == null &&
-        widget.defaultBackendBuilder == null;
+    _usesManagedWebNativeBackend =
+        widget.backend == null && widget.defaultBackendBuilder == null;
     _appBackend = widget.backend ??
-        widget.chatBackend ??
         widget.defaultBackendBuilder?.call() ??
         WebNativeAppBackend.withDefaults(
           appDirProvider: () async {
@@ -188,7 +180,6 @@ class _WebAppGateState extends State<WebAppGate> {
     final authChanged = oldWidget.authController != widget.authController;
     final serviceChanged = oldWidget.service != widget.service;
     final backendChanged = oldWidget.backend != widget.backend;
-    final chatBackendChanged = oldWidget.chatBackend != widget.chatBackend;
     final defaultBackendBuilderChanged =
         oldWidget.defaultBackendBuilder != widget.defaultBackendBuilder;
     final managedVaultBaseUrlChanged = oldWidget.managedVaultBaseUrl.trim() !=
@@ -196,7 +187,6 @@ class _WebAppGateState extends State<WebAppGate> {
     if (!authChanged &&
         !serviceChanged &&
         !backendChanged &&
-        !chatBackendChanged &&
         !defaultBackendBuilderChanged &&
         !managedVaultBaseUrlChanged) {
       return;
@@ -210,7 +200,6 @@ class _WebAppGateState extends State<WebAppGate> {
     _activeUid = _normalizedUid();
     if (authChanged ||
         backendChanged ||
-        chatBackendChanged ||
         defaultBackendBuilderChanged ||
         managedVaultBaseUrlChanged) {
       _resetSessionScopedState();
