@@ -8,7 +8,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('audio transcript copy uses turn view when available', (
+  testWidgets(
+      'audio transcript copy keeps raw transcript when turn view exists', (
     tester,
   ) async {
     String? clipboardText;
@@ -73,7 +74,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('attachment_text_full_copy')));
     await tester.pumpAndSettle();
 
-    expect(clipboardText, '[00:12–00:18] Hello everyone.');
+    expect(clipboardText, 'raw transcript body');
   });
 
   testWidgets(

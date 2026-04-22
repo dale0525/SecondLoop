@@ -265,10 +265,11 @@ void main() {
   testWidgets('Diagnostics JSON includes recent update logs', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final logger = SharedPrefsUpdateEventLogger();
+    final now = DateTime.now().toUtc();
     await logger.record(
       UpdateEventRecord(
         type: UpdateEventType.updateAvailable,
-        timestampUtc: DateTime.utc(2026, 3, 14, 12),
+        timestampUtc: now,
         platform: AppUpdatePlatform.windows,
         currentVersion: '1.0.0+1',
         latestTag: 'v1.1.0',

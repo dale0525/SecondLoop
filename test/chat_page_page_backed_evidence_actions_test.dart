@@ -67,7 +67,7 @@ void main() {
   );
 
   testWidgets(
-    'chat page mixed legacy payload only renders direct-source evidence',
+    'chat page mixed legacy payload keeps message direct sources read-only',
     (tester) async {
       final backend = _ChatEvidenceBackend(
         citationsJson: '''
@@ -134,7 +134,7 @@ void main() {
       expect(find.text('Reply in Chinese.'), findsOneWidget);
       expect(find.text('Inspect page'), findsNothing);
       expect(find.text('Stop using in answers'), findsNothing);
-      expect(find.text('View original'), findsOneWidget);
+      expect(find.text('View original'), findsNothing);
     },
   );
 }

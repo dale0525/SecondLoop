@@ -53,6 +53,197 @@ fn managed_vault_v2_push_and_pull_roundtrip() {
 }
 
 #[test]
+fn managed_vault_v2_third_device_pulls_second_device_changes_after_initial_roundtrip() {
+    let (base_url, stop_tx, _state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello from A").expect("insert msg A");
+    let pushed_a =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push A");
+    assert!(pushed_a > 0);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+    let pulled_b =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull B");
+    assert!(pulled_b > 0);
+
+    let temp_c = tempfile::tempdir().expect("tempdir C");
+    let app_dir_c = temp_c.path().join("secondloop_c");
+    let key_c =
+        auth::init_master_password(&app_dir_c, "pw-c", KdfParams::for_test()).expect("init C");
+    let conn_c = db::open(&app_dir_c).expect("open C db");
+    let pulled_c =
+        sync::managed_vault::pull(&conn_c, &key_c, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull C");
+    assert!(pulled_c > 0);
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    db::insert_message(&conn_b, &key_b, &convs_b[0].id, "user", "hello from B")
+        .expect("insert msg B");
+    let pushed_b =
+        sync::managed_vault::push(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push B");
+    assert!(pushed_b > 0);
+
+    let pulled_c_again =
+        sync::managed_vault::pull(&conn_c, &key_c, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull C again");
+    assert!(pulled_c_again > 0);
+
+    let convs_c = db::list_conversations(&conn_c, &key_c).expect("list convs C");
+    assert_eq!(convs_c.len(), 1);
+    let msgs_c = db::list_messages(&conn_c, &key_c, &convs_c[0].id).expect("list msgs C");
+    assert_eq!(msgs_c.len(), 2);
+    assert_eq!(msgs_c[0].content, "hello from A");
+    assert_eq!(msgs_c[1].content, "hello from B");
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_v2_progress_paths_propagate_second_device_changes_to_third_device() {
+    let (base_url, stop_tx, _state, handle) = start_mock_v2_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello from A").expect("insert msg A");
+    let mut progress_a = Vec::new();
+    let pushed_a = sync::managed_vault::push_ops_only_with_progress(
+        &conn_a,
+        &key_a,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| progress_a.push((done, total)),
+    )
+    .expect("push A");
+    assert!(pushed_a > 0);
+    assert_eq!(progress_a.last().copied(), Some((pushed_a, pushed_a)));
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+    let mut pull_progress_b = Vec::new();
+    let pulled_b = sync::managed_vault::pull_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| pull_progress_b.push((done, total)),
+    )
+    .expect("pull B");
+    assert!(pulled_b > 0);
+    assert!(pull_progress_b
+        .iter()
+        .any(|(done, total)| done == total && *done > 0));
+
+    let temp_c = tempfile::tempdir().expect("tempdir C");
+    let app_dir_c = temp_c.path().join("secondloop_c");
+    let key_c =
+        auth::init_master_password(&app_dir_c, "pw-c", KdfParams::for_test()).expect("init C");
+    let conn_c = db::open(&app_dir_c).expect("open C db");
+    let mut pull_progress_c = Vec::new();
+    let pulled_c = sync::managed_vault::pull_with_progress(
+        &conn_c,
+        &key_c,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| pull_progress_c.push((done, total)),
+    )
+    .expect("pull C");
+    assert!(pulled_c > 0);
+    assert!(pull_progress_c
+        .iter()
+        .any(|(done, total)| done == total && *done > 0));
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    db::insert_message(&conn_b, &key_b, &convs_b[0].id, "user", "hello from B")
+        .expect("insert msg B");
+    let mut push_progress_b = Vec::new();
+    let pushed_b = sync::managed_vault::push_ops_only_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| push_progress_b.push((done, total)),
+    )
+    .expect("push B");
+    assert!(pushed_b > 0);
+    assert_eq!(push_progress_b.last().copied(), Some((pushed_b, pushed_b)));
+
+    let mut pull_progress_c_again = Vec::new();
+    let pulled_c_again = sync::managed_vault::pull_with_progress(
+        &conn_c,
+        &key_c,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| pull_progress_c_again.push((done, total)),
+    )
+    .expect("pull C again");
+    assert!(pulled_c_again > 0);
+    assert!(pull_progress_c_again
+        .iter()
+        .any(|(done, total)| done == total && *done > 0));
+
+    let convs_c = db::list_conversations(&conn_c, &key_c).expect("list convs C");
+    assert_eq!(convs_c.len(), 1);
+    let msgs_c = db::list_messages(&conn_c, &key_c, &convs_c[0].id).expect("list msgs C");
+    assert_eq!(msgs_c.len(), 2);
+    assert_eq!(msgs_c[0].content, "hello from A");
+    assert_eq!(msgs_c[1].content, "hello from B");
+
+    stop_tx.send(()).expect("stop");
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_v2_push_with_progress_reports_completed_work() {
     let (base_url, stop_tx, _state, handle) = start_mock_v2_server();
     let vault_id = "v1".to_string();

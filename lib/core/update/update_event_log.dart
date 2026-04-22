@@ -129,27 +129,27 @@ abstract class UpdateEventLogger {
 
 final class SharedPrefsUpdateEventLogger implements UpdateEventLogger {
   static const prefsKey = 'update_event_log_v1';
-  static const maxEntries = 50;
+  static const maxEntries = 20;
+  static const retention = Duration(days: 7);
+
+  SharedPrefsUpdateEventLogger({
+    DateTime Function()? nowUtc,
+  }) : _nowUtc = nowUtc ?? _systemNowUtc;
+
+  final DateTime Function() _nowUtc;
 
   @override
   Future<void> record(UpdateEventRecord record) async {
     final prefs = await SharedPreferences.getInstance();
     final existing = _decodeList(prefs.getString(prefsKey));
     existing.add(record);
-    final trimmed = existing.length <= maxEntries
-        ? existing
-        : existing.sublist(existing.length - maxEntries);
-    await prefs.setString(
-      prefsKey,
-      jsonEncode(
-          trimmed.map((entry) => entry.toJson()).toList(growable: false)),
-    );
+    await _writePruned(prefs, existing);
   }
 
   @override
   Future<List<UpdateEventRecord>> readRecent() async {
     final prefs = await SharedPreferences.getInstance();
-    return _decodeList(prefs.getString(prefsKey));
+    return _prune(_decodeList(prefs.getString(prefsKey)));
   }
 
   List<UpdateEventRecord> _decodeList(String? raw) {
@@ -172,6 +172,33 @@ final class SharedPrefsUpdateEventLogger implements UpdateEventLogger {
     }
     return out;
   }
+
+  List<UpdateEventRecord> _prune(List<UpdateEventRecord> entries) {
+    if (entries.isEmpty) return <UpdateEventRecord>[];
+    final cutoff = _nowUtc().subtract(retention);
+    final recentOnly = entries
+        .where((entry) => !entry.timestampUtc.isBefore(cutoff))
+        .toList(growable: false);
+    if (recentOnly.length <= maxEntries) {
+      return recentOnly;
+    }
+    return recentOnly.sublist(recentOnly.length - maxEntries);
+  }
+
+  Future<void> _writePruned(
+    SharedPreferences prefs,
+    List<UpdateEventRecord> entries,
+  ) async {
+    final pruned = _prune(entries);
+    await prefs.setString(
+      prefsKey,
+      jsonEncode(
+        pruned.map((entry) => entry.toJson()).toList(growable: false),
+      ),
+    );
+  }
+
+  static DateTime _systemNowUtc() => DateTime.now().toUtc();
 
   @visibleForTesting
   static Future<void> resetForTests() async {
