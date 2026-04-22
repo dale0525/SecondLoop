@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -319,8 +320,124 @@ void main() {
 
     expect(pulled, 1);
     expect(service.afterGlobalSeqs, <int>[8, 0]);
-    expect(backend.recoveryCalls, 1);
+    expect(backend.recoveryCalls, 0);
     expect(backend.finalizedAppliedOps, <int>[1]);
+  });
+
+  test('WebNativeAppBackend reports incremental managed-vault pull progress',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: true,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 2,
+              deviceId: 'device-a',
+              seq: 12,
+              opId: 'op-2',
+              clientOpId: 'op-2',
+              ciphertextB64: 'BAUG',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final events = await backend
+        .syncManagedVaultPullProgress(
+          Uint8List(32),
+          Uint8List(32),
+          baseUrl: 'https://service-vault.secondloop.app',
+          vaultId: 'vault-123',
+          idToken: 'token-1',
+        )
+        .toList();
+
+    expect(
+      events,
+      <String>[
+        '{"type":"progress","done":1,"total":2}',
+        '{"type":"progress","done":2,"total":2}',
+        '{"type":"result","count":2}',
+      ],
+    );
+  });
+
+  test('WebNativeAppBackend awaits async managed-vault pull finalization',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 1,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+      ],
+    );
+    final finalizeCompleter = Completer<void>();
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      finalizeCompleter: finalizeCompleter,
+    );
+
+    var completed = false;
+    final future = backend
+        .syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: 'https://service-vault.secondloop.app',
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    )
+        .then((_) {
+      completed = true;
+    });
+
+    await Future<void>.delayed(Duration.zero);
+    expect(backend.finalizedAppliedOps, <int>[1]);
+    expect(completed, isFalse);
+
+    finalizeCompleter.complete();
+    await future;
+
+    expect(completed, isTrue);
   });
 }
 
@@ -460,12 +577,15 @@ final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
     required super.rustLibInit,
     required super.webAppService,
     List<String> recoveryReasons = const <String>[],
-  }) : _recoveryReasons = List<String>.from(recoveryReasons);
+    Completer<void>? finalizeCompleter,
+  })  : _recoveryReasons = List<String>.from(recoveryReasons),
+        _finalizeCompleter = finalizeCompleter;
 
   final List<WebManagedVaultPullPage> appliedPages =
       <WebManagedVaultPullPage>[];
   final List<int> finalizedAppliedOps = <int>[];
   final List<String> _recoveryReasons;
+  final Completer<void>? _finalizeCompleter;
   int _lastAppliedGlobalSeq = 0;
   String? _generationId;
   int recoveryCalls = 0;
@@ -544,7 +664,7 @@ final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
   }
 
   @override
-  void finalizeManagedVaultV2Pull(
+  Future<void> finalizeManagedVaultV2Pull(
     Uint8List key,
     Uint8List syncKey, {
     required String appDir,
@@ -552,7 +672,8 @@ final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
     required String vaultId,
     required String idToken,
     required int appliedOps,
-  }) {
+  }) async {
     finalizedAppliedOps.add(appliedOps);
+    await _finalizeCompleter?.future;
   }
 }

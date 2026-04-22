@@ -38,7 +38,7 @@ String syncManagedVaultRecoverWebPullState(
     RustLib.instance.api.crateApiWebSyncSyncManagedVaultRecoverWebPullState(
         appDir: appDir, key: key, baseUrl: baseUrl, vaultId: vaultId);
 
-bool syncManagedVaultFinalizeWebPull(
+Future<bool> syncManagedVaultFinalizeWebPull(
         {required String appDir,
         required List<int> key,
         required List<int> syncKey,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -175,7 +176,7 @@ class WebNativeAppBackend extends NativeAppBackend {
     );
   }
 
-  void finalizeManagedVaultV2Pull(
+  Future<void> finalizeManagedVaultV2Pull(
     Uint8List key,
     Uint8List syncKey, {
     required String appDir,
@@ -183,8 +184,8 @@ class WebNativeAppBackend extends NativeAppBackend {
     required String vaultId,
     required String idToken,
     required int appliedOps,
-  }) {
-    rust_web_sync.syncManagedVaultFinalizeWebPull(
+  }) async {
+    await rust_web_sync.syncManagedVaultFinalizeWebPull(
       appDir: appDir,
       key: key,
       syncKey: syncKey,
@@ -249,25 +250,15 @@ class WebNativeAppBackend extends NativeAppBackend {
     }
   }
 
-  @override
-  Future<int> syncManagedVaultPull(
+  Future<int> _syncManagedVaultPullThroughWebAppService(
+    WebAppService webAppService,
     Uint8List key,
     Uint8List syncKey, {
     required String baseUrl,
     required String vaultId,
     required String idToken,
+    void Function(int done, int total)? onProgress,
   }) async {
-    final webAppService = _webAppService;
-    if (webAppService == null) {
-      return super.syncManagedVaultPull(
-        key,
-        syncKey,
-        baseUrl: baseUrl,
-        vaultId: vaultId,
-        idToken: idToken,
-      );
-    }
-
     final appDir = await _resolveAppDir();
     var state = readManagedVaultV2PullState(
       appDir: appDir,
@@ -278,6 +269,9 @@ class WebNativeAppBackend extends NativeAppBackend {
     var resetRecovered = false;
     var generationRecovered = false;
     var nonContiguousRecovered = false;
+    var progressBaseline = state.lastAppliedGlobalSeq;
+    int? totalTarget;
+    var progressResetPending = false;
     while (true) {
       late final WebManagedVaultPullPage page;
       try {
@@ -304,7 +298,10 @@ class WebNativeAppBackend extends NativeAppBackend {
           vaultId: vaultId,
         );
         totalApplied = 0;
+        progressBaseline = state.lastAppliedGlobalSeq;
+        totalTarget = null;
         resetRecovered = true;
+        progressResetPending = true;
         continue;
       }
       final result = applyManagedVaultV2PullPage(
@@ -340,12 +337,31 @@ class WebNativeAppBackend extends NativeAppBackend {
         }
         totalApplied = 0;
         state = result;
+        progressBaseline = state.lastAppliedGlobalSeq;
+        totalTarget = null;
+        progressResetPending = true;
         continue;
       }
       totalApplied += result.appliedCount;
       state = result;
+
+      final effectiveTotalTarget = totalTarget ??=
+          (result.remoteLatestGlobalSeq - progressBaseline)
+              .clamp(0, 1 << 31)
+              .toInt();
+      if (progressResetPending && effectiveTotalTarget > 0) {
+        onProgress?.call(0, effectiveTotalTarget);
+        progressResetPending = false;
+      }
+      if (effectiveTotalTarget > 0) {
+        final done = (state.lastAppliedGlobalSeq - progressBaseline)
+            .clamp(0, effectiveTotalTarget)
+            .toInt();
+        onProgress?.call(done, effectiveTotalTarget);
+      }
+
       if (!result.hasMore) {
-        finalizeManagedVaultV2Pull(
+        await finalizeManagedVaultV2Pull(
           key,
           syncKey,
           appDir: appDir,
@@ -360,6 +376,35 @@ class WebNativeAppBackend extends NativeAppBackend {
   }
 
   @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    final webAppService = _webAppService;
+    if (webAppService == null) {
+      return super.syncManagedVaultPull(
+        key,
+        syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken,
+      );
+    }
+
+    return _syncManagedVaultPullThroughWebAppService(
+      webAppService,
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+    );
+  }
+
+  @override
   Stream<String> syncManagedVaultPullProgress(
     Uint8List key,
     Uint8List syncKey, {
@@ -367,6 +412,44 @@ class WebNativeAppBackend extends NativeAppBackend {
     required String vaultId,
     required String idToken,
   }) async* {
+    final webAppService = _webAppService;
+    if (webAppService != null) {
+      final controller = StreamController<String>();
+      unawaited(() async {
+        try {
+          final pulled = await _syncManagedVaultPullThroughWebAppService(
+            webAppService,
+            key,
+            syncKey,
+            baseUrl: baseUrl,
+            vaultId: vaultId,
+            idToken: idToken,
+            onProgress: (done, total) {
+              controller.add(
+                jsonEncode(<String, Object?>{
+                  'type': 'progress',
+                  'done': done,
+                  'total': total,
+                }),
+              );
+            },
+          );
+          controller.add(
+            jsonEncode(<String, Object?>{
+              'type': 'result',
+              'count': pulled,
+            }),
+          );
+        } catch (error, stackTrace) {
+          controller.addError(error, stackTrace);
+        } finally {
+          await controller.close();
+        }
+      }());
+      yield* controller.stream;
+      return;
+    }
+
     yield '{"type":"progress","done":0,"total":0}';
     final pulled = await syncManagedVaultPull(
       key,

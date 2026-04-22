@@ -54,7 +54,7 @@ pub fn sync_managed_vault_recover_web_pull_state(
     Ok(serde_json::to_string(&state)?)
 }
 
-#[flutter_rust_bridge::frb(sync)]
+#[flutter_rust_bridge::frb]
 pub fn sync_managed_vault_finalize_web_pull(
     app_dir: String,
     key: Vec<u8>,
