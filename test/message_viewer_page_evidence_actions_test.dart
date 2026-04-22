@@ -56,7 +56,7 @@ void main() {
   });
 
   testWidgets(
-      'message viewer mixed legacy payload only exposes direct-source evidence',
+      'message viewer mixed legacy payload keeps message direct sources read-only',
       (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
@@ -116,6 +116,6 @@ void main() {
     expect(find.text('Kickoff notes'), findsOneWidget);
     expect(find.text('Inspect page'), findsNothing);
     expect(find.text('Stop using in answers'), findsNothing);
-    expect(find.text('View original'), findsOneWidget);
+    expect(find.text('View original'), findsNothing);
   });
 }
