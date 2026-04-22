@@ -359,7 +359,7 @@ fn has_remote_device_ops(conn: &Connection, device_id: &str) -> Result<bool> {
     .map_err(Into::into)
 }
 
-fn apply_v2_pull_ops(
+pub(super) fn apply_v2_pull_ops(
     conn: &Connection,
     db_key: &[u8; 32],
     sync_key: &[u8; 32],
@@ -418,7 +418,7 @@ fn apply_v2_pull_ops(
     Ok(batch_applied)
 }
 
-fn pull_page_is_contiguous(ops: &[GlobalLogPullOp], after_global_seq: i64) -> bool {
+pub(super) fn pull_page_is_contiguous(ops: &[GlobalLogPullOp], after_global_seq: i64) -> bool {
     let mut expected = after_global_seq + 1;
     for op in ops {
         if op.global_seq != expected {

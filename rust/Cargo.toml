@@ -76,3 +76,4 @@ zune-jpeg = { path = "../third_party/zune-jpeg-patched" }
 paddle-ocr-rs = { path = "../third_party/paddle-ocr-rs-patched" }
 sqlite-wasm-rs = { path = "../third_party/sqlite-wasm-rs-patched" }
 rusqlite = { path = "../third_party/rusqlite-patched" }
+flutter_rust_bridge = { path = "../third_party/flutter-rust-bridge-patched" }

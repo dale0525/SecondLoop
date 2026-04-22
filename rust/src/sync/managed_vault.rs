@@ -110,6 +110,29 @@ struct PushErrorResponse {
 
 const PULL_BIN_MAGIC_V1: &[u8; 5] = b"SLVB1";
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct WebPullPage {
+    pub generation_id: String,
+    pub remote_latest_global_seq: i64,
+    pub has_more: bool,
+    pub ops: Vec<global_log_protocol::GlobalLogPullOp>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WebPullState {
+    pub generation_id: Option<String>,
+    pub last_applied_global_seq: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WebPullApplyResult {
+    pub applied_count: u64,
+    pub generation_id: Option<String>,
+    pub last_applied_global_seq: i64,
+    pub remote_latest_global_seq: i64,
+    pub has_more: bool,
+}
+
 fn load_since_map(conn: &Connection, scope_id: &str) -> Result<BTreeMap<String, i64>> {
     let prefix = format!("managed_vault.last_pulled_seq:{scope_id}:");
     let pattern = format!("{prefix}%");
@@ -354,6 +377,103 @@ pub fn pull_with_progress(
         ),
         Err(error) => Err(error),
     }
+}
+
+pub fn read_web_pull_state(
+    conn: &Connection,
+    base_url: &str,
+    vault_id: &str,
+) -> Result<WebPullState> {
+    let scope_id = runtime::scope_id(base_url, vault_id);
+    Ok(WebPullState {
+        generation_id: global_log_state::read_generation_id(conn, &scope_id)?,
+        last_applied_global_seq: global_log_state::read_last_applied_global_seq(conn, &scope_id)?,
+    })
+}
+
+pub fn apply_web_pull_page(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+    page: WebPullPage,
+) -> Result<WebPullApplyResult> {
+    let scope_id = runtime::scope_id(base_url, vault_id);
+    let local_generation = global_log_state::read_generation_id(conn, &scope_id)?;
+    let last_applied = global_log_state::read_last_applied_global_seq(conn, &scope_id)?;
+    let response_generation = page.generation_id.trim();
+
+    if response_generation.is_empty() {
+        if page.remote_latest_global_seq == 0 && page.ops.is_empty() {
+            return Ok(WebPullApplyResult {
+                applied_count: 0,
+                generation_id: local_generation,
+                last_applied_global_seq: last_applied,
+                remote_latest_global_seq: page.remote_latest_global_seq,
+                has_more: page.has_more,
+            });
+        }
+        return Err(anyhow!(
+            "managed-vault v2 pull returned an empty generation_id with remote_latest_global_seq={} ops={}",
+            page.remote_latest_global_seq,
+            page.ops.len()
+        ));
+    }
+
+    if let Some(existing_generation) = &local_generation {
+        if existing_generation != response_generation {
+            return Err(anyhow!(
+                "managed-vault web pull generation mismatch: local_generation_id={} remote_generation_id={}",
+                existing_generation,
+                response_generation
+            ));
+        }
+    }
+
+    if page.ops.is_empty() {
+        if page.has_more || page.remote_latest_global_seq > last_applied {
+            return Err(anyhow!(
+                "managed-vault v2 pull returned an empty page while more remote data is still advertised: after_global_seq={last_applied} remote_latest_global_seq={} has_more={}",
+                page.remote_latest_global_seq,
+                page.has_more
+            ));
+        }
+        global_log_state::write_generation_id(conn, &scope_id, response_generation)?;
+        return Ok(WebPullApplyResult {
+            applied_count: 0,
+            generation_id: Some(response_generation.to_string()),
+            last_applied_global_seq: last_applied,
+            remote_latest_global_seq: page.remote_latest_global_seq,
+            has_more: false,
+        });
+    }
+
+    if !global_log_client::pull_page_is_contiguous(&page.ops, last_applied) {
+        return Err(anyhow!(
+            "managed-vault v2 pull returned non-contiguous global_seq page after_global_seq={last_applied}"
+        ));
+    }
+
+    global_log_state::write_generation_id(conn, &scope_id, response_generation)?;
+    let applied_count =
+        global_log_client::apply_v2_pull_ops(conn, db_key, sync_key, &scope_id, &page.ops)?;
+    let next_last_applied = page
+        .ops
+        .last()
+        .map(|item| item.global_seq)
+        .unwrap_or(last_applied);
+    if next_last_applied != last_applied {
+        global_log_state::write_last_applied_global_seq(conn, &scope_id, next_last_applied)?;
+    }
+
+    Ok(WebPullApplyResult {
+        applied_count,
+        generation_id: Some(response_generation.to_string()),
+        last_applied_global_seq: next_last_applied,
+        remote_latest_global_seq: page.remote_latest_global_seq,
+        has_more: page.has_more,
+    })
 }
 
 pub fn push_ops_only_with_progress(

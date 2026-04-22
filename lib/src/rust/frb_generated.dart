@@ -23,6 +23,7 @@ import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
 import 'api/todo_followup_generation.dart';
+import 'api/web_sync.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'db.dart';
@@ -79,7 +80,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => 876871305;
+  int get rustContentHash => 1150278012;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1751,6 +1752,19 @@ abstract class RustLibApi extends BaseApi {
           required List<int> key,
           required PlatformInt64 nowMs,
           required int limit});
+
+  String crateApiWebSyncSyncManagedVaultApplyWebPullPage(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String responseJson});
+
+  String crateApiWebSyncSyncManagedVaultReadWebPullState(
+      {required String appDir,
+      required String baseUrl,
+      required String vaultId});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -11715,6 +11729,77 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             debugName: "db_list_due_auto_todo_followup_generation_jobs",
             argNames: ["appDir", "key", "nowMs", "limit"],
           );
+
+  @override
+  String crateApiWebSyncSyncManagedVaultApplyWebPullPage(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String responseJson}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(responseJson, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 250)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiWebSyncSyncManagedVaultApplyWebPullPageConstMeta,
+      argValues: [appDir, key, syncKey, baseUrl, vaultId, responseJson],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiWebSyncSyncManagedVaultApplyWebPullPageConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_managed_vault_apply_web_pull_page",
+        argNames: [
+          "appDir",
+          "key",
+          "syncKey",
+          "baseUrl",
+          "vaultId",
+          "responseJson"
+        ],
+      );
+
+  @override
+  String crateApiWebSyncSyncManagedVaultReadWebPullState(
+      {required String appDir,
+      required String baseUrl,
+      required String vaultId}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 251)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiWebSyncSyncManagedVaultReadWebPullStateConstMeta,
+      argValues: [appDir, baseUrl, vaultId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiWebSyncSyncManagedVaultReadWebPullStateConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_managed_vault_read_web_pull_state",
+        argNames: ["appDir", "baseUrl", "vaultId"],
+      );
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {

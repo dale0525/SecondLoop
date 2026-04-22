@@ -4,22 +4,53 @@ import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/backend/native_backend.dart';
+import '../src/rust/api/web_sync.dart' as rust_web_sync;
 import 'web_app_service.dart';
 import 'web_formal_settings_adapters.dart';
 
+class ManagedVaultV2PullState {
+  const ManagedVaultV2PullState({
+    required this.generationId,
+    required this.lastAppliedGlobalSeq,
+  });
+
+  final String? generationId;
+  final int lastAppliedGlobalSeq;
+}
+
+class ManagedVaultV2PullApplyResult extends ManagedVaultV2PullState {
+  const ManagedVaultV2PullApplyResult({
+    required super.generationId,
+    required super.lastAppliedGlobalSeq,
+    required this.appliedCount,
+    required this.remoteLatestGlobalSeq,
+    required this.hasMore,
+  });
+
+  final int appliedCount;
+  final int remoteLatestGlobalSeq;
+  final bool hasMore;
+}
+
 class WebNativeAppBackend extends NativeAppBackend {
   WebNativeAppBackend({
-    required super.appDirProvider,
+    required AppDirProvider appDirProvider,
     super.storageScope,
     super.secureStorage,
     super.rustLibInit,
     WebAppService? webAppService,
-  })  : _webAppService = webAppService,
+  })  : _appDirProvider = appDirProvider,
+        _webAppService = webAppService,
         super(
+          appDirProvider: appDirProvider,
           recoverInterruptedExternalImportBatchesOnInit: false,
         );
 
+  final AppDirProvider _appDirProvider;
   final WebAppService? _webAppService;
+  Future<String>? _appDirFuture;
+
+  Future<String> _resolveAppDir() => _appDirFuture ??= _appDirProvider();
 
   bool _shouldBridgeCloudGateway(String gatewayBaseUrl) {
     return _webAppService != null && isWebFormalSettingsBaseUrl(gatewayBaseUrl);
@@ -36,6 +67,126 @@ class WebNativeAppBackend extends NativeAppBackend {
       secureStorage: const FlutterSecureStorage(),
       webAppService: webAppService,
     );
+  }
+
+  ManagedVaultV2PullState readManagedVaultV2PullState({
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) {
+    final decoded = jsonDecode(
+      rust_web_sync.syncManagedVaultReadWebPullState(
+        appDir: appDir,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+      ),
+    );
+    if (decoded is! Map) {
+      throw const FormatException('invalid_managed_vault_pull_state');
+    }
+    return ManagedVaultV2PullState(
+      generationId: '${decoded['generation_id'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${decoded['generation_id']}',
+      lastAppliedGlobalSeq:
+          (decoded['last_applied_global_seq'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  ManagedVaultV2PullApplyResult applyManagedVaultV2PullPage(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required WebManagedVaultPullPage page,
+  }) {
+    final decoded = jsonDecode(
+      rust_web_sync.syncManagedVaultApplyWebPullPage(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        responseJson: jsonEncode(<String, Object?>{
+          'generation_id': page.generationId,
+          'remote_latest_global_seq': page.remoteLatestGlobalSeq,
+          'has_more': page.hasMore,
+          'ops': page.ops
+              .map((item) => <String, Object?>{
+                    'global_seq': item.globalSeq,
+                    'device_id': item.deviceId,
+                    'seq': item.seq,
+                    'op_id': item.opId,
+                    'client_op_id': item.clientOpId,
+                    'ciphertext_b64': item.ciphertextB64,
+                  })
+              .toList(growable: false),
+        }),
+      ),
+    );
+    if (decoded is! Map) {
+      throw const FormatException('invalid_managed_vault_pull_apply_result');
+    }
+    return ManagedVaultV2PullApplyResult(
+      generationId: '${decoded['generation_id'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${decoded['generation_id']}',
+      lastAppliedGlobalSeq:
+          (decoded['last_applied_global_seq'] as num?)?.toInt() ?? 0,
+      appliedCount: (decoded['applied_count'] as num?)?.toInt() ?? 0,
+      remoteLatestGlobalSeq:
+          (decoded['remote_latest_global_seq'] as num?)?.toInt() ?? 0,
+      hasMore: decoded['has_more'] == true,
+    );
+  }
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    final webAppService = _webAppService;
+    if (webAppService == null) {
+      return super.syncManagedVaultPull(
+        key,
+        syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken,
+      );
+    }
+
+    final appDir = await _resolveAppDir();
+    var state = readManagedVaultV2PullState(
+      appDir: appDir,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+    );
+    var totalApplied = 0;
+    while (true) {
+      final page = await webAppService.fetchManagedVaultPullPage(
+        idToken: idToken,
+        vaultId: vaultId,
+        afterGlobalSeq: state.lastAppliedGlobalSeq,
+      );
+      final result = applyManagedVaultV2PullPage(
+        key,
+        syncKey,
+        appDir: appDir,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        page: page,
+      );
+      totalApplied += result.appliedCount;
+      state = result;
+      if (!page.hasMore) {
+        return totalApplied;
+      }
+    }
   }
 
   @override

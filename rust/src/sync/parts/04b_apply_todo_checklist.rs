@@ -2,6 +2,10 @@ fn todo_checklist_item_content_aad_for_sync(item_id: &str) -> Vec<u8> {
     format!("todo_checklist_item.content:{item_id}").into_bytes()
 }
 
+fn todo_checklist_suggestion_content_aad_for_sync(suggestion_id: &str) -> Vec<u8> {
+    format!("todo_checklist_suggestion.content:{suggestion_id}").into_bytes()
+}
+
 fn todo_checklist_item_deleted_at_key(item_id: &str) -> String {
     format!("todo_checklist_item.deleted_at:{item_id}")
 }
@@ -237,6 +241,276 @@ fn apply_todo_checklist_item_reorder(
     Ok(())
 }
 
+fn apply_todo_checklist_suggestion_upsert(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let suggestion_id = payload["suggestion_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.upsert.v1 missing suggestion_id"))?;
+    let todo_id = payload["todo_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.upsert.v1 missing todo_id"))?;
+    let content = payload["content"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.upsert.v1 missing content"))?;
+    let sort_order = payload["sort_order"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.upsert.v1 missing sort_order"))?;
+    let state = payload["state"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.upsert.v1 missing state"))?;
+    let source = payload["source"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.upsert.v1 missing source"))?;
+    let generation_key = payload["generation_key"].as_str();
+    let created_at_ms = payload["created_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.upsert.v1 missing created_at_ms"))?;
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.upsert.v1 missing updated_at_ms"))?;
+    let dismissed_at_ms = payload["dismissed_at_ms"].as_i64();
+    let applied_checklist_item_id = payload["applied_checklist_item_id"].as_str();
+
+    let deleted_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT deleted_at_ms FROM todo_deletions WHERE todo_id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(deleted_at_ms) = deleted_at_ms {
+        if updated_at_ms <= deleted_at_ms {
+            return Ok(());
+        }
+    }
+
+    let existing_updated_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT updated_at_ms FROM todo_checklist_suggestions WHERE id = ?1"#,
+            params![suggestion_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(existing_updated_at_ms) = existing_updated_at_ms {
+        if updated_at_ms < existing_updated_at_ms {
+            return Ok(());
+        }
+    }
+
+    let content_blob = encrypt_bytes(
+        db_key,
+        content.as_bytes(),
+        &todo_checklist_suggestion_content_aad_for_sync(suggestion_id),
+    )?;
+
+    let todo_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM todos WHERE id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let applied_item_exists: Option<i64> = match applied_checklist_item_id {
+        Some(item_id) => conn
+            .query_row(
+                r#"SELECT 1 FROM todo_checklist_items WHERE id = ?1"#,
+                params![item_id],
+                |row| row.get(0),
+            )
+            .optional()?,
+        None => Some(1),
+    };
+    if todo_exists.is_none() || applied_item_exists.is_none() {
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    }
+
+    let upsert_result = conn.execute(
+        r#"
+INSERT INTO todo_checklist_suggestions(
+  id, todo_id, content, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id
+)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+ON CONFLICT(id) DO UPDATE SET
+  todo_id = CASE
+    WHEN excluded.updated_at_ms >= todo_checklist_suggestions.updated_at_ms THEN excluded.todo_id
+    ELSE todo_checklist_suggestions.todo_id
+  END,
+  content = CASE
+    WHEN excluded.updated_at_ms >= todo_checklist_suggestions.updated_at_ms THEN excluded.content
+    ELSE todo_checklist_suggestions.content
+  END,
+  sort_order = CASE
+    WHEN excluded.updated_at_ms >= todo_checklist_suggestions.updated_at_ms THEN excluded.sort_order
+    ELSE todo_checklist_suggestions.sort_order
+  END,
+  state = CASE
+    WHEN excluded.updated_at_ms >= todo_checklist_suggestions.updated_at_ms THEN excluded.state
+    ELSE todo_checklist_suggestions.state
+  END,
+  source = CASE
+    WHEN excluded.updated_at_ms >= todo_checklist_suggestions.updated_at_ms THEN excluded.source
+    ELSE todo_checklist_suggestions.source
+  END,
+  generation_key = CASE
+    WHEN excluded.updated_at_ms >= todo_checklist_suggestions.updated_at_ms THEN excluded.generation_key
+    ELSE todo_checklist_suggestions.generation_key
+  END,
+  dismissed_at_ms = CASE
+    WHEN excluded.updated_at_ms >= todo_checklist_suggestions.updated_at_ms THEN excluded.dismissed_at_ms
+    ELSE todo_checklist_suggestions.dismissed_at_ms
+  END,
+  applied_checklist_item_id = CASE
+    WHEN excluded.updated_at_ms >= todo_checklist_suggestions.updated_at_ms THEN excluded.applied_checklist_item_id
+    ELSE todo_checklist_suggestions.applied_checklist_item_id
+  END,
+  created_at_ms = min(todo_checklist_suggestions.created_at_ms, excluded.created_at_ms),
+  updated_at_ms = max(todo_checklist_suggestions.updated_at_ms, excluded.updated_at_ms)
+"#,
+        params![
+            suggestion_id,
+            todo_id,
+            content_blob,
+            sort_order,
+            state,
+            source,
+            generation_key,
+            created_at_ms,
+            updated_at_ms,
+            dismissed_at_ms,
+            applied_checklist_item_id,
+        ],
+    );
+
+    if todo_exists.is_none() || applied_item_exists.is_none() {
+        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    }
+
+    upsert_result?;
+    Ok(())
+}
+
+fn apply_todo_checklist_suggestion_apply(
+    conn: &Connection,
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let suggestion_id = payload["suggestion_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.apply.v1 missing suggestion_id"))?;
+    let todo_id = payload["todo_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.apply.v1 missing todo_id"))?;
+    let applied_checklist_item_id = payload["applied_checklist_item_id"].as_str().ok_or_else(
+        || anyhow!("todo.checklist_suggestion.apply.v1 missing applied_checklist_item_id"),
+    )?;
+    let updated_at_ms = payload["updated_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.apply.v1 missing updated_at_ms"))?;
+
+    let existing_updated_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT updated_at_ms
+               FROM todo_checklist_suggestions
+               WHERE id = ?1 AND todo_id = ?2"#,
+            params![suggestion_id, todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(existing_updated_at_ms) = existing_updated_at_ms else {
+        return Ok(());
+    };
+    if updated_at_ms < existing_updated_at_ms {
+        return Ok(());
+    }
+
+    let applied_item_exists: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM todo_checklist_items WHERE id = ?1"#,
+            params![applied_checklist_item_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if applied_item_exists.is_none() {
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    }
+
+    let update_result = conn.execute(
+        r#"UPDATE todo_checklist_suggestions
+           SET state = ?3,
+               updated_at_ms = ?4,
+               applied_checklist_item_id = ?5,
+               dismissed_at_ms = NULL
+           WHERE id = ?1
+             AND todo_id = ?2
+             AND updated_at_ms <= ?4"#,
+        params![
+            suggestion_id,
+            todo_id,
+            crate::db::TODO_CHECKLIST_SUGGESTION_STATE_APPLIED,
+            updated_at_ms,
+            applied_checklist_item_id,
+        ],
+    );
+
+    if applied_item_exists.is_none() {
+        let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    }
+
+    update_result?;
+    Ok(())
+}
+
+fn apply_todo_checklist_suggestion_dismiss(
+    conn: &Connection,
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let suggestion_id = payload["suggestion_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.dismiss.v1 missing suggestion_id"))?;
+    let todo_id = payload["todo_id"]
+        .as_str()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.dismiss.v1 missing todo_id"))?;
+    let dismissed_at_ms = payload["dismissed_at_ms"]
+        .as_i64()
+        .ok_or_else(|| anyhow!("todo.checklist_suggestion.dismiss.v1 missing dismissed_at_ms"))?;
+
+    let existing_updated_at_ms: Option<i64> = conn
+        .query_row(
+            r#"SELECT updated_at_ms
+               FROM todo_checklist_suggestions
+               WHERE id = ?1 AND todo_id = ?2"#,
+            params![suggestion_id, todo_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(existing_updated_at_ms) = existing_updated_at_ms else {
+        return Ok(());
+    };
+    if dismissed_at_ms < existing_updated_at_ms {
+        return Ok(());
+    }
+
+    conn.execute(
+        r#"UPDATE todo_checklist_suggestions
+           SET state = ?3,
+               updated_at_ms = ?4,
+               dismissed_at_ms = ?4,
+               applied_checklist_item_id = NULL
+           WHERE id = ?1
+             AND todo_id = ?2
+             AND updated_at_ms <= ?4"#,
+        params![
+            suggestion_id,
+            todo_id,
+            crate::db::TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED,
+            dismissed_at_ms,
+        ],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -426,5 +700,106 @@ mod tests {
         assert_eq!(items[0].sort_order, 0);
         assert_eq!(items[1].id, "item-a");
         assert_eq!(items[1].sort_order, 1);
+    }
+
+    #[test]
+    fn apply_checklist_suggestion_ops_round_trip() {
+        let (_dir, conn, key) = test_conn();
+        apply_test_todo(&conn, &key, "todo-1");
+
+        apply_op(
+            &conn,
+            &key,
+            &json!({
+                "type": "todo.checklist_suggestion.upsert.v1",
+                "payload": {
+                    "suggestion_id": "suggestion-1",
+                    "todo_id": "todo-1",
+                    "content": "Draft checklist item",
+                    "sort_order": 0,
+                    "state": crate::db::TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
+                    "source": "semantic_parse",
+                    "generation_key": "gen-1",
+                    "created_at_ms": 20,
+                    "updated_at_ms": 20,
+                    "dismissed_at_ms": serde_json::Value::Null,
+                    "applied_checklist_item_id": serde_json::Value::Null,
+                }
+            }),
+        )
+        .expect("apply checklist suggestion upsert");
+
+        let suggestions = crate::db::list_todo_checklist_suggestions(&conn, &key, "todo-1")
+            .expect("list suggestions after upsert");
+        assert_eq!(suggestions.len(), 1);
+        assert_eq!(suggestions[0].content, "Draft checklist item");
+        assert_eq!(
+            suggestions[0].state,
+            crate::db::TODO_CHECKLIST_SUGGESTION_STATE_PENDING
+        );
+
+        apply_op(
+            &conn,
+            &key,
+            &json!({
+                "type": "todo.checklist_item.upsert.v1",
+                "payload": {
+                    "item_id": "item-1",
+                    "todo_id": "todo-1",
+                    "content": "Draft checklist item",
+                    "is_done": false,
+                    "sort_order": 0,
+                    "created_at_ms": 25,
+                    "updated_at_ms": 25,
+                }
+            }),
+        )
+        .expect("apply checklist item upsert");
+
+        apply_op(
+            &conn,
+            &key,
+            &json!({
+                "type": "todo.checklist_suggestion.apply.v1",
+                "payload": {
+                    "suggestion_id": "suggestion-1",
+                    "todo_id": "todo-1",
+                    "applied_checklist_item_id": "item-1",
+                    "updated_at_ms": 30,
+                }
+            }),
+        )
+        .expect("apply checklist suggestion apply");
+
+        let suggestions = crate::db::list_todo_checklist_suggestions(&conn, &key, "todo-1")
+            .expect("list suggestions after apply");
+        assert_eq!(
+            suggestions[0].state,
+            crate::db::TODO_CHECKLIST_SUGGESTION_STATE_APPLIED
+        );
+        assert_eq!(suggestions[0].applied_checklist_item_id.as_deref(), Some("item-1"));
+
+        apply_op(
+            &conn,
+            &key,
+            &json!({
+                "type": "todo.checklist_suggestion.dismiss.v1",
+                "payload": {
+                    "suggestion_id": "suggestion-1",
+                    "todo_id": "todo-1",
+                    "dismissed_at_ms": 40,
+                }
+            }),
+        )
+        .expect("apply checklist suggestion dismiss");
+
+        let suggestions = crate::db::list_todo_checklist_suggestions(&conn, &key, "todo-1")
+            .expect("list suggestions after dismiss");
+        assert_eq!(
+            suggestions[0].state,
+            crate::db::TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED
+        );
+        assert_eq!(suggestions[0].dismissed_at_ms, Some(40));
+        assert_eq!(suggestions[0].applied_checklist_item_id, None);
     }
 }

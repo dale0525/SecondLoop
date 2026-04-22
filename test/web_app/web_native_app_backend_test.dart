@@ -157,6 +157,65 @@ void main() {
     expect(service.upsertedIdToken, 'token-1');
     expect(service.upsertedPayload?['scope'], 'scope-1');
   });
+
+  test('WebNativeAppBackend pulls managed-vault pages through WebAppService',
+      () async {
+    final service = _ManagedVaultPullBridgeService(
+      pages: <WebManagedVaultPullPage>[
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: true,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 1,
+              deviceId: 'device-a',
+              seq: 11,
+              opId: 'op-1',
+              clientOpId: 'op-1',
+              ciphertextB64: 'AQID',
+            ),
+          ],
+        ),
+        const WebManagedVaultPullPage(
+          generationId: 'generation-1',
+          remoteLatestGlobalSeq: 2,
+          hasMore: false,
+          ops: <WebManagedVaultPullOp>[
+            WebManagedVaultPullOp(
+              globalSeq: 2,
+              deviceId: 'device-a',
+              seq: 12,
+              opId: 'op-2',
+              clientOpId: 'op-2',
+              ciphertextB64: 'BAUG',
+            ),
+          ],
+        ),
+      ],
+    );
+    final backend = _ManagedVaultPullBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+    );
+
+    final pulled = await backend.syncManagedVaultPull(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: 'https://service-vault.secondloop.app',
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pulled, 2);
+    expect(service.afterGlobalSeqs, <int>[0, 1]);
+    expect(service.idTokens, <String>['token-1', 'token-1']);
+    expect(backend.appliedPages, hasLength(2));
+    expect(backend.appliedPages.first.ops.single.opId, 'op-1');
+    expect(backend.appliedPages.last.ops.single.opId, 'op-2');
+  });
 }
 
 final class _ProgressWrappingBackend extends WebNativeAppBackend {
@@ -244,5 +303,89 @@ final class _TaskPriorityBridgeService extends WebAppService {
   }) async {
     upsertedIdToken = idToken;
     upsertedPayload = payload;
+  }
+}
+
+final class _ManagedVaultPullBridgeService extends WebAppService {
+  _ManagedVaultPullBridgeService({
+    required List<WebManagedVaultPullPage> pages,
+  }) : _pages = List<WebManagedVaultPullPage>.from(pages);
+
+  final List<WebManagedVaultPullPage> _pages;
+  final List<int> afterGlobalSeqs = <int>[];
+  final List<String> idTokens = <String>[];
+
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription({
+    required String idToken,
+  }) async {
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.entitled,
+      canManageSubscription: true,
+    );
+  }
+
+  @override
+  Future<WebManagedVaultPullPage> fetchManagedVaultPullPage({
+    required String idToken,
+    required String vaultId,
+    required int afterGlobalSeq,
+    int limit = 500,
+  }) async {
+    idTokens.add(idToken);
+    afterGlobalSeqs.add(afterGlobalSeq);
+    if (_pages.isEmpty) {
+      throw StateError('unexpected_pull_page_request');
+    }
+    return _pages.removeAt(0);
+  }
+}
+
+final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
+  _ManagedVaultPullBridgeBackend({
+    required super.appDirProvider,
+    required super.secureStorage,
+    required super.rustLibInit,
+    required super.webAppService,
+  });
+
+  final List<WebManagedVaultPullPage> appliedPages =
+      <WebManagedVaultPullPage>[];
+  int _lastAppliedGlobalSeq = 0;
+  String? _generationId;
+
+  @override
+  ManagedVaultV2PullState readManagedVaultV2PullState({
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) {
+    return ManagedVaultV2PullState(
+      generationId: _generationId,
+      lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+    );
+  }
+
+  @override
+  ManagedVaultV2PullApplyResult applyManagedVaultV2PullPage(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required WebManagedVaultPullPage page,
+  }) {
+    appliedPages.add(page);
+    _generationId = page.generationId;
+    if (page.ops.isNotEmpty) {
+      _lastAppliedGlobalSeq = page.ops.last.globalSeq;
+    }
+    return ManagedVaultV2PullApplyResult(
+      appliedCount: page.ops.length,
+      generationId: _generationId,
+      lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+      remoteLatestGlobalSeq: page.remoteLatestGlobalSeq,
+      hasMore: page.hasMore,
+    );
   }
 }
