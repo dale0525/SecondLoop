@@ -145,7 +145,9 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
     Uint8List sessionKey,
   ) async {
     if (backend is CloudWebBackend) {
-      return;
+      throw UnsupportedError(
+        'managed-vault sync requires web native runtime',
+      );
     }
     final uid = widget.authController.uid?.trim() ?? '';
     final baseUrl = widget.managedVaultBaseUrl.trim();

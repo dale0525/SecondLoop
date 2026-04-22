@@ -549,7 +549,7 @@ void main() {
   });
 
   testWidgets(
-      'cloud fallback backend skips managed-vault bootstrap sync requirements',
+      'cloud fallback backend fails managed-vault bootstrap sync requirements',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -581,8 +581,8 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.byType(Placeholder), findsOneWidget);
+    expect(find.byType(Placeholder), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(find.textContaining('not available in web'), findsNothing);
+    expect(find.textContaining('web native runtime'), findsOneWidget);
   });
 }

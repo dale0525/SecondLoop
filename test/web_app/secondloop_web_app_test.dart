@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/i18n/locale_prefs.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/web_app/secondloop_web_app.dart';
 import 'package:secondloop/web_app/web_app_service.dart';
+import 'package:secondloop/web_app/web_native_app_backend.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
 
 void main() {
@@ -108,8 +108,7 @@ void main() {
     expect(service.closeCount, 1);
   });
 
-  testWidgets(
-      'web app falls back to cloud backend when native web runtime is unsupported',
+  testWidgets('web app fails bootstrap when native web runtime is unsupported',
       (tester) async {
     await tester.pumpWidget(
       SecondLoopWebApp(
@@ -128,14 +127,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final backendScope =
-        tester.widget<AppBackendScope>(find.byType(AppBackendScope).first);
-    expect(backendScope.backend, isA<CloudWebBackend>());
+    expect(find.byType(AppBackendScope), findsNothing);
     expect(find.byType(CloudAccountPanel), findsNothing);
+    expect(find.textContaining('native runtime'), findsOneWidget);
   });
 
   testWidgets(
-      'web app defaults to cloud backend until web native runtime is explicitly enabled',
+      'web app defaults to native backend when web native runtime is available',
       (tester) async {
     await tester.pumpWidget(
       SecondLoopWebApp(
@@ -155,7 +153,7 @@ void main() {
 
     final backendScope =
         tester.widget<AppBackendScope>(find.byType(AppBackendScope).first);
-    expect(backendScope.backend, isA<CloudWebBackend>());
+    expect(backendScope.backend, isA<WebNativeAppBackend>());
   });
 }
 

@@ -9,6 +9,52 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   group('CloudWebBackend', () {
+    test(
+        'managed-vault sync APIs fail instead of pretending cloud fallback succeeded',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(32);
+
+      await expectLater(
+        () => backend.syncManagedVaultPull(
+          key,
+          key,
+          baseUrl: 'https://service-vault.secondloop.app',
+          vaultId: 'vault-123',
+          idToken: 'token-1',
+        ),
+        throwsA(
+          isA<UnsupportedError>().having(
+            (error) => '$error',
+            'message',
+            contains('managed-vault sync requires web native runtime'),
+          ),
+        ),
+      );
+      await expectLater(
+        () => backend.syncManagedVaultPush(
+          key,
+          key,
+          baseUrl: 'https://service-vault.secondloop.app',
+          vaultId: 'vault-123',
+          idToken: 'token-1',
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+      await expectLater(
+        () => backend.syncManagedVaultPushOpsOnly(
+          key,
+          key,
+          baseUrl: 'https://service-vault.secondloop.app',
+          vaultId: 'vault-123',
+          idToken: 'token-1',
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
     test('creates conversation and stores messages in memory', () async {
       final backend = CloudWebBackend(
         chatClient: _FakeCloudWebChatClient(responseText: 'ok'),

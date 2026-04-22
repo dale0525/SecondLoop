@@ -801,9 +801,8 @@ final class CloudWebBackend extends AppBackend
     required String vaultId,
     required String idToken,
   }) async {
-    // The shared web shell is already backed by cloud session state, so
-    // explicit managed-vault sync actions are treated as no-ops.
-    return 0;
+    return _unsupportedFuture<int>(
+        'managed-vault sync requires web native runtime');
   }
 
   @override
@@ -814,7 +813,8 @@ final class CloudWebBackend extends AppBackend
     required String vaultId,
     required String idToken,
   }) async {
-    return 0;
+    return _unsupportedFuture<int>(
+        'managed-vault sync requires web native runtime');
   }
 
   @override
@@ -825,7 +825,8 @@ final class CloudWebBackend extends AppBackend
     required String vaultId,
     required String idToken,
   }) async {
-    return 0;
+    return _unsupportedFuture<int>(
+        'managed-vault sync requires web native runtime');
   }
 }
 

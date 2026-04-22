@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app/theme_mode_prefs.dart';
 import '../app/theme_palette_prefs.dart';
-import '../core/backend/cloud_web_backend.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/cloud/firebase_identity_toolkit.dart';
 import '../i18n/locale_prefs.dart';
@@ -97,36 +96,16 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
       _bootstrappedService = service;
       _bootstrappedAuthController = authController;
     }
+    if (!supportsNativeRuntime) {
+      throw UnsupportedError(
+        'web native runtime is required for /app and needs '
+        'SharedArrayBuffer with cross-origin isolation support',
+      );
+    }
     return WebAppBootstrapData(
       authController: authController,
       service: service,
-      chatBackend:
-          supportsNativeRuntime ? null : _buildCloudFallbackBackend(service),
       managedVaultBaseUrl: config.managedVaultBaseUrl,
-    );
-  }
-
-  CloudWebBackend _buildCloudFallbackBackend(WebAppService service) {
-    return CloudWebBackend(
-      chatClient: _WebAppServiceCloudChatClient(service),
-      fetchTaskPriorityAssessments: ({
-        required String idToken,
-        required String cacheScopeKey,
-      }) {
-        return service.fetchTaskPriorityAssessments(
-          idToken: idToken,
-          scope: cacheScopeKey,
-        );
-      },
-      upsertTaskPriorityAssessments: ({
-        required String idToken,
-        required Map<String, Object?> payload,
-      }) {
-        return service.upsertTaskPriorityAssessments(
-          idToken: idToken,
-          payload: payload,
-        );
-      },
     );
   }
 
@@ -188,7 +167,6 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
                 return WebAppGate(
                   authController: snapshot.data!.authController,
                   service: snapshot.data!.service,
-                  chatBackend: snapshot.data!.chatBackend,
                   entryIntent: entryIntent,
                   managedVaultBaseUrl: snapshot.data!.managedVaultBaseUrl,
                 );
@@ -205,31 +183,10 @@ class WebAppBootstrapData {
   const WebAppBootstrapData({
     required this.authController,
     required this.service,
-    required this.chatBackend,
     required this.managedVaultBaseUrl,
   });
 
   final ObservableCloudAuthController authController;
   final WebAppService service;
-  final CloudWebBackend? chatBackend;
   final String managedVaultBaseUrl;
-}
-
-final class _WebAppServiceCloudChatClient implements CloudWebChatClient {
-  const _WebAppServiceCloudChatClient(this._service);
-
-  final WebAppService _service;
-
-  @override
-  Future<String> sendMessages({
-    required String idToken,
-    required String gatewayBaseUrl,
-    required String modelName,
-    required List<Map<String, String>> messages,
-  }) {
-    return _service.sendChat(
-      idToken: idToken,
-      messages: messages,
-    );
-  }
 }
