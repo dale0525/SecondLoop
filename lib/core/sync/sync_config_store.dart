@@ -727,8 +727,9 @@ final class SyncConfigStore {
         final baseUrl =
             (all[kManagedVaultBaseUrl] ?? _managedVaultDefaultBaseUrl).trim();
         if (baseUrl.isEmpty) return null;
-        if (all[_kManagedVaultCanonicalConfigVersion] !=
-            _managedVaultCanonicalConfigVersion) {
+        final canonicalVersion = all[_kManagedVaultCanonicalConfigVersion];
+        if (canonicalVersion != null &&
+            canonicalVersion != _managedVaultCanonicalConfigVersion) {
           return null;
         }
         return SyncConfig.managedVault(

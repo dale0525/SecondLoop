@@ -48,4 +48,9 @@ fn read_attachment_bytes_returns_attachment_not_found_when_local_file_is_missing
         err.to_string().contains("attachment not found"),
         "unexpected error: {err:#}"
     );
+    assert!(
+        err.downcast_ref::<std::io::Error>()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound),
+        "missing local file should preserve io::ErrorKind::NotFound: {err:#}"
+    );
 }

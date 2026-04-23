@@ -41,7 +41,7 @@ void main() {
     expect(configured.baseUrl, 'https://vault.override.example');
   });
 
-  test('Managed vault config ignores legacy entries without canonical marker',
+  test('Managed vault config keeps legacy entries without canonical marker',
       () async {
     SharedPreferences.setMockInitialValues({
       SyncConfigStore.prefsBlobKeyForTest: jsonEncode({
@@ -57,6 +57,9 @@ void main() {
 
     final configured = await store.loadConfiguredSync();
 
-    expect(configured, isNull);
+    expect(configured, isNotNull);
+    expect(configured!.backendType, SyncBackendType.managedVault);
+    expect(configured.remoteRoot, 'uid_1');
+    expect(configured.baseUrl, 'https://vault.default.example');
   });
 }

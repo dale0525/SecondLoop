@@ -63,4 +63,9 @@ fn read_attachment_variant_bytes_returns_variant_not_found_when_local_file_is_mi
         err.to_string().contains("attachment variant not found"),
         "unexpected error: {err:#}"
     );
+    assert!(
+        err.downcast_ref::<std::io::Error>()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound),
+        "missing local variant file should preserve io::ErrorKind::NotFound: {err:#}"
+    );
 }

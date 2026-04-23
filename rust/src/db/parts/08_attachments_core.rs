@@ -90,7 +90,9 @@ pub fn read_attachment_bytes(
 fn read_file_with_domain_not_found(path: &Path, not_found_message: &'static str) -> Result<Vec<u8>> {
     match fs::read(path) {
         Ok(bytes) => Ok(bytes),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(anyhow!(not_found_message)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, not_found_message).into())
+        }
         Err(e) => Err(e.into()),
     }
 }

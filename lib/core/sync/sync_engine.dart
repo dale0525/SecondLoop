@@ -222,6 +222,7 @@ final class SyncEngine {
   bool _pendingPullAfterPush = false;
   bool _retryPushAfterRecoveryPull = false;
   int _managedVaultRecoveryRetryPushes = 0;
+  Completer<void>? _idleCompleter;
 
   static int _defaultNowMs() => DateTime.now().millisecondsSinceEpoch;
 
@@ -258,6 +259,19 @@ final class SyncEngine {
     if (!_running) return;
     _cancelScheduledWork();
     _finishStop();
+  }
+
+  Future<void> stopImmediatelyAndWait() async {
+    if (!_running) return;
+    _cancelScheduledWork();
+    final idle = waitForIdle();
+    _finishStop();
+    await idle;
+  }
+
+  Future<void> waitForIdle() {
+    if (!_busy) return Future<void>.value();
+    return (_idleCompleter ??= Completer<void>()).future;
   }
 
   void _cancelScheduledWork() {
@@ -371,7 +385,12 @@ final class SyncEngine {
 
     _busy = true;
     Future<void>.microtask(
-      () => _runQueue().whenComplete(() => _busy = false),
+      () => _runQueue().whenComplete(() {
+        _busy = false;
+        final idleCompleter = _idleCompleter;
+        _idleCompleter = null;
+        idleCompleter?.complete();
+      }),
     );
   }
 

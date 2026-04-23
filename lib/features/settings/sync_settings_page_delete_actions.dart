@@ -168,13 +168,17 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     if (confirmed != true) return;
 
     final engine = SyncEngineScope.maybeOf(context);
+    final wasRunning = engine?.isRunning ?? false;
     _setState(() => _busy = true);
+    var shouldNotifyExternalChange = false;
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       var remoteClearTimedOut = false;
 
-      engine?.stopImmediately();
+      if (wasRunning) {
+        await engine!.stopImmediatelyAndWait();
+      }
       try {
         await _clearRemoteSyncDataForSavedConfig();
       } catch (e) {
@@ -194,19 +198,25 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         );
       }));
 
-      if (!mounted) return;
-      engine?.start();
-      engine?.notifyExternalChange();
-      _showSnack(
-        remoteClearTimedOut
-            ? t.sync.allData.deletedLocalOnly
-            : t.sync.allData.deleted,
-      );
+      shouldNotifyExternalChange = true;
+      if (mounted) {
+        _showSnack(
+          remoteClearTimedOut
+              ? t.sync.allData.deletedLocalOnly
+              : t.sync.allData.deleted,
+        );
+      }
     } catch (e) {
-      engine?.start();
-      if (!mounted) return;
-      _showSnack(t.sync.allData.failed(error: _deleteActionErrorMessage(e)));
+      if (mounted) {
+        _showSnack(t.sync.allData.failed(error: _deleteActionErrorMessage(e)));
+      }
     } finally {
+      if (wasRunning) {
+        engine?.start();
+      }
+      if (shouldNotifyExternalChange) {
+        engine?.notifyExternalChange();
+      }
       if (mounted) {
         _setState(() => _busy = false);
       } else {
