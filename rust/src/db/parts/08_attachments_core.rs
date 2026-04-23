@@ -79,9 +79,20 @@ pub fn read_attachment_bytes(
         .optional()?;
     let stored_path = stored_path.ok_or_else(|| anyhow!("attachment not found"))?;
 
-    let blob = fs::read(app_dir.join(stored_path))?;
+    let blob = read_file_with_domain_not_found(
+        &app_dir.join(stored_path),
+        "attachment not found",
+    )?;
     let aad = format!("attachment.bytes:{sha256}");
     decrypt_bytes(key, &blob, aad.as_bytes())
+}
+
+fn read_file_with_domain_not_found(path: &Path, not_found_message: &'static str) -> Result<Vec<u8>> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(bytes),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(anyhow!(not_found_message)),
+        Err(e) => Err(e.into()),
+    }
 }
 
 fn version_newer(

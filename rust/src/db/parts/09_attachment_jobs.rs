@@ -159,7 +159,10 @@ pub fn read_attachment_variant_bytes(
         .optional()?;
     let stored_path = stored_path.ok_or_else(|| anyhow!("attachment variant not found"))?;
 
-    let blob = fs::read(app_dir.join(stored_path))?;
+    let blob = read_file_with_domain_not_found(
+        &app_dir.join(stored_path),
+        "attachment variant not found",
+    )?;
     let aad = format!("attachment.variant.bytes:{attachment_sha256}:{variant}");
     decrypt_bytes(key, &blob, aad.as_bytes())
 }
