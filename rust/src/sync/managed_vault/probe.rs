@@ -6,13 +6,17 @@ use rusqlite::{params, Connection};
 use serde::Deserialize;
 
 use super::runtime::Client;
-use super::PullRequest;
 
 #[derive(Debug, Deserialize)]
-struct ProbePullResponse {
-    ops: Vec<super::PullOp>,
-    #[serde(default)]
-    max: BTreeMap<String, i64>,
+struct ProbeSyncV2PullResponse {
+    remote_latest_global_seq: i64,
+    ops: Vec<ProbeSyncV2PullOp>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProbeSyncV2PullOp {
+    device_id: String,
+    seq: i64,
 }
 
 fn managed_remote_attachment_exists(
@@ -133,16 +137,14 @@ pub(super) fn managed_remote_metadata_matches_local_snapshot(
 
     let expected_total: usize = expected_by_device.values().map(Vec::len).sum();
     let limit = i64::try_from(expected_total).map_err(|_| anyhow!("too_many_expected_ops"))?;
-    let endpoint = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
-    let request = PullRequest {
-        device_id,
-        since: BTreeMap::new(),
-        limit,
-    };
+    let endpoint = super::runtime::url(base_url, &format!("/v2/vaults/{vault_id}/sync/pull"))?;
     let resp = http
         .post(endpoint)
         .bearer_auth(id_token)
-        .json(&request)
+        .json(&serde_json::json!({
+            "after_global_seq": 0,
+            "limit": limit,
+        }))
         .send()?;
     let status = resp.status();
     if !status.is_success() {
@@ -151,16 +153,8 @@ pub(super) fn managed_remote_metadata_matches_local_snapshot(
             "managed-vault probe metadata failed: HTTP {status} {text}"
         ));
     }
-    let parsed: ProbePullResponse = resp.json()?;
-
-    let expected_max: BTreeMap<String, i64> = expected_by_device
-        .iter()
-        .filter_map(|(remote_device_id, seqs)| {
-            seqs.last()
-                .map(|last_seq| (remote_device_id.clone(), *last_seq))
-        })
-        .collect();
-    if parsed.max != expected_max {
+    let parsed: ProbeSyncV2PullResponse = resp.json()?;
+    if parsed.remote_latest_global_seq != expected_total as i64 {
         return Ok(false);
     }
     if parsed.ops.len() != expected_total {

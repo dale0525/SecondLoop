@@ -139,7 +139,7 @@ fn managed_vault_clear_vault_prefers_v2_reset_endpoint() {
 }
 
 #[test]
-fn managed_vault_clear_vault_falls_back_to_v1_clear_when_v2_reset_unavailable() {
+fn managed_vault_clear_vault_fails_when_v2_reset_is_unavailable() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     listener.set_nonblocking(true).expect("nonblocking");
     let addr = listener.local_addr().expect("local addr");
@@ -167,9 +167,6 @@ fn managed_vault_clear_vault_falls_back_to_v1_clear_when_v2_reset_unavailable() 
                         404,
                         serde_json::json!({ "error": "not_found" }),
                     ),
-                    ("POST", "/v1/vaults/v1/ops:clear") => {
-                        write_json_response(&mut stream, 200, serde_json::json!({ "ok": true }))
-                    }
                     _ => write_json_response(
                         &mut stream,
                         404,
@@ -185,11 +182,13 @@ fn managed_vault_clear_vault_falls_back_to_v1_clear_when_v2_reset_unavailable() 
     });
 
     let base_url = format!("http://{addr}");
-    sync::managed_vault::clear_vault(&base_url, "v1", "test_uid").expect("clear vault");
+    let err = sync::managed_vault::clear_vault(&base_url, "v1", "test_uid")
+        .expect_err("v2 reset should be required");
 
     let joined = requests.lock().expect("lock").join("\n\n");
     assert!(joined.contains("/v2/vaults/v1/sync/reset"));
-    assert!(joined.contains("/v1/vaults/v1/ops:clear"));
+    assert!(!joined.contains("/v1/vaults/v1/ops:clear"));
+    assert!(err.to_string().contains("HTTP 404"));
 
     stop_tx.send(()).expect("stop");
     handle.join().expect("join");
