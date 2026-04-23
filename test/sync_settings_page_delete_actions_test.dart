@@ -832,6 +832,60 @@ void main() {
   });
 
   testWidgets(
+      'delete all data clears managed vault local repair gate before restarting sync',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend();
+    final runner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        vaultId: 'uid_1',
+        baseUrl: 'https://vault.default.example',
+      ),
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+    engine.writeGate.value = const SyncWriteGateState.localRepairRequired();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+        cloudAuthController: _FakeCloudAuthController(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await _confirmDeletionTwice(tester);
+    await tester.pumpAndSettle();
+
+    expect(engine.isRunning, isTrue);
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
+
+    engine.triggerPushNow();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(runner.pushCalls, 1);
+
+    engine.stop();
+  });
+
+  testWidgets(
       'delete all data refreshes background schedule with the active config store',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

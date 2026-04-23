@@ -218,6 +218,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         );
       }
       await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+      engine?.writeGate.value = const SyncWriteGateState.open();
       if (remoteClearTimedOut) {
         await _store.writeAutoEnabled(false);
         shouldRestartEngine = false;

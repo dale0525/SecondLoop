@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::api::remote_embedding_bootstrap;
@@ -169,6 +170,41 @@ fn normalize_embedding_model_name(name: &str) -> &'static str {
         embedding::PRODUCTION_MODEL_NAME => embedding::PRODUCTION_MODEL_NAME,
         _ => default_embedding_model_name_for_platform(),
     }
+}
+
+fn dir_has_entries(path: &Path) -> Result<bool> {
+    match fs::read_dir(path) {
+        Ok(mut entries) => Ok(entries.next().is_some()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
+    let attachments_exist = dir_has_entries(&app_dir.join("attachments"))?;
+    let db_path = app_dir.join("secondloop.sqlite3");
+    if !db_path.exists() {
+        return Ok(attachments_exist);
+    }
+
+    let conn = db::open(app_dir)?;
+    let db_has_user_data: bool = conn.query_row(
+        r#"
+SELECT
+  EXISTS(SELECT 1 FROM conversations LIMIT 1) OR
+  EXISTS(SELECT 1 FROM messages LIMIT 1) OR
+  EXISTS(SELECT 1 FROM attachments LIMIT 1) OR
+  EXISTS(SELECT 1 FROM todos LIMIT 1) OR
+  EXISTS(SELECT 1 FROM llm_profiles LIMIT 1) OR
+  EXISTS(SELECT 1 FROM embedding_profiles LIMIT 1) OR
+  EXISTS(SELECT 1 FROM tags LIMIT 1) OR
+  EXISTS(SELECT 1 FROM events LIMIT 1) OR
+  EXISTS(SELECT 1 FROM knowledge_documents LIMIT 1)
+"#,
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(db_has_user_data || attachments_exist)
 }
 
 #[flutter_rust_bridge::frb]
@@ -1990,11 +2026,14 @@ pub fn db_cloud_media_backup_summary(
 
 #[flutter_rust_bridge::frb]
 pub fn db_reset_vault_data_preserving_llm_profiles(app_dir: String, key: Vec<u8>) -> Result<()> {
+    let app_dir = Path::new(&app_dir);
     let key = key_from_bytes(key)?;
-    if auth::is_initialized(Path::new(&app_dir)) {
-        auth::validate_key(Path::new(&app_dir), &key)?;
+    if auth::is_initialized(app_dir) {
+        auth::validate_key(app_dir, &key)?;
+    } else if vault_has_user_data_without_auth(app_dir)? {
+        return Err(anyhow!("vault data exists but auth file is missing"));
     }
-    let conn = db::open(Path::new(&app_dir))?;
+    let conn = db::open(app_dir)?;
     db::reset_vault_data_preserving_llm_profiles(&conn)
 }
 
@@ -4066,6 +4105,27 @@ mod tests {
         let error = result.expect_err("invalid key should still be rejected");
         assert!(
             error.to_string().contains("invalid key"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_rejects_missing_auth_when_vault_has_user_data() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        let valid_key = [3u8; 32];
+        db::create_conversation(&conn, &valid_key, "hello").expect("seed conversation");
+
+        let result = db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("vault data without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
             "unexpected error: {error}"
         );
     }
