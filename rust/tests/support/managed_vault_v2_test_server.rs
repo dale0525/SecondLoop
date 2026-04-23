@@ -150,24 +150,6 @@ pub fn start_mock_v2_server() -> (
                             }),
                         );
                     }
-                    ("POST", "/v1/vaults/v1/ops:push") => {
-                        let decoded: serde_json::Value =
-                            serde_json::from_slice(&body).expect("legacy push json");
-                        let max_seq = decoded["ops"]
-                            .as_array()
-                            .into_iter()
-                            .flatten()
-                            .filter_map(|op| op["seq"].as_i64())
-                            .max()
-                            .unwrap_or(0);
-                        write_json_response(
-                            &mut stream,
-                            200,
-                            serde_json::json!({
-                                "max_seq": max_seq,
-                            }),
-                        );
-                    }
                     ("GET", "/v2/vaults/v1/sync/head") => {
                         let state = state_clone.lock().expect("lock");
                         write_json_response(
