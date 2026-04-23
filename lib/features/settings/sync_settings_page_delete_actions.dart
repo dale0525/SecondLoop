@@ -54,66 +54,85 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     );
   }
 
-  String _remoteRootForDeleteAction() {
-    final remoteRoot = _requiredTrimmed(_remoteRootController);
-    if (remoteRoot.isEmpty) {
-      throw StateError(context.t.sync.remoteRootRequired);
+  String _deleteActionErrorMessage(Object error) {
+    if (error is StateError) {
+      return error.message.toString();
     }
-    return remoteRoot;
+    return '$error';
   }
 
-  Future<String> _managedVaultBaseUrlForDeleteAction() async {
-    final baseUrlRequired = context.t.sync.baseUrlRequired;
-    final override = _optionalTrimmed(_managedVaultBaseUrlController);
-    if (kDebugMode && _showManagedVaultEndpointOverride && override != null) {
-      return override;
-    }
-    final resolved = (await _store.resolveManagedVaultBaseUrl())?.trim();
-    if (resolved == null || resolved.isEmpty) {
-      throw StateError(baseUrlRequired);
-    }
-    return resolved;
-  }
-
-  Future<void> _clearRemoteSyncDataForCurrentBackend() async {
+  Future<void> _clearRemoteSyncDataForSavedConfig() async {
     final backend = AppBackendScope.of(context);
+    final cloudAuthController = CloudAuthScope.maybeOf(context)?.controller;
     final signInRequired = context.t.sync.cloudManagedVault.signInRequired;
+    final notConfigured = context.t.sync.allData.notConfigured;
+    final all = await _store.readAll();
+    final backendType = switch (all[SyncConfigStore.kBackendType]) {
+      'localdir' => SyncBackendType.localDir,
+      'managedvault' => SyncBackendType.managedVault,
+      'webdav' => SyncBackendType.webdav,
+      _ => null,
+    };
+    if (backendType == null) {
+      throw StateError(notConfigured);
+    }
 
-    switch (_effectiveBackendType) {
+    switch (backendType) {
       case SyncBackendType.webdav:
-        final baseUrl = _requiredTrimmed(_baseUrlController);
+        final baseUrl = (all[SyncConfigStore.kWebdavBaseUrl] ?? '').trim();
+        final remoteRoot = (all[SyncConfigStore.kRemoteRoot] ?? '').trim();
         if (baseUrl.isEmpty) {
-          throw StateError(context.t.sync.baseUrlRequired);
+          throw StateError(notConfigured);
+        }
+        if (remoteRoot.isEmpty) {
+          throw StateError(notConfigured);
         }
         await backend.syncWebdavClearRemoteRoot(
           baseUrl: baseUrl,
-          username: _optionalTrimmed(_usernameController),
-          password: _optionalTrimmed(_passwordController),
-          remoteRoot: _remoteRootForDeleteAction(),
+          username: (all[SyncConfigStore.kWebdavUsername] ?? '').trim().isEmpty
+              ? null
+              : all[SyncConfigStore.kWebdavUsername]!.trim(),
+          password: await _store.readWebdavPassword(),
+          remoteRoot: remoteRoot,
         );
         return;
       case SyncBackendType.localDir:
-        final localDir = _requiredTrimmed(_localDirController);
+        final localDir = (all[SyncConfigStore.kLocalDir] ?? '').trim();
+        final remoteRoot = (all[SyncConfigStore.kRemoteRoot] ?? '').trim();
         if (localDir.isEmpty) {
-          throw StateError(context.t.sync.localDirRequired);
+          throw StateError(notConfigured);
+        }
+        if (remoteRoot.isEmpty) {
+          throw StateError(notConfigured);
         }
         await backend.syncLocaldirClearRemoteRoot(
           localDir: localDir,
-          remoteRoot: _remoteRootForDeleteAction(),
+          remoteRoot: remoteRoot,
         );
         return;
       case SyncBackendType.managedVault:
-        final controller = CloudAuthScope.maybeOf(context)?.controller;
+        final remoteRoot = cloudAuthController?.uid?.trim() ??
+            (all[SyncConfigStore.kRemoteRoot] ?? '').trim();
+        if (remoteRoot.isEmpty) {
+          throw StateError(notConfigured);
+        }
         final idToken = await readCloudAuthIdToken(
-          controller,
+          cloudAuthController,
           mode: CloudAuthAccessMode.interactive,
         );
         if (idToken == null || idToken.trim().isEmpty) {
           throw StateError(signInRequired);
         }
+        final override = (kDebugMode && _showManagedVaultEndpointOverride)
+            ? _optionalTrimmed(_managedVaultBaseUrlController)
+            : null;
+        final baseUrl = override ?? (await _store.resolveManagedVaultBaseUrl());
+        if (baseUrl == null || baseUrl.trim().isEmpty) {
+          throw StateError(notConfigured);
+        }
         await backend.syncManagedVaultClearVault(
-          baseUrl: await _managedVaultBaseUrlForDeleteAction(),
-          vaultId: _remoteRootForDeleteAction(),
+          baseUrl: baseUrl.trim(),
+          vaultId: remoteRoot,
           idToken: idToken,
         );
         return;
@@ -147,18 +166,20 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     if (confirmed != true) return;
 
     final engine = SyncEngineScope.maybeOf(context);
-    engine?.stop();
     _setState(() => _busy = true);
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
+      var remoteClearTimedOut = false;
 
+      engine?.stop();
       try {
-        await _clearRemoteSyncDataForCurrentBackend();
+        await _clearRemoteSyncDataForSavedConfig();
       } catch (e) {
         if (!_isOperationTimeoutError(e)) {
           rethrow;
         }
+        remoteClearTimedOut = true;
         debugPrint(
           'sync settings delete-all: ignored remote clear timeout: $e',
         );
@@ -173,10 +194,15 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
 
       if (!mounted) return;
       engine?.notifyExternalChange();
-      _showSnack(t.sync.allData.deleted);
+      _showSnack(
+        remoteClearTimedOut
+            ? t.sync.allData.deletedLocalOnly
+            : t.sync.allData.deleted,
+      );
     } catch (e) {
+      engine?.start();
       if (!mounted) return;
-      _showSnack(t.sync.allData.failed(error: '$e'));
+      _showSnack(t.sync.allData.failed(error: _deleteActionErrorMessage(e)));
     } finally {
       if (mounted) {
         _setState(() => _busy = false);

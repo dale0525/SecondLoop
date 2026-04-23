@@ -256,6 +256,99 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets(
+      'delete all data uses saved sync config instead of unsaved form edits',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SavedRoot');
+    await store.writeWebdavBaseUrl('https://saved.example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend();
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Server address'),
+      'https://unsaved.example.com/dav',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Folder name'),
+      'UnsavedRoot',
+    );
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(backend.syncWebdavClearRemoteRootCalls, 1);
+    expect(backend.lastWebdavClearBaseUrl, 'https://saved.example.com/dav');
+    expect(backend.lastWebdavClearRemoteRoot, 'SavedRoot');
+    expect(backend.resetLocalDataCalls, 1);
+  });
+
+  testWidgets('delete all data restarts sync engine after remote clear failure',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend(
+      webdavClearRemoteRootError: StateError('remote clear failed'),
+    );
+    final runner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(backend.resetLocalDataCalls, 0);
+    expect(find.textContaining('Delete failed:'), findsOneWidget);
+
+    engine.triggerPushNow();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(runner.pushCalls, 1);
+
+    engine.stop();
+  });
+
   testWidgets('delete all data keeps deleting local data after remote timeout',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -286,7 +379,8 @@ void main() {
 
     expect(backend.syncWebdavClearRemoteRootCalls, 1);
     expect(backend.resetLocalDataCalls, 1);
-    expect(find.text('Deleted local and remote data'), findsOneWidget);
+    expect(find.textContaining('Deleted local data only'), findsOneWidget);
+    expect(find.textContaining('remote clear timed out'), findsOneWidget);
   });
 }
 
@@ -340,6 +434,8 @@ final class _DeleteActionsBackend extends AppBackend {
   int syncLocaldirClearRemoteRootCalls = 0;
   int syncManagedVaultClearVaultCalls = 0;
   String? lastManagedVaultClearVaultId;
+  String? lastWebdavClearBaseUrl;
+  String? lastWebdavClearRemoteRoot;
   final Object? webdavClearRemoteRootError;
   final Completer<void>? webdavClearRemoteRootCompleter;
 
@@ -545,6 +641,8 @@ final class _DeleteActionsBackend extends AppBackend {
     required String remoteRoot,
   }) async {
     syncWebdavClearRemoteRootCalls += 1;
+    lastWebdavClearBaseUrl = baseUrl;
+    lastWebdavClearRemoteRoot = remoteRoot;
     final completer = webdavClearRemoteRootCompleter;
     if (completer != null) {
       await completer.future;

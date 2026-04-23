@@ -76,7 +76,9 @@
   "allData": {
     "button": "Delete all data",
     "deleted": "Deleted local and remote data",
+    "deletedLocalOnly": "Deleted local data only; remote clear timed out, so retry if you still need to remove remote data.",
     "failed": "Delete failed: $error",
+    "notConfigured": "Save your sync settings first.",
     "dialog": {
       "title": "Delete all data?",
       "message": "This deletes all synced local data on this device and clears all remote data for the current sync backend, including WebDAV, local folder sync, or SecondLoop Cloud. Your sync settings are kept.",

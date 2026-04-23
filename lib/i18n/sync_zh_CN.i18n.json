@@ -76,7 +76,9 @@
   "allData": {
     "button": "删除所有数据",
     "deleted": "已删除本地和远端数据",
+    "deletedLocalOnly": "仅已删除本地数据；远端清理超时，如仍需删除远端数据请重试。",
     "failed": "删除失败：$error",
+    "notConfigured": "请先保存同步设置。",
     "dialog": {
       "title": "删除所有数据？",
       "message": "这会删除当前设备上的所有同步本地数据，并清空当前同步方式对应的全部远端数据，包括 WebDAV、本机文件夹同步或 SecondLoop Cloud。你的同步设置会保留。",
