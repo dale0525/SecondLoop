@@ -9,6 +9,7 @@ pub mod audio_transcribe;
 #[cfg(target_family = "wasm")]
 #[path = "audio_transcribe_wasm.rs"]
 pub mod audio_transcribe;
+pub(crate) mod auth_state;
 pub mod content_enrichment;
 pub mod content_extract;
 pub mod core;

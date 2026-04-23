@@ -23,6 +23,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 part 'sync_settings_page_delete_actions_test_support.dart';
+part 'sync_settings_page_delete_actions_regression_test.dart';
 
 void main() {
   testWidgets(
@@ -969,4 +970,6 @@ void main() {
     expect(configured.remoteRoot, 'uid_1');
     expect(configured.baseUrl, 'https://vault.default.example');
   });
+
+  registerDeleteActionsRegressionTests();
 }

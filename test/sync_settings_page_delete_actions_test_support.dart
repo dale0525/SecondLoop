@@ -53,6 +53,7 @@ final class _DeleteActionsBackend extends AppBackend {
     this.webdavClearRemoteRootError,
     this.webdavClearRemoteRootCompleter,
     this.resetLocalDataCompleter,
+    this.resetLocalDataError,
     this.savedSessionKey,
   });
 
@@ -68,6 +69,7 @@ final class _DeleteActionsBackend extends AppBackend {
   final Object? webdavClearRemoteRootError;
   final Completer<void>? webdavClearRemoteRootCompleter;
   final Completer<void>? resetLocalDataCompleter;
+  final Object? resetLocalDataError;
   final Uint8List? savedSessionKey;
 
   @override
@@ -152,6 +154,10 @@ final class _DeleteActionsBackend extends AppBackend {
     final completer = resetLocalDataCompleter;
     if (completer != null) {
       await completer.future;
+    }
+    final error = resetLocalDataError;
+    if (error != null) {
+      throw error;
     }
   }
 

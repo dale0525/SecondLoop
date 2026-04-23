@@ -1,7 +1,30 @@
 part of 'sync_settings_page.dart';
 
 extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
-  bool _isOperationTimeoutError(Object error) => error is TimeoutException;
+  bool _isOperationTimeoutError(Object error) {
+    if (error is TimeoutException) return true;
+    final message = error.toString().toLowerCase();
+    return message.contains('operation timeout') ||
+        message.contains('timed out') ||
+        message.contains('timeout');
+  }
+
+  Future<void> _disableAutoSyncAndRefreshSchedule(AppBackend backend) async {
+    await _store.writeAutoEnabled(false);
+    if (mounted) {
+      _setState(() => _autoEnabled = false);
+    } else {
+      _autoEnabled = false;
+    }
+    unawaited(BackgroundSync.refreshSchedule(
+      backend: backend,
+      configStore: _store,
+    ).catchError((e) {
+      debugPrint(
+        'sync settings delete-all: failed to refresh schedule after disabling sync: $e',
+      );
+    }));
+  }
 
   Future<bool> _confirmDeleteAction({
     required String title,
@@ -193,14 +216,15 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     final engine = SyncEngineScope.maybeOf(context);
     final wasRunning = engine?.isRunning ?? false;
     var shouldRestartEngine = wasRunning;
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
     _setState(() {
       _busy = true;
       _deleteProgressMessage = t.sync.deleteProgress.allData;
     });
     var shouldNotifyExternalChange = false;
+    var remoteClearSucceeded = false;
     try {
-      final backend = AppBackendScope.of(context);
-      final sessionKey = SessionScope.of(context).sessionKey;
       var remoteClearTimedOut = false;
 
       if (wasRunning) {
@@ -208,6 +232,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       }
       try {
         await _clearRemoteSyncDataForSavedConfig();
+        remoteClearSucceeded = true;
       } catch (e) {
         if (!_isOperationTimeoutError(e)) {
           rethrow;
@@ -220,13 +245,8 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
       engine?.writeGate.value = const SyncWriteGateState.open();
       if (remoteClearTimedOut) {
-        await _store.writeAutoEnabled(false);
+        await _disableAutoSyncAndRefreshSchedule(backend);
         shouldRestartEngine = false;
-        if (mounted) {
-          _setState(() => _autoEnabled = false);
-        } else {
-          _autoEnabled = false;
-        }
       }
       unawaited(BackgroundSync.refreshSchedule(
         backend: backend,
@@ -246,8 +266,18 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         );
       }
     } catch (e) {
+      if (remoteClearSucceeded) {
+        await _disableAutoSyncAndRefreshSchedule(backend);
+        shouldRestartEngine = false;
+      }
       if (mounted) {
-        _showSnack(t.sync.allData.failed(error: _deleteActionErrorMessage(e)));
+        _showSnack(
+          remoteClearSucceeded
+              ? t.sync.allData.remoteDeletedLocalCleanupFailed(
+                  error: _deleteActionErrorMessage(e),
+                )
+              : t.sync.allData.failed(error: _deleteActionErrorMessage(e)),
+        );
       }
     } finally {
       if (shouldRestartEngine) {
