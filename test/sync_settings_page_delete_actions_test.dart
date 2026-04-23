@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -203,6 +204,90 @@ void main() {
     expect(backend.syncLocaldirClearRemoteRootCalls, 0);
     expect(backend.resetLocalDataCalls, 1);
   });
+
+  testWidgets('delete all data stops sync engine before remote clear completes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final remoteClearCompleter = Completer<void>();
+    final backend = _DeleteActionsBackend(
+      webdavClearRemoteRootCompleter: remoteClearCompleter,
+    );
+    final runner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pump();
+
+    engine.triggerPushNow();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(runner.pushCalls, 0);
+
+    remoteClearCompleter.complete();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('delete all data keeps deleting local data after remote timeout',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend(
+      webdavClearRemoteRootError: TimeoutException('operation timeout'),
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(backend.syncWebdavClearRemoteRootCalls, 1);
+    expect(backend.resetLocalDataCalls, 1);
+    expect(find.text('Deleted local and remote data'), findsOneWidget);
+  });
 }
 
 Widget _wrap({
@@ -244,12 +329,19 @@ Future<void> _ensureVisible(WidgetTester tester, Finder target) async {
 }
 
 final class _DeleteActionsBackend extends AppBackend {
+  _DeleteActionsBackend({
+    this.webdavClearRemoteRootError,
+    this.webdavClearRemoteRootCompleter,
+  });
+
   int clearLocalCacheCalls = 0;
   int resetLocalDataCalls = 0;
   int syncWebdavClearRemoteRootCalls = 0;
   int syncLocaldirClearRemoteRootCalls = 0;
   int syncManagedVaultClearVaultCalls = 0;
   String? lastManagedVaultClearVaultId;
+  final Object? webdavClearRemoteRootError;
+  final Completer<void>? webdavClearRemoteRootCompleter;
 
   @override
   Future<void> init() async {}
@@ -453,6 +545,14 @@ final class _DeleteActionsBackend extends AppBackend {
     required String remoteRoot,
   }) async {
     syncWebdavClearRemoteRootCalls += 1;
+    final completer = webdavClearRemoteRootCompleter;
+    if (completer != null) {
+      await completer.future;
+    }
+    final error = webdavClearRemoteRootError;
+    if (error != null) {
+      throw error;
+    }
   }
 
   @override
@@ -543,6 +643,19 @@ final class _DeleteActionsBackend extends AppBackend {
 final class _NoopSyncRunner implements SyncRunner {
   @override
   Future<int> push(SyncConfig config) async => 0;
+
+  @override
+  Future<int> pull(SyncConfig config) async => 0;
+}
+
+final class _CountingSyncRunner implements SyncRunner {
+  int pushCalls = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    pushCalls += 1;
+    return 0;
+  }
 
   @override
   Future<int> pull(SyncConfig config) async => 0;

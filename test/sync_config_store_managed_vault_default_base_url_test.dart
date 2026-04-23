@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -38,5 +39,24 @@ void main() {
     expect(configured, isNotNull);
     expect(configured!.backendType, SyncBackendType.managedVault);
     expect(configured.baseUrl, 'https://vault.override.example');
+  });
+
+  test('Managed vault config ignores legacy entries without canonical marker',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      SyncConfigStore.prefsBlobKeyForTest: jsonEncode({
+        SyncConfigStore.kBackendType: 'managedvault',
+        SyncConfigStore.kRemoteRoot: 'uid_1',
+        SyncConfigStore.kManagedVaultBaseUrl: 'https://vault.default.example',
+      }),
+    });
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+
+    final configured = await store.loadConfiguredSync();
+
+    expect(configured, isNull);
   });
 }

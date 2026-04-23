@@ -1,6 +1,14 @@
 part of 'sync_settings_page.dart';
 
 extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
+  bool _isOperationTimeoutError(Object error) {
+    if (error is TimeoutException) return true;
+    final message = error.toString().toLowerCase();
+    return message.contains('operation timeout') ||
+        message.contains('timed out') ||
+        message.contains('timeout');
+  }
+
   Widget _buildDeleteActionsRow({
     required bool canClearLocalCache,
   }) {
@@ -138,14 +146,30 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     if (!mounted) return;
     if (confirmed != true) return;
 
+    final engine = SyncEngineScope.maybeOf(context);
+    engine?.stop();
     _setState(() => _busy = true);
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
-      final engine = SyncEngineScope.maybeOf(context);
 
-      await _clearRemoteSyncDataForCurrentBackend();
+      try {
+        await _clearRemoteSyncDataForCurrentBackend();
+      } catch (e) {
+        if (!_isOperationTimeoutError(e)) {
+          rethrow;
+        }
+        debugPrint(
+          'sync settings delete-all: ignored remote clear timeout: $e',
+        );
+      }
       await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+      unawaited(
+          BackgroundSync.refreshSchedule(backend: backend).catchError((e) {
+        debugPrint(
+          'sync settings delete-all: failed to refresh schedule after reset: $e',
+        );
+      }));
 
       if (!mounted) return;
       engine?.notifyExternalChange();
