@@ -61,15 +61,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     final signInRequired = context.t.sync.cloudManagedVault.signInRequired;
     final notConfigured = context.t.sync.allData.notConfigured;
     final all = await _store.readAll();
-    final backendType = switch (all[SyncConfigStore.kBackendType]) {
-      'localdir' => SyncBackendType.localDir,
-      'managedvault' => SyncBackendType.managedVault,
-      'webdav' => SyncBackendType.webdav,
-      _ => null,
-    };
-    if (backendType == null) {
-      throw StateError(notConfigured);
-    }
+    final backendType = await _store.readBackendType();
 
     switch (backendType) {
       case SyncBackendType.webdav:
@@ -195,8 +187,10 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
           _autoEnabled = false;
         }
       }
-      unawaited(
-          BackgroundSync.refreshSchedule(backend: backend).catchError((e) {
+      unawaited(BackgroundSync.refreshSchedule(
+        backend: backend,
+        configStore: _store,
+      ).catchError((e) {
         debugPrint(
           'sync settings delete-all: failed to refresh schedule after reset: $e',
         );

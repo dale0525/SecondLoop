@@ -1,9 +1,10 @@
 library sync_settings_page_delete_actions_test;
 
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -177,6 +178,41 @@ void main() {
     expect(find.text('Deleted local and remote data'), findsOneWidget);
 
     engine.stop();
+  });
+
+  testWidgets(
+      'delete all data supports legacy webdav config without sync_backend_type',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      SyncConfigStore.prefsBlobKeyForTest: jsonEncode({
+        SyncConfigStore.kRemoteRoot: 'SecondLoop',
+        SyncConfigStore.kWebdavBaseUrl: 'https://example.com/dav',
+      }),
+    });
+    final store = SyncConfigStore();
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend();
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(backend.syncWebdavClearRemoteRootCalls, 1);
+    expect(backend.lastWebdavClearBaseUrl, 'https://example.com/dav');
+    expect(backend.lastWebdavClearRemoteRoot, 'SecondLoop');
+    expect(backend.resetLocalDataCalls, 1);
+    expect(find.text('Deleted local and remote data'), findsOneWidget);
   });
 
   testWidgets('delete all data uses managed vault clear for cloud backend',
@@ -682,6 +718,65 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(runner.pushCalls, 0);
+  });
+
+  testWidgets(
+      'delete all data refreshes background schedule with the active config store',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final methodCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel(
+          'be.tramckrijte.workmanager/foreground_channel_work_manager'),
+      (call) async {
+        methodCalls.add(call);
+        return true;
+      },
+    );
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel(
+            'be.tramckrijte.workmanager/foreground_channel_work_manager'),
+        null,
+      );
+    });
+
+    final store = SyncConfigStore(scopeKey: 'delete-actions-scope');
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('ScopedRoot');
+    await store.writeWebdavBaseUrl('https://scoped.example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend(
+      savedSessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      methodCalls.where((call) => call.method == 'registerPeriodicTask'),
+      hasLength(1),
+    );
+    expect(
+      methodCalls.where((call) => call.method == 'cancelTaskByUniqueName'),
+      isEmpty,
+    );
   });
 
   testWidgets(

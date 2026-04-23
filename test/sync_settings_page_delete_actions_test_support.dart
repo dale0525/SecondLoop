@@ -46,6 +46,7 @@ final class _DeleteActionsBackend extends AppBackend {
   _DeleteActionsBackend({
     this.webdavClearRemoteRootError,
     this.webdavClearRemoteRootCompleter,
+    this.savedSessionKey,
   });
 
   int clearLocalCacheCalls = 0;
@@ -59,6 +60,7 @@ final class _DeleteActionsBackend extends AppBackend {
   String? lastWebdavClearRemoteRoot;
   final Object? webdavClearRemoteRootError;
   final Completer<void>? webdavClearRemoteRootCompleter;
+  final Uint8List? savedSessionKey;
 
   @override
   Future<void> init() async {}
@@ -73,7 +75,7 @@ final class _DeleteActionsBackend extends AppBackend {
   Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
 
   @override
-  Future<Uint8List?> loadSavedSessionKey() async => null;
+  Future<Uint8List?> loadSavedSessionKey() async => savedSessionKey;
 
   @override
   Future<void> saveSessionKey(Uint8List key) async {}
