@@ -30,6 +30,7 @@ part 'sync_settings_page_media_actions.dart';
 part 'sync_settings_page_managed_vault_save.dart';
 part 'sync_settings_page_managed_vault_sync.dart';
 part 'sync_settings_page_delete_actions.dart';
+part 'sync_settings_page_delete_progress.dart';
 part 'sync_settings_page_sync_actions.dart';
 
 int _coerceTimestampMs(Object value) {
@@ -89,6 +90,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   static const _kManualSyncProgressKey = ValueKey('sync_manual_progress');
   static const _kManualSyncProgressPercentKey =
       ValueKey('sync_manual_progress_percent');
+  static const _kDeleteProgressKey = ValueKey('sync_delete_progress');
   static const _kRecoveryHintBannerKey = ValueKey('sync_recovery_hint_banner');
   static const _kRecoveryHintActionKey = ValueKey('sync_recovery_hint_action');
   static const _kRecoveryPassphraseFieldKey =
@@ -104,6 +106,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   final _recoveryPassphraseFieldAnchorKey = GlobalKey();
 
   bool _busy = false;
+  String? _deleteProgressMessage;
   bool _passphraseIsPlaceholder = false;
   bool _showManagedVaultEndpointOverride = false;
   bool _showRecoveryHintBanner = false;
@@ -360,593 +363,616 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       appBar: AppBar(
         title: Text(context.t.sync.title),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Stack(
         children: [
-          sectionTitle(context.t.sync.sections.automation),
-          sectionCard(
-            Column(
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(context.t.sync.autoSync.title),
-                  subtitle: Text(context.t.sync.autoSync.subtitle),
-                  value: _autoEnabled,
-                  onChanged: _busy
-                      ? null
-                      : (value) async {
-                          final backend = AppBackendScope.of(context);
-                          setState(() => _autoEnabled = value);
-                          await _store.writeAutoEnabled(value);
-                          await BackgroundSync.refreshSchedule(
-                              backend: backend);
-                        },
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  key: const ValueKey('sync_auto_wifi_only'),
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(context.t.sync.autoSync.wifiOnlyTitle),
-                  subtitle: Text(context.t.sync.autoSync.wifiOnlySubtitle),
-                  value: _autoWifiOnly,
-                  onChanged: _busy
-                      ? null
-                      : (value) async {
-                          await _setAutoWifiOnly(value);
-                        },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onLongPress:
-                (backendType == SyncBackendType.managedVault && kDebugMode)
-                    ? () {
-                        setState(() {
-                          _showManagedVaultEndpointOverride =
-                              !_showManagedVaultEndpointOverride;
-                        });
-                      }
-                    : null,
-            child: sectionTitle(
-              usesCloudSessionModel
-                  ? context.t.sync.backendManagedVault
-                  : context.t.sync.sections.backend,
-            ),
-          ),
-          sectionCard(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (engine != null)
-                  ValueListenableBuilder(
-                    valueListenable: engine.writeGate,
-                    builder: (context, gate, _) {
-                      if (backendType != SyncBackendType.managedVault) {
-                        return const SizedBox.shrink();
-                      }
-                      if (gate.kind == SyncWriteGateKind.open) {
-                        return const SizedBox.shrink();
-                      }
-
-                      final nowMs = DateTime.now().millisecondsSinceEpoch;
-                      final untilMs = gate.graceUntilMs;
-                      final activeGrace =
-                          gate.kind == SyncWriteGateKind.graceReadOnly &&
-                              untilMs != null &&
-                              nowMs < untilMs;
-
-                      if (gate.kind == SyncWriteGateKind.graceReadOnly &&
-                          activeGrace) {
-                        final dt = DateTime.fromMillisecondsSinceEpoch(untilMs)
-                            .toLocal();
-                        final until = MaterialLocalizations.of(context)
-                            .formatShortDate(dt);
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            context.t.sync.cloudManagedVault
-                                .graceReadonlyUntil(until: until),
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                    color: Theme.of(context).colorScheme.error),
-                          ),
-                        );
-                      }
-
-                      if (gate.kind == SyncWriteGateKind.paymentRequired) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            context.t.sync.cloudManagedVault.paymentRequired,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                    color: Theme.of(context).colorScheme.error),
-                          ),
-                        );
-                      }
-
-                      if (gate.kind == SyncWriteGateKind.localRepairRequired) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            context.t.sync.cloudManagedVault
-                                .localSyncDataRepairRequired,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                    color: Theme.of(context).colorScheme.error),
-                          ),
-                        );
-                      }
-
-                      if (gate.kind == SyncWriteGateKind.storageQuotaExceeded) {
-                        final used = gate.quotaUsedBytes;
-                        final limit = gate.quotaLimitBytes;
-                        final message =
-                            (used != null && limit != null && limit > 0)
-                                ? context.t.sync.cloudManagedVault
-                                    .storageQuotaExceededWithUsage(
-                                    used: _formatBytes(used),
-                                    limit: _formatBytes(limit),
-                                  )
-                                : context.t.sync.cloudManagedVault
-                                    .storageQuotaExceeded;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            message,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                    color: Theme.of(context).colorScheme.error),
-                          ),
-                        );
-                      }
-
-                      return const SizedBox.shrink();
-                    },
-                  ),
-                if (usesCloudSessionModel)
-                  Text(
-                    context.t.sync.backendManagedVault,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  )
-                else
-                  DropdownButtonFormField<SyncBackendType>(
-                    value: backendType,
-                    decoration: InputDecoration(
-                      labelText: context.t.sync.backendLabel,
+          ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              sectionTitle(context.t.sync.sections.automation),
+              sectionCard(
+                Column(
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(context.t.sync.autoSync.title),
+                      subtitle: Text(context.t.sync.autoSync.subtitle),
+                      value: _autoEnabled,
+                      onChanged: _busy
+                          ? null
+                          : (value) async {
+                              final backend = AppBackendScope.of(context);
+                              setState(() => _autoEnabled = value);
+                              await _store.writeAutoEnabled(value);
+                              await BackgroundSync.refreshSchedule(
+                                  backend: backend);
+                            },
                     ),
-                    items: [
-                      DropdownMenuItem(
-                        value: SyncBackendType.webdav,
-                        child: Text(context.t.sync.backendWebdav),
-                      ),
-                      DropdownMenuItem(
-                        value: SyncBackendType.localDir,
-                        child: Text(context.t.sync.backendLocalDir),
-                      ),
-                      DropdownMenuItem(
-                        value: SyncBackendType.managedVault,
-                        child: Text(context.t.sync.backendManagedVault),
-                      ),
-                    ],
-                    onChanged: _busy
-                        ? null
-                        : (value) {
-                            if (value == null) return;
-                            setState(() {
-                              _backendType = value;
-                              _cloudMediaBackupSummary =
-                                  value == SyncBackendType.managedVault
-                                      ? _maybeLoadCloudMediaBackupSummary()
-                                      : null;
-                            });
-                          },
-                  ),
-                if (!usesCloudSessionModel) const SizedBox(height: 12),
-                if (backendType == SyncBackendType.webdav) ...[
-                  TextField(
-                    controller: _baseUrlController,
-                    decoration: InputDecoration(
-                      labelText: context.t.sync.fields.baseUrl.label,
-                      hintText: context.t.sync.fields.baseUrl.hint,
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      key: const ValueKey('sync_auto_wifi_only'),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(context.t.sync.autoSync.wifiOnlyTitle),
+                      subtitle: Text(context.t.sync.autoSync.wifiOnlySubtitle),
+                      value: _autoWifiOnly,
+                      onChanged: _busy
+                          ? null
+                          : (value) async {
+                              await _setAutoWifiOnly(value);
+                            },
                     ),
-                    enabled: !_busy,
-                    keyboardType: TextInputType.url,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _usernameController,
-                    decoration: InputDecoration(
-                      labelText: context.t.sync.fields.username.label,
-                    ),
-                    enabled: !_busy,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    decoration: InputDecoration(
-                      labelText: context.t.sync.fields.password.label,
-                    ),
-                    enabled: !_busy,
-                    obscureText: true,
-                    obscuringCharacter: '*',
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (backendType == SyncBackendType.localDir) ...[
-                  TextField(
-                    controller: _localDirController,
-                    decoration: InputDecoration(
-                      labelText: context.t.sync.fields.localDir.label,
-                      hintText: context.t.sync.fields.localDir.hint,
-                      helperText: context.t.sync.fields.localDir.helper,
-                    ),
-                    enabled: !_busy,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (backendType == SyncBackendType.managedVault &&
-                    kDebugMode &&
-                    _showManagedVaultEndpointOverride) ...[
-                  TextField(
-                    controller: _managedVaultBaseUrlController,
-                    decoration: InputDecoration(
-                      labelText:
-                          context.t.sync.fields.managedVaultBaseUrl.label,
-                      hintText: context.t.sync.fields.managedVaultBaseUrl.hint,
-                    ),
-                    enabled: !_busy,
-                    keyboardType: TextInputType.url,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                TextField(
-                  controller: _remoteRootController,
-                  decoration: InputDecoration(
-                    labelText: backendType == SyncBackendType.managedVault
-                        ? context.t.sync.fields.vaultId.label
-                        : context.t.sync.fields.remoteRoot.label,
-                    hintText: backendType == SyncBackendType.managedVault
-                        ? context.t.sync.fields.vaultId.hint
-                        : context.t.sync.fields.remoteRoot.hint,
-                  ),
-                  enabled: backendType == SyncBackendType.managedVault
-                      ? false
-                      : !_busy,
-                ),
-                if (backendType == SyncBackendType.managedVault) ...[
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    key: const ValueKey('sync_save_button'),
-                    onPressed: _busy ? null : _save,
-                    child: Text(context.t.common.actions.save),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (backendType != SyncBackendType.managedVault) ...[
-            sectionTitle(context.t.settings.sections.security),
-            sectionCard(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_showRecoveryHintBanner) ...[
-                    Container(
-                      key: _kRecoveryHintBannerKey,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            recoveryHintTitle,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            recoveryHintMessage,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 10),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: FilledButton.tonal(
-                              key: _kRecoveryHintActionKey,
-                              onPressed:
-                                  _busy ? null : _handleRecoveryHintAction,
-                              child: Text(recoveryHintAction),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                   ],
-                  SizedBox(
-                    key: _recoveryPassphraseFieldAnchorKey,
-                    child: const SizedBox.shrink(),
-                  ),
-                  TextField(
-                    key: _kRecoveryPassphraseFieldKey,
-                    controller: _syncPassphraseController,
-                    decoration: InputDecoration(
-                      labelText: recoveryPassphraseLabel,
-                      helperText: recoveryPassphraseHelper,
-                      helperMaxLines: 3,
-                    ),
-                    enabled: !_busy,
-                    obscureText: true,
-                    obscuringCharacter: '*',
-                    onTap: _passphraseIsPlaceholder
+                ),
+              ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onLongPress:
+                    (backendType == SyncBackendType.managedVault && kDebugMode)
                         ? () {
-                            _syncPassphraseController.clear();
-                            setState(() => _passphraseIsPlaceholder = false);
+                            setState(() {
+                              _showManagedVaultEndpointOverride =
+                                  !_showManagedVaultEndpointOverride;
+                            });
                           }
                         : null,
-                    onChanged: (_) {
-                      if (!_passphraseIsPlaceholder) return;
-                      setState(() => _passphraseIsPlaceholder = false);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    key: const ValueKey('sync_save_button'),
-                    onPressed: _busy ? null : _save,
-                    child: Text(context.t.common.actions.save),
-                  ),
-                ],
+                child: sectionTitle(
+                  usesCloudSessionModel
+                      ? context.t.sync.backendManagedVault
+                      : context.t.sync.sections.backend,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          sectionTitle(context.t.sync.sections.mediaPreview),
-          sectionCard(
-            SwitchListTile(
-              key: const ValueKey('sync_media_downloads_wifi_only'),
-              contentPadding: EdgeInsets.zero,
-              title:
-                  Text(context.t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle),
-              subtitle: Text(
-                  context.t.sync.mediaPreview.chatThumbnailsWifiOnlySubtitle),
-              value: _mediaDownloadsWifiOnly,
-              onChanged: _busy
-                  ? null
-                  : (value) async {
-                      await _setMediaDownloadsWifiOnly(value);
-                    },
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (backendType == SyncBackendType.managedVault ||
-              backendType == SyncBackendType.webdav) ...[
-            sectionTitle(context.t.sync.sections.mediaBackup),
-            sectionCard(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SwitchListTile(
-                    key: const ValueKey('sync_media_backup_enabled'),
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(context.t.sync.mediaBackup.title),
-                    subtitle: Text(context.t.sync.mediaBackup.subtitle),
-                    value: _cloudMediaBackupEnabled,
-                    onChanged: _busy
-                        ? null
-                        : (value) async {
-                            await _setCloudMediaBackupEnabled(value);
-                          },
-                  ),
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    key: const ValueKey('sync_media_backup_wifi_only'),
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(context.t.sync.mediaBackup.wifiOnlyTitle),
-                    subtitle: Text(context.t.sync.mediaBackup.wifiOnlySubtitle),
-                    value: _cloudMediaBackupWifiOnly,
-                    onChanged: _busy || !_cloudMediaBackupEnabled
-                        ? null
-                        : (value) async {
-                            await _setCloudMediaBackupWifiOnly(value);
-                          },
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    context.t.sync.mediaBackup.description,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  FutureBuilder(
-                    future: _cloudMediaBackupSummary,
-                    builder: (context, snapshot) {
-                      final s = snapshot.data;
-                      if (s == null) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const SizedBox.shrink();
-                        }
-                        return const SizedBox.shrink();
-                      }
+              sectionCard(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (engine != null)
+                      ValueListenableBuilder(
+                        valueListenable: engine.writeGate,
+                        builder: (context, gate, _) {
+                          if (backendType != SyncBackendType.managedVault) {
+                            return const SizedBox.shrink();
+                          }
+                          if (gate.kind == SyncWriteGateKind.open) {
+                            return const SizedBox.shrink();
+                          }
 
-                      final lastUploaded = s.lastUploadedAtMs;
-                      final lastError = s.lastError;
-                      final lastErrorAtMs = s.lastErrorAtMs;
+                          final nowMs = DateTime.now().millisecondsSinceEpoch;
+                          final untilMs = gate.graceUntilMs;
+                          final activeGrace =
+                              gate.kind == SyncWriteGateKind.graceReadOnly &&
+                                  untilMs != null &&
+                                  nowMs < untilMs;
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            context.t.sync.mediaBackup.stats(
-                              pending: s.pending,
-                              failed: s.failed,
-                              uploaded: s.uploaded,
-                            ),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          if (lastUploaded != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              context.t.sync.mediaBackup.lastUploaded(
-                                at: _formatTimestamp(lastUploaded),
+                          if (gate.kind == SyncWriteGateKind.graceReadOnly &&
+                              activeGrace) {
+                            final dt =
+                                DateTime.fromMillisecondsSinceEpoch(untilMs)
+                                    .toLocal();
+                            final until = MaterialLocalizations.of(context)
+                                .formatShortDate(dt);
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                context.t.sync.cloudManagedVault
+                                    .graceReadonlyUntil(until: until),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error),
                               ),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                          if (lastError != null &&
-                              lastError.trim().isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    lastErrorAtMs == null
-                                        ? context.t.sync.mediaBackup
-                                            .lastError(error: lastError)
-                                        : context.t.sync.mediaBackup
-                                            .lastErrorWithTime(
-                                            error: lastError,
-                                            at: _formatTimestamp(lastErrorAtMs),
-                                          ),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .error),
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: context.t.common.actions.copy,
-                                  onPressed: () => _copyText(lastError),
-                                  icon: const Icon(Icons.copy_rounded),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  if (!usesCloudSessionModel)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _busy || !_cloudMediaBackupEnabled
-                                ? null
-                                : _backfillCloudMediaBackupFiles,
-                            child:
-                                Text(context.t.sync.mediaBackup.backfillButton),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: _busy || !_cloudMediaBackupEnabled
-                                ? null
-                                : _uploadCloudMediaBackupNow,
-                            child: Text(
-                                context.t.sync.mediaBackup.uploadNowButton),
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          sectionTitle(context.t.sync.sections.securityActions),
-          sectionCard(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (backendType == SyncBackendType.managedVault &&
-                    (cloudUid == null || cloudUid.isEmpty))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      context.t.sync.cloudManagedVault.signInRequired,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                if (engine == null)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _busy ? null : _push,
-                          child: Text(context.t.common.actions.push),
-                        ),
+                            );
+                          }
+
+                          if (gate.kind == SyncWriteGateKind.paymentRequired) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                context
+                                    .t.sync.cloudManagedVault.paymentRequired,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error),
+                              ),
+                            );
+                          }
+
+                          if (gate.kind ==
+                              SyncWriteGateKind.localRepairRequired) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                context.t.sync.cloudManagedVault
+                                    .localSyncDataRepairRequired,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error),
+                              ),
+                            );
+                          }
+
+                          if (gate.kind ==
+                              SyncWriteGateKind.storageQuotaExceeded) {
+                            final used = gate.quotaUsedBytes;
+                            final limit = gate.quotaLimitBytes;
+                            final message =
+                                (used != null && limit != null && limit > 0)
+                                    ? context.t.sync.cloudManagedVault
+                                        .storageQuotaExceededWithUsage(
+                                        used: _formatBytes(used),
+                                        limit: _formatBytes(limit),
+                                      )
+                                    : context.t.sync.cloudManagedVault
+                                        .storageQuotaExceeded;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                message,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error),
+                              ),
+                            );
+                          }
+
+                          return const SizedBox.shrink();
+                        },
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _busy ? null : _pull,
-                          child: Text(context.t.common.actions.pull),
+                    if (usesCloudSessionModel)
+                      Text(
+                        context.t.sync.backendManagedVault,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      )
+                    else
+                      DropdownButtonFormField<SyncBackendType>(
+                        value: backendType,
+                        decoration: InputDecoration(
+                          labelText: context.t.sync.backendLabel,
                         ),
+                        items: [
+                          DropdownMenuItem(
+                            value: SyncBackendType.webdav,
+                            child: Text(context.t.sync.backendWebdav),
+                          ),
+                          DropdownMenuItem(
+                            value: SyncBackendType.localDir,
+                            child: Text(context.t.sync.backendLocalDir),
+                          ),
+                          DropdownMenuItem(
+                            value: SyncBackendType.managedVault,
+                            child: Text(context.t.sync.backendManagedVault),
+                          ),
+                        ],
+                        onChanged: _busy
+                            ? null
+                            : (value) {
+                                if (value == null) return;
+                                setState(() {
+                                  _backendType = value;
+                                  _cloudMediaBackupSummary =
+                                      value == SyncBackendType.managedVault
+                                          ? _maybeLoadCloudMediaBackupSummary()
+                                          : null;
+                                });
+                              },
+                      ),
+                    if (!usesCloudSessionModel) const SizedBox(height: 12),
+                    if (backendType == SyncBackendType.webdav) ...[
+                      TextField(
+                        controller: _baseUrlController,
+                        decoration: InputDecoration(
+                          labelText: context.t.sync.fields.baseUrl.label,
+                          hintText: context.t.sync.fields.baseUrl.hint,
+                        ),
+                        enabled: !_busy,
+                        keyboardType: TextInputType.url,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _usernameController,
+                        decoration: InputDecoration(
+                          labelText: context.t.sync.fields.username.label,
+                        ),
+                        enabled: !_busy,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _passwordController,
+                        decoration: InputDecoration(
+                          labelText: context.t.sync.fields.password.label,
+                        ),
+                        enabled: !_busy,
+                        obscureText: true,
+                        obscuringCharacter: '*',
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (backendType == SyncBackendType.localDir) ...[
+                      TextField(
+                        controller: _localDirController,
+                        decoration: InputDecoration(
+                          labelText: context.t.sync.fields.localDir.label,
+                          hintText: context.t.sync.fields.localDir.hint,
+                          helperText: context.t.sync.fields.localDir.helper,
+                        ),
+                        enabled: !_busy,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (backendType == SyncBackendType.managedVault &&
+                        kDebugMode &&
+                        _showManagedVaultEndpointOverride) ...[
+                      TextField(
+                        controller: _managedVaultBaseUrlController,
+                        decoration: InputDecoration(
+                          labelText:
+                              context.t.sync.fields.managedVaultBaseUrl.label,
+                          hintText:
+                              context.t.sync.fields.managedVaultBaseUrl.hint,
+                        ),
+                        enabled: !_busy,
+                        keyboardType: TextInputType.url,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    TextField(
+                      controller: _remoteRootController,
+                      decoration: InputDecoration(
+                        labelText: backendType == SyncBackendType.managedVault
+                            ? context.t.sync.fields.vaultId.label
+                            : context.t.sync.fields.remoteRoot.label,
+                        hintText: backendType == SyncBackendType.managedVault
+                            ? context.t.sync.fields.vaultId.hint
+                            : context.t.sync.fields.remoteRoot.hint,
+                      ),
+                      enabled: backendType == SyncBackendType.managedVault
+                          ? false
+                          : !_busy,
+                    ),
+                    if (backendType == SyncBackendType.managedVault) ...[
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        key: const ValueKey('sync_save_button'),
+                        onPressed: _busy ? null : _save,
+                        child: Text(context.t.common.actions.save),
                       ),
                     ],
-                  )
-                else
-                  ValueListenableBuilder(
-                    valueListenable: engine.writeGate,
-                    builder: (context, gate, _) {
-                      final disablePush = _busy ||
-                          (backendType == SyncBackendType.managedVault &&
-                              gate.kind != SyncWriteGateKind.open);
-                      final disablePull = _busy ||
-                          (backendType == SyncBackendType.managedVault &&
-                              gate.kind == SyncWriteGateKind.paymentRequired);
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (backendType != SyncBackendType.managedVault) ...[
+                sectionTitle(context.t.settings.sections.security),
+                sectionCard(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_showRecoveryHintBanner) ...[
+                        Container(
+                          key: _kRecoveryHintBannerKey,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color:
+                                Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                recoveryHintTitle,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                recoveryHintMessage,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: FilledButton.tonal(
+                                  key: _kRecoveryHintActionKey,
+                                  onPressed:
+                                      _busy ? null : _handleRecoveryHintAction,
+                                  child: Text(recoveryHintAction),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      SizedBox(
+                        key: _recoveryPassphraseFieldAnchorKey,
+                        child: const SizedBox.shrink(),
+                      ),
+                      TextField(
+                        key: _kRecoveryPassphraseFieldKey,
+                        controller: _syncPassphraseController,
+                        decoration: InputDecoration(
+                          labelText: recoveryPassphraseLabel,
+                          helperText: recoveryPassphraseHelper,
+                          helperMaxLines: 3,
+                        ),
+                        enabled: !_busy,
+                        obscureText: true,
+                        obscuringCharacter: '*',
+                        onTap: _passphraseIsPlaceholder
+                            ? () {
+                                _syncPassphraseController.clear();
+                                setState(
+                                    () => _passphraseIsPlaceholder = false);
+                              }
+                            : null,
+                        onChanged: (_) {
+                          if (!_passphraseIsPlaceholder) return;
+                          setState(() => _passphraseIsPlaceholder = false);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        key: const ValueKey('sync_save_button'),
+                        onPressed: _busy ? null : _save,
+                        child: Text(context.t.common.actions.save),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              sectionTitle(context.t.sync.sections.mediaPreview),
+              sectionCard(
+                SwitchListTile(
+                  key: const ValueKey('sync_media_downloads_wifi_only'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                      context.t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle),
+                  subtitle: Text(context
+                      .t.sync.mediaPreview.chatThumbnailsWifiOnlySubtitle),
+                  value: _mediaDownloadsWifiOnly,
+                  onChanged: _busy
+                      ? null
+                      : (value) async {
+                          await _setMediaDownloadsWifiOnly(value);
+                        },
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (backendType == SyncBackendType.managedVault ||
+                  backendType == SyncBackendType.webdav) ...[
+                sectionTitle(context.t.sync.sections.mediaBackup),
+                sectionCard(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SwitchListTile(
+                        key: const ValueKey('sync_media_backup_enabled'),
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(context.t.sync.mediaBackup.title),
+                        subtitle: Text(context.t.sync.mediaBackup.subtitle),
+                        value: _cloudMediaBackupEnabled,
+                        onChanged: _busy
+                            ? null
+                            : (value) async {
+                                await _setCloudMediaBackupEnabled(value);
+                              },
+                      ),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        key: const ValueKey('sync_media_backup_wifi_only'),
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(context.t.sync.mediaBackup.wifiOnlyTitle),
+                        subtitle:
+                            Text(context.t.sync.mediaBackup.wifiOnlySubtitle),
+                        value: _cloudMediaBackupWifiOnly,
+                        onChanged: _busy || !_cloudMediaBackupEnabled
+                            ? null
+                            : (value) async {
+                                await _setCloudMediaBackupWifiOnly(value);
+                              },
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.t.sync.mediaBackup.description,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                      FutureBuilder(
+                        future: _cloudMediaBackupSummary,
+                        builder: (context, snapshot) {
+                          final s = snapshot.data;
+                          if (s == null) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const SizedBox.shrink();
+                            }
+                            return const SizedBox.shrink();
+                          }
 
-                      return Row(
+                          final lastUploaded = s.lastUploadedAtMs;
+                          final lastError = s.lastError;
+                          final lastErrorAtMs = s.lastErrorAtMs;
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                context.t.sync.mediaBackup.stats(
+                                  pending: s.pending,
+                                  failed: s.failed,
+                                  uploaded: s.uploaded,
+                                ),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              if (lastUploaded != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  context.t.sync.mediaBackup.lastUploaded(
+                                    at: _formatTimestamp(lastUploaded),
+                                  ),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                              if (lastError != null &&
+                                  lastError.trim().isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        lastErrorAtMs == null
+                                            ? context.t.sync.mediaBackup
+                                                .lastError(error: lastError)
+                                            : context.t.sync.mediaBackup
+                                                .lastErrorWithTime(
+                                                error: lastError,
+                                                at: _formatTimestamp(
+                                                    lastErrorAtMs),
+                                              ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .error),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: context.t.common.actions.copy,
+                                      onPressed: () => _copyText(lastError),
+                                      icon: const Icon(Icons.copy_rounded),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      if (!usesCloudSessionModel)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _busy || !_cloudMediaBackupEnabled
+                                    ? null
+                                    : _backfillCloudMediaBackupFiles,
+                                child: Text(
+                                    context.t.sync.mediaBackup.backfillButton),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: _busy || !_cloudMediaBackupEnabled
+                                    ? null
+                                    : _uploadCloudMediaBackupNow,
+                                child: Text(
+                                    context.t.sync.mediaBackup.uploadNowButton),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              sectionTitle(context.t.sync.sections.securityActions),
+              sectionCard(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (backendType == SyncBackendType.managedVault &&
+                        (cloudUid == null || cloudUid.isEmpty))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          context.t.sync.cloudManagedVault.signInRequired,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    if (engine == null)
+                      Row(
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: disablePush ? null : _push,
+                              onPressed: _busy ? null : _push,
                               child: Text(context.t.common.actions.push),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: disablePull ? null : _pull,
+                              onPressed: _busy ? null : _pull,
                               child: Text(context.t.common.actions.pull),
                             ),
                           ),
                         ],
-                      );
-                    },
-                  ),
-                const SizedBox(height: 12),
-                _buildDeleteActionsRow(
-                  canClearLocalCache: canClearLocalCache,
+                      )
+                    else
+                      ValueListenableBuilder(
+                        valueListenable: engine.writeGate,
+                        builder: (context, gate, _) {
+                          final disablePush = _busy ||
+                              (backendType == SyncBackendType.managedVault &&
+                                  gate.kind != SyncWriteGateKind.open);
+                          final disablePull = _busy ||
+                              (backendType == SyncBackendType.managedVault &&
+                                  gate.kind ==
+                                      SyncWriteGateKind.paymentRequired);
+
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: disablePush ? null : _push,
+                                  child: Text(context.t.common.actions.push),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: disablePull ? null : _pull,
+                                  child: Text(context.t.common.actions.pull),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    const SizedBox(height: 12),
+                    _buildDeleteActionsRow(
+                      canClearLocalCache: canClearLocalCache,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+          if (_deleteProgressMessage != null) _buildDeleteProgressOverlay(),
         ],
       ),
     );

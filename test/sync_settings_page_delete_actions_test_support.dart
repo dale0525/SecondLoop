@@ -42,10 +42,17 @@ Future<void> _ensureVisible(WidgetTester tester, Finder target) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _confirmDeletionTwice(WidgetTester tester) async {
+  await tester.tap(find.text('Delete'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Delete'));
+}
+
 final class _DeleteActionsBackend extends AppBackend {
   _DeleteActionsBackend({
     this.webdavClearRemoteRootError,
     this.webdavClearRemoteRootCompleter,
+    this.resetLocalDataCompleter,
     this.savedSessionKey,
   });
 
@@ -60,6 +67,7 @@ final class _DeleteActionsBackend extends AppBackend {
   String? lastWebdavClearRemoteRoot;
   final Object? webdavClearRemoteRootError;
   final Completer<void>? webdavClearRemoteRootCompleter;
+  final Completer<void>? resetLocalDataCompleter;
   final Uint8List? savedSessionKey;
 
   @override
@@ -141,6 +149,10 @@ final class _DeleteActionsBackend extends AppBackend {
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
     resetLocalDataCalls += 1;
+    final completer = resetLocalDataCompleter;
+    if (completer != null) {
+      await completer.future;
+    }
   }
 
   @override

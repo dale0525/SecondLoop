@@ -3,6 +3,57 @@ part of 'sync_settings_page.dart';
 extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
   bool _isOperationTimeoutError(Object error) => error is TimeoutException;
 
+  Future<bool> _confirmDeleteAction({
+    required String title,
+    required String message,
+    required String secondTitle,
+    required String secondMessage,
+  }) async {
+    final t = context.t;
+    final firstConfirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.common.actions.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(t.sync.localData.dialog.confirm),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted || firstConfirmed != true) return false;
+
+    final secondConfirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(secondTitle),
+          content: Text(secondMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.common.actions.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(t.sync.localData.dialog.confirm),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return false;
+    return secondConfirmed == true;
+  }
+
   Widget _buildDeleteActionsRow({
     required bool canClearLocalCache,
   }) {
@@ -131,32 +182,21 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     if (_busy) return;
 
     final t = context.t;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(t.sync.allData.dialog.title),
-          content: Text(t.sync.allData.dialog.message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(t.sync.allData.dialog.confirm),
-            ),
-          ],
-        );
-      },
+    final confirmed = await _confirmDeleteAction(
+      title: t.sync.allData.dialog.title,
+      message: t.sync.allData.dialog.message,
+      secondTitle: t.sync.allData.secondDialog.title,
+      secondMessage: t.sync.allData.secondDialog.message,
     );
-    if (!mounted) return;
-    if (confirmed != true) return;
+    if (!mounted || confirmed != true) return;
 
     final engine = SyncEngineScope.maybeOf(context);
     final wasRunning = engine?.isRunning ?? false;
     var shouldRestartEngine = wasRunning;
-    _setState(() => _busy = true);
+    _setState(() {
+      _busy = true;
+      _deleteProgressMessage = t.sync.deleteProgress.allData;
+    });
     var shouldNotifyExternalChange = false;
     try {
       final backend = AppBackendScope.of(context);
@@ -216,9 +256,13 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         engine?.notifyExternalChange();
       }
       if (mounted) {
-        _setState(() => _busy = false);
+        _setState(() {
+          _busy = false;
+          _deleteProgressMessage = null;
+        });
       } else {
         _busy = false;
+        _deleteProgressMessage = null;
       }
     }
   }

@@ -1991,7 +1991,9 @@ pub fn db_cloud_media_backup_summary(
 #[flutter_rust_bridge::frb]
 pub fn db_reset_vault_data_preserving_llm_profiles(app_dir: String, key: Vec<u8>) -> Result<()> {
     let key = key_from_bytes(key)?;
-    auth::validate_key(Path::new(&app_dir), &key)?;
+    if auth::is_initialized(Path::new(&app_dir)) {
+        auth::validate_key(Path::new(&app_dir), &key)?;
+    }
     let conn = db::open(Path::new(&app_dir))?;
     db::reset_vault_data_preserving_llm_profiles(&conn)
 }
@@ -4022,4 +4024,49 @@ pub fn sync_managed_vault_clear_vault(
     firebase_id_token: String,
 ) -> Result<()> {
     sync::managed_vault::clear_vault(&base_url, &vault_id, &firebase_id_token)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_allows_missing_auth_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let key = vec![7u8; 32];
+
+        let result = db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            key,
+        );
+
+        assert!(
+            result.is_ok(),
+            "expected reset to succeed without auth.json"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_still_rejects_invalid_key_when_auth_exists() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let valid_key = [3u8; 32];
+        auth::init_master_password_with_existing_key(
+            dir.path(),
+            "password",
+            crate::crypto::KdfParams::for_test(),
+            valid_key,
+        )
+        .expect("initialize auth");
+
+        let result = db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("invalid key should still be rejected");
+        assert!(
+            error.to_string().contains("invalid key"),
+            "unexpected error: {error}"
+        );
+    }
 }

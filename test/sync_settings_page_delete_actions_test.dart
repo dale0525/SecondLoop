@@ -122,6 +122,99 @@ void main() {
   });
 
   testWidgets(
+      'delete local data requires a second confirmation before clearing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend();
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete local data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete local data?'), findsOneWidget);
+    expect(
+      find.textContaining('messages, attachments, and embeddings'),
+      findsOneWidget,
+    );
+    expect(backend.resetLocalDataCalls, 0);
+
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete local data again?'), findsOneWidget);
+    expect(
+      find.textContaining('remote copy is not changed'),
+      findsOneWidget,
+    );
+    expect(backend.resetLocalDataCalls, 0);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(backend.resetLocalDataCalls, 0);
+
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await _confirmDeletionTwice(tester);
+    await tester.pumpAndSettle();
+
+    expect(backend.resetLocalDataCalls, 1);
+    expect(find.text('Local synced data deleted'), findsOneWidget);
+  });
+
+  testWidgets('delete local data shows progress while deletion is running',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final resetCompleter = Completer<void>();
+    final backend = _DeleteActionsBackend(
+      resetLocalDataCompleter: resetCompleter,
+    );
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete local data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await _confirmDeletionTwice(tester);
+    await tester.pump();
+
+    expect(find.text('Deleting…'), findsOneWidget);
+    expect(find.text('Deleting local synced data…'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    resetCompleter.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Deleting…'), findsNothing);
+    expect(find.text('Deleting local synced data…'), findsNothing);
+  });
+
+  testWidgets(
       'delete all data clears remote and local webdav data after confirmation',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -172,6 +265,17 @@ void main() {
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Delete all data again?'), findsOneWidget);
+    expect(
+      find.textContaining('This also clears the remote sync data'),
+      findsOneWidget,
+    );
+    expect(backend.syncWebdavClearRemoteRootCalls, 0);
+    expect(backend.resetLocalDataCalls, 0);
+
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
     expect(backend.syncWebdavClearRemoteRootCalls, 1);
     expect(backend.resetLocalDataCalls, 1);
     expect(notifications, 1);
@@ -205,7 +309,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     expect(backend.syncWebdavClearRemoteRootCalls, 1);
@@ -237,7 +341,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     expect(backend.syncManagedVaultClearVaultCalls, 1);
@@ -271,7 +375,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     expect(backend.syncManagedVaultClearVaultCalls, 0);
@@ -311,7 +415,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     expect(backend.syncManagedVaultClearVaultCalls, 1);
@@ -356,8 +460,12 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pump();
+
+    expect(find.text('Deleting…'), findsOneWidget);
+    expect(find.text('Deleting local and remote data…'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     engine.triggerPushNow();
     await tester.pump();
@@ -367,6 +475,9 @@ void main() {
 
     remoteClearCompleter.complete();
     await tester.pumpAndSettle();
+
+    expect(find.text('Deleting…'), findsNothing);
+    expect(find.text('Deleting local and remote data…'), findsNothing);
 
     engine.stop();
   });
@@ -410,7 +521,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -460,7 +571,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pump();
 
     expect(backend.syncWebdavClearRemoteRootCalls, 0);
@@ -507,7 +618,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     expect(backend.syncWebdavClearRemoteRootCalls, 1);
@@ -551,7 +662,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     expect(engine.isRunning, isTrue);
@@ -601,7 +712,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     expect(engine.isRunning, isFalse);
@@ -650,7 +761,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     expect(backend.resetLocalDataCalls, 0);
@@ -703,7 +814,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     expect(backend.syncWebdavClearRemoteRootCalls, 1);
@@ -764,7 +875,7 @@ void main() {
     await _ensureVisible(tester, button);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
     await tester.pump(const Duration(milliseconds: 50));

@@ -8,6 +8,11 @@
     "uploadingMedia": "Uploading files…",
     "finalizing": "Finalizing…"
   },
+  "deleteProgress": {
+    "title": "Deleting…",
+    "localData": "Deleting local synced data…",
+    "allData": "Deleting local and remote data…"
+  },
   "sections": {
     "automation": "Auto sync",
     "backend": "Sync method",
@@ -71,6 +76,11 @@
       "title": "Delete local data?",
       "message": "This deletes all synced local data on this device, including messages, attachments, and embeddings. Your sync settings are kept, and a later Download will fully replace local data from remote again.",
       "confirm": "Delete"
+    },
+    "secondDialog": {
+      "title": "Delete local data again?",
+      "message": "This cannot be undone on this device. Your remote copy is not changed, and you can download it again later if needed.",
+      "confirm": "Delete"
     }
   },
   "allData": {
@@ -82,6 +92,11 @@
     "dialog": {
       "title": "Delete all data?",
       "message": "This deletes all synced local data on this device and clears all remote data for the current sync backend, including WebDAV, local folder sync, or SecondLoop Cloud. Your sync settings are kept.",
+      "confirm": "Delete"
+    },
+    "secondDialog": {
+      "title": "Delete all data again?",
+      "message": "This cannot be undone. This also clears the remote sync data for the current sync method.",
       "confirm": "Delete"
     }
   },

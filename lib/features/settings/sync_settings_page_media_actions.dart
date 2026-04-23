@@ -259,29 +259,18 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
     if (_busy) return;
 
     final t = context.t;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(t.sync.localData.dialog.title),
-          content: Text(t.sync.localData.dialog.message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(t.sync.localData.dialog.confirm),
-            ),
-          ],
-        );
-      },
+    final confirmed = await _confirmDeleteAction(
+      title: t.sync.localData.dialog.title,
+      message: t.sync.localData.dialog.message,
+      secondTitle: t.sync.localData.secondDialog.title,
+      secondMessage: t.sync.localData.secondDialog.message,
     );
-    if (!mounted) return;
-    if (confirmed != true) return;
+    if (!mounted || confirmed != true) return;
 
-    _setState(() => _busy = true);
+    _setState(() {
+      _busy = true;
+      _deleteProgressMessage = t.sync.deleteProgress.localData;
+    });
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
@@ -297,9 +286,13 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       _showSnack(t.sync.localData.failed(error: '$e'));
     } finally {
       if (mounted) {
-        _setState(() => _busy = false);
+        _setState(() {
+          _busy = false;
+          _deleteProgressMessage = null;
+        });
       } else {
         _busy = false;
+        _deleteProgressMessage = null;
       }
     }
   }
