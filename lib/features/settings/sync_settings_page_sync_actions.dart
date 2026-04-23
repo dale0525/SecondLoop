@@ -49,10 +49,6 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       return false;
     }
 
-    await _store.writeBackendType(backendType);
-    await _store.writeAutoEnabled(_autoEnabled);
-    await _store.writeRemoteRoot(resolvedRemoteRoot);
-
     switch (backendType) {
       case SyncBackendType.webdav:
         final baseUrl = _requiredTrimmed(_baseUrlController);
@@ -84,6 +80,12 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
         break;
     }
+
+    await _store.writePrimarySyncSettings(
+      backendType: backendType,
+      remoteRoot: resolvedRemoteRoot,
+      autoEnabled: _autoEnabled,
+    );
 
     return true;
   }

@@ -292,8 +292,10 @@ final class _CloudSyncSwitchPromptGateState
     required Uint8List? previousSyncKey,
     required SyncEngine? engine,
   }) async {
-    await _store.writeBackendType(previousBackendType);
-    await _store.writeRemoteRoot(previousRemoteRoot ?? '');
+    await _store.writePrimarySyncSettings(
+      backendType: previousBackendType,
+      remoteRoot: previousRemoteRoot ?? '',
+    );
     if (previousSyncKey != null) {
       await SyncKeyManager.save(
         write: _store.writeSyncKey,
@@ -870,8 +872,10 @@ final class _CloudSyncSwitchPromptGateState
       key: syncKey,
     );
 
-    await _store.writeBackendType(SyncBackendType.managedVault);
-    await _store.writeRemoteRoot(uid);
+    await _store.writePrimarySyncSettings(
+      backendType: SyncBackendType.managedVault,
+      remoteRoot: uid,
+    );
     if (!mounted) return;
 
     unawaited(BackgroundSync.refreshSchedule(

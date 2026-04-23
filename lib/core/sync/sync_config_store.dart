@@ -72,9 +72,6 @@ final class SyncConfigStore {
   static const kRemoteRoot = 'sync_webdav_remote_root';
   static const kSyncKeyB64 = SyncConfigMigrator.syncKeyB64Key;
   static const kManagedVaultBaseUrl = 'sync_managed_vault_base_url';
-  static const _kManagedVaultCanonicalConfigVersion =
-      'sync_managed_vault_canonical_config_version';
-  static const _managedVaultCanonicalConfigVersion = '1';
 
   static const kCloudMediaBackupEnabled = 'cloud_media_backup_enabled'; // 1|0
   static const kCloudMediaBackupWifiOnly =
@@ -154,15 +151,18 @@ final class SyncConfigStore {
   }
 
   Future<void> writeBackendType(SyncBackendType type) async {
-    final v = switch (type) {
-      SyncBackendType.localDir => 'localdir',
-      SyncBackendType.managedVault => 'managedvault',
-      SyncBackendType.webdav => 'webdav',
-    };
+    await _writeConfigUpdates({kBackendType: _backendTypeToken(type)});
+  }
+
+  Future<void> writePrimarySyncSettings({
+    required SyncBackendType backendType,
+    required String remoteRoot,
+    bool? autoEnabled,
+  }) async {
     await _writeConfigUpdates({
-      kBackendType: v,
-      if (type != SyncBackendType.managedVault)
-        _kManagedVaultCanonicalConfigVersion: null,
+      kBackendType: _backendTypeToken(backendType),
+      kRemoteRoot: remoteRoot,
+      if (autoEnabled != null) kAutoEnabled: autoEnabled ? '1' : '0',
     });
   }
 
@@ -258,15 +258,8 @@ final class SyncConfigStore {
       _writeConfigUpdates({kWebdavBaseUrl: baseUrl});
   Future<void> writeManagedVaultBaseUrl(String baseUrl) async =>
       _writeConfigUpdates({kManagedVaultBaseUrl: baseUrl});
-  Future<void> writeRemoteRoot(String remoteRoot) async {
-    final backendType = await readBackendType();
-    await _writeConfigUpdates({
-      kRemoteRoot: remoteRoot,
-      if (backendType == SyncBackendType.managedVault)
-        _kManagedVaultCanonicalConfigVersion:
-            _managedVaultCanonicalConfigVersion,
-    });
-  }
+  Future<void> writeRemoteRoot(String remoteRoot) async =>
+      _writeConfigUpdates({kRemoteRoot: remoteRoot});
 
   Future<void> writeWebdavUsername(String? username) async {
     if (username == null || username.isEmpty) {
@@ -727,11 +720,6 @@ final class SyncConfigStore {
         final baseUrl =
             (all[kManagedVaultBaseUrl] ?? _managedVaultDefaultBaseUrl).trim();
         if (baseUrl.isEmpty) return null;
-        final canonicalVersion = all[_kManagedVaultCanonicalConfigVersion];
-        if (canonicalVersion != null &&
-            canonicalVersion != _managedVaultCanonicalConfigVersion) {
-          return null;
-        }
         return SyncConfig.managedVault(
           syncKey: syncKey,
           vaultId: remoteRoot,

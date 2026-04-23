@@ -1,13 +1,7 @@
 part of 'sync_settings_page.dart';
 
 extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
-  bool _isOperationTimeoutError(Object error) {
-    if (error is TimeoutException) return true;
-    final message = error.toString().toLowerCase();
-    return message.contains('operation timeout') ||
-        message.contains('timed out') ||
-        message.contains('timeout');
-  }
+  bool _isOperationTimeoutError(Object error) => error is TimeoutException;
 
   Widget _buildDeleteActionsRow({
     required bool canClearLocalCache,
@@ -169,6 +163,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
 
     final engine = SyncEngineScope.maybeOf(context);
     final wasRunning = engine?.isRunning ?? false;
+    var shouldRestartEngine = wasRunning;
     _setState(() => _busy = true);
     var shouldNotifyExternalChange = false;
     try {
@@ -191,6 +186,15 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         );
       }
       await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+      if (remoteClearTimedOut) {
+        await _store.writeAutoEnabled(false);
+        shouldRestartEngine = false;
+        if (mounted) {
+          _setState(() => _autoEnabled = false);
+        } else {
+          _autoEnabled = false;
+        }
+      }
       unawaited(
           BackgroundSync.refreshSchedule(backend: backend).catchError((e) {
         debugPrint(
@@ -211,7 +215,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         _showSnack(t.sync.allData.failed(error: _deleteActionErrorMessage(e)));
       }
     } finally {
-      if (wasRunning) {
+      if (shouldRestartEngine) {
         engine?.start();
       }
       if (shouldNotifyExternalChange) {

@@ -170,6 +170,22 @@ void main() {
         Uint8List.fromList(List<int>.filled(32, 2)));
   });
 
+  test('SyncConfigStore writes primary sync settings atomically', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = SyncConfigStore();
+
+    await store.writePrimarySyncSettings(
+      backendType: SyncBackendType.managedVault,
+      remoteRoot: 'uid-1',
+      autoEnabled: false,
+    );
+
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(await store.readRemoteRoot(), 'uid-1');
+    expect(await store.readAutoEnabled(), isFalse);
+  });
+
   test('SyncConfigStore migrates legacy unscoped secure storage into a scope',
       () async {
     SharedPreferences.setMockInitialValues({});

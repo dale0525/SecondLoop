@@ -634,6 +634,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeAutoEnabled(true);
     await store.writeRemoteRoot('SecondLoop');
     await store.writeWebdavBaseUrl('https://example.com/dav');
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
@@ -641,11 +642,23 @@ void main() {
     final backend = _DeleteActionsBackend(
       webdavClearRemoteRootError: TimeoutException('operation timeout'),
     );
+    final runner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
 
     await tester.pumpWidget(
       _wrap(
         backend: backend,
         store: store,
+        engine: engine,
       ),
     );
     await tester.pumpAndSettle();
@@ -659,8 +672,16 @@ void main() {
 
     expect(backend.syncWebdavClearRemoteRootCalls, 1);
     expect(backend.resetLocalDataCalls, 1);
+    expect(await store.readAutoEnabled(), isFalse);
+    expect(engine.isRunning, isFalse);
     expect(find.textContaining('Deleted local data only'), findsOneWidget);
     expect(find.textContaining('remote clear timed out'), findsOneWidget);
+
+    engine.triggerPushNow();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(runner.pushCalls, 0);
   });
 
   testWidgets(
