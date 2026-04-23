@@ -256,9 +256,12 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       }
     });
 
-    if (_usesCloudSessionModel &&
-        storedBackendType != SyncBackendType.managedVault) {
-      await _store.writeBackendType(SyncBackendType.managedVault);
+    if (_usesCloudSessionModel) {
+      final cloudUid = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
+      if (cloudUid != null && cloudUid.isNotEmpty) {
+        await _store.writeBackendType(SyncBackendType.managedVault);
+        await _store.writeRemoteRoot(cloudUid);
+      }
     }
   }
 

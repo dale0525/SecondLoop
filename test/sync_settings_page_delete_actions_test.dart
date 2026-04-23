@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/platform/app_platform_capabilities.dart';
+import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
@@ -179,14 +181,14 @@ void main() {
     final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.managedVault);
     await store.writeRemoteRoot('victim_uid');
-    await store.writeManagedVaultBaseUrl('https://cloud.example.com');
+    await store.writeManagedVaultBaseUrl('https://saved.example.com');
 
     final backend = _DeleteActionsBackend();
     await tester.pumpWidget(
       _wrap(
         backend: backend,
         store: store,
-        cloudAuthController: _FakeCloudAuthController(),
+        cloudAuthController: _FakeCloudAuthController(userId: 'victim_uid'),
       ),
     );
     await tester.pumpAndSettle();
@@ -199,10 +201,81 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.syncManagedVaultClearVaultCalls, 1);
-    expect(backend.lastManagedVaultClearVaultId, 'uid_1');
+    expect(backend.lastManagedVaultClearVaultId, 'victim_uid');
+    expect(backend.lastManagedVaultClearBaseUrl, 'https://saved.example.com');
     expect(backend.syncWebdavClearRemoteRootCalls, 0);
     expect(backend.syncLocaldirClearRemoteRootCalls, 0);
     expect(backend.resetLocalDataCalls, 1);
+  });
+
+  testWidgets(
+      'delete all data blocks managed vault clear when signed-in user mismatches saved vault',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('victim_uid');
+    await store.writeManagedVaultBaseUrl('https://saved.example.com');
+
+    final backend = _DeleteActionsBackend();
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        cloudAuthController: _FakeCloudAuthController(userId: 'other_uid'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(backend.syncManagedVaultClearVaultCalls, 0);
+    expect(backend.resetLocalDataCalls, 0);
+    expect(find.textContaining('Delete failed:'), findsOneWidget);
+  });
+
+  testWidgets(
+      'delete all data ignores unsaved managed vault endpoint override edits',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('victim_uid');
+    await store.writeManagedVaultBaseUrl('https://saved.example.com');
+
+    final backend = _DeleteActionsBackend();
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        cloudAuthController: _FakeCloudAuthController(userId: 'victim_uid'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final syncMethodTitle = find.text('Sync method').first;
+    await _ensureVisible(tester, syncMethodTitle);
+    await tester.longPress(syncMethodTitle);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Cloud server address (advanced)'),
+      'https://unsaved.example.com',
+    );
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(backend.syncManagedVaultClearVaultCalls, 1);
+    expect(backend.lastManagedVaultClearBaseUrl, 'https://saved.example.com');
   });
 
   testWidgets('delete all data stops sync engine before remote clear completes',
@@ -254,6 +327,59 @@ void main() {
 
     remoteClearCompleter.complete();
     await tester.pumpAndSettle();
+
+    engine.stop();
+  });
+
+  testWidgets('delete all data hard-stops pending pushes before remote clear',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final remoteClearCompleter = Completer<void>();
+    final backend = _DeleteActionsBackend(
+      webdavClearRemoteRootCompleter: remoteClearCompleter,
+    );
+    final runner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: const Duration(days: 1),
+    )..start();
+    engine.notifyLocalMutation();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(runner.pushCalls, 0);
+
+    remoteClearCompleter.complete();
+    await tester.pumpAndSettle();
+
+    engine.stop();
   });
 
   testWidgets(
@@ -295,6 +421,55 @@ void main() {
     expect(backend.lastWebdavClearBaseUrl, 'https://saved.example.com/dav');
     expect(backend.lastWebdavClearRemoteRoot, 'SavedRoot');
     expect(backend.resetLocalDataCalls, 1);
+  });
+
+  testWidgets('delete all data restarts sync engine after success',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend();
+    final runner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(engine.isRunning, isTrue);
+
+    engine.triggerPushNow();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(runner.pushCalls, 1);
+
+    engine.stop();
   });
 
   testWidgets('delete all data restarts sync engine after remote clear failure',
@@ -382,6 +557,32 @@ void main() {
     expect(find.textContaining('Deleted local data only'), findsOneWidget);
     expect(find.textContaining('remote clear timed out'), findsOneWidget);
   });
+
+  testWidgets(
+      'cloud session model persists canonical managed vault config on load',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: _DeleteActionsBackend(),
+        store: store,
+        cloudAuthController: _FakeCloudAuthController(),
+        capabilities: AppPlatformCapabilities.webCloud(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final configured = await store.loadConfiguredSync();
+    expect(configured, isNotNull);
+    expect(configured!.backendType, SyncBackendType.managedVault);
+    expect(configured.remoteRoot, 'uid_1');
+    expect(configured.baseUrl, 'https://vault.default.example');
+  });
 }
 
 Widget _wrap({
@@ -389,20 +590,24 @@ Widget _wrap({
   required SyncConfigStore store,
   SyncEngine? engine,
   CloudAuthController? cloudAuthController,
+  AppPlatformCapabilities? capabilities,
 }) {
   return wrapWithI18n(
     MaterialApp(
-      home: AppBackendScope(
-        backend: backend,
-        child: CloudAuthScope(
-          controller: cloudAuthController ?? _FakeCloudAuthController(),
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: SyncEngineScope(
-              engine: engine,
-              child: Scaffold(
-                body: SyncSettingsPage(configStore: store),
+      home: AppPlatformCapabilityScope(
+        capabilities: capabilities ?? AppPlatformCapabilities.native(),
+        child: AppBackendScope(
+          backend: backend,
+          child: CloudAuthScope(
+            controller: cloudAuthController ?? _FakeCloudAuthController(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: SyncEngineScope(
+                engine: engine,
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
               ),
             ),
           ),
@@ -434,6 +639,7 @@ final class _DeleteActionsBackend extends AppBackend {
   int syncLocaldirClearRemoteRootCalls = 0;
   int syncManagedVaultClearVaultCalls = 0;
   String? lastManagedVaultClearVaultId;
+  String? lastManagedVaultClearBaseUrl;
   String? lastWebdavClearBaseUrl;
   String? lastWebdavClearRemoteRoot;
   final Object? webdavClearRemoteRootError;
@@ -734,6 +940,7 @@ final class _DeleteActionsBackend extends AppBackend {
     required String idToken,
   }) async {
     syncManagedVaultClearVaultCalls += 1;
+    lastManagedVaultClearBaseUrl = baseUrl;
     lastManagedVaultClearVaultId = vaultId;
   }
 }
@@ -760,11 +967,15 @@ final class _CountingSyncRunner implements SyncRunner {
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {
+  _FakeCloudAuthController({this.userId = 'uid_1'});
+
+  final String userId;
+
   @override
   Future<String?> getIdToken() async => 'test-id-token';
 
   @override
-  String? get uid => 'uid_1';
+  String? get uid => userId;
 
   @override
   String? get email => null;

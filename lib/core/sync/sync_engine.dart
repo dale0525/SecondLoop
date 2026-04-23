@@ -254,6 +254,12 @@ final class SyncEngine {
     _finishStop();
   }
 
+  void stopImmediately() {
+    if (!_running) return;
+    _cancelScheduledWork();
+    _finishStop();
+  }
+
   void _cancelScheduledWork() {
     _pushDebounceTimer?.cancel();
     _pushDebounceTimer = null;

@@ -111,10 +111,15 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         );
         return;
       case SyncBackendType.managedVault:
-        final remoteRoot = cloudAuthController?.uid?.trim() ??
-            (all[SyncConfigStore.kRemoteRoot] ?? '').trim();
+        final remoteRoot = (all[SyncConfigStore.kRemoteRoot] ?? '').trim();
         if (remoteRoot.isEmpty) {
           throw StateError(notConfigured);
+        }
+        final signedInUid = cloudAuthController?.uid?.trim();
+        if (signedInUid == null ||
+            signedInUid.isEmpty ||
+            signedInUid != remoteRoot) {
+          throw StateError(signInRequired);
         }
         final idToken = await readCloudAuthIdToken(
           cloudAuthController,
@@ -123,10 +128,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         if (idToken == null || idToken.trim().isEmpty) {
           throw StateError(signInRequired);
         }
-        final override = (kDebugMode && _showManagedVaultEndpointOverride)
-            ? _optionalTrimmed(_managedVaultBaseUrlController)
-            : null;
-        final baseUrl = override ?? (await _store.resolveManagedVaultBaseUrl());
+        final baseUrl = await _store.resolveManagedVaultBaseUrl();
         if (baseUrl == null || baseUrl.trim().isEmpty) {
           throw StateError(notConfigured);
         }
@@ -172,7 +174,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       final sessionKey = SessionScope.of(context).sessionKey;
       var remoteClearTimedOut = false;
 
-      engine?.stop();
+      engine?.stopImmediately();
       try {
         await _clearRemoteSyncDataForSavedConfig();
       } catch (e) {
@@ -193,6 +195,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       }));
 
       if (!mounted) return;
+      engine?.start();
       engine?.notifyExternalChange();
       _showSnack(
         remoteClearTimedOut
