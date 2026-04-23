@@ -134,10 +134,13 @@ class _TaskHubPageState extends State<TaskHubPage> {
         required aiService,
         required cacheScopeKey,
         required nowLocal,
-      }) async =>
-          aiService is BackendTaskPriorityAiService
-              ? aiService.readSharedAssessments(nowLocal: nowLocal)
-              : const <String, TaskPriorityAiCachedAssessment>{},
+      }) async {
+        final client = await _resolveSharedAssessmentsClient(cacheScopeKey);
+        if (client == null) {
+          return const <String, TaskPriorityAiCachedAssessment>{};
+        }
+        return client.read(nowLocal: nowLocal);
+      },
       writeSharedAiAssessments: ({
         required aiService,
         required cacheScopeKey,
@@ -145,12 +148,12 @@ class _TaskHubPageState extends State<TaskHubPage> {
         required activeTodoIds,
         required nowLocal,
       }) async {
-        if (aiService is BackendTaskPriorityAiService) {
-          await aiService.writeSharedAssessments(
-            entries: entries,
-            activeTodoIds: activeTodoIds,
-          );
-        }
+        final client = await _resolveSharedAssessmentsClient(cacheScopeKey);
+        if (client == null) return;
+        await client.write(
+          entries: entries,
+          activeTodoIds: activeTodoIds,
+        );
       },
       feedbackStore: _feedbackStore,
     );
@@ -276,6 +279,63 @@ class _TaskHubPageState extends State<TaskHubPage> {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<BackendTaskPriorityAiSharedAssessmentsClient?>
+      _resolveSharedAssessmentsClient(String cacheScopeKey) async {
+    final normalizedScopeKey = cacheScopeKey.trim();
+    if (normalizedScopeKey.isEmpty) return null;
+
+    final backend = AppBackendScope.maybeOf(context);
+    if (backend == null) return null;
+
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    if (subscriptionStatus != SubscriptionStatus.entitled) {
+      return null;
+    }
+
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final gatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+    final cloudUid = (cloudAuthScope?.controller.uid ?? '').trim();
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
+    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
+    if (cloudUid.isEmpty || gatewayConfig.baseUrl.trim().isEmpty) {
+      return null;
+    }
+
+    final idToken = await readCloudCapabilityIdToken(
+      cloudAuthScope?.controller,
+      mode: CloudCapabilityAuthMode.background,
+    );
+    final normalizedIdToken = (idToken ?? '').trim();
+    if (normalizedIdToken.isEmpty) {
+      return null;
+    }
+
+    final expectedScopeKey = await resolveTaskPriorityAiCacheScopeKey(
+      backend,
+      sessionKey,
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: gatewayConfig.baseUrl,
+      modelName: gatewayConfig.modelName,
+      localeTag: localeTag,
+      cloudUid: cloudUid,
+    );
+    if ((expectedScopeKey ?? '').trim() != normalizedScopeKey) {
+      return null;
+    }
+
+    return BackendTaskPriorityAiSharedAssessmentsClient(
+      backend: backend,
+      sessionKey: sessionKey,
+      gatewayBaseUrl: gatewayConfig.baseUrl,
+      idToken: normalizedIdToken,
+      modelName: gatewayConfig.modelName,
+      localeTag: localeTag,
+      cacheScopeKey: normalizedScopeKey,
+    );
   }
 
   Future<void> _refresh() async {

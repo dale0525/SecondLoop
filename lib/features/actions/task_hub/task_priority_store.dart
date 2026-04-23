@@ -313,11 +313,22 @@ class TaskPriorityStore extends ChangeNotifier {
         for (final candidate in request.candidates) candidate.todoId: candidate,
       };
       final bootstrapPersisted = canUsePersistedCache
-          ? const <String, TaskPriorityAiCachedAssessment>{}
+          ? _filterMatchingPersistedAiAssessments(
+              await _readPersistedAiAssessments(
+                cacheScopeKey: persistedCacheScopeKey,
+                nowLocal: nowLocal,
+              ),
+              candidateByTodoId: candidateByTodoId,
+              nowLocal: nowLocal,
+            )
           : await _readMatchingPersistedAiAssessments(
               candidateByTodoId: candidateByTodoId,
               nowLocal: nowLocal,
             );
+      final bootstrapHasCompleteCoverage = request.candidates.isNotEmpty &&
+          request.candidates.every(
+            (candidate) => bootstrapPersisted.containsKey(candidate.todoId),
+          );
       final publishedBootstrap = bootstrapPersisted.isNotEmpty
           ? _publishSnapshot(
               buildTaskPrioritySnapshot(
@@ -331,7 +342,11 @@ class TaskPriorityStore extends ChangeNotifier {
                 enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
                 feedbackState: feedbackState,
               ).copyWith(
-                resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
+                resolutionPhase: aiService == null
+                    ? TaskPriorityResolutionPhase.aiResolved
+                    : bootstrapHasCompleteCoverage
+                        ? TaskPriorityResolutionPhase.aiResolved
+                        : TaskPriorityResolutionPhase.awaitingAi,
                 refreshGeneration: refreshGeneration,
               ),
               nowLocal: nowLocal,
@@ -777,6 +792,26 @@ class TaskPriorityStore extends ChangeNotifier {
       }
     }
     return merged;
+  }
+
+  Map<String, TaskPriorityAiCachedAssessment>
+      _filterMatchingPersistedAiAssessments(
+    Map<String, TaskPriorityAiCachedAssessment> entries, {
+    required Map<String, TaskPriorityAiCandidate> candidateByTodoId,
+    required DateTime nowLocal,
+  }) {
+    final matched = <String, TaskPriorityAiCachedAssessment>{};
+    for (final entry in entries.entries) {
+      final candidate = candidateByTodoId[entry.key];
+      if (candidate == null) continue;
+      final requestSignature = _buildCandidateRequestSignature(
+        candidate,
+        nowLocal: nowLocal,
+      );
+      if (entry.value.requestSignature != requestSignature) continue;
+      matched[entry.key] = entry.value;
+    }
+    return matched;
   }
 
   Map<String, TaskPriorityAiCachedAssessment> _readInMemoryAiAssessments({
