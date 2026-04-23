@@ -588,6 +588,62 @@ void main() {
   });
 
   testWidgets(
+      'delete all data waits for draining push after engine entered stop-after-drain',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final runner = _BlockingPushRunner();
+    final backend = _DeleteActionsBackend();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: const Duration(days: 1),
+    )..start();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    engine.notifyLocalMutation();
+    await tester.pump();
+    engine.stop();
+    await runner.pushStarted.future;
+
+    expect(engine.isRunning, isFalse);
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete all data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await _confirmDeletionTwice(tester);
+    await tester.pump();
+
+    expect(backend.syncWebdavClearRemoteRootCalls, 0);
+    expect(backend.resetLocalDataCalls, 0);
+
+    runner.completePush();
+    await tester.pumpAndSettle();
+
+    expect(backend.syncWebdavClearRemoteRootCalls, 1);
+    expect(backend.resetLocalDataCalls, 1);
+  });
+
+  testWidgets(
       'delete all data uses saved sync config instead of unsaved form edits',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -968,6 +1024,39 @@ void main() {
     expect(configured, isNotNull);
     expect(configured!.backendType, SyncBackendType.managedVault);
     expect(configured.remoteRoot, 'uid_1');
+    expect(configured.baseUrl, 'https://vault.default.example');
+  });
+
+  testWidgets(
+      'cloud session model persists canonical managed vault config after auth controller updates',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    final cloudAuthController =
+        _MutableCloudAuthController(userId: null, idToken: null);
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: _DeleteActionsBackend(),
+        store: store,
+        cloudAuthController: cloudAuthController,
+        capabilities: AppPlatformCapabilities.webCloud(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(await store.loadConfiguredSync(), isNull);
+
+    cloudAuthController.setSession(userId: 'uid_2', idToken: 'token-2');
+    await tester.pumpAndSettle();
+
+    final configured = await store.loadConfiguredSync();
+    expect(configured, isNotNull);
+    expect(configured!.backendType, SyncBackendType.managedVault);
+    expect(configured.remoteRoot, 'uid_2');
     expect(configured.baseUrl, 'https://vault.default.example');
   });
 

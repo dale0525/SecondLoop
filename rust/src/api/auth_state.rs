@@ -40,14 +40,7 @@ SELECT
 }
 
 pub(crate) fn auth_is_initialized(app_dir: &Path) -> bool {
-    if auth::is_initialized(app_dir) {
-        return true;
-    }
-
-    match vault_has_user_data_without_auth(app_dir) {
-        Ok(has_data) => has_data,
-        Err(_) => true,
-    }
+    auth::is_initialized(app_dir)
 }
 
 pub(crate) fn validate_reset_vault_data_access(app_dir: &Path, key: &[u8; 32]) -> Result<()> {
@@ -125,12 +118,12 @@ mod tests {
     }
 
     #[test]
-    fn auth_is_initialized_returns_true_when_auth_is_missing_but_vault_has_user_data() {
+    fn auth_is_initialized_returns_false_when_auth_is_missing_but_vault_has_user_data() {
         let dir = tempfile::tempdir().expect("tempdir");
         let conn = db::open(dir.path()).expect("open db");
         let valid_key = [3u8; 32];
         db::create_conversation(&conn, &valid_key, "hello").expect("seed conversation");
 
-        assert!(auth_is_initialized(dir.path()));
+        assert!(!auth_is_initialized(dir.path()));
     }
 }

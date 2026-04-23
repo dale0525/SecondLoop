@@ -227,9 +227,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     try {
       var remoteClearTimedOut = false;
 
-      if (wasRunning) {
-        await engine!.stopImmediatelyAndWait();
-      }
+      await engine?.stopImmediatelyAndWait();
       try {
         await _clearRemoteSyncDataForSavedConfig();
         remoteClearSucceeded = true;

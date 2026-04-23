@@ -463,3 +463,59 @@ final class _FakeCloudAuthController implements CloudAuthController {
   @override
   Future<void> signOut() async {}
 }
+
+final class _MutableCloudAuthController extends ChangeNotifier
+    implements ObservableCloudAuthController {
+  _MutableCloudAuthController({
+    required String? userId,
+    required String? idToken,
+  })  : _userId = userId,
+        _idToken = idToken;
+
+  String? _userId;
+  String? _idToken;
+
+  void setSession({
+    required String? userId,
+    required String? idToken,
+  }) {
+    _userId = userId;
+    _idToken = idToken;
+    notifyListeners();
+  }
+
+  @override
+  String? get uid => _userId;
+
+  @override
+  String? get email => _userId == null ? null : 'user@example.com';
+
+  @override
+  bool? get emailVerified => _userId == null ? null : true;
+
+  @override
+  Future<String?> getIdToken() async => _idToken;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {
+    setSession(userId: null, idToken: null);
+  }
+}

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_access.dart';
+import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/sync/cloud_sync_switch_prefs.dart';
@@ -114,6 +115,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   SyncConfigStore? _fallbackStore;
   late SyncConfigStore _store;
   bool _storeLoaded = false;
+  CloudAuthController? _cloudAuthController;
+  Listenable? _cloudAuthListenable;
+  String? _lastObservedCloudUid;
 
   SyncBackendType _backendType = SyncBackendType.webdav;
   bool _autoEnabled = true;
@@ -149,20 +153,47 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     return _fallbackStore ??= SyncConfigStore();
   }
 
+  bool _bindCloudAuthController(CloudAuthController? controller) {
+    if (identical(_cloudAuthController, controller)) {
+      return false;
+    }
+
+    _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
+    _cloudAuthController = controller;
+    final listenable =
+        controller is Listenable ? controller as Listenable : null;
+    _cloudAuthListenable = listenable;
+    _lastObservedCloudUid = controller?.uid?.trim();
+    listenable?.addListener(_onCloudAuthChanged);
+    return true;
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final resolvedStore = _resolveSyncConfigStore(context);
-    if (_storeLoaded && identical(_store, resolvedStore)) {
+    final storeChanged = !_storeLoaded || !identical(_store, resolvedStore);
+    if (storeChanged) {
+      _store = resolvedStore;
+      _storeLoaded = true;
+    }
+
+    final cloudAuthChanged = _bindCloudAuthController(
+      CloudAuthScope.maybeOf(context)?.controller,
+    );
+
+    if (storeChanged) {
+      unawaited(_load());
       return;
     }
-    _store = resolvedStore;
-    _storeLoaded = true;
-    unawaited(_load());
+    if (cloudAuthChanged) {
+      unawaited(_persistCloudSessionManagedVaultConfig());
+    }
   }
 
   @override
   void dispose() {
+    _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
     _baseUrlController.dispose();
     _managedVaultBaseUrlController.dispose();
     _usernameController.dispose();
@@ -171,6 +202,39 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     _remoteRootController.dispose();
     _syncPassphraseController.dispose();
     super.dispose();
+  }
+
+  void _onCloudAuthChanged() {
+    final nextUid = _cloudAuthController?.uid?.trim();
+    if (nextUid == _lastObservedCloudUid) {
+      return;
+    }
+    _lastObservedCloudUid = nextUid;
+    if (nextUid != null &&
+        nextUid.isNotEmpty &&
+        _remoteRootController.text != nextUid) {
+      _remoteRootController.text = nextUid;
+    }
+    unawaited(_persistCloudSessionManagedVaultConfig(uidOverride: nextUid));
+  }
+
+  Future<void> _persistCloudSessionManagedVaultConfig({
+    String? uidOverride,
+  }) async {
+    if (!_storeLoaded || !_usesCloudSessionModel) {
+      return;
+    }
+    final cloudUid = (uidOverride ?? _cloudAuthController?.uid)?.trim();
+    if (cloudUid == null || cloudUid.isEmpty) {
+      return;
+    }
+    if (_remoteRootController.text != cloudUid) {
+      _remoteRootController.text = cloudUid;
+    }
+    await _store.writePrimarySyncSettings(
+      backendType: SyncBackendType.managedVault,
+      remoteRoot: cloudUid,
+    );
   }
 
   Future<CloudMediaBackupSummary>? _maybeLoadCloudMediaBackupSummary({
@@ -259,15 +323,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
       }
     });
 
-    if (_usesCloudSessionModel) {
-      final cloudUid = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
-      if (cloudUid != null && cloudUid.isNotEmpty) {
-        await _store.writePrimarySyncSettings(
-          backendType: SyncBackendType.managedVault,
-          remoteRoot: cloudUid,
-        );
-      }
-    }
+    await _persistCloudSessionManagedVaultConfig();
   }
 
   void _handleRecoveryHintAction() {
