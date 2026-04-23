@@ -154,6 +154,9 @@ pub(super) fn managed_remote_metadata_matches_local_snapshot(
         ));
     }
     let parsed: ProbeSyncV2PullResponse = resp.json()?;
+    // The v2 global log currently allocates contiguous 1-based global_seq values, so the
+    // latest observed sequence also equals the total remote op count for this snapshot.
+    // If the protocol ever allows gaps, this conservative shortcut should be revisited.
     if parsed.remote_latest_global_seq != expected_total as i64 {
         return Ok(false);
     }

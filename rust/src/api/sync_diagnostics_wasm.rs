@@ -17,7 +17,8 @@ pub fn sync_managed_vault_cursor_diagnostics(
         "local_pending_apply_op_ids": [],
         "remote_device_seq_map": null,
         "remote_device_seq_map_source": null,
-        "remote_probe_error": "managed_vault_cursor_diagnostics_unsupported_on_wasm"
+        "remote_probe_status": "managed_vault_cursor_diagnostics_unsupported_on_wasm",
+        "remote_probe_error": null
     })
     .to_string())
 }
