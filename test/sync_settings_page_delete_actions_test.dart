@@ -177,7 +177,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
     await store.writeBackendType(SyncBackendType.managedVault);
-    await store.writeRemoteRoot('uid_1');
+    await store.writeRemoteRoot('victim_uid');
     await store.writeManagedVaultBaseUrl('https://cloud.example.com');
 
     final backend = _DeleteActionsBackend();
@@ -198,6 +198,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.syncManagedVaultClearVaultCalls, 1);
+    expect(backend.lastManagedVaultClearVaultId, 'uid_1');
     expect(backend.syncWebdavClearRemoteRootCalls, 0);
     expect(backend.syncLocaldirClearRemoteRootCalls, 0);
     expect(backend.resetLocalDataCalls, 1);
@@ -248,6 +249,7 @@ final class _DeleteActionsBackend extends AppBackend {
   int syncWebdavClearRemoteRootCalls = 0;
   int syncLocaldirClearRemoteRootCalls = 0;
   int syncManagedVaultClearVaultCalls = 0;
+  String? lastManagedVaultClearVaultId;
 
   @override
   Future<void> init() async {}
@@ -534,6 +536,7 @@ final class _DeleteActionsBackend extends AppBackend {
     required String idToken,
   }) async {
     syncManagedVaultClearVaultCalls += 1;
+    lastManagedVaultClearVaultId = vaultId;
   }
 }
 
