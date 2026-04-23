@@ -222,7 +222,7 @@ fn build_managed_vault_cursor_remote_diagnostics(
 
     let remote_device_seq_map: Option<RemoteDeviceSeqMap> = None;
     let remote_device_seq_map_source: Option<String> = None;
-    let mut remote_probe_error: Option<String> = None;
+    let remote_probe_error: Option<String> = Some("legacy_remote_probe_removed".to_string());
     let mut managed_vault_v2_remote_generation_id: Option<String> = None;
     let mut managed_vault_v2_remote_latest_global_seq: Option<i64> = None;
     let mut managed_vault_v2_remote_head_error: Option<String> = None;
@@ -243,7 +243,6 @@ fn build_managed_vault_cursor_remote_diagnostics(
         }
     } else {
         managed_vault_v2_remote_head_error = Some("missing_id_token".to_string());
-        remote_probe_error = Some("missing_id_token".to_string());
     }
 
     Ok(ManagedVaultCursorRemoteDiagnostics {
@@ -441,6 +440,10 @@ mod tests {
         assert_eq!(diagnostics.managed_vault_v2_remote_head_error, None);
         assert_eq!(diagnostics.remote_device_seq_map, None);
         assert_eq!(diagnostics.remote_device_seq_map_source, None);
+        assert_eq!(
+            diagnostics.remote_probe_error.as_deref(),
+            Some("legacy_remote_probe_removed")
+        );
     }
 
     #[test]
