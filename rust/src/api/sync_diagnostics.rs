@@ -45,6 +45,7 @@ struct ManagedVaultCursorRemoteDiagnostics {
     managed_vault_v2_remote_head_error: Option<String>,
     remote_device_seq_map: Option<RemoteDeviceSeqMap>,
     remote_device_seq_map_source: Option<String>,
+    remote_probe_status: Option<String>,
     remote_probe_error: Option<String>,
 }
 
@@ -222,7 +223,8 @@ fn build_managed_vault_cursor_remote_diagnostics(
 
     let remote_device_seq_map: Option<RemoteDeviceSeqMap> = None;
     let remote_device_seq_map_source: Option<String> = None;
-    let remote_probe_error: Option<String> = Some("legacy_remote_probe_removed".to_string());
+    let remote_probe_status: Option<String> = Some("legacy_remote_probe_removed".to_string());
+    let remote_probe_error: Option<String> = None;
     let mut managed_vault_v2_remote_generation_id: Option<String> = None;
     let mut managed_vault_v2_remote_latest_global_seq: Option<i64> = None;
     let mut managed_vault_v2_remote_head_error: Option<String> = None;
@@ -268,6 +270,7 @@ fn build_managed_vault_cursor_remote_diagnostics(
         managed_vault_v2_remote_head_error,
         remote_device_seq_map,
         remote_device_seq_map_source,
+        remote_probe_status,
         remote_probe_error,
     })
 }
@@ -373,6 +376,7 @@ mod tests {
         let diagnostics =
             build_managed_vault_cursor_remote_diagnostics(&conn, base_url, vault_id, None)
                 .expect("build diagnostics");
+        let diagnostics_json = serde_json::to_value(&diagnostics).expect("serialize");
 
         assert_eq!(diagnostics.local_device_id, "device-local");
         assert_eq!(
@@ -387,6 +391,14 @@ mod tests {
         assert_eq!(
             diagnostics.managed_vault_v2_remote_head_error.as_deref(),
             Some("missing_id_token")
+        );
+        assert_eq!(
+            diagnostics_json["remote_probe_error"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            diagnostics_json["remote_probe_status"],
+            serde_json::Value::from("legacy_remote_probe_removed")
         );
     }
 
@@ -426,6 +438,7 @@ mod tests {
             Some("token"),
         )
         .expect("build diagnostics");
+        let diagnostics_json = serde_json::to_value(&diagnostics).expect("serialize");
 
         server.join().expect("join");
 
@@ -441,8 +454,12 @@ mod tests {
         assert_eq!(diagnostics.remote_device_seq_map, None);
         assert_eq!(diagnostics.remote_device_seq_map_source, None);
         assert_eq!(
-            diagnostics.remote_probe_error.as_deref(),
-            Some("legacy_remote_probe_removed")
+            diagnostics_json["remote_probe_error"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            diagnostics_json["remote_probe_status"],
+            serde_json::Value::from("legacy_remote_probe_removed")
         );
     }
 
