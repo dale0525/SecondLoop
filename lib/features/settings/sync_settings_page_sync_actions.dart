@@ -643,7 +643,11 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         if (!mounted) return;
         if (backendType == SyncBackendType.managedVault) {
           final details = inspectManagedVaultPushFailure(e);
-          if (details.writeGateState != null) {
+          final recoveryBlockedReason =
+              extractManagedVaultRecoveryBlockedReason(e);
+          if (details.writeGateState != null &&
+              recoveryBlockedReason == null &&
+              SyncEngineScope.maybeOf(context) != null) {
             return;
           }
           _showSnack(
