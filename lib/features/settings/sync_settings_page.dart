@@ -21,6 +21,8 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/sync_http_error.dart';
 import '../../core/sync/sync_key_manager.dart';
+import '../../core/sync/sync_switch_direction.dart';
+import '../../core/sync/sync_switch_direction_dialog.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -32,6 +34,8 @@ part 'sync_settings_page_managed_vault_save.dart';
 part 'sync_settings_page_managed_vault_sync.dart';
 part 'sync_settings_page_delete_actions.dart';
 part 'sync_settings_page_delete_progress.dart';
+part 'sync_settings_page_switch_direction.dart';
+part 'sync_settings_page_cloud_session.dart';
 part 'sync_settings_page_sync_actions.dart';
 
 int _coerceTimestampMs(Object value) {
@@ -153,21 +157,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     return _fallbackStore ??= SyncConfigStore();
   }
 
-  bool _bindCloudAuthController(CloudAuthController? controller) {
-    if (identical(_cloudAuthController, controller)) {
-      return false;
-    }
-
-    _cloudAuthListenable?.removeListener(_onCloudAuthChanged);
-    _cloudAuthController = controller;
-    final listenable =
-        controller is Listenable ? controller as Listenable : null;
-    _cloudAuthListenable = listenable;
-    _lastObservedCloudUid = controller?.uid?.trim();
-    listenable?.addListener(_onCloudAuthChanged);
-    return true;
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -202,39 +191,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     _remoteRootController.dispose();
     _syncPassphraseController.dispose();
     super.dispose();
-  }
-
-  void _onCloudAuthChanged() {
-    final nextUid = _cloudAuthController?.uid?.trim();
-    if (nextUid == _lastObservedCloudUid) {
-      return;
-    }
-    _lastObservedCloudUid = nextUid;
-    if (nextUid != null &&
-        nextUid.isNotEmpty &&
-        _remoteRootController.text != nextUid) {
-      _remoteRootController.text = nextUid;
-    }
-    unawaited(_persistCloudSessionManagedVaultConfig(uidOverride: nextUid));
-  }
-
-  Future<void> _persistCloudSessionManagedVaultConfig({
-    String? uidOverride,
-  }) async {
-    if (!_storeLoaded || !_usesCloudSessionModel) {
-      return;
-    }
-    final cloudUid = (uidOverride ?? _cloudAuthController?.uid)?.trim();
-    if (cloudUid == null || cloudUid.isEmpty) {
-      return;
-    }
-    if (_remoteRootController.text != cloudUid) {
-      _remoteRootController.text = cloudUid;
-    }
-    await _store.writePrimarySyncSettings(
-      backendType: SyncBackendType.managedVault,
-      remoteRoot: cloudUid,
-    );
   }
 
   Future<CloudMediaBackupSummary>? _maybeLoadCloudMediaBackupSummary({

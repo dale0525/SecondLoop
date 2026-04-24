@@ -171,7 +171,7 @@ void main() {
     subscription.setStatus(SubscriptionStatus.entitled);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(await store.readBackendType(), SyncBackendType.managedVault);
@@ -222,7 +222,7 @@ void main() {
     subscription.setStatus(SubscriptionStatus.entitled);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(await store.readBackendType(), SyncBackendType.webdav);
@@ -341,7 +341,7 @@ void main() {
 
     // Switch prompt shows first.
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
 
     // Sync progress dialog appears before the AI guide prompt.
     await tester.pump(const Duration(milliseconds: 100));
@@ -430,7 +430,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(backend.calls, contains('syncManagedVaultPull'));
@@ -485,7 +485,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(backend.calls, <String>['syncManagedVaultPush']);
@@ -572,7 +572,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(
@@ -653,7 +653,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(
@@ -721,7 +721,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(backend.calls, <String>['syncManagedVaultPush']);
@@ -775,7 +775,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(backend.calls, <String>['syncManagedVaultPush']);
@@ -847,7 +847,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(backend.calls, <String>['syncManagedVaultPush']);
@@ -931,7 +931,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(backend.calls, <String>['syncManagedVaultPush']);
@@ -1006,7 +1006,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(
@@ -1083,7 +1083,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(
@@ -1160,13 +1160,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch'), findsOneWidget);
-    await tester.tap(find.text('Switch'));
+    await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
     expect(backend.calls, contains('syncManagedVaultPush'));
     expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
     engine.stop();
   });
+}
+
+Future<void> _tapSwitchAndChooseMerge(WidgetTester tester) async {
+  await tester.tap(find.text('Switch'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Merge local and remote'));
 }
 
 final class _FakeSubscriptionController extends ChangeNotifier

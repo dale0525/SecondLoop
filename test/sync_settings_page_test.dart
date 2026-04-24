@@ -192,6 +192,8 @@ void main() {
     await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merge local and remote'));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('sync_save_progress')), findsOneWidget);
@@ -204,6 +206,84 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
+  });
+
+  testWidgets('Save after changing WebDAV folder asks how to reconcile data',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _SyncSettingsBackend();
+    await tester.pumpWidget(_wrap(
+      backend: backend,
+      store: store,
+      engine: null,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Folder name',
+      ),
+      'SecondLoop2',
+    );
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose sync direction'), findsOneWidget);
+    expect(find.text('Replace remote with this device'), findsOneWidget);
+    expect(find.text('Replace this device with remote'), findsOneWidget);
+    expect(find.text('Merge local and remote'), findsOneWidget);
+  });
+
+  testWidgets('Save can replace local data from new WebDAV folder',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _TrackingSyncSettingsBackend();
+    await tester.pumpWidget(_wrap(
+      backend: backend,
+      store: store,
+      engine: null,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Folder name',
+      ),
+      'SecondLoop2',
+    );
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Replace this device with remote'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>[
+      'webdavTest',
+      'resetLocal',
+      'webdavPull:SecondLoop2',
+    ]);
   });
 
   testWidgets('Save after changing local folder shows sync progress dialog',
@@ -255,6 +335,8 @@ void main() {
     await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merge local and remote'));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('sync_save_progress')), findsOneWidget);
@@ -321,6 +403,8 @@ void main() {
     await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merge local and remote'));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('sync_save_progress')), findsOneWidget);
@@ -1515,7 +1599,14 @@ void main() {
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Delete local data again?'), findsOneWidget);
+    expect(backend.resetCalls, 0);
+
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
     expect(find.text('Delete local data?'), findsNothing);
+    expect(find.text('Delete local data again?'), findsNothing);
     expect(backend.resetCalls, 1);
     expect(notifications, 1);
     expect(find.text('Local synced data deleted'), findsOneWidget);
@@ -1553,9 +1644,13 @@ Widget _wrap({
         backend: backend,
         child: SyncEngineScope(
           engine: engine,
-          child: Scaffold(
-            body: SyncSettingsPage(
-              configStore: store,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: Scaffold(
+              body: SyncSettingsPage(
+                configStore: store,
+              ),
             ),
           ),
         ),
@@ -1879,6 +1974,53 @@ final class _ResetLocalDataSyncSettingsBackend extends _SyncSettingsBackend {
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
     resetCalls += 1;
+  }
+}
+
+final class _TrackingSyncSettingsBackend extends _SyncSettingsBackend {
+  _TrackingSyncSettingsBackend() : super(webdavPullResult: 0);
+
+  final List<String> calls = <String>[];
+
+  @override
+  Future<void> syncWebdavTestConnection({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavTest');
+  }
+
+  @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
+    calls.add('resetLocal');
+  }
+
+  @override
+  Future<int> syncWebdavPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavPull:$remoteRoot');
+    return 0;
+  }
+
+  @override
+  Future<int> syncWebdavPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavPush:$remoteRoot');
+    return 0;
   }
 }
 

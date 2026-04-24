@@ -299,34 +299,6 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     }
   }
 
-  bool _shouldRunSaveSyncForConfigChange({
-    required SyncBackendType oldBackendType,
-    required String oldWebdavBaseUrl,
-    required String oldRemoteRoot,
-    required String oldLocalDir,
-    required SyncBackendType newBackendType,
-    required String newWebdavBaseUrl,
-    required String newRemoteRoot,
-    required String newLocalDir,
-  }) {
-    if (newBackendType == SyncBackendType.webdav) {
-      return oldBackendType != newBackendType ||
-          oldWebdavBaseUrl != newWebdavBaseUrl ||
-          oldRemoteRoot != newRemoteRoot;
-    }
-    if (newBackendType == SyncBackendType.localDir) {
-      return oldBackendType != newBackendType ||
-          oldLocalDir != newLocalDir ||
-          oldRemoteRoot != newRemoteRoot;
-    }
-    if (newBackendType == SyncBackendType.managedVault) {
-      // Specifically requested: switching from WebDAV/local-dir to Cloud should
-      // trigger an immediate sync.
-      return oldBackendType != SyncBackendType.managedVault;
-    }
-    return false;
-  }
-
   Future<Uint8List> _deriveManagedVaultSyncKey(AppBackend backend) async {
     final vaultId = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
     if (vaultId == null || vaultId.isEmpty) {
@@ -382,8 +354,42 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           passphrase != null &&
           !_passphraseIsPlaceholder;
 
-      final persisted = await _persistBackendConfig();
-      if (!persisted) return;
+      final newBackendType = backendType;
+      final newWebdavBaseUrl = _requiredTrimmed(_baseUrlController).trim();
+      final newRemoteRoot = switch (backendType) {
+        SyncBackendType.managedVault =>
+          CloudAuthScope.maybeOf(context)?.controller.uid?.trim() ?? '',
+        _ => _requiredTrimmed(_remoteRootController).trim(),
+      };
+      final newLocalDir = _requiredTrimmed(_localDirController).trim();
+      final shouldSync = !_usesCloudSessionModel &&
+          _shouldRunSaveSyncForConfigChange(
+            oldBackendType: oldBackendType,
+            oldWebdavBaseUrl: oldWebdavBaseUrl,
+            oldRemoteRoot: oldRemoteRoot,
+            oldLocalDir: oldLocalDir,
+            newBackendType: newBackendType,
+            newWebdavBaseUrl: newWebdavBaseUrl,
+            newRemoteRoot: newRemoteRoot,
+            newLocalDir: newLocalDir,
+          );
+      SyncSwitchDirection? switchDirection;
+      if (!_usesCloudSessionModel &&
+          _shouldPromptSyncDirectionForConfigChange(
+            oldBackendType: oldBackendType,
+            oldWebdavBaseUrl: oldWebdavBaseUrl,
+            oldRemoteRoot: oldRemoteRoot,
+            oldLocalDir: oldLocalDir,
+            newBackendType: newBackendType,
+            newWebdavBaseUrl: newWebdavBaseUrl,
+            newRemoteRoot: newRemoteRoot,
+            newLocalDir: newLocalDir,
+          )) {
+        _setState(() => _busy = false);
+        switchDirection = await showSyncSwitchDirectionDialog(context);
+        if (!mounted || switchDirection == null) return;
+        _setState(() => _busy = true);
+      }
 
       Uint8List? syncKey;
       if (backendType == SyncBackendType.managedVault) {
@@ -462,6 +468,9 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         _passphraseIsPlaceholder = true;
       }
 
+      final persisted = await _persistBackendConfig();
+      if (!persisted) return;
+
       unawaited(BackgroundSync.refreshSchedule(
           backend: backend, configStore: _store));
 
@@ -469,23 +478,6 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         await _runConnectionTest();
         if (!mounted) return;
         _showSnack(t.sync.connectionOk);
-
-        final newBackendType = backendType;
-        final newWebdavBaseUrl = _requiredTrimmed(_baseUrlController).trim();
-        final newRemoteRoot = _requiredTrimmed(_remoteRootController).trim();
-        final newLocalDir = _requiredTrimmed(_localDirController).trim();
-
-        final shouldSync = !_usesCloudSessionModel &&
-            _shouldRunSaveSyncForConfigChange(
-              oldBackendType: oldBackendType,
-              oldWebdavBaseUrl: oldWebdavBaseUrl,
-              oldRemoteRoot: oldRemoteRoot,
-              oldLocalDir: oldLocalDir,
-              newBackendType: newBackendType,
-              newWebdavBaseUrl: newWebdavBaseUrl,
-              newRemoteRoot: newRemoteRoot,
-              newLocalDir: newLocalDir,
-            );
 
         var didSync = false;
         final engine = SyncEngineScope.maybeOf(context);
@@ -500,123 +492,26 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             final activeSyncKey = syncKey;
             switch (newBackendType) {
               case SyncBackendType.webdav:
-                await _runSaveSyncWithProgress(
-                  run: (stage, progress) async {
-                    var stageProgress =
-                        _makeSmoothStageProgressReporter(progress);
-                    stage.value = t.sync.progressDialog.pulling;
-                    progress.value = 0.0;
-                    await _consumeRustProgressStream(
-                      backend.syncWebdavPullProgress(
-                        sessionKey,
-                        activeSyncKey,
-                        baseUrl: newWebdavBaseUrl,
-                        username: _optionalTrimmed(_usernameController),
-                        password: _optionalTrimmed(_passwordController),
-                        remoteRoot: newRemoteRoot,
-                      ),
-                      onProgress: stageProgress.onProgress,
-                    );
-
-                    stageProgress = _makeSmoothStageProgressReporter(progress);
-                    stage.value = t.sync.progressDialog.pushing;
-                    progress.value = 0.0;
-                    await _consumeRustProgressStream(
-                      backend.syncWebdavPushOpsOnlyProgress(
-                        sessionKey,
-                        activeSyncKey,
-                        baseUrl: newWebdavBaseUrl,
-                        username: _optionalTrimmed(_usernameController),
-                        password: _optionalTrimmed(_passwordController),
-                        remoteRoot: newRemoteRoot,
-                      ),
-                      onProgress: stageProgress.onProgress,
-                    );
-
-                    if (_cloudMediaBackupEnabled) {
-                      stage.value = t.sync.progressDialog.uploadingMedia;
-                      progress.value = null;
-
-                      final runner = CloudMediaBackupRunner(
-                        store: BackendCloudMediaBackupStore(
-                          backend: backend,
-                          sessionKey: sessionKey,
-                          scopeId: _store.syncStateScopeIdForFields(
-                            backendType: SyncBackendType.webdav,
-                            baseUrl: newWebdavBaseUrl,
-                            username: _optionalTrimmed(_usernameController),
-                            remoteRoot: newRemoteRoot,
-                            syncKey: activeSyncKey,
-                          ),
-                        ),
-                        client: WebDavCloudMediaBackupClient(
-                          backend: backend,
-                          sessionKey: sessionKey,
-                          syncKey: activeSyncKey,
-                          baseUrl: newWebdavBaseUrl,
-                          username: _optionalTrimmed(_usernameController),
-                          password: _optionalTrimmed(_passwordController),
-                          remoteRoot: newRemoteRoot,
-                        ),
-                        settings: CloudMediaBackupRunnerSettings(
-                          enabled: true,
-                          wifiOnly: _cloudMediaBackupWifiOnly,
-                        ),
-                        getNetwork:
-                            ConnectivityCloudMediaBackupNetworkProvider().call,
-                      );
-                      final result = await runner.runOnce(
-                        allowCellular: false,
-                        onBytesProgress: (doneBytes, totalBytes) {
-                          progress.value = totalBytes <= 0
-                              ? 1.0
-                              : (doneBytes / totalBytes).clamp(0.0, 1.0);
-                        },
-                      );
-                      if (result.needsCellularConfirmation) {
-                        progress.value = 1.0;
-                      }
-                    }
-
-                    stage.value = t.sync.progressDialog.finalizing;
-                    stageProgress.complete();
-                  },
+                await _runWebdavSwitchSyncWithProgress(
+                  direction: switchDirection ?? SyncSwitchDirection.merge,
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: activeSyncKey,
+                  baseUrl: newWebdavBaseUrl,
+                  username: _optionalTrimmed(_usernameController),
+                  password: _optionalTrimmed(_passwordController),
+                  remoteRoot: newRemoteRoot,
                 );
                 didSync = true;
                 break;
               case SyncBackendType.localDir:
-                await _runSaveSyncWithProgress(
-                  run: (stage, progress) async {
-                    var stageProgress =
-                        _makeSmoothStageProgressReporter(progress);
-                    stage.value = t.sync.progressDialog.pulling;
-                    progress.value = 0.0;
-                    await _consumeRustProgressStream(
-                      backend.syncLocaldirPullProgress(
-                        sessionKey,
-                        activeSyncKey,
-                        localDir: newLocalDir,
-                        remoteRoot: newRemoteRoot,
-                      ),
-                      onProgress: stageProgress.onProgress,
-                    );
-
-                    stageProgress = _makeSmoothStageProgressReporter(progress);
-                    stage.value = t.sync.progressDialog.pushing;
-                    progress.value = 0.0;
-                    await _consumeRustProgressStream(
-                      backend.syncLocaldirPushProgress(
-                        sessionKey,
-                        activeSyncKey,
-                        localDir: newLocalDir,
-                        remoteRoot: newRemoteRoot,
-                      ),
-                      onProgress: stageProgress.onProgress,
-                    );
-
-                    stage.value = t.sync.progressDialog.finalizing;
-                    stageProgress.complete();
-                  },
+                await _runLocalDirSwitchSyncWithProgress(
+                  direction: switchDirection ?? SyncSwitchDirection.merge,
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: activeSyncKey,
+                  localDir: newLocalDir,
+                  remoteRoot: newRemoteRoot,
                 );
                 didSync = true;
                 break;

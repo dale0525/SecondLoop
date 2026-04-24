@@ -5,8 +5,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     if (error is TimeoutException) return true;
     final message = error.toString().toLowerCase();
     return message.contains('operation timeout') ||
-        message.contains('timed out') ||
-        message.contains('timeout');
+        message.contains('timed out');
   }
 
   Future<void> _disableAutoSyncAndRefreshSchedule(AppBackend backend) async {

@@ -27,8 +27,6 @@ SELECT
   EXISTS(SELECT 1 FROM messages LIMIT 1) OR
   EXISTS(SELECT 1 FROM attachments LIMIT 1) OR
   EXISTS(SELECT 1 FROM todos LIMIT 1) OR
-  EXISTS(SELECT 1 FROM llm_profiles LIMIT 1) OR
-  EXISTS(SELECT 1 FROM embedding_profiles LIMIT 1) OR
   EXISTS(SELECT 1 FROM tags LIMIT 1) OR
   EXISTS(SELECT 1 FROM events LIMIT 1) OR
   EXISTS(SELECT 1 FROM knowledge_documents LIMIT 1)
@@ -125,5 +123,28 @@ mod tests {
         db::create_conversation(&conn, &valid_key, "hello").expect("seed conversation");
 
         assert!(!auth_is_initialized(dir.path()));
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_allows_preserved_profiles_without_auth() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        conn.execute(
+            r#"INSERT INTO llm_profiles(
+              id, name, provider_type, base_url, api_key, model_name, is_active, created_at, updated_at
+            ) VALUES ('p1', 'Profile', 'openai', NULL, NULL, 'gpt-test', 1, 1, 1)"#,
+            [],
+        )
+        .expect("insert profile");
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![7u8; 32],
+        );
+
+        assert!(
+            result.is_ok(),
+            "preserved profile-only vault should reset without auth: {result:?}"
+        );
     }
 }

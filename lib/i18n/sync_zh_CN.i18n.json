@@ -101,6 +101,13 @@
       "confirm": "删除"
     }
   },
+  "switchDirection": {
+    "title": "选择同步方向",
+    "message": "你正在切换到另一个同步位置。请选择 SecondLoop 如何处理本设备和远端副本。",
+    "localReplacesRemote": "用本设备替换远端",
+    "remoteReplacesLocal": "用远端替换本设备",
+    "merge": "合并本地和远端"
+  },
   "backendLabel": "同步方式",
   "backendWebdav": "WebDAV（你自己的服务器）",
   "backendLocalDir": "本机文件夹（桌面端）",

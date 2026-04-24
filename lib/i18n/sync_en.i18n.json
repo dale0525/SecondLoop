@@ -101,6 +101,13 @@
       "confirm": "Delete"
     }
   },
+  "switchDirection": {
+    "title": "Choose sync direction",
+    "message": "You are switching to a different sync location. Choose how SecondLoop should reconcile this device and the remote copy.",
+    "localReplacesRemote": "Replace remote with this device",
+    "remoteReplacesLocal": "Replace this device with remote",
+    "merge": "Merge local and remote"
+  },
   "backendLabel": "Sync method",
   "backendWebdav": "WebDAV (your server)",
   "backendLocalDir": "Folder on this computer (desktop)",
