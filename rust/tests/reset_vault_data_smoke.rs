@@ -74,6 +74,69 @@ fn reset_vault_data_preserves_llm_profiles_and_embedding_model() {
 }
 
 #[test]
+fn reset_vault_data_deletes_external_readonly_import_data() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let _key = auth::init_master_password(Path::new(&app_dir), "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+    let external_conn = db::open_external_readonly_db(&app_dir).expect("open external db");
+
+    external_conn
+        .execute(
+            r#"INSERT INTO external_import_batches(
+              batch_id, source_kind, source_label, status,
+              created_at_ms, updated_at_ms, stats_json
+            ) VALUES ('batch-1', 'obsidian', 'External', 'completed', 1, 1, '{}')"#,
+            [],
+        )
+        .expect("insert external batch");
+    external_conn
+        .execute(
+            r#"INSERT INTO external_documents(
+              doc_id, batch_id, title, body_markdown, tags_json,
+              created_at_ms, updated_at_ms, checksum_sha256
+            ) VALUES ('doc-1', 'batch-1', x'01', x'02', x'03', 1, 1, 'checksum')"#,
+            [],
+        )
+        .expect("insert external document");
+    std::fs::create_dir_all(app_dir.join("external_readonly/storage/attachments"))
+        .expect("create external attachment dir");
+    std::fs::write(
+        app_dir.join("external_readonly/storage/attachments/external.bin"),
+        b"external attachment",
+    )
+    .expect("write external attachment");
+    drop(external_conn);
+
+    assert!(
+        app_dir
+            .join("external_readonly/external_readonly.sqlite3")
+            .exists(),
+        "external readonly db should exist before reset"
+    );
+    assert_eq!(
+        db::list_llm_profiles(&conn)
+            .expect("list llm profiles before reset")
+            .len(),
+        0
+    );
+
+    db::reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault data");
+
+    assert!(
+        !app_dir.join("external_readonly").exists(),
+        "external readonly data should be deleted after reset"
+    );
+    assert_eq!(
+        db::list_llm_profiles(&conn)
+            .expect("list llm profiles after reset")
+            .len(),
+        0
+    );
+}
+
+#[test]
 fn clear_remote_root_deletes_localdir_data() {
     let remote_dir = tempfile::tempdir().expect("remote dir");
     let remote = sync::localdir::LocalDirRemoteStore::new(remote_dir.path().to_path_buf())

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::auth;
+use crate::{auth, db};
 use anyhow::{anyhow, Result};
 use rusqlite::{params, Connection, OpenFlags};
 
@@ -82,9 +82,10 @@ fn table_has_rows(conn: &Connection, table: &str) -> Result<bool> {
 
 fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
     let attachments_exist = dir_has_entries(&app_dir.join("attachments"))?;
+    let external_readonly_exists = db::external_readonly_has_user_data(app_dir)?;
     let db_path = app_dir.join("secondloop.sqlite3");
     if !db_path.exists() {
-        return Ok(attachments_exist);
+        return Ok(attachments_exist || external_readonly_exists);
     }
 
     let conn = Connection::open_with_flags(
@@ -96,7 +97,7 @@ fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
             return Ok(true);
         }
     }
-    Ok(attachments_exist)
+    Ok(attachments_exist || external_readonly_exists)
 }
 
 pub(crate) fn auth_is_initialized(app_dir: &Path) -> bool {
@@ -116,6 +117,18 @@ pub(crate) fn validate_reset_vault_data_access(app_dir: &Path, key: &[u8; 32]) -
 mod tests {
     use super::*;
     use crate::db;
+
+    fn seed_external_import_batch(app_dir: &Path) {
+        let conn = db::open_external_readonly_db(app_dir).expect("open external readonly db");
+        conn.execute(
+            r#"INSERT INTO external_import_batches(
+              batch_id, source_kind, source_label, status,
+              created_at_ms, updated_at_ms, stats_json
+            ) VALUES ('batch-1', 'obsidian', 'External', 'completed', 1, 1, '{}')"#,
+            [],
+        )
+        .expect("insert external batch");
+    }
 
     #[test]
     fn reset_vault_data_preserving_llm_profiles_allows_missing_auth_file() {
@@ -170,6 +183,25 @@ mod tests {
         );
 
         let error = result.expect_err("vault data without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_rejects_missing_auth_when_external_data_exists() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        seed_external_import_batch(dir.path());
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("external data without auth should be rejected");
         assert!(
             error
                 .to_string()

@@ -145,6 +145,7 @@ DELETE FROM kv WHERE key != 'embedding.active_model_name';
             if let Some(app_dir) = app_dir.as_ref() {
                 migration_archive_remove_rollback_snapshots_except_active(app_dir)?;
                 best_effort_remove_dir_all(&migration_archive_staging_dir(app_dir))?;
+                remove_external_readonly_data(app_dir)?;
             }
             Ok(())
         }
