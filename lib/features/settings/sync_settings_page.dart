@@ -23,6 +23,7 @@ import '../../core/sync/sync_http_error.dart';
 import '../../core/sync/sync_key_manager.dart';
 import '../../core/sync/sync_switch_direction.dart';
 import '../../core/sync/sync_switch_direction_dialog.dart';
+import '../../core/sync/vault_replace_local_guard.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';

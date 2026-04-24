@@ -53,6 +53,26 @@ Future<MigrationArchiveManifest> migrationArchiveImport(
     RustLib.instance.api.crateApiMigrationArchiveMigrationArchiveImport(
         appDir: appDir, key: key, archivePath: archivePath);
 
+Future<String?> migrationArchiveCreateRollbackSnapshot(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api
+        .crateApiMigrationArchiveMigrationArchiveCreateRollbackSnapshot(
+            appDir: appDir, key: key);
+
+Future<void> migrationArchiveRestoreRollbackSnapshot(
+        {required String appDir,
+        required List<int> key,
+        required String snapshotPath}) =>
+    RustLib.instance.api
+        .crateApiMigrationArchiveMigrationArchiveRestoreRollbackSnapshot(
+            appDir: appDir, key: key, snapshotPath: snapshotPath);
+
+Future<void> migrationArchiveRemoveRollbackSnapshot(
+        {required String snapshotPath}) =>
+    RustLib.instance.api
+        .crateApiMigrationArchiveMigrationArchiveRemoveRollbackSnapshot(
+            snapshotPath: snapshotPath);
+
 Stream<String> migrationArchiveImportProgress(
         {required String appDir,
         required List<int> key,

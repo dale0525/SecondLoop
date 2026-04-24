@@ -24,8 +24,10 @@ import 'sync_http_error.dart';
 import 'managed_vault_sync_helpers.dart';
 import 'sync_switch_direction.dart';
 import 'sync_switch_direction_dialog.dart';
+import 'vault_replace_local_guard.dart';
 
 part 'cloud_sync_switch_prompt_gate_key.dart';
+part 'cloud_sync_switch_prompt_gate_restore.dart';
 
 final class CloudSyncSwitchPromptGate extends StatefulWidget {
   const CloudSyncSwitchPromptGate({
@@ -264,34 +266,6 @@ final class _CloudSyncSwitchPromptGateState
             : _managedVaultRecoveredMessageForGate(details.writeGateState!),
       );
     }
-  }
-
-  Future<void> _restorePreviousSyncConfig({
-    required AppBackend backend,
-    required SyncBackendType previousBackendType,
-    required String? previousRemoteRoot,
-    required Uint8List? previousSyncKey,
-    required SyncEngine? engine,
-  }) async {
-    await _store.writePrimarySyncSettings(
-      backendType: previousBackendType,
-      remoteRoot: previousRemoteRoot ?? '',
-    );
-    if (previousSyncKey != null) {
-      await SyncKeyManager.save(
-        write: _store.writeSyncKey,
-        key: previousSyncKey,
-      );
-    } else {
-      await _store.clearSyncKey();
-    }
-    if (previousBackendType != SyncBackendType.managedVault) {
-      engine?.writeGate.value = const SyncWriteGateState.open();
-    }
-    unawaited(BackgroundSync.refreshSchedule(
-      backend: backend,
-      configStore: _store,
-    ));
   }
 
   @override
@@ -617,18 +591,19 @@ final class _CloudSyncSwitchPromptGateState
                   case SyncSwitchDirection.remoteReplacesLocal:
                     stage.value = t.sync.progressDialog.pulling;
                     progress.value = 0.0;
-                    await backend.resetVaultDataPreservingLlmProfiles(
-                      sessionKey,
-                    );
-                    await _runManagedVaultPullStageWithProgress(
+                    await runDestructiveReplaceLocalWithRollback<void>(
                       backend: backend,
                       sessionKey: sessionKey,
-                      syncKey: syncKey,
-                      baseUrl: baseUrl,
-                      vaultId: vaultId,
-                      idToken: idToken,
-                      stage: stage,
-                      progress: progress,
+                      run: () => _runManagedVaultPullStageWithProgress(
+                        backend: backend,
+                        sessionKey: sessionKey,
+                        syncKey: syncKey,
+                        baseUrl: baseUrl,
+                        vaultId: vaultId,
+                        idToken: idToken,
+                        stage: stage,
+                        progress: progress,
+                      ),
                     );
                     break;
                   case SyncSwitchDirection.merge:
@@ -843,7 +818,17 @@ final class _CloudSyncSwitchPromptGateState
     final backend = backendScope.backend;
 
     final previousBackendType = await _store.readBackendType();
-    final previousRemoteRoot = await _store.readRemoteRoot();
+    final previousAll = await _store.readAll();
+    final previousWebdavBaseUrl = previousAll[SyncConfigStore.kWebdavBaseUrl];
+    final previousWebdavUsername = previousAll[SyncConfigStore.kWebdavUsername];
+    final previousWebdavPassword = await _store.readWebdavPassword();
+    final previousLocalDir = previousAll[SyncConfigStore.kLocalDir];
+    final previousManagedVaultBaseUrl =
+        previousAll[SyncConfigStore.kManagedVaultBaseUrl];
+    final previousRemoteRoot = previousAll[SyncConfigStore.kRemoteRoot];
+    final previousAutoEnabled =
+        previousAll[SyncConfigStore.kAutoEnabled] == null ||
+            previousAll[SyncConfigStore.kAutoEnabled] == '1';
     final previousSyncKey = await _store.readSyncKey();
     if (!mounted) return;
 
@@ -937,10 +922,17 @@ final class _CloudSyncSwitchPromptGateState
         onSafeToRestartEngine: restartEngineBeforeDialogDismiss,
       );
       if (!result.completed && result.rollbackConfig) {
-        await _restorePreviousSyncConfig(
+        await _restoreCloudSyncPreviousSyncConfig(
+          this,
           backend: backend,
           previousBackendType: previousBackendType,
+          previousWebdavBaseUrl: previousWebdavBaseUrl,
+          previousWebdavUsername: previousWebdavUsername,
+          previousWebdavPassword: previousWebdavPassword,
+          previousLocalDir: previousLocalDir,
+          previousManagedVaultBaseUrl: previousManagedVaultBaseUrl,
           previousRemoteRoot: previousRemoteRoot,
+          previousAutoEnabled: previousAutoEnabled,
           previousSyncKey: previousSyncKey,
           engine: engine,
         );
@@ -957,10 +949,17 @@ final class _CloudSyncSwitchPromptGateState
         _showSnack(result.failureMessage!);
       }
     } catch (error) {
-      await _restorePreviousSyncConfig(
+      await _restoreCloudSyncPreviousSyncConfig(
+        this,
         backend: backend,
         previousBackendType: previousBackendType,
+        previousWebdavBaseUrl: previousWebdavBaseUrl,
+        previousWebdavUsername: previousWebdavUsername,
+        previousWebdavPassword: previousWebdavPassword,
+        previousLocalDir: previousLocalDir,
+        previousManagedVaultBaseUrl: previousManagedVaultBaseUrl,
         previousRemoteRoot: previousRemoteRoot,
+        previousAutoEnabled: previousAutoEnabled,
         previousSyncKey: previousSyncKey,
         engine: engine,
       );

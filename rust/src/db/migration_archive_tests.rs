@@ -485,6 +485,59 @@ fn migration_archive_rollback_snapshot_is_encrypted_on_disk() {
 }
 
 #[test]
+fn vault_rollback_snapshot_restores_non_migration_archive_tables_and_attachments() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [53u8; 32];
+
+    conn.execute(
+        r#"INSERT INTO knowledge_pages(
+          page_id, page_type, state, created_at_ms, updated_at_ms,
+          tags_json, primary_evidence_json, related_page_ids_json,
+          source_document_ids_json, claim_ids_json,
+          compiled_title, compiled_summary, compiled_body
+        ) VALUES (
+          'page-1', 'fact', 'active', 1, 1,
+          '[]', '[]', '[]', '[]', '[]',
+          X'7469746C65', X'73756D6D617279', X'626F6479'
+        )"#,
+        [],
+    )
+    .expect("insert knowledge page");
+    let attachments_dir = app_dir.join("attachments");
+    fs::create_dir_all(&attachments_dir).expect("create attachments dir");
+    fs::write(attachments_dir.join("orphan.bin"), b"attachment-bytes").expect("write attachment");
+
+    let snapshot_path = migration_archive_create_rollback_snapshot(&app_dir, &key)
+        .expect("create snapshot")
+        .expect("snapshot path");
+    assert!(snapshot_path.exists());
+
+    reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault");
+    let count_after_reset: i64 = conn
+        .query_row("SELECT COUNT(*) FROM knowledge_pages", [], |row| row.get(0))
+        .expect("count after reset");
+    assert_eq!(count_after_reset, 0);
+    assert!(!attachments_dir.join("orphan.bin").exists());
+    drop(conn);
+
+    migration_archive_restore_rollback_snapshot(&app_dir, &key, &snapshot_path)
+        .expect("restore snapshot");
+    assert!(!snapshot_path.exists());
+
+    let conn = open(&app_dir).expect("reopen db");
+    let count_after_restore: i64 = conn
+        .query_row("SELECT COUNT(*) FROM knowledge_pages", [], |row| row.get(0))
+        .expect("count after restore");
+    assert_eq!(count_after_restore, 1);
+    assert_eq!(
+        fs::read(attachments_dir.join("orphan.bin")).expect("read attachment"),
+        b"attachment-bytes"
+    );
+}
+
+#[test]
 fn migration_archive_restore_from_materialized_source_cleans_up_written_attachments_on_error() {
     let dir = tempfile::tempdir().expect("tempdir");
     let source_root = dir.path().join("source-root");

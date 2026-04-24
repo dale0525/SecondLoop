@@ -31,10 +31,18 @@ extension SyncConfigStoreBackendSettings on SyncConfigStore {
   }
 
   Future<void> writeWebdavBaseUrl(String baseUrl) async {
+    if (baseUrl.isEmpty) {
+      await _writeConfigUpdates({SyncConfigStore.kWebdavBaseUrl: null});
+      return;
+    }
     await _writeConfigUpdates({SyncConfigStore.kWebdavBaseUrl: baseUrl});
   }
 
-  Future<void> writeManagedVaultBaseUrl(String baseUrl) async {
+  Future<void> writeManagedVaultBaseUrl(String? baseUrl) async {
+    if (baseUrl == null || baseUrl.isEmpty) {
+      await _writeConfigUpdates({SyncConfigStore.kManagedVaultBaseUrl: null});
+      return;
+    }
     await _writeConfigUpdates({SyncConfigStore.kManagedVaultBaseUrl: baseUrl});
   }
 
@@ -67,7 +75,7 @@ extension SyncConfigStoreBackendSettings on SyncConfigStore {
     await _writeConfigUpdates({
       SyncConfigStore.kBackendType:
           SyncConfigStore._backendTypeToken(SyncBackendType.webdav),
-      SyncConfigStore.kWebdavBaseUrl: baseUrl,
+      SyncConfigStore.kWebdavBaseUrl: baseUrl.isEmpty ? null : baseUrl,
       SyncConfigStore.kWebdavUsername: username,
       SyncConfigStore.kRemoteRoot: remoteRoot,
       if (autoEnabled != null)
@@ -83,7 +91,7 @@ extension SyncConfigStoreBackendSettings on SyncConfigStore {
     await _writeConfigUpdates({
       SyncConfigStore.kBackendType:
           SyncConfigStore._backendTypeToken(SyncBackendType.localDir),
-      SyncConfigStore.kLocalDir: localDir,
+      SyncConfigStore.kLocalDir: localDir.isEmpty ? null : localDir,
       SyncConfigStore.kRemoteRoot: remoteRoot,
       if (autoEnabled != null)
         SyncConfigStore.kAutoEnabled: autoEnabled ? '1' : '0',

@@ -1,9 +1,9 @@
 use std::fs;
 use std::path::Path;
 
-use crate::{auth, db};
+use crate::auth;
 use anyhow::{anyhow, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 
 const USER_DATA_TABLES_WITHOUT_AUTH: &[&str] = &[
     "message_embeddings",
@@ -87,7 +87,10 @@ fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
         return Ok(attachments_exist);
     }
 
-    let conn = db::open(app_dir)?;
+    let conn = Connection::open_with_flags(
+        db_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
     for table in USER_DATA_TABLES_WITHOUT_AUTH {
         if table_has_rows(&conn, table)? {
             return Ok(true);
@@ -112,6 +115,7 @@ pub(crate) fn validate_reset_vault_data_access(app_dir: &Path, key: &[u8; 32]) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db;
 
     #[test]
     fn reset_vault_data_preserving_llm_profiles_allows_missing_auth_file() {
@@ -197,6 +201,109 @@ mod tests {
                 .contains("vault data exists but auth file is missing"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn missing_auth_user_data_check_does_not_migrate_legacy_db() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(dir.path()).expect("create app dir");
+        let db_path = dir.path().join("secondloop.sqlite3");
+        let conn = Connection::open(&db_path).expect("open legacy db");
+        conn.execute_batch(
+            r#"
+CREATE TABLE conversations (
+  id TEXT PRIMARY KEY,
+  title BLOB NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+INSERT INTO conversations(id, title, created_at, updated_at)
+VALUES ('c1', X'68656C6C6F', 1, 1);
+PRAGMA user_version = 1;
+"#,
+        )
+        .expect("seed legacy db");
+        drop(conn);
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("vault data without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+
+        let conn = Connection::open(&db_path).expect("reopen legacy db");
+        let user_version: i64 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("read user_version");
+        assert_eq!(user_version, 1);
+
+        let llm_profiles_exists: bool = conn
+            .query_row(
+                r#"SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'llm_profiles')"#,
+                [],
+                |row| row.get(0),
+            )
+            .expect("check llm_profiles");
+        assert!(!llm_profiles_exists);
+    }
+
+    #[test]
+    fn rollback_snapshot_creation_does_not_migrate_legacy_db_without_auth() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(dir.path()).expect("create app dir");
+        let db_path = dir.path().join("secondloop.sqlite3");
+        let conn = Connection::open(&db_path).expect("open legacy db");
+        conn.execute_batch(
+            r#"
+CREATE TABLE conversations (
+  id TEXT PRIMARY KEY,
+  title BLOB NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+INSERT INTO conversations(id, title, created_at, updated_at)
+VALUES ('c1', X'68656C6C6F', 1, 1);
+PRAGMA user_version = 1;
+"#,
+        )
+        .expect("seed legacy db");
+        drop(conn);
+
+        let result = crate::api::migration_archive::migration_archive_create_rollback_snapshot(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("vault data without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+        assert!(!dir.path().join("migration_archive").exists());
+
+        let conn = Connection::open(&db_path).expect("reopen legacy db");
+        let user_version: i64 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("read user_version");
+        assert_eq!(user_version, 1);
+
+        let llm_profiles_exists: bool = conn
+            .query_row(
+                r#"SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'llm_profiles')"#,
+                [],
+                |row| row.get(0),
+            )
+            .expect("check llm_profiles");
+        assert!(!llm_profiles_exists);
     }
 
     #[test]

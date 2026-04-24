@@ -262,10 +262,19 @@ final class SyncEngine {
   }
 
   Future<void> stopImmediatelyAndWait() async {
-    if (!_running) return;
+    if (!_running && !_busy) return;
     _cancelScheduledWork();
     final idle = waitForIdle();
-    _finishStop();
+    if (_running) {
+      _finishStop();
+    } else {
+      _stopAfterDrain = false;
+      _pushQueued = false;
+      _pullQueued = false;
+      _pendingPullAfterPush = false;
+      _retryPushAfterRecoveryPull = false;
+      _managedVaultRecoveryRetryPushes = 0;
+    }
     await idle;
   }
 

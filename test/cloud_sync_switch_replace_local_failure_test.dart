@@ -85,7 +85,12 @@ void main() {
     await tester.tap(find.text('Replace this device with remote'));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, <String>['resetLocal', 'syncManagedVaultPull']);
+    expect(backend.calls, <String>[
+      'createSnapshot',
+      'resetLocal',
+      'syncManagedVaultPull',
+      'restoreSnapshot:snapshot-1',
+    ]);
     expect(syncRunner.pushCalls, 0);
     expect(syncRunner.pullCalls, 0);
     expect(await store.readBackendType(), SyncBackendType.webdav);
@@ -155,6 +160,20 @@ final class _ResetThenFailingPullBackend extends TestAppBackend {
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
     calls.add('resetLocal');
+  }
+
+  @override
+  Future<String?> createVaultRollbackSnapshot(Uint8List key) async {
+    calls.add('createSnapshot');
+    return 'snapshot-1';
+  }
+
+  @override
+  Future<void> restoreVaultRollbackSnapshot(
+    Uint8List key, {
+    required String snapshotPath,
+  }) async {
+    calls.add('restoreSnapshot:$snapshotPath');
   }
 
   @override

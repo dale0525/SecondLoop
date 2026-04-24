@@ -25,6 +25,18 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     }));
   }
 
+  Future<void> _tryDisableAutoSyncAndRefreshSchedule(
+    AppBackend backend,
+  ) async {
+    try {
+      await _disableAutoSyncAndRefreshSchedule(backend);
+    } catch (e) {
+      debugPrint(
+        'sync settings delete-all: failed to disable sync after destructive cleanup: $e',
+      );
+    }
+  }
+
   Future<bool> _confirmDeleteAction({
     required String title,
     required String message,
@@ -241,8 +253,8 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
       engine?.writeGate.value = const SyncWriteGateState.open();
       if (remoteClearTimedOut) {
-        await _disableAutoSyncAndRefreshSchedule(backend);
         shouldRestartEngine = false;
+        await _tryDisableAutoSyncAndRefreshSchedule(backend);
       }
       unawaited(BackgroundSync.refreshSchedule(
         backend: backend,
@@ -263,8 +275,8 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       }
     } catch (e) {
       if (remoteClearSucceeded || remoteClearTimedOut) {
-        await _disableAutoSyncAndRefreshSchedule(backend);
         shouldRestartEngine = false;
+        await _tryDisableAutoSyncAndRefreshSchedule(backend);
       }
       if (mounted) {
         _showSnack(

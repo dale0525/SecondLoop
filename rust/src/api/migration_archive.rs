@@ -109,6 +109,37 @@ pub fn migration_archive_import(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn migration_archive_create_rollback_snapshot(
+    app_dir: String,
+    key: Vec<u8>,
+) -> Result<Option<String>> {
+    let app_dir = Path::new(&app_dir);
+    let key = key_from_bytes(key)?;
+    crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
+    db::migration_archive_create_rollback_snapshot(app_dir, &key)
+        .map(|path| path.map(|path| path.to_string_lossy().into_owned()))
+}
+
+#[flutter_rust_bridge::frb]
+pub fn migration_archive_restore_rollback_snapshot(
+    app_dir: String,
+    key: Vec<u8>,
+    snapshot_path: String,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    db::migration_archive_restore_rollback_snapshot(
+        Path::new(&app_dir),
+        &key,
+        Path::new(&snapshot_path),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn migration_archive_remove_rollback_snapshot(snapshot_path: String) -> Result<()> {
+    db::migration_archive_remove_rollback_snapshot(Path::new(&snapshot_path))
+}
+
+#[flutter_rust_bridge::frb]
 pub fn migration_archive_import_progress(
     app_dir: String,
     key: Vec<u8>,

@@ -91,17 +91,20 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
               stage.value = pullingLabel;
               progress.value = 0.0;
               hasTotal.value = false;
-              await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
-              await _runManagedVaultPullStageWithProgress(
+              await runDestructiveReplaceLocalWithRollback<void>(
                 backend: backend,
                 sessionKey: sessionKey,
-                syncKey: syncKey,
-                baseUrl: baseUrlTrimmed,
-                vaultId: vaultId,
-                idToken: idTokenTrimmed,
-                stage: stage,
-                progress: progress,
-                hasTotal: hasTotal,
+                run: () => _runManagedVaultPullStageWithProgress(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: syncKey,
+                  baseUrl: baseUrlTrimmed,
+                  vaultId: vaultId,
+                  idToken: idTokenTrimmed,
+                  stage: stage,
+                  progress: progress,
+                  hasTotal: hasTotal,
+                ),
               );
               if (mounted) {
                 engine?.notifyExternalChange();

@@ -95,18 +95,23 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
           case SyncSwitchDirection.remoteReplacesLocal:
             stage.value = t.sync.progressDialog.pulling;
             progress.value = null;
-            await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
-            progress.value = 0.0;
-            await _consumeRustProgressStream(
-              backend.syncWebdavPullProgress(
-                sessionKey,
-                syncKey,
-                baseUrl: baseUrl,
-                username: username,
-                password: password,
-                remoteRoot: remoteRoot,
-              ),
-              onProgress: stageProgress.onProgress,
+            await runDestructiveReplaceLocalWithRollback<void>(
+              backend: backend,
+              sessionKey: sessionKey,
+              run: () async {
+                progress.value = 0.0;
+                await _consumeRustProgressStream(
+                  backend.syncWebdavPullProgress(
+                    sessionKey,
+                    syncKey,
+                    baseUrl: baseUrl,
+                    username: username,
+                    password: password,
+                    remoteRoot: remoteRoot,
+                  ),
+                  onProgress: stageProgress.onProgress,
+                );
+              },
             );
             stageProgress.complete();
             break;
@@ -249,16 +254,21 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
           case SyncSwitchDirection.remoteReplacesLocal:
             stage.value = t.sync.progressDialog.pulling;
             progress.value = null;
-            await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
-            progress.value = 0.0;
-            await _consumeRustProgressStream(
-              backend.syncLocaldirPullProgress(
-                sessionKey,
-                syncKey,
-                localDir: localDir,
-                remoteRoot: remoteRoot,
-              ),
-              onProgress: stageProgress.onProgress,
+            await runDestructiveReplaceLocalWithRollback<void>(
+              backend: backend,
+              sessionKey: sessionKey,
+              run: () async {
+                progress.value = 0.0;
+                await _consumeRustProgressStream(
+                  backend.syncLocaldirPullProgress(
+                    sessionKey,
+                    syncKey,
+                    localDir: localDir,
+                    remoteRoot: remoteRoot,
+                  ),
+                  onProgress: stageProgress.onProgress,
+                );
+              },
             );
             stageProgress.complete();
             break;

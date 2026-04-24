@@ -341,14 +341,42 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
   Future<void> _restorePrimarySyncConfigSnapshot({
     required AppBackend backend,
     required SyncBackendType backendType,
+    required String webdavBaseUrl,
+    required String? webdavUsername,
+    required String? webdavPassword,
+    required String localDir,
+    required String? managedVaultBaseUrl,
     required String remoteRoot,
+    required bool autoEnabled,
     required Uint8List? syncKey,
     required SyncEngine? engine,
   }) async {
-    await _store.writePrimarySyncSettings(
-      backendType: backendType,
-      remoteRoot: remoteRoot,
-    );
+    switch (backendType) {
+      case SyncBackendType.webdav:
+        await _store.writeWebdavPassword(webdavPassword);
+        await _store.writeWebdavSyncSettings(
+          baseUrl: webdavBaseUrl,
+          username: webdavUsername,
+          remoteRoot: remoteRoot,
+          autoEnabled: autoEnabled,
+        );
+        break;
+      case SyncBackendType.localDir:
+        await _store.writeLocalDirSyncSettings(
+          localDir: localDir,
+          remoteRoot: remoteRoot,
+          autoEnabled: autoEnabled,
+        );
+        break;
+      case SyncBackendType.managedVault:
+        await _store.writeManagedVaultBaseUrl(managedVaultBaseUrl);
+        await _store.writeManagedVaultSyncSettings(
+          baseUrl: managedVaultBaseUrl,
+          remoteRoot: remoteRoot,
+          autoEnabled: autoEnabled,
+        );
+        break;
+    }
     if (syncKey != null) {
       await SyncKeyManager.save(
         write: _store.writeSyncKey,
@@ -383,8 +411,14 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       };
       final oldWebdavBaseUrl =
           (before[SyncConfigStore.kWebdavBaseUrl] ?? '').trim();
+      final oldWebdavUsername = before[SyncConfigStore.kWebdavUsername];
+      final oldWebdavPassword = await _store.readWebdavPassword();
       final oldRemoteRoot = (before[SyncConfigStore.kRemoteRoot] ?? '').trim();
       final oldLocalDir = (before[SyncConfigStore.kLocalDir] ?? '').trim();
+      final oldManagedVaultBaseUrl =
+          before[SyncConfigStore.kManagedVaultBaseUrl];
+      final oldAutoEnabled = before[SyncConfigStore.kAutoEnabled] == null ||
+          before[SyncConfigStore.kAutoEnabled] == '1';
       final previousSyncKey = await _store.readSyncKey();
       if (!mounted) return;
 
@@ -597,15 +631,21 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
       } catch (e) {
         if (!mounted) return;
-        final shouldRestoreManagedVaultSnapshot =
-            newBackendType == SyncBackendType.managedVault &&
-                (switchDirection == SyncSwitchDirection.remoteReplacesLocal ||
+        final shouldRestorePrimarySnapshot =
+            switchDirection == SyncSwitchDirection.remoteReplacesLocal ||
+                (newBackendType == SyncBackendType.managedVault &&
                     e is _ManagedVaultSaveConfigurationException);
-        if (shouldRestoreManagedVaultSnapshot) {
+        if (shouldRestorePrimarySnapshot) {
           await _restorePrimarySyncConfigSnapshot(
             backend: backend,
             backendType: oldBackendType,
+            webdavBaseUrl: oldWebdavBaseUrl,
+            webdavUsername: oldWebdavUsername,
+            webdavPassword: oldWebdavPassword,
+            localDir: oldLocalDir,
+            managedVaultBaseUrl: oldManagedVaultBaseUrl,
             remoteRoot: oldRemoteRoot,
+            autoEnabled: oldAutoEnabled,
             syncKey: previousSyncKey,
             engine: engine,
           );

@@ -63,6 +63,36 @@ mixin _NativeAppBackendSyncMigration on _NativeAppBackendAccess {
   }
 
   @override
+  Future<String?> createVaultRollbackSnapshot(Uint8List key) async {
+    final appDir = await _getAppDir();
+    return rust_migration_archive.migrationArchiveCreateRollbackSnapshot(
+      appDir: appDir,
+      key: key,
+    );
+  }
+
+  @override
+  Future<void> restoreVaultRollbackSnapshot(
+    Uint8List key, {
+    required String snapshotPath,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_migration_archive.migrationArchiveRestoreRollbackSnapshot(
+      appDir: appDir,
+      key: key,
+      snapshotPath: snapshotPath,
+    );
+  }
+
+  @override
+  Future<void> deleteVaultRollbackSnapshot(
+      {required String snapshotPath}) async {
+    await rust_migration_archive.migrationArchiveRemoveRollbackSnapshot(
+      snapshotPath: snapshotPath,
+    );
+  }
+
+  @override
   Stream<String> runMigrationArchiveImportProgress(
     Uint8List key, {
     required String archivePath,
