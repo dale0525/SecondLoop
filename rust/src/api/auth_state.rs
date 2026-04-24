@@ -338,4 +338,39 @@ PRAGMA user_version = 1;
             "preserved profile-only vault should reset without auth: {result:?}"
         );
     }
+
+    #[test]
+    fn rollback_snapshot_restore_rejects_missing_auth_when_vault_has_user_data() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let key = [3u8; 32];
+        auth::init_master_password_with_existing_key(
+            dir.path(),
+            "password",
+            crate::crypto::KdfParams::for_test(),
+            key,
+        )
+        .expect("initialize auth");
+        let conn = db::open(dir.path()).expect("open db");
+        db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+        drop(conn);
+
+        let snapshot_path = db::migration_archive_create_rollback_snapshot(dir.path(), &key)
+            .expect("create snapshot")
+            .expect("snapshot path");
+        fs::remove_file(dir.path().join("auth.json")).expect("remove auth file");
+
+        let result = crate::api::migration_archive::migration_archive_restore_rollback_snapshot(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+            snapshot_path.to_string_lossy().into_owned(),
+        );
+
+        let error = result.expect_err("vault data without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+    }
 }

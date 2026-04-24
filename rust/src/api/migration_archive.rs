@@ -126,12 +126,10 @@ pub fn migration_archive_restore_rollback_snapshot(
     key: Vec<u8>,
     snapshot_path: String,
 ) -> Result<()> {
+    let app_dir = Path::new(&app_dir);
     let key = key_from_bytes(key)?;
-    db::migration_archive_restore_rollback_snapshot(
-        Path::new(&app_dir),
-        &key,
-        Path::new(&snapshot_path),
-    )
+    crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
+    db::migration_archive_restore_rollback_snapshot(app_dir, &key, Path::new(&snapshot_path))
 }
 
 #[flutter_rust_bridge::frb]

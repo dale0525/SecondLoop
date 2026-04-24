@@ -56,6 +56,8 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
     final pullingLabel = context.t.sync.progressDialog.pulling;
     final uploadingMediaLabel = context.t.sync.progressDialog.uploadingMedia;
     final finalizingLabel = context.t.sync.progressDialog.finalizing;
+    final serverUnavailableMessage =
+        context.t.sync.cloudManagedVault.serverUnavailable;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(cloudSyncSwitchInProgressPrefsKey, true);
@@ -129,6 +131,13 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
                   ManagedVaultPushFailureRecoveryAction.none;
               retryPushAfterPull = initialPush.recoveryAction ==
                   ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
+
+              if (initialPush.recoveryAction ==
+                  ManagedVaultPushFailureRecoveryAction.pullOnly) {
+                throw _ManagedVaultSaveConfigurationException(
+                  initialPush.recoveredMessage ?? serverUnavailableMessage,
+                );
+              }
 
               await _runManagedVaultPullStageWithProgress(
                 backend: backend,

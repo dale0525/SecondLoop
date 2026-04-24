@@ -6,7 +6,7 @@ struct AttachmentsResetGuard {
 impl AttachmentsResetGuard {
     fn prepare(app_dir: &Path) -> Result<Self> {
         let attachments_dir = app_dir.join("attachments");
-        let mut staged_dir = if attachments_dir.exists() {
+        let staged_dir = if attachments_dir.exists() {
             if !attachments_dir.is_dir() {
                 return Err(anyhow!("attachments path is not a directory"));
             }
@@ -19,12 +19,6 @@ impl AttachmentsResetGuard {
         } else {
             None
         };
-        if let Err(error) = fs::create_dir_all(&attachments_dir) {
-            if let Some(staged_dir) = staged_dir.take() {
-                let _ = fs::rename(staged_dir, &attachments_dir);
-            }
-            return Err(error.into());
-        }
         Ok(Self {
             attachments_dir,
             staged_dir,

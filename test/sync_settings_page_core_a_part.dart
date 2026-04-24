@@ -679,10 +679,15 @@ void registerSyncSettingsPageCoreATests() {
     expect(syncKey!.length, 32);
   });
 
-  testWidgets('Managed Vault save still pulls when push is read-only blocked',
+  testWidgets('Managed Vault save rolls back when push is read-only blocked',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeWebdavBaseUrl('https://webdav.example.com');
+    await store.writeRemoteRoot('SecondLoop');
+    final previousSyncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    await store.writeSyncKey(previousSyncKey);
     await store.writeManagedVaultBaseUrl('https://vault.example.com');
     final backend = _GraceReadOnlyManagedVaultSyncBackend();
     final cloudAuth = _FakeCloudAuthController();
@@ -737,14 +742,19 @@ void registerSyncSettingsPageCoreATests() {
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Merge local and remote'));
+    await tester.pumpAndSettle();
 
     expect(
       backend.calls,
-      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
+      <String>['syncManagedVaultPush'],
     );
+    expect(await store.readBackendType(), SyncBackendType.webdav);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect((await store.readSyncKey())?.toList(), previousSyncKey.toList());
     expect(find.textContaining('HTTP 403'), findsNothing);
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
-    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
     engine.stop();
   });
 

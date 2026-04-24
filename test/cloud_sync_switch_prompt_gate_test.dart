@@ -8,6 +8,8 @@ import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/platform/app_platform_capabilities.dart';
+import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/cloud_sync_switch_prompt_gate.dart';
@@ -578,16 +580,71 @@ void main() {
     await _tapSwitchAndChooseMerge(tester);
     await tester.pumpAndSettle();
 
-    expect(
-      backend.calls,
-      <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
-    );
+    expect(backend.calls, <String>['syncManagedVaultPush']);
     expect(await store.readBackendType(), SyncBackendType.webdav);
     expect(await store.readRemoteRoot(), 'SecondLoop');
     expect((await store.readSyncKey())?.toList(), List<int>.filled(32, 7));
     expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
     expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
     engine.stop();
+  });
+
+  testWidgets('Cloud session switch preserves existing random sync key',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final previousSyncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(previousSyncKey);
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final backend = _SuccessfulPushBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppPlatformCapabilityScope(
+            capabilities: AppPlatformCapabilities.webCloud(),
+            child: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: CloudAuthScope(
+                  controller: cloudAuth,
+                  child: SubscriptionScope(
+                    controller: subscription,
+                    child: CloudSyncSwitchPromptGate(
+                      configStore: store,
+                      child: const Scaffold(body: Text('home')),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await _tapSwitchAndChooseMerge(tester);
+    await tester.pumpAndSettle();
+
+    expect(backend.calls,
+        <String>['syncManagedVaultPush', 'syncManagedVaultPull']);
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(await store.readRemoteRoot(), 'uid_1');
+    expect((await store.readSyncKey())?.toList(), previousSyncKey.toList());
   });
 
   testWidgets('Switching to Cloud clears background repair block after success',

@@ -9,6 +9,7 @@ import '../backend/app_backend.dart';
 import '../cloud/cloud_auth_access.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
+import '../platform/app_platform_capability_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
@@ -626,6 +627,14 @@ final class _CloudSyncSwitchPromptGateState
                     retryPushAfterPull = pushStage.recoveryAction ==
                         ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
 
+                    if (pushStage.recoveryAction ==
+                        ManagedVaultPushFailureRecoveryAction.pullOnly) {
+                      completed = false;
+                      rollbackConfig = true;
+                      runFailureMessage = pushStage.failureMessage;
+                      break;
+                    }
+
                     await _runManagedVaultPullStageWithProgress(
                       backend: backend,
                       sessionKey: sessionKey,
@@ -661,13 +670,6 @@ final class _CloudSyncSwitchPromptGateState
                         stage: stage,
                         progress: progress,
                       );
-                    }
-
-                    if (pushStage.recoveryAction ==
-                        ManagedVaultPushFailureRecoveryAction.pullOnly) {
-                      completed = false;
-                      rollbackConfig = true;
-                      runFailureMessage = pushStage.failureMessage;
                     }
                     break;
                 }
@@ -893,11 +895,10 @@ final class _CloudSyncSwitchPromptGateState
 
     try {
       if (!effectiveContext.mounted) return;
-      final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
-        vaultId: uid,
-        deriveSyncKey: backend.deriveSyncKey,
+      final syncKey = await _resolveManagedVaultSyncKey(
+        uid: uid,
+        backend: backend,
       );
-      await SyncKeyManager.save(write: _store.writeSyncKey, key: syncKey);
       await _store.writePrimarySyncSettings(
         backendType: SyncBackendType.managedVault,
         remoteRoot: uid,
