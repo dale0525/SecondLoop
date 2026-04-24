@@ -38,7 +38,8 @@ void main() {
     final warmStore = TaskPriorityStore.fromLoaders(
       nowLocal: () => DateTime(2026, 3, 13, 10, 0),
       loadTodos: () async => <Todo>[
-        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+        todo(id: 'cached', title: 'Keep cached task', updatedAtMs: 10),
+        todo(id: 'fresh', title: 'Fresh task', updatedAtMs: 20),
       ],
       resolveAiService: () async => _ImmediateAiService(
         cacheScopeKey: 'bootstrap-cache',
@@ -50,28 +51,38 @@ void main() {
     expect(warmStore.snapshot.primaryFocus?.reasonText, 'Cached AI reason.');
 
     final release = Completer<void>();
+    final delayedService = _DelayedAiService(
+      cacheScopeKey: 'bootstrap-cache',
+      release: release.future,
+      reason: 'Fresh AI reason.',
+    );
     final secondStore = TaskPriorityStore.fromLoaders(
       nowLocal: () => DateTime(2026, 3, 13, 10, 5),
       loadTodos: () async => <Todo>[
-        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+        todo(id: 'cached', title: 'Keep cached task', updatedAtMs: 10),
+        todo(id: 'fresh', title: 'Fresh task updated', updatedAtMs: 21),
       ],
-      resolveAiService: () async => _DelayedAiService(
-        cacheScopeKey: 'bootstrap-cache',
-        release: release.future,
-        reason: 'Fresh AI reason.',
-      ),
+      resolveAiService: () async => delayedService,
     );
 
     final refresh = secondStore.refresh();
     await _waitForNonIdleSnapshot(secondStore);
 
-    expect(secondStore.snapshot.primaryFocus?.reasonText, 'Cached AI reason.');
+    expect(_reasonFor(secondStore, 'cached'), 'Cached AI reason.');
+    expect(delayedService.requestTodoIds, <String>['fresh']);
 
     release.complete();
     await refresh;
 
-    expect(secondStore.snapshot.primaryFocus?.reasonText, 'Cached AI reason.');
+    expect(secondStore.snapshot.primaryFocus?.reasonText, 'Fresh AI reason.');
   });
+}
+
+String? _reasonFor(TaskPriorityStore store, String todoId) {
+  for (final entry in store.snapshot.activeEntries) {
+    if (entry.todo.id == todoId) return entry.reasonText;
+  }
+  return null;
 }
 
 Future<void> _waitForNonIdleSnapshot(TaskPriorityStore store) async {
@@ -102,7 +113,7 @@ final class _ImmediateAiService extends TaskPriorityAiService {
           .map(
             (candidate) => TaskPriorityAiEntry(
               todoId: candidate.todoId,
-              semanticAdjustment: 20,
+              semanticAdjustment: candidate.todoId == 'cached' ? 40 : 10,
               reason: reason,
               confidence: TaskPriorityAiConfidence.high,
               isImportant: true,
@@ -125,17 +136,20 @@ final class _DelayedAiService extends TaskPriorityAiService {
   final String cacheScopeKey;
   final Future<void> release;
   final String reason;
+  final List<String> requestTodoIds = <String>[];
 
   @override
   Future<TaskPriorityAiBatchResult> rerank(
       TaskPriorityAiRequest request) async {
+    requestTodoIds
+        .addAll(request.candidates.map((candidate) => candidate.todoId));
     await release;
     return TaskPriorityAiBatchResult(
       entries: request.candidates
           .map(
             (candidate) => TaskPriorityAiEntry(
               todoId: candidate.todoId,
-              semanticAdjustment: 22,
+              semanticAdjustment: 80,
               reason: reason,
               confidence: TaskPriorityAiConfidence.high,
               isImportant: true,

@@ -199,6 +199,52 @@ void main() {
     expect(notifyCount, 1);
   });
 
+  test('dispose before cache scope resolves skips shared cache callbacks',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final scopeCompleter = Completer<String?>();
+    var sharedReadCalls = 0;
+    var sharedWriteCalls = 0;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _CountingAiService(
+        const TaskPriorityAiBatchResult.empty(),
+        cacheScopeKey: '',
+      ),
+      resolveAiCacheScopeKey: () => scopeCompleter.future,
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async {
+        sharedReadCalls += 1;
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      },
+      writeSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required entries,
+        required activeTodoIds,
+        required nowLocal,
+      }) async {
+        sharedWriteCalls += 1;
+      },
+    );
+
+    final refresh = store.refresh();
+    await Future<void>.delayed(Duration.zero);
+
+    store.dispose();
+    scopeCompleter.complete('shared-scope');
+
+    await expectLater(refresh, completes);
+    expect(sharedReadCalls, 0);
+    expect(sharedWriteCalls, 0);
+  });
+
   test('empty task list still yields an empty structured snapshot', () async {
     SharedPreferences.setMockInitialValues({});
     final store = TaskPriorityStore.fromLoaders(

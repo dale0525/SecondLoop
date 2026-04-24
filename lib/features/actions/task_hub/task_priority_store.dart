@@ -293,10 +293,12 @@ class TaskPriorityStore extends ChangeNotifier {
         _aiAvailability = TaskPriorityAiAvailability.unavailable;
         aiService = null;
       }
+      if (_disposed) return;
 
       final serviceCacheScopeKey = aiService?.cacheScopeKey.trim();
       final resolvedCacheScopeKey =
           (await _resolveAiCacheScopeKey?.call())?.trim();
+      if (_disposed) return;
       final sharedCacheScopeKey = (serviceCacheScopeKey?.isNotEmpty ?? false)
           ? serviceCacheScopeKey
           : resolvedCacheScopeKey;
@@ -325,6 +327,7 @@ class TaskPriorityStore extends ChangeNotifier {
               candidateByTodoId: candidateByTodoId,
               nowLocal: nowLocal,
             );
+      if (_disposed) return;
       final bootstrapHasCompleteCoverage = request.candidates.isNotEmpty &&
           request.candidates.every(
             (candidate) => bootstrapPersisted.containsKey(candidate.todoId),
@@ -363,6 +366,7 @@ class TaskPriorityStore extends ChangeNotifier {
         _safeNotify();
       }
 
+      if (_disposed) return;
       final sharedPersisted = canUseSharedCache
           ? await _readSharedAiAssessments?.call(
                 aiService: aiService,
@@ -371,12 +375,14 @@ class TaskPriorityStore extends ChangeNotifier {
               ) ??
               const <String, TaskPriorityAiCachedAssessment>{}
           : const <String, TaskPriorityAiCachedAssessment>{};
+      if (_disposed) return;
       final persisted = canUsePersistedCache
           ? await _readPersistedAiAssessments(
               cacheScopeKey: persistedCacheScopeKey,
               nowLocal: nowLocal,
             )
           : const <String, TaskPriorityAiCachedAssessment>{};
+      if (_disposed) return;
       final memoryCached = canUseInMemoryCache
           ? _readInMemoryAiAssessments(nowLocal: nowLocal)
           : const <String, TaskPriorityAiCachedAssessment>{};
@@ -476,6 +482,7 @@ class TaskPriorityStore extends ChangeNotifier {
           final result = await aiService.rerank(
             request.copyWith(candidates: staleCandidates),
           );
+          if (_disposed) return;
           for (final entry in result.entries) {
             final candidate = staleCandidateByTodoId[entry.todoId];
             if (candidate == null) continue;
@@ -516,6 +523,7 @@ class TaskPriorityStore extends ChangeNotifier {
               rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
         );
       }
+      if (_disposed) return;
       if (canUseSharedCache) {
         await _writeSharedAiAssessments?.call(
           aiService: aiService,
@@ -526,6 +534,7 @@ class TaskPriorityStore extends ChangeNotifier {
           nowLocal: nowLocal,
         );
       }
+      if (_disposed) return;
 
       final aiEntries = <TaskPriorityAiEntry>[];
       for (final activeEntry in rulesSnapshot.activeEntries) {
