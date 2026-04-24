@@ -88,6 +88,7 @@
     "deleted": "Deleted local and remote data",
     "deletedLocalOnly": "Deleted local data only; remote clear timed out, so retry if you still need to remove remote data.",
     "failed": "Delete failed: $error",
+    "remoteClearUnknownLocalCleanupFailed": "Remote clear timed out, and local cleanup failed. Sync stayed off because remote state is unknown. Error: $error",
     "remoteDeletedLocalCleanupFailed": "Remote sync data deleted, but local cleanup failed. Sync stayed off to avoid restoring remote data. Error: $error",
     "notConfigured": "Save your sync settings first.",
     "dialog": {

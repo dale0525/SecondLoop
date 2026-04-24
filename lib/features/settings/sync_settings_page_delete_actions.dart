@@ -223,9 +223,8 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     });
     var shouldNotifyExternalChange = false;
     var remoteClearSucceeded = false;
+    var remoteClearTimedOut = false;
     try {
-      var remoteClearTimedOut = false;
-
       await engine?.stopImmediatelyAndWait();
       try {
         await _clearRemoteSyncDataForSavedConfig();
@@ -263,17 +262,21 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         );
       }
     } catch (e) {
-      if (remoteClearSucceeded) {
+      if (remoteClearSucceeded || remoteClearTimedOut) {
         await _disableAutoSyncAndRefreshSchedule(backend);
         shouldRestartEngine = false;
       }
       if (mounted) {
         _showSnack(
-          remoteClearSucceeded
-              ? t.sync.allData.remoteDeletedLocalCleanupFailed(
+          remoteClearTimedOut
+              ? t.sync.allData.remoteClearUnknownLocalCleanupFailed(
                   error: _deleteActionErrorMessage(e),
                 )
-              : t.sync.allData.failed(error: _deleteActionErrorMessage(e)),
+              : remoteClearSucceeded
+                  ? t.sync.allData.remoteDeletedLocalCleanupFailed(
+                      error: _deleteActionErrorMessage(e),
+                    )
+                  : t.sync.allData.failed(error: _deleteActionErrorMessage(e)),
         );
       }
     } finally {

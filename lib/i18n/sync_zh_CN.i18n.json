@@ -88,6 +88,7 @@
     "deleted": "已删除本地和远端数据",
     "deletedLocalOnly": "仅已删除本地数据；远端清理超时，如仍需删除远端数据请重试。",
     "failed": "删除失败：$error",
+    "remoteClearUnknownLocalCleanupFailed": "远端清理超时且本地清理失败。由于远端状态未知，同步已保持关闭。错误：$error",
     "remoteDeletedLocalCleanupFailed": "远端同步数据已删除，但本地清理失败。为避免把远端数据重新同步回来，同步已保持关闭。错误：$error",
     "notConfigured": "请先保存同步设置。",
     "dialog": {

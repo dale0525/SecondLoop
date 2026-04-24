@@ -56,9 +56,13 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           _showSnack(t.sync.baseUrlRequired);
           return false;
         }
-        await _store.writeWebdavBaseUrl(baseUrl);
-        await _store.writeWebdavUsername(_optionalTrimmed(_usernameController));
         await _store.writeWebdavPassword(_optionalTrimmed(_passwordController));
+        await _store.writeWebdavSyncSettings(
+          baseUrl: baseUrl,
+          username: _optionalTrimmed(_usernameController),
+          remoteRoot: resolvedRemoteRoot,
+          autoEnabled: _autoEnabled,
+        );
         break;
       case SyncBackendType.localDir:
         final localDir = _requiredTrimmed(_localDirController);
@@ -66,26 +70,35 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           _showSnack(t.sync.localDirRequired);
           return false;
         }
-        await _store.writeLocalDir(localDir);
+        await _store.writeLocalDirSyncSettings(
+          localDir: localDir,
+          remoteRoot: resolvedRemoteRoot,
+          autoEnabled: _autoEnabled,
+        );
         break;
       case SyncBackendType.managedVault:
+        String? managedVaultBaseUrl;
         if (kDebugMode && _showManagedVaultEndpointOverride) {
-          await _store.writeManagedVaultBaseUrl(
-              _requiredTrimmed(_managedVaultBaseUrlController));
+          managedVaultBaseUrl =
+              _requiredTrimmed(_managedVaultBaseUrlController);
+          if (managedVaultBaseUrl.isEmpty) {
+            _showSnack(t.sync.baseUrlRequired);
+            return false;
+          }
         }
-        final resolved = await _store.resolveManagedVaultBaseUrl();
+        final resolved = managedVaultBaseUrl ??
+            (await _store.resolveManagedVaultBaseUrl())?.trim();
         if (resolved == null || resolved.trim().isEmpty) {
           _showSnack(t.sync.baseUrlRequired);
           return false;
         }
+        await _store.writeManagedVaultSyncSettings(
+          baseUrl: managedVaultBaseUrl,
+          remoteRoot: resolvedRemoteRoot,
+          autoEnabled: _autoEnabled,
+        );
         break;
     }
-
-    await _store.writePrimarySyncSettings(
-      backendType: backendType,
-      remoteRoot: resolvedRemoteRoot,
-      autoEnabled: _autoEnabled,
-    );
 
     return true;
   }
@@ -358,6 +371,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     _setState(() => _busy = true);
 
     final t = context.t;
+    final engine = SyncEngineScope.maybeOf(context);
     var shouldHideRecoveryHint = false;
     try {
       final before = await _store.readAll();
@@ -496,14 +510,25 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         _passphraseIsPlaceholder = true;
       }
 
+      final wasEngineRunning = engine?.isRunning ?? false;
+      var shouldRestartStoppedEngine = false;
+      if (shouldSync && engine != null) {
+        await engine.stopImmediatelyAndWait();
+        shouldRestartStoppedEngine = wasEngineRunning;
+      }
+
       final persisted = await _persistBackendConfig();
-      if (!persisted) return;
+      if (!persisted) {
+        if (shouldRestartStoppedEngine) {
+          engine?.start();
+        }
+        return;
+      }
       if (!mounted) return;
 
       unawaited(BackgroundSync.refreshSchedule(
           backend: backend, configStore: _store));
 
-      final engine = SyncEngineScope.maybeOf(context);
       try {
         await _runConnectionTest();
         if (!mounted) return;
@@ -558,20 +583,25 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
 
         if (!mounted) return;
-        engine?.start();
+        if (!shouldSync || shouldRestartStoppedEngine) {
+          engine?.start();
+        }
         if (!(didSync && newBackendType == SyncBackendType.managedVault)) {
           engine?.notifyExternalChange();
         }
-        final canScheduleFallbackSync =
-            switchDirection != SyncSwitchDirection.remoteReplacesLocal;
+        final canScheduleFallbackSync = switchDirection == null ||
+            switchDirection == SyncSwitchDirection.merge;
         if (!didSync && canScheduleFallbackSync) {
           engine?.triggerPushNow();
           engine?.triggerPullNow();
         }
       } catch (e) {
         if (!mounted) return;
-        if (newBackendType == SyncBackendType.managedVault &&
-            switchDirection == SyncSwitchDirection.remoteReplacesLocal) {
+        final shouldRestoreManagedVaultSnapshot =
+            newBackendType == SyncBackendType.managedVault &&
+                (switchDirection == SyncSwitchDirection.remoteReplacesLocal ||
+                    e is _ManagedVaultSaveConfigurationException);
+        if (shouldRestoreManagedVaultSnapshot) {
           await _restorePrimarySyncConfigSnapshot(
             backend: backend,
             backendType: oldBackendType,
@@ -579,6 +609,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             syncKey: previousSyncKey,
             engine: engine,
           );
+        }
+        if (shouldRestartStoppedEngine &&
+            switchDirection != SyncSwitchDirection.remoteReplacesLocal) {
+          engine?.start();
         }
         if (backendType == SyncBackendType.managedVault) {
           final details = inspectManagedVaultPushFailure(e);

@@ -3,6 +3,58 @@ use std::path::Path;
 
 use crate::{auth, db};
 use anyhow::{anyhow, Result};
+use rusqlite::{params, Connection};
+
+const USER_DATA_TABLES_WITHOUT_AUTH: &[&str] = &[
+    "message_embeddings",
+    "todo_embeddings",
+    "todo_activity_embeddings",
+    "semantic_parse_jobs",
+    "todo_followup_generation_jobs",
+    "tag_merge_feedback",
+    "message_tag_autofill_events",
+    "message_tag_autofill_jobs",
+    "message_tags",
+    "message_attachments",
+    "attachment_derivations",
+    "cloud_media_backup",
+    "attachment_variants",
+    "attachment_exif",
+    "attachment_metadata",
+    "attachment_places",
+    "attachment_annotations",
+    "attachment_chunk_embedding_jobs",
+    "attachment_text_chunks",
+    "attachment_deletions",
+    "attachments",
+    "messages",
+    "tags",
+    "conversations",
+    "todo_deletions",
+    "todo_checklist_suggestions",
+    "todo_followup_suggestions",
+    "todo_checklist_items",
+    "todos",
+    "todo_activity_attachments",
+    "todo_activities",
+    "todo_recurrences",
+    "todo_series",
+    "events",
+    "detached_ask_completion_claims",
+    "embedding_artifact_manifests",
+    "knowledge_document_usage",
+    "knowledge_document_feedback",
+    "knowledge_page_lints",
+    "knowledge_page_history",
+    "knowledge_page_versions",
+    "knowledge_pages",
+    "knowledge_claims",
+    "knowledge_embeddings",
+    "knowledge_index_jobs",
+    "knowledge_units",
+    "knowledge_documents",
+    "oplog",
+];
 
 fn dir_has_entries(path: &Path) -> Result<bool> {
     match fs::read_dir(path) {
@@ -10,6 +62,22 @@ fn dir_has_entries(path: &Path) -> Result<bool> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(e.into()),
     }
+}
+
+fn table_has_rows(conn: &Connection, table: &str) -> Result<bool> {
+    let table_exists: bool = conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)"#,
+        params![table],
+        |row| row.get(0),
+    )?;
+    if !table_exists {
+        return Ok(false);
+    }
+
+    let quoted_table = table.replace('"', "\"\"");
+    let sql = format!(r#"SELECT EXISTS(SELECT 1 FROM "{quoted_table}" LIMIT 1)"#);
+    let has_rows: bool = conn.query_row(&sql, [], |row| row.get(0))?;
+    Ok(has_rows)
 }
 
 fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
@@ -20,21 +88,12 @@ fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
     }
 
     let conn = db::open(app_dir)?;
-    let db_has_user_data: bool = conn.query_row(
-        r#"
-SELECT
-  EXISTS(SELECT 1 FROM conversations LIMIT 1) OR
-  EXISTS(SELECT 1 FROM messages LIMIT 1) OR
-  EXISTS(SELECT 1 FROM attachments LIMIT 1) OR
-  EXISTS(SELECT 1 FROM todos LIMIT 1) OR
-  EXISTS(SELECT 1 FROM tags LIMIT 1) OR
-  EXISTS(SELECT 1 FROM events LIMIT 1) OR
-  EXISTS(SELECT 1 FROM knowledge_documents LIMIT 1)
-"#,
-        [],
-        |row| row.get(0),
-    )?;
-    Ok(db_has_user_data || attachments_exist)
+    for table in USER_DATA_TABLES_WITHOUT_AUTH {
+        if table_has_rows(&conn, table)? {
+            return Ok(true);
+        }
+    }
+    Ok(attachments_exist)
 }
 
 pub(crate) fn auth_is_initialized(app_dir: &Path) -> bool {
@@ -107,6 +166,31 @@ mod tests {
         );
 
         let error = result.expect_err("vault data without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_rejects_missing_auth_when_only_oplog_exists() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        conn.execute(
+            r#"INSERT INTO oplog(op_id, device_id, seq, op_json, created_at)
+               VALUES ('op-1', 'device-1', 1, X'00', 1)"#,
+            [],
+        )
+        .expect("insert oplog");
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("oplog without auth should be rejected");
         assert!(
             error
                 .to_string()

@@ -13,6 +13,8 @@ import 'sync_engine.dart';
 import 'sync_key_manager.dart';
 import 'sync_secret_store.dart';
 
+part 'sync_config_store_backend_settings.dart';
+
 final class SyncConfigStore {
   SyncConfigStore({
     FlutterSecureStorage? storage,
@@ -141,31 +143,6 @@ final class SyncConfigStore {
     return writeMediaDownloadsWifiOnly(enabled);
   }
 
-  Future<SyncBackendType> readBackendType() async {
-    final v = (await _loadConfigMap())[kBackendType];
-    return switch (v) {
-      'localdir' => SyncBackendType.localDir,
-      'managedvault' => SyncBackendType.managedVault,
-      _ => SyncBackendType.webdav,
-    };
-  }
-
-  Future<void> writeBackendType(SyncBackendType type) async {
-    await _writeConfigUpdates({kBackendType: _backendTypeToken(type)});
-  }
-
-  Future<void> writePrimarySyncSettings({
-    required SyncBackendType backendType,
-    required String remoteRoot,
-    bool? autoEnabled,
-  }) async {
-    await _writeConfigUpdates({
-      kBackendType: _backendTypeToken(backendType),
-      kRemoteRoot: remoteRoot,
-      if (autoEnabled != null) kAutoEnabled: autoEnabled ? '1' : '0',
-    });
-  }
-
   Future<Uint8List?> readSyncKey() async {
     if (_scopeKey == null) {
       final cached = SyncKeyManager.readCachedSyncKey();
@@ -254,21 +231,6 @@ final class SyncConfigStore {
       (await _loadConfigMap())[kRemoteRoot];
   Future<String?> readLocalDir() async => (await _loadConfigMap())[kLocalDir];
 
-  Future<void> writeWebdavBaseUrl(String baseUrl) async =>
-      _writeConfigUpdates({kWebdavBaseUrl: baseUrl});
-  Future<void> writeManagedVaultBaseUrl(String baseUrl) async =>
-      _writeConfigUpdates({kManagedVaultBaseUrl: baseUrl});
-  Future<void> writeRemoteRoot(String remoteRoot) async =>
-      _writeConfigUpdates({kRemoteRoot: remoteRoot});
-
-  Future<void> writeWebdavUsername(String? username) async {
-    if (username == null || username.isEmpty) {
-      await _writeConfigUpdates({kWebdavUsername: null});
-      return;
-    }
-    await _writeConfigUpdates({kWebdavUsername: username});
-  }
-
   Future<void> writeWebdavPassword(String? password) async {
     await _secretStore.writeWebdavPassword(password);
     await _writeConfigUpdates(
@@ -279,14 +241,6 @@ final class SyncConfigStore {
 
   Future<void> writeRecoveryEnvelopeJson(String? envelopeJson) async {
     await _secretStore.writeRecoveryEnvelopeJson(envelopeJson);
-  }
-
-  Future<void> writeLocalDir(String? localDir) async {
-    if (localDir == null || localDir.isEmpty) {
-      await _writeConfigUpdates({kLocalDir: null});
-      return;
-    }
-    await _writeConfigUpdates({kLocalDir: localDir});
   }
 
   Future<bool> readCloudMediaBackupEnabled() async {

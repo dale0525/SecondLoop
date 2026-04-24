@@ -1,5 +1,14 @@
 part of 'sync_settings_page.dart';
 
+final class _ManagedVaultSaveConfigurationException implements Exception {
+  const _ManagedVaultSaveConfigurationException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
   Future<bool> _runManagedVaultSaveSync({
     required AppBackend backend,
@@ -28,7 +37,17 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
         vaultId.isEmpty ||
         baseUrl == null ||
         baseUrl.trim().isEmpty) {
-      // If we can't get auth details, fall back to engine scheduling.
+      if (direction == SyncSwitchDirection.merge) {
+        // Non-destructive merge can still fall back to regular engine scheduling.
+        return false;
+      }
+      final message = baseUrl == null || baseUrl.trim().isEmpty
+          ? context.t.sync.baseUrlRequired
+          : context.t.sync.cloudManagedVault.signInRequired;
+      throw _ManagedVaultSaveConfigurationException(message);
+    }
+
+    if (!mounted) {
       return false;
     }
 

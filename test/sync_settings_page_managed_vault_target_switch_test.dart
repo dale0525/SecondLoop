@@ -12,6 +12,7 @@ import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/settings/sync_settings_page.dart';
 
 import 'test_backend.dart';
@@ -108,6 +109,102 @@ void main() {
     expect(await store.readRemoteRoot(), 'old_uid');
     expect(await store.readSyncKey(), previousSyncKey);
   });
+
+  testWidgets(
+      'Managed Vault replace-remote save requires auth without fallback sync',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('old_uid');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _TrackingManagedVaultBackend();
+    final cloudAuth = _FakeCloudAuthController(
+      uid: 'uid_1',
+      idToken: null,
+    );
+    final runner = _RecordingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: store.loadConfiguredSync,
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    );
+
+    await tester.pumpWidget(_wrapSettingsPage(
+      store: store,
+      backend: backend,
+      cloudAuth: cloudAuth,
+      engine: engine,
+    ));
+    await tester.pumpAndSettle();
+
+    await _tapSave(tester);
+
+    expect(find.text('Choose sync direction'), findsOneWidget);
+    await tester.tap(find.text('Replace remote with this device'));
+    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(backend.calls, isEmpty);
+    expect(runner.calls, isEmpty);
+    expect(await store.readRemoteRoot(), 'old_uid');
+    expect(engine.isRunning, isFalse);
+  });
+
+  testWidgets('Managed Vault switch stops running engine before remote reset',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('old_uid');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final runner = _RecordingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: store.loadConfiguredSync,
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+    bool? engineRunningDuringRemoteClear;
+    final backend = _TrackingManagedVaultBackend(
+      onClearVault: () {
+        engineRunningDuringRemoteClear = engine.isRunning;
+      },
+    );
+    final cloudAuth = _FakeCloudAuthController(uid: 'uid_1');
+
+    await tester.pumpWidget(_wrapSettingsPage(
+      store: store,
+      backend: backend,
+      cloudAuth: cloudAuth,
+      engine: engine,
+    ));
+    await tester.pumpAndSettle();
+
+    await _tapSave(tester);
+
+    expect(find.text('Choose sync direction'), findsOneWidget);
+    await tester.tap(find.text('Replace remote with this device'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultClearVault:uid_1',
+        'syncManagedVaultPush:uid_1'
+      ],
+    );
+    expect(engineRunningDuringRemoteClear, isFalse);
+    expect(engine.isRunning, isTrue);
+
+    engine.stopImmediately();
+  });
 }
 
 Widget _wrapSettingsPage({
@@ -115,6 +212,7 @@ Widget _wrapSettingsPage({
   required AppBackend backend,
   required CloudAuthController cloudAuth,
   bool cloudSession = false,
+  SyncEngine? engine,
 }) {
   Widget child = AppBackendScope(
     backend: backend,
@@ -123,8 +221,11 @@ Widget _wrapSettingsPage({
       child: SessionScope(
         sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
         lock: () {},
-        child: Scaffold(
-          body: SyncSettingsPage(configStore: store),
+        child: SyncEngineScope(
+          engine: engine,
+          child: Scaffold(
+            body: SyncSettingsPage(configStore: store),
+          ),
         ),
       ),
     ),
@@ -153,6 +254,9 @@ Future<void> _tapSave(WidgetTester tester) async {
 }
 
 final class _TrackingManagedVaultBackend extends TestAppBackend {
+  _TrackingManagedVaultBackend({this.onClearVault});
+
+  final VoidCallback? onClearVault;
   final List<String> calls = <String>[];
 
   @override
@@ -194,6 +298,7 @@ final class _TrackingManagedVaultBackend extends TestAppBackend {
     required String vaultId,
     required String idToken,
   }) async {
+    onClearVault?.call();
     calls.add('syncManagedVaultClearVault:$vaultId');
   }
 }
@@ -214,13 +319,15 @@ final class _FailingPullManagedVaultBackend
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {
-  _FakeCloudAuthController({required this.uid});
+  _FakeCloudAuthController({required this.uid, this.idToken = 'test-id-token'});
 
   @override
   final String uid;
 
+  final String? idToken;
+
   @override
-  Future<String?> getIdToken() async => 'test-id-token';
+  Future<String?> getIdToken() async => idToken;
 
   @override
   String? get email => null;
@@ -248,4 +355,20 @@ final class _FakeCloudAuthController implements CloudAuthController {
 
   @override
   Future<void> signOut() async {}
+}
+
+final class _RecordingSyncRunner implements SyncRunner {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    calls.add('push:${config.remoteRoot}');
+    return 0;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    calls.add('pull:${config.remoteRoot}');
+    return 0;
+  }
 }
