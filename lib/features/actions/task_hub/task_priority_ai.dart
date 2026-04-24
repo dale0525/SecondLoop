@@ -470,6 +470,9 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   Future<Map<String, TaskPriorityAiCachedAssessment>> readSharedAssessments({
     required DateTime nowLocal,
   }) async {
+    if (_route != AskAiRouteKind.cloudGateway) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
     return _sharedAssessmentsClient.read(nowLocal: nowLocal);
   }
 
@@ -478,6 +481,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
     required Map<String, TaskPriorityAiCachedAssessment> entries,
     required Iterable<String> activeTodoIds,
   }) async {
+    if (_route != AskAiRouteKind.cloudGateway) return;
     await _sharedAssessmentsClient.write(
       entries: entries,
       activeTodoIds: activeTodoIds,

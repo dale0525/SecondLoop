@@ -29,6 +29,7 @@ import 'task_hub_quick_actions.dart';
 import 'task_priority_ai.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
+import 'task_priority_shared_assessments_resolver.dart';
 import 'task_priority_store.dart';
 import '../todo/todo_detail_page.dart';
 
@@ -130,31 +131,11 @@ class _TaskHubPageState extends State<TaskHubPage> {
       resolveAiService: _resolveAiService,
       resolveAiCacheScopeKey: _resolveAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
-      readSharedAiAssessments: ({
-        required aiService,
-        required cacheScopeKey,
-        required nowLocal,
-      }) async {
-        final client = await _resolveSharedAssessmentsClient(cacheScopeKey);
-        if (client == null) {
-          return const <String, TaskPriorityAiCachedAssessment>{};
-        }
-        return client.read(nowLocal: nowLocal);
-      },
-      writeSharedAiAssessments: ({
-        required aiService,
-        required cacheScopeKey,
-        required entries,
-        required activeTodoIds,
-        required nowLocal,
-      }) async {
-        final client = await _resolveSharedAssessmentsClient(cacheScopeKey);
-        if (client == null) return;
-        await client.write(
-          entries: entries,
-          activeTodoIds: activeTodoIds,
-        );
-      },
+      resolveSharedAiAssessmentsClient: ({required cacheScopeKey}) =>
+          resolveTaskPrioritySharedAssessmentsClient(
+        context,
+        cacheScopeKey: cacheScopeKey,
+      ),
       feedbackStore: _feedbackStore,
     );
     _attachStoreListener();
@@ -279,63 +260,6 @@ class _TaskHubPageState extends State<TaskHubPage> {
     } catch (_) {
       return null;
     }
-  }
-
-  Future<BackendTaskPriorityAiSharedAssessmentsClient?>
-      _resolveSharedAssessmentsClient(String cacheScopeKey) async {
-    final normalizedScopeKey = cacheScopeKey.trim();
-    if (normalizedScopeKey.isEmpty) return null;
-
-    final backend = AppBackendScope.maybeOf(context);
-    if (backend == null) return null;
-
-    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-        SubscriptionStatus.unknown;
-    if (subscriptionStatus != SubscriptionStatus.entitled) {
-      return null;
-    }
-
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final gatewayConfig =
-        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-    final cloudUid = (cloudAuthScope?.controller.uid ?? '').trim();
-    final localeTag = Localizations.localeOf(context).toLanguageTag();
-    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
-    if (cloudUid.isEmpty || gatewayConfig.baseUrl.trim().isEmpty) {
-      return null;
-    }
-
-    final idToken = await readCloudCapabilityIdToken(
-      cloudAuthScope?.controller,
-      mode: CloudCapabilityAuthMode.background,
-    );
-    final normalizedIdToken = (idToken ?? '').trim();
-    if (normalizedIdToken.isEmpty) {
-      return null;
-    }
-
-    final expectedScopeKey = await resolveTaskPriorityAiCacheScopeKey(
-      backend,
-      sessionKey,
-      route: AskAiRouteKind.cloudGateway,
-      gatewayBaseUrl: gatewayConfig.baseUrl,
-      modelName: gatewayConfig.modelName,
-      localeTag: localeTag,
-      cloudUid: cloudUid,
-    );
-    if ((expectedScopeKey ?? '').trim() != normalizedScopeKey) {
-      return null;
-    }
-
-    return BackendTaskPriorityAiSharedAssessmentsClient(
-      backend: backend,
-      sessionKey: sessionKey,
-      gatewayBaseUrl: gatewayConfig.baseUrl,
-      idToken: normalizedIdToken,
-      modelName: gatewayConfig.modelName,
-      localeTag: localeTag,
-      cacheScopeKey: normalizedScopeKey,
-    );
   }
 
   Future<void> _refresh() async {

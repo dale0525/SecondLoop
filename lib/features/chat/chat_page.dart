@@ -67,6 +67,7 @@ import '../actions/task_hub/task_hub_page.dart';
 import '../actions/task_hub/task_hub_quick_actions.dart';
 import '../actions/task_hub/task_priority_ai.dart';
 import '../actions/task_hub/task_priority_feedback_store.dart';
+import '../actions/task_hub/task_priority_shared_assessments_resolver.dart';
 import '../actions/task_hub/task_priority_store.dart';
 import '../actions/todo/todo_deeplink.dart';
 import '../actions/todo/todo_detail_page.dart';
@@ -597,28 +598,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       resolveAiService: _resolveTaskPriorityAiService,
       resolveAiCacheScopeKey: _resolveTaskPriorityAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
-      readSharedAiAssessments: ({
-        required aiService,
-        required cacheScopeKey,
-        required nowLocal,
-      }) async =>
-          aiService is BackendTaskPriorityAiService
-              ? aiService.readSharedAssessments(nowLocal: nowLocal)
-              : const <String, TaskPriorityAiCachedAssessment>{},
-      writeSharedAiAssessments: ({
-        required aiService,
-        required cacheScopeKey,
-        required entries,
-        required activeTodoIds,
-        required nowLocal,
-      }) async {
-        if (aiService is BackendTaskPriorityAiService) {
-          await aiService.writeSharedAssessments(
-            entries: entries,
-            activeTodoIds: activeTodoIds,
-          );
-        }
-      },
+      resolveSharedAiAssessmentsClient: ({required cacheScopeKey}) =>
+          resolveTaskPrioritySharedAssessmentsClient(
+        context,
+        cacheScopeKey: cacheScopeKey,
+      ),
       feedbackStore: _taskPriorityFeedbackStore,
     );
 
