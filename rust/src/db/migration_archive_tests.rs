@@ -485,6 +485,25 @@ fn migration_archive_rollback_snapshot_is_encrypted_on_disk() {
 }
 
 #[test]
+fn migration_archive_failed_encrypted_snapshot_restore_keeps_snapshot_for_recovery() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    fs::create_dir_all(app_dir.join("migration_archive/rollback")).expect("mkdir rollback");
+    let snapshot_path = app_dir.join("migration_archive/rollback/corrupt.bin");
+    fs::write(&snapshot_path, b"not an encrypted snapshot").expect("write corrupt snapshot");
+    let key = [42u8; 32];
+
+    let err = migration_archive_restore_from_encrypted_snapshot(&app_dir, &key, &snapshot_path)
+        .expect_err("corrupt snapshot restore should fail");
+
+    assert!(!err.to_string().is_empty());
+    assert!(
+        snapshot_path.exists(),
+        "failed snapshot restore should keep snapshot for manual recovery"
+    );
+}
+
+#[test]
 fn vault_rollback_snapshot_restores_non_migration_archive_tables_and_attachments() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().join("app");

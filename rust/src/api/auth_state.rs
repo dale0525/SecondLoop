@@ -82,10 +82,11 @@ fn table_has_rows(conn: &Connection, table: &str) -> Result<bool> {
 
 fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
     let attachments_exist = dir_has_entries(&app_dir.join("attachments"))?;
+    let staged_attachments_exist = db::attachment_reset_staging_dirs_have_entries(app_dir)?;
     let external_readonly_exists = db::external_readonly_has_user_data(app_dir)?;
     let db_path = app_dir.join("secondloop.sqlite3");
     if !db_path.exists() {
-        return Ok(attachments_exist || external_readonly_exists);
+        return Ok(attachments_exist || staged_attachments_exist || external_readonly_exists);
     }
 
     let conn = Connection::open_with_flags(
@@ -97,7 +98,7 @@ fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
             return Ok(true);
         }
     }
-    Ok(attachments_exist || external_readonly_exists)
+    Ok(attachments_exist || staged_attachments_exist || external_readonly_exists)
 }
 
 pub(crate) fn auth_is_initialized(app_dir: &Path) -> bool {
@@ -183,6 +184,28 @@ mod tests {
         );
 
         let error = result.expect_err("vault data without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_rejects_missing_auth_when_staged_attachments_exist()
+    {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let staged_dir = dir.path().join("attachments.reset-staged-stale");
+        fs::create_dir_all(&staged_dir).expect("create staged attachments");
+        fs::write(staged_dir.join("orphan.bin"), b"orphan").expect("write staged attachment");
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("staged attachment data without auth should be rejected");
         assert!(
             error
                 .to_string()

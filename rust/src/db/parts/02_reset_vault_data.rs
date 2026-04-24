@@ -3,6 +3,60 @@ struct AttachmentsResetGuard {
     staged_dir: Option<PathBuf>,
 }
 
+const ATTACHMENTS_RESET_STAGED_PREFIX: &str = "attachments.reset-staged-";
+
+fn is_attachment_reset_staging_name(name: &str) -> bool {
+    name.starts_with(ATTACHMENTS_RESET_STAGED_PREFIX)
+}
+
+pub(crate) fn attachment_reset_staging_dirs_have_entries(app_dir: &Path) -> Result<bool> {
+    match fs::read_dir(app_dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry?;
+                let name = entry.file_name();
+                if !is_attachment_reset_staging_name(&name.to_string_lossy()) {
+                    continue;
+                }
+                if entry.file_type()?.is_dir() {
+                    match fs::read_dir(entry.path()) {
+                        Ok(mut entries) => {
+                            if entries.next().is_some() {
+                                return Ok(true);
+                            }
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => return Err(e.into()),
+                    }
+                }
+            }
+            Ok(false)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn remove_stale_attachment_reset_staging_dirs(app_dir: &Path) -> Result<()> {
+    match fs::read_dir(app_dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry?;
+                let name = entry.file_name();
+                if !is_attachment_reset_staging_name(&name.to_string_lossy()) {
+                    continue;
+                }
+                if entry.file_type()?.is_dir() {
+                    best_effort_remove_dir_all(&entry.path())?;
+                }
+            }
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
 impl AttachmentsResetGuard {
     fn prepare(app_dir: &Path) -> Result<Self> {
         let attachments_dir = app_dir.join("attachments");
@@ -47,6 +101,10 @@ pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()>
     let mut attachments_guard = None;
 
     if let Some(app_dir) = app_dir.as_ref() {
+        if let Err(error) = remove_stale_attachment_reset_staging_dirs(app_dir) {
+            let _ = conn.execute_batch("ROLLBACK;");
+            return Err(error);
+        }
         match AttachmentsResetGuard::prepare(app_dir) {
             Ok(guard) => attachments_guard = Some(guard),
             Err(error) => {
@@ -134,8 +192,14 @@ DELETE FROM kv WHERE key != 'embedding.active_model_name';
     match result {
         Ok(()) => {
             if let Err(error) = conn.execute_batch("COMMIT;") {
+                let rollback_result = conn.execute_batch("ROLLBACK;");
                 if let Some(guard) = attachments_guard.as_mut() {
                     guard.restore()?;
+                }
+                if let Err(rollback_error) = rollback_result {
+                    return Err(anyhow!(
+                        "{error}; transaction rollback failed: {rollback_error}"
+                    ));
                 }
                 return Err(error.into());
             }

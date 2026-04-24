@@ -137,6 +137,25 @@ fn reset_vault_data_deletes_external_readonly_import_data() {
 }
 
 #[test]
+fn reset_vault_data_removes_stale_attachment_reset_staging_dirs() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let stale_staged_dir = app_dir.join("attachments.reset-staged-stale");
+    std::fs::create_dir_all(&stale_staged_dir).expect("create stale staged dir");
+    std::fs::write(stale_staged_dir.join("orphan.bin"), b"orphan")
+        .expect("write stale staged attachment");
+
+    db::reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault data");
+
+    assert!(
+        !stale_staged_dir.exists(),
+        "stale attachment reset staging data should be removed"
+    );
+}
+
+#[test]
 fn clear_remote_root_deletes_localdir_data() {
     let remote_dir = tempfile::tempdir().expect("remote dir");
     let remote = sync::localdir::LocalDirRemoteStore::new(remote_dir.path().to_path_buf())

@@ -485,9 +485,9 @@ pub fn import_migration_archive_with_callbacks(
             } else {
                 Ok(())
             };
-            migration_archive_remove_snapshot(snapshot_path.as_deref());
             match rollback_result {
                 Ok(()) => {
+                    migration_archive_remove_snapshot(snapshot_path.as_deref());
                     migration_archive_record_terminal_state(
                         app_dir,
                         on_event,
