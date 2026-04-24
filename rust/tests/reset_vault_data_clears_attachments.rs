@@ -56,8 +56,8 @@ fn reset_vault_data_deletes_attachments_and_exif() {
     assert_eq!(exif_after, 0);
 
     assert!(
-        !attachments_dir.exists(),
-        "attachments dir should be deleted after reset"
+        attachments_dir.is_dir(),
+        "attachments dir should be recreated after reset"
     );
     assert!(
         !attachment_path.exists(),

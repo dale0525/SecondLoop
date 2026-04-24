@@ -71,10 +71,6 @@ fn external_readonly_attachment_dir(app_dir: &Path) -> PathBuf {
     external_readonly_storage_dir(app_dir).join("attachments")
 }
 
-fn external_readonly_staging_dir(app_dir: &Path) -> PathBuf {
-    external_readonly_root_dir(app_dir).join("staging")
-}
-
 const EXTERNAL_READONLY_USER_DATA_TABLES: &[&str] = &[
     "external_import_batches",
     "external_documents",

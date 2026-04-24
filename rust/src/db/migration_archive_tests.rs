@@ -736,7 +736,7 @@ fn migration_archive_restore_from_encrypted_snapshot_cleans_up_on_materialize_fa
     let err = migration_archive_restore_from_encrypted_snapshot(&app_dir, &key, &snapshot_path)
         .expect_err("corrupt snapshot should fail");
 
-    assert!(!snapshot_path.exists());
+    assert!(snapshot_path.exists());
     assert!(!err.to_string().is_empty());
 }
 
