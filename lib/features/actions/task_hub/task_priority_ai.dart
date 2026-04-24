@@ -17,6 +17,7 @@ abstract class TaskPriorityAiService {
 
   Future<Map<String, TaskPriorityAiCachedAssessment>> readSharedAssessments({
     required DateTime nowLocal,
+    Duration cacheTtl = defaultTaskPriorityAiCacheTtl,
   }) async =>
       const <String, TaskPriorityAiCachedAssessment>{};
 
@@ -60,6 +61,139 @@ class TaskPriorityAiCachedAssessment {
       computedAtLocal:
           DateTime.fromMillisecondsSinceEpoch(computedAtMs.toInt()),
     );
+  }
+}
+
+class BackendTaskPriorityAiSharedAssessmentsClient {
+  BackendTaskPriorityAiSharedAssessmentsClient({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String localeTag,
+    required String cacheScopeKey,
+  })  : _backend = backend,
+        _sessionKey = Uint8List.fromList(sessionKey),
+        _gatewayBaseUrl = gatewayBaseUrl,
+        _idToken = idToken,
+        _modelName = modelName,
+        _localeTag = localeTag.trim(),
+        _cacheScopeKey = cacheScopeKey.trim();
+
+  final AppBackend _backend;
+  final Uint8List _sessionKey;
+  final String _gatewayBaseUrl;
+  final String _idToken;
+  final String _modelName;
+  final String _localeTag;
+  final String _cacheScopeKey;
+
+  String get cacheScopeKey => _cacheScopeKey;
+
+  bool get _canUseSharedCache =>
+      _idToken.trim().isNotEmpty && _cacheScopeKey.isNotEmpty;
+
+  Future<Map<String, TaskPriorityAiCachedAssessment>> read({
+    required DateTime nowLocal,
+    Duration cacheTtl = defaultTaskPriorityAiCacheTtl,
+  }) async {
+    if (!_canUseSharedCache) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+    try {
+      final raw = await _backend.fetchTaskPriorityAiAssessmentsCloudGateway(
+        _sessionKey,
+        gatewayBaseUrl: _gatewayBaseUrl,
+        idToken: _idToken,
+        cacheScopeKey: _cacheScopeKey,
+      );
+      if (raw.trim().isEmpty) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final data = decoded.map((key, value) => MapEntry(key.toString(), value));
+      final rawEntries = data['entries'];
+      if (rawEntries is! List) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final entries = <String, TaskPriorityAiCachedAssessment>{};
+      for (final rawEntry in rawEntries) {
+        if (rawEntry is! Map) continue;
+        final entryJson =
+            rawEntry.map((key, value) => MapEntry(key.toString(), value));
+        final todoId = (entryJson['todo_id'] ?? '').toString().trim();
+        if (todoId.isEmpty) continue;
+        final computedAtMs = entryJson['computed_at_ms'];
+        final parsedComputedAtMs = computedAtMs is num
+            ? computedAtMs.toInt()
+            : int.tryParse('${computedAtMs ?? ''}');
+        if (parsedComputedAtMs == null) continue;
+        final computedAtLocal =
+            DateTime.fromMillisecondsSinceEpoch(parsedComputedAtMs);
+        if (nowLocal.difference(computedAtLocal).abs() > cacheTtl) {
+          continue;
+        }
+        entries[todoId] = TaskPriorityAiCachedAssessment(
+          entry: TaskPriorityAiEntry.fromJson(entryJson),
+          requestSignature: (entryJson['request_signature'] ?? '').toString(),
+          computedAtLocal: computedAtLocal,
+        );
+      }
+      return entries;
+    } catch (_) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+  }
+
+  Future<void> write({
+    required Map<String, TaskPriorityAiCachedAssessment> entries,
+    required Iterable<String> activeTodoIds,
+  }) async {
+    if (!_canUseSharedCache) return;
+    final activeIds = activeTodoIds
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final isFullSnapshot = entries.keys.toSet().containsAll(activeIds);
+    final payloadEntries = <Object?>[];
+    int? updatedAtMs;
+    for (final entry in entries.entries) {
+      if (!activeIds.contains(entry.key)) continue;
+      final computedAtMs = entry.value.computedAtLocal.millisecondsSinceEpoch;
+      if (updatedAtMs == null || computedAtMs > updatedAtMs) {
+        updatedAtMs = computedAtMs;
+      }
+      payloadEntries.add(<String, Object?>{
+        ...entry.value.entry.toJson(),
+        'request_signature': entry.value.requestSignature,
+        'computed_at_ms': computedAtMs,
+      });
+    }
+    final resolvedUpdatedAtMs =
+        updatedAtMs ?? DateTime.now().millisecondsSinceEpoch;
+    try {
+      await _backend.upsertTaskPriorityAiAssessmentsCloudGateway(
+        _sessionKey,
+        gatewayBaseUrl: _gatewayBaseUrl,
+        idToken: _idToken,
+        cacheScopeKey: _cacheScopeKey,
+        payloadJson: jsonEncode(<String, Object?>{
+          'scope': _cacheScopeKey,
+          'route': AskAiRouteKind.cloudGateway.name,
+          'model_name': _modelName,
+          'locale_tag': _localeTag,
+          'replace_missing_entries': isFullSnapshot,
+          'updated_at_ms': resolvedUpdatedAtMs,
+          'entries': payloadEntries,
+        }),
+      );
+    } catch (_) {
+      // Ignore shared cache write failures.
+    }
   }
 }
 
@@ -322,79 +456,29 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
     );
   }
 
-  Future<String> _fetchSharedAssessmentsRaw() {
-    return _backend.fetchTaskPriorityAiAssessmentsCloudGateway(
-      _sessionKey,
-      gatewayBaseUrl: _gatewayBaseUrl,
-      idToken: _idToken,
-      cacheScopeKey: cacheScopeKey,
-    );
-  }
-
-  Future<void> _upsertSharedAssessmentsRaw(String payloadJson) {
-    return _backend.upsertTaskPriorityAiAssessmentsCloudGateway(
-      _sessionKey,
-      gatewayBaseUrl: _gatewayBaseUrl,
-      idToken: _idToken,
-      cacheScopeKey: cacheScopeKey,
-      payloadJson: payloadJson,
-    );
-  }
+  BackendTaskPriorityAiSharedAssessmentsClient get _sharedAssessmentsClient =>
+      BackendTaskPriorityAiSharedAssessmentsClient(
+        backend: _backend,
+        sessionKey: _sessionKey,
+        gatewayBaseUrl: _gatewayBaseUrl,
+        idToken: _idToken,
+        modelName: _modelName,
+        localeTag: _localeTag,
+        cacheScopeKey: cacheScopeKey,
+      );
 
   @override
   Future<Map<String, TaskPriorityAiCachedAssessment>> readSharedAssessments({
     required DateTime nowLocal,
+    Duration cacheTtl = defaultTaskPriorityAiCacheTtl,
   }) async {
     if (_route != AskAiRouteKind.cloudGateway) {
       return const <String, TaskPriorityAiCachedAssessment>{};
     }
-    final normalizedIdToken = _idToken.trim();
-    final normalizedScopeKey = cacheScopeKey.trim();
-    if (normalizedIdToken.isEmpty || normalizedScopeKey.isEmpty) {
-      return const <String, TaskPriorityAiCachedAssessment>{};
-    }
-    try {
-      final raw = await _fetchSharedAssessmentsRaw();
-      if (raw.trim().isEmpty) {
-        return const <String, TaskPriorityAiCachedAssessment>{};
-      }
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        return const <String, TaskPriorityAiCachedAssessment>{};
-      }
-      final data = decoded.map((key, value) => MapEntry(key.toString(), value));
-      final rawEntries = data['entries'];
-      if (rawEntries is! List) {
-        return const <String, TaskPriorityAiCachedAssessment>{};
-      }
-      final entries = <String, TaskPriorityAiCachedAssessment>{};
-      for (final rawEntry in rawEntries) {
-        if (rawEntry is! Map) continue;
-        final entryJson =
-            rawEntry.map((key, value) => MapEntry(key.toString(), value));
-        final todoId = (entryJson['todo_id'] ?? '').toString().trim();
-        if (todoId.isEmpty) continue;
-        final computedAtMs = entryJson['computed_at_ms'];
-        final parsedComputedAtMs = computedAtMs is num
-            ? computedAtMs.toInt()
-            : int.tryParse('${computedAtMs ?? ''}');
-        if (parsedComputedAtMs == null) continue;
-        final computedAtLocal =
-            DateTime.fromMillisecondsSinceEpoch(parsedComputedAtMs);
-        if (nowLocal.difference(computedAtLocal).abs() >
-            defaultTaskPriorityAiCacheTtl) {
-          continue;
-        }
-        entries[todoId] = TaskPriorityAiCachedAssessment(
-          entry: TaskPriorityAiEntry.fromJson(entryJson),
-          requestSignature: (entryJson['request_signature'] ?? '').toString(),
-          computedAtLocal: computedAtLocal,
-        );
-      }
-      return entries;
-    } catch (_) {
-      return const <String, TaskPriorityAiCachedAssessment>{};
-    }
+    return _sharedAssessmentsClient.read(
+      nowLocal: nowLocal,
+      cacheTtl: cacheTtl,
+    );
   }
 
   @override
@@ -403,45 +487,10 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
     required Iterable<String> activeTodoIds,
   }) async {
     if (_route != AskAiRouteKind.cloudGateway) return;
-    final normalizedIdToken = _idToken.trim();
-    final normalizedScopeKey = cacheScopeKey.trim();
-    if (normalizedIdToken.isEmpty || normalizedScopeKey.isEmpty) return;
-    final activeIds = activeTodoIds
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet();
-    final isFullSnapshot = entries.keys.toSet().containsAll(activeIds);
-    final payloadEntries = <Object?>[];
-    int? updatedAtMs;
-    for (final entry in entries.entries) {
-      if (!activeIds.contains(entry.key)) continue;
-      final computedAtMs = entry.value.computedAtLocal.millisecondsSinceEpoch;
-      if (updatedAtMs == null || computedAtMs > updatedAtMs) {
-        updatedAtMs = computedAtMs;
-      }
-      payloadEntries.add(<String, Object?>{
-        ...entry.value.entry.toJson(),
-        'request_signature': entry.value.requestSignature,
-        'computed_at_ms': computedAtMs,
-      });
-    }
-    final resolvedUpdatedAtMs =
-        updatedAtMs ?? DateTime.now().millisecondsSinceEpoch;
-    try {
-      await _upsertSharedAssessmentsRaw(
-        jsonEncode(<String, Object?>{
-          'scope': normalizedScopeKey,
-          'route': _route.name,
-          'model_name': _modelName,
-          'locale_tag': _localeTag,
-          'replace_missing_entries': isFullSnapshot,
-          'updated_at_ms': resolvedUpdatedAtMs,
-          'entries': payloadEntries,
-        }),
-      );
-    } catch (_) {
-      // Ignore shared cache write failures.
-    }
+    await _sharedAssessmentsClient.write(
+      entries: entries,
+      activeTodoIds: activeTodoIds,
+    );
   }
 
   @override

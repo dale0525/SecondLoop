@@ -29,6 +29,7 @@ import 'task_hub_quick_actions.dart';
 import 'task_priority_ai.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
+import 'task_priority_shared_assessments_resolver.dart';
 import 'task_priority_store.dart';
 import '../todo/todo_detail_page.dart';
 
@@ -130,28 +131,11 @@ class _TaskHubPageState extends State<TaskHubPage> {
       resolveAiService: _resolveAiService,
       resolveAiCacheScopeKey: _resolveAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
-      readSharedAiAssessments: ({
-        required aiService,
-        required cacheScopeKey,
-        required nowLocal,
-      }) async =>
-          aiService is BackendTaskPriorityAiService
-              ? aiService.readSharedAssessments(nowLocal: nowLocal)
-              : const <String, TaskPriorityAiCachedAssessment>{},
-      writeSharedAiAssessments: ({
-        required aiService,
-        required cacheScopeKey,
-        required entries,
-        required activeTodoIds,
-        required nowLocal,
-      }) async {
-        if (aiService is BackendTaskPriorityAiService) {
-          await aiService.writeSharedAssessments(
-            entries: entries,
-            activeTodoIds: activeTodoIds,
-          );
-        }
-      },
+      resolveSharedAiAssessmentsClient: ({required cacheScopeKey}) =>
+          resolveTaskPrioritySharedAssessmentsClient(
+        context,
+        cacheScopeKey: cacheScopeKey,
+      ),
       feedbackStore: _feedbackStore,
     );
     _attachStoreListener();

@@ -354,6 +354,48 @@ void main() {
     expect(entries, isEmpty);
   });
 
+  test('byok service skips shared assessment network even with token and scope',
+      () async {
+    final backend = _RecordingTaskPriorityBackend();
+    backend.sharedAssessmentsResponse = jsonEncode(<String, Object?>{
+      'ok': true,
+      'scope': 'byok-scope',
+      'entries': <Object?>[
+        <String, Object?>{
+          'todo_id': 'focus',
+          'semantic_adjustment': 18,
+          'reason': 'Cloud result must not leak into BYOK.',
+          'confidence': 'high',
+          'request_signature': 'sig-focus',
+          'computed_at_ms': DateTime(2026, 3, 13, 10, 0).millisecondsSinceEpoch,
+        },
+      ],
+    });
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'stale-cloud-token',
+      modelName: 'gpt-byok-test',
+      localeTag: 'en-US',
+      cacheScopeKeyOverride: 'byok-scope',
+    );
+
+    final entries = await service.readSharedAssessments(
+      nowLocal: DateTime(2026, 3, 13, 10, 5),
+    );
+    await service.writeSharedAssessments(
+      entries: const <String, TaskPriorityAiCachedAssessment>{},
+      activeTodoIds: const <String>[],
+    );
+
+    expect(entries, isEmpty);
+    expect(backend.sharedAssessmentFetchCalls, 0);
+    expect(backend.sharedAssessmentUpsertCalls, 0);
+    expect(backend.lastSharedAssessmentsPayload, isNull);
+  });
+
   test('shared assessment writes declare full snapshot replacement', () async {
     final backend = _RecordingTaskPriorityBackend();
     final service = BackendTaskPriorityAiService.forTesting(
@@ -857,6 +899,8 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
   Map<String, Object?>? lastSharedAssessmentsPayload;
   int taskPriorityCalls = 0;
   int cloudTaskPriorityCalls = 0;
+  int sharedAssessmentFetchCalls = 0;
+  int sharedAssessmentUpsertCalls = 0;
 
   @override
   Future<String> taskPriorityRerankAi(
@@ -912,6 +956,7 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
     required String idToken,
     required String cacheScopeKey,
   }) async {
+    sharedAssessmentFetchCalls += 1;
     return sharedAssessmentsResponse;
   }
 
@@ -923,6 +968,7 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
     required String cacheScopeKey,
     required String payloadJson,
   }) async {
+    sharedAssessmentUpsertCalls += 1;
     final decoded = jsonDecode(payloadJson) as Map;
     lastSharedAssessmentsPayload =
         decoded.map((key, value) => MapEntry(key.toString(), value));
