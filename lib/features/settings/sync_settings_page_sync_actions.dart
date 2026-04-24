@@ -325,6 +325,34 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return _deriveManagedVaultSyncKey(backend);
   }
 
+  Future<void> _restorePrimarySyncConfigSnapshot({
+    required AppBackend backend,
+    required SyncBackendType backendType,
+    required String remoteRoot,
+    required Uint8List? syncKey,
+    required SyncEngine? engine,
+  }) async {
+    await _store.writePrimarySyncSettings(
+      backendType: backendType,
+      remoteRoot: remoteRoot,
+    );
+    if (syncKey != null) {
+      await SyncKeyManager.save(
+        write: _store.writeSyncKey,
+        key: syncKey,
+      );
+    } else {
+      await _store.clearSyncKey();
+    }
+    if (backendType != SyncBackendType.managedVault) {
+      engine?.writeGate.value = const SyncWriteGateState.open();
+    }
+    unawaited(BackgroundSync.refreshSchedule(
+      backend: backend,
+      configStore: _store,
+    ));
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     _setState(() => _busy = true);
@@ -343,6 +371,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           (before[SyncConfigStore.kWebdavBaseUrl] ?? '').trim();
       final oldRemoteRoot = (before[SyncConfigStore.kRemoteRoot] ?? '').trim();
       final oldLocalDir = (before[SyncConfigStore.kLocalDir] ?? '').trim();
+      final previousSyncKey = await _store.readSyncKey();
+      if (!mounted) return;
 
       final backend = AppBackendScope.of(context);
       final backendType = _effectiveBackendType;
@@ -362,29 +392,27 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         _ => _requiredTrimmed(_remoteRootController).trim(),
       };
       final newLocalDir = _requiredTrimmed(_localDirController).trim();
-      final shouldSync = !_usesCloudSessionModel &&
-          _shouldRunSaveSyncForConfigChange(
-            oldBackendType: oldBackendType,
-            oldWebdavBaseUrl: oldWebdavBaseUrl,
-            oldRemoteRoot: oldRemoteRoot,
-            oldLocalDir: oldLocalDir,
-            newBackendType: newBackendType,
-            newWebdavBaseUrl: newWebdavBaseUrl,
-            newRemoteRoot: newRemoteRoot,
-            newLocalDir: newLocalDir,
-          );
+      final shouldSync = _shouldRunSaveSyncForConfigChange(
+        oldBackendType: oldBackendType,
+        oldWebdavBaseUrl: oldWebdavBaseUrl,
+        oldRemoteRoot: oldRemoteRoot,
+        oldLocalDir: oldLocalDir,
+        newBackendType: newBackendType,
+        newWebdavBaseUrl: newWebdavBaseUrl,
+        newRemoteRoot: newRemoteRoot,
+        newLocalDir: newLocalDir,
+      );
       SyncSwitchDirection? switchDirection;
-      if (!_usesCloudSessionModel &&
-          _shouldPromptSyncDirectionForConfigChange(
-            oldBackendType: oldBackendType,
-            oldWebdavBaseUrl: oldWebdavBaseUrl,
-            oldRemoteRoot: oldRemoteRoot,
-            oldLocalDir: oldLocalDir,
-            newBackendType: newBackendType,
-            newWebdavBaseUrl: newWebdavBaseUrl,
-            newRemoteRoot: newRemoteRoot,
-            newLocalDir: newLocalDir,
-          )) {
+      if (_shouldPromptSyncDirectionForConfigChange(
+        oldBackendType: oldBackendType,
+        oldWebdavBaseUrl: oldWebdavBaseUrl,
+        oldRemoteRoot: oldRemoteRoot,
+        oldLocalDir: oldLocalDir,
+        newBackendType: newBackendType,
+        newWebdavBaseUrl: newWebdavBaseUrl,
+        newRemoteRoot: newRemoteRoot,
+        newLocalDir: newLocalDir,
+      )) {
         _setState(() => _busy = false);
         switchDirection = await showSyncSwitchDirectionDialog(context);
         if (!mounted || switchDirection == null) return;
@@ -470,17 +498,18 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
+      if (!mounted) return;
 
       unawaited(BackgroundSync.refreshSchedule(
           backend: backend, configStore: _store));
 
+      final engine = SyncEngineScope.maybeOf(context);
       try {
         await _runConnectionTest();
         if (!mounted) return;
         _showSnack(t.sync.connectionOk);
 
         var didSync = false;
-        final engine = SyncEngineScope.maybeOf(context);
         if (shouldSync) {
           final sessionScope =
               context.getInheritedWidgetOfExactType<SessionScope>();
@@ -521,6 +550,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   sessionKey: sessionKey,
                   syncKey: activeSyncKey,
                   engine: engine,
+                  direction: switchDirection ?? SyncSwitchDirection.merge,
                 );
                 break;
             }
@@ -532,12 +562,24 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         if (!(didSync && newBackendType == SyncBackendType.managedVault)) {
           engine?.notifyExternalChange();
         }
-        if (!didSync) {
+        final canScheduleFallbackSync =
+            switchDirection != SyncSwitchDirection.remoteReplacesLocal;
+        if (!didSync && canScheduleFallbackSync) {
           engine?.triggerPushNow();
           engine?.triggerPullNow();
         }
       } catch (e) {
         if (!mounted) return;
+        if (newBackendType == SyncBackendType.managedVault &&
+            switchDirection == SyncSwitchDirection.remoteReplacesLocal) {
+          await _restorePrimarySyncConfigSnapshot(
+            backend: backend,
+            backendType: oldBackendType,
+            remoteRoot: oldRemoteRoot,
+            syncKey: previousSyncKey,
+            engine: engine,
+          );
+        }
         if (backendType == SyncBackendType.managedVault) {
           final details = inspectManagedVaultPushFailure(e);
           if (details.writeGateState != null) {

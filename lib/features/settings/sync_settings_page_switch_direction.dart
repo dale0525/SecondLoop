@@ -22,7 +22,8 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
           oldRemoteRoot != newRemoteRoot;
     }
     if (newBackendType == SyncBackendType.managedVault) {
-      return oldBackendType != SyncBackendType.managedVault;
+      return oldBackendType != SyncBackendType.managedVault ||
+          oldRemoteRoot != newRemoteRoot;
     }
     return false;
   }

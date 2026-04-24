@@ -746,7 +746,8 @@ final class _CloudSyncSwitchPromptGateState
                 progress.value = 1.0;
               } catch (error) {
                 rollbackConfig =
-                    shouldRollbackManagedVaultBootstrapAfterFailure(error);
+                    direction == SyncSwitchDirection.remoteReplacesLocal ||
+                        shouldRollbackManagedVaultBootstrapAfterFailure(error);
                 runFailureMessage = _managedVaultSyncFailureMessage(error);
                 // Best-effort: avoid blocking the user on transient sync errors.
                 completed = false;
