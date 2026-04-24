@@ -48,6 +48,42 @@ void main() {
     expect(await store.readRemoteRoot(), 'uid_1');
   });
 
+  testWidgets('Managed Vault save prompts when cloud server changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://old-vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _TrackingManagedVaultBackend();
+    final cloudAuth = _FakeCloudAuthController(uid: 'uid_1');
+
+    await tester.pumpWidget(_wrapSettingsPage(
+      store: store,
+      backend: backend,
+      cloudAuth: cloudAuth,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('Sync method').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) =>
+            w is TextField &&
+            w.decoration?.labelText == 'Cloud server address (advanced)',
+      ),
+      'https://new-vault.example.com',
+    );
+    await tester.pumpAndSettle();
+
+    await _tapSave(tester);
+
+    expect(find.text('Choose sync direction'), findsOneWidget);
+  });
+
   testWidgets('Cloud session save prompts when signed-in vault changes',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

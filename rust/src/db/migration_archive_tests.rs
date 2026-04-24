@@ -538,6 +538,74 @@ fn vault_rollback_snapshot_restores_non_migration_archive_tables_and_attachments
 }
 
 #[test]
+fn reset_vault_data_preserving_llm_profiles_clears_stale_migration_archive_runtime_data() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+
+    let rollback_file = app_dir.join("migration_archive/rollback/stale.bin");
+    let staging_file = app_dir.join("migration_archive/staging/stale/payload.bin");
+    fs::create_dir_all(rollback_file.parent().expect("rollback parent"))
+        .expect("create rollback dir");
+    fs::create_dir_all(staging_file.parent().expect("staging parent")).expect("create staging dir");
+    fs::write(&rollback_file, b"deleted-data-copy").expect("write rollback file");
+    fs::write(&staging_file, b"deleted-data-copy").expect("write staging file");
+
+    reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault");
+
+    assert!(!rollback_file.exists());
+    assert!(!staging_file.exists());
+}
+
+#[test]
+fn vault_rollback_restore_keeps_current_db_when_attachment_restore_cannot_start() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [55u8; 32];
+
+    let snapshot_conversation =
+        create_conversation(&conn, &key, "Snapshot").expect("snapshot conversation");
+    let attachments_dir = app_dir.join("attachments");
+    fs::create_dir_all(&attachments_dir).expect("create attachments dir");
+    fs::write(attachments_dir.join("snapshot.bin"), b"snapshot")
+        .expect("write snapshot attachment");
+    let snapshot_path = migration_archive_create_rollback_snapshot(&app_dir, &key)
+        .expect("create snapshot")
+        .expect("snapshot path");
+
+    let current_conversation =
+        create_conversation(&conn, &key, "Current").expect("current conversation");
+    drop(conn);
+    fs::remove_dir_all(&attachments_dir).expect("remove current attachments dir");
+    fs::write(&attachments_dir, b"not-a-directory").expect("write attachments blocker");
+
+    let err = migration_archive_restore_rollback_snapshot(&app_dir, &key, &snapshot_path)
+        .expect_err("restore should fail before replacing db");
+
+    assert!(!err.to_string().is_empty());
+    let conn = open(&app_dir).expect("reopen db");
+    let conversations = list_conversations(&conn, &key).expect("list conversations");
+    assert!(
+        conversations
+            .iter()
+            .any(|item| item.id == current_conversation.id),
+        "current database content should survive failed attachment restore"
+    );
+    assert!(
+        conversations
+            .iter()
+            .any(|item| item.id == snapshot_conversation.id),
+        "pre-existing snapshot-era content should still be present"
+    );
+    assert_eq!(
+        fs::read(&attachments_dir).expect("read blocker"),
+        b"not-a-directory"
+    );
+    assert!(snapshot_path.exists());
+}
+
+#[test]
 fn vault_rollback_restore_rejects_snapshot_without_db_without_deleting_current_db() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().join("app");

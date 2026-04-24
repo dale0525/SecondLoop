@@ -41,7 +41,8 @@ fn migration_archive_register_attachment_refs(
 ) -> Vec<String> {
     let mut paths = Vec::<String>::new();
     for attachment in attachments {
-        let archive_path = migration_archive_attachment_path(&attachment.sha256, &attachment.mime_type);
+        let archive_path =
+            migration_archive_attachment_path(&attachment.sha256, &attachment.mime_type);
         let entry = attachment_map
             .entry(attachment.sha256.clone())
             .or_insert_with(|| MigrationArchiveAttachment {
@@ -114,13 +115,75 @@ fn migration_archive_copy_attachments(
 const MIGRATION_ARCHIVE_ROLLBACK_SNAPSHOT_AAD: &[u8] = b"migration_archive.rollback_snapshot";
 const VAULT_ROLLBACK_SNAPSHOT_AAD: &[u8] = b"vault.rollback_snapshot.v1";
 
+fn migration_archive_active_rollback_snapshots() -> &'static std::sync::Mutex<BTreeSet<PathBuf>> {
+    static ACTIVE: std::sync::OnceLock<std::sync::Mutex<BTreeSet<PathBuf>>> =
+        std::sync::OnceLock::new();
+    ACTIVE.get_or_init(|| std::sync::Mutex::new(BTreeSet::new()))
+}
+
+fn migration_archive_normalized_path(path: &Path) -> PathBuf {
+    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn migration_archive_mark_active_rollback_snapshot(snapshot_path: &Path) -> Result<()> {
+    let mut active = migration_archive_active_rollback_snapshots()
+        .lock()
+        .map_err(|_| anyhow!("active rollback snapshot registry poisoned"))?;
+    active.insert(migration_archive_normalized_path(snapshot_path));
+    Ok(())
+}
+
+fn migration_archive_active_rollback_snapshot_paths(app_dir: &Path) -> Result<BTreeSet<PathBuf>> {
+    let rollback_dir =
+        migration_archive_normalized_path(&migration_archive_root_dir(app_dir).join("rollback"));
+    let mut active = migration_archive_active_rollback_snapshots()
+        .lock()
+        .map_err(|_| anyhow!("active rollback snapshot registry poisoned"))?;
+    active.retain(|path| path.exists());
+    Ok(active
+        .iter()
+        .filter(|path| path.parent() == Some(rollback_dir.as_path()))
+        .cloned()
+        .collect())
+}
+
+fn migration_archive_clear_active_rollback_marker_for_snapshot(snapshot_path: &Path) {
+    if let Ok(mut active) = migration_archive_active_rollback_snapshots().lock() {
+        active.remove(snapshot_path);
+        active.remove(&migration_archive_normalized_path(snapshot_path));
+    }
+}
+
+fn migration_archive_remove_rollback_snapshots_except_active(app_dir: &Path) -> Result<()> {
+    let rollback_dir = migration_archive_root_dir(app_dir).join("rollback");
+    if !rollback_dir.exists() {
+        return Ok(());
+    }
+    let active_snapshots = migration_archive_active_rollback_snapshot_paths(app_dir)?;
+    if active_snapshots.is_empty() {
+        return best_effort_remove_dir_all(&rollback_dir);
+    }
+    for entry in fs::read_dir(&rollback_dir)? {
+        let path = entry?.path();
+        if active_snapshots.contains(&migration_archive_normalized_path(&path)) {
+            continue;
+        }
+        if path.is_dir() {
+            best_effort_remove_dir_all(&path)?;
+        } else {
+            best_effort_remove_file(&path)?;
+        }
+    }
+    Ok(())
+}
+
 fn migration_archive_write_zip_to_writer<W: std::io::Write + std::io::Seek>(
     stage_dir: &Path,
     writer: W,
 ) -> Result<W> {
     let mut writer = zip::ZipWriter::new(writer);
-    let options = zip::write::FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let options =
+        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     let mut files = Vec::<PathBuf>::new();
     collect_files_recursively(stage_dir, &mut files)?;
     files.sort();
@@ -139,7 +202,8 @@ fn migration_archive_write_zip_to_writer<W: std::io::Write + std::io::Seek>(
 }
 
 fn migration_archive_write_zip_bytes(stage_dir: &Path) -> Result<Vec<u8>> {
-    let cursor = migration_archive_write_zip_to_writer(stage_dir, std::io::Cursor::new(Vec::new()))?;
+    let cursor =
+        migration_archive_write_zip_to_writer(stage_dir, std::io::Cursor::new(Vec::new()))?;
     Ok(cursor.into_inner())
 }
 
@@ -242,11 +306,10 @@ fn migration_archive_build_stage(
                 to_id: conversation.id.clone(),
                 relation_type: "belongs_to_conversation".to_string(),
             });
-            let archive_body = migration_archive_rewrite_embedded_attachment_refs(
-                &message.content,
-                &attachments,
-            );
-            let markdown = migration_archive_markdown_doc(&item, &archive_body, &attachment_paths, &[]);
+            let archive_body =
+                migration_archive_rewrite_embedded_attachment_refs(&message.content, &attachments);
+            let markdown =
+                migration_archive_markdown_doc(&item, &archive_body, &attachment_paths, &[]);
             let full_path = stage_dir.join(&item.markdown_path);
             if let Some(parent) = full_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -349,10 +412,8 @@ fn migration_archive_build_stage(
                 ),
             };
             item_titles.insert(item.id.clone(), item.title.clone());
-            let archive_body = migration_archive_rewrite_embedded_attachment_refs(
-                &activity_content,
-                &attachments,
-            );
+            let archive_body =
+                migration_archive_rewrite_embedded_attachment_refs(&activity_content, &attachments);
             let markdown = migration_archive_markdown_doc(
                 &item,
                 &archive_body,
@@ -413,7 +474,9 @@ fn migration_archive_build_stage(
 
     on_stage("copying_attachments", 3)?;
     migration_archive_copy_attachments(conn, key, app_dir, stage_dir, &attachments)?;
-    let attachments_vec = attachments.into_values().collect::<Vec<MigrationArchiveAttachment>>();
+    let attachments_vec = attachments
+        .into_values()
+        .collect::<Vec<MigrationArchiveAttachment>>();
     fs::create_dir_all(stage_dir.join("attachments"))?;
     let manifest = MigrationArchiveManifest {
         schema_version: MIGRATION_ARCHIVE_SCHEMA_VERSION,
@@ -447,7 +510,8 @@ fn migration_archive_write_encrypted_snapshot(
 
     let snapshot_result = (|| -> Result<()> {
         let mut on_stage = |_stage: &str, _done: i64| Ok(());
-        let _manifest = migration_archive_build_stage(conn, key, app_dir, &stage_dir, &mut on_stage)?;
+        let _manifest =
+            migration_archive_build_stage(conn, key, app_dir, &stage_dir, &mut on_stage)?;
         let zip_bytes = migration_archive_write_zip_bytes(&stage_dir)?;
         let encrypted = encrypt_bytes(key, &zip_bytes, MIGRATION_ARCHIVE_ROLLBACK_SNAPSHOT_AAD)?;
         if let Some(parent) = snapshot_path.parent() {
@@ -476,19 +540,20 @@ fn migration_archive_restore_from_encrypted_snapshot(
     key: &[u8; 32],
     snapshot_path: &Path,
 ) -> Result<()> {
-    let rollback_result = match migration_archive_materialize_encrypted_snapshot(
-        app_dir,
-        key,
-        snapshot_path,
-    ) {
-        Ok(source) => {
-            let result = migration_archive_replace_vault_with_source_root(app_dir, key, &source.root_dir)
+    let rollback_result =
+        match migration_archive_materialize_encrypted_snapshot(app_dir, key, snapshot_path) {
+            Ok(source) => {
+                let result = migration_archive_replace_vault_with_source_root(
+                    app_dir,
+                    key,
+                    &source.root_dir,
+                )
                 .map(|_| ());
-            cleanup_materialized_external_import_source(&source);
-            result
-        }
-        Err(err) => Err(err),
-    };
+                cleanup_materialized_external_import_source(&source);
+                result
+            }
+            Err(err) => Err(err),
+        };
     migration_archive_remove_snapshot(Some(snapshot_path));
     rollback_result
 }
@@ -593,51 +658,111 @@ fn vault_rollback_restore_from_encrypted_snapshot(
         if !staged_db.is_file() {
             return Err(anyhow!("rollback snapshot missing secondloop.sqlite3"));
         }
+        let attachments_dir = app_dir.join("attachments");
+        if attachments_dir.exists() && !attachments_dir.is_dir() {
+            return Err(anyhow!("attachments path is not a directory"));
+        }
+
         let temp_db = app_dir.join(format!(
             "secondloop.sqlite3.restore-{}.tmp",
             uuid::Uuid::new_v4()
         ));
-        fs::copy(&staged_db, &temp_db)?;
-        {
-            let validation_conn = Connection::open(&temp_db)?;
-            let _: i64 = validation_conn
-                .pragma_query_value(None, "user_version", |row| row.get(0))?;
-        }
-        let backup_db = app_dir.join(format!(
-            "secondloop.sqlite3.restore-backup-{}.tmp",
-            uuid::Uuid::new_v4()
-        ));
-        let had_existing_db = db_path.exists();
-        if had_existing_db {
-            fs::rename(&db_path, &backup_db)?;
-        }
-        if let Err(error) = fs::rename(&temp_db, &db_path) {
-            if had_existing_db {
-                let _ = fs::rename(&backup_db, &db_path);
-            }
-            return Err(error.into());
-        }
-        if had_existing_db {
-            best_effort_remove_file(&backup_db)?;
-        }
-        best_effort_remove_file(&app_dir.join("secondloop.sqlite3-wal"))?;
-        best_effort_remove_file(&app_dir.join("secondloop.sqlite3-shm"))?;
+        let temp_attachments =
+            app_dir.join(format!("attachments.restore-{}.tmp", uuid::Uuid::new_v4()));
 
-        let attachments_dir = app_dir.join("attachments");
-        best_effort_remove_dir_all(&attachments_dir)?;
-        let staged_attachments = stage_dir.join("attachments");
-        if staged_attachments.exists() {
-            vault_rollback_copy_dir_recursive(&staged_attachments, &attachments_dir)?;
-        } else {
-            fs::create_dir_all(&attachments_dir)?;
+        let prepared_result = (|| -> Result<()> {
+            fs::copy(&staged_db, &temp_db)?;
+            {
+                let validation_conn = Connection::open(&temp_db)?;
+                let _: i64 =
+                    validation_conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+            }
+
+            let staged_attachments = stage_dir.join("attachments");
+            if staged_attachments.exists() {
+                vault_rollback_copy_dir_recursive(&staged_attachments, &temp_attachments)?;
+            } else {
+                fs::create_dir_all(&temp_attachments)?;
+            }
+
+            let backup_db = app_dir.join(format!(
+                "secondloop.sqlite3.restore-backup-{}.tmp",
+                uuid::Uuid::new_v4()
+            ));
+            let backup_attachments = app_dir.join(format!(
+                "attachments.restore-backup-{}.tmp",
+                uuid::Uuid::new_v4()
+            ));
+            let had_existing_db = db_path.exists();
+            let had_existing_attachments = attachments_dir.exists();
+            let mut db_replaced = false;
+            let mut attachments_backed_up = false;
+            let mut attachments_replaced = false;
+
+            let swap_result = (|| -> Result<()> {
+                if had_existing_db {
+                    fs::rename(&db_path, &backup_db)?;
+                }
+                fs::rename(&temp_db, &db_path)?;
+                db_replaced = true;
+                best_effort_remove_file(&app_dir.join("secondloop.sqlite3-wal"))?;
+                best_effort_remove_file(&app_dir.join("secondloop.sqlite3-shm"))?;
+
+                if had_existing_attachments {
+                    fs::rename(&attachments_dir, &backup_attachments)?;
+                    attachments_backed_up = true;
+                }
+                fs::rename(&temp_attachments, &attachments_dir)?;
+                attachments_replaced = true;
+                Ok(())
+            })();
+
+            if let Err(error) = swap_result {
+                let mut rollback_error: Option<anyhow::Error> = None;
+                if attachments_replaced {
+                    if let Err(err) = best_effort_remove_dir_all(&attachments_dir) {
+                        rollback_error = Some(anyhow!("remove restored attachments failed: {err}"));
+                    }
+                }
+                if attachments_backed_up {
+                    if let Err(err) = fs::rename(&backup_attachments, &attachments_dir) {
+                        rollback_error = Some(anyhow!("restore attachments failed: {err}"));
+                    }
+                }
+                if db_replaced {
+                    if let Err(err) = best_effort_remove_file(&db_path) {
+                        rollback_error = Some(anyhow!("remove restored db failed: {err}"));
+                    }
+                }
+                if had_existing_db && backup_db.exists() {
+                    if let Err(err) = fs::rename(&backup_db, &db_path) {
+                        rollback_error = Some(anyhow!("restore db failed: {err}"));
+                    }
+                }
+                let _ = best_effort_remove_file(&temp_db);
+                let _ = best_effort_remove_dir_all(&temp_attachments);
+                if let Some(rollback_error) = rollback_error {
+                    return Err(anyhow!("{error}; rollback failed: {rollback_error}"));
+                }
+                return Err(error);
+            }
+
+            best_effort_remove_file(&backup_db)?;
+            best_effort_remove_dir_all(&backup_attachments)?;
+            Ok(())
+        })();
+        if prepared_result.is_err() {
+            let _ = best_effort_remove_file(&temp_db);
+            let _ = best_effort_remove_dir_all(&temp_attachments);
         }
-        Ok(())
+        prepared_result
     })();
 
     let _ = fs::remove_dir_all(&stage_dir);
     if restore_result.is_ok() {
         migration_archive_remove_snapshot(Some(snapshot_path));
     }
+    migration_archive_clear_active_rollback_marker_for_snapshot(snapshot_path);
     restore_result
 }
 
@@ -650,6 +775,7 @@ pub fn migration_archive_create_rollback_snapshot(
     fs::create_dir_all(&snapshot_dir)?;
     let snapshot_path = snapshot_dir.join(format!("{}.bin", uuid::Uuid::new_v4()));
     vault_rollback_write_encrypted_snapshot(&conn, key, app_dir, &snapshot_path)?;
+    migration_archive_mark_active_rollback_snapshot(&snapshot_path)?;
     Ok(Some(snapshot_path))
 }
 
@@ -662,6 +788,7 @@ pub fn migration_archive_restore_rollback_snapshot(
 }
 
 pub fn migration_archive_remove_rollback_snapshot(snapshot_path: &Path) -> Result<()> {
+    migration_archive_clear_active_rollback_marker_for_snapshot(snapshot_path);
     best_effort_remove_file(snapshot_path)
 }
 
@@ -673,16 +800,41 @@ pub fn export_migration_archive_with_callbacks(
     on_event: &mut dyn FnMut(MigrationArchiveProgress),
 ) -> Result<MigrationArchiveManifest> {
     let total_steps = 5;
-    migration_archive_record_progress(app_dir, on_event, "export", "preparing", 0, total_steps, "in_progress")?;
+    migration_archive_record_progress(
+        app_dir,
+        on_event,
+        "export",
+        "preparing",
+        0,
+        total_steps,
+        "in_progress",
+    )?;
     let stage_dir = migration_archive_staging_dir(app_dir).join(uuid::Uuid::new_v4().to_string());
     fs::create_dir_all(&stage_dir)?;
 
     let export_result = (|| -> Result<MigrationArchiveManifest> {
         let mut on_stage = |stage: &str, done: i64| {
-            migration_archive_record_progress(app_dir, on_event, "export", stage, done, total_steps, "in_progress")
+            migration_archive_record_progress(
+                app_dir,
+                on_event,
+                "export",
+                stage,
+                done,
+                total_steps,
+                "in_progress",
+            )
         };
-        let manifest = migration_archive_build_stage(conn, key, app_dir, &stage_dir, &mut on_stage)?;
-        migration_archive_record_progress(app_dir, on_event, "export", "zipping", 4, total_steps, "in_progress")?;
+        let manifest =
+            migration_archive_build_stage(conn, key, app_dir, &stage_dir, &mut on_stage)?;
+        migration_archive_record_progress(
+            app_dir,
+            on_event,
+            "export",
+            "zipping",
+            4,
+            total_steps,
+            "in_progress",
+        )?;
         migration_archive_write_zip(&stage_dir, output_path)?;
         migration_archive_record_terminal_state(
             app_dir,
@@ -780,7 +932,8 @@ SELECT (
         [],
         |row| row.get(0),
     )?;
-    let attachment_count: i64 = conn.query_row(r#"SELECT COUNT(*) FROM attachments"#, [], |row| row.get(0))?;
+    let attachment_count: i64 =
+        conn.query_row(r#"SELECT COUNT(*) FROM attachments"#, [], |row| row.get(0))?;
     let estimated_size_bytes = migration_archive_estimated_size_bytes(conn)?;
     Ok(MigrationArchiveExportEstimate {
         schema_version: MIGRATION_ARCHIVE_SCHEMA_VERSION,

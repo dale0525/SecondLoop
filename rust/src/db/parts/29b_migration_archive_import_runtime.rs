@@ -436,6 +436,7 @@ fn migration_archive_replace_vault_with_archive_with_callbacks(
 
 fn migration_archive_remove_snapshot(snapshot_path: Option<&Path>) {
     if let Some(path) = snapshot_path {
+        migration_archive_clear_active_rollback_marker_for_snapshot(path);
         let _ = fs::remove_file(path);
     }
 }
@@ -465,6 +466,7 @@ pub fn import_migration_archive_with_callbacks(
         let path = snapshot_dir.join(format!("{}.bin", uuid::Uuid::new_v4()));
         let conn = open(app_dir)?;
         migration_archive_write_encrypted_snapshot(&conn, key, app_dir, &path)?;
+        migration_archive_mark_active_rollback_snapshot(&path)?;
         Some(path)
     } else {
         None

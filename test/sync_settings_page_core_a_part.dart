@@ -226,6 +226,42 @@ void registerSyncSettingsPageCoreATests() {
     expect(find.text('Merge local and remote'), findsOneWidget);
   });
 
+  testWidgets('Save after changing WebDAV username asks how to reconcile data',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeWebdavUsername('old-user');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _SyncSettingsBackend();
+    await tester.pumpWidget(_wrap(
+      backend: backend,
+      store: store,
+      engine: null,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) =>
+            w is TextField && w.decoration?.labelText == 'Username (optional)',
+      ),
+      'new-user',
+    );
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose sync direction'), findsOneWidget);
+  });
+
   testWidgets('Save can replace local data from new WebDAV folder',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

@@ -412,11 +412,16 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final oldWebdavBaseUrl =
           (before[SyncConfigStore.kWebdavBaseUrl] ?? '').trim();
       final oldWebdavUsername = before[SyncConfigStore.kWebdavUsername];
+      final oldWebdavTargetUsername = oldWebdavUsername?.trim() ?? '';
       final oldWebdavPassword = await _store.readWebdavPassword();
       final oldRemoteRoot = (before[SyncConfigStore.kRemoteRoot] ?? '').trim();
       final oldLocalDir = (before[SyncConfigStore.kLocalDir] ?? '').trim();
       final oldManagedVaultBaseUrl =
           before[SyncConfigStore.kManagedVaultBaseUrl];
+      final oldManagedVaultTargetBaseUrl =
+          (oldManagedVaultBaseUrl ?? await _store.resolveManagedVaultBaseUrl())
+                  ?.trim() ??
+              '';
       final oldAutoEnabled = before[SyncConfigStore.kAutoEnabled] == null ||
           before[SyncConfigStore.kAutoEnabled] == '1';
       final previousSyncKey = await _store.readSyncKey();
@@ -434,6 +439,13 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
       final newBackendType = backendType;
       final newWebdavBaseUrl = _requiredTrimmed(_baseUrlController).trim();
+      final newWebdavUsername = _optionalTrimmed(_usernameController) ?? '';
+      final newManagedVaultBaseUrl = backendType == SyncBackendType.managedVault
+          ? (kDebugMode && _showManagedVaultEndpointOverride
+              ? _requiredTrimmed(_managedVaultBaseUrlController).trim()
+              : (await _store.resolveManagedVaultBaseUrl())?.trim() ?? '')
+          : '';
+      if (!mounted) return;
       final newRemoteRoot = switch (backendType) {
         SyncBackendType.managedVault =>
           CloudAuthScope.maybeOf(context)?.controller.uid?.trim() ?? '',
@@ -443,10 +455,14 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final shouldSync = _shouldRunSaveSyncForConfigChange(
         oldBackendType: oldBackendType,
         oldWebdavBaseUrl: oldWebdavBaseUrl,
+        oldWebdavUsername: oldWebdavTargetUsername,
+        oldManagedVaultBaseUrl: oldManagedVaultTargetBaseUrl,
         oldRemoteRoot: oldRemoteRoot,
         oldLocalDir: oldLocalDir,
         newBackendType: newBackendType,
         newWebdavBaseUrl: newWebdavBaseUrl,
+        newWebdavUsername: newWebdavUsername,
+        newManagedVaultBaseUrl: newManagedVaultBaseUrl,
         newRemoteRoot: newRemoteRoot,
         newLocalDir: newLocalDir,
       );
@@ -454,10 +470,14 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       if (_shouldPromptSyncDirectionForConfigChange(
         oldBackendType: oldBackendType,
         oldWebdavBaseUrl: oldWebdavBaseUrl,
+        oldWebdavUsername: oldWebdavTargetUsername,
+        oldManagedVaultBaseUrl: oldManagedVaultTargetBaseUrl,
         oldRemoteRoot: oldRemoteRoot,
         oldLocalDir: oldLocalDir,
         newBackendType: newBackendType,
         newWebdavBaseUrl: newWebdavBaseUrl,
+        newWebdavUsername: newWebdavUsername,
+        newManagedVaultBaseUrl: newManagedVaultBaseUrl,
         newRemoteRoot: newRemoteRoot,
         newLocalDir: newLocalDir,
       )) {

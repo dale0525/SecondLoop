@@ -4,16 +4,21 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
   bool _shouldRunSaveSyncForConfigChange({
     required SyncBackendType oldBackendType,
     required String oldWebdavBaseUrl,
+    required String oldWebdavUsername,
+    required String oldManagedVaultBaseUrl,
     required String oldRemoteRoot,
     required String oldLocalDir,
     required SyncBackendType newBackendType,
     required String newWebdavBaseUrl,
+    required String newWebdavUsername,
+    required String newManagedVaultBaseUrl,
     required String newRemoteRoot,
     required String newLocalDir,
   }) {
     if (newBackendType == SyncBackendType.webdav) {
       return oldBackendType != newBackendType ||
           oldWebdavBaseUrl != newWebdavBaseUrl ||
+          oldWebdavUsername != newWebdavUsername ||
           oldRemoteRoot != newRemoteRoot;
     }
     if (newBackendType == SyncBackendType.localDir) {
@@ -23,6 +28,7 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
     }
     if (newBackendType == SyncBackendType.managedVault) {
       return oldBackendType != SyncBackendType.managedVault ||
+          oldManagedVaultBaseUrl != newManagedVaultBaseUrl ||
           oldRemoteRoot != newRemoteRoot;
     }
     return false;
@@ -31,10 +37,14 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
   bool _shouldPromptSyncDirectionForConfigChange({
     required SyncBackendType oldBackendType,
     required String oldWebdavBaseUrl,
+    required String oldWebdavUsername,
+    required String oldManagedVaultBaseUrl,
     required String oldRemoteRoot,
     required String oldLocalDir,
     required SyncBackendType newBackendType,
     required String newWebdavBaseUrl,
+    required String newWebdavUsername,
+    required String newManagedVaultBaseUrl,
     required String newRemoteRoot,
     required String newLocalDir,
   }) {
@@ -43,17 +53,22 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
         oldWebdavBaseUrl.isNotEmpty && oldRemoteRoot.isNotEmpty,
       SyncBackendType.localDir =>
         oldLocalDir.isNotEmpty && oldRemoteRoot.isNotEmpty,
-      SyncBackendType.managedVault => oldRemoteRoot.isNotEmpty,
+      SyncBackendType.managedVault =>
+        oldManagedVaultBaseUrl.isNotEmpty && oldRemoteRoot.isNotEmpty,
     };
     if (!oldTargetConfigured) return false;
 
     return _shouldRunSaveSyncForConfigChange(
       oldBackendType: oldBackendType,
       oldWebdavBaseUrl: oldWebdavBaseUrl,
+      oldWebdavUsername: oldWebdavUsername,
+      oldManagedVaultBaseUrl: oldManagedVaultBaseUrl,
       oldRemoteRoot: oldRemoteRoot,
       oldLocalDir: oldLocalDir,
       newBackendType: newBackendType,
       newWebdavBaseUrl: newWebdavBaseUrl,
+      newWebdavUsername: newWebdavUsername,
+      newManagedVaultBaseUrl: newManagedVaultBaseUrl,
       newRemoteRoot: newRemoteRoot,
       newLocalDir: newLocalDir,
     );
