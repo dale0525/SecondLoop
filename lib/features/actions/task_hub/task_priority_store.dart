@@ -42,6 +42,8 @@ class TaskPriorityStore extends ChangeNotifier {
     Future<BackendTaskPriorityAiSharedAssessmentsClient?> Function({
       required String cacheScopeKey,
     })? resolveSharedAiAssessmentsClient,
+    // Legacy test seam; production callers should use
+    // resolveSharedAiAssessmentsClient instead.
     Future<Map<String, TaskPriorityAiCachedAssessment>> Function({
       required TaskPriorityAiService? aiService,
       required String cacheScopeKey,
@@ -79,6 +81,8 @@ class TaskPriorityStore extends ChangeNotifier {
     Future<BackendTaskPriorityAiSharedAssessmentsClient?> Function({
       required String cacheScopeKey,
     })? resolveSharedAiAssessmentsClient,
+    // Legacy test seam; production callers should use
+    // resolveSharedAiAssessmentsClient instead.
     Future<Map<String, TaskPriorityAiCachedAssessment>> Function({
       required TaskPriorityAiService? aiService,
       required String cacheScopeKey,
@@ -388,7 +392,10 @@ class TaskPriorityStore extends ChangeNotifier {
       if (_disposed) return;
       final sharedPersisted = canUseSharedCache
           ? sharedAssessmentsClient != null
-              ? await sharedAssessmentsClient.read(nowLocal: nowLocal)
+              ? await sharedAssessmentsClient.read(
+                  nowLocal: nowLocal,
+                  cacheTtl: _aiCacheTtl,
+                )
               : await _readSharedAiAssessments?.call(
                     aiService: aiService,
                     cacheScopeKey: sharedCacheScopeKey,

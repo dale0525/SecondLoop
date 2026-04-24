@@ -45,6 +45,30 @@ void main() {
     expect(backend.fetchCalls, 1);
     expect(backend.upsertCalls, 1);
   });
+
+  test('store forwards configured TTL to shared assessments client', () async {
+    SharedPreferences.setMockInitialValues({});
+    const cacheTtl = Duration(seconds: 7);
+    final client = _CapturingSharedAssessmentsClient();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _ImmediateAiService(
+        cacheScopeKey: 'cloud-scope',
+      ),
+      resolveSharedAiAssessmentsClient: ({required cacheScopeKey}) async {
+        expect(cacheScopeKey, 'cloud-scope');
+        return client;
+      },
+      aiCacheTtl: cacheTtl,
+    );
+
+    await store.refresh();
+
+    expect(client.readCacheTtl, cacheTtl);
+  });
 }
 
 Todo todo({
@@ -91,6 +115,37 @@ final class _ImmediateAiService extends TaskPriorityAiService {
           .toList(growable: false),
     );
   }
+}
+
+final class _CapturingSharedAssessmentsClient
+    extends BackendTaskPriorityAiSharedAssessmentsClient {
+  _CapturingSharedAssessmentsClient()
+      : super(
+          backend: _RecordingSharedAssessmentBackend(),
+          sessionKey: Uint8List(32),
+          gatewayBaseUrl: 'https://gateway.test',
+          idToken: 'test-id-token',
+          modelName: 'cloud-model',
+          localeTag: 'en',
+          cacheScopeKey: 'cloud-scope',
+        );
+
+  Duration? readCacheTtl;
+
+  @override
+  Future<Map<String, TaskPriorityAiCachedAssessment>> read({
+    required DateTime nowLocal,
+    Duration cacheTtl = defaultTaskPriorityAiCacheTtl,
+  }) async {
+    readCacheTtl = cacheTtl;
+    return const <String, TaskPriorityAiCachedAssessment>{};
+  }
+
+  @override
+  Future<void> write({
+    required Map<String, TaskPriorityAiCachedAssessment> entries,
+    required Iterable<String> activeTodoIds,
+  }) async {}
 }
 
 final class _RecordingSharedAssessmentBackend extends TestAppBackend {

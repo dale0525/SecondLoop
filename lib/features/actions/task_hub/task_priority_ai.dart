@@ -17,6 +17,7 @@ abstract class TaskPriorityAiService {
 
   Future<Map<String, TaskPriorityAiCachedAssessment>> readSharedAssessments({
     required DateTime nowLocal,
+    Duration cacheTtl = defaultTaskPriorityAiCacheTtl,
   }) async =>
       const <String, TaskPriorityAiCachedAssessment>{};
 
@@ -95,6 +96,7 @@ class BackendTaskPriorityAiSharedAssessmentsClient {
 
   Future<Map<String, TaskPriorityAiCachedAssessment>> read({
     required DateTime nowLocal,
+    Duration cacheTtl = defaultTaskPriorityAiCacheTtl,
   }) async {
     if (!_canUseSharedCache) {
       return const <String, TaskPriorityAiCachedAssessment>{};
@@ -132,8 +134,7 @@ class BackendTaskPriorityAiSharedAssessmentsClient {
         if (parsedComputedAtMs == null) continue;
         final computedAtLocal =
             DateTime.fromMillisecondsSinceEpoch(parsedComputedAtMs);
-        if (nowLocal.difference(computedAtLocal).abs() >
-            defaultTaskPriorityAiCacheTtl) {
+        if (nowLocal.difference(computedAtLocal).abs() > cacheTtl) {
           continue;
         }
         entries[todoId] = TaskPriorityAiCachedAssessment(
@@ -469,11 +470,15 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   @override
   Future<Map<String, TaskPriorityAiCachedAssessment>> readSharedAssessments({
     required DateTime nowLocal,
+    Duration cacheTtl = defaultTaskPriorityAiCacheTtl,
   }) async {
     if (_route != AskAiRouteKind.cloudGateway) {
       return const <String, TaskPriorityAiCachedAssessment>{};
     }
-    return _sharedAssessmentsClient.read(nowLocal: nowLocal);
+    return _sharedAssessmentsClient.read(
+      nowLocal: nowLocal,
+      cacheTtl: cacheTtl,
+    );
   }
 
   @override
