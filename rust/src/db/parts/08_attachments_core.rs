@@ -949,4 +949,28 @@ mod attachment_cache_tests {
         assert!(attachments_dir.is_dir());
         assert!(!attachment_file.exists());
     }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_reports_attachment_cleanup_failure() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let key = [3u8; 32];
+        crate::db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+        fs::write(dir.path().join("attachments"), b"not a directory")
+            .expect("write attachments file");
+
+        let result = crate::db::reset_vault_data_preserving_llm_profiles(&conn);
+
+        assert!(
+            result.is_err(),
+            "attachment cleanup failure should be reported"
+        );
+        let conversations: i64 = conn
+            .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
+            .expect("count conversations");
+        assert_eq!(
+            conversations, 1,
+            "db reset should roll back on cleanup failure"
+        );
+    }
 }

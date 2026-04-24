@@ -1,6 +1,49 @@
 part of 'sync_settings_page_delete_actions_test.dart';
 
 void registerDeleteActionsTailTests() {
+  testWidgets('delete local data disables auto sync and stops sync engine',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeAutoEnabled(true);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend();
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete local data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await _confirmDeletionTwice(tester);
+    await tester.pumpAndSettle();
+
+    expect(backend.resetLocalDataCalls, 1);
+    expect(await store.readAutoEnabled(), isFalse);
+    expect(engine.isRunning, isFalse);
+  });
+
   testWidgets(
       'delete all data refreshes background schedule with the active config store',
       (tester) async {

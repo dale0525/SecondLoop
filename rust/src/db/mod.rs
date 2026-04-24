@@ -6,6 +6,8 @@ include!("parts/01_kv_and_oplog.rs");
 include!("parts/02_migrate.rs");
 include!("parts/02_migrate_mid.rs");
 include!("parts/02_migrate_tail.rs");
+include!("parts/02_migrate_tail_tests.rs");
+include!("parts/02_reset_vault_data.rs");
 include!("parts/02_migrate_recent.rs");
 include!("parts/13_content_enrichment_kv.rs");
 include!("parts/03_conversations_messages.rs");

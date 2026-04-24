@@ -25,6 +25,8 @@ import 'managed_vault_sync_helpers.dart';
 import 'sync_switch_direction.dart';
 import 'sync_switch_direction_dialog.dart';
 
+part 'cloud_sync_switch_prompt_gate_key.dart';
+
 final class CloudSyncSwitchPromptGate extends StatefulWidget {
   const CloudSyncSwitchPromptGate({
     required this.child,
@@ -467,7 +469,6 @@ final class _CloudSyncSwitchPromptGateState
       return;
     }
     final shouldSwitch = await _promptSwitchToCloud();
-    _promptedForUid = true;
 
     if (!mounted) return;
     if (shouldSwitch == true) {
@@ -475,6 +476,7 @@ final class _CloudSyncSwitchPromptGateState
       if (!mounted || syncDirection == null) return;
       await _switchToCloud(uid, direction: syncDirection);
     }
+    _promptedForUid = true;
 
     await _maybePromptReviewAiFeatureGuide();
   }
@@ -565,6 +567,7 @@ final class _CloudSyncSwitchPromptGateState
     required String vaultId,
     required String idToken,
     required SyncSwitchDirection direction,
+    VoidCallback? onSafeToRestartEngine,
   }) async {
     final t = dialogContext.t;
     final stage = ValueNotifier<String>(t.sync.progressDialog.preparing);
@@ -693,6 +696,9 @@ final class _CloudSyncSwitchPromptGateState
                     }
                     break;
                 }
+                if (!rollbackConfig) {
+                  onSafeToRestartEngine?.call();
+                }
 
                 // Media uploads (optional)
                 final mediaEnabled = allowMediaUploads &&
@@ -741,7 +747,6 @@ final class _CloudSyncSwitchPromptGateState
                   }
                 }
 
-                // Finalize
                 stage.value = t.sync.progressDialog.finalizing;
                 progress.value = 1.0;
               } catch (error) {
@@ -752,6 +757,9 @@ final class _CloudSyncSwitchPromptGateState
                 // Best-effort: avoid blocking the user on transient sync errors.
                 completed = false;
               } finally {
+                if (!rollbackConfig) {
+                  onSafeToRestartEngine?.call();
+                }
                 if (context.mounted) {
                   Navigator.of(context).pop();
                 }
@@ -887,30 +895,35 @@ final class _CloudSyncSwitchPromptGateState
       return;
     }
 
-    final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
-      vaultId: uid,
-      deriveSyncKey: backend.deriveSyncKey,
-    );
-    await SyncKeyManager.save(
-      write: _store.writeSyncKey,
-      key: syncKey,
-    );
-
-    await _store.writePrimarySyncSettings(
-      backendType: SyncBackendType.managedVault,
-      remoteRoot: uid,
-    );
-    if (!mounted) return;
-
-    unawaited(BackgroundSync.refreshSchedule(
-      backend: backend,
-      configStore: _store,
-    ));
-
     var didSync = false;
     final engine = SyncEngineScope.maybeOf(context);
-    if (!effectiveContext.mounted) return;
+    var shouldRestartEngine = engine?.isRunning ?? false;
+    await engine?.stopImmediatelyAndWait();
+    var restartedEngineBeforeDialogDismiss = false;
+    void restartEngineBeforeDialogDismiss() {
+      if (!shouldRestartEngine || restartedEngineBeforeDialogDismiss) return;
+      engine?.start();
+      restartedEngineBeforeDialogDismiss = true;
+    }
+
     try {
+      if (!effectiveContext.mounted) return;
+      final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
+        vaultId: uid,
+        deriveSyncKey: backend.deriveSyncKey,
+      );
+      await SyncKeyManager.save(write: _store.writeSyncKey, key: syncKey);
+      await _store.writePrimarySyncSettings(
+        backendType: SyncBackendType.managedVault,
+        remoteRoot: uid,
+      );
+      if (!mounted) return;
+      if (!effectiveContext.mounted) return;
+      unawaited(BackgroundSync.refreshSchedule(
+        backend: backend,
+        configStore: _store,
+      ));
+
       final result = await _runManagedVaultSyncWithProgress(
         dialogContext: effectiveContext,
         engine: engine,
@@ -921,6 +934,7 @@ final class _CloudSyncSwitchPromptGateState
         vaultId: uid,
         idToken: idToken.trim(),
         direction: direction,
+        onSafeToRestartEngine: restartEngineBeforeDialogDismiss,
       );
       if (!result.completed && result.rollbackConfig) {
         await _restorePreviousSyncConfig(
@@ -930,6 +944,9 @@ final class _CloudSyncSwitchPromptGateState
           previousSyncKey: previousSyncKey,
           engine: engine,
         );
+        if (direction == SyncSwitchDirection.remoteReplacesLocal) {
+          shouldRestartEngine = false;
+        }
         if (mounted && result.failureMessage != null) {
           _showSnack(result.failureMessage!);
         }
@@ -947,10 +964,17 @@ final class _CloudSyncSwitchPromptGateState
         previousSyncKey: previousSyncKey,
         engine: engine,
       );
+      if (direction == SyncSwitchDirection.remoteReplacesLocal) {
+        shouldRestartEngine = false;
+      }
       if (mounted) {
         _showSnack(_managedVaultUserFacingErrorMessage(error));
       }
       return;
+    } finally {
+      if (shouldRestartEngine && !restartedEngineBeforeDialogDismiss) {
+        engine?.start();
+      }
     }
 
     if (!mounted) return;
@@ -958,25 +982,6 @@ final class _CloudSyncSwitchPromptGateState
     if (!didSync) {
       engine?.triggerPushNow();
       engine?.triggerPullNow();
-    }
-  }
-
-  Future<void> _ensureManagedVaultSyncKey(String uid) async {
-    final backendScope =
-        context.getInheritedWidgetOfExactType<AppBackendScope>();
-    if (backendScope == null) return;
-    final backend = backendScope.backend;
-    try {
-      final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
-        vaultId: uid,
-        deriveSyncKey: backend.deriveSyncKey,
-      );
-      await SyncKeyManager.save(
-        write: _store.writeSyncKey,
-        key: syncKey,
-      );
-    } catch (_) {
-      // Best-effort self-heal for managed-vault key policy.
     }
   }
 

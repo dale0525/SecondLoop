@@ -275,8 +275,21 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final engine = SyncEngineScope.maybeOf(context);
+      final wasRunning = engine?.isRunning ?? false;
+      var shouldRestartEngine = wasRunning;
 
-      await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+      try {
+        await engine?.stopImmediatelyAndWait();
+        await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+        shouldRestartEngine = false;
+        engine?.writeGate.value = const SyncWriteGateState.open();
+        await _disableAutoSyncAndRefreshSchedule(backend);
+      } catch (_) {
+        if (shouldRestartEngine) {
+          engine?.start();
+        }
+        rethrow;
+      }
 
       if (!mounted) return;
       engine?.notifyExternalChange();
