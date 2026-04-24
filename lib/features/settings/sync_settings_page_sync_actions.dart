@@ -631,10 +631,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
       } catch (e) {
         if (!mounted) return;
-        final shouldRestorePrimarySnapshot =
-            switchDirection == SyncSwitchDirection.remoteReplacesLocal ||
-                (newBackendType == SyncBackendType.managedVault &&
-                    e is _ManagedVaultSaveConfigurationException);
+        final shouldRestorePrimarySnapshot = switchDirection != null ||
+            (newBackendType == SyncBackendType.managedVault &&
+                e is _ManagedVaultSaveConfigurationException);
+        var restoredPrimarySnapshot = false;
         if (shouldRestorePrimarySnapshot) {
           await _restorePrimarySyncConfigSnapshot(
             backend: backend,
@@ -649,9 +649,11 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             syncKey: previousSyncKey,
             engine: engine,
           );
+          restoredPrimarySnapshot = true;
         }
         if (shouldRestartStoppedEngine &&
-            switchDirection != SyncSwitchDirection.remoteReplacesLocal) {
+            (switchDirection != SyncSwitchDirection.remoteReplacesLocal ||
+                restoredPrimarySnapshot)) {
           engine?.start();
         }
         if (backendType == SyncBackendType.managedVault) {

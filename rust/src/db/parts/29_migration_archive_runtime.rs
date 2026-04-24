@@ -588,13 +588,40 @@ fn vault_rollback_restore_from_encrypted_snapshot(
 
     let restore_result = (|| -> Result<()> {
         fs::create_dir_all(app_dir)?;
-        best_effort_remove_file(&app_dir.join("secondloop.sqlite3"))?;
+        let db_path = app_dir.join("secondloop.sqlite3");
+        let staged_db = stage_dir.join("secondloop.sqlite3");
+        if !staged_db.is_file() {
+            return Err(anyhow!("rollback snapshot missing secondloop.sqlite3"));
+        }
+        let temp_db = app_dir.join(format!(
+            "secondloop.sqlite3.restore-{}.tmp",
+            uuid::Uuid::new_v4()
+        ));
+        fs::copy(&staged_db, &temp_db)?;
+        {
+            let validation_conn = Connection::open(&temp_db)?;
+            let _: i64 = validation_conn
+                .pragma_query_value(None, "user_version", |row| row.get(0))?;
+        }
+        let backup_db = app_dir.join(format!(
+            "secondloop.sqlite3.restore-backup-{}.tmp",
+            uuid::Uuid::new_v4()
+        ));
+        let had_existing_db = db_path.exists();
+        if had_existing_db {
+            fs::rename(&db_path, &backup_db)?;
+        }
+        if let Err(error) = fs::rename(&temp_db, &db_path) {
+            if had_existing_db {
+                let _ = fs::rename(&backup_db, &db_path);
+            }
+            return Err(error.into());
+        }
+        if had_existing_db {
+            best_effort_remove_file(&backup_db)?;
+        }
         best_effort_remove_file(&app_dir.join("secondloop.sqlite3-wal"))?;
         best_effort_remove_file(&app_dir.join("secondloop.sqlite3-shm"))?;
-        fs::copy(
-            stage_dir.join("secondloop.sqlite3"),
-            app_dir.join("secondloop.sqlite3"),
-        )?;
 
         let attachments_dir = app_dir.join("attachments");
         best_effort_remove_dir_all(&attachments_dir)?;

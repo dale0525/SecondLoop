@@ -632,7 +632,7 @@ mixin _AppBackendSemanticAndSyncMixin {
   }
 
   Future<String?> createVaultRollbackSnapshot(Uint8List key) async {
-    return null;
+    throw UnimplementedError('createVaultRollbackSnapshot');
   }
 
   Future<void> restoreVaultRollbackSnapshot(
@@ -642,8 +642,9 @@ mixin _AppBackendSemanticAndSyncMixin {
     throw UnimplementedError('restoreVaultRollbackSnapshot');
   }
 
-  Future<void> deleteVaultRollbackSnapshot(
-      {required String snapshotPath}) async {}
+  Future<void> deleteVaultRollbackSnapshot({required String snapshotPath}) {
+    throw UnimplementedError('deleteVaultRollbackSnapshot');
+  }
 
   Stream<String> runMigrationArchiveImportProgress(
     Uint8List key, {

@@ -143,6 +143,21 @@ class TestAppBackend extends AppBackend {
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
 
   @override
+  Future<String?> createVaultRollbackSnapshot(Uint8List key) async =>
+      'test-vault-rollback-snapshot';
+
+  @override
+  Future<void> restoreVaultRollbackSnapshot(
+    Uint8List key, {
+    required String snapshotPath,
+  }) async {}
+
+  @override
+  Future<void> deleteVaultRollbackSnapshot({
+    required String snapshotPath,
+  }) async {}
+
+  @override
   Future<List<Todo>> listTodos(Uint8List key) async => const <Todo>[];
 
   @override

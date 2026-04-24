@@ -1,6 +1,66 @@
+struct AttachmentsResetGuard {
+    attachments_dir: PathBuf,
+    staged_dir: Option<PathBuf>,
+}
+
+impl AttachmentsResetGuard {
+    fn prepare(app_dir: &Path) -> Result<Self> {
+        let attachments_dir = app_dir.join("attachments");
+        let mut staged_dir = if attachments_dir.exists() {
+            if !attachments_dir.is_dir() {
+                return Err(anyhow!("attachments path is not a directory"));
+            }
+            let staged_dir = app_dir.join(format!(
+                "attachments.reset-staged-{}",
+                uuid::Uuid::new_v4()
+            ));
+            fs::rename(&attachments_dir, &staged_dir)?;
+            Some(staged_dir)
+        } else {
+            None
+        };
+        if let Err(error) = fs::create_dir_all(&attachments_dir) {
+            if let Some(staged_dir) = staged_dir.take() {
+                let _ = fs::rename(staged_dir, &attachments_dir);
+            }
+            return Err(error.into());
+        }
+        Ok(Self {
+            attachments_dir,
+            staged_dir,
+        })
+    }
+
+    fn restore(&mut self) -> Result<()> {
+        best_effort_remove_dir_all(&self.attachments_dir)?;
+        if let Some(staged_dir) = self.staged_dir.take() {
+            fs::rename(staged_dir, &self.attachments_dir)?;
+        }
+        Ok(())
+    }
+
+    fn finish(mut self) -> Result<()> {
+        if let Some(staged_dir) = self.staged_dir.take() {
+            best_effort_remove_dir_all(&staged_dir)?;
+        }
+        Ok(())
+    }
+}
+
 pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()> {
     let app_dir = app_dir_from_conn(conn).ok();
     conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let mut attachments_guard = None;
+
+    if let Some(app_dir) = app_dir.as_ref() {
+        match AttachmentsResetGuard::prepare(app_dir) {
+            Ok(guard) => attachments_guard = Some(guard),
+            Err(error) => {
+                let _ = conn.execute_batch("ROLLBACK;");
+                return Err(error);
+            }
+        }
+    }
 
     let result: Result<()> = (|| {
         conn.execute_batch(
@@ -74,22 +134,32 @@ DELETE FROM oplog;
 DELETE FROM kv WHERE key != 'embedding.active_model_name';
 "#,
         )?;
-        if let Some(app_dir) = app_dir.as_ref() {
-            let attachments_dir = app_dir.join("attachments");
-            best_effort_remove_dir_all(&attachments_dir)?;
-            fs::create_dir_all(attachments_dir)?;
-        }
         Ok(())
     })();
 
     match result {
         Ok(()) => {
-            conn.execute_batch("COMMIT;")?;
+            if let Err(error) = conn.execute_batch("COMMIT;") {
+                if let Some(guard) = attachments_guard.as_mut() {
+                    guard.restore()?;
+                }
+                return Err(error.into());
+            }
+            if let Some(guard) = attachments_guard {
+                guard.finish()?;
+            }
             Ok(())
         }
-        Err(e) => {
+        Err(error) => {
             let _ = conn.execute_batch("ROLLBACK;");
-            Err(e)
+            if let Some(guard) = attachments_guard.as_mut() {
+                if let Err(restore_error) = guard.restore() {
+                    return Err(anyhow!(
+                        "{error}; attachment restore failed: {restore_error}"
+                    ));
+                }
+            }
+            Err(error)
         }
     }
 }

@@ -383,6 +383,21 @@ final class _TrackingSyncSettingsBackend extends _SyncSettingsBackend {
   }
 
   @override
+  Future<String?> createVaultRollbackSnapshot(Uint8List key) async =>
+      'snapshot-1';
+
+  @override
+  Future<void> restoreVaultRollbackSnapshot(
+    Uint8List key, {
+    required String snapshotPath,
+  }) async {}
+
+  @override
+  Future<void> deleteVaultRollbackSnapshot({
+    required String snapshotPath,
+  }) async {}
+
+  @override
   Future<int> syncWebdavPull(
     Uint8List key,
     Uint8List syncKey, {
@@ -453,6 +468,65 @@ final class _FailingReplaceLocalSyncSettingsBackend
     required String snapshotPath,
   }) async {
     calls.add('restoreSnapshot:$snapshotPath');
+  }
+}
+
+final class _FailingReplaceRemoteSyncSettingsBackend
+    extends _SyncSettingsBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<void> syncWebdavTestConnection({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavTest');
+  }
+
+  @override
+  Future<void> syncWebdavClearRemoteRoot({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavClear:$remoteRoot');
+    throw StateError('webdav_clear_failed');
+  }
+}
+
+final class _RollbacklessReplaceLocalSyncSettingsBackend
+    extends _SyncSettingsBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<void> syncWebdavTestConnection({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavTest');
+  }
+
+  @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
+    calls.add('resetLocal');
+  }
+
+  @override
+  Future<int> syncWebdavPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavPull:$remoteRoot');
+    return 0;
   }
 }
 

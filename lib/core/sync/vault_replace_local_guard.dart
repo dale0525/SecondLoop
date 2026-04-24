@@ -12,41 +12,38 @@ Future<T> runDestructiveReplaceLocalWithRollback<T>({
   try {
     snapshotPath = await backend.createVaultRollbackSnapshot(sessionKey);
   } on UnimplementedError catch (error) {
-    debugPrint(
-      'sync replace-local: rollback snapshot unavailable; continuing without snapshot: $error',
-    );
+    throw StateError('replace-local rollback snapshot unavailable: $error');
+  }
+  if (snapshotPath == null || snapshotPath.trim().isEmpty) {
+    throw StateError('replace-local rollback snapshot unavailable');
   }
 
   try {
     await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
     final result = await run();
     final path = snapshotPath;
-    if (path != null) {
-      unawaited(backend
-          .deleteVaultRollbackSnapshot(snapshotPath: path)
-          .catchError((error) {
-        debugPrint(
-          'sync replace-local: failed to remove rollback snapshot after success: $error',
-        );
-      }));
-    }
+    final deleteSnapshot = Future<void>.sync(
+      () => backend.deleteVaultRollbackSnapshot(snapshotPath: path),
+    ).catchError((error) {
+      debugPrint(
+        'sync replace-local: failed to remove rollback snapshot after success: $error',
+      );
+    });
+    unawaited(deleteSnapshot);
     return result;
   } catch (error, stackTrace) {
-    final path = snapshotPath;
-    if (path != null) {
-      try {
-        await backend.restoreVaultRollbackSnapshot(
-          sessionKey,
-          snapshotPath: path,
-        );
-      } catch (rollbackError) {
-        Error.throwWithStackTrace(
-          StateError(
-            'replace-local failed: $error; rollback failed: $rollbackError',
-          ),
-          stackTrace,
-        );
-      }
+    try {
+      await backend.restoreVaultRollbackSnapshot(
+        sessionKey,
+        snapshotPath: snapshotPath,
+      );
+    } catch (rollbackError) {
+      Error.throwWithStackTrace(
+        StateError(
+          'replace-local failed: $error; rollback failed: $rollbackError',
+        ),
+        stackTrace,
+      );
     }
     rethrow;
   }

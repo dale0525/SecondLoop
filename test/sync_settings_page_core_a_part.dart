@@ -326,6 +326,143 @@ void registerSyncSettingsPageCoreATests() {
     expect(await store.readSyncKey(), oldSyncKey);
   });
 
+  testWidgets('Failed WebDAV replace-local restarts previously running engine',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://old.example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final runner = _FakeRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: store.loadConfiguredSync,
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+    final backend = _FailingReplaceLocalSyncSettingsBackend();
+    await tester.pumpWidget(_wrap(
+      backend: backend,
+      store: store,
+      engine: engine,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Folder name',
+      ),
+      'SecondLoop2',
+    );
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Replace this device with remote'));
+    await tester.pumpAndSettle();
+
+    expect(engine.isRunning, isTrue);
+    engine.stopImmediately();
+  });
+
+  testWidgets('Failed WebDAV replace-remote restores old config',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final oldSyncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://old.example.com/dav');
+    await store.writeWebdavUsername('old-user');
+    await store.writeWebdavPassword('old-password');
+    await store.writeSyncKey(oldSyncKey);
+
+    final backend = _FailingReplaceRemoteSyncSettingsBackend();
+    await tester.pumpWidget(_wrap(
+      backend: backend,
+      store: store,
+      engine: null,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
+      ),
+      'https://new.example.com/dav',
+    );
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Folder name',
+      ),
+      'SecondLoop2',
+    );
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Replace remote with this device'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>[
+      'webdavTest',
+      'webdavClear:SecondLoop2',
+    ]);
+    expect(await store.readWebdavBaseUrl(), 'https://old.example.com/dav');
+    expect(await store.readWebdavUsername(), 'old-user');
+    expect(await store.readWebdavPassword(), 'old-password');
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+    expect(await store.readSyncKey(), oldSyncKey);
+  });
+
+  testWidgets('Replace-local refuses backends without rollback snapshots',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://old.example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _RollbacklessReplaceLocalSyncSettingsBackend();
+    await tester.pumpWidget(_wrap(
+      backend: backend,
+      store: store,
+      engine: null,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Folder name',
+      ),
+      'SecondLoop2',
+    );
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Replace this device with remote'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>['webdavTest']);
+    expect(await store.readRemoteRoot(), 'SecondLoop');
+  });
+
   testWidgets('Save after changing local folder shows sync progress dialog',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

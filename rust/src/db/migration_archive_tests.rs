@@ -538,6 +538,38 @@ fn vault_rollback_snapshot_restores_non_migration_archive_tables_and_attachments
 }
 
 #[test]
+fn vault_rollback_restore_rejects_snapshot_without_db_without_deleting_current_db() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [54u8; 32];
+
+    let conversation = create_conversation(&conn, &key, "Keep me").expect("conversation");
+    drop(conn);
+
+    let stage_dir = dir.path().join("bad-snapshot-stage");
+    fs::create_dir_all(stage_dir.join("attachments")).expect("create stage attachments");
+    fs::write(stage_dir.join("attachments/orphan.bin"), b"orphan").expect("write staged file");
+    let zip_bytes = migration_archive_write_zip_bytes(&stage_dir).expect("zip stage");
+    let encrypted =
+        encrypt_bytes(&key, &zip_bytes, VAULT_ROLLBACK_SNAPSHOT_AAD).expect("encrypt snapshot");
+    let snapshot_path = app_dir
+        .join("migration_archive/rollback")
+        .join("missing-db.bin");
+    fs::create_dir_all(snapshot_path.parent().expect("rollback dir")).expect("mkdir rollback");
+    fs::write(&snapshot_path, encrypted).expect("write snapshot");
+
+    let err = migration_archive_restore_rollback_snapshot(&app_dir, &key, &snapshot_path)
+        .expect_err("snapshot without db should fail");
+
+    assert!(err.to_string().contains("secondloop.sqlite3"));
+    assert!(app_dir.join("secondloop.sqlite3").exists());
+    let conn = open(&app_dir).expect("reopen db");
+    let conversations = list_conversations(&conn, &key).expect("list conversations");
+    assert!(conversations.iter().any(|item| item.id == conversation.id));
+}
+
+#[test]
 fn migration_archive_restore_from_materialized_source_cleans_up_written_attachments_on_error() {
     let dir = tempfile::tempdir().expect("tempdir");
     let source_root = dir.path().join("source-root");
