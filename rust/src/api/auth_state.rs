@@ -84,10 +84,14 @@ fn table_has_rows(conn: &Connection, table: &str) -> Result<bool> {
 fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
     let attachments_exist = dir_has_entries(&app_dir.join("attachments"))?;
     let staged_attachments_exist = db::attachment_reset_staging_dirs_have_entries(app_dir)?;
+    let embedding_artifacts_exist = dir_has_entries(&app_dir.join("embedding_artifacts"))?;
     let external_readonly_exists = db::external_readonly_has_user_data(app_dir)?;
     let db_path = app_dir.join("secondloop.sqlite3");
     if !db_path.exists() {
-        return Ok(attachments_exist || staged_attachments_exist || external_readonly_exists);
+        return Ok(attachments_exist
+            || staged_attachments_exist
+            || embedding_artifacts_exist
+            || external_readonly_exists);
     }
 
     let conn = Connection::open_with_flags(
@@ -99,7 +103,13 @@ fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
             return Ok(true);
         }
     }
-    Ok(attachments_exist || staged_attachments_exist || external_readonly_exists)
+    if db::dynamic_embedding_tables_have_rows(&conn)? {
+        return Ok(true);
+    }
+    Ok(attachments_exist
+        || staged_attachments_exist
+        || embedding_artifacts_exist
+        || external_readonly_exists)
 }
 
 pub(crate) fn auth_is_initialized(app_dir: &Path) -> bool {
@@ -226,6 +236,55 @@ mod tests {
         );
 
         let error = result.expect_err("external data without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_rejects_missing_auth_when_embedding_artifacts_exist(
+    ) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let artifact_dir = dir.path().join("embedding_artifacts");
+        fs::create_dir_all(&artifact_dir).expect("create embedding artifact dir");
+        fs::write(artifact_dir.join("orphan.bin"), b"artifact").expect("write artifact blob");
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("embedding artifacts without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_rejects_missing_auth_when_dynamic_embeddings_exist()
+    {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        conn.execute_batch(
+            r#"
+CREATE TABLE message_embeddings__s_review_4(embedding BLOB, message_id TEXT, model_name TEXT);
+INSERT INTO message_embeddings__s_review_4 VALUES (X'01', 'message-1', 'review');
+"#,
+        )
+        .expect("seed dynamic embedding table");
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("dynamic embeddings without auth should be rejected");
         assert!(
             error
                 .to_string()
@@ -437,7 +496,7 @@ PRAGMA user_version = 1;
     }
 
     #[test]
-    fn rollback_snapshot_restore_rejects_missing_auth_when_vault_has_user_data() {
+    fn rollback_snapshot_restore_allows_active_snapshot_when_auth_file_is_missing() {
         let dir = tempfile::tempdir().expect("tempdir");
         let key = [3u8; 32];
         auth::init_master_password_with_existing_key(
@@ -462,7 +521,31 @@ PRAGMA user_version = 1;
             snapshot_path.to_string_lossy().into_owned(),
         );
 
-        let error = result.expect_err("vault data without auth should be rejected");
+        assert!(
+            result.is_ok(),
+            "active rollback snapshot should restore without current auth: {result:?}"
+        );
+    }
+
+    #[test]
+    fn rollback_snapshot_restore_still_rejects_inactive_snapshot_when_auth_file_is_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let key = [4u8; 32];
+        let conn = db::open(dir.path()).expect("open db");
+        db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+        drop(conn);
+        let snapshot_path = dir.path().join("migration_archive/rollback/inactive.bin");
+        fs::create_dir_all(snapshot_path.parent().expect("snapshot parent"))
+            .expect("create rollback dir");
+        fs::write(&snapshot_path, b"inactive").expect("write inactive snapshot");
+
+        let result = crate::api::migration_archive::migration_archive_restore_rollback_snapshot(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+            snapshot_path.to_string_lossy().into_owned(),
+        );
+
+        let error = result.expect_err("inactive snapshot without auth should be rejected");
         assert!(
             error
                 .to_string()

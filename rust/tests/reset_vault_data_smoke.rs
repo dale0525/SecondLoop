@@ -155,6 +155,97 @@ fn reset_vault_data_deletes_external_readonly_import_data() {
 }
 
 #[test]
+fn reset_vault_data_deletes_dynamic_embedding_tables() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let _key = auth::init_master_password(Path::new(&app_dir), "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+
+    conn.execute_batch(
+        r#"
+CREATE TABLE message_embeddings__s_review_4(embedding BLOB, message_id TEXT, model_name TEXT);
+CREATE TABLE todo_embeddings__s_review_4(embedding BLOB, todo_id TEXT, model_name TEXT);
+CREATE TABLE todo_activity_embeddings__s_review_4(embedding BLOB, activity_id TEXT, todo_id TEXT, model_name TEXT);
+CREATE TABLE attachment_chunk_embeddings__s_review_4(embedding BLOB, chunk_rowid INTEGER, model_name TEXT);
+INSERT INTO message_embeddings__s_review_4 VALUES (X'01', 'message-1', 'review');
+INSERT INTO todo_embeddings__s_review_4 VALUES (X'02', 'todo-1', 'review');
+INSERT INTO todo_activity_embeddings__s_review_4 VALUES (X'03', 'activity-1', 'todo-1', 'review');
+INSERT INTO attachment_chunk_embeddings__s_review_4 VALUES (X'04', 1, 'review');
+"#,
+    )
+    .expect("seed dynamic embedding tables");
+
+    db::reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault data");
+
+    for table in [
+        "message_embeddings__s_review_4",
+        "todo_embeddings__s_review_4",
+        "todo_activity_embeddings__s_review_4",
+        "attachment_chunk_embeddings__s_review_4",
+    ] {
+        let count: i64 = conn
+            .query_row(&format!(r#"SELECT COUNT(*) FROM "{table}""#), [], |row| {
+                row.get(0)
+            })
+            .expect("count dynamic embedding table");
+        assert_eq!(count, 0, "{table} should be empty after reset");
+    }
+}
+
+#[test]
+fn reset_vault_data_deletes_embedding_artifact_blobs() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(Path::new(&app_dir), "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+    let blob_ref = "blob/reset-artifact";
+
+    db::write_embedding_artifact_blob(&app_dir, &key, blob_ref, b"artifact-secret")
+        .expect("write artifact blob");
+    db::record_embedding_artifact_manifest(
+        &conn,
+        db::EmbeddingArtifactManifestInput {
+            source_kind: "message",
+            source_id: "message-1",
+            source_revision: 1,
+            chunk_hash: "chunk-1",
+            chunk_ordinal: 0,
+            profile_id: "profile-1",
+            producer_device_id: Some("device-a"),
+            producer_class: "desktop",
+            quality_tier: "full",
+            vector_format: "f32",
+            dimension: 4,
+            blob_ref,
+            created_at_ms: Some(1),
+        },
+    )
+    .expect("record artifact manifest");
+    let artifact_path = app_dir.join(db::embedding_artifact_blob_rel_path(blob_ref));
+    assert!(
+        artifact_path.exists(),
+        "artifact blob should exist before reset"
+    );
+
+    db::reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault data");
+
+    let manifest_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM embedding_artifact_manifests",
+            [],
+            |row| row.get(0),
+        )
+        .expect("count artifact manifests");
+    assert_eq!(manifest_count, 0);
+    assert!(
+        !artifact_path.exists(),
+        "artifact blob should be deleted after reset"
+    );
+}
+
+#[test]
 fn reset_vault_data_removes_stale_attachment_reset_staging_dirs() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().join("app");

@@ -4,6 +4,12 @@ struct AttachmentsResetGuard {
 }
 
 const ATTACHMENTS_RESET_STAGED_PREFIX: &str = "attachments.reset-staged-";
+const DYNAMIC_EMBEDDING_TABLE_PREFIXES: &[&str] = &[
+    "message_embeddings__",
+    "todo_embeddings__",
+    "todo_activity_embeddings__",
+    "attachment_chunk_embeddings__",
+];
 
 fn is_attachment_reset_staging_name(name: &str) -> bool {
     name.starts_with(ATTACHMENTS_RESET_STAGED_PREFIX)
@@ -55,6 +61,63 @@ fn remove_stale_attachment_reset_staging_dirs(app_dir: &Path) -> Result<()> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e.into()),
     }
+}
+
+fn is_dynamic_embedding_space_suffix(suffix: &str) -> bool {
+    let Some(dim) = suffix.rsplit('_').next() else {
+        return false;
+    };
+    suffix.starts_with("s_")
+        && suffix.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+        && !dim.is_empty()
+        && dim.chars().all(|ch| ch.is_ascii_digit())
+}
+
+fn is_dynamic_embedding_table_name(name: &str) -> bool {
+    DYNAMIC_EMBEDDING_TABLE_PREFIXES.iter().any(|prefix| {
+        name.strip_prefix(prefix)
+            .is_some_and(is_dynamic_embedding_space_suffix)
+    })
+}
+
+fn dynamic_embedding_table_names(conn: &Connection) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type = 'table'")?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+    let mut table_names = Vec::new();
+    for row in rows {
+        let table_name = row?;
+        if is_dynamic_embedding_table_name(&table_name) {
+            table_names.push(table_name);
+        }
+    }
+    Ok(table_names)
+}
+
+pub(crate) fn dynamic_embedding_tables_have_rows(conn: &Connection) -> Result<bool> {
+    for table_name in dynamic_embedding_table_names(conn)? {
+        let quoted = table_name.replace('"', "\"\"");
+        let has_rows: bool = conn.query_row(
+            &format!(r#"SELECT EXISTS(SELECT 1 FROM "{quoted}" LIMIT 1)"#),
+            [],
+            |row| row.get(0),
+        )?;
+        if has_rows {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn clear_dynamic_embedding_tables(conn: &Connection) -> Result<()> {
+    for table_name in dynamic_embedding_table_names(conn)? {
+        let quoted = table_name.replace('"', "\"\"");
+        conn.execute(&format!(r#"DELETE FROM "{quoted}""#), [])?;
+    }
+    Ok(())
+}
+
+fn remove_embedding_artifacts_data(app_dir: &Path) -> Result<()> {
+    best_effort_remove_dir_all(&app_dir.join("embedding_artifacts"))
 }
 
 impl AttachmentsResetGuard {
@@ -115,6 +178,7 @@ pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()>
     }
 
     let result: Result<()> = (|| {
+        clear_dynamic_embedding_tables(conn)?;
         conn.execute_batch(
             r#"
 DELETE FROM message_embeddings;
@@ -204,13 +268,14 @@ DELETE FROM kv WHERE key != 'embedding.active_model_name';
                 return Err(error.into());
             }
             if let Some(guard) = attachments_guard {
-                guard.finish()?;
+                let _ = guard.finish();
             }
             if let Some(app_dir) = app_dir.as_ref() {
-                fs::create_dir_all(app_dir.join("attachments"))?;
-                migration_archive_remove_rollback_snapshots_except_active(app_dir)?;
-                best_effort_remove_dir_all(&migration_archive_staging_dir(app_dir))?;
-                remove_external_readonly_data(app_dir)?;
+                let _ = fs::create_dir_all(app_dir.join("attachments"));
+                let _ = migration_archive_remove_rollback_snapshots_except_active(app_dir);
+                let _ = best_effort_remove_dir_all(&migration_archive_staging_dir(app_dir));
+                let _ = remove_external_readonly_data(app_dir);
+                let _ = remove_embedding_artifacts_data(app_dir);
             }
             Ok(())
         }

@@ -147,6 +147,14 @@ fn migration_archive_active_rollback_snapshot_paths(app_dir: &Path) -> Result<BT
         .collect())
 }
 
+pub fn migration_archive_is_active_rollback_snapshot(
+    app_dir: &Path,
+    snapshot_path: &Path,
+) -> Result<bool> {
+    Ok(migration_archive_active_rollback_snapshot_paths(app_dir)?
+        .contains(&migration_archive_normalized_path(snapshot_path)))
+}
+
 fn migration_archive_clear_active_rollback_marker_for_snapshot(snapshot_path: &Path) {
     if let Ok(mut active) = migration_archive_active_rollback_snapshots().lock() {
         active.remove(snapshot_path);
@@ -594,10 +602,7 @@ fn vault_rollback_write_encrypted_snapshot(
         let db_snapshot_path = stage_dir.join("secondloop.sqlite3");
         let db_snapshot_path_string = db_snapshot_path.to_string_lossy().into_owned();
         conn.execute("VACUUM main INTO ?1", params![db_snapshot_path_string])?;
-        vault_rollback_copy_dir_recursive(
-            &app_dir.join("attachments"),
-            &stage_dir.join("attachments"),
-        )?;
+        vault_rollback_copy_file_dirs(app_dir, &stage_dir)?;
         let zip_bytes = migration_archive_write_zip_bytes(&stage_dir)?;
         let encrypted = encrypt_bytes(key, &zip_bytes, VAULT_ROLLBACK_SNAPSHOT_AAD)?;
         if let Some(parent) = snapshot_path.parent() {
@@ -660,17 +665,10 @@ fn vault_rollback_restore_from_encrypted_snapshot(
         if !staged_db.is_file() {
             return Err(anyhow!("rollback snapshot missing secondloop.sqlite3"));
         }
-        let attachments_dir = app_dir.join("attachments");
-        if attachments_dir.exists() && !attachments_dir.is_dir() {
-            return Err(anyhow!("attachments path is not a directory"));
-        }
-
         let temp_db = app_dir.join(format!(
             "secondloop.sqlite3.restore-{}.tmp",
             uuid::Uuid::new_v4()
         ));
-        let temp_attachments =
-            app_dir.join(format!("attachments.restore-{}.tmp", uuid::Uuid::new_v4()));
 
         let prepared_result = (|| -> Result<()> {
             fs::copy(&staged_db, &temp_db)?;
@@ -680,26 +678,14 @@ fn vault_rollback_restore_from_encrypted_snapshot(
                     validation_conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
             }
 
-            let staged_attachments = stage_dir.join("attachments");
-            if staged_attachments.exists() {
-                vault_rollback_copy_dir_recursive(&staged_attachments, &temp_attachments)?;
-            } else {
-                fs::create_dir_all(&temp_attachments)?;
-            }
+            let mut file_dir_swaps = vault_rollback_prepare_file_dir_swaps(app_dir, &stage_dir)?;
 
             let backup_db = app_dir.join(format!(
                 "secondloop.sqlite3.restore-backup-{}.tmp",
                 uuid::Uuid::new_v4()
             ));
-            let backup_attachments = app_dir.join(format!(
-                "attachments.restore-backup-{}.tmp",
-                uuid::Uuid::new_v4()
-            ));
             let had_existing_db = db_path.exists();
-            let had_existing_attachments = attachments_dir.exists();
             let mut db_replaced = false;
-            let mut attachments_backed_up = false;
-            let mut attachments_replaced = false;
 
             let swap_result = (|| -> Result<()> {
                 if had_existing_db {
@@ -710,27 +696,12 @@ fn vault_rollback_restore_from_encrypted_snapshot(
                 best_effort_remove_file(&app_dir.join("secondloop.sqlite3-wal"))?;
                 best_effort_remove_file(&app_dir.join("secondloop.sqlite3-shm"))?;
 
-                if had_existing_attachments {
-                    fs::rename(&attachments_dir, &backup_attachments)?;
-                    attachments_backed_up = true;
-                }
-                fs::rename(&temp_attachments, &attachments_dir)?;
-                attachments_replaced = true;
+                vault_rollback_apply_file_dir_swaps(&mut file_dir_swaps)?;
                 Ok(())
             })();
 
             if let Err(error) = swap_result {
-                let mut rollback_error: Option<anyhow::Error> = None;
-                if attachments_replaced {
-                    if let Err(err) = best_effort_remove_dir_all(&attachments_dir) {
-                        rollback_error = Some(anyhow!("remove restored attachments failed: {err}"));
-                    }
-                }
-                if attachments_backed_up {
-                    if let Err(err) = fs::rename(&backup_attachments, &attachments_dir) {
-                        rollback_error = Some(anyhow!("restore attachments failed: {err}"));
-                    }
-                }
+                let mut rollback_error = vault_rollback_undo_file_dir_swaps(&mut file_dir_swaps);
                 if db_replaced {
                     if let Err(err) = best_effort_remove_file(&db_path) {
                         rollback_error = Some(anyhow!("remove restored db failed: {err}"));
@@ -742,7 +713,6 @@ fn vault_rollback_restore_from_encrypted_snapshot(
                     }
                 }
                 let _ = best_effort_remove_file(&temp_db);
-                let _ = best_effort_remove_dir_all(&temp_attachments);
                 if let Some(rollback_error) = rollback_error {
                     return Err(anyhow!("{error}; rollback failed: {rollback_error}"));
                 }
@@ -750,12 +720,11 @@ fn vault_rollback_restore_from_encrypted_snapshot(
             }
 
             best_effort_remove_file(&backup_db)?;
-            best_effort_remove_dir_all(&backup_attachments)?;
+            vault_rollback_cleanup_file_dir_swaps(&file_dir_swaps);
             Ok(())
         })();
         if prepared_result.is_err() {
             let _ = best_effort_remove_file(&temp_db);
-            let _ = best_effort_remove_dir_all(&temp_attachments);
         }
         prepared_result
     })();

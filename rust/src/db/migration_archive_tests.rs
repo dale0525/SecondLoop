@@ -527,6 +527,17 @@ fn vault_rollback_snapshot_restores_non_migration_archive_tables_and_attachments
     let attachments_dir = app_dir.join("attachments");
     fs::create_dir_all(&attachments_dir).expect("create attachments dir");
     fs::write(attachments_dir.join("orphan.bin"), b"attachment-bytes").expect("write attachment");
+    let external_readonly_dir = app_dir.join("external_readonly/storage/attachments");
+    fs::create_dir_all(&external_readonly_dir).expect("create external readonly dir");
+    fs::write(external_readonly_dir.join("orphan.bin"), b"external-bytes")
+        .expect("write external readonly file");
+    let embedding_artifacts_dir = app_dir.join("embedding_artifacts");
+    fs::create_dir_all(&embedding_artifacts_dir).expect("create embedding artifacts dir");
+    fs::write(
+        embedding_artifacts_dir.join("orphan.bin"),
+        b"artifact-bytes",
+    )
+    .expect("write embedding artifact file");
 
     let snapshot_path = migration_archive_create_rollback_snapshot(&app_dir, &key)
         .expect("create snapshot")
@@ -539,6 +550,8 @@ fn vault_rollback_snapshot_restores_non_migration_archive_tables_and_attachments
         .expect("count after reset");
     assert_eq!(count_after_reset, 0);
     assert!(!attachments_dir.join("orphan.bin").exists());
+    assert!(!external_readonly_dir.join("orphan.bin").exists());
+    assert!(!embedding_artifacts_dir.join("orphan.bin").exists());
     drop(conn);
 
     migration_archive_restore_rollback_snapshot(&app_dir, &key, &snapshot_path)
@@ -553,6 +566,14 @@ fn vault_rollback_snapshot_restores_non_migration_archive_tables_and_attachments
     assert_eq!(
         fs::read(attachments_dir.join("orphan.bin")).expect("read attachment"),
         b"attachment-bytes"
+    );
+    assert_eq!(
+        fs::read(external_readonly_dir.join("orphan.bin")).expect("read external readonly file"),
+        b"external-bytes"
+    );
+    assert_eq!(
+        fs::read(embedding_artifacts_dir.join("orphan.bin")).expect("read embedding artifact file"),
+        b"artifact-bytes"
     );
 }
 

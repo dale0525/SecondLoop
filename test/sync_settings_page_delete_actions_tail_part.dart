@@ -133,7 +133,27 @@ void registerDeleteActionsTailTests() {
       'cloud session model persists canonical managed vault config after auth controller updates',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
+    final methodCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel(
+          'be.tramckrijte.workmanager/foreground_channel_work_manager'),
+      (call) async {
+        methodCalls.add(call);
+        return true;
+      },
+    );
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel(
+            'be.tramckrijte.workmanager/foreground_channel_work_manager'),
+        null,
+      );
+    });
+
     final store = SyncConfigStore(
+      scopeKey: 'cloud-session-scope',
       managedVaultDefaultBaseUrl: 'https://vault.default.example',
     );
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
@@ -142,7 +162,9 @@ void registerDeleteActionsTailTests() {
 
     await tester.pumpWidget(
       _wrap(
-        backend: _DeleteActionsBackend(),
+        backend: _DeleteActionsBackend(
+          savedSessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+        ),
         store: store,
         cloudAuthController: cloudAuthController,
         capabilities: AppPlatformCapabilities.webCloud(),
@@ -151,6 +173,8 @@ void registerDeleteActionsTailTests() {
     await tester.pumpAndSettle();
 
     expect(await store.loadConfiguredSync(), isNull);
+    await store.writeAutoEnabled(true);
+    methodCalls.clear();
 
     cloudAuthController.setSession(userId: 'uid_2', idToken: 'token-2');
     await tester.pumpAndSettle();
@@ -160,5 +184,10 @@ void registerDeleteActionsTailTests() {
     expect(configured!.backendType, SyncBackendType.managedVault);
     expect(configured.remoteRoot, 'uid_2');
     expect(configured.baseUrl, 'https://vault.default.example');
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+      methodCalls.where((call) => call.method == 'registerPeriodicTask'),
+      hasLength(1),
+    );
   });
 }

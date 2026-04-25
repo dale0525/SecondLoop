@@ -44,6 +44,7 @@ include!("parts/26_external_readonly_phase_b.rs");
 include!("parts/28_migration_archive.rs");
 include!("parts/29_migration_archive_runtime.rs");
 include!("parts/29b_migration_archive_import_runtime.rs");
+include!("parts/29c_migration_archive_file_dirs.rs");
 include!("parts/30_todo_followup_suggestions.rs");
 include!("parts/31_todo_followup_generation_jobs.rs");
 

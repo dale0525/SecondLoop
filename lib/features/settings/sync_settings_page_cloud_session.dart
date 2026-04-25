@@ -63,5 +63,11 @@ extension _SyncSettingsPageCloudSession on _SyncSettingsPageState {
       backendType: SyncBackendType.managedVault,
       remoteRoot: cloudUid,
     );
+    if (backend != null) {
+      unawaited(BackgroundSync.refreshSchedule(
+        backend: backend,
+        configStore: _store,
+      ));
+    }
   }
 }
