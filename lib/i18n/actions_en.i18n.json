@@ -235,6 +235,8 @@
     "title": "Add to calendar?",
     "pickTime": "Pick a start time",
     "noAutoTime": "No suggested time found",
-    "pickCustom": "Pick date & time"
+    "pickCustom": "Pick date & time",
+    "localTimeRange": "Local: $range",
+    "timezoneTimeRange": "$timezone: $range"
   }
 }

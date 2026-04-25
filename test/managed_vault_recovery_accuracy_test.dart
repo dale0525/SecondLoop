@@ -138,6 +138,9 @@ void main() {
     expect(find.text('Switch'), findsOneWidget);
     await tester.tap(find.text('Switch'));
     await tester.pumpAndSettle();
+    expect(find.text('Choose sync direction'), findsOneWidget);
+    await tester.tap(find.text('Merge local and remote'));
+    await tester.pumpAndSettle();
 
     expect(
       backend.calls,

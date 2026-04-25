@@ -15,9 +15,9 @@ String _wireSection(String fnName) {
 }
 
 void main() {
-  test('web wasm FRB async APIs are limited to init_app bootstrap only', () {
+  test('web wasm FRB async APIs are limited to audited entrypoints', () {
     final apiFiles = Directory('rust/src/api')
-        .listSync()
+        .listSync(recursive: true)
         .whereType<File>()
         .where((file) => file.path.endsWith('.rs'))
         .toList()
@@ -35,20 +35,28 @@ void main() {
         pattern.allMatches(source).map((match) => match.group(1)!),
       );
     }
+    asyncApis.sort();
 
     expect(
       asyncApis,
-      <String>['init_app'],
+      <String>['init_app', 'sync_managed_vault_pull'],
       reason:
-          'Non-bootstrap web wasm FRB async APIs bypass the normal worker-pool path and run on the current thread.',
+          'FRB async APIs bypass the normal worker-pool path, so each non-bootstrap entrypoint needs an explicit runtime contract.',
     );
   });
 
-  test('managed-vault pull wire uses the normal worker-pool path', () {
+  test('managed-vault pull wire uses the async bridge path', () {
     final section =
         _wireSection('wire__crate__api__core__sync_managed_vault_pull_impl');
-    expect(section, contains('wrap_normal::<'));
-    expect(section, isNot(contains('wrap_async::<')));
+    final pullEntrypoint =
+        File('rust/src/api/core_parts/part_05.rs').readAsStringSync();
+
+    expect(section, contains('wrap_async::<'));
+    expect(section, isNot(contains('wrap_normal::<')));
+    expect(section, contains('crate::api::core::sync_managed_vault_pull('));
+    expect(section, contains('.await'));
+    expect(pullEntrypoint, contains('tokio::task::spawn_blocking'));
+    expect(pullEntrypoint, contains('#[cfg(target_family = "wasm")]'));
   });
 
   test(

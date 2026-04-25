@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
 
 class EventViewerPage extends StatelessWidget {
@@ -20,6 +21,7 @@ class EventViewerPage extends StatelessWidget {
         _resolveEventTimeInOriginalTimezone(event.startAtMs.toInt(), event.tz);
     final originalEnd =
         _resolveEventTimeInOriginalTimezone(event.endAtMs.toInt(), event.tz);
+    final t = context.t.actions.calendar;
 
     return Scaffold(
       key: const ValueKey('event_viewer_page'),
@@ -35,13 +37,19 @@ class EventViewerPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           SelectableText(
-            'Local: ${_formatEventRange(localizations, localStart, localEnd)}',
+            t.localTimeRange(
+              range: _formatEventRange(localizations, localStart, localEnd),
+            ),
             key: const ValueKey('event_viewer_time_range'),
           ),
           if (originalStart != null && originalEnd != null) ...[
             const SizedBox(height: 12),
             SelectableText(
-              '${event.tz}: ${_formatEventRange(localizations, originalStart, originalEnd)}',
+              t.timezoneTimeRange(
+                timezone: event.tz,
+                range: _formatEventRange(
+                    localizations, originalStart, originalEnd),
+              ),
               key: const ValueKey('event_viewer_original_time_range'),
             ),
           ],

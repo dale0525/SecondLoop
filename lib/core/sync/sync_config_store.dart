@@ -46,6 +46,8 @@ final class SyncConfigStore {
   static const _kStateRevisionKey = 'sync_config_state_revision_v1';
   static const prefsBlobKeyForTest = _kPrefsBlobKey;
   static const legacyPrefsBlobKeyForTest = _kLegacyPrefsBlobKey;
+  static const stateRevisionPrefsKeyForTest = _kStateRevisionKey;
+  static const secretPrefsBlobKeyForTest = SyncSecretStore.kPrefsBlobKeyForTest;
   static const syncSecretStoreVersionPrefsKeyForTest =
       SyncConfigMigrator.secretStoreVersionPrefsKey;
   static final ValueNotifier<int> _changeCounter = ValueNotifier<int>(0);

@@ -72,6 +72,7 @@ final class _CloudSyncSwitchPromptGateState
       SnackBar(
         content: Text(message),
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }

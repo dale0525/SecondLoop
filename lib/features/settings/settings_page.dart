@@ -378,7 +378,18 @@ class _SettingsPageState extends State<SettingsPage> {
         }
       }
 
-      await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+      Object? committedCleanupFailure;
+      try {
+        await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+      } catch (e) {
+        if (!_isVaultResetCommittedCleanupFailure(e)) {
+          rethrow;
+        }
+        committedCleanupFailure = e;
+        debugPrint(
+          'settings debug reset: local vault reset committed but cleanup failed: $e',
+        );
+      }
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kAppLockEnabledPrefsKey);
@@ -386,6 +397,25 @@ class _SettingsPageState extends State<SettingsPage> {
       await backend.clearSavedSessionKey();
 
       await BackgroundSync.refreshSchedule(backend: backend);
+
+      if (committedCleanupFailure != null && mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              clearAllRemoteData
+                  ? t.settings.resetLocalDataAllDevices
+                      .cleanupFailedAfterCommit(
+                      error: '$committedCleanupFailure',
+                    )
+                  : t.settings.resetLocalDataThisDeviceOnly
+                      .cleanupFailedAfterCommit(
+                      error: '$committedCleanupFailure',
+                    ),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
@@ -402,6 +432,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (!mounted) return;
     lock();
+  }
+
+  bool _isVaultResetCommittedCleanupFailure(Object error) {
+    return error
+        .toString()
+        .contains('filesystem cleanup failed after vault reset commit');
   }
 
   @override

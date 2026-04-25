@@ -21,6 +21,13 @@ void main() {
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getKeys().length, 2);
+    expect(
+      prefs.getKeys(),
+      <String>{
+        SyncConfigStore.prefsBlobKeyForTest,
+        SyncConfigStore.stateRevisionPrefsKeyForTest,
+        SyncConfigStore.secretPrefsBlobKeyForTest,
+      },
+    );
   });
 }
