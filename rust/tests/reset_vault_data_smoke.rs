@@ -17,7 +17,7 @@ fn reset_vault_data_preserves_llm_profiles_and_embedding_model() {
     let conv = db::get_or_create_loop_home_conversation(&conn, &key).expect("loop home");
     db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert message");
 
-    db::create_llm_profile(
+    let profile = db::create_llm_profile(
         &conn,
         &key,
         "OpenAI",
@@ -28,6 +28,16 @@ fn reset_vault_data_preserves_llm_profiles_and_embedding_model() {
         true,
     )
     .expect("create llm profile");
+    db::record_llm_usage_daily(
+        &conn,
+        "2026-04-25",
+        &profile.id,
+        "ask_ai",
+        Some(10),
+        Some(20),
+        Some(30),
+    )
+    .expect("record llm usage");
 
     db::set_active_embedding_model_name(&conn, "secondloop-default-embed-v0")
         .expect("set embedding model");
@@ -71,6 +81,14 @@ fn reset_vault_data_preserves_llm_profiles_and_embedding_model() {
             .as_deref(),
         Some("secondloop-default-embed-v0")
     );
+    let usage = db::sum_llm_usage_daily_by_purpose(&conn, &profile.id, "2026-04-25", "2026-04-25")
+        .expect("sum llm usage after reset");
+    assert_eq!(usage.len(), 1);
+    assert_eq!(usage[0].purpose, "ask_ai");
+    assert_eq!(usage[0].requests, 1);
+    assert_eq!(usage[0].input_tokens, 10);
+    assert_eq!(usage[0].output_tokens, 20);
+    assert_eq!(usage[0].total_tokens, 30);
 }
 
 #[test]

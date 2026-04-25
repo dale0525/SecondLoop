@@ -41,6 +41,7 @@ const USER_DATA_TABLES_WITHOUT_AUTH: &[&str] = &[
     "todo_series",
     "events",
     "detached_ask_completion_claims",
+    "llm_usage_daily",
     "embedding_artifact_manifests",
     "knowledge_document_usage",
     "knowledge_document_feedback",
@@ -250,6 +251,47 @@ mod tests {
         );
 
         let error = result.expect_err("oplog without auth should be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_rejects_missing_auth_when_llm_usage_exists() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        let key = [3u8; 32];
+        let profile = db::create_llm_profile(
+            &conn,
+            &key,
+            "OpenAI",
+            "openai-compatible",
+            Some("https://api.openai.com/v1"),
+            None,
+            "gpt-test",
+            true,
+        )
+        .expect("create profile");
+        db::record_llm_usage_daily(
+            &conn,
+            "2026-04-25",
+            &profile.id,
+            "ask_ai",
+            Some(10),
+            Some(20),
+            Some(30),
+        )
+        .expect("record usage");
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            vec![9u8; 32],
+        );
+
+        let error = result.expect_err("llm usage without auth should be rejected");
         assert!(
             error
                 .to_string()
