@@ -428,19 +428,19 @@ extension _SettingsPageBuild on _SettingsPageState {
           const SizedBox(height: 8),
           sectionCard([
             ListTile(
-              title: Text(
-                  context.t.settings.debugResetLocalDataThisDeviceOnly.title),
+              title: Text(context
+                  .t.settingsReset.debugResetLocalDataThisDeviceOnly.title),
               subtitle: Text(context
-                  .t.settings.debugResetLocalDataThisDeviceOnly.subtitle),
+                  .t.settingsReset.debugResetLocalDataThisDeviceOnly.subtitle),
               onTap: _busy
                   ? null
                   : () => _resetLocalData(clearAllRemoteData: false),
             ),
             ListTile(
-              title:
-                  Text(context.t.settings.debugResetLocalDataAllDevices.title),
-              subtitle: Text(
-                  context.t.settings.debugResetLocalDataAllDevices.subtitle),
+              title: Text(
+                  context.t.settingsReset.debugResetLocalDataAllDevices.title),
+              subtitle: Text(context
+                  .t.settingsReset.debugResetLocalDataAllDevices.subtitle),
               onTap: _busy
                   ? null
                   : () => _resetLocalData(clearAllRemoteData: true),

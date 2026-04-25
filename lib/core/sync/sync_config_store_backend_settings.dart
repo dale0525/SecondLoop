@@ -106,7 +106,7 @@ extension SyncConfigStoreBackendSettings on SyncConfigStore {
     await _writeConfigUpdates({
       SyncConfigStore.kBackendType:
           SyncConfigStore._backendTypeToken(SyncBackendType.managedVault),
-      if (baseUrl != null) SyncConfigStore.kManagedVaultBaseUrl: baseUrl,
+      SyncConfigStore.kManagedVaultBaseUrl: baseUrl,
       SyncConfigStore.kRemoteRoot: remoteRoot,
       if (autoEnabled != null)
         SyncConfigStore.kAutoEnabled: autoEnabled ? '1' : '0',

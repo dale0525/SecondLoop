@@ -50,6 +50,26 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     }));
   }
 
+  Future<void> _restoreAutoSyncAndRefreshSchedule(
+    AppBackend backend, {
+    required bool enabled,
+  }) async {
+    await _store.writeAutoEnabled(enabled);
+    if (mounted) {
+      _setState(() => _autoEnabled = enabled);
+    } else {
+      _autoEnabled = enabled;
+    }
+    unawaited(BackgroundSync.refreshSchedule(
+      backend: backend,
+      configStore: _store,
+    ).catchError((e) {
+      debugPrint(
+        'sync settings delete-data: failed to refresh schedule after restoring sync: $e',
+      );
+    }));
+  }
+
   Future<void> _disableAutoSyncAfterDestructiveCleanup(
     AppBackend backend,
   ) async {
@@ -262,6 +282,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     var shouldNotifyExternalChange = false;
     var remoteClearSucceeded = false;
     var remoteClearTimedOut = false;
+    var autoSyncDisabledAfterRemoteUncertain = false;
     try {
       await engine?.stopImmediatelyAndWait(
         timeout: kDestructiveSyncStopTimeout,
@@ -278,12 +299,13 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
           'sync settings delete-all: ignored remote clear timeout: $e',
         );
       }
-      await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
-      engine?.writeGate.value = const SyncWriteGateState.open();
       if (remoteClearTimedOut) {
         shouldRestartEngine = false;
         await _disableAutoSyncAfterDestructiveCleanup(backend);
+        autoSyncDisabledAfterRemoteUncertain = true;
       }
+      await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+      engine?.writeGate.value = const SyncWriteGateState.open();
       unawaited(BackgroundSync.refreshSchedule(
         backend: backend,
         configStore: _store,
@@ -314,7 +336,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
           e is _AutoSyncDisableAfterDestructiveCleanupException;
       if (remoteClearSucceeded || remoteClearTimedOut) {
         shouldRestartEngine = false;
-        if (!autoSyncDisableFailure) {
+        if (!autoSyncDisableFailure && !autoSyncDisabledAfterRemoteUncertain) {
           try {
             await _disableAutoSyncAfterDestructiveCleanup(backend);
           } catch (disableError) {

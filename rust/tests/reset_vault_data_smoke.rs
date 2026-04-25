@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use rusqlite::OptionalExtension;
 use secondloop_rust::auth;
 use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::db;
@@ -89,6 +90,53 @@ fn reset_vault_data_preserves_llm_profiles_and_embedding_model() {
     assert_eq!(usage[0].input_tokens, 10);
     assert_eq!(usage[0].output_tokens, 20);
     assert_eq!(usage[0].total_tokens, 30);
+}
+
+#[test]
+fn reset_vault_data_preserves_local_ai_configuration_kv() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(Path::new(&app_dir), "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conv = db::get_or_create_loop_home_conversation(&conn, &key).expect("loop home");
+    db::insert_message(&conn, &key, &conv.id, "user", "hello").expect("insert message");
+    conn.execute_batch(
+        r#"
+INSERT INTO kv(key, value) VALUES
+  ('media_annotation.search_enabled', '0'),
+  ('media_annotation.provider_mode', 'cloud_gateway'),
+  ('content_enrichment.ocr_enabled', '0'),
+  ('storage_policy.auto_purge_enabled', '0'),
+  ('embedding.active_dim', '1536'),
+  ('device_id', 'device-before-reset')
+ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+"#,
+    )
+    .expect("seed kv");
+
+    db::reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault data");
+
+    let kv = |key: &str| -> Option<String> {
+        conn.query_row("SELECT value FROM kv WHERE key = ?1", [key], |row| {
+            row.get(0)
+        })
+        .optional()
+        .expect("query kv")
+    };
+    assert_eq!(kv("media_annotation.search_enabled").as_deref(), Some("0"));
+    assert_eq!(
+        kv("media_annotation.provider_mode").as_deref(),
+        Some("cloud_gateway")
+    );
+    assert_eq!(kv("content_enrichment.ocr_enabled").as_deref(), Some("0"));
+    assert_eq!(
+        kv("storage_policy.auto_purge_enabled").as_deref(),
+        Some("0")
+    );
+    assert_eq!(kv("embedding.active_dim").as_deref(), Some("1536"));
+    assert_eq!(kv("device_id"), None);
 }
 
 #[test]

@@ -62,6 +62,36 @@ void main() {
       isEmpty,
     );
   });
+
+  test(
+      'replace-local attempts rollback snapshot cleanup after restored failure',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _RollbackSuccessCleanupBackend();
+
+    await expectLater(
+      runDestructiveReplaceLocalWithRollback<void>(
+        backend: backend,
+        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        run: () async {
+          backend.calls.add('run');
+          throw StateError('pull failed');
+        },
+      ),
+      throwsStateError,
+    );
+
+    expect(
+      backend.calls,
+      <String>[
+        'createSnapshot',
+        'resetLocal',
+        'run',
+        'restoreSnapshot:snapshot-restore',
+        'deleteSnapshot:snapshot-restore',
+      ],
+    );
+  });
 }
 
 final class _SnapshotCleanupFailureBackend extends TestAppBackend {
@@ -107,6 +137,36 @@ final class _SnapshotCleanupRetryBackend extends TestAppBackend {
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
     calls.add('resetLocal');
+  }
+
+  @override
+  Future<void> deleteVaultRollbackSnapshot({
+    required String snapshotPath,
+  }) async {
+    calls.add('deleteSnapshot:$snapshotPath');
+  }
+}
+
+final class _RollbackSuccessCleanupBackend extends TestAppBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<String?> createVaultRollbackSnapshot(Uint8List key) async {
+    calls.add('createSnapshot');
+    return 'snapshot-restore';
+  }
+
+  @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
+    calls.add('resetLocal');
+  }
+
+  @override
+  Future<void> restoreVaultRollbackSnapshot(
+    Uint8List key, {
+    required String snapshotPath,
+  }) async {
+    calls.add('restoreSnapshot:$snapshotPath');
   }
 
   @override

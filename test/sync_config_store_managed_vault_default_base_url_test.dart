@@ -41,6 +41,33 @@ void main() {
     expect(configured.baseUrl, 'https://vault.override.example');
   });
 
+  test(
+      'Managed vault sync settings clear stored override when base URL is null',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+    await store.writeManagedVaultBaseUrl('https://vault.override.example');
+
+    await store.writeManagedVaultSyncSettings(
+      baseUrl: null,
+      remoteRoot: 'uid_2',
+      autoEnabled: true,
+    );
+
+    expect(await store.readManagedVaultBaseUrl(), isNull);
+    expect(await store.resolveManagedVaultBaseUrl(),
+        'https://vault.default.example');
+    final configured = await store.loadConfiguredSync();
+    expect(configured, isNotNull);
+    expect(configured!.baseUrl, 'https://vault.default.example');
+    expect(configured.remoteRoot, 'uid_2');
+  });
+
   test('Managed vault config keeps legacy entries without canonical marker',
       () async {
     SharedPreferences.setMockInitialValues({

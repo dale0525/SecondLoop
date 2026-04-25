@@ -44,7 +44,12 @@ void main() {
     await tester.tap(find.text('Replace this device with remote'));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, <String>['resetLocal', 'syncManagedVaultPull:uid_1']);
+    expect(backend.calls, <String>[
+      'createSnapshot',
+      'resetLocal',
+      'syncManagedVaultPull:uid_1',
+      'deleteSnapshot:test-vault-rollback-snapshot',
+    ]);
     expect(await store.readRemoteRoot(), 'uid_1');
   });
 
@@ -110,7 +115,12 @@ void main() {
     await tester.tap(find.text('Replace this device with remote'));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, <String>['resetLocal', 'syncManagedVaultPull:uid_1']);
+    expect(backend.calls, <String>[
+      'createSnapshot',
+      'resetLocal',
+      'syncManagedVaultPull:uid_1',
+      'deleteSnapshot:test-vault-rollback-snapshot',
+    ]);
     expect(await store.readRemoteRoot(), 'uid_1');
   });
 
@@ -140,7 +150,13 @@ void main() {
     await tester.tap(find.text('Replace this device with remote'));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, <String>['resetLocal', 'syncManagedVaultPull:uid_1']);
+    expect(backend.calls, <String>[
+      'createSnapshot',
+      'resetLocal',
+      'syncManagedVaultPull:uid_1',
+      'restoreSnapshot:test-vault-rollback-snapshot',
+      'deleteSnapshot:test-vault-rollback-snapshot',
+    ]);
     expect(await store.readBackendType(), SyncBackendType.managedVault);
     expect(await store.readRemoteRoot(), 'old_uid');
     expect(await store.readSyncKey(), previousSyncKey);
@@ -300,8 +316,29 @@ final class _TrackingManagedVaultBackend extends TestAppBackend {
       Uint8List.fromList(List<int>.filled(32, 9));
 
   @override
+  Future<String?> createVaultRollbackSnapshot(Uint8List key) async {
+    calls.add('createSnapshot');
+    return 'test-vault-rollback-snapshot';
+  }
+
+  @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
     calls.add('resetLocal');
+  }
+
+  @override
+  Future<void> restoreVaultRollbackSnapshot(
+    Uint8List key, {
+    required String snapshotPath,
+  }) async {
+    calls.add('restoreSnapshot:$snapshotPath');
+  }
+
+  @override
+  Future<void> deleteVaultRollbackSnapshot({
+    required String snapshotPath,
+  }) async {
+    calls.add('deleteSnapshot:$snapshotPath');
   }
 
   @override

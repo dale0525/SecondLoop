@@ -120,6 +120,20 @@ fn remove_embedding_artifacts_data(app_dir: &Path) -> Result<()> {
     best_effort_remove_dir_all(&app_dir.join("embedding_artifacts"))
 }
 
+fn clear_resettable_kv(conn: &Connection) -> Result<()> {
+    conn.execute(
+        r#"
+DELETE FROM kv
+WHERE key NOT IN (?1, ?2)
+  AND key NOT LIKE 'media_annotation.%'
+  AND key NOT LIKE 'content_enrichment.%'
+  AND key NOT LIKE 'storage_policy.%'
+"#,
+        params![KV_ACTIVE_EMBEDDING_MODEL_NAME, KV_ACTIVE_EMBEDDING_DIM],
+    )?;
+    Ok(())
+}
+
 fn record_filesystem_cleanup_error(
     errors: &mut Vec<String>,
     label: &str,
@@ -257,9 +271,9 @@ SET status = 'empty',
     last_indexed_model_name = NULL,
     last_indexed_dim = NULL;
 DELETE FROM oplog;
-DELETE FROM kv WHERE key != 'embedding.active_model_name';
 "#,
         )?;
+        clear_resettable_kv(conn)?;
         Ok(())
     })();
 

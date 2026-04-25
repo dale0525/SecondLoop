@@ -776,26 +776,6 @@
     "title": "Sync",
     "subtitle": "Choose where your data syncs (Cloud / WebDAV / folder)"
   },
-  "resetLocalDataThisDeviceOnly": {
-    "dialogTitle": "Reset local data?",
-    "dialogBody": "This will delete local messages and clear synced remote data for this device only. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.",
-    "failed": "Reset failed: $error",
-    "cleanupFailedAfterCommit": "Data was reset, but some local files could not be cleaned up: $error"
-  },
-  "resetLocalDataAllDevices": {
-    "dialogTitle": "Reset local data?",
-    "dialogBody": "This will delete local messages and clear all synced remote data. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.",
-    "failed": "Reset failed: $error",
-    "cleanupFailedAfterCommit": "Data was reset, but some local files could not be cleaned up: $error"
-  },
-  "debugResetLocalDataThisDeviceOnly": {
-    "title": "Debug: Reset local data (this device)",
-    "subtitle": "Delete local messages + clear remote data for this device only"
-  },
-  "debugResetLocalDataAllDevices": {
-    "title": "Debug: Reset local data (all devices)",
-    "subtitle": "Delete local messages + clear all remote data"
-  },
   "debugSemanticSearch": {
     "title": "Debug: Semantic search",
     "subtitle": "Search similar messages + rebuild embeddings index"

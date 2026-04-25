@@ -159,6 +159,57 @@ void registerDeleteActionsTailTests() {
   });
 
   testWidgets(
+      'delete local data restores auto sync when reset fails before commit',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeAutoEnabled(true);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend(
+      resetLocalDataError: StateError('local reset failed before commit'),
+    );
+    final runner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete local data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await _confirmDeletionTwice(tester);
+    await tester.pumpAndSettle();
+
+    expect(backend.resetLocalDataCalls, 1);
+    expect(await store.readAutoEnabled(), isTrue);
+    expect(engine.isRunning, isTrue);
+    expect(find.textContaining('local reset failed before commit'),
+        findsOneWidget);
+
+    engine.stop();
+  });
+
+  testWidgets(
       'delete all data refreshes background schedule with the active config store',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

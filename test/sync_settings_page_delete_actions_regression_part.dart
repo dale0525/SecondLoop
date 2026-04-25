@@ -2,7 +2,7 @@ part of 'sync_settings_page_delete_actions_test.dart';
 
 void registerDeleteActionsRegressionTests() {
   testWidgets(
-      'delete all data reports failure when auto sync cannot be disabled after remote timeout',
+      'delete all data aborts local reset when auto sync cannot be disabled after remote timeout',
       (tester) async {
     SharedPreferences.resetStatic();
     SharedPreferences.setMockInitialValues({});
@@ -52,7 +52,9 @@ void registerDeleteActionsRegressionTests() {
     await tester.pumpAndSettle();
 
     expect(backend.syncWebdavClearRemoteRootCalls, 1);
-    expect(backend.resetLocalDataCalls, 1);
+    expect(backend.resetLocalDataCalls, 0);
+    expect(await store.readAutoEnabled(), isTrue);
+    expect(engine.isRunning, isFalse);
     expect(find.textContaining('Delete failed:'), findsOneWidget);
     expect(
       find.textContaining('injected prefs write failure'),

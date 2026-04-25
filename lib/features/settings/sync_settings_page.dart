@@ -38,6 +38,7 @@ part 'sync_settings_page_delete_progress.dart';
 part 'sync_settings_page_switch_direction.dart';
 part 'sync_settings_page_cloud_session.dart';
 part 'sync_settings_page_sync_actions.dart';
+part 'sync_settings_page_sync_progress.dart';
 
 int _coerceTimestampMs(Object value) {
   if (value is BigInt) return value.toInt();

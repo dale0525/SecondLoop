@@ -41,6 +41,7 @@ Future<T> runDestructiveReplaceLocalWithRollback<T>({
         stackTrace,
       );
     }
+    await _cleanupRestoredVaultRollbackSnapshot(backend, snapshotPath);
     rethrow;
   }
 
@@ -54,6 +55,36 @@ Future<T> runDestructiveReplaceLocalWithRollback<T>({
   }
 
   return result;
+}
+
+Future<void> _cleanupRestoredVaultRollbackSnapshot(
+  AppBackend backend,
+  String snapshotPath,
+) async {
+  try {
+    await backend.deleteVaultRollbackSnapshot(snapshotPath: snapshotPath);
+  } catch (error) {
+    if (_rollbackSnapshotAlreadyRemoved(error)) {
+      return;
+    }
+    try {
+      await _recordPendingVaultRollbackSnapshotCleanup(snapshotPath);
+    } catch (recordError) {
+      debugPrint(
+        'sync replace-local: failed to record pending rollback snapshot cleanup: $recordError',
+      );
+    }
+    debugPrint(
+      'sync replace-local: failed to remove rollback snapshot after restore: $error',
+    );
+  }
+}
+
+bool _rollbackSnapshotAlreadyRemoved(Object error) {
+  final message = error.toString().toLowerCase();
+  return message.contains('not active') ||
+      message.contains('not found') ||
+      message.contains('no such file');
 }
 
 Future<void> _retryPendingVaultRollbackSnapshotCleanup(

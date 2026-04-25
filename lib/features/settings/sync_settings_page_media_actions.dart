@@ -277,12 +277,15 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       final engine = SyncEngineScope.maybeOf(context);
       final wasRunning = engine?.isRunning ?? false;
       var shouldRestartEngine = wasRunning;
+      final previousAutoEnabled = _autoEnabled;
+      var autoSyncDisabledForReset = false;
 
       try {
         await engine?.stopImmediatelyAndWait(
           timeout: kDestructiveSyncStopTimeout,
         );
         await _disableAutoSyncAndRefreshSchedule(backend);
+        autoSyncDisabledForReset = true;
         await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
         shouldRestartEngine = false;
         engine?.writeGate.value = const SyncWriteGateState.open();
@@ -299,6 +302,19 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
         }
         if (_isDestructiveSyncStopTimeout(e)) {
           shouldRestartEngine = false;
+        }
+        if (autoSyncDisabledForReset) {
+          try {
+            await _restoreAutoSyncAndRefreshSchedule(
+              backend,
+              enabled: previousAutoEnabled,
+            );
+          } catch (restoreError) {
+            throw StateError(
+              '${_deleteActionErrorMessage(e)}; '
+              'failed to restore auto sync: $restoreError',
+            );
+          }
         }
         if (shouldRestartEngine) {
           engine?.start();

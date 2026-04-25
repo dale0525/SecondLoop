@@ -1,36 +1,6 @@
 part of 'sync_settings_page.dart';
 
 extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
-  Future<int> _consumeRustProgressStream(
-    Stream<String> stream, {
-    required void Function(int done, int total) onProgress,
-  }) async {
-    var count = 0;
-    await for (final msg in stream) {
-      Map<String, dynamic>? ev;
-      try {
-        final decoded = jsonDecode(msg);
-        ev = decoded is Map ? decoded.cast<String, dynamic>() : null;
-      } catch (_) {
-        ev = null;
-      }
-      if (ev == null) continue;
-
-      final type = ev['type'];
-      if (type == 'progress') {
-        final done = (ev['done'] as num?)?.toInt();
-        final total = (ev['total'] as num?)?.toInt();
-        if (done != null && total != null) {
-          onProgress(done, total);
-        }
-      } else if (type == 'result') {
-        final v = (ev['count'] as num?)?.toInt();
-        if (v != null) count = v;
-      }
-    }
-    return count;
-  }
-
   Future<bool> _persistBackendConfig() async {
     final t = context.t;
     final backendType = _effectiveBackendType;
@@ -85,6 +55,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             _showSnack(t.sync.baseUrlRequired);
             return false;
           }
+        } else {
+          managedVaultBaseUrl = await _store.readManagedVaultBaseUrl();
         }
         final resolved = managedVaultBaseUrl ??
             (await _store.resolveManagedVaultBaseUrl())?.trim();
@@ -744,6 +716,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       stateScopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 
       var pushed = 0;
+      var pulled = 0;
       var recoveredOnly = false;
       var refreshedLocalState = false;
       String? recoveredMessage;
@@ -776,6 +749,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                 hasTotal: hasTotal,
               );
               pushed = result.pushed;
+              pulled = result.pulled;
               recoveredOnly = result.recoveredOnly;
               recoveredMessage = result.recoveredMessage;
               refreshedLocalState = result.refreshedLocalState;
@@ -816,7 +790,12 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         },
       );
       final successMessage = recoveredOnly
-          ? (recoveredMessage ?? t.sync.cloudManagedVault.serverUnavailable)
+          ? [
+              recoveredMessage ?? t.sync.cloudManagedVault.serverUnavailable,
+              pulled == 0
+                  ? t.sync.noNewChanges
+                  : t.sync.pulledOps(count: pulled),
+            ].join(' ')
           : t.sync.pushedOps(count: pushed);
       await _writeLastSyncLog(
         direction: SyncBackgroundDirection.push,

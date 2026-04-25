@@ -284,11 +284,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final t = context.t;
     final dialogTitle = clearAllRemoteData
-        ? t.settings.resetLocalDataAllDevices.dialogTitle
-        : t.settings.resetLocalDataThisDeviceOnly.dialogTitle;
+        ? t.settingsReset.resetLocalDataAllDevices.dialogTitle
+        : t.settingsReset.resetLocalDataThisDeviceOnly.dialogTitle;
     final dialogBody = _normalizeAppLockWording(clearAllRemoteData
-        ? t.settings.resetLocalDataAllDevices.dialogBody
-        : t.settings.resetLocalDataThisDeviceOnly.dialogBody);
+        ? t.settingsReset.resetLocalDataAllDevices.dialogBody
+        : t.settingsReset.resetLocalDataThisDeviceOnly.dialogBody);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -403,11 +403,11 @@ class _SettingsPageState extends State<SettingsPage> {
           SnackBar(
             content: Text(
               clearAllRemoteData
-                  ? t.settings.resetLocalDataAllDevices
+                  ? t.settingsReset.resetLocalDataAllDevices
                       .cleanupFailedAfterCommit(
                       error: '$committedCleanupFailure',
                     )
-                  : t.settings.resetLocalDataThisDeviceOnly
+                  : t.settingsReset.resetLocalDataThisDeviceOnly
                       .cleanupFailedAfterCommit(
                       error: '$committedCleanupFailure',
                     ),
@@ -420,8 +420,10 @@ class _SettingsPageState extends State<SettingsPage> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(clearAllRemoteData
-              ? t.settings.resetLocalDataAllDevices.failed(error: '$e')
-              : t.settings.resetLocalDataThisDeviceOnly.failed(error: '$e')),
+              ? t.settingsReset.resetLocalDataAllDevices.failed(error: '$e')
+              : t.settingsReset.resetLocalDataThisDeviceOnly.failed(
+                  error: '$e',
+                )),
           duration: const Duration(seconds: 3),
         ),
       );
