@@ -13,6 +13,7 @@ Future<void> _restoreCloudSyncPreviousSyncConfig(
   required bool previousAutoEnabled,
   required Uint8List? previousSyncKey,
   required SyncEngine? engine,
+  bool refreshSchedule = true,
 }) async {
   switch (previousBackendType) {
     case SyncBackendType.webdav:
@@ -51,8 +52,26 @@ Future<void> _restoreCloudSyncPreviousSyncConfig(
   if (previousBackendType != SyncBackendType.managedVault) {
     engine?.writeGate.value = const SyncWriteGateState.open();
   }
-  unawaited(BackgroundSync.refreshSchedule(
-    backend: backend,
-    configStore: state._store,
-  ));
+  if (refreshSchedule) {
+    await _refreshCloudSyncSwitchBackgroundScheduleBestEffort(
+      backend: backend,
+      store: state._store,
+    );
+  }
+}
+
+Future<void> _refreshCloudSyncSwitchBackgroundScheduleBestEffort({
+  required AppBackend backend,
+  required SyncConfigStore store,
+}) async {
+  try {
+    await BackgroundSync.refreshSchedule(
+      backend: backend,
+      configStore: store,
+    );
+  } catch (e) {
+    debugPrint(
+      'cloud sync switch: failed to refresh background sync schedule: $e',
+    );
+  }
 }

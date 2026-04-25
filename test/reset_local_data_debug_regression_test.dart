@@ -141,6 +141,102 @@ void main() {
     expect(backend.clearLocalDirCalls, hasLength(1));
     expect(remoteClearStartedBeforePushCompleted, isFalse);
   });
+
+  testWidgets(
+      'Debug reset disables auto sync when local reset fails after remote clear',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final remote = Directory.systemTemp.createTempSync('sl_remote_');
+    addTearDown(() => _deleteDir(remote));
+
+    final store = SyncConfigStore();
+    await _writeLocalDirConfig(
+      store,
+      localDir: remote.path,
+      remoteRoot: 'RemoteRoot',
+      syncKeyByte: 5,
+    );
+    _writeRemoteSentinel(remote, 'RemoteRoot');
+
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: store.loadConfiguredSync,
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+    addTearDown(engine.stopImmediately);
+
+    final backend = _ResetDebugBackend(
+      deviceId: 'deviceA',
+      resetVaultDataError: StateError('local reset failed'),
+    );
+    var locked = false;
+
+    await _pumpSettings(
+      tester,
+      backend: backend,
+      lock: () => locked = true,
+      engine: engine,
+    );
+
+    await _tapDebugReset(tester, allDevices: true);
+    await tester.pumpAndSettle();
+
+    expect(backend.clearLocalDirCalls, hasLength(1));
+    expect(backend.resetVaultDataCalls, 1);
+    expect(await store.readAutoEnabled(), isFalse);
+    expect(engine.isRunning, isFalse);
+    expect(backend.clearSavedSessionKeyCalls, 0);
+    expect(locked, isFalse);
+  });
+
+  testWidgets('Debug reset restarts sync engine when remote clear fails first',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final remote = Directory.systemTemp.createTempSync('sl_remote_');
+    addTearDown(() => _deleteDir(remote));
+
+    final store = SyncConfigStore();
+    await _writeLocalDirConfig(
+      store,
+      localDir: remote.path,
+      remoteRoot: 'RemoteRoot',
+      syncKeyByte: 6,
+    );
+    _writeRemoteSentinel(remote, 'RemoteRoot');
+
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: store.loadConfiguredSync,
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+    addTearDown(engine.stopImmediately);
+
+    final backend = _ResetDebugBackend(
+      deviceId: 'deviceA',
+      clearRemoteRootError: StateError('remote clear failed'),
+    );
+    var locked = false;
+
+    await _pumpSettings(
+      tester,
+      backend: backend,
+      lock: () => locked = true,
+      engine: engine,
+    );
+
+    await _tapDebugReset(tester, allDevices: true);
+    await tester.pumpAndSettle();
+
+    expect(backend.clearLocalDirCalls, hasLength(1));
+    expect(backend.resetVaultDataCalls, 0);
+    expect(await store.readAutoEnabled(), isTrue);
+    expect(engine.isRunning, isTrue);
+    expect(locked, isFalse);
+    engine.stopImmediately();
+    await tester.pump();
+  });
 }
 
 Future<void> _writeLocalDirConfig(
@@ -274,11 +370,17 @@ final class _ResetDebugBackend extends TestAppBackend {
   _ResetDebugBackend({
     required this.deviceId,
     this.onBeforeClearRemoteRoot,
+    this.clearRemoteRootError,
+    this.resetVaultDataError,
   });
 
   final String deviceId;
   final VoidCallback? onBeforeClearRemoteRoot;
+  final Object? clearRemoteRootError;
+  final Object? resetVaultDataError;
   final List<({String localDir, String remoteRoot})> clearLocalDirCalls = [];
+  int resetVaultDataCalls = 0;
+  int clearSavedSessionKeyCalls = 0;
 
   @override
   Future<String> getOrCreateDeviceId() async => deviceId;
@@ -290,10 +392,28 @@ final class _ResetDebugBackend extends TestAppBackend {
   }) async {
     onBeforeClearRemoteRoot?.call();
     clearLocalDirCalls.add((localDir: localDir, remoteRoot: remoteRoot));
+    final clearRemoteRootError = this.clearRemoteRootError;
+    if (clearRemoteRootError != null) {
+      throw clearRemoteRootError;
+    }
     final dir = Directory('$localDir${Platform.pathSeparator}$remoteRoot');
     if (dir.existsSync()) {
       dir.deleteSync(recursive: true);
     }
+  }
+
+  @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
+    resetVaultDataCalls += 1;
+    final resetVaultDataError = this.resetVaultDataError;
+    if (resetVaultDataError != null) {
+      throw resetVaultDataError;
+    }
+  }
+
+  @override
+  Future<void> clearSavedSessionKey() async {
+    clearSavedSessionKeyCalls += 1;
   }
 }
 
@@ -318,6 +438,14 @@ final class _BlockingSyncRunner implements SyncRunner {
     onPushCompleted();
     return 1;
   }
+}
+
+final class _NoopSyncRunner implements SyncRunner {
+  @override
+  Future<int> pull(SyncConfig config) async => 0;
+
+  @override
+  Future<int> push(SyncConfig config) async => 0;
 }
 
 final class _FakeBillingClient implements BillingClient {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/cloud_sync_switch_prompt_gate.dart';
+import 'package:secondloop/core/sync/cloud_sync_switch_prefs.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
@@ -44,9 +46,13 @@ void main() {
       pullOnStart: false,
     )..start();
     bool? engineRunningDuringRemoteClear;
+    bool? switchInProgressDuringRemoteClear;
     final backend = _TrackingManagedVaultBackend(
-      onClearVault: () {
+      onClearVault: () async {
+        final prefs = await SharedPreferences.getInstance();
         engineRunningDuringRemoteClear = engine.isRunning;
+        switchInProgressDuringRemoteClear =
+            prefs.getBool(cloudSyncSwitchInProgressPrefsKey);
       },
     );
 
@@ -67,6 +73,12 @@ void main() {
       'syncManagedVaultPush',
     ]);
     expect(engineRunningDuringRemoteClear, isFalse);
+    expect(switchInProgressDuringRemoteClear, isTrue);
+    expect(
+      (await SharedPreferences.getInstance())
+          .getBool(cloudSyncSwitchInProgressPrefsKey),
+      isFalse,
+    );
     expect(engine.isRunning, isTrue);
 
     engine.stopImmediately();
@@ -478,7 +490,7 @@ final class _TrackingManagedVaultBackend extends TestAppBackend {
     this.pushError,
   });
 
-  final VoidCallback? onClearVault;
+  final FutureOr<void> Function()? onClearVault;
   final Object? pushError;
   final List<String> calls = <String>[];
 
@@ -488,7 +500,7 @@ final class _TrackingManagedVaultBackend extends TestAppBackend {
     required String vaultId,
     required String idToken,
   }) async {
-    onClearVault?.call();
+    await onClearVault?.call();
     calls.add('syncManagedVaultClearVault');
   }
 

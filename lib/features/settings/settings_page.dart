@@ -205,6 +205,31 @@ class _SettingsPageState extends State<SettingsPage> {
         message.contains('timeout');
   }
 
+  bool _isDestructiveSyncStopTimeout(Object error) {
+    return error is TimeoutException &&
+        (error.message?.contains(
+              'sync engine did not stop before destructive operation',
+            ) ??
+            false);
+  }
+
+  Future<void> _disableAutoSyncAfterDebugResetCleanup({
+    required AppBackend backend,
+    required SyncConfigStore store,
+  }) async {
+    await store.writeAutoEnabled(false);
+    try {
+      await BackgroundSync.refreshSchedule(
+        backend: backend,
+        configStore: store,
+      );
+    } catch (e) {
+      debugPrint(
+        'settings debug reset: failed to refresh schedule after disabling sync: $e',
+      );
+    }
+  }
+
   String _normalizeAppLockWording(String text) {
     return text
         .replaceAll('master password', 'app lock password')
@@ -323,6 +348,12 @@ class _SettingsPageState extends State<SettingsPage> {
     final sessionKey = SessionScope.of(context).sessionKey;
     final engine = SyncEngineScope.maybeOf(context);
     final store = _syncConfigStore(context);
+    final wasEngineRunning = engine?.isRunning ?? false;
+    var shouldRestartEngine = wasEngineRunning;
+    var remoteClearSucceeded = false;
+    var remoteClearTimedOut = false;
+    var localResetCommitted = false;
+    var autoSyncDisabledAfterCleanup = false;
 
     setState(() => _busy = true);
     try {
@@ -379,27 +410,41 @@ class _SettingsPageState extends State<SettingsPage> {
                 );
               }(),
           };
+          remoteClearSucceeded = true;
         } catch (e) {
           if (!(clearAllRemoteData && _isOperationTimeoutError(e))) {
             rethrow;
           }
+          remoteClearTimedOut = true;
           debugPrint(
               'settings debug reset: ignored remote clear timeout in all-devices mode: $e');
         }
       }
 
+      if (remoteClearTimedOut) {
+        shouldRestartEngine = false;
+        await _disableAutoSyncAfterDebugResetCleanup(
+          backend: backend,
+          store: store,
+        );
+        autoSyncDisabledAfterCleanup = true;
+      }
+
       Object? committedCleanupFailure;
       try {
         await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+        localResetCommitted = true;
       } catch (e) {
         if (!_isVaultResetCommittedCleanupFailure(e)) {
           rethrow;
         }
+        localResetCommitted = true;
         committedCleanupFailure = e;
         debugPrint(
           'settings debug reset: local vault reset committed but cleanup failed: $e',
         );
       }
+      shouldRestartEngine = false;
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kAppLockEnabledPrefsKey);
@@ -430,18 +475,43 @@ class _SettingsPageState extends State<SettingsPage> {
         );
       }
     } catch (e) {
+      if (_isDestructiveSyncStopTimeout(e)) {
+        shouldRestartEngine = false;
+      }
+      var displayError = e;
+      if (remoteClearSucceeded || remoteClearTimedOut || localResetCommitted) {
+        shouldRestartEngine = false;
+        if (!autoSyncDisabledAfterCleanup) {
+          try {
+            await _disableAutoSyncAfterDebugResetCleanup(
+              backend: backend,
+              store: store,
+            );
+            autoSyncDisabledAfterCleanup = true;
+          } catch (disableError) {
+            displayError = StateError(
+              '$e; failed to disable sync after destructive cleanup: '
+              '$disableError',
+            );
+          }
+        }
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text(clearAllRemoteData
-              ? t.settingsReset.resetLocalDataAllDevices.failed(error: '$e')
+              ? t.settingsReset.resetLocalDataAllDevices
+                  .failed(error: '$displayError')
               : t.settingsReset.resetLocalDataThisDeviceOnly.failed(
-                  error: '$e',
+                  error: '$displayError',
                 )),
           duration: const Duration(seconds: 3),
         ),
       );
       return;
     } finally {
+      if (shouldRestartEngine) {
+        engine?.start();
+      }
       if (mounted) setState(() => _busy = false);
     }
 

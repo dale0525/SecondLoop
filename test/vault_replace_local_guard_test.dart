@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 import 'package:secondloop/core/sync/vault_replace_local_guard.dart';
 
 import 'test_backend.dart';
@@ -27,6 +28,33 @@ void main() {
     expect(
       prefs.getStringList('vault_rollback_snapshot_cleanup_pending_v1'),
       <String>['snapshot-1'],
+    );
+  });
+
+  test(
+      'replace-local succeeds when rollback snapshot cleanup failure cannot be recorded',
+      () async {
+    SharedPreferences.resetStatic();
+    SharedPreferences.setMockInitialValues({});
+    SharedPreferencesStorePlatform.instance =
+        _FailingSnapshotCleanupPrefsStore();
+    addTearDown(() {
+      SharedPreferences.resetStatic();
+      SharedPreferences.setMockInitialValues({});
+    });
+    final backend = _SnapshotCleanupFailureBackend();
+
+    await runDestructiveReplaceLocalWithRollback<void>(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      run: () async {
+        backend.calls.add('run');
+      },
+    );
+
+    expect(
+      backend.calls,
+      <String>['createSnapshot', 'resetLocal', 'run', 'deleteSnapshot'],
     );
   });
 
@@ -156,6 +184,19 @@ final class _SnapshotCleanupFailureBackend extends TestAppBackend {
   }) async {
     calls.add('deleteSnapshot');
     throw StateError('cleanup denied');
+  }
+}
+
+final class _FailingSnapshotCleanupPrefsStore
+    extends InMemorySharedPreferencesStore {
+  _FailingSnapshotCleanupPrefsStore() : super.empty();
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key.contains('vault_rollback_snapshot_cleanup_pending_v1')) {
+      throw Exception('injected prefs write failure for $key');
+    }
+    return super.setValue(valueType, key, value);
   }
 }
 

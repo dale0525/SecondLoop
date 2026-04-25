@@ -322,6 +322,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     required bool autoEnabled,
     required Uint8List? syncKey,
     required SyncEngine? engine,
+    bool refreshSchedule = true,
   }) async {
     switch (backendType) {
       case SyncBackendType.webdav:
@@ -360,10 +361,22 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     if (backendType != SyncBackendType.managedVault) {
       engine?.writeGate.value = const SyncWriteGateState.open();
     }
-    unawaited(BackgroundSync.refreshSchedule(
-      backend: backend,
-      configStore: _store,
-    ));
+    if (refreshSchedule) {
+      await _refreshBackgroundScheduleBestEffort(backend);
+    }
+  }
+
+  Future<void> _refreshBackgroundScheduleBestEffort(AppBackend backend) async {
+    try {
+      await BackgroundSync.refreshSchedule(
+        backend: backend,
+        configStore: _store,
+      );
+    } catch (e) {
+      debugPrint(
+        'sync settings: failed to refresh background sync schedule: $e',
+      );
+    }
   }
 
   Future<void> _save() async {
@@ -375,6 +388,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     var shouldHideRecoveryHint = false;
     var shouldRestartStoppedEngine = false;
     var engineRestartedAfterStop = false;
+    var shouldRefreshBackgroundSchedule = false;
+    AppBackend? backgroundScheduleBackend;
 
     void restartStoppedEngineIfNeeded() {
       if (!shouldRestartStoppedEngine || engineRestartedAfterStop) {
@@ -411,6 +426,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       if (!mounted) return;
 
       final backend = AppBackendScope.of(context);
+      backgroundScheduleBackend = backend;
       final backendType = _effectiveBackendType;
 
       final requiresSyncKey = backendType == SyncBackendType.webdav ||
@@ -560,10 +576,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         restartStoppedEngineIfNeeded();
         return;
       }
+      shouldRefreshBackgroundSchedule = true;
       if (!mounted) return;
-
-      unawaited(BackgroundSync.refreshSchedule(
-          backend: backend, configStore: _store));
 
       try {
         await _runConnectionTest();
@@ -657,8 +671,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             autoEnabled: oldAutoEnabled,
             syncKey: previousSyncKey,
             engine: engine,
+            refreshSchedule: false,
           );
           restoredPrimarySnapshot = true;
+          shouldRefreshBackgroundSchedule = true;
         }
         if (shouldRestartStoppedEngine &&
             (switchDirection != SyncSwitchDirection.remoteReplacesLocal ||
@@ -684,6 +700,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     } catch (e) {
       _showSnack(t.sync.saveFailed(error: '$e'));
     } finally {
+      final backend = backgroundScheduleBackend;
+      if (shouldRefreshBackgroundSchedule && backend != null) {
+        await _refreshBackgroundScheduleBestEffort(backend);
+      }
       restartStoppedEngineIfNeeded();
       if (mounted) {
         _setState(() {

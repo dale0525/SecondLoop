@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 import '../ai/ai_routing.dart';
@@ -13,6 +14,7 @@ import '../cloud/cloud_auth_scope.dart';
 import '../cloud/firebase_identity_toolkit.dart';
 import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
+import 'cloud_sync_switch_prefs.dart';
 import 'managed_vault_pending_write_work.dart';
 import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
@@ -174,6 +176,11 @@ final class BackgroundSync {
         configStore: store,
         scheduler: scheduler,
       );
+    }
+
+    if (await _cloudSwitchInProgress()) {
+      await rescheduleIfNeeded();
+      return true;
     }
 
     final enabled = await store.readAutoEnabled();
@@ -518,6 +525,15 @@ final class BackgroundSync {
       SyncKeyManager.setSessionKey(null);
       cloudAuth?.dispose();
     }
+  }
+
+  @visibleForTesting
+  static Future<bool> cloudSwitchInProgressForTest() =>
+      _cloudSwitchInProgress();
+
+  static Future<bool> _cloudSwitchInProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(cloudSyncSwitchInProgressPrefsKey) ?? false;
   }
 
   @visibleForTesting

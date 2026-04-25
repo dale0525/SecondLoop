@@ -835,6 +835,9 @@ final class _CloudSyncSwitchPromptGateState
     final engine = SyncEngineScope.maybeOf(context);
     var shouldRestartEngine = engine?.isRunning ?? false;
     var restartedEngineBeforeDialogDismiss = false;
+    final switchPrefs = await SharedPreferences.getInstance();
+    var switchInProgressMarked = false;
+    var shouldRefreshBackgroundSchedule = false;
     void restartEngineBeforeDialogDismiss() {
       if (!shouldRestartEngine || restartedEngineBeforeDialogDismiss) return;
       engine?.start();
@@ -842,6 +845,8 @@ final class _CloudSyncSwitchPromptGateState
     }
 
     try {
+      await switchPrefs.setBool(cloudSyncSwitchInProgressPrefsKey, true);
+      switchInProgressMarked = true;
       await engine?.stopImmediatelyAndWait(
         timeout: kDestructiveSyncStopTimeout,
       );
@@ -854,12 +859,9 @@ final class _CloudSyncSwitchPromptGateState
         backendType: SyncBackendType.managedVault,
         remoteRoot: uid,
       );
+      shouldRefreshBackgroundSchedule = true;
       if (!mounted) return false;
       if (!effectiveContext.mounted) return false;
-      unawaited(BackgroundSync.refreshSchedule(
-        backend: backend,
-        configStore: _store,
-      ));
 
       final result = await _runManagedVaultSyncWithProgress(
         dialogContext: effectiveContext,
@@ -887,14 +889,12 @@ final class _CloudSyncSwitchPromptGateState
           previousAutoEnabled: previousAutoEnabled,
           previousSyncKey: previousSyncKey,
           engine: engine,
+          refreshSchedule: false,
         );
+        shouldRefreshBackgroundSchedule = true;
         if (result.pauseSync) {
           shouldRestartEngine = false;
           await _store.writeAutoEnabled(false);
-          unawaited(BackgroundSync.refreshSchedule(
-            backend: backend,
-            configStore: _store,
-          ));
         }
         if (mounted && result.failureMessage != null) {
           _showSnack(result.failureMessage!);
@@ -905,10 +905,7 @@ final class _CloudSyncSwitchPromptGateState
       if (result.pauseSync) {
         shouldRestartEngine = false;
         await _store.writeAutoEnabled(false);
-        unawaited(BackgroundSync.refreshSchedule(
-          backend: backend,
-          configStore: _store,
-        ));
+        shouldRefreshBackgroundSchedule = true;
       }
       if (mounted && result.failureMessage != null) {
         _showSnack(result.failureMessage!);
@@ -934,7 +931,9 @@ final class _CloudSyncSwitchPromptGateState
         previousAutoEnabled: previousAutoEnabled,
         previousSyncKey: previousSyncKey,
         engine: engine,
+        refreshSchedule: false,
       );
+      shouldRefreshBackgroundSchedule = true;
       if (mounted) {
         _showSnack(
           _managedVaultUserFacingErrorMessage(
@@ -946,6 +945,21 @@ final class _CloudSyncSwitchPromptGateState
       }
       return true;
     } finally {
+      if (switchInProgressMarked) {
+        try {
+          await switchPrefs.setBool(cloudSyncSwitchInProgressPrefsKey, false);
+        } catch (e) {
+          debugPrint(
+            'cloud sync switch: failed to clear in-progress marker: $e',
+          );
+        }
+      }
+      if (shouldRefreshBackgroundSchedule) {
+        unawaited(_refreshCloudSyncSwitchBackgroundScheduleBestEffort(
+          backend: backend,
+          store: _store,
+        ));
+      }
       if (shouldRestartEngine && !restartedEngineBeforeDialogDismiss) {
         engine?.start();
       }

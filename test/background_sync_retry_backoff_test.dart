@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/sync/background_sync.dart';
+import 'package:secondloop/core/sync/cloud_sync_switch_prefs.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/features/media_backup/cloud_media_backup_runner.dart';
@@ -231,6 +232,15 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  test('background sync skips while a cloud sync switch is in progress',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      cloudSyncSwitchInProgressPrefsKey: true,
+    });
+
+    expect(await BackgroundSync.cloudSwitchInProgressForTest(), isTrue);
   });
 
   test('invalid managed-vault batches are non-retryable and user visible', () {

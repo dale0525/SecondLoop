@@ -48,7 +48,13 @@ Future<T> runDestructiveReplaceLocalWithRollback<T>({
   try {
     await backend.deleteVaultRollbackSnapshot(snapshotPath: snapshotPath);
   } catch (error) {
-    await _recordPendingVaultRollbackSnapshotCleanup(snapshotPath);
+    try {
+      await _recordPendingVaultRollbackSnapshotCleanup(snapshotPath);
+    } catch (recordError) {
+      debugPrint(
+        'sync replace-local: failed to record pending rollback snapshot cleanup: $recordError',
+      );
+    }
     debugPrint(
       'sync replace-local: failed to remove rollback snapshot after success: $error',
     );
