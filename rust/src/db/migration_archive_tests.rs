@@ -688,6 +688,8 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
     let app_dir = dir.path().join("app");
     let key = [29u8; 32];
     fs::create_dir_all(source_root.join("attachments")).expect("create attachments dir");
+    let attachment_bytes = b"blob";
+    let attachment_sha256 = "fa2c8cc4f28176bbeed4b736df569a34c79cd3723e9ec42f9674b4d46ac6b8b8";
 
     let manifest = MigrationArchiveManifest {
         schema_version: MIGRATION_ARCHIVE_SCHEMA_VERSION,
@@ -696,9 +698,9 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
         app_version: "1.0.0".to_string(),
         items: vec![],
         attachments: vec![MigrationArchiveAttachment {
-            sha256: VALID_TEST_ATTACHMENT_SHA256.to_string(),
-            archive_path: format!("attachments/{VALID_TEST_ATTACHMENT_SHA256}.bin"),
-            original_filename: format!("{VALID_TEST_ATTACHMENT_SHA256}.bin"),
+            sha256: attachment_sha256.to_string(),
+            archive_path: format!("attachments/{attachment_sha256}.bin"),
+            original_filename: format!("{attachment_sha256}.bin"),
             mime_type: Some("application/octet-stream".to_string()),
             size_bytes: 4,
             item_ids: vec!["missing-item".to_string()],
@@ -711,8 +713,8 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
     )
     .expect("write manifest");
     fs::write(
-        source_root.join(format!("attachments/{VALID_TEST_ATTACHMENT_SHA256}.bin")),
-        b"blob",
+        source_root.join(format!("attachments/{attachment_sha256}.bin")),
+        attachment_bytes,
     )
     .expect("write blob");
 
@@ -724,9 +726,12 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
     )
     .expect_err("restore should fail when attachment owner is missing");
 
-    assert!(err.to_string().contains("attachment owner item not found"));
+    assert!(
+        err.to_string().contains("attachment owner item not found"),
+        "{err}"
+    );
     assert!(!app_dir
-        .join(format!("attachments/{VALID_TEST_ATTACHMENT_SHA256}.bin"))
+        .join(format!("attachments/{attachment_sha256}.bin"))
         .exists());
 }
 
