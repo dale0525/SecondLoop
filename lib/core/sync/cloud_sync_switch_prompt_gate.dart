@@ -400,7 +400,9 @@ final class _CloudSyncSwitchPromptGateState
           savedRemoteRoot != uid) {
         final syncDirection = await _promptSyncSwitchDirection();
         if (!mounted || syncDirection == null) return;
-        await _switchToCloud(uid, direction: syncDirection);
+        final switchHandled =
+            await _switchToCloud(uid, direction: syncDirection);
+        if (!mounted || !switchHandled) return;
       } else {
         await _ensureManagedVaultSyncKey(uid);
       }
@@ -414,7 +416,8 @@ final class _CloudSyncSwitchPromptGateState
     if (shouldSwitch == true) {
       final syncDirection = await _promptSyncSwitchDirection();
       if (!mounted || syncDirection == null) return;
-      await _switchToCloud(uid, direction: syncDirection);
+      final switchHandled = await _switchToCloud(uid, direction: syncDirection);
+      if (!mounted || !switchHandled) return;
     }
     _promptedForUid = true;
 
@@ -804,13 +807,13 @@ final class _CloudSyncSwitchPromptGateState
     );
   }
 
-  Future<void> _switchToCloud(
+  Future<bool> _switchToCloud(
     String uid, {
     required SyncSwitchDirection direction,
   }) async {
     final backendScope =
         context.getInheritedWidgetOfExactType<AppBackendScope>();
-    if (backendScope == null) return;
+    if (backendScope == null) return false;
     final backend = backendScope.backend;
 
     final previousBackendType = await _store.readBackendType();
@@ -826,7 +829,7 @@ final class _CloudSyncSwitchPromptGateState
         previousAll[SyncConfigStore.kAutoEnabled] == null ||
             previousAll[SyncConfigStore.kAutoEnabled] == '1';
     final previousSyncKey = await _store.readSyncKey();
-    if (!mounted) return;
+    if (!mounted) return false;
 
     final sessionKey =
         context.getInheritedWidgetOfExactType<SessionScope>()?.sessionKey;
@@ -840,13 +843,13 @@ final class _CloudSyncSwitchPromptGateState
     } catch (_) {
       idToken = null;
     }
-    if (!mounted) return;
+    if (!mounted) return false;
 
     final dialogContext = widget.navigatorKey?.currentContext;
     final effectiveContext = (dialogContext != null && dialogContext.mounted)
         ? dialogContext
         : context;
-    if (!effectiveContext.mounted) return;
+    if (!effectiveContext.mounted) return false;
 
     final canShowDialog =
         Navigator.maybeOf(effectiveContext, rootNavigator: true) != null;
@@ -873,13 +876,12 @@ final class _CloudSyncSwitchPromptGateState
           },
         );
       }
-      return;
+      return false;
     }
 
     var didSync = false;
     final engine = SyncEngineScope.maybeOf(context);
     var shouldRestartEngine = engine?.isRunning ?? false;
-    await engine?.stopImmediatelyAndWait();
     var restartedEngineBeforeDialogDismiss = false;
     void restartEngineBeforeDialogDismiss() {
       if (!shouldRestartEngine || restartedEngineBeforeDialogDismiss) return;
@@ -888,7 +890,10 @@ final class _CloudSyncSwitchPromptGateState
     }
 
     try {
-      if (!effectiveContext.mounted) return;
+      await engine?.stopImmediatelyAndWait(
+        timeout: kDestructiveSyncStopTimeout,
+      );
+      if (!effectiveContext.mounted) return false;
       final syncKey = await _resolveManagedVaultSyncKey(
         uid: uid,
         backend: backend,
@@ -897,8 +902,8 @@ final class _CloudSyncSwitchPromptGateState
         backendType: SyncBackendType.managedVault,
         remoteRoot: uid,
       );
-      if (!mounted) return;
-      if (!effectiveContext.mounted) return;
+      if (!mounted) return false;
+      if (!effectiveContext.mounted) return false;
       unawaited(BackgroundSync.refreshSchedule(
         backend: backend,
         configStore: _store,
@@ -942,7 +947,7 @@ final class _CloudSyncSwitchPromptGateState
         if (mounted && result.failureMessage != null) {
           _showSnack(result.failureMessage!);
         }
-        return;
+        return true;
       }
       didSync = result.completed;
       if (result.pauseSync) {
@@ -957,6 +962,13 @@ final class _CloudSyncSwitchPromptGateState
         _showSnack(result.failureMessage!);
       }
     } catch (error) {
+      if (error is TimeoutException &&
+          (error.message?.contains(
+                'sync engine did not stop before destructive operation',
+              ) ??
+              false)) {
+        shouldRestartEngine = false;
+      }
       await _restoreCloudSyncPreviousSyncConfig(
         this,
         backend: backend,
@@ -980,19 +992,20 @@ final class _CloudSyncSwitchPromptGateState
           ),
         );
       }
-      return;
+      return true;
     } finally {
       if (shouldRestartEngine && !restartedEngineBeforeDialogDismiss) {
         engine?.start();
       }
     }
 
-    if (!mounted) return;
+    if (!mounted) return true;
     engine?.notifyExternalChange();
     if (!didSync && shouldRestartEngine) {
       engine?.triggerPushNow();
       engine?.triggerPullNow();
     }
+    return true;
   }
 
   @override

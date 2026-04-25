@@ -279,7 +279,9 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       var shouldRestartEngine = wasRunning;
 
       try {
-        await engine?.stopImmediatelyAndWait();
+        await engine?.stopImmediatelyAndWait(
+          timeout: kDestructiveSyncStopTimeout,
+        );
         await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
         shouldRestartEngine = false;
         engine?.writeGate.value = const SyncWriteGateState.open();
@@ -295,6 +297,9 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
             error: _deleteActionErrorMessage(e),
           ));
           return;
+        }
+        if (_isDestructiveSyncStopTimeout(e)) {
+          shouldRestartEngine = false;
         }
         if (shouldRestartEngine) {
           engine?.start();

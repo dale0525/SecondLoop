@@ -176,6 +176,7 @@ pub fn migration_archive_inspect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn remove_rollback_snapshot_rejects_untracked_path() {
@@ -209,5 +210,31 @@ mod tests {
             .expect("remove active snapshot");
 
         assert!(!Path::new(&snapshot_path).exists());
+    }
+
+    #[test]
+    fn remove_rollback_snapshot_keeps_marker_when_file_removal_fails() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let app_dir = dir.path().join("app");
+        let key = vec![7u8; 32];
+        let snapshot_path =
+            migration_archive_create_rollback_snapshot(app_dir.to_string_lossy().into_owned(), key)
+                .expect("create rollback snapshot")
+                .expect("snapshot path");
+        let snapshot_path_buf = PathBuf::from(&snapshot_path);
+        std::fs::remove_file(&snapshot_path_buf).expect("remove snapshot file");
+        std::fs::create_dir(&snapshot_path_buf).expect("create removal blocker");
+
+        let result = migration_archive_remove_rollback_snapshot(snapshot_path.clone());
+
+        assert!(
+            result.is_err(),
+            "directory blocker should make snapshot removal fail"
+        );
+        assert!(
+            db::migration_archive_is_active_rollback_snapshot(&app_dir, &snapshot_path_buf)
+                .expect("read active marker"),
+            "failed removal should keep active marker for retry"
+        );
     }
 }

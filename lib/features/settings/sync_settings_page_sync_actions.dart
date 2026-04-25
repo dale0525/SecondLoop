@@ -577,7 +577,9 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
       final wasEngineRunning = engine?.isRunning ?? false;
       if (shouldSync && engine != null) {
-        await engine.stopImmediatelyAndWait();
+        await engine.stopImmediatelyAndWait(
+          timeout: kDestructiveSyncStopTimeout,
+        );
         shouldRestartStoppedEngine = wasEngineRunning;
       }
 
@@ -663,7 +665,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         final displayError = remoteReplaceCommitted ? e.cause : e;
         if (remoteReplaceCommitted) {
           shouldRestartStoppedEngine = false;
-          await _tryDisableAutoSyncAndRefreshSchedule(backend);
+          await _disableAutoSyncAfterDestructiveCleanup(backend);
         }
         final shouldRestorePrimarySnapshot = !remoteReplaceCommitted &&
             (switchDirection != null ||

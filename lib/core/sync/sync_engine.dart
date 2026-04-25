@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart'
 import 'managed_vault_sync_error_policy.dart';
 import 'sync_result.dart';
 
+const kDestructiveSyncStopTimeout = Duration(seconds: 30);
+
 enum SyncBackendType {
   webdav,
   localDir,
@@ -261,7 +263,7 @@ final class SyncEngine {
     _finishStop();
   }
 
-  Future<void> stopImmediatelyAndWait() async {
+  Future<void> stopImmediatelyAndWait({Duration? timeout}) async {
     if (!_running && !_busy) return;
     _cancelScheduledWork();
     final idle = waitForIdle();
@@ -275,7 +277,17 @@ final class SyncEngine {
       _retryPushAfterRecoveryPull = false;
       _managedVaultRecoveryRetryPushes = 0;
     }
-    await idle;
+    if (timeout == null) {
+      await idle;
+      return;
+    }
+    await idle.timeout(
+      timeout,
+      onTimeout: () => throw TimeoutException(
+        'sync engine did not stop before destructive operation',
+        timeout,
+      ),
+    );
   }
 
   Future<void> waitForIdle() {

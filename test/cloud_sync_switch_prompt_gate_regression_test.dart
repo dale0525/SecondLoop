@@ -184,6 +184,67 @@ void main() {
     expect(backend.calls, isEmpty);
   });
 
+  testWidgets('switch-to-cloud can prompt again after missing id token',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final backend = _TrackingManagedVaultBackend();
+    final cloudAuth = _MutableCloudAuthControllerWithToken(
+      uid: 'uid_1',
+      idToken: null,
+    );
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => null,
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+
+    await tester.pumpWidget(_wrapGate(
+      store: store,
+      backend: backend,
+      engine: engine,
+      cloudAuth: cloudAuth,
+      subscription: subscription,
+      gatewayModelName: 'cloud-a',
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merge local and remote'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Sign in to use SecondLoop Cloud sync'),
+        findsOneWidget);
+    expect(backend.calls, isEmpty);
+
+    cloudAuth.setToken('test-id-token');
+    await tester.pumpWidget(_wrapGate(
+      store: store,
+      backend: backend,
+      engine: engine,
+      cloudAuth: cloudAuth,
+      subscription: subscription,
+      gatewayModelName: 'cloud-b',
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch to SecondLoop Cloud sync?'), findsOneWidget);
+  });
+
   testWidgets('direction dialog blocks reentrant switch prompt',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -357,6 +418,58 @@ final class _MutableCloudAuthController extends ChangeNotifier
 
   @override
   Future<void> signOut() async {}
+}
+
+final class _MutableCloudAuthControllerWithToken extends ChangeNotifier
+    implements CloudAuthController {
+  _MutableCloudAuthControllerWithToken({
+    required String uid,
+    required String? idToken,
+  })  : _uid = uid,
+        _idToken = idToken;
+
+  final String _uid;
+  String? _idToken;
+
+  void setToken(String? idToken) {
+    _idToken = idToken;
+    notifyListeners();
+  }
+
+  @override
+  String? get uid => _uid;
+
+  @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<String?> getIdToken() async => _idToken;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {
+    setToken(null);
+  }
 }
 
 final class _TrackingManagedVaultBackend extends TestAppBackend {

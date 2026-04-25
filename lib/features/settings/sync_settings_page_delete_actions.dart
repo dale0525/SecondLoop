@@ -6,6 +6,25 @@ bool _isVaultResetCommittedCleanupFailure(Object error) {
       .contains('filesystem cleanup failed after vault reset commit');
 }
 
+bool _isDestructiveSyncStopTimeout(Object error) {
+  return error is TimeoutException &&
+      (error.message?.contains(
+            'sync engine did not stop before destructive operation',
+          ) ??
+          false);
+}
+
+final class _AutoSyncDisableAfterDestructiveCleanupException
+    implements Exception {
+  const _AutoSyncDisableAfterDestructiveCleanupException(this.cause);
+
+  final Object cause;
+
+  @override
+  String toString() =>
+      'failed to disable sync after destructive cleanup: $cause';
+}
+
 extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
   bool _isOperationTimeoutError(Object error) {
     if (error is TimeoutException) return true;
@@ -31,7 +50,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     }));
   }
 
-  Future<void> _tryDisableAutoSyncAndRefreshSchedule(
+  Future<void> _disableAutoSyncAfterDestructiveCleanup(
     AppBackend backend,
   ) async {
     try {
@@ -40,6 +59,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       debugPrint(
         'sync settings delete-all: failed to disable sync after destructive cleanup: $e',
       );
+      throw _AutoSyncDisableAfterDestructiveCleanupException(e);
     }
   }
 
@@ -243,7 +263,9 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
     var remoteClearSucceeded = false;
     var remoteClearTimedOut = false;
     try {
-      await engine?.stopImmediatelyAndWait();
+      await engine?.stopImmediatelyAndWait(
+        timeout: kDestructiveSyncStopTimeout,
+      );
       try {
         await _clearRemoteSyncDataForSavedConfig();
         remoteClearSucceeded = true;
@@ -260,7 +282,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       engine?.writeGate.value = const SyncWriteGateState.open();
       if (remoteClearTimedOut) {
         shouldRestartEngine = false;
-        await _tryDisableAutoSyncAndRefreshSchedule(backend);
+        await _disableAutoSyncAfterDestructiveCleanup(backend);
       }
       unawaited(BackgroundSync.refreshSchedule(
         backend: backend,
@@ -280,25 +302,46 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         );
       }
     } catch (e) {
+      if (_isDestructiveSyncStopTimeout(e)) {
+        shouldRestartEngine = false;
+      }
       if (_isVaultResetCommittedCleanupFailure(e)) {
         engine?.writeGate.value = const SyncWriteGateState.open();
         shouldNotifyExternalChange = true;
       }
+      var displayError = e;
+      final autoSyncDisableFailure =
+          e is _AutoSyncDisableAfterDestructiveCleanupException;
       if (remoteClearSucceeded || remoteClearTimedOut) {
         shouldRestartEngine = false;
-        await _tryDisableAutoSyncAndRefreshSchedule(backend);
+        if (!autoSyncDisableFailure) {
+          try {
+            await _disableAutoSyncAfterDestructiveCleanup(backend);
+          } catch (disableError) {
+            displayError = StateError(
+              '${_deleteActionErrorMessage(e)}; '
+              '${_deleteActionErrorMessage(disableError)}',
+            );
+          }
+        }
       }
       if (mounted) {
         _showSnack(
-          remoteClearTimedOut
-              ? t.sync.allData.remoteClearUnknownLocalCleanupFailed(
-                  error: _deleteActionErrorMessage(e),
+          autoSyncDisableFailure
+              ? t.sync.allData.failed(
+                  error: _deleteActionErrorMessage(displayError),
                 )
-              : remoteClearSucceeded
-                  ? t.sync.allData.remoteDeletedLocalCleanupFailed(
-                      error: _deleteActionErrorMessage(e),
+              : remoteClearTimedOut
+                  ? t.sync.allData.remoteClearUnknownLocalCleanupFailed(
+                      error: _deleteActionErrorMessage(displayError),
                     )
-                  : t.sync.allData.failed(error: _deleteActionErrorMessage(e)),
+                  : remoteClearSucceeded
+                      ? t.sync.allData.remoteDeletedLocalCleanupFailed(
+                          error: _deleteActionErrorMessage(displayError),
+                        )
+                      : t.sync.allData.failed(
+                          error: _deleteActionErrorMessage(displayError),
+                        ),
         );
       }
     } finally {

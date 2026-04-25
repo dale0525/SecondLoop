@@ -743,8 +743,9 @@ pub fn migration_archive_remove_rollback_snapshot(snapshot_path: &Path) -> Resul
     if !is_active {
         return Err(anyhow!("rollback snapshot is not active"));
     }
+    best_effort_remove_file(snapshot_path)?;
     migration_archive_clear_active_rollback_marker_for_snapshot(snapshot_path);
-    best_effort_remove_file(snapshot_path)
+    Ok(())
 }
 
 pub fn export_migration_archive_with_callbacks(

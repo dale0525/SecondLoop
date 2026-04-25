@@ -401,6 +401,25 @@ final class _CountingSyncRunner implements SyncRunner {
   Future<int> pull(SyncConfig config) async => 0;
 }
 
+final class _BlockingPullRunner implements SyncRunner {
+  int pullCalls = 0;
+  final Completer<int> _pullCompleter = Completer<int>();
+
+  void completePull({required int applied}) {
+    if (_pullCompleter.isCompleted) return;
+    _pullCompleter.complete(applied);
+  }
+
+  @override
+  Future<int> push(SyncConfig config) async => 0;
+
+  @override
+  Future<int> pull(SyncConfig config) {
+    pullCalls += 1;
+    return _pullCompleter.future;
+  }
+}
+
 final class _BlockingPushRunner implements SyncRunner {
   int pushCalls = 0;
   final Completer<void> pushStarted = Completer<void>();
@@ -517,5 +536,20 @@ final class _MutableCloudAuthController extends ChangeNotifier
   @override
   Future<void> signOut() async {
     setSession(userId: null, idToken: null);
+  }
+}
+
+final class _ToggleFailingPrefsStore extends InMemorySharedPreferencesStore {
+  _ToggleFailingPrefsStore() : super.empty();
+
+  bool failPublicConfigWrites = false;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (failPublicConfigWrites &&
+        key.endsWith(SyncConfigStore.prefsBlobKeyForTest)) {
+      throw Exception('injected prefs write failure for $key');
+    }
+    return super.setValue(valueType, key, value);
   }
 }
