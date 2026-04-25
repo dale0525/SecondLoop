@@ -753,6 +753,8 @@ void registerSyncSettingsPageCoreATests() {
     expect(await store.readRemoteRoot(), 'SecondLoop');
     expect((await store.readSyncKey())?.toList(), previousSyncKey.toList());
     expect(find.textContaining('HTTP 403'), findsNothing);
+    expect(
+        find.textContaining('Cloud sync is read-only until'), findsOneWidget);
     expect(find.byKey(const ValueKey('sync_save_progress')), findsNothing);
     expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
     engine.stop();

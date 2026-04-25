@@ -93,10 +93,11 @@ void main() {
     ]);
     expect(syncRunner.pushCalls, 0);
     expect(syncRunner.pullCalls, 0);
+    expect(engine.isRunning, isTrue);
     expect(await store.readBackendType(), SyncBackendType.webdav);
     expect(await store.readRemoteRoot(), 'SecondLoop');
 
-    engine.stop();
+    engine.stopImmediately();
   });
 }
 

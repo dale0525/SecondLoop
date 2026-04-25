@@ -92,20 +92,29 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
           case SyncSwitchDirection.localReplacesRemote:
             stage.value = t.sync.progressDialog.pushing;
             progress.value = null;
-            await backend.syncWebdavClearRemoteRoot(
-              baseUrl: baseUrl,
-              username: username,
-              password: password,
-              remoteRoot: remoteRoot,
-            );
-            await backend.syncWebdavPush(
-              sessionKey,
-              syncKey,
-              baseUrl: baseUrl,
-              username: username,
-              password: password,
-              remoteRoot: remoteRoot,
-            );
+            var remoteCleared = false;
+            try {
+              await backend.syncWebdavClearRemoteRoot(
+                baseUrl: baseUrl,
+                username: username,
+                password: password,
+                remoteRoot: remoteRoot,
+              );
+              remoteCleared = true;
+              await backend.syncWebdavPush(
+                sessionKey,
+                syncKey,
+                baseUrl: baseUrl,
+                username: username,
+                password: password,
+                remoteRoot: remoteRoot,
+              );
+            } catch (error) {
+              if (remoteCleared) {
+                throw SyncRemoteReplaceCommittedException(error);
+              }
+              rethrow;
+            }
             break;
           case SyncSwitchDirection.remoteReplacesLocal:
             stage.value = t.sync.progressDialog.pulling;
@@ -250,21 +259,30 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
           case SyncSwitchDirection.localReplacesRemote:
             stage.value = t.sync.progressDialog.pushing;
             progress.value = null;
-            await backend.syncLocaldirClearRemoteRoot(
-              localDir: localDir,
-              remoteRoot: remoteRoot,
-            );
-            progress.value = 0.0;
-            await _consumeRustProgressStream(
-              backend.syncLocaldirPushProgress(
-                sessionKey,
-                syncKey,
+            var remoteCleared = false;
+            try {
+              await backend.syncLocaldirClearRemoteRoot(
                 localDir: localDir,
                 remoteRoot: remoteRoot,
-              ),
-              onProgress: stageProgress.onProgress,
-            );
-            stageProgress.complete();
+              );
+              remoteCleared = true;
+              progress.value = 0.0;
+              await _consumeRustProgressStream(
+                backend.syncLocaldirPushProgress(
+                  sessionKey,
+                  syncKey,
+                  localDir: localDir,
+                  remoteRoot: remoteRoot,
+                ),
+                onProgress: stageProgress.onProgress,
+              );
+              stageProgress.complete();
+            } catch (error) {
+              if (remoteCleared) {
+                throw SyncRemoteReplaceCommittedException(error);
+              }
+              rethrow;
+            }
             break;
           case SyncSwitchDirection.remoteReplacesLocal:
             stage.value = t.sync.progressDialog.pulling;

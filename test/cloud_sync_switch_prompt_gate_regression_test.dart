@@ -72,6 +72,61 @@ void main() {
     engine.stopImmediately();
   });
 
+  testWidgets('failed switch-to-cloud replace-remote keeps new cloud config',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+    await store.writeAutoEnabled(true);
+
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        baseUrl: 'https://old.example.com/dav',
+        remoteRoot: 'SecondLoop',
+      ),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    )..start();
+    final backend = _TrackingManagedVaultBackend(
+      pushError: StateError(
+        'managed-vault push failed: HTTP 403 '
+        '{"error":"storage_quota_exceeded","used_bytes":10,"limit_bytes":9}',
+      ),
+    );
+
+    await tester.pumpWidget(_wrapGate(
+      store: store,
+      backend: backend,
+      engine: engine,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Replace remote with this device'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, <String>[
+      'syncManagedVaultClearVault',
+      'syncManagedVaultPush',
+    ]);
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(await store.readRemoteRoot(), 'uid_1');
+    expect(await store.readAutoEnabled(), isFalse);
+    expect(engine.isRunning, isFalse);
+    expect(find.textContaining('Cloud storage is full'), findsOneWidget);
+  });
+
   testWidgets('switch-to-cloud can prompt again after direction is dismissed',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -126,6 +181,51 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Switch to SecondLoop Cloud sync?'), findsOneWidget);
+    expect(backend.calls, isEmpty);
+  });
+
+  testWidgets('direction dialog blocks reentrant switch prompt',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final backend = _TrackingManagedVaultBackend();
+    final cloudAuth = _MutableCloudAuthController(uid: 'uid_1');
+    final engine = SyncEngine(
+      syncRunner: _CountingSyncRunner(),
+      loadConfig: () async => null,
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+
+    await tester.pumpWidget(_wrapGate(
+      store: store,
+      backend: backend,
+      engine: engine,
+      cloudAuth: cloudAuth,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose sync direction'), findsOneWidget);
+
+    cloudAuth.setUid('uid_2');
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose sync direction'), findsOneWidget);
+    expect(find.text('Switch to SecondLoop Cloud sync?'), findsNothing);
+    expect(find.byType(AlertDialog), findsOneWidget);
     expect(backend.calls, isEmpty);
   });
 }
@@ -214,10 +314,59 @@ final class _FakeCloudAuthController implements CloudAuthController {
   Future<void> signOut() async {}
 }
 
+final class _MutableCloudAuthController extends ChangeNotifier
+    implements CloudAuthController {
+  _MutableCloudAuthController({required String uid}) : _uid = uid;
+
+  String _uid;
+
+  void setUid(String uid) {
+    _uid = uid;
+    notifyListeners();
+  }
+
+  @override
+  String? get uid => _uid;
+
+  @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<String?> getIdToken() async => 'test-id-token';
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+}
+
 final class _TrackingManagedVaultBackend extends TestAppBackend {
-  _TrackingManagedVaultBackend({this.onClearVault});
+  _TrackingManagedVaultBackend({
+    this.onClearVault,
+    this.pushError,
+  });
 
   final VoidCallback? onClearVault;
+  final Object? pushError;
   final List<String> calls = <String>[];
 
   @override
@@ -239,6 +388,10 @@ final class _TrackingManagedVaultBackend extends TestAppBackend {
     required String idToken,
   }) async {
     calls.add('syncManagedVaultPush');
+    final pushError = this.pushError;
+    if (pushError != null) {
+      throw pushError;
+    }
     return 0;
   }
 

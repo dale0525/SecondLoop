@@ -497,6 +497,76 @@ final class _FailingReplaceRemoteSyncSettingsBackend
   }
 }
 
+final class _FailingPushAfterClearRemoteSyncSettingsBackend
+    extends _SyncSettingsBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<void> syncWebdavTestConnection({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavTest');
+  }
+
+  @override
+  Future<void> syncWebdavClearRemoteRoot({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavClear:$remoteRoot');
+  }
+
+  @override
+  Future<int> syncWebdavPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavPush:$remoteRoot');
+    throw StateError('webdav_push_failed');
+  }
+}
+
+final class _FailingLocalDirPushAfterClearRemoteSyncSettingsBackend
+    extends _SyncSettingsBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  }) async {
+    calls.add('localdirTest:$remoteRoot');
+  }
+
+  @override
+  Future<void> syncLocaldirClearRemoteRoot({
+    required String localDir,
+    required String remoteRoot,
+  }) async {
+    calls.add('localdirClear:$remoteRoot');
+  }
+
+  @override
+  Future<int> syncLocaldirPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async {
+    calls.add('localdirPush:$remoteRoot');
+    throw StateError('localdir_push_failed');
+  }
+}
+
 final class _RollbacklessReplaceLocalSyncSettingsBackend
     extends _SyncSettingsBackend {
   final List<String> calls = <String>[];
@@ -527,6 +597,49 @@ final class _RollbacklessReplaceLocalSyncSettingsBackend
   }) async {
     calls.add('webdavPull:$remoteRoot');
     return 0;
+  }
+}
+
+final class _FailingLocalDirReplaceLocalSyncSettingsBackend
+    extends _SyncSettingsBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<void> syncLocaldirTestConnection({
+    required String localDir,
+    required String remoteRoot,
+  }) async {
+    calls.add('localdirTest:$remoteRoot');
+  }
+
+  @override
+  Future<String?> createVaultRollbackSnapshot(Uint8List key) async {
+    calls.add('createSnapshot');
+    return 'snapshot-1';
+  }
+
+  @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
+    calls.add('resetLocal');
+  }
+
+  @override
+  Future<int> syncLocaldirPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String localDir,
+    required String remoteRoot,
+  }) async {
+    calls.add('localdirPull:$remoteRoot');
+    throw StateError('localdir_pull_failed');
+  }
+
+  @override
+  Future<void> restoreVaultRollbackSnapshot(
+    Uint8List key, {
+    required String snapshotPath,
+  }) async {
+    calls.add('restoreSnapshot:$snapshotPath');
   }
 }
 

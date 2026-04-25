@@ -69,25 +69,34 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
 
           switch (direction) {
             case SyncSwitchDirection.localReplacesRemote:
-              await backend.syncManagedVaultClearVault(
-                baseUrl: baseUrlTrimmed,
-                vaultId: vaultId,
-                idToken: idTokenTrimmed,
-              );
-              await _runManagedVaultPushStageWithProgress(
-                backend: backend,
-                sessionKey: sessionKey,
-                syncKey: syncKey,
-                engine: engine,
-                baseUrl: baseUrlTrimmed,
-                vaultId: vaultId,
-                idToken: idTokenTrimmed,
-                stage: stage,
-                progress: progress,
-                hasTotal: hasTotal,
-                allowRecovery: false,
-              );
-              allowMediaUploads = true;
+              var remoteCleared = false;
+              try {
+                await backend.syncManagedVaultClearVault(
+                  baseUrl: baseUrlTrimmed,
+                  vaultId: vaultId,
+                  idToken: idTokenTrimmed,
+                );
+                remoteCleared = true;
+                await _runManagedVaultPushStageWithProgress(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: syncKey,
+                  engine: engine,
+                  baseUrl: baseUrlTrimmed,
+                  vaultId: vaultId,
+                  idToken: idTokenTrimmed,
+                  stage: stage,
+                  progress: progress,
+                  hasTotal: hasTotal,
+                  allowRecovery: false,
+                );
+                allowMediaUploads = true;
+              } catch (error) {
+                if (remoteCleared) {
+                  throw SyncRemoteReplaceCommittedException(error);
+                }
+                rethrow;
+              }
               break;
             case SyncSwitchDirection.remoteReplacesLocal:
               stage.value = pullingLabel;

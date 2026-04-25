@@ -659,9 +659,16 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
       } catch (e) {
         if (!mounted) return;
-        final shouldRestorePrimarySnapshot = switchDirection != null ||
-            (newBackendType == SyncBackendType.managedVault &&
-                e is _ManagedVaultSaveConfigurationException);
+        final remoteReplaceCommitted = e is SyncRemoteReplaceCommittedException;
+        final displayError = remoteReplaceCommitted ? e.cause : e;
+        if (remoteReplaceCommitted) {
+          shouldRestartStoppedEngine = false;
+          await _tryDisableAutoSyncAndRefreshSchedule(backend);
+        }
+        final shouldRestorePrimarySnapshot = !remoteReplaceCommitted &&
+            (switchDirection != null ||
+                (newBackendType == SyncBackendType.managedVault &&
+                    e is _ManagedVaultSaveConfigurationException));
         var restoredPrimarySnapshot = false;
         if (shouldRestorePrimarySnapshot) {
           await _restorePrimarySyncConfigSnapshot(
@@ -685,18 +692,20 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           restartStoppedEngineIfNeeded();
         }
         if (backendType == SyncBackendType.managedVault) {
-          final details = inspectManagedVaultPushFailure(e);
-          if (details.writeGateState != null) {
+          final details = inspectManagedVaultPushFailure(displayError);
+          if (details.writeGateState != null &&
+              !remoteReplaceCommitted &&
+              !restoredPrimarySnapshot) {
             return;
           }
           _showSnack(
             t.sync.connectionFailed(
-              error: managedVaultUserFacingErrorMessage(e),
+              error: managedVaultUserFacingErrorMessage(displayError),
             ),
           );
           return;
         }
-        _showSnack(t.sync.connectionFailed(error: '$e'));
+        _showSnack(t.sync.connectionFailed(error: '$displayError'));
       }
     } catch (e) {
       _showSnack(t.sync.saveFailed(error: '$e'));
