@@ -188,7 +188,7 @@ void registerDeleteActionsRegressionTests() {
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
 
     final backend = _DeleteActionsBackend(
-      webdavClearRemoteRootError: StateError('operation timeout'),
+      webdavClearRemoteRootError: StateError('request timeout'),
     );
     final runner = _CountingSyncRunner();
     final engine = SyncEngine(

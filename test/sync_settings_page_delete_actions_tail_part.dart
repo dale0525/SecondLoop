@@ -210,6 +210,75 @@ void registerDeleteActionsTailTests() {
   });
 
   testWidgets(
+      'delete local data restarts sync engine when auto sync restore fails',
+      (tester) async {
+    SharedPreferences.resetStatic();
+    SharedPreferences.setMockInitialValues({});
+    final prefsStore = _ToggleFailingPrefsStore();
+    SharedPreferencesStorePlatform.instance = prefsStore;
+    addTearDown(() {
+      SharedPreferences.resetStatic();
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeAutoEnabled(true);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend(
+      resetLocalDataError: StateError('local reset failed before commit'),
+    );
+    final runner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    prefsStore
+      ..resetSuccessfulPublicConfigWrites()
+      ..failPublicConfigWritesAfterSuccessfulWrites = 1;
+    final button = find.widgetWithText(OutlinedButton, 'Delete local data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await _confirmDeletionTwice(tester);
+    await tester.pumpAndSettle();
+
+    expect(backend.resetLocalDataCalls, 1);
+    expect(await store.readAutoEnabled(), isFalse);
+    expect(engine.isRunning, isTrue);
+    expect(find.textContaining('local reset failed before commit'),
+        findsOneWidget);
+    expect(find.textContaining('failed to restore auto sync'), findsOneWidget);
+
+    engine.triggerPushNow();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(runner.pushCalls, 1);
+
+    engine.stop();
+  });
+
+  testWidgets(
       'delete all data disables auto sync before refreshing background schedule',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

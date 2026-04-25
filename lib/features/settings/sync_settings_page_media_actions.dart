@@ -297,6 +297,9 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
               enabled: previousAutoEnabled,
             );
           } catch (restoreError) {
+            if (shouldRestartEngine) {
+              engine?.start();
+            }
             throw StateError(
               '${_deleteActionErrorMessage(e)}; '
               'failed to restore auto sync: $restoreError',

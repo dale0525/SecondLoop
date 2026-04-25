@@ -543,12 +543,22 @@ final class _ToggleFailingPrefsStore extends InMemorySharedPreferencesStore {
   _ToggleFailingPrefsStore() : super.empty();
 
   bool failPublicConfigWrites = false;
+  int? failPublicConfigWritesAfterSuccessfulWrites;
+  int _successfulPublicConfigWrites = 0;
+
+  void resetSuccessfulPublicConfigWrites() {
+    _successfulPublicConfigWrites = 0;
+  }
 
   @override
   Future<bool> setValue(String valueType, String key, Object value) async {
-    if (failPublicConfigWrites &&
-        key.endsWith(SyncConfigStore.prefsBlobKeyForTest)) {
-      throw Exception('injected prefs write failure for $key');
+    if (key.endsWith(SyncConfigStore.prefsBlobKeyForTest)) {
+      final failAfter = failPublicConfigWritesAfterSuccessfulWrites;
+      if (failPublicConfigWrites ||
+          (failAfter != null && _successfulPublicConfigWrites >= failAfter)) {
+        throw Exception('injected prefs write failure for $key');
+      }
+      _successfulPublicConfigWrites += 1;
     }
     return super.setValue(valueType, key, value);
   }
