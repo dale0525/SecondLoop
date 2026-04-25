@@ -2,7 +2,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 import '../ai/ai_routing.dart';
@@ -528,13 +527,11 @@ final class BackgroundSync {
   }
 
   @visibleForTesting
-  static Future<bool> cloudSwitchInProgressForTest() =>
-      _cloudSwitchInProgress();
+  static Future<bool> cloudSwitchInProgressForTest({DateTime? now}) =>
+      _cloudSwitchInProgress(now: now);
 
-  static Future<bool> _cloudSwitchInProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(cloudSyncSwitchInProgressPrefsKey) ?? false;
-  }
+  static Future<bool> _cloudSwitchInProgress({DateTime? now}) =>
+      cloudSyncSwitchInProgress(now: now);
 
   @visibleForTesting
   static Future<({int? statusCode, String? errorCode, bool retryable})>

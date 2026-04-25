@@ -1,9 +1,15 @@
 struct AttachmentsResetGuard {
+    app_dir: PathBuf,
     attachments_dir: PathBuf,
     staged_dir: Option<PathBuf>,
+    staged_dir_name: Option<String>,
 }
 
 const ATTACHMENTS_RESET_STAGED_PREFIX: &str = "attachments.reset-staged-";
+const ATTACHMENTS_RESET_STATE_FILE: &str = "attachments.reset-state.json";
+const ATTACHMENTS_RESET_PHASE_PREPARING: &str = "preparing";
+const ATTACHMENTS_RESET_PHASE_PREPARED: &str = "prepared";
+const ATTACHMENTS_RESET_PHASE_COMMITTED: &str = "committed";
 const DYNAMIC_EMBEDDING_TABLE_PREFIXES: &[&str] = &[
     "message_embeddings__",
     "todo_embeddings__",
@@ -13,6 +19,85 @@ const DYNAMIC_EMBEDDING_TABLE_PREFIXES: &[&str] = &[
 
 fn is_attachment_reset_staging_name(name: &str) -> bool {
     name.starts_with(ATTACHMENTS_RESET_STAGED_PREFIX)
+}
+
+#[derive(Deserialize, Serialize)]
+struct AttachmentResetState {
+    phase: String,
+    staged_dir_name: String,
+}
+
+fn attachment_reset_state_path(app_dir: &Path) -> PathBuf {
+    app_dir.join(ATTACHMENTS_RESET_STATE_FILE)
+}
+
+fn is_safe_attachment_reset_staging_name(name: &str) -> bool {
+    is_attachment_reset_staging_name(name)
+        && !name.contains('/')
+        && !name.contains('\\')
+        && name != ATTACHMENTS_RESET_STAGED_PREFIX
+}
+
+fn write_attachment_reset_state(app_dir: &Path, state: &AttachmentResetState) -> Result<()> {
+    fs::write(
+        attachment_reset_state_path(app_dir),
+        serde_json::to_vec(state)?,
+    )?;
+    Ok(())
+}
+
+fn read_attachment_reset_state(app_dir: &Path) -> Result<Option<AttachmentResetState>> {
+    let path = attachment_reset_state_path(app_dir);
+    match fs::read(&path) {
+        Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn remove_attachment_reset_state(app_dir: &Path) -> Result<()> {
+    match fs::remove_file(attachment_reset_state_path(app_dir)) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn remove_path_if_exists(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_dir() => best_effort_remove_dir_all(path),
+        Ok(_) => fs::remove_file(path).map_err(Into::into),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn recover_pending_attachment_reset_state(app_dir: &Path) -> Result<()> {
+    let Some(state) = read_attachment_reset_state(app_dir)? else {
+        return Ok(());
+    };
+    if !is_safe_attachment_reset_staging_name(&state.staged_dir_name) {
+        return Err(anyhow!(
+            "invalid attachment reset staged directory name: {}",
+            state.staged_dir_name
+        ));
+    }
+
+    let staged_dir = app_dir.join(&state.staged_dir_name);
+    match state.phase.as_str() {
+        ATTACHMENTS_RESET_PHASE_PREPARING | ATTACHMENTS_RESET_PHASE_PREPARED => {
+            if staged_dir.exists() {
+                remove_path_if_exists(&app_dir.join("attachments"))?;
+                fs::rename(&staged_dir, app_dir.join("attachments"))?;
+            }
+            remove_attachment_reset_state(app_dir)
+        }
+        ATTACHMENTS_RESET_PHASE_COMMITTED => {
+            best_effort_remove_dir_all(&staged_dir)?;
+            remove_attachment_reset_state(app_dir)
+        }
+        other => Err(anyhow!("invalid attachment reset phase: {other}")),
+    }
 }
 
 pub(crate) fn attachment_reset_staging_dirs_have_entries(app_dir: &Path) -> Result<bool> {
@@ -151,33 +236,59 @@ impl AttachmentsResetGuard {
             if !attachments_dir.is_dir() {
                 return Err(anyhow!("attachments path is not a directory"));
             }
-            let staged_dir = app_dir.join(format!(
-                "attachments.reset-staged-{}",
-                uuid::Uuid::new_v4()
-            ));
+            let staged_dir_name = format!("attachments.reset-staged-{}", uuid::Uuid::new_v4());
+            let staged_dir = app_dir.join(&staged_dir_name);
+            write_attachment_reset_state(
+                app_dir,
+                &AttachmentResetState {
+                    phase: ATTACHMENTS_RESET_PHASE_PREPARING.to_string(),
+                    staged_dir_name: staged_dir_name.clone(),
+                },
+            )?;
             fs::rename(&attachments_dir, &staged_dir)?;
-            Some(staged_dir)
+            write_attachment_reset_state(
+                app_dir,
+                &AttachmentResetState {
+                    phase: ATTACHMENTS_RESET_PHASE_PREPARED.to_string(),
+                    staged_dir_name: staged_dir_name.clone(),
+                },
+            )?;
+            Some((staged_dir, staged_dir_name))
         } else {
             None
         };
         Ok(Self {
+            app_dir: app_dir.to_path_buf(),
             attachments_dir,
-            staged_dir,
+            staged_dir: staged_dir.as_ref().map(|(path, _)| path.clone()),
+            staged_dir_name: staged_dir.map(|(_, name)| name),
         })
     }
 
     fn restore(&mut self) -> Result<()> {
-        best_effort_remove_dir_all(&self.attachments_dir)?;
+        remove_path_if_exists(&self.attachments_dir)?;
         if let Some(staged_dir) = self.staged_dir.take() {
             fs::rename(staged_dir, &self.attachments_dir)?;
         }
+        self.staged_dir_name = None;
+        remove_attachment_reset_state(&self.app_dir)?;
         Ok(())
     }
 
     fn finish(mut self) -> Result<()> {
-        if let Some(staged_dir) = self.staged_dir.take() {
+        if let (Some(staged_dir), Some(staged_dir_name)) =
+            (self.staged_dir.take(), self.staged_dir_name.take())
+        {
+            write_attachment_reset_state(
+                &self.app_dir,
+                &AttachmentResetState {
+                    phase: ATTACHMENTS_RESET_PHASE_COMMITTED.to_string(),
+                    staged_dir_name,
+                },
+            )?;
             best_effort_remove_dir_all(&staged_dir)?;
         }
+        remove_attachment_reset_state(&self.app_dir)?;
         Ok(())
     }
 }
@@ -188,6 +299,10 @@ pub fn reset_vault_data_preserving_llm_profiles(conn: &Connection) -> Result<()>
     let mut attachments_guard = None;
 
     if let Some(app_dir) = app_dir.as_ref() {
+        if let Err(error) = recover_pending_attachment_reset_state(app_dir) {
+            let _ = conn.execute_batch("ROLLBACK;");
+            return Err(error);
+        }
         if let Err(error) = remove_stale_attachment_reset_staging_dirs(app_dir) {
             let _ = conn.execute_batch("ROLLBACK;");
             return Err(error);
@@ -346,5 +461,40 @@ DELETE FROM oplog;
             }
             Err(error)
         }
+    }
+}
+
+#[cfg(test)]
+mod reset_vault_data_attachment_state_tests {
+    use super::*;
+
+    #[test]
+    fn attachment_reset_state_recovers_uncommitted_staging_before_cleanup() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let app_dir = dir.path();
+        let staged_dir_name = "attachments.reset-staged-crash";
+        let staged_dir = app_dir.join(staged_dir_name);
+        fs::create_dir_all(&staged_dir).expect("create staged attachments dir");
+        fs::write(staged_dir.join("kept.bin"), b"kept attachment").expect("write staged file");
+        fs::write(
+            app_dir.join("attachments.reset-state.json"),
+            format!(r#"{{"phase":"prepared","staged_dir_name":"{staged_dir_name}"}}"#),
+        )
+        .expect("write reset state");
+
+        recover_pending_attachment_reset_state(app_dir).expect("recover pending reset state");
+
+        assert!(
+            app_dir.join("attachments/kept.bin").exists(),
+            "uncommitted staging should be restored to attachments"
+        );
+        assert!(
+            !staged_dir.exists(),
+            "uncommitted staging directory should be consumed after restore"
+        );
+        assert!(
+            !app_dir.join("attachments.reset-state.json").exists(),
+            "recovered uncommitted state marker should be removed"
+        );
     }
 }

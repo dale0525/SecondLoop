@@ -163,6 +163,54 @@ void main() {
   });
 
   testWidgets(
+      'Managed Vault replace-local rollback failure disables sync and leaves engine stopped',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('old_uid');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeAutoEnabled(true);
+    final previousSyncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    await store.writeSyncKey(previousSyncKey);
+
+    final backend = _FailingPullAndRollbackManagedVaultBackend();
+    final cloudAuth = _FakeCloudAuthController(uid: 'uid_1');
+    final runner = _RecordingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: store.loadConfiguredSync,
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+
+    await tester.pumpWidget(_wrapSettingsPage(
+      store: store,
+      backend: backend,
+      cloudAuth: cloudAuth,
+      engine: engine,
+    ));
+    await tester.pumpAndSettle();
+
+    await _tapSave(tester);
+
+    expect(find.text('Choose sync direction'), findsOneWidget);
+    await tester.tap(find.text('Replace this device with remote'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(backend.calls, <String>[
+      'createSnapshot',
+      'resetLocal',
+      'syncManagedVaultPull:uid_1',
+      'restoreSnapshot:test-vault-rollback-snapshot',
+    ]);
+    expect(await store.readAutoEnabled(), isFalse);
+    expect(engine.isRunning, isFalse);
+    expect(runner.calls, isEmpty);
+  });
+
+  testWidgets(
       'Managed Vault replace-remote save requires auth without fallback sync',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -388,6 +436,18 @@ final class _FailingPullManagedVaultBackend
   }) async {
     calls.add('syncManagedVaultPull:$vaultId');
     throw StateError('managed_vault_pull_failed');
+  }
+}
+
+final class _FailingPullAndRollbackManagedVaultBackend
+    extends _FailingPullManagedVaultBackend {
+  @override
+  Future<void> restoreVaultRollbackSnapshot(
+    Uint8List key, {
+    required String snapshotPath,
+  }) async {
+    calls.add('restoreSnapshot:$snapshotPath');
+    throw StateError('vault_rollback_restore_failed');
   }
 }
 

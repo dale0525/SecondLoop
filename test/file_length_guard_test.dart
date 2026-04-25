@@ -8,6 +8,7 @@ void main() {
       'lib/core/backend/native_backend.dart',
       'lib/core/sync/cloud_sync_switch_prompt_gate.dart',
       'lib/core/sync/background_sync.dart',
+      'lib/features/settings/settings_page.dart',
       'lib/i18n/settings_en.i18n.json',
       'lib/i18n/settings_zh_CN.i18n.json',
       'test/sync_engine_gate_media_uploads_test.dart',

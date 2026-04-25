@@ -24,6 +24,7 @@ import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../core/sync/vault_reset_error.dart';
 import '../../core/desktop/desktop_boot_prefs.dart';
 import '../../core/desktop/desktop_quick_capture_hotkey_prefs.dart';
 import '../../core/desktop/system_hotkey_conflicts.dart';
@@ -47,6 +48,7 @@ import 'oplog_maintenance_scope.dart';
 import '../welcome/welcome_page.dart';
 
 part 'settings_page_build.dart';
+part 'settings_page_reset_actions.dart';
 part 'settings_page_theme.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -78,6 +80,14 @@ class _SettingsPageState extends State<SettingsPage> {
   CloudAuthController? _cloudAuthController;
   Listenable? _cloudAuthListenable;
   String? _lastCloudUid;
+
+  void _setState(VoidCallback fn) {
+    if (mounted) {
+      setState(fn);
+    } else {
+      fn();
+    }
+  }
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
@@ -189,47 +199,6 @@ class _SettingsPageState extends State<SettingsPage> {
     return AppPlatformCapabilityScope.of(context).supportsDesktopBootSettings;
   }
 
-  String _joinRemotePath(String root, String child) {
-    final r = root.trim().replaceAll(RegExp(r'/+$'), '');
-    final c = child.trim().replaceAll(RegExp(r'^/+'), '');
-    if (r.isEmpty) return c;
-    if (c.isEmpty) return r;
-    return '$r/$c';
-  }
-
-  bool _isOperationTimeoutError(Object error) {
-    if (error is TimeoutException) return true;
-    final message = error.toString().toLowerCase();
-    return message.contains('operation timeout') ||
-        message.contains('timed out') ||
-        message.contains('timeout');
-  }
-
-  bool _isDestructiveSyncStopTimeout(Object error) {
-    return error is TimeoutException &&
-        (error.message?.contains(
-              'sync engine did not stop before destructive operation',
-            ) ??
-            false);
-  }
-
-  Future<void> _disableAutoSyncAfterDebugResetCleanup({
-    required AppBackend backend,
-    required SyncConfigStore store,
-  }) async {
-    await store.writeAutoEnabled(false);
-    try {
-      await BackgroundSync.refreshSchedule(
-        backend: backend,
-        configStore: store,
-      );
-    } catch (e) {
-      debugPrint(
-        'settings debug reset: failed to refresh schedule after disabling sync: $e',
-      );
-    }
-  }
-
   String _normalizeAppLockWording(String text) {
     return text
         .replaceAll('master password', 'app lock password')
@@ -248,11 +217,6 @@ class _SettingsPageState extends State<SettingsPage> {
       SyncBackendType.managedVault =>
         rust_oplog_maintenance.OplogMaintenanceBackend.managedVault,
     };
-  }
-
-  SyncConfigStore _syncConfigStore(BuildContext context) {
-    final webSettings = WebFormalSettingsScope.maybeOf(context)?.dependencies;
-    return webSettings?.vaultConfigStore ?? SyncConfigStore();
   }
 
   Future<void> _runOplogMaintenanceDebug() async {
@@ -309,220 +273,6 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  Future<void> _resetLocalData({required bool clearAllRemoteData}) async {
-    if (_busy) return;
-
-    final t = context.t;
-    final dialogTitle = clearAllRemoteData
-        ? t.settingsReset.resetLocalDataAllDevices.dialogTitle
-        : t.settingsReset.resetLocalDataThisDeviceOnly.dialogTitle;
-    final dialogBody = _normalizeAppLockWording(clearAllRemoteData
-        ? t.settingsReset.resetLocalDataAllDevices.dialogBody
-        : t.settingsReset.resetLocalDataThisDeviceOnly.dialogBody);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(dialogTitle),
-          content: Text(dialogBody),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.t.common.actions.reset),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmed != true || !mounted) return;
-
-    final backend = AppBackendScope.of(context);
-    final lock = SessionScope.of(context).lock;
-    final messenger = ScaffoldMessenger.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final engine = SyncEngineScope.maybeOf(context);
-    final store = _syncConfigStore(context);
-    final wasEngineRunning = engine?.isRunning ?? false;
-    var shouldRestartEngine = wasEngineRunning;
-    var remoteClearSucceeded = false;
-    var remoteClearTimedOut = false;
-    var localResetCommitted = false;
-    var autoSyncDisabledAfterCleanup = false;
-
-    setState(() => _busy = true);
-    try {
-      await engine?.stopImmediatelyAndWait(
-        timeout: kDestructiveSyncStopTimeout,
-      );
-      final sync = await store.loadConfiguredSync();
-      if (sync != null) {
-        final deviceId =
-            clearAllRemoteData ? null : await backend.getOrCreateDeviceId();
-        try {
-          await switch (sync.backendType) {
-            SyncBackendType.webdav => backend.syncWebdavClearRemoteRoot(
-                baseUrl: sync.baseUrl ?? '',
-                username: sync.username,
-                password: sync.password,
-                remoteRoot: deviceId == null
-                    ? sync.remoteRoot
-                    : _joinRemotePath(sync.remoteRoot, deviceId),
-              ),
-            SyncBackendType.localDir => backend.syncLocaldirClearRemoteRoot(
-                localDir: sync.localDir ?? '',
-                remoteRoot: deviceId == null
-                    ? sync.remoteRoot
-                    : _joinRemotePath(sync.remoteRoot, deviceId),
-              ),
-            SyncBackendType.managedVault => () async {
-                final idToken = await readCloudAuthIdToken(
-                  CloudAuthScope.maybeOf(context)?.controller,
-                  mode: CloudAuthAccessMode.interactive,
-                );
-                if (idToken == null || idToken.trim().isEmpty) {
-                  throw StateError('missing_cloud_id_token');
-                }
-                final baseUrl = sync.baseUrl ?? '';
-                if (baseUrl.trim().isEmpty) {
-                  throw StateError('missing_base_url');
-                }
-
-                if (deviceId == null) {
-                  await backend.syncManagedVaultClearVault(
-                    baseUrl: baseUrl,
-                    vaultId: sync.remoteRoot,
-                    idToken: idToken,
-                  );
-                  return;
-                }
-
-                await backend.syncManagedVaultClearDevice(
-                  baseUrl: baseUrl,
-                  vaultId: sync.remoteRoot,
-                  idToken: idToken,
-                  deviceId: deviceId,
-                );
-              }(),
-          };
-          remoteClearSucceeded = true;
-        } catch (e) {
-          if (!(clearAllRemoteData && _isOperationTimeoutError(e))) {
-            rethrow;
-          }
-          remoteClearTimedOut = true;
-          debugPrint(
-              'settings debug reset: ignored remote clear timeout in all-devices mode: $e');
-        }
-      }
-
-      if (remoteClearTimedOut) {
-        shouldRestartEngine = false;
-        await _disableAutoSyncAfterDebugResetCleanup(
-          backend: backend,
-          store: store,
-        );
-        autoSyncDisabledAfterCleanup = true;
-      }
-
-      Object? committedCleanupFailure;
-      try {
-        await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
-        localResetCommitted = true;
-      } catch (e) {
-        if (!_isVaultResetCommittedCleanupFailure(e)) {
-          rethrow;
-        }
-        localResetCommitted = true;
-        committedCleanupFailure = e;
-        debugPrint(
-          'settings debug reset: local vault reset committed but cleanup failed: $e',
-        );
-      }
-      shouldRestartEngine = false;
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kAppLockEnabledPrefsKey);
-      await prefs.remove(_kBiometricUnlockEnabledPrefsKey);
-      await backend.clearSavedSessionKey();
-
-      await BackgroundSync.refreshSchedule(
-        backend: backend,
-        configStore: store,
-      );
-
-      if (committedCleanupFailure != null && mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              clearAllRemoteData
-                  ? t.settingsReset.resetLocalDataAllDevices
-                      .cleanupFailedAfterCommit(
-                      error: '$committedCleanupFailure',
-                    )
-                  : t.settingsReset.resetLocalDataThisDeviceOnly
-                      .cleanupFailedAfterCommit(
-                      error: '$committedCleanupFailure',
-                    ),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if (_isDestructiveSyncStopTimeout(e)) {
-        shouldRestartEngine = false;
-      }
-      var displayError = e;
-      if (remoteClearSucceeded || remoteClearTimedOut || localResetCommitted) {
-        shouldRestartEngine = false;
-        if (!autoSyncDisabledAfterCleanup) {
-          try {
-            await _disableAutoSyncAfterDebugResetCleanup(
-              backend: backend,
-              store: store,
-            );
-            autoSyncDisabledAfterCleanup = true;
-          } catch (disableError) {
-            displayError = StateError(
-              '$e; failed to disable sync after destructive cleanup: '
-              '$disableError',
-            );
-          }
-        }
-      }
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(clearAllRemoteData
-              ? t.settingsReset.resetLocalDataAllDevices
-                  .failed(error: '$displayError')
-              : t.settingsReset.resetLocalDataThisDeviceOnly.failed(
-                  error: '$displayError',
-                )),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return;
-    } finally {
-      if (shouldRestartEngine) {
-        engine?.start();
-      }
-      if (mounted) setState(() => _busy = false);
-    }
-
-    if (!mounted) return;
-    lock();
-  }
-
-  bool _isVaultResetCommittedCleanupFailure(Object error) {
-    return error
-        .toString()
-        .contains('filesystem cleanup failed after vault reset commit');
   }
 
   @override

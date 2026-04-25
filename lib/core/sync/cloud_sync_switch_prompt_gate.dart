@@ -390,12 +390,12 @@ final class _CloudSyncSwitchPromptGateState
         _subscriptionController?.status ?? SubscriptionStatus.unknown;
     if (subscriptionStatus != SubscriptionStatus.entitled) return;
 
-    final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
-    if ((prefs.getBool(cloudSyncSwitchInProgressPrefsKey) ?? false) == true) {
+    if (await cloudSyncSwitchInProgress()) {
       _scheduleAiFeatureGuidePrompt();
       return;
     }
+    final prefs = await SharedPreferences.getInstance();
 
     final alreadyPromptedUid =
         (prefs.getString(_kCloudAiFeatureGuidePromptedUidPrefsKey) ?? '')
@@ -835,7 +835,6 @@ final class _CloudSyncSwitchPromptGateState
     final engine = SyncEngineScope.maybeOf(context);
     var shouldRestartEngine = engine?.isRunning ?? false;
     var restartedEngineBeforeDialogDismiss = false;
-    final switchPrefs = await SharedPreferences.getInstance();
     var switchInProgressMarked = false;
     var shouldRefreshBackgroundSchedule = false;
     void restartEngineBeforeDialogDismiss() {
@@ -845,7 +844,7 @@ final class _CloudSyncSwitchPromptGateState
     }
 
     try {
-      await switchPrefs.setBool(cloudSyncSwitchInProgressPrefsKey, true);
+      await markCloudSyncSwitchInProgress();
       switchInProgressMarked = true;
       await engine?.stopImmediatelyAndWait(
         timeout: kDestructiveSyncStopTimeout,
@@ -947,7 +946,7 @@ final class _CloudSyncSwitchPromptGateState
     } finally {
       if (switchInProgressMarked) {
         try {
-          await switchPrefs.setBool(cloudSyncSwitchInProgressPrefsKey, false);
+          await clearCloudSyncSwitchInProgress();
         } catch (e) {
           debugPrint(
             'cloud sync switch: failed to clear in-progress marker: $e',

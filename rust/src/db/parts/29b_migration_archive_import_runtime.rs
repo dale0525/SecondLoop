@@ -221,6 +221,22 @@ fn migration_archive_restore_attachment(
     written_attachment_paths: &mut Vec<std::path::PathBuf>,
 ) -> Result<()> {
     let bytes = fs::read(source_root.join(&attachment.archive_path))?;
+    if bytes.len() as i64 != attachment.size_bytes {
+        return Err(anyhow!(
+            "attachment size mismatch for {}: manifest={} actual={}",
+            attachment.sha256,
+            attachment.size_bytes,
+            bytes.len()
+        ));
+    }
+    let actual_sha256 = migration_archive_sha256_hex(&bytes);
+    if actual_sha256 != attachment.sha256 {
+        return Err(anyhow!(
+            "attachment sha256 mismatch for {}: actual={}",
+            attachment.sha256,
+            actual_sha256
+        ));
+    }
     let rel_path = format!("attachments/{}.bin", attachment.sha256);
     let full_path = app_dir.join(&rel_path);
     fs::create_dir_all(app_dir.join("attachments"))?;
@@ -267,6 +283,18 @@ fn migration_archive_restore_attachment(
         }
     }
     Ok(())
+}
+
+fn migration_archive_sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(digest.len() * 2);
+    for b in digest {
+        use std::fmt::Write;
+        let _ = write!(&mut out, "{b:02x}");
+    }
+    out
 }
 
 fn migration_archive_restore_from_materialized_source_with_callbacks(

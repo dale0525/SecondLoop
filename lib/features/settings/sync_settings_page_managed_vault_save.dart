@@ -59,8 +59,7 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
     final serverUnavailableMessage =
         context.t.sync.cloudManagedVault.serverUnavailable;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(cloudSyncSwitchInProgressPrefsKey, true);
+    await markCloudSyncSwitchInProgress();
     try {
       await _runSaveSyncWithProgress(
         run: (stage, progress) async {
@@ -242,7 +241,7 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
       );
       return true;
     } finally {
-      await prefs.setBool(cloudSyncSwitchInProgressPrefsKey, false);
+      await clearCloudSyncSwitchInProgress();
     }
   }
 }

@@ -236,11 +236,36 @@ void main() {
 
   test('background sync skips while a cloud sync switch is in progress',
       () async {
+    final startedAt = DateTime.utc(2026, 1, 1, 12);
     SharedPreferences.setMockInitialValues({
       cloudSyncSwitchInProgressPrefsKey: true,
+      cloudSyncSwitchStartedAtPrefsKey: startedAt.millisecondsSinceEpoch,
     });
 
-    expect(await BackgroundSync.cloudSwitchInProgressForTest(), isTrue);
+    expect(
+      await BackgroundSync.cloudSwitchInProgressForTest(now: startedAt),
+      isTrue,
+    );
+  });
+
+  test('background sync ignores and clears stale cloud sync switch leases',
+      () async {
+    final now = DateTime.utc(2026, 1, 1, 12);
+    SharedPreferences.setMockInitialValues({
+      cloudSyncSwitchInProgressPrefsKey: true,
+      cloudSyncSwitchStartedAtPrefsKey: now
+          .subtract(kCloudSyncSwitchLeaseDuration * 2)
+          .millisecondsSinceEpoch,
+    });
+
+    expect(
+      await BackgroundSync.cloudSwitchInProgressForTest(now: now),
+      isFalse,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(cloudSyncSwitchInProgressPrefsKey), isFalse);
+    expect(prefs.getInt(cloudSyncSwitchStartedAtPrefsKey), isNull);
   });
 
   test('invalid managed-vault batches are non-retryable and user visible', () {

@@ -648,12 +648,14 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       } catch (e) {
         if (!mounted) return;
         final remoteReplaceCommitted = e is SyncRemoteReplaceCommittedException;
+        final replaceLocalRollbackFailed = isSyncReplaceLocalRollbackFailure(e);
         final displayError = remoteReplaceCommitted ? e.cause : e;
-        if (remoteReplaceCommitted) {
+        if (remoteReplaceCommitted || replaceLocalRollbackFailed) {
           shouldRestartStoppedEngine = false;
           await _disableAutoSyncAfterDestructiveCleanup(backend);
         }
         final shouldRestorePrimarySnapshot = !remoteReplaceCommitted &&
+            !replaceLocalRollbackFailed &&
             (switchDirection != null ||
                 (newBackendType == SyncBackendType.managedVault &&
                     e is _ManagedVaultSaveConfigurationException));
@@ -685,6 +687,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           final details = inspectManagedVaultPushFailure(displayError);
           if (details.writeGateState != null &&
               !remoteReplaceCommitted &&
+              !replaceLocalRollbackFailed &&
               !restoredPrimarySnapshot) {
             return;
           }

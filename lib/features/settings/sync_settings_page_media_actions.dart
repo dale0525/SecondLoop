@@ -290,7 +290,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
         shouldRestartEngine = false;
         engine?.writeGate.value = const SyncWriteGateState.open();
       } catch (e) {
-        if (_isVaultResetCommittedCleanupFailure(e)) {
+        if (isVaultResetCommittedCleanupFailure(e)) {
           shouldRestartEngine = false;
           engine?.writeGate.value = const SyncWriteGateState.open();
           if (!mounted) return;

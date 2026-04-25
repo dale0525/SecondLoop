@@ -6,6 +6,26 @@ import '../backend/app_backend.dart';
 const _kPendingVaultRollbackSnapshotCleanupPrefsKey =
     'vault_rollback_snapshot_cleanup_pending_v1';
 
+final class SyncReplaceLocalRollbackFailedException implements Exception {
+  const SyncReplaceLocalRollbackFailedException({
+    required this.cause,
+    required this.rollbackError,
+  });
+
+  final Object cause;
+  final Object rollbackError;
+
+  @override
+  String toString() =>
+      'replace-local failed: $cause; rollback failed: $rollbackError';
+}
+
+bool isSyncReplaceLocalRollbackFailure(Object error) {
+  return error is SyncReplaceLocalRollbackFailedException ||
+      (error.toString().contains('replace-local failed:') &&
+          error.toString().contains('rollback failed:'));
+}
+
 Future<T> runDestructiveReplaceLocalWithRollback<T>({
   required AppBackend backend,
   required Uint8List sessionKey,
@@ -35,8 +55,9 @@ Future<T> runDestructiveReplaceLocalWithRollback<T>({
       );
     } catch (rollbackError) {
       Error.throwWithStackTrace(
-        StateError(
-          'replace-local failed: $error; rollback failed: $rollbackError',
+        SyncReplaceLocalRollbackFailedException(
+          cause: error,
+          rollbackError: rollbackError,
         ),
         stackTrace,
       );

@@ -1,11 +1,5 @@
 part of 'sync_settings_page.dart';
 
-bool _isVaultResetCommittedCleanupFailure(Object error) {
-  return error
-      .toString()
-      .contains('filesystem cleanup failed after vault reset commit');
-}
-
 bool _isDestructiveSyncStopTimeout(Object error) {
   return error is TimeoutException &&
       (error.message?.contains(
@@ -327,7 +321,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       if (_isDestructiveSyncStopTimeout(e)) {
         shouldRestartEngine = false;
       }
-      if (_isVaultResetCommittedCleanupFailure(e)) {
+      if (isVaultResetCommittedCleanupFailure(e)) {
         engine?.writeGate.value = const SyncWriteGateState.open();
         shouldNotifyExternalChange = true;
       }

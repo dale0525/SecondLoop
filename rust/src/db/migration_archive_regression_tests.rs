@@ -6,6 +6,97 @@ use super::*;
 const VALID_TEST_ATTACHMENT_SHA256: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+fn test_sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(digest.len() * 2);
+    for b in digest {
+        use std::fmt::Write;
+        let _ = write!(&mut out, "{b:02x}");
+    }
+    out
+}
+
+fn write_attachment_import_archive(
+    archive_path: &std::path::Path,
+    manifest_sha256: &str,
+    manifest_size_bytes: i64,
+    attachment_bytes: &[u8],
+) {
+    let file = fs::File::create(archive_path).expect("create archive");
+    let mut writer = zip::ZipWriter::new(file);
+    let options = zip::write::FileOptions::default();
+    let manifest = MigrationArchiveManifest {
+        schema_version: 1,
+        archive_kind: "migration".to_string(),
+        exported_at_ms: 1,
+        app_version: "1.0.0".to_string(),
+        items: vec![
+            MigrationArchiveItem {
+                id: "conversation_import".to_string(),
+                entity_type: "conversation".to_string(),
+                markdown_path: "items/conversation_import.md".to_string(),
+                created_at_ms: 1,
+                updated_at_ms: 1,
+                title: "Import".to_string(),
+                tags: vec![],
+                status: None,
+                extra_json: None,
+            },
+            MigrationArchiveItem {
+                id: "message_import".to_string(),
+                entity_type: "message".to_string(),
+                markdown_path: "items/message_import.md".to_string(),
+                created_at_ms: 1,
+                updated_at_ms: 1,
+                title: "Import message".to_string(),
+                tags: vec![],
+                status: None,
+                extra_json: Some(
+                    r#"{"conversation_id":"conversation_import","role":"user","content":"hello"}"#
+                        .to_string(),
+                ),
+            },
+        ],
+        attachments: vec![MigrationArchiveAttachment {
+            sha256: manifest_sha256.to_string(),
+            archive_path: format!("attachments/{manifest_sha256}.bin"),
+            original_filename: "attachment.bin".to_string(),
+            mime_type: Some("application/octet-stream".to_string()),
+            size_bytes: manifest_size_bytes,
+            item_ids: vec!["message_import".to_string()],
+        }],
+        relations: vec![],
+    };
+
+    writer
+        .start_file("export-manifest.json", options)
+        .expect("manifest entry");
+    writer
+        .write_all(
+            serde_json::to_string(&manifest)
+                .expect("manifest json")
+                .as_bytes(),
+        )
+        .expect("write manifest");
+    writer
+        .start_file("items/conversation_import.md", options)
+        .expect("conversation entry");
+    writer.write_all(b"# Import\n").expect("write conversation");
+    writer
+        .start_file("items/message_import.md", options)
+        .expect("message entry");
+    writer.write_all(b"hello\n").expect("write message");
+    writer
+        .start_file(format!("attachments/{manifest_sha256}.bin"), options)
+        .expect("attachment entry");
+    writer
+        .write_all(attachment_bytes)
+        .expect("write attachment");
+    writer.finish().expect("finish archive");
+}
+
 #[test]
 fn migration_archive_manifest_validation_rejects_attachment_sha256_path_traversal() {
     let json = r#"{
@@ -61,6 +152,55 @@ fn migration_archive_manifest_validation_rejects_item_markdown_path_traversal() 
         .expect_err("item markdown path traversal should fail");
 
     assert!(err.to_string().contains("item markdown_path"));
+}
+
+#[test]
+fn migration_archive_import_rejects_attachment_sha256_mismatch() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let key = [61u8; 32];
+    let archive_path = dir.path().join("bad-attachment-sha.zip");
+    let attachment_bytes = b"actual attachment bytes";
+
+    write_attachment_import_archive(
+        &archive_path,
+        VALID_TEST_ATTACHMENT_SHA256,
+        attachment_bytes.len() as i64,
+        attachment_bytes,
+    );
+
+    let err = import_migration_archive(&app_dir, &key, &archive_path)
+        .expect_err("sha256 mismatch should fail import");
+
+    assert!(
+        err.to_string().contains("attachment sha256 mismatch"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn migration_archive_import_rejects_attachment_size_mismatch() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let key = [62u8; 32];
+    let archive_path = dir.path().join("bad-attachment-size.zip");
+    let attachment_bytes = b"actual attachment bytes";
+    let sha256 = test_sha256_hex(attachment_bytes);
+
+    write_attachment_import_archive(
+        &archive_path,
+        &sha256,
+        attachment_bytes.len() as i64 + 1,
+        attachment_bytes,
+    );
+
+    let err = import_migration_archive(&app_dir, &key, &archive_path)
+        .expect_err("size mismatch should fail import");
+
+    assert!(
+        err.to_string().contains("attachment size mismatch"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]
