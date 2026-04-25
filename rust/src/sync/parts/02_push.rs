@@ -1,8 +1,5 @@
 pub fn clear_remote_root(remote: &impl RemoteStore, remote_root: &str) -> Result<()> {
-    let remote_root_dir = normalize_dir(remote_root);
-    if remote_root_dir == "/" {
-        return Err(anyhow!("refusing to clear remote root '/'"));
-    }
+    let remote_root_dir = validate_destructive_remote_root(remote_root)?;
 
     fn clear_dir_contents(remote: &impl RemoteStore, dir: &str) -> Result<()> {
         for entry in remote.list(dir)? {
@@ -38,6 +35,22 @@ pub fn clear_remote_root(remote: &impl RemoteStore, remote_root: &str) -> Result
 
     let _ = remote.delete(&remote_root_dir);
     Ok(())
+}
+
+fn validate_destructive_remote_root(remote_root: &str) -> Result<String> {
+    let trimmed = remote_root.trim_matches('/');
+    for part in trimmed.split('/') {
+        if part.is_empty() {
+            continue;
+        }
+        if part == "." || part == ".." || part.contains('\\') {
+            return Err(anyhow!("invalid remote root for destructive clear"));
+        }
+    }
+    if trimmed.is_empty() {
+        return Err(anyhow!("invalid remote root for destructive clear"));
+    }
+    Ok(normalize_dir(remote_root))
 }
 
 pub fn push(

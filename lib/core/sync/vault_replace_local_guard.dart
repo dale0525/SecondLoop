@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../backend/app_backend.dart';
@@ -18,19 +17,10 @@ Future<T> runDestructiveReplaceLocalWithRollback<T>({
     throw StateError('replace-local rollback snapshot unavailable');
   }
 
+  late final T result;
   try {
     await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
-    final result = await run();
-    final path = snapshotPath;
-    final deleteSnapshot = Future<void>.sync(
-      () => backend.deleteVaultRollbackSnapshot(snapshotPath: path),
-    ).catchError((error) {
-      debugPrint(
-        'sync replace-local: failed to remove rollback snapshot after success: $error',
-      );
-    });
-    unawaited(deleteSnapshot);
-    return result;
+    result = await run();
   } catch (error, stackTrace) {
     try {
       await backend.restoreVaultRollbackSnapshot(
@@ -47,4 +37,18 @@ Future<T> runDestructiveReplaceLocalWithRollback<T>({
     }
     rethrow;
   }
+
+  try {
+    await backend.deleteVaultRollbackSnapshot(snapshotPath: snapshotPath);
+  } catch (error, stackTrace) {
+    debugPrint(
+      'sync replace-local: failed to remove rollback snapshot after success: $error',
+    );
+    Error.throwWithStackTrace(
+      StateError('replace-local snapshot cleanup failed: $error'),
+      stackTrace,
+    );
+  }
+
+  return result;
 }

@@ -212,6 +212,9 @@ impl super::RemoteStore for LocalDirRemoteStore {
             }
 
             let local = self.resolve_virtual_path(dir.trim_end_matches('/'))?;
+            if local == self.root {
+                return Err(anyhow!("refusing to delete localdir root"));
+            }
             match fs::remove_dir_all(local) {
                 Ok(()) => Ok(()),
                 Err(e) if e.kind() == ErrorKind::NotFound => {

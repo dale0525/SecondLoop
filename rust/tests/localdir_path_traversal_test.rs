@@ -78,6 +78,27 @@ fn localdir_allows_valid_paths() {
 }
 
 #[test]
+fn localdir_rejects_dot_directory_delete_at_root() {
+    let root = tempfile::tempdir().expect("root");
+    let root_path = root.path().to_path_buf();
+    let remote = LocalDirRemoteStore::new(root_path.clone()).expect("create localdir remote");
+    remote
+        .put("/safe/hello.txt", b"ok".to_vec())
+        .expect("write valid path");
+
+    let err = remote
+        .delete("/./")
+        .expect_err("dot directory delete must not remove root");
+    let msg = err.to_string();
+    assert!(msg.contains("root"), "unexpected delete error: {msg}");
+    assert!(root_path.exists(), "root directory must remain");
+    assert!(
+        root_path.join("safe/hello.txt").exists(),
+        "existing file must remain"
+    );
+}
+
+#[test]
 fn localdir_put_atomically_overwrites_existing_file() {
     let root = tempfile::tempdir().expect("root");
     let remote =

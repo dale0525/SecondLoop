@@ -120,6 +120,16 @@ fn remove_embedding_artifacts_data(app_dir: &Path) -> Result<()> {
     best_effort_remove_dir_all(&app_dir.join("embedding_artifacts"))
 }
 
+fn record_filesystem_cleanup_error(
+    errors: &mut Vec<String>,
+    label: &str,
+    result: Result<()>,
+) {
+    if let Err(error) = result {
+        errors.push(format!("{label}: {error}"));
+    }
+}
+
 impl AttachmentsResetGuard {
     fn prepare(app_dir: &Path) -> Result<Self> {
         let attachments_dir = app_dir.join("attachments");
@@ -267,17 +277,49 @@ DELETE FROM kv WHERE key != 'embedding.active_model_name';
                 }
                 return Err(error.into());
             }
+            let mut cleanup_errors = Vec::new();
             if let Some(guard) = attachments_guard {
-                let _ = guard.finish();
+                record_filesystem_cleanup_error(
+                    &mut cleanup_errors,
+                    "attachment staging cleanup",
+                    guard.finish(),
+                );
             }
             if let Some(app_dir) = app_dir.as_ref() {
-                let _ = fs::create_dir_all(app_dir.join("attachments"));
-                let _ = migration_archive_remove_rollback_snapshots_except_active(app_dir);
-                let _ = best_effort_remove_dir_all(&migration_archive_staging_dir(app_dir));
-                let _ = remove_external_readonly_data(app_dir);
-                let _ = remove_embedding_artifacts_data(app_dir);
+                record_filesystem_cleanup_error(
+                    &mut cleanup_errors,
+                    "attachments directory recreation",
+                    fs::create_dir_all(app_dir.join("attachments")).map_err(Into::into),
+                );
+                record_filesystem_cleanup_error(
+                    &mut cleanup_errors,
+                    "migration archive rollback snapshot cleanup",
+                    migration_archive_remove_rollback_snapshots_except_active(app_dir),
+                );
+                record_filesystem_cleanup_error(
+                    &mut cleanup_errors,
+                    "migration archive staging cleanup",
+                    best_effort_remove_dir_all(&migration_archive_staging_dir(app_dir)),
+                );
+                record_filesystem_cleanup_error(
+                    &mut cleanup_errors,
+                    "external readonly cleanup",
+                    remove_external_readonly_data(app_dir),
+                );
+                record_filesystem_cleanup_error(
+                    &mut cleanup_errors,
+                    "embedding artifact cleanup",
+                    remove_embedding_artifacts_data(app_dir),
+                );
             }
-            Ok(())
+            if cleanup_errors.is_empty() {
+                Ok(())
+            } else {
+                Err(anyhow!(
+                    "filesystem cleanup failed after vault reset commit: {}",
+                    cleanup_errors.join("; ")
+                ))
+            }
         }
         Err(error) => {
             let _ = conn.execute_batch("ROLLBACK;");

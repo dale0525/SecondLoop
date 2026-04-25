@@ -265,6 +265,26 @@ fn reset_vault_data_removes_stale_attachment_reset_staging_dirs() {
 }
 
 #[test]
+fn reset_vault_data_reports_external_readonly_cleanup_failure() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let key = auth::init_master_password(Path::new(&app_dir), "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+    db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+    std::fs::write(app_dir.join("external_readonly"), b"not a directory")
+        .expect("seed cleanup blocker");
+
+    let err = db::reset_vault_data_preserving_llm_profiles(&conn)
+        .expect_err("filesystem cleanup failure should be reported");
+
+    assert!(
+        err.to_string().contains("filesystem cleanup failed"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn clear_remote_root_deletes_localdir_data() {
     let remote_dir = tempfile::tempdir().expect("remote dir");
     let remote = sync::localdir::LocalDirRemoteStore::new(remote_dir.path().to_path_buf())
@@ -287,5 +307,34 @@ fn clear_remote_root_deletes_localdir_data() {
     assert!(
         !remote_root_path.exists(),
         "remote root directory should be deleted"
+    );
+}
+
+#[test]
+fn clear_remote_root_rejects_dot_paths_without_deleting_localdir_root() {
+    let remote_dir = tempfile::tempdir().expect("remote dir");
+    let root_path = remote_dir.path().to_path_buf();
+    let remote = sync::localdir::LocalDirRemoteStore::new(root_path.clone())
+        .expect("create localdir remote");
+    remote
+        .put(
+            "SecondLoopTest/deviceA/ops/op_1.json",
+            br#"{"op_id":"1"}"#.to_vec(),
+        )
+        .expect("write remote op");
+
+    let err =
+        sync::clear_remote_root(&remote, ".").expect_err("dot remote root should be rejected");
+
+    assert!(
+        err.to_string().contains("invalid remote root"),
+        "unexpected error: {err}"
+    );
+    assert!(root_path.exists(), "localdir root must not be deleted");
+    assert!(
+        root_path
+            .join("SecondLoopTest/deviceA/ops/op_1.json")
+            .exists(),
+        "existing remote data must remain untouched"
     );
 }
