@@ -1,12 +1,18 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../backend/app_backend.dart';
+
+const _kPendingVaultRollbackSnapshotCleanupPrefsKey =
+    'vault_rollback_snapshot_cleanup_pending_v1';
 
 Future<T> runDestructiveReplaceLocalWithRollback<T>({
   required AppBackend backend,
   required Uint8List sessionKey,
   required Future<T> Function() run,
 }) async {
+  await _retryPendingVaultRollbackSnapshotCleanup(backend);
+
   String? snapshotPath;
   try {
     snapshotPath = await backend.createVaultRollbackSnapshot(sessionKey);
@@ -41,10 +47,68 @@ Future<T> runDestructiveReplaceLocalWithRollback<T>({
   try {
     await backend.deleteVaultRollbackSnapshot(snapshotPath: snapshotPath);
   } catch (error) {
+    await _recordPendingVaultRollbackSnapshotCleanup(snapshotPath);
     debugPrint(
       'sync replace-local: failed to remove rollback snapshot after success: $error',
     );
   }
 
+  return result;
+}
+
+Future<void> _retryPendingVaultRollbackSnapshotCleanup(
+    AppBackend backend) async {
+  final prefs = await SharedPreferences.getInstance();
+  final pending = _dedupeSnapshotPaths(
+    prefs.getStringList(_kPendingVaultRollbackSnapshotCleanupPrefsKey) ??
+        const <String>[],
+  );
+  if (pending.isEmpty) return;
+
+  final remaining = <String>[];
+  for (final snapshotPath in pending) {
+    try {
+      await backend.deleteVaultRollbackSnapshot(snapshotPath: snapshotPath);
+    } catch (error) {
+      remaining.add(snapshotPath);
+      debugPrint(
+        'sync replace-local: failed to remove pending rollback snapshot '
+        '$snapshotPath: $error',
+      );
+    }
+  }
+
+  await prefs.setStringList(
+    _kPendingVaultRollbackSnapshotCleanupPrefsKey,
+    remaining,
+  );
+}
+
+Future<void> _recordPendingVaultRollbackSnapshotCleanup(
+  String snapshotPath,
+) async {
+  final prefs = await SharedPreferences.getInstance();
+  final pending = _dedupeSnapshotPaths(
+    prefs.getStringList(_kPendingVaultRollbackSnapshotCleanupPrefsKey) ??
+        const <String>[],
+  );
+  if (!pending.contains(snapshotPath)) {
+    pending.add(snapshotPath);
+  }
+  await prefs.setStringList(
+    _kPendingVaultRollbackSnapshotCleanupPrefsKey,
+    pending,
+  );
+}
+
+List<String> _dedupeSnapshotPaths(Iterable<String> paths) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final path in paths) {
+    if (path.trim().isEmpty) continue;
+    if (seen.add(path)) {
+      result.add(path);
+    }
+  }
   return result;
 }

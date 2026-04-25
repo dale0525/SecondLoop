@@ -69,6 +69,27 @@ final class _FakeRunner implements SyncRunner {
   }
 }
 
+final class _FakeConnectivityPlatform extends ConnectivityPlatform {
+  _FakeConnectivityPlatform(this._results);
+
+  factory _FakeConnectivityPlatform.wifi() {
+    return _FakeConnectivityPlatform(
+      const <ConnectivityResult>[ConnectivityResult.wifi],
+    );
+  }
+
+  final List<ConnectivityResult> _results;
+  final StreamController<List<ConnectivityResult>> _controller =
+      StreamController<List<ConnectivityResult>>.broadcast();
+
+  @override
+  Stream<List<ConnectivityResult>> get onConnectivityChanged =>
+      _controller.stream;
+
+  @override
+  Future<List<ConnectivityResult>> checkConnectivity() async => _results;
+}
+
 class _SyncSettingsBackend extends AppBackend {
   _SyncSettingsBackend({
     this.webdavPullResult = 0,
@@ -532,6 +553,100 @@ final class _FailingPushAfterClearRemoteSyncSettingsBackend
   }) async {
     calls.add('webdavPush:$remoteRoot');
     throw StateError('webdav_push_failed');
+  }
+}
+
+final class _MediaBackupReplaceRemoteWebdavBackend
+    extends _SyncSettingsBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<void> syncWebdavTestConnection({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavTest');
+  }
+
+  @override
+  Future<void> syncWebdavClearRemoteRoot({
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavClear:$remoteRoot');
+  }
+
+  @override
+  Future<int> syncWebdavPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    calls.add('webdavPush:$remoteRoot');
+    return 0;
+  }
+
+  @override
+  Future<List<CloudMediaBackup>> listDueCloudMediaBackups(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 100,
+    String? scopeId,
+  }) async {
+    calls.add('listDueMedia:$scopeId');
+    return const <CloudMediaBackup>[
+      CloudMediaBackup(
+        attachmentSha256: 'sha-media-1',
+        desiredVariant: 'original',
+        byteLen: 12,
+        status: 'pending',
+        attempts: 0,
+        updatedAtMs: 0,
+      ),
+    ];
+  }
+
+  @override
+  Future<bool> syncWebdavUploadAttachmentBytes(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+    required String sha256,
+  }) async {
+    calls.add('uploadMedia:$remoteRoot:$sha256');
+    return true;
+  }
+
+  @override
+  Future<void> markCloudMediaBackupUploaded(
+    Uint8List key, {
+    required String attachmentSha256,
+    required int nowMs,
+    String? scopeId,
+  }) async {
+    calls.add('markMediaUploaded:$scopeId:$attachmentSha256');
+  }
+
+  @override
+  Future<CloudMediaBackupSummary> cloudMediaBackupSummary(
+    Uint8List key, {
+    String? scopeId,
+  }) async {
+    return const CloudMediaBackupSummary(
+      pending: 1,
+      failed: 0,
+      uploaded: 0,
+    );
   }
 }
 

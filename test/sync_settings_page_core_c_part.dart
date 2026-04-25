@@ -174,6 +174,65 @@ void registerSyncSettingsPageCoreCTests() {
     expect(find.textContaining('localdir_push_failed'), findsOneWidget);
   });
 
+  testWidgets('WebDAV replace-remote uploads cloud media backup after clear',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    addTearDown(() => ConnectivityPlatform.instance = oldConnectivity);
+
+    final store = SyncConfigStore();
+    final oldSyncKey = Uint8List.fromList(List<int>.filled(32, 7));
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://old.example.com/dav');
+    await store.writeAutoEnabled(true);
+    await store.writeCloudMediaBackupEnabled(true);
+    await store.writeCloudMediaBackupWifiOnly(true);
+    await store.writeSyncKey(oldSyncKey);
+
+    final backend = _MediaBackupReplaceRemoteWebdavBackend();
+    await tester.pumpWidget(_wrap(
+      backend: backend,
+      store: store,
+      engine: null,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
+      ),
+      'https://new.example.com/dav',
+    );
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Folder name',
+      ),
+      'SecondLoop2',
+    );
+    await tester.pumpAndSettle();
+
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Replace remote with this device'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      containsAllInOrder(<String>[
+        'webdavTest',
+        'webdavClear:SecondLoop2',
+        'webdavPush:SecondLoop2',
+        'uploadMedia:SecondLoop2:sha-media-1',
+      ]),
+    );
+  });
+
   testWidgets('Failed local folder replace-local restores snapshot and config',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

@@ -109,6 +109,19 @@ extension _SyncSettingsPageSwitchDirection on _SyncSettingsPageState {
                 password: password,
                 remoteRoot: remoteRoot,
               );
+              if (_cloudMediaBackupEnabled) {
+                await _runWebdavMediaBackupStage(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: syncKey,
+                  baseUrl: baseUrl,
+                  username: username,
+                  password: password,
+                  remoteRoot: remoteRoot,
+                  stage: stage,
+                  progress: progress,
+                );
+              }
             } catch (error) {
               if (remoteCleared) {
                 throw SyncRemoteReplaceCommittedException(error);

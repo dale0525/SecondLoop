@@ -127,7 +127,7 @@ void main() {
     expect(find.textContaining('Cloud storage is full'), findsOneWidget);
   });
 
-  testWidgets('switch-to-cloud can prompt again after direction is dismissed',
+  testWidgets('switch-to-cloud does not prompt again after direction dismissed',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': false,
@@ -180,7 +180,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('Switch to SecondLoop Cloud sync?'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(backend.calls, isEmpty);
   });
 

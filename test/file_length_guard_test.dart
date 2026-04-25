@@ -6,6 +6,7 @@ void main() {
   test('review-target files stay below the 1000 line limit', () {
     const targets = <String>[
       'lib/core/backend/native_backend.dart',
+      'lib/core/sync/cloud_sync_switch_prompt_gate.dart',
       'lib/core/sync/background_sync.dart',
       'test/sync_engine_gate_media_uploads_test.dart',
       'rust/tests/sync_managed_vault_v2_pull.rs',
