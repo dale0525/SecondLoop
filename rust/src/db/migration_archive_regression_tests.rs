@@ -167,3 +167,51 @@ fn vault_rollback_snapshot_uses_chunked_encrypted_file_format() {
     migration_archive_restore_rollback_snapshot(&app_dir, &key, &snapshot_path)
         .expect("restore chunked snapshot");
 }
+
+#[test]
+fn vault_rollback_snapshot_active_marker_survives_registry_reset() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [57u8; 32];
+
+    create_conversation(&conn, &key, "Persistent marker").expect("conversation");
+    drop(conn);
+
+    let snapshot_path = migration_archive_create_rollback_snapshot(&app_dir, &key)
+        .expect("create snapshot")
+        .expect("snapshot path");
+
+    migration_archive_clear_active_rollback_snapshots_for_test();
+
+    assert!(
+        migration_archive_is_active_rollback_snapshot(&app_dir, &snapshot_path)
+            .expect("read active marker"),
+        "active rollback snapshot marker should survive process-local registry loss"
+    );
+}
+
+#[test]
+fn migration_archive_internal_snapshot_cleanup_keeps_marker_when_removal_fails() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [58u8; 32];
+
+    create_conversation(&conn, &key, "Cleanup failure marker").expect("conversation");
+    drop(conn);
+
+    let snapshot_path = migration_archive_create_rollback_snapshot(&app_dir, &key)
+        .expect("create snapshot")
+        .expect("snapshot path");
+    fs::remove_file(&snapshot_path).expect("remove snapshot file");
+    fs::create_dir(&snapshot_path).expect("create removal blocker");
+
+    migration_archive_remove_snapshot(Some(&snapshot_path));
+
+    assert!(
+        migration_archive_is_active_rollback_snapshot(&app_dir, &snapshot_path)
+            .expect("read active marker"),
+        "failed cleanup should keep active marker for retry"
+    );
+}

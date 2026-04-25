@@ -393,6 +393,20 @@ fn migration_archive_replace_vault_with_source_root_with_callbacks(
     migration_archive_record_progress(app_dir, on_event, "import", "vault_cleared", 2, 6, "in_progress")?;
     drop(conn);
 
+    migration_archive_restore_materialized_source_after_reset_with_callbacks(
+        app_dir,
+        key,
+        source_root,
+        on_event,
+    )
+}
+
+fn migration_archive_restore_materialized_source_after_reset_with_callbacks(
+    app_dir: &Path,
+    key: &[u8; 32],
+    source_root: &Path,
+    on_event: &mut dyn FnMut(MigrationArchiveProgress),
+) -> Result<MigrationArchiveManifest> {
     let manifest = migration_archive_restore_from_materialized_source_with_callbacks(
         app_dir,
         key,
@@ -424,8 +438,22 @@ fn migration_archive_replace_vault_with_archive_with_callbacks(
     archive_path: &Path,
     on_event: &mut dyn FnMut(MigrationArchiveProgress),
 ) -> Result<MigrationArchiveManifest> {
+    if archive_path.is_dir() {
+        return migration_archive_replace_vault_with_source_root_with_callbacks(
+            app_dir,
+            key,
+            archive_path,
+            on_event,
+        );
+    }
+
+    let conn = open(app_dir)?;
+    reset_vault_data_preserving_llm_profiles(&conn)?;
+    migration_archive_record_progress(app_dir, on_event, "import", "vault_cleared", 2, 6, "in_progress")?;
+    drop(conn);
+
     let source = materialize_external_import_source(app_dir, archive_path)?;
-    let result = migration_archive_replace_vault_with_source_root_with_callbacks(
+    let result = migration_archive_restore_materialized_source_after_reset_with_callbacks(
         app_dir,
         key,
         &source.root_dir,
@@ -437,8 +465,7 @@ fn migration_archive_replace_vault_with_archive_with_callbacks(
 
 fn migration_archive_remove_snapshot(snapshot_path: Option<&Path>) {
     if let Some(path) = snapshot_path {
-        migration_archive_clear_active_rollback_marker_for_snapshot(path);
-        let _ = fs::remove_file(path);
+        let _ = migration_archive_remove_rollback_snapshot(path);
     }
 }
 

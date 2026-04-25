@@ -282,15 +282,14 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
         await engine?.stopImmediatelyAndWait(
           timeout: kDestructiveSyncStopTimeout,
         );
+        await _disableAutoSyncAndRefreshSchedule(backend);
         await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
         shouldRestartEngine = false;
         engine?.writeGate.value = const SyncWriteGateState.open();
-        await _disableAutoSyncAndRefreshSchedule(backend);
       } catch (e) {
         if (_isVaultResetCommittedCleanupFailure(e)) {
           shouldRestartEngine = false;
           engine?.writeGate.value = const SyncWriteGateState.open();
-          await _disableAutoSyncAndRefreshSchedule(backend);
           if (!mounted) return;
           engine?.notifyExternalChange();
           _showSnack(t.sync.localData.failed(

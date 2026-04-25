@@ -115,6 +115,7 @@ fn migration_archive_copy_attachments(
 #[cfg(test)]
 const MIGRATION_ARCHIVE_ROLLBACK_SNAPSHOT_AAD: &[u8] = b"migration_archive.rollback_snapshot";
 const VAULT_ROLLBACK_SNAPSHOT_AAD: &[u8] = b"vault.rollback_snapshot.v1";
+const VAULT_ROLLBACK_ACTIVE_MARKER_SUFFIX: &str = ".active";
 
 fn migration_archive_active_rollback_snapshots() -> &'static std::sync::Mutex<BTreeSet<PathBuf>> {
     static ACTIVE: std::sync::OnceLock<std::sync::Mutex<BTreeSet<PathBuf>>> =
@@ -126,7 +127,66 @@ fn migration_archive_normalized_path(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
+fn migration_archive_rollback_active_marker_path(snapshot_path: &Path) -> Result<PathBuf> {
+    let file_name = snapshot_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| anyhow!("invalid rollback snapshot path"))?;
+    Ok(snapshot_path.with_file_name(format!(
+        "{file_name}{VAULT_ROLLBACK_ACTIVE_MARKER_SUFFIX}"
+    )))
+}
+
+fn migration_archive_snapshot_path_from_active_marker(marker_path: &Path) -> Option<PathBuf> {
+    let file_name = marker_path.file_name()?.to_str()?;
+    let snapshot_file_name = file_name.strip_suffix(VAULT_ROLLBACK_ACTIVE_MARKER_SUFFIX)?;
+    Some(marker_path.with_file_name(snapshot_file_name))
+}
+
+fn migration_archive_snapshot_path_has_rollback_layout(snapshot_path: &Path) -> bool {
+    snapshot_path
+        .parent()
+        .and_then(|parent| parent.file_name())
+        .and_then(|name| name.to_str())
+        == Some("rollback")
+        && snapshot_path
+            .parent()
+            .and_then(|parent| parent.parent())
+            .and_then(|parent| parent.file_name())
+            .and_then(|name| name.to_str())
+            == Some("migration_archive")
+}
+
+fn migration_archive_collect_persisted_active_rollback_snapshots(
+    app_dir: &Path,
+) -> Result<BTreeSet<PathBuf>> {
+    let rollback_dir = migration_archive_root_dir(app_dir).join("rollback");
+    let mut persisted = BTreeSet::new();
+    match fs::read_dir(&rollback_dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let marker_path = entry?.path();
+                let Some(snapshot_path) =
+                    migration_archive_snapshot_path_from_active_marker(&marker_path)
+                else {
+                    continue;
+                };
+                if snapshot_path.exists() {
+                    persisted.insert(migration_archive_normalized_path(&snapshot_path));
+                } else {
+                    let _ = fs::remove_file(marker_path);
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    Ok(persisted)
+}
+
 fn migration_archive_mark_active_rollback_snapshot(snapshot_path: &Path) -> Result<()> {
+    let marker_path = migration_archive_rollback_active_marker_path(snapshot_path)?;
+    fs::write(marker_path, b"active")?;
     let mut active = migration_archive_active_rollback_snapshots()
         .lock()
         .map_err(|_| anyhow!("active rollback snapshot registry poisoned"))?;
@@ -137,9 +197,11 @@ fn migration_archive_mark_active_rollback_snapshot(snapshot_path: &Path) -> Resu
 fn migration_archive_active_rollback_snapshot_paths(app_dir: &Path) -> Result<BTreeSet<PathBuf>> {
     let rollback_dir =
         migration_archive_normalized_path(&migration_archive_root_dir(app_dir).join("rollback"));
+    let persisted = migration_archive_collect_persisted_active_rollback_snapshots(app_dir)?;
     let mut active = migration_archive_active_rollback_snapshots()
         .lock()
         .map_err(|_| anyhow!("active rollback snapshot registry poisoned"))?;
+    active.extend(persisted);
     active.retain(|path| path.exists());
     Ok(active
         .iter()
@@ -161,6 +223,16 @@ fn migration_archive_clear_active_rollback_marker_for_snapshot(snapshot_path: &P
         active.remove(snapshot_path);
         active.remove(&migration_archive_normalized_path(snapshot_path));
     }
+    if let Ok(marker_path) = migration_archive_rollback_active_marker_path(snapshot_path) {
+        let _ = fs::remove_file(marker_path);
+    }
+}
+
+#[cfg(test)]
+fn migration_archive_clear_active_rollback_snapshots_for_test() {
+    if let Ok(mut active) = migration_archive_active_rollback_snapshots().lock() {
+        active.clear();
+    }
 }
 
 fn migration_archive_remove_rollback_snapshots_except_active(app_dir: &Path) -> Result<()> {
@@ -174,7 +246,13 @@ fn migration_archive_remove_rollback_snapshots_except_active(app_dir: &Path) -> 
     }
     for entry in fs::read_dir(&rollback_dir)? {
         let path = entry?.path();
-        if active_snapshots.contains(&migration_archive_normalized_path(&path)) {
+        let normalized = migration_archive_normalized_path(&path);
+        let active_marker = migration_archive_snapshot_path_from_active_marker(&path)
+            .map(|snapshot_path| {
+                active_snapshots.contains(&migration_archive_normalized_path(&snapshot_path))
+            })
+            .unwrap_or(false);
+        if active_snapshots.contains(&normalized) || active_marker {
             continue;
         }
         if path.is_dir() {
@@ -706,7 +784,7 @@ fn vault_rollback_restore_from_encrypted_snapshot(
 
     let _ = fs::remove_dir_all(&stage_dir);
     if restore_result.is_ok() {
-        migration_archive_remove_snapshot(Some(snapshot_path));
+        let _ = migration_archive_remove_rollback_snapshot(snapshot_path);
     }
     restore_result
 }
@@ -739,7 +817,8 @@ pub fn migration_archive_remove_rollback_snapshot(snapshot_path: &Path) -> Resul
             .lock()
             .map_err(|_| anyhow!("active rollback snapshot registry poisoned"))?;
         active.contains(&normalized) || active.contains(snapshot_path)
-    };
+    } || (migration_archive_snapshot_path_has_rollback_layout(snapshot_path)
+        && migration_archive_rollback_active_marker_path(snapshot_path)?.exists());
     if !is_active {
         return Err(anyhow!("rollback snapshot is not active"));
     }

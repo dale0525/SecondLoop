@@ -140,6 +140,24 @@ fn external_import_scan_supports_zip_sources() {
 }
 
 #[test]
+fn external_import_zip_staging_uses_app_controlled_directory() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let source = create_generic_markdown_zip(dir.path());
+
+    let materialized =
+        materialize_external_import_source(&app_dir, &source).expect("materialize zip");
+
+    assert!(
+        materialized
+            .root_dir
+            .starts_with(app_dir.join("external_readonly/staging")),
+        "zip staging should stay under the app-controlled external readonly staging directory"
+    );
+    cleanup_materialized_external_import_source(&materialized);
+}
+
+#[test]
 fn external_import_scan_rejects_oversized_zip_entries() {
     let dir = tempdir().expect("tempdir");
     let source = create_zip_with_oversized_entry(dir.path());

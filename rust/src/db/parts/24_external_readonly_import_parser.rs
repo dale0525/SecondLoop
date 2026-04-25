@@ -142,14 +142,11 @@ fn source_label_from_path(path: &Path) -> String {
 }
 
 fn materialize_external_import_source_from_zip_reader<R: Read + std::io::Seek>(
-    _app_dir: &Path,
+    app_dir: &Path,
     source_label: String,
     reader: R,
 ) -> Result<MaterializedExternalImportSource> {
-    let stage_dir = std::env::temp_dir().join(format!(
-        "secondloop-external-import-{}",
-        uuid::Uuid::new_v4()
-    ));
+    let stage_dir = external_readonly_staging_dir(app_dir).join(uuid::Uuid::new_v4().to_string());
     fs::create_dir_all(&stage_dir)?;
 
     let extract_result = (|| -> Result<()> {
