@@ -34,6 +34,7 @@ import '../../src/rust/api/oplog_maintenance.dart' as rust_oplog_maintenance;
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
+import '../../web_app/web_formal_settings_scope.dart';
 import '../actions/settings/actions_settings_store.dart';
 import 'cloud_account_page.dart';
 import 'ai_settings_page.dart';
@@ -224,15 +225,21 @@ class _SettingsPageState extends State<SettingsPage> {
     };
   }
 
+  SyncConfigStore _syncConfigStore(BuildContext context) {
+    final webSettings = WebFormalSettingsScope.maybeOf(context)?.dependencies;
+    return webSettings?.vaultConfigStore ?? SyncConfigStore();
+  }
+
   Future<void> _runOplogMaintenanceDebug() async {
     if (_busy) return;
 
     final messenger = ScaffoldMessenger.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final store = _syncConfigStore(context);
 
     setState(() => _busy = true);
     try {
-      final sync = await SyncConfigStore().loadConfiguredSync();
+      final sync = await store.loadConfiguredSync();
       if (sync == null) {
         throw StateError('sync_not_configured');
       }
@@ -314,11 +321,14 @@ class _SettingsPageState extends State<SettingsPage> {
     final lock = SessionScope.of(context).lock;
     final messenger = ScaffoldMessenger.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    SyncEngineScope.maybeOf(context)?.stop();
+    final engine = SyncEngineScope.maybeOf(context);
+    final store = _syncConfigStore(context);
 
     setState(() => _busy = true);
     try {
-      final store = SyncConfigStore();
+      await engine?.stopImmediatelyAndWait(
+        timeout: kDestructiveSyncStopTimeout,
+      );
       final sync = await store.loadConfiguredSync();
       if (sync != null) {
         final deviceId =
@@ -396,7 +406,10 @@ class _SettingsPageState extends State<SettingsPage> {
       await prefs.remove(_kBiometricUnlockEnabledPrefsKey);
       await backend.clearSavedSessionKey();
 
-      await BackgroundSync.refreshSchedule(backend: backend);
+      await BackgroundSync.refreshSchedule(
+        backend: backend,
+        configStore: store,
+      );
 
       if (committedCleanupFailure != null && mounted) {
         messenger.showSnackBar(
