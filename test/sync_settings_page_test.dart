@@ -24,6 +24,7 @@ part 'sync_settings_page_core_a_part.dart';
 part 'sync_settings_page_core_b_part.dart';
 part 'sync_settings_page_core_c_part.dart';
 part 'sync_settings_page_test_support_part.dart';
+part 'sync_settings_page_managed_vault_support_part.dart';
 
 void main() {
   registerSyncSettingsPageCoreATests();
