@@ -111,9 +111,11 @@ void registerDeleteActionsRegressionTests() {
     expect(backend.resetLocalDataCalls, 0);
     expect(find.textContaining('Delete failed:'), findsOneWidget);
     expect(find.textContaining('sync engine did not stop'), findsOneWidget);
+    expect(engine.isRunning, isTrue);
 
     runner.completePull(applied: 0);
     await tester.pump();
+    engine.stop();
   });
 
   testWidgets(

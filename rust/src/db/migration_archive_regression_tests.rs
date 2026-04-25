@@ -207,7 +207,9 @@ fn migration_archive_internal_snapshot_cleanup_keeps_marker_when_removal_fails()
     fs::remove_file(&snapshot_path).expect("remove snapshot file");
     fs::create_dir(&snapshot_path).expect("create removal blocker");
 
-    migration_archive_remove_snapshot(Some(&snapshot_path));
+    let cleanup_error = migration_archive_remove_snapshot(Some(&snapshot_path))
+        .expect_err("cleanup failure should be returned");
+    assert!(!cleanup_error.to_string().is_empty());
 
     assert!(
         migration_archive_is_active_rollback_snapshot(&app_dir, &snapshot_path)

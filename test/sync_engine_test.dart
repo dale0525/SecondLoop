@@ -268,6 +268,52 @@ void main() {
     });
   });
 
+  test('stopImmediatelyAndWait timeout restores a running engine', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+      );
+
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 1);
+
+      Object? stopError;
+      var stopped = false;
+      unawaited(engine
+          .stopImmediatelyAndWait(timeout: const Duration(seconds: 1))
+          .then<void>(
+        (_) {
+          stopped = true;
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          stopError = error;
+        },
+      ));
+
+      async.elapse(const Duration(seconds: 1));
+      async.flushMicrotasks();
+
+      expect(stopped, isFalse);
+      expect(stopError, isA<TimeoutException>());
+      expect(engine.isRunning, isTrue);
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+      engine.stop();
+    });
+  });
+
   test('stop-after-drain ignores new pull requests', () {
     fakeAsync((async) {
       final runner = _BlockingPullRunner();

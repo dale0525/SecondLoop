@@ -265,6 +265,7 @@ final class SyncEngine {
 
   Future<void> stopImmediatelyAndWait({Duration? timeout}) async {
     if (!_running && !_busy) return;
+    final stopState = _snapshotStopState();
     _cancelScheduledWork();
     final idle = waitForIdle();
     if (_running) {
@@ -277,22 +278,69 @@ final class SyncEngine {
       _retryPushAfterRecoveryPull = false;
       _managedVaultRecoveryRetryPushes = 0;
     }
-    if (timeout == null) {
-      await idle;
-      return;
-    }
-    await idle.timeout(
-      timeout,
-      onTimeout: () => throw TimeoutException(
-        'sync engine did not stop before destructive operation',
+    try {
+      if (timeout == null) {
+        await idle;
+        return;
+      }
+      await idle.timeout(
         timeout,
-      ),
-    );
+        onTimeout: () => throw TimeoutException(
+          'sync engine did not stop before destructive operation',
+          timeout,
+        ),
+      );
+    } on TimeoutException {
+      _restoreStopState(stopState);
+      rethrow;
+    }
   }
 
   Future<void> waitForIdle() {
     if (!_busy) return Future<void>.value();
     return (_idleCompleter ??= Completer<void>()).future;
+  }
+
+  _SyncEngineStopState _snapshotStopState() {
+    return _SyncEngineStopState(
+      running: _running,
+      stopAfterDrain: _stopAfterDrain,
+      pushQueued: _pushQueued,
+      pullQueued: _pullQueued,
+      pendingPullAfterPush: _pendingPullAfterPush,
+      retryPushAfterRecoveryPull: _retryPushAfterRecoveryPull,
+      managedVaultRecoveryRetryPushes: _managedVaultRecoveryRetryPushes,
+      hadPushDebounceTimer: _pushDebounceTimer != null,
+      hadPullTimer: _pullTimer != null,
+    );
+  }
+
+  void _restoreStopState(_SyncEngineStopState state) {
+    _running = state.running;
+    _stopAfterDrain = state.stopAfterDrain;
+    _pushQueued = state.pushQueued;
+    _pullQueued = state.pullQueued;
+    _pendingPullAfterPush = state.pendingPullAfterPush;
+    _retryPushAfterRecoveryPull = state.retryPushAfterRecoveryPull;
+    _managedVaultRecoveryRetryPushes = state.managedVaultRecoveryRetryPushes;
+
+    _pushDebounceTimer?.cancel();
+    _pushDebounceTimer = null;
+    _pullTimer?.cancel();
+    _pullTimer = null;
+
+    if (_acceptsNewWork) {
+      if (state.hadPushDebounceTimer && !_pushQueued) {
+        _pushDebounceTimer = Timer(pushDebounce, _queuePush);
+      }
+      if (state.hadPullTimer) {
+        _scheduleNextPull();
+      }
+    }
+
+    if (_running && (_pushQueued || _pullQueued)) {
+      _drain();
+    }
   }
 
   void _cancelScheduledWork() {
@@ -647,4 +695,28 @@ final class SyncEngine {
     }
     return false;
   }
+}
+
+final class _SyncEngineStopState {
+  const _SyncEngineStopState({
+    required this.running,
+    required this.stopAfterDrain,
+    required this.pushQueued,
+    required this.pullQueued,
+    required this.pendingPullAfterPush,
+    required this.retryPushAfterRecoveryPull,
+    required this.managedVaultRecoveryRetryPushes,
+    required this.hadPushDebounceTimer,
+    required this.hadPullTimer,
+  });
+
+  final bool running;
+  final bool stopAfterDrain;
+  final bool pushQueued;
+  final bool pullQueued;
+  final bool pendingPullAfterPush;
+  final bool retryPushAfterRecoveryPull;
+  final int managedVaultRecoveryRetryPushes;
+  final bool hadPushDebounceTimer;
+  final bool hadPullTimer;
 }

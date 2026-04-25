@@ -63,6 +63,40 @@ void main() {
     );
   });
 
+  test('replace-local drops pending cleanup for already removed snapshots',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'vault_rollback_snapshot_cleanup_pending_v1': <String>[
+        'missing-snapshot',
+      ],
+    });
+    final backend = _AlreadyRemovedPendingCleanupBackend();
+
+    await runDestructiveReplaceLocalWithRollback<void>(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      run: () async {
+        backend.calls.add('run');
+      },
+    );
+
+    expect(
+      backend.calls,
+      <String>[
+        'deleteSnapshot:missing-snapshot',
+        'createSnapshot',
+        'resetLocal',
+        'run',
+        'deleteSnapshot:new-snapshot',
+      ],
+    );
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getStringList('vault_rollback_snapshot_cleanup_pending_v1'),
+      isEmpty,
+    );
+  });
+
   test(
       'replace-local attempts rollback snapshot cleanup after restored failure',
       () async {
@@ -122,6 +156,31 @@ final class _SnapshotCleanupFailureBackend extends TestAppBackend {
   }) async {
     calls.add('deleteSnapshot');
     throw StateError('cleanup denied');
+  }
+}
+
+final class _AlreadyRemovedPendingCleanupBackend extends TestAppBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<String?> createVaultRollbackSnapshot(Uint8List key) async {
+    calls.add('createSnapshot');
+    return 'new-snapshot';
+  }
+
+  @override
+  Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
+    calls.add('resetLocal');
+  }
+
+  @override
+  Future<void> deleteVaultRollbackSnapshot({
+    required String snapshotPath,
+  }) async {
+    calls.add('deleteSnapshot:$snapshotPath');
+    if (snapshotPath == 'missing-snapshot') {
+      throw StateError('rollback snapshot is not active');
+    }
   }
 }
 

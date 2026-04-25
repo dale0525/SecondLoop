@@ -101,6 +101,9 @@ Future<void> _retryPendingVaultRollbackSnapshotCleanup(
     try {
       await backend.deleteVaultRollbackSnapshot(snapshotPath: snapshotPath);
     } catch (error) {
+      if (_rollbackSnapshotAlreadyRemoved(error)) {
+        continue;
+      }
       remaining.add(snapshotPath);
       debugPrint(
         'sync replace-local: failed to remove pending rollback snapshot '

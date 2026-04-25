@@ -463,10 +463,11 @@ fn migration_archive_replace_vault_with_archive_with_callbacks(
     result
 }
 
-fn migration_archive_remove_snapshot(snapshot_path: Option<&Path>) {
+fn migration_archive_remove_snapshot(snapshot_path: Option<&Path>) -> Result<()> {
     if let Some(path) = snapshot_path {
-        let _ = migration_archive_remove_rollback_snapshot(path);
+        migration_archive_remove_rollback_snapshot(path)?;
     }
+    Ok(())
 }
 
 pub fn import_migration_archive(
@@ -489,7 +490,7 @@ pub fn import_migration_archive_with_callbacks(
 
     match migration_archive_replace_vault_with_archive_with_callbacks(app_dir, key, archive_path, on_event) {
         Ok(manifest) => {
-            migration_archive_remove_snapshot(snapshot_path.as_deref());
+            migration_archive_remove_snapshot(snapshot_path.as_deref())?;
             Ok(manifest)
         }
         Err(err) => {
@@ -501,7 +502,13 @@ pub fn import_migration_archive_with_callbacks(
             };
             match rollback_result {
                 Ok(()) => {
-                    migration_archive_remove_snapshot(snapshot_path.as_deref());
+                    let cleanup_result = migration_archive_remove_snapshot(snapshot_path.as_deref());
+                    let terminal_error = match cleanup_result.as_ref() {
+                        Ok(()) => original_error.clone(),
+                        Err(cleanup_error) => format!(
+                            "{original_error}; rollback snapshot cleanup failed: {cleanup_error}"
+                        ),
+                    };
                     migration_archive_record_terminal_state(
                         app_dir,
                         on_event,
@@ -510,11 +517,16 @@ pub fn import_migration_archive_with_callbacks(
                         6,
                         6,
                         "rollback",
-                        Some(original_error.clone()),
+                        Some(terminal_error.clone()),
                         None,
                         None,
                         None,
                     )?;
+                    if let Err(cleanup_error) = cleanup_result {
+                        return Err(anyhow!(
+                            "{original_error}; rollback snapshot cleanup failed: {cleanup_error}"
+                        ));
+                    }
                     Err(anyhow!(original_error))
                 }
                 Err(rollback_error) => {

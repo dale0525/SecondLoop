@@ -643,9 +643,9 @@ fn migration_archive_restore_from_encrypted_snapshot(
                 result
             }
             Err(err) => Err(err),
-        };
+    };
     if rollback_result.is_ok() {
-        migration_archive_remove_snapshot(Some(snapshot_path));
+        migration_archive_remove_snapshot(Some(snapshot_path))?;
     }
     rollback_result
 }
