@@ -367,6 +367,7 @@ fn migration_archive_restore_from_materialized_source_with_callbacks(
     }
 }
 
+#[cfg(test)]
 fn migration_archive_replace_vault_with_source_root(
     app_dir: &Path,
     key: &[u8; 32],
@@ -456,21 +457,7 @@ pub fn import_migration_archive_with_callbacks(
     archive_path: &Path,
     on_event: &mut dyn FnMut(MigrationArchiveProgress),
 ) -> Result<MigrationArchiveManifest> {
-    let conn = open(app_dir)?;
-    let estimate = migration_archive_export_estimate(&conn)?;
-    drop(conn);
-
-    let snapshot_path = if estimate.item_count > 0 || estimate.attachment_count > 0 {
-        let snapshot_dir = migration_archive_root_dir(app_dir).join("rollback");
-        fs::create_dir_all(&snapshot_dir)?;
-        let path = snapshot_dir.join(format!("{}.bin", uuid::Uuid::new_v4()));
-        let conn = open(app_dir)?;
-        migration_archive_write_encrypted_snapshot(&conn, key, app_dir, &path)?;
-        migration_archive_mark_active_rollback_snapshot(&path)?;
-        Some(path)
-    } else {
-        None
-    };
+    let snapshot_path = migration_archive_create_rollback_snapshot(app_dir, key)?;
     migration_archive_record_progress(app_dir, on_event, "import", "snapshot_created", 1, 6, "in_progress")?;
 
     match migration_archive_replace_vault_with_archive_with_callbacks(app_dir, key, archive_path, on_event) {
@@ -481,7 +468,7 @@ pub fn import_migration_archive_with_callbacks(
         Err(err) => {
             let original_error = err.to_string();
             let rollback_result = if let Some(path) = snapshot_path.as_ref() {
-                migration_archive_restore_from_encrypted_snapshot(app_dir, key, path)
+                migration_archive_restore_rollback_snapshot(app_dir, key, path)
             } else {
                 Ok(())
             };

@@ -104,8 +104,10 @@ pub fn migration_archive_import(
     key: Vec<u8>,
     archive_path: String,
 ) -> Result<db::MigrationArchiveManifest> {
+    let app_dir = Path::new(&app_dir);
     let key = key_from_bytes(key)?;
-    db::import_migration_archive(Path::new(&app_dir), &key, Path::new(&archive_path))
+    crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
+    db::import_migration_archive(app_dir, &key, Path::new(&archive_path))
 }
 
 #[flutter_rust_bridge::frb]
@@ -147,12 +149,14 @@ pub fn migration_archive_import_progress(
     archive_path: String,
     sink: StreamSink<String>,
 ) -> Result<()> {
+    let app_dir = Path::new(&app_dir);
     let key = key_from_bytes(key)?;
+    crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
     let mut on_event = |progress: db::MigrationArchiveProgress| {
         emit_progress(&sink, progress);
     };
     let manifest = db::import_migration_archive_with_callbacks(
-        Path::new(&app_dir),
+        app_dir,
         &key,
         Path::new(&archive_path),
         &mut on_event,

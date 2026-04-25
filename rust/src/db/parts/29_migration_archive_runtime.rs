@@ -112,6 +112,7 @@ fn migration_archive_copy_attachments(
     Ok(())
 }
 
+#[cfg(test)]
 const MIGRATION_ARCHIVE_ROLLBACK_SNAPSHOT_AAD: &[u8] = b"migration_archive.rollback_snapshot";
 const VAULT_ROLLBACK_SNAPSHOT_AAD: &[u8] = b"vault.rollback_snapshot.v1";
 
@@ -202,13 +203,13 @@ fn migration_archive_write_zip_to_writer<W: std::io::Write + std::io::Seek>(
             .to_string_lossy()
             .replace('\\', "/");
         writer.start_file(rel, options)?;
-        let bytes = fs::read(&path)?;
-        use std::io::Write as _;
-        writer.write_all(&bytes)?;
+        let mut file = fs::File::open(&path)?;
+        std::io::copy(&mut file, &mut writer)?;
     }
     Ok(writer.finish()?)
 }
 
+#[cfg(test)]
 fn migration_archive_write_zip_bytes(stage_dir: &Path) -> Result<Vec<u8>> {
     let cursor =
         migration_archive_write_zip_to_writer(stage_dir, std::io::Cursor::new(Vec::new()))?;
@@ -507,6 +508,7 @@ fn migration_archive_build_stage(
     Ok(manifest)
 }
 
+#[cfg(test)]
 fn migration_archive_write_encrypted_snapshot(
     conn: &Connection,
     key: &[u8; 32],
@@ -533,6 +535,7 @@ fn migration_archive_write_encrypted_snapshot(
     snapshot_result
 }
 
+#[cfg(test)]
 fn migration_archive_materialize_encrypted_snapshot(
     app_dir: &Path,
     key: &[u8; 32],
@@ -543,6 +546,7 @@ fn migration_archive_materialize_encrypted_snapshot(
     materialize_external_import_source_from_zip_bytes(app_dir, "rollback-snapshot", &zip_bytes)
 }
 
+#[cfg(test)]
 fn migration_archive_restore_from_encrypted_snapshot(
     app_dir: &Path,
     key: &[u8; 32],
@@ -603,12 +607,14 @@ fn vault_rollback_write_encrypted_snapshot(
         let db_snapshot_path_string = db_snapshot_path.to_string_lossy().into_owned();
         conn.execute("VACUUM main INTO ?1", params![db_snapshot_path_string])?;
         vault_rollback_copy_file_dirs(app_dir, &stage_dir)?;
-        let zip_bytes = migration_archive_write_zip_bytes(&stage_dir)?;
-        let encrypted = encrypt_bytes(key, &zip_bytes, VAULT_ROLLBACK_SNAPSHOT_AAD)?;
-        if let Some(parent) = snapshot_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(snapshot_path, encrypted)?;
+        let zip_path = stage_dir.with_extension("zip.tmp");
+        let zip_result = (|| -> Result<()> {
+            migration_archive_write_zip(&stage_dir, &zip_path)?;
+            vault_rollback_encrypt_zip_file_to_snapshot(key, &zip_path, snapshot_path)?;
+            Ok(())
+        })();
+        let _ = fs::remove_file(&zip_path);
+        zip_result?;
         Ok(())
     })();
 
@@ -617,36 +623,7 @@ fn vault_rollback_write_encrypted_snapshot(
 }
 
 fn vault_rollback_extract_zip_bytes(app_dir: &Path, zip_bytes: &[u8]) -> Result<PathBuf> {
-    let stage_dir = migration_archive_staging_dir(app_dir).join(uuid::Uuid::new_v4().to_string());
-    fs::create_dir_all(&stage_dir)?;
-
-    let extract_result = (|| -> Result<()> {
-        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes))?;
-        for index in 0..archive.len() {
-            let mut entry = archive.by_index(index)?;
-            let Some(name) = entry.enclosed_name().map(|value| value.to_path_buf()) else {
-                continue;
-            };
-            let out_path = stage_dir.join(name);
-            if entry.is_dir() {
-                fs::create_dir_all(&out_path)?;
-                continue;
-            }
-            if let Some(parent) = out_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            let mut out = fs::File::create(&out_path)?;
-            std::io::copy(&mut entry, &mut out)?;
-        }
-        Ok(())
-    })();
-
-    if let Err(err) = extract_result {
-        let _ = fs::remove_dir_all(&stage_dir);
-        return Err(err);
-    }
-
-    Ok(stage_dir)
+    vault_rollback_extract_zip_archive(app_dir, std::io::Cursor::new(zip_bytes))
 }
 
 fn vault_rollback_restore_from_encrypted_snapshot(
@@ -654,9 +631,7 @@ fn vault_rollback_restore_from_encrypted_snapshot(
     key: &[u8; 32],
     snapshot_path: &Path,
 ) -> Result<()> {
-    let encrypted = fs::read(snapshot_path)?;
-    let zip_bytes = decrypt_bytes(key, &encrypted, VAULT_ROLLBACK_SNAPSHOT_AAD)?;
-    let stage_dir = vault_rollback_extract_zip_bytes(app_dir, &zip_bytes)?;
+    let stage_dir = vault_rollback_extract_snapshot_to_stage(app_dir, key, snapshot_path)?;
 
     let restore_result = (|| -> Result<()> {
         fs::create_dir_all(app_dir)?;
@@ -733,7 +708,6 @@ fn vault_rollback_restore_from_encrypted_snapshot(
     if restore_result.is_ok() {
         migration_archive_remove_snapshot(Some(snapshot_path));
     }
-    migration_archive_clear_active_rollback_marker_for_snapshot(snapshot_path);
     restore_result
 }
 

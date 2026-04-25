@@ -22,6 +22,9 @@ fn zip_has_entry(zip_path: &Path, entry_name: &str) -> bool {
     present
 }
 
+const VALID_TEST_ATTACHMENT_SHA256: &str =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 #[test]
 fn migration_archive_manifest_round_trip_preserves_core_fields() {
     let manifest = MigrationArchiveManifest {
@@ -138,7 +141,7 @@ fn migration_archive_manifest_validation_rejects_attachment_path_traversal() {
         "items": [],
         "attachments": [
           {
-            "sha256": "abc123",
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "archive_path": "../../../secret.txt",
             "original_filename": "secret.txt",
             "mime_type": "text/plain",
@@ -382,6 +385,7 @@ fn migration_archive_import_rolls_back_when_archive_restore_fails() {
     let file = fs::File::create(&bad_archive_path).expect("create bad zip");
     let mut writer = zip::ZipWriter::new(file);
     let options = zip::write::FileOptions::default();
+    let missing_sha = VALID_TEST_ATTACHMENT_SHA256;
     let manifest = MigrationArchiveManifest {
         schema_version: 1,
         archive_kind: "migration".to_string(),
@@ -399,8 +403,8 @@ fn migration_archive_import_rolls_back_when_archive_restore_fails() {
             extra_json: None,
         }],
         attachments: vec![MigrationArchiveAttachment {
-            sha256: "missing-sha".to_string(),
-            archive_path: "attachments/missing-sha.png".to_string(),
+            sha256: missing_sha.to_string(),
+            archive_path: format!("attachments/{missing_sha}.png"),
             original_filename: "missing.png".to_string(),
             mime_type: Some("image/png".to_string()),
             size_bytes: 9,
@@ -429,7 +433,7 @@ fn migration_archive_import_rolls_back_when_archive_restore_fails() {
         .expect_err("import should fail and rollback");
     let err_text = err.to_string();
     assert!(
-        err_text.contains("missing-sha")
+        err_text.contains(missing_sha)
             || err_text.contains("No such file")
             || err_text.contains("cannot find the file")
             || err_text.contains("系统找不到指定的文件")
@@ -692,9 +696,9 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
         app_version: "1.0.0".to_string(),
         items: vec![],
         attachments: vec![MigrationArchiveAttachment {
-            sha256: "deadbeef".to_string(),
-            archive_path: "attachments/deadbeef.bin".to_string(),
-            original_filename: "deadbeef.bin".to_string(),
+            sha256: VALID_TEST_ATTACHMENT_SHA256.to_string(),
+            archive_path: format!("attachments/{VALID_TEST_ATTACHMENT_SHA256}.bin"),
+            original_filename: format!("{VALID_TEST_ATTACHMENT_SHA256}.bin"),
             mime_type: Some("application/octet-stream".to_string()),
             size_bytes: 4,
             item_ids: vec!["missing-item".to_string()],
@@ -706,7 +710,11 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
         serde_json::to_vec(&manifest).expect("serialize manifest"),
     )
     .expect("write manifest");
-    fs::write(source_root.join("attachments/deadbeef.bin"), b"blob").expect("write blob");
+    fs::write(
+        source_root.join(format!("attachments/{VALID_TEST_ATTACHMENT_SHA256}.bin")),
+        b"blob",
+    )
+    .expect("write blob");
 
     let err = migration_archive_restore_from_materialized_source_with_callbacks(
         &app_dir,
@@ -717,7 +725,9 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
     .expect_err("restore should fail when attachment owner is missing");
 
     assert!(err.to_string().contains("attachment owner item not found"));
-    assert!(!app_dir.join("attachments/deadbeef.bin").exists());
+    assert!(!app_dir
+        .join(format!("attachments/{VALID_TEST_ATTACHMENT_SHA256}.bin"))
+        .exists());
 }
 
 #[test]

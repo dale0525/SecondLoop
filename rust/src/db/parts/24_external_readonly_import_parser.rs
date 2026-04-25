@@ -201,6 +201,7 @@ fn materialize_external_import_source_from_zip_reader<R: Read + std::io::Seek>(
     })
 }
 
+#[cfg(test)]
 fn materialize_external_import_source_from_zip_bytes(
     app_dir: &Path,
     source_label: &str,

@@ -106,6 +106,28 @@ pub fn parse_migration_archive_manifest_json(
     Ok(manifest)
 }
 
+fn validate_migration_archive_relative_path(label: &str, value: &str) -> Result<()> {
+    if value.trim().is_empty() {
+        return Err(anyhow!("{label} must not be empty"));
+    }
+    let candidate = Path::new(value);
+    for component in candidate.components() {
+        match component {
+            std::path::Component::Prefix(_)
+            | std::path::Component::RootDir
+            | std::path::Component::ParentDir => {
+                return Err(anyhow!("{label} contains path traversal: {value}"));
+            }
+            std::path::Component::CurDir | std::path::Component::Normal(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn is_valid_migration_archive_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 pub fn validate_migration_archive_manifest(manifest: &MigrationArchiveManifest) -> Result<()> {
     if manifest.schema_version <= 0 {
         return Err(anyhow!("schema_version must be positive"));
@@ -127,19 +149,21 @@ pub fn validate_migration_archive_manifest(manifest: &MigrationArchiveManifest) 
         if item.id.trim().is_empty() {
             return Err(anyhow!("item id must not be empty"));
         }
-        if item.markdown_path.trim().is_empty() {
-            return Err(anyhow!("markdown_path must not be empty"));
-        }
+        validate_migration_archive_relative_path("item markdown_path", &item.markdown_path)?;
     }
     for attachment in &manifest.attachments {
-        let candidate = Path::new(&attachment.archive_path);
-        if candidate.is_absolute()
-            || candidate
-                .components()
-                .any(|component| component == std::path::Component::ParentDir)
-        {
+        if !is_valid_migration_archive_sha256(&attachment.sha256) {
             return Err(anyhow!(
-                "attachment archive_path contains path traversal: {}",
+                "attachment sha256 must be 64 lowercase or uppercase hex characters: {}",
+                attachment.sha256
+            ));
+        }
+        if let Err(err) = validate_migration_archive_relative_path(
+            "attachment archive_path",
+            &attachment.archive_path,
+        ) {
+            return Err(anyhow!(
+                "{err}: {}",
                 attachment.archive_path
             ));
         }
