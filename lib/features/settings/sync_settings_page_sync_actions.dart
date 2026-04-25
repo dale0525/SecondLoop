@@ -685,10 +685,14 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
         if (backendType == SyncBackendType.managedVault) {
           final details = inspectManagedVaultPushFailure(displayError);
+          final recoveryBlockedReason =
+              extractManagedVaultRecoveryBlockedReason(displayError);
           if (details.writeGateState != null &&
+              recoveryBlockedReason == null &&
               !remoteReplaceCommitted &&
               !replaceLocalRollbackFailed &&
-              !restoredPrimarySnapshot) {
+              !restoredPrimarySnapshot &&
+              engine != null) {
             return;
           }
           _showSnack(

@@ -300,16 +300,12 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
       }
       await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
       engine?.writeGate.value = const SyncWriteGateState.open();
-      unawaited(BackgroundSync.refreshSchedule(
-        backend: backend,
-        configStore: _store,
-      ).catchError((e) {
-        debugPrint(
-          'sync settings delete-all: failed to refresh schedule after reset: $e',
-        );
-      }));
-
       shouldNotifyExternalChange = true;
+      shouldRestartEngine = false;
+      if (!autoSyncDisabledAfterRemoteUncertain) {
+        await _disableAutoSyncAfterDestructiveCleanup(backend);
+      }
+
       if (mounted) {
         _showSnack(
           remoteClearTimedOut

@@ -210,7 +210,7 @@ void registerDeleteActionsTailTests() {
   });
 
   testWidgets(
-      'delete all data refreshes background schedule with the active config store',
+      'delete all data disables auto sync before refreshing background schedule',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final methodCalls = <MethodCall>[];
@@ -258,12 +258,9 @@ void registerDeleteActionsTailTests() {
 
     await tester.pump(const Duration(milliseconds: 50));
 
+    expect(await store.readAutoEnabled(), isFalse);
     expect(
       methodCalls.where((call) => call.method == 'registerPeriodicTask'),
-      hasLength(1),
-    );
-    expect(
-      methodCalls.where((call) => call.method == 'cancelTaskByUniqueName'),
       isEmpty,
     );
   });

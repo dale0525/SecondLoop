@@ -120,6 +120,22 @@ void main() {
     await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Delete local cache again?'), findsOneWidget);
+    expect(
+      find.textContaining('Cached files from this device'),
+      findsOneWidget,
+    );
+    expect(backend.clearLocalCacheCalls, 0);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(backend.clearLocalCacheCalls, 0);
+
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await _confirmDeletionTwice(tester);
+    await tester.pumpAndSettle();
+
     expect(backend.clearLocalCacheCalls, 1);
     expect(find.text('Deleted local cache'), findsOneWidget);
   });
@@ -686,7 +702,8 @@ void main() {
     expect(backend.resetLocalDataCalls, 1);
   });
 
-  testWidgets('delete all data restarts sync engine after success',
+  testWidgets(
+      'delete all data disables auto sync and keeps sync engine stopped',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -694,6 +711,7 @@ void main() {
     await store.writeRemoteRoot('SecondLoop');
     await store.writeWebdavBaseUrl('https://example.com/dav');
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeAutoEnabled(true);
 
     final backend = _DeleteActionsBackend();
     final runner = _CountingSyncRunner();
@@ -724,15 +742,10 @@ void main() {
     await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
-    expect(engine.isRunning, isTrue);
-
-    engine.triggerPushNow();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(runner.pushCalls, 1);
-
-    engine.stop();
+    expect(backend.syncWebdavClearRemoteRootCalls, 1);
+    expect(backend.resetLocalDataCalls, 1);
+    expect(await store.readAutoEnabled(), isFalse);
+    expect(engine.isRunning, isFalse);
   });
 
   testWidgets(
@@ -891,7 +904,7 @@ void main() {
   });
 
   testWidgets(
-      'delete all data clears managed vault local repair gate before restarting sync',
+      'delete all data clears managed vault local repair gate before staying stopped',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore(
@@ -932,16 +945,14 @@ void main() {
     await _confirmDeletionTwice(tester);
     await tester.pumpAndSettle();
 
-    expect(engine.isRunning, isTrue);
+    expect(engine.isRunning, isFalse);
     expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
 
     engine.triggerPushNow();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(runner.pushCalls, 1);
-
-    engine.stop();
+    expect(runner.pushCalls, 0);
   });
 
   registerDeleteActionsTailTests();

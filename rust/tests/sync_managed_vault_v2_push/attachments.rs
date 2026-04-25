@@ -423,8 +423,7 @@ fn managed_vault_v2_post_commit_missing_attachment_is_queued_for_repair_and_reco
 
     let requests_after_first_push = state.lock().expect("lock").requests.join("\n\n");
     assert!(
-        requests_after_first_push.contains("/v2/vaults/v1/sync/push")
-            || requests_after_first_push.contains("/v1/vaults/v1/ops:push"),
+        requests_after_first_push.contains("/v2/vaults/v1/sync/push"),
         "expected a sync push request, got {requests_after_first_push}"
     );
     assert!(

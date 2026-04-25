@@ -13,27 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::db;
 
 type RemoteDeviceSeqMap = BTreeMap<String, i64>;
-type RemoteDeviceSeqMapProbeResult = (Option<RemoteDeviceSeqMap>, Option<String>);
 const DIAGNOSTICS_HTTP_TIMEOUT: Duration = Duration::from_secs(1);
-
-#[derive(Debug, Serialize)]
-struct DiagnosticsRegisterDeviceRequest<'a> {
-    platform: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    device_id: Option<&'a str>,
-}
-
-#[derive(Debug, Deserialize)]
-struct DiagnosticsRegisterDeviceResponse {
-    device_id: String,
-}
-
-#[derive(Debug, Serialize)]
-struct PullProbeRequest<'a> {
-    device_id: &'a str,
-    since: BTreeMap<String, i64>,
-    limit: i64,
-}
 
 #[derive(Debug, Deserialize)]
 struct DiagnosticsV2HeadResponse {
@@ -65,6 +45,7 @@ struct ManagedVaultCursorRemoteDiagnostics {
     managed_vault_v2_remote_head_error: Option<String>,
     remote_device_seq_map: Option<RemoteDeviceSeqMap>,
     remote_device_seq_map_source: Option<String>,
+    remote_probe_status: Option<String>,
     remote_probe_error: Option<String>,
 }
 
@@ -170,87 +151,6 @@ fn read_local_device_id(conn: &Connection) -> Result<Option<String>> {
     .map_err(Into::into)
 }
 
-fn json_value_to_i64(value: &serde_json::Value) -> Option<i64> {
-    if let Some(seq) = value.as_i64() {
-        return Some(seq);
-    }
-    value.as_str().and_then(|v| v.parse::<i64>().ok())
-}
-
-fn parse_device_seq_map_from_payload(
-    payload: &serde_json::Value,
-    key: &str,
-) -> Option<RemoteDeviceSeqMap> {
-    let map = payload.get(key)?.as_object()?;
-    let mut out = BTreeMap::new();
-    for (device_id, seq_value) in map {
-        if let Some(seq) = json_value_to_i64(seq_value) {
-            out.insert(device_id.to_string(), seq);
-        }
-    }
-    if out.is_empty() {
-        return None;
-    }
-    Some(out)
-}
-
-fn probe_remote_device_seq_map(
-    base_url: &str,
-    vault_id: &str,
-    id_token: &str,
-    local_device_id: &str,
-    since: &BTreeMap<String, i64>,
-) -> Result<RemoteDeviceSeqMapProbeResult> {
-    let http = client()?;
-    let register_endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/devices"))?;
-    let register_resp = http
-        .post(register_endpoint)
-        .bearer_auth(id_token)
-        .json(&DiagnosticsRegisterDeviceRequest {
-            platform: "unknown",
-            device_id: Some(local_device_id),
-        })
-        .send()?;
-
-    let register_status = register_resp.status();
-    let register_text = register_resp.text().unwrap_or_default();
-    if !register_status.is_success() {
-        return Err(anyhow!(
-            "managed-vault diagnostics register-device failed: HTTP {register_status} {register_text}"
-        ));
-    }
-
-    let register_parsed: DiagnosticsRegisterDeviceResponse = serde_json::from_str(&register_text)?;
-    let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
-    let resp = http
-        .post(endpoint)
-        .bearer_auth(id_token)
-        .json(&PullProbeRequest {
-            device_id: register_parsed.device_id.as_str(),
-            since: since.clone(),
-            limit: 1,
-        })
-        .send()?;
-
-    let status = resp.status();
-    let body = resp.bytes()?;
-    if !status.is_success() {
-        let text = String::from_utf8_lossy(body.as_ref()).to_string();
-        return Err(anyhow!(
-            "managed-vault diagnostics probe failed: HTTP {status} {text}"
-        ));
-    }
-
-    let payload: serde_json::Value = serde_json::from_slice(body.as_ref())?;
-    if let Some(map) = parse_device_seq_map_from_payload(&payload, "max") {
-        return Ok((Some(map), Some("max".to_string())));
-    }
-    if let Some(map) = parse_device_seq_map_from_payload(&payload, "next") {
-        return Ok((Some(map), Some("next".to_string())));
-    }
-    Ok((None, None))
-}
-
 fn probe_managed_vault_v2_head(
     base_url: &str,
     vault_id: &str,
@@ -321,9 +221,10 @@ fn build_managed_vault_cursor_remote_diagnostics(
         .transpose()?
         .flatten();
 
-    let mut remote_device_seq_map: Option<RemoteDeviceSeqMap> = None;
-    let mut remote_device_seq_map_source: Option<String> = None;
-    let mut remote_probe_error: Option<String> = None;
+    let remote_device_seq_map: Option<RemoteDeviceSeqMap> = None;
+    let remote_device_seq_map_source: Option<String> = None;
+    let remote_probe_status: Option<String> = Some("legacy_remote_probe_removed".to_string());
+    let remote_probe_error: Option<String> = None;
     let mut managed_vault_v2_remote_generation_id: Option<String> = None;
     let mut managed_vault_v2_remote_latest_global_seq: Option<i64> = None;
     let mut managed_vault_v2_remote_head_error: Option<String> = None;
@@ -342,28 +243,8 @@ fn build_managed_vault_cursor_remote_diagnostics(
                 managed_vault_v2_remote_head_error = Some(e.to_string());
             }
         }
-        if let Some(probe_device_id) = local_device_id.as_deref() {
-            match probe_remote_device_seq_map(
-                base_url,
-                vault_id,
-                id_token,
-                probe_device_id,
-                &local_last_pulled_seq_by_device,
-            ) {
-                Ok((map, source)) => {
-                    remote_device_seq_map = map;
-                    remote_device_seq_map_source = source;
-                }
-                Err(e) => {
-                    remote_probe_error = Some(e.to_string());
-                }
-            }
-        } else {
-            remote_probe_error = Some("missing_local_device_id".to_string());
-        }
     } else {
         managed_vault_v2_remote_head_error = Some("missing_id_token".to_string());
-        remote_probe_error = Some("missing_id_token".to_string());
     }
 
     Ok(ManagedVaultCursorRemoteDiagnostics {
@@ -389,6 +270,7 @@ fn build_managed_vault_cursor_remote_diagnostics(
         managed_vault_v2_remote_head_error,
         remote_device_seq_map,
         remote_device_seq_map_source,
+        remote_probe_status,
         remote_probe_error,
     })
 }
@@ -494,6 +376,7 @@ mod tests {
         let diagnostics =
             build_managed_vault_cursor_remote_diagnostics(&conn, base_url, vault_id, None)
                 .expect("build diagnostics");
+        let diagnostics_json = serde_json::to_value(&diagnostics).expect("serialize");
 
         assert_eq!(diagnostics.local_device_id, "device-local");
         assert_eq!(
@@ -509,6 +392,14 @@ mod tests {
             diagnostics.managed_vault_v2_remote_head_error.as_deref(),
             Some("missing_id_token")
         );
+        assert_eq!(
+            diagnostics_json["remote_probe_error"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            diagnostics_json["remote_probe_status"],
+            serde_json::Value::from("legacy_remote_probe_removed")
+        );
     }
 
     #[test]
@@ -516,7 +407,7 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("local addr");
         let server = thread::spawn(move || {
-            for _ in 0..3 {
+            for _ in 0..1 {
                 let (mut stream, _) = listener.accept().expect("accept");
                 let (headers, _) = read_http_request(&mut stream);
                 let request_line = headers.lines().next().unwrap_or_default().to_string();
@@ -525,18 +416,6 @@ mod tests {
                         &mut stream,
                         "200 OK",
                         r#"{"generation_id":"gen-remote","remote_latest_global_seq":23}"#,
-                    );
-                    continue;
-                }
-                if request_line.starts_with("POST /v1/vaults/test-vault/devices ") {
-                    respond_json(&mut stream, "200 OK", r#"{"device_id":"device-local"}"#);
-                    continue;
-                }
-                if request_line.starts_with("POST /v1/vaults/test-vault/ops:pull ") {
-                    respond_json(
-                        &mut stream,
-                        "200 OK",
-                        r#"{"ops":[],"next":{"device-remote":4},"max":{"device-remote":4}}"#,
                     );
                     continue;
                 }
@@ -559,6 +438,7 @@ mod tests {
             Some("token"),
         )
         .expect("build diagnostics");
+        let diagnostics_json = serde_json::to_value(&diagnostics).expect("serialize");
 
         server.join().expect("join");
 
@@ -571,13 +451,15 @@ mod tests {
             Some(23)
         );
         assert_eq!(diagnostics.managed_vault_v2_remote_head_error, None);
+        assert_eq!(diagnostics.remote_device_seq_map, None);
+        assert_eq!(diagnostics.remote_device_seq_map_source, None);
         assert_eq!(
-            diagnostics.remote_device_seq_map,
-            Some(BTreeMap::from([(String::from("device-remote"), 4)]))
+            diagnostics_json["remote_probe_error"],
+            serde_json::Value::Null
         );
         assert_eq!(
-            diagnostics.remote_device_seq_map_source.as_deref(),
-            Some("max")
+            diagnostics_json["remote_probe_status"],
+            serde_json::Value::from("legacy_remote_probe_removed")
         );
     }
 

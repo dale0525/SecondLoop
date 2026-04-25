@@ -65,6 +65,11 @@
       "title": "Delete local cache?",
       "message": "This deletes cached photos and files on this device to save space. Your remote sync storage keeps a copy; items will be re-downloaded on demand when viewed again.",
       "confirm": "Delete"
+    },
+    "secondDialog": {
+      "title": "Delete local cache again?",
+      "message": "This cannot be undone locally. Cached files from this device are removed, and remote copies stay available for re-download.",
+      "confirm": "Delete"
     }
   },
   "localData": {

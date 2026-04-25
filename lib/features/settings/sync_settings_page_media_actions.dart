@@ -218,24 +218,11 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
     if (_busy) return;
 
     final t = context.t;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(t.sync.localCache.dialog.title),
-          content: Text(t.sync.localCache.dialog.message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(t.sync.localCache.dialog.confirm),
-            ),
-          ],
-        );
-      },
+    final confirmed = await _confirmDeleteAction(
+      title: t.sync.localCache.dialog.title,
+      message: t.sync.localCache.dialog.message,
+      secondTitle: t.sync.localCache.secondDialog.title,
+      secondMessage: t.sync.localCache.secondDialog.message,
     );
     if (!mounted) return;
     if (confirmed != true) return;
