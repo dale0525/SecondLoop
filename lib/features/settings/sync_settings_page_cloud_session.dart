@@ -34,18 +34,6 @@ extension _SyncSettingsPageCloudSession on _SyncSettingsPageState {
     final cloudUid = (uidOverride ?? _cloudAuthController?.uid)?.trim();
     final backend = AppBackendScope.maybeOf(context);
     if (cloudUid == null || cloudUid.isEmpty) {
-      await _store.writeAutoEnabled(false);
-      if (mounted) {
-        _setState(() => _autoEnabled = false);
-      } else {
-        _autoEnabled = false;
-      }
-      if (backend != null) {
-        unawaited(BackgroundSync.refreshSchedule(
-          backend: backend,
-          configStore: _store,
-        ));
-      }
       return;
     }
 

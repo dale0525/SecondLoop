@@ -284,7 +284,18 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
         shouldRestartEngine = false;
         engine?.writeGate.value = const SyncWriteGateState.open();
         await _disableAutoSyncAndRefreshSchedule(backend);
-      } catch (_) {
+      } catch (e) {
+        if (_isVaultResetCommittedCleanupFailure(e)) {
+          shouldRestartEngine = false;
+          engine?.writeGate.value = const SyncWriteGateState.open();
+          await _disableAutoSyncAndRefreshSchedule(backend);
+          if (!mounted) return;
+          engine?.notifyExternalChange();
+          _showSnack(t.sync.localData.failed(
+            error: _deleteActionErrorMessage(e),
+          ));
+          return;
+        }
         if (shouldRestartEngine) {
           engine?.start();
         }

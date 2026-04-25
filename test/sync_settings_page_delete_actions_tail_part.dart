@@ -45,6 +45,62 @@ void registerDeleteActionsTailTests() {
   });
 
   testWidgets(
+      'delete local data keeps sync stopped when reset committed but cleanup failed',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeAutoEnabled(true);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _DeleteActionsBackend(
+      resetLocalDataError: StateError(
+        'filesystem cleanup failed after vault reset commit: attachment cleanup',
+      ),
+    );
+    final runner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: runner,
+      loadConfig: () async => SyncConfig.webdav(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        remoteRoot: 'SecondLoop',
+        baseUrl: 'https://example.com/dav',
+      ),
+      pullOnStart: false,
+      pushDebounce: Duration.zero,
+    )..start();
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: backend,
+        store: store,
+        engine: engine,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(OutlinedButton, 'Delete local data');
+    await _ensureVisible(tester, button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await _confirmDeletionTwice(tester);
+    await tester.pumpAndSettle();
+
+    expect(backend.resetLocalDataCalls, 1);
+    expect(await store.readAutoEnabled(), isFalse);
+    expect(engine.isRunning, isFalse);
+    expect(find.textContaining('filesystem cleanup failed'), findsOneWidget);
+
+    engine.triggerPushNow();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(runner.pushCalls, 0);
+  });
+
+  testWidgets(
       'delete all data refreshes background schedule with the active config store',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -189,5 +245,38 @@ void registerDeleteActionsTailTests() {
       methodCalls.where((call) => call.method == 'registerPeriodicTask'),
       hasLength(1),
     );
+  });
+
+  testWidgets('cloud session model preserves auto sync while uid is absent',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeAutoEnabled(true);
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    final cloudAuthController =
+        _MutableCloudAuthController(userId: null, idToken: null);
+
+    await tester.pumpWidget(
+      _wrap(
+        backend: _DeleteActionsBackend(),
+        store: store,
+        cloudAuthController: cloudAuthController,
+        capabilities: AppPlatformCapabilities.webCloud(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(await store.readAutoEnabled(), isTrue);
+    expect(await store.loadConfiguredSync(), isNull);
+
+    cloudAuthController.setSession(userId: 'uid_3', idToken: 'token-3');
+    await tester.pumpAndSettle();
+
+    final configured = await store.loadConfiguredSync();
+    expect(await store.readAutoEnabled(), isTrue);
+    expect(configured, isNotNull);
+    expect(configured!.remoteRoot, 'uid_3');
   });
 }

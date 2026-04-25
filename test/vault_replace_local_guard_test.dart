@@ -6,10 +6,10 @@ import 'package:secondloop/core/sync/vault_replace_local_guard.dart';
 import 'test_backend.dart';
 
 void main() {
-  test('replace-local reports rollback snapshot cleanup failure', () async {
+  test('replace-local succeeds when rollback snapshot cleanup fails', () async {
     final backend = _SnapshotCleanupFailureBackend();
 
-    final result = runDestructiveReplaceLocalWithRollback<void>(
+    await runDestructiveReplaceLocalWithRollback<void>(
       backend: backend,
       sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
       run: () async {
@@ -17,16 +17,6 @@ void main() {
       },
     );
 
-    await expectLater(
-      result,
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('snapshot cleanup failed'),
-        ),
-      ),
-    );
     expect(
       backend.calls,
       <String>['createSnapshot', 'resetLocal', 'run', 'deleteSnapshot'],

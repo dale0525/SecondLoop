@@ -40,13 +40,9 @@ Future<T> runDestructiveReplaceLocalWithRollback<T>({
 
   try {
     await backend.deleteVaultRollbackSnapshot(snapshotPath: snapshotPath);
-  } catch (error, stackTrace) {
+  } catch (error) {
     debugPrint(
       'sync replace-local: failed to remove rollback snapshot after success: $error',
-    );
-    Error.throwWithStackTrace(
-      StateError('replace-local snapshot cleanup failed: $error'),
-      stackTrace,
     );
   }
 

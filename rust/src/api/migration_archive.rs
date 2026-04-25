@@ -168,3 +168,42 @@ pub fn migration_archive_inspect(
 ) -> Result<db::MigrationArchiveManifest> {
     db::inspect_migration_archive(Path::new(&app_dir), Path::new(&archive_path))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remove_rollback_snapshot_rejects_untracked_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let outside_path = dir.path().join("outside.bin");
+        std::fs::write(&outside_path, b"not a rollback snapshot").expect("write outside file");
+
+        let result =
+            migration_archive_remove_rollback_snapshot(outside_path.to_string_lossy().into_owned());
+
+        assert!(
+            result.is_err(),
+            "untracked rollback snapshot removal should fail"
+        );
+        assert!(outside_path.exists());
+    }
+
+    #[test]
+    fn remove_rollback_snapshot_allows_active_snapshot() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let app_dir = dir.path().join("app");
+        let key = vec![7u8; 32];
+        let snapshot_path =
+            migration_archive_create_rollback_snapshot(app_dir.to_string_lossy().into_owned(), key)
+                .expect("create rollback snapshot")
+                .expect("snapshot path");
+
+        assert!(Path::new(&snapshot_path).exists());
+
+        migration_archive_remove_rollback_snapshot(snapshot_path.clone())
+            .expect("remove active snapshot");
+
+        assert!(!Path::new(&snapshot_path).exists());
+    }
+}

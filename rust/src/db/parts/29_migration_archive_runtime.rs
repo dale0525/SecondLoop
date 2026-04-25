@@ -759,6 +759,16 @@ pub fn migration_archive_restore_rollback_snapshot(
 }
 
 pub fn migration_archive_remove_rollback_snapshot(snapshot_path: &Path) -> Result<()> {
+    let normalized = migration_archive_normalized_path(snapshot_path);
+    let is_active = {
+        let active = migration_archive_active_rollback_snapshots()
+            .lock()
+            .map_err(|_| anyhow!("active rollback snapshot registry poisoned"))?;
+        active.contains(&normalized) || active.contains(snapshot_path)
+    };
+    if !is_active {
+        return Err(anyhow!("rollback snapshot is not active"));
+    }
     migration_archive_clear_active_rollback_marker_for_snapshot(snapshot_path);
     best_effort_remove_file(snapshot_path)
 }

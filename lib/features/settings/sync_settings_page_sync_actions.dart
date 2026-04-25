@@ -401,6 +401,17 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     final t = context.t;
     final engine = SyncEngineScope.maybeOf(context);
     var shouldHideRecoveryHint = false;
+    var shouldRestartStoppedEngine = false;
+    var engineRestartedAfterStop = false;
+
+    void restartStoppedEngineIfNeeded() {
+      if (!shouldRestartStoppedEngine || engineRestartedAfterStop) {
+        return;
+      }
+      engine?.start();
+      engineRestartedAfterStop = true;
+    }
+
     try {
       final before = await _store.readAll();
       if (!mounted) return;
@@ -565,7 +576,6 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       }
 
       final wasEngineRunning = engine?.isRunning ?? false;
-      var shouldRestartStoppedEngine = false;
       if (shouldSync && engine != null) {
         await engine.stopImmediatelyAndWait();
         shouldRestartStoppedEngine = wasEngineRunning;
@@ -573,9 +583,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
       final persisted = await _persistBackendConfig();
       if (!persisted) {
-        if (shouldRestartStoppedEngine) {
-          engine?.start();
-        }
+        restartStoppedEngineIfNeeded();
         return;
       }
       if (!mounted) return;
@@ -638,7 +646,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
         if (!mounted) return;
         if (!shouldSync || shouldRestartStoppedEngine) {
-          engine?.start();
+          restartStoppedEngineIfNeeded();
         }
         if (!(didSync && newBackendType == SyncBackendType.managedVault)) {
           engine?.notifyExternalChange();
@@ -674,7 +682,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         if (shouldRestartStoppedEngine &&
             (switchDirection != SyncSwitchDirection.remoteReplacesLocal ||
                 restoredPrimarySnapshot)) {
-          engine?.start();
+          restartStoppedEngineIfNeeded();
         }
         if (backendType == SyncBackendType.managedVault) {
           final details = inspectManagedVaultPushFailure(e);
@@ -693,6 +701,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     } catch (e) {
       _showSnack(t.sync.saveFailed(error: '$e'));
     } finally {
+      restartStoppedEngineIfNeeded();
       if (mounted) {
         _setState(() {
           _busy = false;

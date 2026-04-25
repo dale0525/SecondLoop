@@ -1,5 +1,11 @@
 part of 'sync_settings_page.dart';
 
+bool _isVaultResetCommittedCleanupFailure(Object error) {
+  return error
+      .toString()
+      .contains('filesystem cleanup failed after vault reset commit');
+}
+
 extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
   bool _isOperationTimeoutError(Object error) {
     if (error is TimeoutException) return true;
@@ -274,6 +280,10 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         );
       }
     } catch (e) {
+      if (_isVaultResetCommittedCleanupFailure(e)) {
+        engine?.writeGate.value = const SyncWriteGateState.open();
+        shouldNotifyExternalChange = true;
+      }
       if (remoteClearSucceeded || remoteClearTimedOut) {
         shouldRestartEngine = false;
         await _tryDisableAutoSyncAndRefreshSchedule(backend);
