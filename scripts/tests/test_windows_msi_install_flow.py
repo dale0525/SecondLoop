@@ -252,15 +252,22 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertIn("$entryPublisher -ne $Publisher", body)
         self.assertIn("[string]::IsNullOrWhiteSpace($entryProductCode)", body)
 
-    def test_uninstall_script_residual_registry_cleanup_does_not_match_by_display_name(self) -> None:
+    def test_uninstall_script_residual_registry_cleanup_requires_product_identity(self) -> None:
         script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
         body = self._extract_function_body(script, "Remove-ResidualUninstallRegistryEntries")
+        matcher_body = self._extract_function_body(script, "Test-RegistryEntryMatchesResidualCleanup")
 
         self.assertIn("ProductCode", body)
         self.assertIn("ExpectedInstallLocation", body)
-        self.assertNotIn("ProductName", body)
-        self.assertNotIn("-ProductName $ProductName", body)
+        self.assertIn("ProductName", body)
+        self.assertIn("Publisher", body)
+        self.assertIn("Test-RegistryEntryMatchesResidualCleanup", body)
+        self.assertIn("-ProductName $ProductName", body)
+        self.assertIn("-Publisher $Publisher", body)
         self.assertNotIn("$displayName", body)
+        self.assertIn("Test-RegistryEntryHasSafeInstallLocation", matcher_body)
+        self.assertIn("Test-RegistryEntryHasLegacyProductIdentity", matcher_body)
+        self.assertIn("$hasSafeInstallLocation -and $hasLegacyProductIdentity", matcher_body)
 
     def test_uninstall_script_removes_shared_registry_parent_only_when_empty(self) -> None:
         script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
@@ -296,6 +303,14 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         )
         self.assertNotIn("Skipped msiexec.exe because no MSI product code was available", script)
         self.assertIn("Residual cleanup completed for missing package", script)
+
+    def test_uninstall_script_preserves_user_data_when_package_entry_is_missing(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("[switch]$ForceResidualUserDataCleanup", script)
+        self.assertIn("$canRemoveUserData = $selectedEntry -or $ForceResidualUserDataCleanup", script)
+        self.assertIn("if ($KeepUserData -or -not $canRemoveUserData)", script)
+        self.assertIn("$cleanupArgs.KeepUserData = $true", script)
 
     def test_uninstall_script_sanitizes_user_controlled_path_components(self) -> None:
         script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")

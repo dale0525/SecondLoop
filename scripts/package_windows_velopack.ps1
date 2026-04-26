@@ -96,6 +96,10 @@ function Build-DartDefines {
     $defines += "--dart-define=SECONDLOOP_APP_ID=$($env:SECONDLOOP_APP_ID)"
   }
 
+  if ($env:SECONDLOOP_APP_NAME) {
+    $defines += "--dart-define=SECONDLOOP_APP_NAME=$($env:SECONDLOOP_APP_NAME)"
+  }
+
   if (Test-Path Env:SECONDLOOP_RELEASE_API_ORIGIN) {
     $defines += "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN=$($env:SECONDLOOP_RELEASE_API_ORIGIN)"
   }
@@ -109,6 +113,14 @@ function Build-DartDefines {
   }
 
   return $defines
+}
+
+function Resolve-DefaultAppName([string]$ResolvedPackId) {
+  if ($ResolvedPackId -eq 'com.secondloop.secondloopdev') {
+    return 'SecondLoop Dev'
+  }
+
+  return 'SecondLoop'
 }
 
 function Resolve-PackageVersion {
@@ -356,6 +368,9 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
   Import-DotEnvLocal
   if ($PackId) {
     Set-Item -Path Env:SECONDLOOP_APP_ID -Value $PackId
+  }
+  if ([string]::IsNullOrWhiteSpace($env:SECONDLOOP_APP_NAME)) {
+    Set-Item -Path Env:SECONDLOOP_APP_NAME -Value (Resolve-DefaultAppName -ResolvedPackId $PackId)
   }
   Ensure-WindowsBuildEnvironment
 

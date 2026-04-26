@@ -7,6 +7,7 @@ param(
   [string]$AppId = '',
   [switch]$Quiet,
   [switch]$KeepUserData,
+  [switch]$ForceResidualUserDataCleanup,
   [switch]$SkipResidualCleanup
 )
 
@@ -554,14 +555,46 @@ function Test-RegistryEntryMatchesProduct {
   return $false
 }
 
+function Test-RegistryEntryMatchesResidualCleanup {
+  param(
+    [psobject]$Entry,
+    [string]$ExpectedInstallLocation,
+    [string]$ProductName,
+    [string]$Publisher,
+    [string]$ProductCode
+  )
+
+  $uninstallString = Get-StringValue $Entry.UninstallString
+  $entryProductCode = Resolve-ProductCode -Entry $Entry
+
+  if (-not [string]::IsNullOrWhiteSpace($ProductCode)) {
+    if ($Entry.PSChildName -eq $ProductCode -or
+        $entryProductCode -eq $ProductCode -or
+        $uninstallString.IndexOf($ProductCode, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+      return $true
+    }
+  }
+
+  $hasSafeInstallLocation = Test-RegistryEntryHasSafeInstallLocation -Entry $Entry -ExpectedInstallLocation $ExpectedInstallLocation
+  $hasLegacyProductIdentity = Test-RegistryEntryHasLegacyProductIdentity -Entry $Entry -ProductName $ProductName -Publisher $Publisher
+  return $hasSafeInstallLocation -and $hasLegacyProductIdentity
+}
+
 function Remove-ResidualUninstallRegistryEntries {
   param(
     [string]$ExpectedInstallLocation,
+    [string]$ProductName,
+    [string]$Publisher,
     [string]$ProductCode
   )
 
   Get-UninstallRegistryEntries | Where-Object {
-    Test-RegistryEntryMatchesProduct -Entry $_ -ExpectedInstallLocation $ExpectedInstallLocation -ProductCode $ProductCode
+    Test-RegistryEntryMatchesResidualCleanup `
+      -Entry $_ `
+      -ExpectedInstallLocation $ExpectedInstallLocation `
+      -ProductName $ProductName `
+      -Publisher $Publisher `
+      -ProductCode $ProductCode
   } | ForEach-Object {
     Remove-RegistryTreeIfExists -RegistryPath $_.PSPath
   }
@@ -573,6 +606,7 @@ function Remove-UninstallResidue {
     [string]$InstallDirName,
     [string]$ExecutableName,
     [string]$CompanyName,
+    [string]$Publisher,
     [string]$AppId,
     [string]$InstallLocation,
     [string]$ProductCode,
@@ -615,7 +649,11 @@ function Remove-UninstallResidue {
     Remove-EmptyApplicationDataParents -ApplicationDirectories $appCacheDirectories -RootDirectory $env:LOCALAPPDATA
   }
 
-  Remove-ResidualUninstallRegistryEntries -ExpectedInstallLocation $expectedInstallLocationPath -ProductCode $ProductCode
+  Remove-ResidualUninstallRegistryEntries `
+    -ExpectedInstallLocation $expectedInstallLocationPath `
+    -ProductName $ProductName `
+    -Publisher $Publisher `
+    -ProductCode $ProductCode
 
   $safeProductRegistryKeyName = Get-SafeDirectoryName -Value $ProductName
   if (-not [string]::IsNullOrWhiteSpace($safeProductRegistryKeyName)) {
@@ -681,12 +719,14 @@ if (-not $SkipResidualCleanup) {
     InstallDirName = $InstallDirName
     ExecutableName = $ExecutableName
     CompanyName = $CompanyName
+    Publisher = $Publisher
     AppId = $AppId
     InstallLocation = $selectedInstallLocation
     ProductCode = $productCode
   }
 
-  if ($KeepUserData) {
+  $canRemoveUserData = $selectedEntry -or $ForceResidualUserDataCleanup
+  if ($KeepUserData -or -not $canRemoveUserData) {
     $cleanupArgs.KeepUserData = $true
   }
 

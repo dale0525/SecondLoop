@@ -308,6 +308,8 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("if ($PackId)", script)
         self.assertIn('Set-Item -Path Env:SECONDLOOP_APP_ID -Value $PackId', script)
         self.assertIn("--dart-define=SECONDLOOP_APP_ID=", script)
+        self.assertIn("SECONDLOOP_APP_NAME", script)
+        self.assertIn("--dart-define=SECONDLOOP_APP_NAME=", script)
 
     def test_windows_velopack_script_can_forward_http_update_override_define(self) -> None:
         script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")

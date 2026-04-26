@@ -37,9 +37,17 @@ WindowsVelopackUninstallCleanupPlan buildWindowsVelopackUninstallCleanupPlan({
     appId: appId,
     productName: productName,
   );
+  final safeCompanyName = _sanitizeWindowsPathComponent(companyName);
+  final safeProductName = _sanitizeWindowsPathComponent(resolvedProductName);
+  if (safeProductName.isEmpty) {
+    return const WindowsVelopackUninstallCleanupPlan(
+      directories: [],
+      registryKeys: [],
+    );
+  }
   final relativeAppPath = _joinWindowsPathParts([
-    companyName,
-    resolvedProductName,
+    safeCompanyName,
+    safeProductName,
   ]);
 
   final directories = <String>[
@@ -56,7 +64,7 @@ WindowsVelopackUninstallCleanupPlan buildWindowsVelopackUninstallCleanupPlan({
         'HKCU',
         'Software',
         'SecondLoop',
-        resolvedProductName,
+        safeProductName,
       ]),
     ],
   );
@@ -138,6 +146,17 @@ String? _nonEmptyEnv(Map<String, String> environment, String key) {
     return null;
   }
   return value;
+}
+
+String _sanitizeWindowsPathComponent(String value) {
+  var sanitized = value
+      .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
+      .trimRight()
+      .replaceAll(RegExp(r'[.]+$'), '');
+  if (sanitized.length > 255) {
+    sanitized = sanitized.substring(0, 255);
+  }
+  return sanitized;
 }
 
 Future<void> _removeDirectoryTree(String path) async {

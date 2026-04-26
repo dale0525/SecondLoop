@@ -32,6 +32,52 @@ void main() {
     );
   });
 
+  test('cleanup plan sanitizes Windows app data directory components', () {
+    final plan = buildWindowsVelopackUninstallCleanupPlan(
+      environment: {
+        'APPDATA': r'C:\Users\dev\AppData\Roaming',
+        'LOCALAPPDATA': r'C:\Users\dev\AppData\Local',
+      },
+      appId: 'com.secondloop.secondloop',
+      productName: 'SecondLoop: Dev.',
+      companyName: r'com:secondloop\labs',
+    );
+
+    expect(
+      plan.directories,
+      containsAll([
+        r'C:\Users\dev\AppData\Roaming\com_secondloop_labs\SecondLoop_ Dev',
+        r'C:\Users\dev\AppData\Local\com_secondloop_labs\SecondLoop_ Dev',
+      ]),
+    );
+    expect(
+      plan.directories,
+      isNot(contains(contains(r'com:secondloop\labs'))),
+    );
+    expect(
+      plan.directories,
+      isNot(contains(contains('SecondLoop: Dev.'))),
+    );
+    expect(
+      plan.registryKeys,
+      contains(r'HKCU\Software\SecondLoop\SecondLoop_ Dev'),
+    );
+  });
+
+  test('cleanup plan skips paths when sanitized product name is empty', () {
+    final plan = buildWindowsVelopackUninstallCleanupPlan(
+      environment: {
+        'APPDATA': r'C:\Users\dev\AppData\Roaming',
+        'LOCALAPPDATA': r'C:\Users\dev\AppData\Local',
+      },
+      productName: '...',
+      companyName: 'com.secondloop',
+    );
+
+    expect(plan.directories, isEmpty);
+    expect(plan.registryKeys, isEmpty);
+  });
+
   test('cleanup removes directories and invokes registry cleanup best effort',
       () async {
     final tempRoot = Directory.systemTemp.createTempSync(
