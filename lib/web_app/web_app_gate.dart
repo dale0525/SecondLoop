@@ -157,8 +157,7 @@ class _WebAppGateState extends State<WebAppGate> {
     final normalizedRuntimeBaseUrl =
         runtimeBaseUrl.replaceFirst(RegExp(r'/+$'), '');
     if (storedBaseUrl.isNotEmpty &&
-        (storedBaseUrl == kWebFormalSettingsBaseUrl ||
-            normalizedStoredBaseUrl != normalizedRuntimeBaseUrl)) {
+        normalizedStoredBaseUrl != normalizedRuntimeBaseUrl) {
       await _vaultConfigStore.writeManagedVaultBaseUrl('');
     }
     await _vaultConfigStore.writeBackendType(SyncBackendType.managedVault);
