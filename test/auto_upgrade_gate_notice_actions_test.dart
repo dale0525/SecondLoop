@@ -390,6 +390,46 @@ void main() {
     expect(find.byKey(const ValueKey('update_progress_dialog')), findsNothing);
   });
 
+  testWidgets('manual update action keeps retry controls when launcher throws',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+    );
+    final service = FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(
+      tester,
+      service: service,
+      externalUriLauncher: (uri) async {
+        throw StateError('launcher_failed');
+      },
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+        find.byKey(const ValueKey('update_progress_dialog')), findsOneWidget);
+    expect(find.text('Could not open update page'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('android_update_confirm')), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+  });
+
   testWidgets('linux passive reminder installs immediately from primary action',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -593,6 +633,52 @@ void main() {
     expect(
       prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
       isNotNull,
+    );
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets('windows staged-next-launch action reports restart failure',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = FakeAutoUpdateService(
+      throwOnApplyStagedRestart: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(service.stageCalls, 1);
+    expect(service.applyStagedRestartCalls, 1);
+    expect(
+      find.textContaining('Auto update failed'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Failed to prepare update'),
+      findsNothing,
     );
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{

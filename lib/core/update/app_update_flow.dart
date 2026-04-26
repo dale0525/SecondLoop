@@ -205,6 +205,7 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
   AndroidApkDownloadProgress? _progress;
   bool _isRunning = false;
   bool _awaitingInstallPermission = false;
+  bool _applyingStagedUpdate = false;
   String? _statusMessage;
   String? _errorMessage;
   AndroidApkDownloadCancelToken? _cancelToken;
@@ -237,6 +238,7 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
   Widget build(BuildContext context) {
     final t = context.t;
     final percent = _progress?.percent;
+    final showProgress = _isRunning;
     return AlertDialog(
       key: ValueKey(widget.useAndroidApkUpdate
           ? 'android_update_dialog'
@@ -251,21 +253,23 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(_statusMessage ?? t.settings.about.messages.installStarting),
-            const SizedBox(height: 16),
-            LinearProgressIndicator(
-              key: const ValueKey('update_progress_bar'),
-              value: widget.useAndroidApkUpdate ? _progress?.fraction : null,
-            ),
-            if (widget.useAndroidApkUpdate) ...[
-              const SizedBox(height: 8),
-              Text(
-                percent == null
-                    ? t.settings.updateDialog.downloadProgressUnknown
-                    : t.settings.updateDialog.downloadProgress(
-                        percent: percent,
-                      ),
-                key: const ValueKey('android_update_progress_label'),
+            if (showProgress) ...[
+              const SizedBox(height: 16),
+              LinearProgressIndicator(
+                key: const ValueKey('update_progress_bar'),
+                value: widget.useAndroidApkUpdate ? _progress?.fraction : null,
               ),
+              if (widget.useAndroidApkUpdate) ...[
+                const SizedBox(height: 8),
+                Text(
+                  percent == null
+                      ? t.settings.updateDialog.downloadProgressUnknown
+                      : t.settings.updateDialog.downloadProgress(
+                          percent: percent,
+                        ),
+                  key: const ValueKey('android_update_progress_label'),
+                ),
+              ],
             ],
             if (_errorMessage != null) ...[
               const SizedBox(height: 16),
@@ -325,6 +329,7 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
     setState(() {
       _isRunning = true;
       _awaitingInstallPermission = false;
+      _applyingStagedUpdate = false;
       _progress = null;
       _errorMessage = null;
       _statusMessage = _initialStatusMessage(context);
@@ -347,15 +352,18 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
       setState(() {
         _isRunning = false;
         _awaitingInstallPermission = true;
+        _applyingStagedUpdate = false;
         _errorMessage = context.t.settings.updateDialog.permissionRequired;
         _statusMessage = context.t.settings.updateDialog.permissionRequired;
       });
     } catch (error) {
       if (!mounted) return;
+      final errorMessage = _buildErrorMessage(error);
       setState(() {
         _isRunning = false;
         _awaitingInstallPermission = false;
-        _errorMessage = _buildErrorMessage(error);
+        _applyingStagedUpdate = false;
+        _errorMessage = errorMessage;
       });
     } finally {
       if (identical(_cancelToken, cancelToken)) {
@@ -402,6 +410,7 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
       await widget.updateService.stageUpdateForNextLaunch(update);
       if (!mounted) return;
       setState(() {
+        _applyingStagedUpdate = true;
         _statusMessage = context.t.settings.updateDialog.installing;
       });
       await widget.updateService.applyStagedUpdateAndRestart();
@@ -441,6 +450,9 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
       return context.t.settings.updateDialog.downloadFailed;
     }
     if (widget.update.canStageForNextLaunch) {
+      if (_applyingStagedUpdate) {
+        return context.t.settings.about.messages.installFailed(error: '$error');
+      }
       return context.t.settings.about.messages.stageFailed(error: '$error');
     }
     if (widget.update.canSeamlessInstall) {
@@ -465,9 +477,9 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
     try {
       final launcher = widget.externalUriLauncher;
       if (launcher != null) {
-        return launcher(widget.update.releasePageUri);
+        return await launcher(widget.update.releasePageUri);
       }
-      return launchUrl(
+      return await launchUrl(
         widget.update.releasePageUri,
         mode: LaunchMode.externalApplication,
       );

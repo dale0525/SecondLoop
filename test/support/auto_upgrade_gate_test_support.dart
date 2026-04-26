@@ -16,6 +16,7 @@ class FakeAutoUpdateService extends AppUpdateService {
         const PendingUpdateStartupResult.noPendingUpdate(),
     this.throwOnInstall = false,
     this.throwOnStage = false,
+    this.throwOnApplyStagedRestart = false,
     this.releaseRepoValue = 'dale0525/SecondLoop',
     this.canStageSilentlyForNextLaunchValue = false,
     this.installCompleter,
@@ -28,6 +29,7 @@ class FakeAutoUpdateService extends AppUpdateService {
   final PendingUpdateStartupResult applyPendingResult;
   final bool throwOnInstall;
   final bool throwOnStage;
+  final bool throwOnApplyStagedRestart;
   final String releaseRepoValue;
   final bool canStageSilentlyForNextLaunchValue;
   final Completer<void>? installCompleter;
@@ -101,6 +103,9 @@ class FakeAutoUpdateService extends AppUpdateService {
     final pending = applyStagedRestartCompleter;
     if (pending != null) {
       await pending.future;
+    }
+    if (throwOnApplyStagedRestart) {
+      throw StateError('apply_staged_restart_failed');
     }
   }
 }

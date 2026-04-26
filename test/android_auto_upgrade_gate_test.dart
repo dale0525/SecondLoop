@@ -430,6 +430,11 @@ void main() {
       await settleAndroidUpdateFlow(tester);
 
       expect(find.text('Could not open update page'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('android_update_progress_label')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('update_progress_bar')), findsNothing);
       expect(find.byType(AlertDialog), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
