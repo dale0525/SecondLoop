@@ -2,7 +2,11 @@ param(
   [string]$ProductName = 'SecondLoop Dev',
   [string]$InstallDirName = 'SecondLoop Dev',
   [string]$ExecutableName = 'secondloop.exe',
-  [switch]$Quiet
+  [string]$CompanyName = 'com.secondloop',
+  [string]$AppId = '',
+  [switch]$Quiet,
+  [switch]$KeepUserData,
+  [switch]$SkipResidualCleanup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +19,69 @@ function Get-ExpectedInstallLocation {
   }
 
   return (Join-Path $env:LOCALAPPDATA ("Programs\$DirectoryName"))
+}
+
+function Get-DefaultAppId {
+  param([string]$ResolvedProductName)
+
+  if ($ResolvedProductName -eq 'SecondLoop Dev') {
+    return 'com.secondloop.secondloopdev'
+  }
+
+  return 'com.secondloop.secondloop'
+}
+
+function Get-EffectiveAppId {
+  param(
+    [string]$ConfiguredAppId,
+    [string]$ResolvedProductName
+  )
+
+  if (-not [string]::IsNullOrWhiteSpace($ConfiguredAppId)) {
+    return $ConfiguredAppId.Trim()
+  }
+
+  return Get-DefaultAppId -ResolvedProductName $ResolvedProductName
+}
+
+function Get-SafeDirectoryName {
+  param([string]$Value)
+
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return ''
+  }
+
+  $safeValue = $Value -replace '[<>:"/\\|?*]', '_'
+  $safeValue = $safeValue.TrimEnd()
+  $safeValue = $safeValue -replace '[.]+$', ''
+  if ($safeValue.Length -gt 255) {
+    $safeValue = $safeValue.Substring(0, 255)
+  }
+
+  return $safeValue
+}
+
+function Get-AppStorageRelativePath {
+  param(
+    [string]$ResolvedProductName,
+    [string]$ResolvedCompanyName
+  )
+
+  if ($ResolvedCompanyName -eq 'com.secondloop') {
+    return "com.secondloop\$ResolvedProductName"
+  }
+
+  $safeProductName = Get-SafeDirectoryName -Value $ResolvedProductName
+  if ([string]::IsNullOrWhiteSpace($safeProductName)) {
+    return ''
+  }
+
+  $safeCompanyName = Get-SafeDirectoryName -Value $ResolvedCompanyName
+  if ([string]::IsNullOrWhiteSpace($safeCompanyName)) {
+    return $safeProductName
+  }
+
+  return (Join-Path $safeCompanyName $safeProductName)
 }
 
 function Normalize-PathValue {
@@ -70,6 +137,279 @@ function Resolve-ProductCode {
   return ''
 }
 
+function Add-UniquePath {
+  param(
+    [System.Collections.Generic.List[string]]$Paths,
+    [string]$Path
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Path)) {
+    return
+  }
+
+  $normalizedPath = Normalize-PathValue $Path
+  $alreadyPresent = $Paths | Where-Object { (Normalize-PathValue $_) -eq $normalizedPath } | Select-Object -First 1
+  if (-not $alreadyPresent) {
+    $Paths.Add($Path) | Out-Null
+  }
+}
+
+function Get-InstallResidueDirectories {
+  param(
+    [string]$InstallDirName,
+    [string]$ProductName,
+    [string]$AppId,
+    [string]$InstallLocation
+  )
+
+  $directories = New-Object System.Collections.Generic.List[string]
+
+  Add-UniquePath -Paths $directories -Path $InstallLocation
+
+  if ($env:LOCALAPPDATA) {
+    Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA "Programs\$InstallDirName")
+    Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $ProductName)
+
+    if (-not [string]::IsNullOrWhiteSpace($AppId)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $AppId)
+    }
+  }
+
+  return @($directories)
+}
+
+function Get-ShortcutResiduePaths {
+  param([string]$ProductName)
+
+  $paths = New-Object System.Collections.Generic.List[string]
+
+  if ($env:APPDATA) {
+    Add-UniquePath -Paths $paths -Path (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$ProductName")
+    Add-UniquePath -Paths $paths -Path (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$ProductName.lnk")
+  }
+
+  $desktopDir = [Environment]::GetFolderPath('DesktopDirectory')
+  if (-not [string]::IsNullOrWhiteSpace($desktopDir)) {
+    Add-UniquePath -Paths $paths -Path (Join-Path $desktopDir "$ProductName.lnk")
+  }
+
+  return @($paths)
+}
+
+function Get-ApplicationDataDirectories {
+  param(
+    [string]$ProductName,
+    [string]$CompanyName,
+    [string]$AppId
+  )
+
+  $directories = New-Object System.Collections.Generic.List[string]
+  $relativeAppPath = Get-AppStorageRelativePath -ResolvedProductName $ProductName -ResolvedCompanyName $CompanyName
+
+  if ($env:APPDATA) {
+    Add-UniquePath -Paths $directories -Path (Join-Path $env:APPDATA $relativeAppPath)
+    if (-not [string]::IsNullOrWhiteSpace($AppId)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:APPDATA $AppId)
+    }
+  }
+
+  return @($directories)
+}
+
+function Get-ApplicationCacheDirectories {
+  param(
+    [string]$ProductName,
+    [string]$CompanyName,
+    [string]$AppId
+  )
+
+  $directories = New-Object System.Collections.Generic.List[string]
+  $relativeAppPath = Get-AppStorageRelativePath -ResolvedProductName $ProductName -ResolvedCompanyName $CompanyName
+
+  if ($env:LOCALAPPDATA) {
+    Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $relativeAppPath)
+    if (-not [string]::IsNullOrWhiteSpace($AppId)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $AppId)
+    }
+  }
+
+  return @($directories)
+}
+
+function Get-ApplicationStateFiles {
+  param([string[]]$AppDataDirectories)
+
+  $stateFiles = New-Object System.Collections.Generic.List[string]
+  foreach ($appDataDirectory in $AppDataDirectories) {
+    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'shared_preferences.json')
+    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'flutter_secure_storage.dat')
+    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'secondloop.sqlite3')
+    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'secondloop.sqlite3-wal')
+    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'secondloop.sqlite3-shm')
+  }
+
+  return @($stateFiles)
+}
+
+function Remove-FileSystemTree {
+  param([string]$Path)
+
+  if ([string]::IsNullOrWhiteSpace($Path)) {
+    return
+  }
+
+  for ($attempt = 1; $attempt -le 3; $attempt += 1) {
+    try {
+      if (Test-Path -LiteralPath $Path -PathType Container) {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        Write-Host "Removed directory: $Path"
+        return
+      }
+
+      if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+        Write-Host "Removed file: $Path"
+        return
+      }
+
+      return
+    } catch {
+      if ($attempt -ge 3) {
+        Write-Warning "Failed to remove '$Path': $($_.Exception.Message)"
+        return
+      }
+
+      Start-Sleep -Milliseconds 500
+    }
+  }
+}
+
+function Remove-RegistryTreeIfExists {
+  param([string]$RegistryPath)
+
+  if ([string]::IsNullOrWhiteSpace($RegistryPath)) {
+    return
+  }
+
+  try {
+    if (Test-Path -Path $RegistryPath) {
+      Remove-Item -Path $RegistryPath -Recurse -Force -ErrorAction Stop
+      Write-Host "Removed registry key: $RegistryPath"
+    }
+  } catch {
+    Write-Warning "Failed to remove registry key '$RegistryPath': $($_.Exception.Message)"
+  }
+}
+
+function Test-RegistryEntryMatchesProduct {
+  param(
+    [psobject]$Entry,
+    [string]$ProductName,
+    [string]$ExpectedInstallLocation,
+    [string]$ProductCode
+  )
+
+  $displayName = Get-StringValue $Entry.DisplayName
+  $installLocation = Normalize-PathValue (Get-StringValue $Entry.InstallLocation)
+  $uninstallString = Get-StringValue $Entry.UninstallString
+  $entryProductCode = Resolve-ProductCode -Entry $Entry
+
+  if (-not [string]::IsNullOrWhiteSpace($ProductCode)) {
+    if ($Entry.PSChildName -eq $ProductCode -or
+        $entryProductCode -eq $ProductCode -or
+        $uninstallString.IndexOf($ProductCode, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+      return $true
+    }
+  }
+
+  if ($displayName -eq $ProductName) {
+    return $true
+  }
+
+  if ($ExpectedInstallLocation -and $installLocation -eq $ExpectedInstallLocation) {
+    return $true
+  }
+
+  return $false
+}
+
+function Remove-ResidualUninstallRegistryEntries {
+  param(
+    [string]$ProductName,
+    [string]$ExpectedInstallLocation,
+    [string]$ProductCode
+  )
+
+  Get-UninstallRegistryEntries | Where-Object {
+    Test-RegistryEntryMatchesProduct -Entry $_ -ProductName $ProductName -ExpectedInstallLocation $ExpectedInstallLocation -ProductCode $ProductCode
+  } | ForEach-Object {
+    Remove-RegistryTreeIfExists -RegistryPath $_.PSPath
+  }
+}
+
+function Test-AnySecondLoopInstallRemaining {
+  $remainingInstall = Get-UninstallRegistryEntries | Where-Object {
+    $displayName = Get-StringValue $_.DisplayName
+    $publisher = Get-StringValue $_.Publisher
+    $installLocation = Get-StringValue $_.InstallLocation
+
+    $displayName.StartsWith('SecondLoop', [System.StringComparison]::OrdinalIgnoreCase) -or
+      $publisher.StartsWith('SecondLoop', [System.StringComparison]::OrdinalIgnoreCase) -or
+      $installLocation.IndexOf('\SecondLoop', [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+  } | Select-Object -First 1
+
+  return ($null -ne $remainingInstall)
+}
+
+function Remove-UninstallResidue {
+  param(
+    [string]$ProductName,
+    [string]$InstallDirName,
+    [string]$ExecutableName,
+    [string]$CompanyName,
+    [string]$AppId,
+    [string]$InstallLocation,
+    [string]$ProductCode,
+    [switch]$KeepUserData
+  )
+
+  $effectiveAppId = Get-EffectiveAppId -ConfiguredAppId $AppId -ResolvedProductName $ProductName
+
+  $pathsToRemove = New-Object System.Collections.Generic.List[string]
+  foreach ($path in (Get-ShortcutResiduePaths -ProductName $ProductName)) {
+    Add-UniquePath -Paths $pathsToRemove -Path $path
+  }
+  foreach ($path in (Get-InstallResidueDirectories -InstallDirName $InstallDirName -ProductName $ProductName -AppId $effectiveAppId -InstallLocation $InstallLocation)) {
+    Add-UniquePath -Paths $pathsToRemove -Path $path
+  }
+
+  if (-not $KeepUserData) {
+    $appDataDirectories = @(Get-ApplicationDataDirectories -ProductName $ProductName -CompanyName $CompanyName -AppId $effectiveAppId)
+    $appCacheDirectories = @(Get-ApplicationCacheDirectories -ProductName $ProductName -CompanyName $CompanyName -AppId $effectiveAppId)
+    foreach ($path in (Get-ApplicationStateFiles -AppDataDirectories $appDataDirectories)) {
+      Add-UniquePath -Paths $pathsToRemove -Path $path
+    }
+    foreach ($path in $appDataDirectories) {
+      Add-UniquePath -Paths $pathsToRemove -Path $path
+    }
+    foreach ($path in $appCacheDirectories) {
+      Add-UniquePath -Paths $pathsToRemove -Path $path
+    }
+  }
+
+  foreach ($path in $pathsToRemove) {
+    Remove-FileSystemTree -Path $path
+  }
+
+  $expectedInstallLocation = Normalize-PathValue (Get-ExpectedInstallLocation -DirectoryName $InstallDirName)
+  Remove-ResidualUninstallRegistryEntries -ProductName $ProductName -ExpectedInstallLocation $expectedInstallLocation -ProductCode $ProductCode
+
+  if (-not (Test-AnySecondLoopInstallRemaining)) {
+    Remove-RegistryTreeIfExists -RegistryPath 'HKCU:\Software\SecondLoop\Installer'
+    Remove-RegistryTreeIfExists -RegistryPath 'HKCU:\Software\SecondLoop'
+  }
+}
+
 $expectedInstallLocation = Normalize-PathValue (Get-ExpectedInstallLocation -DirectoryName $InstallDirName)
 
 $matchingEntries = @(
@@ -84,14 +424,23 @@ $matchingEntries = @(
   }
 )
 
-if ($matchingEntries.Count -eq 0) {
-  throw "Installed MSI entry not found for ProductName='$ProductName' InstallDirName='$InstallDirName'."
+$selectedEntry = $null
+$productCode = ''
+$selectedInstallLocation = Get-ExpectedInstallLocation -DirectoryName $InstallDirName
+
+if ($matchingEntries.Count -gt 0) {
+  $selectedEntry = $matchingEntries | Select-Object -First 1
+  $productCode = Resolve-ProductCode -Entry $selectedEntry
+  $entryInstallLocation = Get-StringValue $selectedEntry.InstallLocation
+  if (-not [string]::IsNullOrWhiteSpace($entryInstallLocation)) {
+    $selectedInstallLocation = $entryInstallLocation
+  }
+} else {
+  Write-Warning "Installed MSI entry not found for ProductName='$ProductName' InstallDirName='$InstallDirName'. Running residual cleanup only."
 }
 
-$selectedEntry = $matchingEntries | Select-Object -First 1
-$productCode = Resolve-ProductCode -Entry $selectedEntry
-if ([string]::IsNullOrWhiteSpace($productCode)) {
-  throw "Unable to resolve MSI product code for '$ProductName'. UninstallString=$($selectedEntry.UninstallString)"
+if ($selectedEntry -and [string]::IsNullOrWhiteSpace($productCode)) {
+  Write-Warning "Unable to resolve MSI product code for '$ProductName'. UninstallString=$($selectedEntry.UninstallString). Running residual cleanup only."
 }
 
 & (Join-Path $PSScriptRoot 'stop_windows_installed_app.ps1') -InstallDirName $InstallDirName -ExecutableName $ExecutableName -TerminateIfNeeded
@@ -99,16 +448,38 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-$arguments = @('/x', $productCode)
-if ($Quiet) {
-  $arguments += '/qn'
-  $arguments += '/norestart'
+if (-not [string]::IsNullOrWhiteSpace($productCode)) {
+  $arguments = @('/x', $productCode)
+  if ($Quiet) {
+    $arguments += '/qn'
+    $arguments += '/norestart'
+  }
+
+  Write-Host ('Running: msiexec.exe ' + ($arguments -join ' '))
+  $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru -Wait
+  if ($process.ExitCode -notin @(0, 1605, 1614, 1641, 3010)) {
+    throw "MSI uninstall failed with exit code $($process.ExitCode)."
+  }
+} else {
+  Write-Host "Skipped msiexec.exe because no MSI product code was available for '$ProductName'."
 }
 
-Write-Host ('Running: msiexec.exe ' + ($arguments -join ' '))
-$process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru -Wait
-if ($process.ExitCode -notin @(0, 1605, 1614, 1641, 3010)) {
-  throw "MSI uninstall failed with exit code $($process.ExitCode)."
+if (-not $SkipResidualCleanup) {
+  $cleanupArgs = @{
+    ProductName = $ProductName
+    InstallDirName = $InstallDirName
+    ExecutableName = $ExecutableName
+    CompanyName = $CompanyName
+    AppId = $AppId
+    InstallLocation = $selectedInstallLocation
+    ProductCode = $productCode
+  }
+
+  if ($KeepUserData) {
+    $cleanupArgs.KeepUserData = $true
+  }
+
+  Remove-UninstallResidue @cleanupArgs
 }
 
 Write-Host "Uninstalled package: $ProductName ($productCode)"

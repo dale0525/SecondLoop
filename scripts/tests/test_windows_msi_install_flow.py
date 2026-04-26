@@ -54,7 +54,7 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         script = self._read_repo_file("scripts/create_windows_msi.ps1")
 
         self.assertIn("function Convert-HarvestToPerUserCompliant", script)
-        self.assertIn("Software\\SecondLoop\\Installer\\Components", script)
+        self.assertIn("$componentRegistryKey = \"$ProductRegistryKey\\Installer\\Components\"", script)
         self.assertIn("RemoveFolder", script)
         self.assertIn("KeyPath', 'no'", script)
         self.assertIn("'-sice:ICE60'", script)
@@ -78,6 +78,41 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
             '<MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of [ProductName] is already installed." />',
             script,
         )
+
+    def test_create_windows_msi_cleans_user_data_and_cache_on_standard_uninstall(self) -> None:
+        script = self._read_repo_file("scripts/create_windows_msi.ps1")
+
+        self.assertIn("SECONDLOOP_APPDATA_CLEANUP_PATH", script)
+        self.assertIn("SECONDLOOP_LOCALAPPDATA_CLEANUP_PATH", script)
+        self.assertIn('[AppDataFolder]__APP_STORAGE_RELATIVE_PATH__', script)
+        self.assertIn('[LocalAppDataFolder]__APP_STORAGE_RELATIVE_PATH__', script)
+        self.assertIn('<RegistrySearch Id="SecondLoopAppDataCleanupPathSearch"', script)
+        self.assertIn('<RegistrySearch Id="SecondLoopLocalAppDataCleanupPathSearch"', script)
+        self.assertIn(
+            '<RegistryValue Root="HKCU" Key="__PRODUCT_REG_KEY__\\CleanupPaths" Name="AppData" Type="string" Value="[AppDataFolder]__APP_STORAGE_RELATIVE_PATH__" />',
+            script,
+        )
+        self.assertIn(
+            '<RegistryValue Root="HKCU" Key="__PRODUCT_REG_KEY__\\CleanupPaths" Name="LocalAppData" Type="string" Value="[LocalAppDataFolder]__APP_STORAGE_RELATIVE_PATH__" />',
+            script,
+        )
+        self.assertIn(
+            '<util:RemoveFolderEx Id="RemoveSecondLoopAppData" On="uninstall" Property="SECONDLOOP_APPDATA_CLEANUP_PATH" />',
+            script,
+        )
+        self.assertIn(
+            '<util:RemoveFolderEx Id="RemoveSecondLoopLocalAppData" On="uninstall" Property="SECONDLOOP_LOCALAPPDATA_CLEANUP_PATH" />',
+            script,
+        )
+
+    def test_create_windows_msi_uses_product_specific_registry_cleanup_keys(self) -> None:
+        script = self._read_repo_file("scripts/create_windows_msi.ps1")
+
+        self.assertIn("$productRegistryKey = \"Software\\SecondLoop\\$ProductName\"", script)
+        self.assertIn("ProductRegistryKey", script)
+        self.assertIn("$componentRegistryKey = \"$ProductRegistryKey\\Installer\\Components\"", script)
+        self.assertIn('<RemoveRegistryKey Root="HKCU" Key="__PRODUCT_REG_KEY__" Action="removeOnUninstall" />', script)
+        self.assertNotIn("$shortcutRegKey = 'Software\\SecondLoop'", script)
 
     def test_install_script_can_disable_msi_auto_launch_for_manual_launch_mode(self) -> None:
         script = self._read_repo_file("scripts/install_windows_msi.ps1")
@@ -121,6 +156,32 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertIn("Programs\\$DirectoryName\\$FileName", helper_script)
         self.assertIn("CloseMainWindow", helper_script)
         self.assertIn("Stop-Process -Id", helper_script)
+
+    def test_uninstall_script_removes_residual_files_shortcuts_and_user_data(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("[switch]$KeepUserData", script)
+        self.assertIn("function Remove-UninstallResidue", script)
+        self.assertIn("Remove-UninstallResidue @cleanupArgs", script)
+        self.assertIn("function Get-InstallResidueDirectories", script)
+        self.assertIn("Programs\\$InstallDirName", script)
+        self.assertIn("Start Menu\\Programs\\$ProductName", script)
+        self.assertIn("com.secondloop\\$ResolvedProductName", script)
+        self.assertIn("shared_preferences.json", script)
+        self.assertIn("flutter_secure_storage.dat", script)
+        self.assertIn("if (-not $KeepUserData)", script)
+
+    def test_uninstall_script_removes_residual_registry_entries_safely(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("[string]$CompanyName = 'com.secondloop'", script)
+        self.assertIn("[string]$AppId = ''", script)
+        self.assertIn("function Remove-ResidualUninstallRegistryEntries", script)
+        self.assertIn("function Test-AnySecondLoopInstallRemaining", script)
+        self.assertIn("Remove-RegistryTreeIfExists -RegistryPath 'HKCU:\\Software\\SecondLoop\\Installer'", script)
+        self.assertIn("Remove-RegistryTreeIfExists -RegistryPath 'HKCU:\\Software\\SecondLoop'", script)
+        self.assertIn("ProductCode", script)
+        self.assertIn("InstallLocation", script)
 
     def test_run_windows_script_uses_local_fvm_runner_for_flutter_and_dart_commands(self) -> None:
         script = self._read_repo_file("scripts/run_windows.ps1")
