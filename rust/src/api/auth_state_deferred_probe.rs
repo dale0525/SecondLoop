@@ -6,6 +6,8 @@ use anyhow::Result;
 use rusqlite::{params, Connection, OpenFlags};
 
 const MIN_ENCRYPTED_BLOB_LEN: usize = 24 + 16;
+const MAX_PROBE_DB_BLOB_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_TOTAL_PROBE_DB_BLOB_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_PROBE_FILE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_TOTAL_PROBE_FILE_BYTES: u64 = 256 * 1024 * 1024;
 
@@ -137,7 +139,6 @@ const EXTERNAL_ROW_AAD_PROBES: &[RowAadProbe] = &[
 pub(super) enum MissingAuthKeyProbe {
     NoEncryptedData,
     ValidKey,
-    InvalidKey,
     UnableToValidate,
 }
 
@@ -158,7 +159,6 @@ struct RowAadProbe {
 enum ProbeMatch {
     NoEncryptedData,
     ValidKey,
-    InvalidKey,
     UnableToValidate,
     Indeterminate,
 }
@@ -175,34 +175,25 @@ impl ProbeAccumulator {
         match result {
             ProbeMatch::NoEncryptedData => None,
             ProbeMatch::ValidKey => {
-                if self.found_unverifiable {
-                    Some(ProbeMatch::InvalidKey)
-                } else {
-                    self.found_valid = true;
-                    None
-                }
+                self.found_valid = true;
+                None
             }
             ProbeMatch::UnableToValidate => {
-                if self.found_valid {
-                    Some(ProbeMatch::InvalidKey)
-                } else {
-                    self.found_unverifiable = true;
-                    None
-                }
+                self.found_unverifiable = true;
+                Some(ProbeMatch::UnableToValidate)
             }
             ProbeMatch::Indeterminate => {
                 self.found_indeterminate = true;
-                None
+                Some(ProbeMatch::UnableToValidate)
             }
-            ProbeMatch::InvalidKey => Some(ProbeMatch::InvalidKey),
         }
     }
 
     fn finish(self) -> ProbeMatch {
-        if self.found_valid && !self.found_indeterminate {
-            ProbeMatch::ValidKey
-        } else if self.found_unverifiable || self.found_indeterminate {
+        if self.found_unverifiable || self.found_indeterminate {
             ProbeMatch::UnableToValidate
+        } else if self.found_valid {
+            ProbeMatch::ValidKey
         } else {
             ProbeMatch::NoEncryptedData
         }
@@ -241,7 +232,6 @@ fn missing_auth_key_probe_result(result: ProbeMatch) -> MissingAuthKeyProbe {
     match result {
         ProbeMatch::NoEncryptedData => MissingAuthKeyProbe::NoEncryptedData,
         ProbeMatch::ValidKey => MissingAuthKeyProbe::ValidKey,
-        ProbeMatch::InvalidKey => MissingAuthKeyProbe::InvalidKey,
         ProbeMatch::UnableToValidate => MissingAuthKeyProbe::UnableToValidate,
         ProbeMatch::Indeterminate => MissingAuthKeyProbe::UnableToValidate,
     }
@@ -490,7 +480,7 @@ where
         .join(", ");
     let sql = format!(
         r#"
-SELECT {select_ids}, {quoted_column}
+SELECT {select_ids}, length({quoted_column}), {quoted_column}
 FROM {quoted_table}
 WHERE typeof({quoted_column}) = 'blob'
   AND length({quoted_column}) >= ?1
@@ -499,10 +489,31 @@ ORDER BY rowid
     );
     let mut stmt = conn.prepare(&sql)?;
     let mut rows = stmt.query(params![MIN_ENCRYPTED_BLOB_LEN as i64])?;
-    let blob_index = id_columns.len();
+    let len_index = id_columns.len();
+    let blob_index = id_columns.len() + 1;
     let mut accumulator = ProbeAccumulator::default();
+    let mut total_blob_bytes = 0u64;
     while let Some(row) = rows.next()? {
+        let blob_len = nonnegative_i64_to_u64(row.get(len_index)?);
+        if blob_len > MAX_PROBE_DB_BLOB_BYTES
+            || total_blob_bytes.saturating_add(blob_len) > MAX_TOTAL_PROBE_DB_BLOB_BYTES
+        {
+            if let Some(result) = accumulator.add(ProbeMatch::Indeterminate) {
+                return Ok(result);
+            }
+            continue;
+        }
         let blob: Vec<u8> = row.get(blob_index)?;
+        let bytes_len = blob.len() as u64;
+        if bytes_len > MAX_PROBE_DB_BLOB_BYTES
+            || total_blob_bytes.saturating_add(bytes_len) > MAX_TOTAL_PROBE_DB_BLOB_BYTES
+        {
+            if let Some(result) = accumulator.add(ProbeMatch::Indeterminate) {
+                return Ok(result);
+            }
+            continue;
+        }
+        total_blob_bytes += bytes_len;
         let aad = aad_for_row(row)?;
         if let Some(result) = accumulator.add(match probe_blob_matches_key(key, &blob, &aad)? {
             Some(true) => ProbeMatch::ValidKey,
@@ -603,14 +614,20 @@ fn read_app_relative_file(
         return Ok(ProbeFileRead::Indeterminate);
     }
     let full_path = app_dir.join(relative_path);
-    let metadata = match fs::metadata(&full_path) {
+    let metadata = match fs::symlink_metadata(&full_path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(ProbeFileRead::NoEncryptedData);
         }
         Err(error) => return Err(error.into()),
     };
+    if metadata.file_type().is_symlink() {
+        return Ok(ProbeFileRead::Indeterminate);
+    }
     if !metadata.is_file() {
+        return Ok(ProbeFileRead::Indeterminate);
+    }
+    if !canonical_path_stays_in_app_dir(app_dir, &full_path)? {
         return Ok(ProbeFileRead::Indeterminate);
     }
     let file_len = metadata.len();
@@ -631,6 +648,16 @@ fn read_app_relative_file(
     }
     *total_file_bytes += bytes_len;
     Ok(ProbeFileRead::Blob(bytes))
+}
+
+fn nonnegative_i64_to_u64(value: i64) -> u64 {
+    u64::try_from(value).unwrap_or(u64::MAX)
+}
+
+fn canonical_path_stays_in_app_dir(app_dir: &Path, path: &Path) -> Result<bool> {
+    let canonical_app_dir = app_dir.canonicalize()?;
+    let canonical_path = path.canonicalize()?;
+    Ok(canonical_path.starts_with(canonical_app_dir))
 }
 
 fn is_safe_app_relative_path(path: &Path) -> bool {

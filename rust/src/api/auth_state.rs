@@ -130,7 +130,6 @@ pub(crate) fn validate_reset_vault_data_access(app_dir: &Path, key: &[u8; 32]) -
     } else if vault_has_user_data_without_auth(app_dir)? {
         match missing_auth_key_probe(app_dir, key)? {
             MissingAuthKeyProbe::ValidKey => return Ok(()),
-            MissingAuthKeyProbe::InvalidKey => return Err(anyhow!("invalid key")),
             MissingAuthKeyProbe::UnableToValidate => {
                 return Err(anyhow!(
                     "unable to validate key against existing vault data"
@@ -346,7 +345,9 @@ mod tests {
 
         let error = result.expect_err("mixed deferred keys should be rejected");
         assert!(
-            error.to_string().contains("invalid key"),
+            error
+                .to_string()
+                .contains("unable to validate key against existing vault data"),
             "unexpected error: {error}"
         );
         let conn = db::open(dir.path()).expect("reopen db");

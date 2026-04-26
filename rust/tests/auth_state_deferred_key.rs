@@ -2,6 +2,8 @@ use std::fs;
 
 use secondloop_rust::{api::core, crypto, db};
 
+const OVERSIZED_DB_PROBE_BYTES: usize = 17 * 1024 * 1024;
+
 fn insert_attachment_row(
     conn: &rusqlite::Connection,
     sha256: &str,
@@ -42,7 +44,9 @@ fn reset_rejects_cross_table_mixed_deferred_keys() {
 
     let error = result.expect_err("mixed table keys should be rejected");
     assert!(
-        error.to_string().contains("invalid key"),
+        error
+            .to_string()
+            .contains("unable to validate key against existing vault data"),
         "unexpected error: {error}"
     );
     let conn = db::open(dir.path()).expect("reopen db");
@@ -73,7 +77,9 @@ fn reset_rejects_same_table_mixed_deferred_key_after_probe_window() {
 
     let error = result.expect_err("mixed keys after the old probe window should be rejected");
     assert!(
-        error.to_string().contains("invalid key"),
+        error
+            .to_string()
+            .contains("unable to validate key against existing vault data"),
         "unexpected error: {error}"
     );
     let conn = db::open(dir.path()).expect("reopen db");
@@ -81,6 +87,121 @@ fn reset_rejects_same_table_mixed_deferred_key_after_probe_window() {
         .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
         .expect("count conversations");
     assert_eq!(count, 65);
+}
+
+#[test]
+fn reset_rejects_valid_plus_corrupt_deferred_data_without_reporting_invalid_key() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open db");
+    let key = [3u8; 32];
+    let conversation = db::create_conversation(&conn, &key, "valid").expect("seed conversation");
+    let corrupt_blob = vec![0xA5u8; 48];
+    conn.execute(
+        r#"INSERT INTO messages(id, conversation_id, role, content, created_at)
+           VALUES ('corrupt-message', ?1, 'user', ?2, 1)"#,
+        rusqlite::params![conversation.id, corrupt_blob],
+    )
+    .expect("seed corrupt message");
+    drop(conn);
+
+    let result = core::db_reset_vault_data_preserving_llm_profiles(
+        dir.path().to_string_lossy().into_owned(),
+        key.to_vec(),
+    );
+
+    let error = result.expect_err("corrupt mixed data should fail closed");
+    assert!(
+        error
+            .to_string()
+            .contains("unable to validate key against existing vault data"),
+        "unexpected error: {error}"
+    );
+    assert!(
+        !error.to_string().contains("invalid key"),
+        "corrupt data should not be reported as a definitive invalid key: {error}"
+    );
+}
+
+#[test]
+fn reset_rejects_oversized_db_probe_without_reporting_invalid_key() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open db");
+    let key = [4u8; 32];
+    let conversation = db::create_conversation(&conn, &key, "valid").expect("seed conversation");
+    let oversized_plaintext = vec![b'x'; OVERSIZED_DB_PROBE_BYTES];
+    let oversized_blob = crypto::encrypt_bytes(&key, &oversized_plaintext, b"message.content")
+        .expect("encrypt oversized message");
+    conn.execute(
+        r#"INSERT INTO messages(id, conversation_id, role, content, created_at)
+           VALUES ('oversized-message', ?1, 'user', ?2, 1)"#,
+        rusqlite::params![conversation.id, oversized_blob],
+    )
+    .expect("seed oversized message");
+    drop(conn);
+
+    let result = core::db_reset_vault_data_preserving_llm_profiles(
+        dir.path().to_string_lossy().into_owned(),
+        key.to_vec(),
+    );
+
+    let error = result.expect_err("oversized DB probe should fail closed");
+    assert!(
+        error
+            .to_string()
+            .contains("unable to validate key against existing vault data"),
+        "unexpected error: {error}"
+    );
+    assert!(
+        !error.to_string().contains("invalid key"),
+        "oversized DB probe should not be reported as a definitive invalid key: {error}"
+    );
+    let conn = db::open(dir.path()).expect("reopen db");
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))
+        .expect("count messages");
+    assert_eq!(count, 1);
+}
+
+#[test]
+#[cfg(unix)]
+fn reset_rejects_symlink_attachment_probe_without_following_link() {
+    use std::os::unix::fs::symlink;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let outside = tempfile::tempdir().expect("outside tempdir");
+    let conn = db::open(dir.path()).expect("open db");
+    let key = [5u8; 32];
+    let sha256 = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    let stored_path = format!("attachments/{sha256}.bin");
+    let link_path = dir.path().join(&stored_path);
+    fs::create_dir_all(link_path.parent().expect("attachment parent"))
+        .expect("create attachment dir");
+    let outside_path = outside.path().join("target.bin");
+    let aad = format!("attachment.bytes:{sha256}");
+    let blob = crypto::encrypt_bytes(&key, b"outside attachment", aad.as_bytes())
+        .expect("encrypt outside attachment");
+    fs::write(&outside_path, blob).expect("write outside attachment");
+    symlink(&outside_path, &link_path).expect("create attachment symlink");
+    insert_attachment_row(&conn, sha256, &stored_path, 18, 1);
+    drop(conn);
+
+    let result = core::db_reset_vault_data_preserving_llm_profiles(
+        dir.path().to_string_lossy().into_owned(),
+        key.to_vec(),
+    );
+
+    let error = result.expect_err("symlink attachment probe should fail closed");
+    assert!(
+        error
+            .to_string()
+            .contains("unable to validate key against existing vault data"),
+        "unexpected error: {error}"
+    );
+    let conn = db::open(dir.path()).expect("reopen db");
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM attachments", [], |row| row.get(0))
+        .expect("count attachments");
+    assert_eq!(count, 1);
 }
 
 #[test]
