@@ -151,7 +151,14 @@ class _WebAppGateState extends State<WebAppGate> {
   Future<void> _primeWebFormalSyncDefaults() async {
     final storedBaseUrl =
         (await _vaultConfigStore.readManagedVaultBaseUrl())?.trim() ?? '';
-    if (storedBaseUrl == kWebFormalSettingsBaseUrl) {
+    final runtimeBaseUrl = widget.managedVaultBaseUrl.trim();
+    final normalizedStoredBaseUrl =
+        storedBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final normalizedRuntimeBaseUrl =
+        runtimeBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    if (storedBaseUrl.isNotEmpty &&
+        (storedBaseUrl == kWebFormalSettingsBaseUrl ||
+            normalizedStoredBaseUrl != normalizedRuntimeBaseUrl)) {
       await _vaultConfigStore.writeManagedVaultBaseUrl('');
     }
     await _vaultConfigStore.writeBackendType(SyncBackendType.managedVault);

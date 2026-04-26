@@ -10,37 +10,26 @@ void main() {
     expect(source, contains('console_error_panic_hook::set_once();'));
   });
 
-  test(
-      'managed vault keeps the shared pull loop module and wasm-safe runtime constraints',
+  test('managed vault keeps the v2 pull path and wasm-safe runtime constraints',
       () async {
     final managedVault = await readRustSource('rust/src/sync/managed_vault.rs');
-    final pullLoop =
-        await readRustSource('rust/src/sync/managed_vault/pull_loop.rs');
-    final v2Client =
-        await readRustSource('rust/src/sync/managed_vault/v2_client.rs');
-    final pullRecovery =
-        await readRustSource('rust/src/sync/managed_vault/pull_recovery.rs');
+    final globalLogClient = await readRustSource(
+        'rust/src/sync/managed_vault/global_log_client.rs');
     final runtime =
         await readRustSource('rust/src/sync/managed_vault/runtime.rs');
 
     expect(File('rust/src/sync/managed_vault/pull.rs').existsSync(), isFalse);
     expect(managedVault, isNot(contains('mod pull;')));
-    expect(managedVault, contains('mod pull_loop;'));
+    expect(managedVault, contains('mod global_log_client;'));
     expect(managedVault, contains('pub fn pull('));
-    expect(managedVault, contains('pull_loop::pull('));
-    expect(
-      managedVault,
-      contains('fn should_fallback_to_json_pull(status_code: u16) -> bool'),
-    );
-    expect(pullLoop,
-        contains('super::should_fallback_to_json_pull(status.as_u16())'));
+    expect(managedVault, contains('global_log_client::pull_v2('));
+    expect(managedVault, contains('finalize_v2_pull_blob_backfill('));
     expect(runtime, contains('dedicated web worker path'));
     expect(
       runtime,
       contains('managed-vault sync XHR must run in a dedicated web worker'),
     );
-    expect(v2Client, isNot(contains('reqwest::blocking::Client')));
-    expect(pullRecovery, isNot(contains('reqwest::blocking::Client')));
+    expect(globalLogClient, isNot(contains('reqwest::blocking::Client')));
   });
 
   test(
