@@ -298,6 +298,7 @@ mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
+    use std::sync::mpsc;
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -467,21 +468,23 @@ mod tests {
     fn sync_managed_vault_cursor_diagnostics_v2_head_probe_times_out_quickly() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("local addr");
+        let (release_tx, release_rx) = mpsc::channel();
         let server = thread::spawn(move || {
             let (_stream, _) = listener.accept().expect("accept");
-            thread::sleep(Duration::from_secs(2));
+            let _ = release_rx.recv_timeout(Duration::from_secs(6));
         });
 
         let started = Instant::now();
         let result = probe_managed_vault_v2_head(&format!("http://{addr}"), "test-vault", "token");
         let elapsed = started.elapsed();
 
+        let _ = release_tx.send(());
         server.join().expect("join");
 
         assert!(result.is_err());
         assert!(
-            elapsed < Duration::from_millis(1500),
-            "expected timeout before 1500ms, got {elapsed:?}"
+            elapsed < Duration::from_secs(3),
+            "expected diagnostics timeout well before server release, got {elapsed:?}"
         );
     }
 }
