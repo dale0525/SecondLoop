@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::crypto::decrypt_bytes;
 use crate::{auth, db};
 use anyhow::{anyhow, Result};
-use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
+use rusqlite::{params, Connection, OpenFlags};
 
 const USER_DATA_TABLES_WITHOUT_AUTH: &[&str] = &[
     "message_embeddings",
@@ -122,23 +122,28 @@ fn encrypted_probe_matches_key(
 
     let quoted_table = table.replace('"', "\"\"");
     let quoted_column = column.replace('"', "\"\"");
-    let sql = format!(r#"SELECT "{quoted_column}" FROM "{quoted_table}" LIMIT 1"#);
-    let blob = conn
-        .query_row(&sql, [], |row| row.get::<_, Vec<u8>>(0))
-        .optional()?;
-    let Some(blob) = blob else {
-        return Ok(None);
-    };
-    if blob.len() < MIN_ENCRYPTED_BLOB_LEN {
-        return Ok(None);
+    let sql = format!(
+        r#"
+SELECT "{quoted_column}"
+FROM "{quoted_table}"
+WHERE typeof("{quoted_column}") = 'blob'
+  AND length("{quoted_column}") >= ?1
+ORDER BY rowid
+"#
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let mut rows = stmt.query(params![MIN_ENCRYPTED_BLOB_LEN as i64])?;
+    let mut found_valid = false;
+    while let Some(row) = rows.next()? {
+        let blob: Vec<u8> = row.get(0)?;
+        match decrypt_bytes(key, &blob, aad) {
+            Ok(_) => found_valid = true,
+            Err(error) if error.to_string().contains("decrypt failed") => return Ok(Some(false)),
+            Err(error) if error.to_string().contains("ciphertext too short") => {}
+            Err(error) => return Err(error),
+        }
     }
-
-    match decrypt_bytes(key, &blob, aad) {
-        Ok(_) => Ok(Some(true)),
-        Err(error) if error.to_string().contains("decrypt failed") => Ok(Some(false)),
-        Err(error) if error.to_string().contains("ciphertext too short") => Ok(None),
-        Err(error) => Err(error),
-    }
+    Ok(found_valid.then_some(true))
 }
 
 fn missing_auth_key_probe(app_dir: &Path, key: &[u8; 32]) -> Result<MissingAuthKeyProbe> {
@@ -371,6 +376,128 @@ mod tests {
         let conn = db::open(dir.path()).expect("reopen db");
         let conversations = db::list_conversations(&conn, &key).expect("list conversations");
         assert!(conversations.is_empty());
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_skips_short_probe_rows() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        conn.execute(
+            r#"INSERT INTO conversations(id, title, created_at, updated_at)
+               VALUES ('legacy-short', X'68656C6C6F', 1, 1)"#,
+            [],
+        )
+        .expect("insert short legacy row");
+        let key = [3u8; 32];
+        db::create_conversation(&conn, &key, "hello").expect("seed encrypted conversation");
+        drop(conn);
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+        );
+
+        assert!(
+            result.is_ok(),
+            "valid deferred key should be found after short probe rows: {result:?}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_rejects_mixed_deferred_keys() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        let first_key = [3u8; 32];
+        let second_key = [4u8; 32];
+        db::create_conversation(&conn, &first_key, "first").expect("seed first conversation");
+        db::create_conversation(&conn, &second_key, "second").expect("seed second conversation");
+        drop(conn);
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            first_key.to_vec(),
+        );
+
+        let error = result.expect_err("mixed deferred keys should be rejected");
+        assert!(
+            error.to_string().contains("invalid key"),
+            "unexpected error: {error}"
+        );
+        let conn = db::open(dir.path()).expect("reopen db");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
+            .expect("count conversations");
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_allows_message_probe_fallback() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        let key = [3u8; 32];
+        let conversation =
+            db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+        db::insert_message(&conn, &key, &conversation.id, "user", "message").expect("seed message");
+        conn.execute_batch(
+            r#"
+PRAGMA foreign_keys = OFF;
+DELETE FROM conversations;
+PRAGMA foreign_keys = ON;
+"#,
+        )
+        .expect("remove conversation probe rows");
+        drop(conn);
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+        );
+
+        assert!(
+            result.is_ok(),
+            "valid deferred key should be accepted from message probe fallback: {result:?}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_allows_todo_probe_fallback() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        let key = [3u8; 32];
+        db::upsert_todo(
+            &conn, &key, "todo-1", "todo", None, "open", None, None, None, None, None, None,
+        )
+        .expect("seed todo");
+        drop(conn);
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+        );
+
+        assert!(
+            result.is_ok(),
+            "valid deferred key should be accepted from todo probe fallback: {result:?}"
+        );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_allows_event_probe_fallback() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        let key = [3u8; 32];
+        db::upsert_event(&conn, &key, "event-1", "event", 1, 2, "UTC", None).expect("seed event");
+        drop(conn);
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+        );
+
+        assert!(
+            result.is_ok(),
+            "valid deferred key should be accepted from event probe fallback: {result:?}"
+        );
     }
 
     #[test]
