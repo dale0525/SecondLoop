@@ -117,6 +117,14 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertNotIn("Software\\SecondLoop\\Installer\\Components", script)
         self.assertNotIn("$shortcutRegKey = 'Software\\SecondLoop'", script)
 
+    def test_create_windows_msi_persists_install_location_for_registry_matching(self) -> None:
+        script = self._read_repo_file("scripts/create_windows_msi.ps1")
+
+        self.assertIn(
+            '<SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" Sequence="execute" />',
+            script,
+        )
+
     def test_install_script_can_disable_msi_auto_launch_for_manual_launch_mode(self) -> None:
         script = self._read_repo_file("scripts/install_windows_msi.ps1")
 
@@ -156,7 +164,8 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertIn("-InstallDirName $devProductName", run_script)
         self.assertIn("stop_windows_installed_app.ps1", uninstall_script)
         self.assertIn("[string]$InstallDirName = 'SecondLoop Dev'", uninstall_script)
-        self.assertIn("Programs\\$DirectoryName\\$FileName", helper_script)
+        self.assertIn("Join-Path 'Programs' $safeDirectoryName", helper_script)
+        self.assertIn("$safeFileName = Get-SafePathComponent -Value $FileName", helper_script)
         self.assertIn("CloseMainWindow", helper_script)
         self.assertIn("Stop-Process -Id", helper_script)
 
@@ -167,9 +176,9 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertIn("function Remove-UninstallResidue", script)
         self.assertIn("Remove-UninstallResidue @cleanupArgs", script)
         self.assertIn("function Get-InstallResidueDirectories", script)
-        self.assertIn("Programs\\$InstallDirName", script)
-        self.assertIn("Start Menu\\Programs\\$ProductName", script)
-        self.assertIn("com.secondloop\\$ResolvedProductName", script)
+        self.assertIn("Join-Path 'Programs' $safeInstallDirName", script)
+        self.assertIn("Start Menu\\Programs' $safeProductName", script)
+        self.assertIn("Join-Path 'com.secondloop' $safeProductName", script)
         self.assertIn("shared_preferences.json", script)
         self.assertIn("flutter_secure_storage.dat", script)
         self.assertIn("if (-not $KeepUserData)", script)
@@ -202,6 +211,11 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         body = self._extract_function_body(script, "Test-RegistryEntryMatchesProduct")
 
         self.assertIn("Test-RegistryEntryHasSafeInstallLocation", body)
+        self.assertIn("Resolve-ProductCode -Entry $Entry", body)
+        self.assertIn(
+            "if ($displayName -eq $ProductName -and -not [string]::IsNullOrWhiteSpace($entryProductCode))",
+            body,
+        )
         self.assertNotIn("if ($displayName -eq $ProductName) {\n    return $true\n  }", body)
 
         matching_entries_start = script.find("$matchingEntries = @(")
@@ -223,6 +237,32 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
             script,
         )
         self.assertNotIn("Test-AnySecondLoopInstallRemaining", script)
+
+    def test_uninstall_script_fails_when_installed_entry_has_no_product_code(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn(
+            "throw \"Unable to resolve MSI product code for '$ProductName'. UninstallString=$($selectedEntry.UninstallString)\"",
+            script,
+        )
+        self.assertNotIn("Skipped msiexec.exe because no MSI product code was available", script)
+        self.assertIn("Residual cleanup completed for missing package", script)
+
+    def test_uninstall_script_sanitizes_user_controlled_path_components(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+        storage_body = self._extract_function_body(script, "Get-AppStorageRelativePath")
+        install_body = self._extract_function_body(script, "Get-InstallResidueDirectories")
+        data_body = self._extract_function_body(script, "Get-ApplicationDataDirectories")
+        cache_body = self._extract_function_body(script, "Get-ApplicationCacheDirectories")
+
+        self.assertIn("$safeProductName = Get-SafeDirectoryName -Value $ResolvedProductName", storage_body)
+        self.assertIn("Join-Path 'com.secondloop' $safeProductName", storage_body)
+        self.assertNotIn("return \"com.secondloop\\$ResolvedProductName\"", storage_body)
+        self.assertIn("$safeInstallDirName = Get-SafeDirectoryName -Value $InstallDirName", install_body)
+        self.assertIn("$safeProductName = Get-SafeDirectoryName -Value $ProductName", install_body)
+        self.assertIn("$safeAppId = Get-SafeDirectoryName -Value $AppId", install_body)
+        self.assertIn("$safeAppId = Get-SafeDirectoryName -Value $AppId", data_body)
+        self.assertIn("$safeAppId = Get-SafeDirectoryName -Value $AppId", cache_body)
 
     def test_run_windows_script_uses_local_fvm_runner_for_flutter_and_dart_commands(self) -> None:
         script = self._read_repo_file("scripts/run_windows.ps1")

@@ -18,7 +18,12 @@ function Get-ExpectedInstallLocation {
     return ''
   }
 
-  return (Join-Path $env:LOCALAPPDATA ("Programs\$DirectoryName"))
+  $safeDirectoryName = Get-SafeDirectoryName -Value $DirectoryName
+  if ([string]::IsNullOrWhiteSpace($safeDirectoryName)) {
+    return ''
+  }
+
+  return (Join-Path $env:LOCALAPPDATA (Join-Path 'Programs' $safeDirectoryName))
 }
 
 function Test-IsPathEqualOrChild {
@@ -111,16 +116,15 @@ function Get-AppStorageRelativePath {
     [string]$ResolvedCompanyName
   )
 
-  if ($ResolvedCompanyName -eq 'com.secondloop') {
-    return "com.secondloop\$ResolvedProductName"
-  }
-
   $safeProductName = Get-SafeDirectoryName -Value $ResolvedProductName
   if ([string]::IsNullOrWhiteSpace($safeProductName)) {
     return ''
   }
 
   $safeCompanyName = Get-SafeDirectoryName -Value $ResolvedCompanyName
+  if ($safeCompanyName -eq 'com.secondloop') {
+    return (Join-Path 'com.secondloop' $safeProductName)
+  }
   if ([string]::IsNullOrWhiteSpace($safeCompanyName)) {
     return $safeProductName
   }
@@ -213,11 +217,18 @@ function Get-InstallResidueDirectories {
   Add-UniquePath -Paths $directories -Path $safeInstallLocation
 
   if ($env:LOCALAPPDATA) {
-    Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA "Programs\$InstallDirName")
-    Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $ProductName)
+    $safeInstallDirName = Get-SafeDirectoryName -Value $InstallDirName
+    $safeProductName = Get-SafeDirectoryName -Value $ProductName
+    $safeAppId = Get-SafeDirectoryName -Value $AppId
 
-    if (-not [string]::IsNullOrWhiteSpace($AppId)) {
-      Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $AppId)
+    if (-not [string]::IsNullOrWhiteSpace($safeInstallDirName)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA (Join-Path 'Programs' $safeInstallDirName))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($safeProductName)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $safeProductName)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($safeAppId)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $safeAppId)
     }
   }
 
@@ -228,15 +239,17 @@ function Get-ShortcutResiduePaths {
   param([string]$ProductName)
 
   $paths = New-Object System.Collections.Generic.List[string]
+  $safeProductName = Get-SafeDirectoryName -Value $ProductName
 
-  if ($env:APPDATA) {
-    Add-UniquePath -Paths $paths -Path (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$ProductName")
-    Add-UniquePath -Paths $paths -Path (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$ProductName.lnk")
+  if ($env:APPDATA -and -not [string]::IsNullOrWhiteSpace($safeProductName)) {
+    Add-UniquePath -Paths $paths -Path (Join-Path $env:APPDATA (Join-Path 'Microsoft\Windows\Start Menu\Programs' $safeProductName))
+    Add-UniquePath -Paths $paths -Path (Join-Path $env:APPDATA (Join-Path 'Microsoft\Windows\Start Menu\Programs' "$safeProductName.lnk"))
   }
 
   $desktopDir = [Environment]::GetFolderPath('DesktopDirectory')
-  if (-not [string]::IsNullOrWhiteSpace($desktopDir)) {
-    Add-UniquePath -Paths $paths -Path (Join-Path $desktopDir "$ProductName.lnk")
+  if (-not [string]::IsNullOrWhiteSpace($desktopDir) -and
+      -not [string]::IsNullOrWhiteSpace($safeProductName)) {
+    Add-UniquePath -Paths $paths -Path (Join-Path $desktopDir "$safeProductName.lnk")
   }
 
   return @($paths)
@@ -251,11 +264,14 @@ function Get-ApplicationDataDirectories {
 
   $directories = New-Object System.Collections.Generic.List[string]
   $relativeAppPath = Get-AppStorageRelativePath -ResolvedProductName $ProductName -ResolvedCompanyName $CompanyName
+  $safeAppId = Get-SafeDirectoryName -Value $AppId
 
   if ($env:APPDATA) {
-    Add-UniquePath -Paths $directories -Path (Join-Path $env:APPDATA $relativeAppPath)
-    if (-not [string]::IsNullOrWhiteSpace($AppId)) {
-      Add-UniquePath -Paths $directories -Path (Join-Path $env:APPDATA $AppId)
+    if (-not [string]::IsNullOrWhiteSpace($relativeAppPath)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:APPDATA $relativeAppPath)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($safeAppId)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:APPDATA $safeAppId)
     }
   }
 
@@ -271,11 +287,14 @@ function Get-ApplicationCacheDirectories {
 
   $directories = New-Object System.Collections.Generic.List[string]
   $relativeAppPath = Get-AppStorageRelativePath -ResolvedProductName $ProductName -ResolvedCompanyName $CompanyName
+  $safeAppId = Get-SafeDirectoryName -Value $AppId
 
   if ($env:LOCALAPPDATA) {
-    Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $relativeAppPath)
-    if (-not [string]::IsNullOrWhiteSpace($AppId)) {
-      Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $AppId)
+    if (-not [string]::IsNullOrWhiteSpace($relativeAppPath)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $relativeAppPath)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($safeAppId)) {
+      Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA $safeAppId)
     }
   }
 
@@ -429,6 +448,10 @@ function Test-RegistryEntryMatchesProduct {
     }
   }
 
+  if ($displayName -eq $ProductName -and -not [string]::IsNullOrWhiteSpace($entryProductCode)) {
+    return $true
+  }
+
   if ($hasSafeInstallLocation) {
     return $true
   }
@@ -497,7 +520,10 @@ function Remove-UninstallResidue {
 
   Remove-ResidualUninstallRegistryEntries -ProductName $ProductName -ExpectedInstallLocation $expectedInstallLocationPath -ProductCode $ProductCode
 
-  Remove-RegistryTreeIfExists -RegistryPath "HKCU:\Software\SecondLoop\$ProductName"
+  $safeProductRegistryKeyName = Get-SafeDirectoryName -Value $ProductName
+  if (-not [string]::IsNullOrWhiteSpace($safeProductRegistryKeyName)) {
+    Remove-RegistryTreeIfExists -RegistryPath "HKCU:\Software\SecondLoop\$safeProductRegistryKeyName"
+  }
   Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\Software\SecondLoop\Installer'
   Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\Software\SecondLoop'
 }
@@ -529,7 +555,7 @@ if ($matchingEntries.Count -gt 0) {
 }
 
 if ($selectedEntry -and [string]::IsNullOrWhiteSpace($productCode)) {
-  Write-Warning "Unable to resolve MSI product code for '$ProductName'. UninstallString=$($selectedEntry.UninstallString). Running residual cleanup only."
+  throw "Unable to resolve MSI product code for '$ProductName'. UninstallString=$($selectedEntry.UninstallString)"
 }
 
 & (Join-Path $PSScriptRoot 'stop_windows_installed_app.ps1') -InstallDirName $InstallDirName -ExecutableName $ExecutableName -TerminateIfNeeded
@@ -537,7 +563,7 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-if (-not [string]::IsNullOrWhiteSpace($productCode)) {
+if ($selectedEntry) {
   $arguments = @('/x', $productCode)
   if ($Quiet) {
     $arguments += '/qn'
@@ -549,8 +575,6 @@ if (-not [string]::IsNullOrWhiteSpace($productCode)) {
   if ($process.ExitCode -notin @(0, 1605, 1614, 1641, 3010)) {
     throw "MSI uninstall failed with exit code $($process.ExitCode)."
   }
-} else {
-  Write-Host "Skipped msiexec.exe because no MSI product code was available for '$ProductName'."
 }
 
 if (-not $SkipResidualCleanup) {
@@ -571,4 +595,8 @@ if (-not $SkipResidualCleanup) {
   Remove-UninstallResidue @cleanupArgs
 }
 
-Write-Host "Uninstalled package: $ProductName ($productCode)"
+if ($selectedEntry) {
+  Write-Host "Uninstalled package: $ProductName ($productCode)"
+} else {
+  Write-Host "Residual cleanup completed for missing package: $ProductName"
+}
