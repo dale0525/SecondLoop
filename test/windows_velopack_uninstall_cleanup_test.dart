@@ -164,6 +164,35 @@ void main() {
     expect(deletedKeys, isNot(contains(r'HKCU\Software\SecondLoop')));
   });
 
+  test(
+      'cleanup keeps parent registry key when query expands HKCU to full hive name',
+      () async {
+    final deletedKeys = <String>[];
+
+    await cleanWindowsVelopackUninstallResidue(
+      isWindows: true,
+      environment: const {},
+      registryCommandRunner: (executable, arguments) async {
+        if (arguments.first == 'query') {
+          return ProcessResult(
+            1,
+            0,
+            'HKEY_CURRENT_USER\\Software\\SecondLoop\n'
+                'HKEY_CURRENT_USER\\Software\\SecondLoop\\SecondLoop Dev\n',
+            '',
+          );
+        }
+        if (arguments.first == 'delete') {
+          deletedKeys.add(arguments[1]);
+        }
+        return ProcessResult(1, 0, '', '');
+      },
+    );
+
+    expect(deletedKeys, contains(r'HKCU\Software\SecondLoop\SecondLoop'));
+    expect(deletedKeys, isNot(contains(r'HKCU\Software\SecondLoop')));
+  });
+
   test('cleanup is a no-op outside Windows', () async {
     var registryCalled = false;
 

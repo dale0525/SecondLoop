@@ -12,6 +12,26 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
     def _read_repo_file(self, relative_path: str) -> str:
         return (self.repo_root / relative_path).read_text(encoding="utf-8")
 
+    def _extract_function_body(self, script: str, function_name: str) -> str:
+        marker = f"function {function_name}"
+        start = script.find(marker)
+        self.assertNotEqual(start, -1, f"{function_name} not found")
+
+        brace_start = script.find("{", start)
+        self.assertNotEqual(brace_start, -1, f"{function_name} body not found")
+
+        depth = 0
+        for index in range(brace_start, len(script)):
+            char = script[index]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return script[brace_start + 1 : index]
+
+        self.fail(f"{function_name} body was not closed")
+
     def test_create_windows_msi_defines_auto_launch_custom_action(self) -> None:
         script = self._read_repo_file("scripts/create_windows_msi.ps1")
 
@@ -177,11 +197,40 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertIn("[string]$CompanyName = 'com.secondloop'", script)
         self.assertIn("[string]$AppId = ''", script)
         self.assertIn("function Remove-ResidualUninstallRegistryEntries", script)
-        self.assertIn("function Test-AnySecondLoopInstallRemaining", script)
-        self.assertIn("Remove-RegistryTreeIfExists -RegistryPath 'HKCU:\\Software\\SecondLoop\\Installer'", script)
-        self.assertIn("Remove-RegistryTreeIfExists -RegistryPath 'HKCU:\\Software\\SecondLoop'", script)
+        self.assertIn("function Remove-RegistryTreeIfEmpty", script)
+        self.assertIn("Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\\Software\\SecondLoop\\Installer'", script)
+        self.assertIn("Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\\Software\\SecondLoop'", script)
         self.assertIn("ProductCode", script)
         self.assertIn("InstallLocation", script)
+
+    def test_uninstall_script_uses_allowlisted_install_location_for_cleanup(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("function Test-IsPathEqualOrChild", script)
+        self.assertIn("function Resolve-SafeInstallLocation", script)
+        self.assertIn(
+            "Resolve-SafeInstallLocation -InstallLocation $entryInstallLocation -ExpectedInstallLocation $expectedInstallLocationPath",
+            script,
+        )
+        self.assertNotIn("$selectedInstallLocation = $entryInstallLocation", script)
+
+    def test_uninstall_script_does_not_match_registry_entries_by_display_name_only(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+        body = self._extract_function_body(script, "Test-RegistryEntryMatchesProduct")
+
+        self.assertIn("Test-RegistryEntryHasSafeInstallLocation", body)
+        self.assertNotIn("if ($displayName -eq $ProductName) {\n    return $true\n  }", body)
+
+    def test_uninstall_script_removes_shared_registry_parent_only_when_empty(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("function Test-RegistryTreeHasChildrenOrValues", script)
+        self.assertIn("function Remove-RegistryTreeIfEmpty", script)
+        self.assertIn(
+            "Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\\Software\\SecondLoop'",
+            script,
+        )
+        self.assertNotIn("Test-AnySecondLoopInstallRemaining", script)
 
     def test_run_windows_script_uses_local_fvm_runner_for_flutter_and_dart_commands(self) -> None:
         script = self._read_repo_file("scripts/run_windows.ps1")

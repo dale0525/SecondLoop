@@ -198,14 +198,14 @@ bool _registryQueryOutputHasChildrenOrValues({
   required String registryKey,
   required String output,
 }) {
-  final normalizedRegistryKey = registryKey.toLowerCase();
+  final normalizedRegistryKey = _normalizeRegistryKeyForComparison(registryKey);
   for (final line in output.split(RegExp(r'\r?\n'))) {
     final trimmed = line.trim();
     if (trimmed.isEmpty) {
       continue;
     }
 
-    final normalizedLine = trimmed.toLowerCase();
+    final normalizedLine = _normalizeRegistryKeyForComparison(trimmed);
     if (normalizedLine == normalizedRegistryKey) {
       continue;
     }
@@ -218,6 +218,23 @@ bool _registryQueryOutputHasChildrenOrValues({
   }
 
   return false;
+}
+
+String _normalizeRegistryKeyForComparison(String value) {
+  final normalized = value
+      .trim()
+      .replaceAll(RegExp(r'[\\/]+'), r'\')
+      .replaceAll(RegExp(r'[\\/]+$'), '')
+      .toLowerCase();
+  if (normalized == 'hkey_current_user' ||
+      normalized.startsWith(r'hkey_current_user\')) {
+    return normalized.replaceFirst('hkey_current_user', 'hkcu');
+  }
+  if (normalized == 'hkey_local_machine' ||
+      normalized.startsWith(r'hkey_local_machine\')) {
+    return normalized.replaceFirst('hkey_local_machine', 'hklm');
+  }
+  return normalized;
 }
 
 List<String> _dedupe(List<String> values) {

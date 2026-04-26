@@ -21,6 +21,50 @@ function Get-ExpectedInstallLocation {
   return (Join-Path $env:LOCALAPPDATA ("Programs\$DirectoryName"))
 }
 
+function Test-IsPathEqualOrChild {
+  param(
+    [string]$CandidatePath,
+    [string]$ParentPath
+  )
+
+  if ([string]::IsNullOrWhiteSpace($CandidatePath) -or
+      [string]::IsNullOrWhiteSpace($ParentPath)) {
+    return $false
+  }
+
+  try {
+    $normalizedCandidate = [System.IO.Path]::GetFullPath($CandidatePath).TrimEnd([char[]]@([char]92, [char]47))
+    $normalizedParent = [System.IO.Path]::GetFullPath($ParentPath).TrimEnd([char[]]@([char]92, [char]47))
+  } catch {
+    return $false
+  }
+
+  if ($normalizedCandidate.Equals($normalizedParent, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $true
+  }
+
+  $prefix = $normalizedParent + [System.IO.Path]::DirectorySeparatorChar
+  return $normalizedCandidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Resolve-SafeInstallLocation {
+  param(
+    [string]$InstallLocation,
+    [string]$ExpectedInstallLocation
+  )
+
+  if ([string]::IsNullOrWhiteSpace($InstallLocation)) {
+    return $ExpectedInstallLocation
+  }
+
+  if (Test-IsPathEqualOrChild -CandidatePath $InstallLocation -ParentPath $ExpectedInstallLocation) {
+    return $InstallLocation
+  }
+
+  Write-Warning "Ignoring unsafe InstallLocation from registry: $InstallLocation"
+  return $ExpectedInstallLocation
+}
+
 function Get-DefaultAppId {
   param([string]$ResolvedProductName)
 
@@ -159,12 +203,14 @@ function Get-InstallResidueDirectories {
     [string]$InstallDirName,
     [string]$ProductName,
     [string]$AppId,
-    [string]$InstallLocation
+    [string]$InstallLocation,
+    [string]$ExpectedInstallLocation
   )
 
   $directories = New-Object System.Collections.Generic.List[string]
 
-  Add-UniquePath -Paths $directories -Path $InstallLocation
+  $safeInstallLocation = Resolve-SafeInstallLocation -InstallLocation $InstallLocation -ExpectedInstallLocation $ExpectedInstallLocation
+  Add-UniquePath -Paths $directories -Path $safeInstallLocation
 
   if ($env:LOCALAPPDATA) {
     Add-UniquePath -Paths $directories -Path (Join-Path $env:LOCALAPPDATA "Programs\$InstallDirName")
@@ -301,6 +347,67 @@ function Remove-RegistryTreeIfExists {
   }
 }
 
+function Test-RegistryTreeHasChildrenOrValues {
+  param([string]$RegistryPath)
+
+  if ([string]::IsNullOrWhiteSpace($RegistryPath)) {
+    return $false
+  }
+
+  try {
+    if (-not (Test-Path -Path $RegistryPath)) {
+      return $false
+    }
+
+    $childKey = Get-ChildItem -Path $RegistryPath -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $childKey) {
+      return $true
+    }
+
+    $item = Get-ItemProperty -Path $RegistryPath -ErrorAction SilentlyContinue
+    if ($null -eq $item) {
+      return $false
+    }
+
+    $metadataNames = @('PSPath', 'PSParentPath', 'PSChildName', 'PSDrive', 'PSProvider')
+    $value = $item.PSObject.Properties |
+      Where-Object { $metadataNames -notcontains $_.Name } |
+      Select-Object -First 1
+
+    return ($null -ne $value)
+  } catch {
+    return $true
+  }
+}
+
+function Remove-RegistryTreeIfEmpty {
+  param([string]$RegistryPath)
+
+  if ([string]::IsNullOrWhiteSpace($RegistryPath)) {
+    return
+  }
+
+  if (-not (Test-Path -Path $RegistryPath)) {
+    return
+  }
+
+  if (Test-RegistryTreeHasChildrenOrValues -RegistryPath $RegistryPath) {
+    return
+  }
+
+  Remove-RegistryTreeIfExists -RegistryPath $RegistryPath
+}
+
+function Test-RegistryEntryHasSafeInstallLocation {
+  param(
+    [psobject]$Entry,
+    [string]$ExpectedInstallLocation
+  )
+
+  $installLocation = Get-StringValue $Entry.InstallLocation
+  return Test-IsPathEqualOrChild -CandidatePath $installLocation -ParentPath $ExpectedInstallLocation
+}
+
 function Test-RegistryEntryMatchesProduct {
   param(
     [psobject]$Entry,
@@ -310,9 +417,9 @@ function Test-RegistryEntryMatchesProduct {
   )
 
   $displayName = Get-StringValue $Entry.DisplayName
-  $installLocation = Normalize-PathValue (Get-StringValue $Entry.InstallLocation)
   $uninstallString = Get-StringValue $Entry.UninstallString
   $entryProductCode = Resolve-ProductCode -Entry $Entry
+  $hasSafeInstallLocation = Test-RegistryEntryHasSafeInstallLocation -Entry $Entry -ExpectedInstallLocation $ExpectedInstallLocation
 
   if (-not [string]::IsNullOrWhiteSpace($ProductCode)) {
     if ($Entry.PSChildName -eq $ProductCode -or
@@ -322,11 +429,11 @@ function Test-RegistryEntryMatchesProduct {
     }
   }
 
-  if ($displayName -eq $ProductName) {
+  if ($hasSafeInstallLocation) {
     return $true
   }
 
-  if ($ExpectedInstallLocation -and $installLocation -eq $ExpectedInstallLocation) {
+  if ($displayName -eq $ProductName -and $hasSafeInstallLocation) {
     return $true
   }
 
@@ -347,20 +454,6 @@ function Remove-ResidualUninstallRegistryEntries {
   }
 }
 
-function Test-AnySecondLoopInstallRemaining {
-  $remainingInstall = Get-UninstallRegistryEntries | Where-Object {
-    $displayName = Get-StringValue $_.DisplayName
-    $publisher = Get-StringValue $_.Publisher
-    $installLocation = Get-StringValue $_.InstallLocation
-
-    $displayName.StartsWith('SecondLoop', [System.StringComparison]::OrdinalIgnoreCase) -or
-      $publisher.StartsWith('SecondLoop', [System.StringComparison]::OrdinalIgnoreCase) -or
-      $installLocation.IndexOf('\SecondLoop', [System.StringComparison]::OrdinalIgnoreCase) -ge 0
-  } | Select-Object -First 1
-
-  return ($null -ne $remainingInstall)
-}
-
 function Remove-UninstallResidue {
   param(
     [string]$ProductName,
@@ -379,7 +472,8 @@ function Remove-UninstallResidue {
   foreach ($path in (Get-ShortcutResiduePaths -ProductName $ProductName)) {
     Add-UniquePath -Paths $pathsToRemove -Path $path
   }
-  foreach ($path in (Get-InstallResidueDirectories -InstallDirName $InstallDirName -ProductName $ProductName -AppId $effectiveAppId -InstallLocation $InstallLocation)) {
+  $expectedInstallLocationPath = Get-ExpectedInstallLocation -DirectoryName $InstallDirName
+  foreach ($path in (Get-InstallResidueDirectories -InstallDirName $InstallDirName -ProductName $ProductName -AppId $effectiveAppId -InstallLocation $InstallLocation -ExpectedInstallLocation $expectedInstallLocationPath)) {
     Add-UniquePath -Paths $pathsToRemove -Path $path
   }
 
@@ -401,39 +495,40 @@ function Remove-UninstallResidue {
     Remove-FileSystemTree -Path $path
   }
 
-  $expectedInstallLocation = Normalize-PathValue (Get-ExpectedInstallLocation -DirectoryName $InstallDirName)
-  Remove-ResidualUninstallRegistryEntries -ProductName $ProductName -ExpectedInstallLocation $expectedInstallLocation -ProductCode $ProductCode
+  Remove-ResidualUninstallRegistryEntries -ProductName $ProductName -ExpectedInstallLocation $expectedInstallLocationPath -ProductCode $ProductCode
 
-  if (-not (Test-AnySecondLoopInstallRemaining)) {
-    Remove-RegistryTreeIfExists -RegistryPath 'HKCU:\Software\SecondLoop\Installer'
-    Remove-RegistryTreeIfExists -RegistryPath 'HKCU:\Software\SecondLoop'
-  }
+  Remove-RegistryTreeIfExists -RegistryPath "HKCU:\Software\SecondLoop\$ProductName"
+  Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\Software\SecondLoop\Installer'
+  Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\Software\SecondLoop'
 }
 
-$expectedInstallLocation = Normalize-PathValue (Get-ExpectedInstallLocation -DirectoryName $InstallDirName)
+$expectedInstallLocationPath = Get-ExpectedInstallLocation -DirectoryName $InstallDirName
+$expectedInstallLocation = Normalize-PathValue $expectedInstallLocationPath
 
 $matchingEntries = @(
   Get-UninstallRegistryEntries | Where-Object {
     $displayName = Get-StringValue $_.DisplayName
     $installLocation = Normalize-PathValue (Get-StringValue $_.InstallLocation)
+    $hasSafeInstallLocation = Test-RegistryEntryHasSafeInstallLocation -Entry $_ -ExpectedInstallLocation $expectedInstallLocationPath
 
-    $displayName -eq $ProductName -or (
-      $expectedInstallLocation -and
-      $installLocation -eq $expectedInstallLocation
-    )
+    $hasSafeInstallLocation -or
+      $displayName -eq $ProductName -or (
+        $expectedInstallLocation -and
+        $installLocation -eq $expectedInstallLocation
+      )
   }
 )
 
 $selectedEntry = $null
 $productCode = ''
-$selectedInstallLocation = Get-ExpectedInstallLocation -DirectoryName $InstallDirName
+$selectedInstallLocation = $expectedInstallLocationPath
 
 if ($matchingEntries.Count -gt 0) {
   $selectedEntry = $matchingEntries | Select-Object -First 1
   $productCode = Resolve-ProductCode -Entry $selectedEntry
   $entryInstallLocation = Get-StringValue $selectedEntry.InstallLocation
   if (-not [string]::IsNullOrWhiteSpace($entryInstallLocation)) {
-    $selectedInstallLocation = $entryInstallLocation
+    $selectedInstallLocation = Resolve-SafeInstallLocation -InstallLocation $entryInstallLocation -ExpectedInstallLocation $expectedInstallLocationPath
   }
 } else {
   Write-Warning "Installed MSI entry not found for ProductName='$ProductName' InstallDirName='$InstallDirName'. Running residual cleanup only."
