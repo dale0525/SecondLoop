@@ -470,6 +470,39 @@ void main() {
     );
   });
 
+  testWidgets(
+      'web gate clears stale managed vault direct URL and uses runtime proxy URL',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      scopeKey: 'web-native:uid-1',
+      managedVaultDefaultBaseUrl: 'https://secondloop.app/api/app/vault-proxy',
+    );
+    await store.writeManagedVaultBaseUrl(
+      'https://service-vault.secondloop.app',
+    );
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        service:
+            _FakeWebAppService(subscription: WebSubscriptionState.entitled),
+        managedVaultBaseUrl: 'https://secondloop.app/api/app/vault-proxy',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(await store.readManagedVaultBaseUrl(), isNull);
+    expect(
+      await store.resolveManagedVaultBaseUrl(),
+      'https://secondloop.app/api/app/vault-proxy',
+    );
+  });
+
   testWidgets('web gate times out hung sync-default priming', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final hungPrimer = Completer<void>();
