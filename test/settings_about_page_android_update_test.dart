@@ -158,6 +158,18 @@ class _CountingAndroidApkDownloader implements AndroidApkDownloader {
   }
 }
 
+Future<void> _settleAndroidUpdateFlow(
+  WidgetTester tester, {
+  VoidCallback? beforeWait,
+}) async {
+  await tester.pump();
+  await tester.runAsync(() async {
+    beforeWait?.call();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  });
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUp(() {
     AndroidApkUpdateCoordinator.clearCacheForTest();
@@ -225,10 +237,9 @@ void main() {
     expect(downloader.downloadCalls, 1);
     expect(installer.installCalls, 0);
 
+    expect(downloader.downloadedUri, update.asset!.downloadUri);
     downloadCompleter.complete();
     await tester.pump();
-
-    expect(installer.installCalls, greaterThanOrEqualTo(0));
 
     debugDefaultTargetPlatformOverride = oldPlatform;
   },
@@ -290,10 +301,10 @@ void main() {
     expect(downloader.downloadCalls, 1);
 
     await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-    await tester.pumpAndSettle();
+    await _settleAndroidUpdateFlow(tester);
 
     expect(downloader.downloadCalls, 2);
-    expect(installer.installCalls, greaterThanOrEqualTo(0));
+    expect(find.byKey(const ValueKey('android_update_confirm')), findsNothing);
 
     debugDefaultTargetPlatformOverride = oldPlatform;
   },
@@ -344,7 +355,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
-    await tester.pumpAndSettle();
+    await _settleAndroidUpdateFlow(tester);
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pump();
     await tester.pump();
@@ -416,9 +427,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
 
+    expect(downloader.downloadCalls, 1);
     expect(
         find.text('Failed to download or open the installer.'), findsNothing);
-    expect(installer.installCalls, greaterThanOrEqualTo(0));
 
     debugDefaultTargetPlatformOverride = oldPlatform;
   },
@@ -476,9 +487,13 @@ void main() {
     await tester.runAsync(() async {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(installer.installCalls, greaterThanOrEqualTo(0));
+    expect(downloader.downloadCalls, 1);
+    expect(
+      find.text('Failed to download or open the installer.'),
+      findsNothing,
+    );
     expect(find.text('Could not open update page'), findsNothing);
 
     debugDefaultTargetPlatformOverride = oldPlatform;

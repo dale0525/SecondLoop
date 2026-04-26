@@ -451,7 +451,11 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
 
   Future<void> _openManualUpdate() async {
     final opened = await _openReleasePage();
-    if (!mounted || opened) return;
+    if (!mounted) return;
+    if (opened) {
+      Navigator.of(context).pop(AppUpdateFlowResult.completed);
+      return;
+    }
     setState(() {
       _errorMessage = context.t.settings.about.messages.openUpdateFailed;
     });

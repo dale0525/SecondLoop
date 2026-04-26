@@ -508,6 +508,7 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
+    final opened = <Uri>[];
     final service = _FakeAboutUpdateService(
       result: const AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
@@ -522,6 +523,10 @@ void main() {
             updateService: service,
             runtimeVersionLoader: () async =>
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            externalUriLauncher: (uri) async {
+              opened.add(uri);
+              return true;
+            },
           ),
         ),
       ),
@@ -533,7 +538,15 @@ void main() {
 
     expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
     expect(find.text('Update now'), findsNothing);
+    expect(find.text('Manual update'), findsOneWidget);
     expect(service.checkCalls, 1);
+
+    await tester.tap(find.text('Manual update'));
+    await tester.pumpAndSettle();
+    expect(
+      opened.single.toString(),
+      'https://github.com/dale0525/SecondLoop/releases/latest',
+    );
 
     service.throwOnCheck = null;
     service.result = const AppUpdateCheckResult(currentVersion: '1.0.1+99');

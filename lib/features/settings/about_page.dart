@@ -124,12 +124,13 @@ class _AboutPageState extends State<AboutPage> {
     });
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {SnackBarAction? action}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         duration: const Duration(seconds: 3),
+        action: action,
       ),
     );
   }
@@ -165,7 +166,7 @@ class _AboutPageState extends State<AboutPage> {
       });
 
       if (result.errorMessage != null) {
-        _showMessage(_text.messages.checkFailed(error: result.errorMessage!));
+        _showCheckFailureMessage(result.errorMessage!);
       } else if (result.update == null) {
         await UpdateBadgePrefs.clear();
         _showMessage(_text.messages.upToDate);
@@ -181,10 +182,33 @@ class _AboutPageState extends State<AboutPage> {
           _updateResult = null;
         });
       }
-      _showMessage(_text.messages.checkFailed(error: '$error'));
+      _showCheckFailureMessage('$error');
     } finally {
       if (mounted) setState(() => _checkingUpdate = false);
     }
+  }
+
+  void _showCheckFailureMessage(Object error) {
+    final text = _text;
+    final manualUpdateUri = _manualUpdateUri();
+    final failedMessage = text.messages.openUpdateFailed;
+    _showMessage(
+      text.messages.checkFailed(error: error),
+      action: SnackBarAction(
+        label: text.actions.manualUpdate,
+        onPressed: () {
+          unawaited(_openExternalUri(
+            manualUpdateUri,
+            failedMessage: failedMessage,
+          ));
+        },
+      ),
+    );
+  }
+
+  Uri _manualUpdateUri() {
+    return _updateResult?.update?.releasePageUri ??
+        _updateService.fallbackReleasePageUri;
   }
 
   bool _canUseAndroidApkUpdate(AppUpdateAvailability update) {
@@ -454,6 +478,7 @@ class _AboutActionText {
   String get check => _t.settings.about.actions.check;
   String get checking => _t.settings.about.actions.checking;
   String get autoUpdate => _t.settings.about.actions.autoUpdate;
+  String get manualUpdate => _t.settings.about.actions.manualUpdate;
   String get updating => _t.settings.about.actions.updating;
 }
 

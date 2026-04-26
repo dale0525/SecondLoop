@@ -342,6 +342,54 @@ void main() {
     expect(find.text('Retry'), findsOneWidget);
   });
 
+  testWidgets(
+      'manual update action closes progress dialog when opening succeeds',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    var launcherSucceeds = false;
+    final opened = <Uri>[];
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+    );
+    final service = FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(
+      tester,
+      service: service,
+      externalUriLauncher: (uri) async {
+        opened.add(uri);
+        return launcherSucceeds;
+      },
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+        find.byKey(const ValueKey('update_progress_dialog')), findsOneWidget);
+    expect(find.text('Could not open update page'), findsOneWidget);
+
+    launcherSucceeds = true;
+    await tester.tap(find.byKey(const ValueKey('android_update_manual')));
+    await tester.pumpAndSettle();
+
+    expect(opened, <Uri>[update.releasePageUri, update.releasePageUri]);
+    expect(find.byKey(const ValueKey('update_progress_dialog')), findsNothing);
+  });
+
   testWidgets('linux passive reminder installs immediately from primary action',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
