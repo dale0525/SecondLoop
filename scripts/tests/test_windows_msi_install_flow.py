@@ -111,9 +111,18 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
     def test_create_windows_msi_uses_product_specific_registry_cleanup_keys(self) -> None:
         script = self._read_repo_file("scripts/create_windows_msi.ps1")
 
-        self.assertIn("$productRegistryKey = \"Software\\SecondLoop\\$ProductName\"", script)
+        self.assertIn("function Get-SafeRegistryKeyName", script)
+        self.assertIn(
+            "$safeProductRegistryKeyName = Get-SafeRegistryKeyName -Value $ProductName",
+            script,
+        )
+        self.assertIn(
+            "$productRegistryKey = \"Software\\SecondLoop\\$safeProductRegistryKeyName\"",
+            script,
+        )
         self.assertIn("ProductRegistryKey", script)
         self.assertIn("$componentRegistryKey = \"$ProductRegistryKey\\Installer\\Components\"", script)
+        self.assertNotIn("$productRegistryKey = \"Software\\SecondLoop\\$ProductName\"", script)
         self.assertNotIn("Software\\SecondLoop\\Installer\\Components", script)
         self.assertNotIn("$shortcutRegKey = 'Software\\SecondLoop'", script)
 
@@ -212,8 +221,8 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
 
         self.assertIn("Test-RegistryEntryHasSafeInstallLocation", body)
         self.assertIn("Resolve-ProductCode -Entry $Entry", body)
-        self.assertNotIn("$displayName", body)
-        self.assertNotIn("$ProductName", body)
+        self.assertIn("Test-RegistryEntryHasLegacyProductIdentity", body)
+        self.assertNotIn("$displayName -eq $ProductName -or", body)
         self.assertNotIn("$displayName -eq $ProductName", body)
         self.assertNotIn("if ($displayName -eq $ProductName) {\n    return $true\n  }", body)
 
@@ -224,8 +233,24 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         matching_entries_body = script[matching_entries_start:matching_entries_end]
         self.assertIn("Test-RegistryEntryMatchesProduct", matching_entries_body)
         self.assertIn("-Entry $_", matching_entries_body)
-        self.assertNotIn("-ProductName $ProductName", matching_entries_body)
+        self.assertIn("-ProductName $ProductName", matching_entries_body)
+        self.assertIn("-Publisher $Publisher", matching_entries_body)
         self.assertNotIn("$displayName -eq $ProductName", matching_entries_body)
+
+    def test_uninstall_script_supports_legacy_msi_entries_without_install_location_safely(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+        body = self._extract_function_body(
+            script,
+            "Test-RegistryEntryHasLegacyProductIdentity",
+        )
+
+        self.assertIn("[string]$Publisher = 'SecondLoop'", script)
+        self.assertIn("$displayName = Get-StringValue $Entry.DisplayName", body)
+        self.assertIn("$entryPublisher = Get-StringValue $Entry.Publisher", body)
+        self.assertIn("$entryProductCode = Resolve-ProductCode -Entry $Entry", body)
+        self.assertIn("$displayName -ne $ProductName", body)
+        self.assertIn("$entryPublisher -ne $Publisher", body)
+        self.assertIn("[string]::IsNullOrWhiteSpace($entryProductCode)", body)
 
     def test_uninstall_script_residual_registry_cleanup_does_not_match_by_display_name(self) -> None:
         script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")

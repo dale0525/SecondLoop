@@ -3,6 +3,7 @@ param(
   [string]$InstallDirName = 'SecondLoop Dev',
   [string]$ExecutableName = 'secondloop.exe',
   [string]$CompanyName = 'com.secondloop',
+  [string]$Publisher = 'SecondLoop',
   [string]$AppId = '',
   [switch]$Quiet,
   [switch]$KeepUserData,
@@ -492,10 +493,41 @@ function Test-RegistryEntryHasSafeInstallLocation {
   return Test-IsPathEqualOrChild -CandidatePath $installLocation -ParentPath $ExpectedInstallLocation
 }
 
+function Test-RegistryEntryHasLegacyProductIdentity {
+  param(
+    [psobject]$Entry,
+    [string]$ProductName,
+    [string]$Publisher
+  )
+
+  if ([string]::IsNullOrWhiteSpace($ProductName) -or
+      [string]::IsNullOrWhiteSpace($Publisher)) {
+    return $false
+  }
+
+  $displayName = Get-StringValue $Entry.DisplayName
+  $entryPublisher = Get-StringValue $Entry.Publisher
+  $entryProductCode = Resolve-ProductCode -Entry $Entry
+
+  if ($displayName -ne $ProductName) {
+    return $false
+  }
+  if ($entryPublisher -ne $Publisher) {
+    return $false
+  }
+  if ([string]::IsNullOrWhiteSpace($entryProductCode)) {
+    return $false
+  }
+
+  return $true
+}
+
 function Test-RegistryEntryMatchesProduct {
   param(
     [psobject]$Entry,
     [string]$ExpectedInstallLocation,
+    [string]$ProductName,
+    [string]$Publisher,
     [string]$ProductCode
   )
 
@@ -512,6 +544,10 @@ function Test-RegistryEntryMatchesProduct {
   }
 
   if ($hasSafeInstallLocation) {
+    return $true
+  }
+
+  if (Test-RegistryEntryHasLegacyProductIdentity -Entry $Entry -ProductName $ProductName -Publisher $Publisher) {
     return $true
   }
 
@@ -595,6 +631,8 @@ $matchingEntries = @(
     Test-RegistryEntryMatchesProduct `
       -Entry $_ `
       -ExpectedInstallLocation $expectedInstallLocationPath `
+      -ProductName $ProductName `
+      -Publisher $Publisher `
       -ProductCode ''
   }
 )

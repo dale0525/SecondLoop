@@ -80,10 +80,21 @@ Future<void> cleanWindowsVelopackUninstallResidue({
     productName: productName,
     companyName: companyName,
   );
+  final protectedDirectoryRoots = <String>[
+    if (_nonEmptyEnv(environment ?? Platform.environment, 'APPDATA')
+        case final appData?)
+      appData,
+    if (_nonEmptyEnv(environment ?? Platform.environment, 'LOCALAPPDATA')
+        case final localAppData?)
+      localAppData,
+  ];
 
   for (final directoryPath in plan.directories) {
     await _removeDirectoryTree(directoryPath);
-    await _removeEmptyDirectory(Directory(directoryPath).parent.path);
+    await _removeEmptyParentDirectoryIfSafe(
+      directoryPath: directoryPath,
+      protectedRoots: protectedDirectoryRoots,
+    );
   }
 
   for (final registryKey in plan.registryKeys) {
@@ -158,6 +169,66 @@ Future<void> _removeEmptyDirectory(String path) async {
   } on FileSystemException {
     return;
   }
+}
+
+Future<void> _removeEmptyParentDirectoryIfSafe({
+  required String directoryPath,
+  required List<String> protectedRoots,
+}) async {
+  final parentPath = Directory(directoryPath).parent.path;
+  if (_isProtectedDirectoryRoot(parentPath, protectedRoots)) {
+    return;
+  }
+  if (!_isPathUnderAnyRoot(parentPath, protectedRoots)) {
+    return;
+  }
+  await _removeEmptyDirectory(parentPath);
+}
+
+bool _isProtectedDirectoryRoot(String path, List<String> protectedRoots) {
+  for (final protectedRoot in protectedRoots) {
+    if (_isSamePath(path, protectedRoot)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _isPathUnderAnyRoot(String path, List<String> protectedRoots) {
+  for (final protectedRoot in protectedRoots) {
+    if (_isPathEqualOrChild(path: path, parentPath: protectedRoot) &&
+        !_isSamePath(path, protectedRoot)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _isPathEqualOrChild({
+  required String path,
+  required String parentPath,
+}) {
+  final normalizedPath = _normalizePathForComparison(path);
+  final normalizedParentPath = _normalizePathForComparison(parentPath);
+  if (normalizedPath.isEmpty || normalizedParentPath.isEmpty) {
+    return false;
+  }
+  if (normalizedPath == normalizedParentPath) {
+    return true;
+  }
+  return normalizedPath.startsWith('$normalizedParentPath/') ||
+      normalizedPath.startsWith('$normalizedParentPath\\');
+}
+
+bool _isSamePath(String left, String right) =>
+    _normalizePathForComparison(left) == _normalizePathForComparison(right);
+
+String _normalizePathForComparison(String value) {
+  return value
+      .trim()
+      .replaceAll(RegExp(r'[\\/]+$'), '')
+      .replaceAll(RegExp(r'[\\/]+'), Platform.pathSeparator)
+      .toLowerCase();
 }
 
 Future<void> _removeRegistryKey(

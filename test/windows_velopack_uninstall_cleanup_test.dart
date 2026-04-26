@@ -193,6 +193,40 @@ void main() {
     expect(deletedKeys, isNot(contains(r'HKCU\Software\SecondLoop')));
   });
 
+  test('cleanup does not remove environment root when company name is empty',
+      () async {
+    final tempRoot = Directory.systemTemp.createTempSync(
+      'secondloop_velopack_uninstall_root_guard_',
+    );
+    addTearDown(() {
+      if (tempRoot.existsSync()) {
+        tempRoot.deleteSync(recursive: true);
+      }
+    });
+
+    final roaming = Directory('${tempRoot.path}/Roaming');
+    final local = Directory('${tempRoot.path}/Local');
+    final appData = Directory('${roaming.path}/SecondLoop');
+    final cacheData = Directory('${local.path}/SecondLoop');
+    appData.createSync(recursive: true);
+    cacheData.createSync(recursive: true);
+
+    await cleanWindowsVelopackUninstallResidue(
+      isWindows: true,
+      environment: {
+        'APPDATA': roaming.path,
+        'LOCALAPPDATA': local.path,
+      },
+      companyName: '',
+      registryCommandRunner: (_, __) async => ProcessResult(1, 0, '', ''),
+    );
+
+    expect(appData.existsSync(), false);
+    expect(cacheData.existsSync(), false);
+    expect(roaming.existsSync(), true);
+    expect(local.existsSync(), true);
+  });
+
   test('cleanup is a no-op outside Windows', () async {
     var registryCalled = false;
 

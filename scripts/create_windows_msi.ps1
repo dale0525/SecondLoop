@@ -62,6 +62,23 @@ function Escape-Xml([string]$Value) {
   return [System.Security.SecurityElement]::Escape($Value)
 }
 
+function Get-SafeRegistryKeyName {
+  param([string]$Value)
+
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return ''
+  }
+
+  $safeValue = $Value -replace '[<>:"/\\|?*]', '_'
+  $safeValue = $safeValue.TrimEnd()
+  $safeValue = $safeValue -replace '[.]+$', ''
+  if ($safeValue.Length -gt 255) {
+    $safeValue = $safeValue.Substring(0, 255)
+  }
+
+  return $safeValue
+}
+
 function Resolve-Tool([string]$Name) {
   $command = Get-Command $Name -ErrorAction SilentlyContinue
   if ($null -eq $command) {
@@ -350,7 +367,11 @@ New-Item -ItemType Directory -Force -Path $workDir | Out-Null
 New-Item -ItemType Directory -Force -Path $wixObjDir | Out-Null
 
 $installDirName = $ProductName
-$productRegistryKey = "Software\SecondLoop\$ProductName"
+$safeProductRegistryKeyName = Get-SafeRegistryKeyName -Value $ProductName
+if ([string]::IsNullOrWhiteSpace($safeProductRegistryKeyName)) {
+  throw 'ProductName does not contain a valid registry key name.'
+}
+$productRegistryKey = "Software\SecondLoop\$safeProductRegistryKeyName"
 $shortcutRegKey = $productRegistryKey
 $closeApplicationBlock = if ($DisableCloseApplication) {
   ''
