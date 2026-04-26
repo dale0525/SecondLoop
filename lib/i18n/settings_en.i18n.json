@@ -682,7 +682,6 @@
       "checkFailed": "Failed to check updates: $error",
       "installStarting": "Preparing update. The app will restart shortly.",
       "stageStarting": "Preparing update. The app will restart shortly.",
-      "stageReady": "Update is ready. Restarting to finish the update.",
       "installFailed": "Auto update failed: $error",
       "stageFailed": "Failed to prepare update: $error",
       "openHomepageFailed": "Could not open project homepage",

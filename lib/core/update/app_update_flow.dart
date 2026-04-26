@@ -238,6 +238,9 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
     final t = context.t;
     final percent = _progress?.percent;
     final showProgress = _isRunning;
+    final statusMessage = _errorMessage == null
+        ? _statusMessage ?? t.settings.about.messages.installStarting
+        : _statusMessage;
     return AlertDialog(
       key: ValueKey(widget.useAndroidApkUpdate
           ? 'android_update_dialog'
@@ -251,7 +254,7 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_statusMessage ?? t.settings.about.messages.installStarting),
+            if (statusMessage != null) Text(statusMessage),
             if (showProgress) ...[
               const SizedBox(height: 16),
               LinearProgressIndicator(
@@ -271,7 +274,7 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
               ],
             ],
             if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
+              if (statusMessage != null) const SizedBox(height: 16),
               Text(
                 _errorMessage!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -363,6 +366,7 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
         _awaitingInstallPermission = false;
         _applyingStagedUpdate = false;
         _errorMessage = errorMessage;
+        _statusMessage = null;
       });
     } finally {
       if (identical(_cancelToken, cancelToken)) {

@@ -312,6 +312,9 @@ void main() {
       await settleAndroidUpdateFlow(tester);
 
       expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Could not open update page'), findsOneWidget);
+      expect(find.textContaining('Downloading update'), findsNothing);
+      expect(find.textContaining('Preparing update'), findsNothing);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }

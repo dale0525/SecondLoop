@@ -42,7 +42,6 @@ class AutoUpgradeGate extends StatefulWidget {
       'update_notice_last_shown_at_ms_v1';
   static const updateNoticeDismissedInSessionPrefsKey =
       'update_notice_dismissed_in_session_v1';
-  static const updateReadyAckTagPrefsKey = 'update_ready_ack_tag_v1';
   static Uri fallbackUpdateUri({required String releaseRepo}) {
     final normalizedRepo =
         releaseRepo.trim().isEmpty ? 'dale0525/SecondLoop' : releaseRepo.trim();
@@ -311,7 +310,6 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
         await _dismissUpdateNoticeForSession(
           prefs: prefs,
           latestTag: update.latestTag,
-          updateTag: null,
         );
         return;
       }
@@ -493,7 +491,6 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   Future<void> _dismissUpdateNoticeForSession({
     required SharedPreferences prefs,
     required String latestTag,
-    required String? updateTag,
   }) async {
     await _persistUpdateNoticeCooldown(prefs, latestTag: latestTag);
     _updateNoticeDismissedInSession = true;
@@ -501,10 +498,6 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
       AutoUpgradeGate.updateNoticeDismissedInSessionPrefsKey,
       true,
     );
-    if (updateTag != null && updateTag.trim().isNotEmpty) {
-      await prefs.setString(
-          AutoUpgradeGate.updateReadyAckTagPrefsKey, updateTag);
-    }
   }
 
   @override

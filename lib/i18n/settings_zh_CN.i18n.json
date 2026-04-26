@@ -682,7 +682,6 @@
       "checkFailed": "检查更新失败：$error",
       "installStarting": "正在准备自动更新，应用即将重启。",
       "stageStarting": "正在准备自动更新，应用即将重启。",
-      "stageReady": "更新已准备就绪，正在重启以完成安装。",
       "installFailed": "自动更新失败：$error",
       "stageFailed": "后台准备更新失败：$error",
       "openHomepageFailed": "无法打开项目主页",
