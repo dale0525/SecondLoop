@@ -8,6 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PIXI_TOML = REPO_ROOT / "pixi.toml"
 CONTRIBUTING = REPO_ROOT / "CONTRIBUTING.md"
 RUN_BASH_PS1 = REPO_ROOT / "scripts/run_bash.ps1"
+RUST_CARGO_TOML = REPO_ROOT / "rust/Cargo.toml"
 
 
 class VerificationScriptsTests(unittest.TestCase):
@@ -291,6 +292,12 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('$(command -v llvm-ranlib-18 2>/dev/null || true)', setup_script)
         self.assertIn('verify_downloaded_sha256 "$rustup_init" "${rustup_url}.sha256"', setup_script)
         self.assertIn('curl --fail --show-error --location "$url" -o "$output_path"', setup_script)
+
+    def test_web_rust_release_build_does_not_download_binaryen_in_ci(self) -> None:
+        cargo_toml = RUST_CARGO_TOML.read_text(encoding="utf-8")
+
+        self.assertIn("[package.metadata.wasm-pack.profile.release]", cargo_toml)
+        self.assertIn("wasm-opt = false", cargo_toml)
 
     def test_rust_nextest_wrapper_prefers_project_managed_cargo_environment(self) -> None:
         script = (REPO_ROOT / "scripts/run_rust_ci_nextest.sh").read_text(
