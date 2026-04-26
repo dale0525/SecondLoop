@@ -211,6 +211,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
     expect(find.text('Update now'), findsOneWidget);
+    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pump();

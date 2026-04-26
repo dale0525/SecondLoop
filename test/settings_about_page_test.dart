@@ -309,6 +309,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
+    expect(find.textContaining('restart'), findsOneWidget);
+    expect(find.textContaining('next launch'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
@@ -418,6 +420,7 @@ void main() {
     expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
     expect(find.byKey(const ValueKey('about_manual_update')), findsNothing);
     expect(find.text('Update now'), findsOneWidget);
+    expect(find.byIcon(Icons.open_in_new_rounded), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();

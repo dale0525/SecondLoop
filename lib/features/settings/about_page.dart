@@ -268,6 +268,19 @@ class _AboutPageState extends State<AboutPage> {
     return _text.status.availableExternal(version: update.latestTag);
   }
 
+  IconData _updateActionIcon(AppUpdateAvailability? update) {
+    if (update == null) {
+      return Icons.system_update_alt_rounded;
+    }
+    if (_canUseAndroidApkUpdate(update)) {
+      return Icons.download_rounded;
+    }
+    if (!update.canSeamlessInstall && !update.canStageForNextLaunch) {
+      return Icons.open_in_new_rounded;
+    }
+    return Icons.restart_alt_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = _text;
@@ -360,9 +373,7 @@ class _AboutPageState extends State<AboutPage> {
                                 child:
                                     CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : Icon(update == null
-                                ? Icons.system_update_alt_rounded
-                                : Icons.restart_alt_rounded),
+                            : Icon(_updateActionIcon(update)),
                         label: Text(updateActionLabel),
                       ),
                     ],

@@ -212,7 +212,7 @@ void main() {
     );
   });
 
-  testWidgets('staged update reminder explains next-launch apply behavior',
+  testWidgets('staged update reminder explains immediate restart behavior',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final update = AppUpdateAvailability(
@@ -242,10 +242,10 @@ void main() {
     expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
     expect(find.text('Update'), findsOneWidget);
     expect(
-      find.textContaining('apply next launch'),
+      find.textContaining('restart'),
       findsOneWidget,
     );
-    expect(find.textContaining('download it now'), findsNothing);
+    expect(find.textContaining('next launch'), findsNothing);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,

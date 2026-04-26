@@ -228,6 +228,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
           return;
         }
 
+        if (_isAndroidPlatform) {
+          _androidInstallPermissionPendingTag = null;
+        }
         await _maybeShowUpdatePrompt(
           prefs: prefs,
           update: update,
@@ -294,6 +297,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
         context: context,
         update: update,
         releaseNotes: releaseNotes,
+        message: useAndroidApkUpdate
+            ? context.t.settings.updateDialog.message
+            : null,
       );
       if (!mounted) return;
       if (!confirmed) {
