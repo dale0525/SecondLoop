@@ -103,9 +103,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('about_check_updates')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
+      expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+      expect(find.text('Update now'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+      await tester.tap(find.byKey(const ValueKey('about_check_updates')));
       await tester.pump();
 
       expect(downloader.downloadCalls, 1);
@@ -165,7 +166,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
-      expect(find.byKey(const ValueKey('about_manual_update')), findsOneWidget);
+      expect(find.byKey(const ValueKey('about_manual_update')), findsNothing);
+      expect(find.text('Update now'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
@@ -222,9 +224,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('about_check_updates')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
+      expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+      expect(find.text('Update now'), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+      await tester.tap(find.byKey(const ValueKey('about_check_updates')));
       await tester.pump();
 
       expect(downloader.downloadCalls, 1);

@@ -237,9 +237,9 @@ void main() {
     expect(service.checkCalls, 1);
     expect(releaseNotesService.fetchCalls, 1);
     expect(find.byType(AlertDialog), findsOneWidget);
-    expect(find.textContaining('v1.1.0'), findsOneWidget);
+    expect(find.text('Update available: v1.1.0'), findsOneWidget);
 
-    await tester.tap(find.text('Cancel', skipOffstage: false));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_ignore')));
     await tester.pumpAndSettle();
 
     expect(find.byType(AlertDialog), findsNothing);
@@ -297,8 +297,8 @@ void main() {
 
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await _settleAndroidUpdateFlow(tester);
 
     expect(find.byKey(const ValueKey('android_update_cancel_download')),
         findsOneWidget);
@@ -366,7 +366,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(AlertDialog), findsOneWidget);
 
-    await tester.tap(find.text('Cancel', skipOffstage: false));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_ignore')));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
 
@@ -464,7 +464,7 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
       await _settleAndroidUpdateFlow(tester);
 
       expect(find.byType(AlertDialog), findsOneWidget);
@@ -524,7 +524,7 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
       await _settleAndroidUpdateFlow(tester);
       await tester.tap(find.byKey(const ValueKey('android_update_manual')));
       await tester.pumpAndSettle();
@@ -582,7 +582,7 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
       await _settleAndroidUpdateFlow(tester);
 
       expect(find.text('Could not open update page'), findsNothing);
@@ -691,7 +691,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(AlertDialog), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
       await _settleAndroidUpdateFlow(tester);
       expect(find.byType(AlertDialog), findsOneWidget);
       await tester.tap(find.text('Cancel', skipOffstage: false));
@@ -758,7 +758,7 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
       await _settleAndroidUpdateFlow(tester);
       expect(coordinator.downloadCalls, 1);
       expect(coordinator.performCalls, 1);
@@ -780,8 +780,7 @@ void main() {
     }
   });
 
-  testWidgets(
-      'reopens Android update dialog after install permission is granted',
+  testWidgets('retries Android update after install permission is granted',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -827,15 +826,82 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(AlertDialog), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
       await _settleAndroidUpdateFlow(tester);
       expect(find.byType(AlertDialog), findsOneWidget);
 
+      coordinator.error = null;
       coordinator.canRequestPackageInstallsResult = true;
-      await tester.tap(find.text('Cancel', skipOffstage: false));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
 
+      expect(coordinator.permissionCheckCalls, 1);
+      expect(coordinator.performCalls, 2);
+      expect(find.byType(AlertDialog), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
+  testWidgets(
+      'retries Android apk install automatically after install permission is granted',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      final coordinator = _FakeAndroidApkUpdateCoordinator(
+        error: const AndroidApkInstallerRequiresPermissionSettingsException(),
+        reuseVerifiedDownloads: true,
+        canRequestPackageInstallsResult: false,
+      );
+      final service = _AndroidAutoUpdateService(
+        result: AppUpdateCheckResult(
+          currentVersion: '1.0.0+1',
+          update: AppUpdateAvailability(
+            currentVersion: '1.0.0+1',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+            installMode: AppUpdateInstallMode.externalDownload,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-android-arm64-v8a.apk',
+              downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+              sha256: _fakeAndroidApkSha256,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AutoUpgradeGate(
+              updateService: service,
+              releaseNotesService: _FakeReleaseNotesService(
+                result: const ReleaseNotesFetchResult(),
+              ),
+              androidApkUpdateCoordinator: coordinator,
+              enableInDebug: true,
+              child: const Scaffold(body: Text('home')),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+      await _settleAndroidUpdateFlow(tester);
+
+      expect(coordinator.downloadCalls, 1);
+      expect(coordinator.performCalls, 1);
+
+      coordinator.error = null;
+      coordinator.canRequestPackageInstallsResult = true;
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await tester.pump();
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -843,8 +909,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(coordinator.permissionCheckCalls, 1);
-      expect(find.byType(AlertDialog), findsOneWidget);
-      expect(coordinator.performCalls, 1);
+      expect(coordinator.downloadCalls, 1);
+      expect(coordinator.performCalls, 2);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
@@ -895,7 +961,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(AlertDialog), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
       await _settleAndroidUpdateFlow(tester);
       expect(find.byType(AlertDialog), findsNothing);
 

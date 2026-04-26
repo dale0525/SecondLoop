@@ -209,14 +209,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
+    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.text('Update now'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pump();
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('about_android_progress_bar')),
+    expect(find.byKey(const ValueKey('android_update_dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('android_update_progress_label')),
         findsOneWidget);
-    expect(find.textContaining('55%'), findsOneWidget);
     expect(service.installCalls, 0);
     expect(service.stageCalls, 0);
     expect(downloader.downloadCalls, 1);
@@ -278,15 +280,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('about_android_retry')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('android_update_confirm')), findsOneWidget);
     expect(installer.installCalls, 0);
     expect(downloader.downloadCalls, 1);
 
-    await tester.tap(find.byKey(const ValueKey('about_android_retry')));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+    await tester.pumpAndSettle();
 
     expect(downloader.downloadCalls, 2);
     expect(installer.installCalls, greaterThanOrEqualTo(0));
@@ -341,19 +344,20 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pump();
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('about_android_cancel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('android_update_cancel_download')),
+        findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('about_android_cancel')));
+    await tester
+        .tap(find.byKey(const ValueKey('android_update_cancel_download')));
     downloadCompleter.complete();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(
-        find.byKey(const ValueKey('about_android_progress_bar')), findsNothing);
-    expect(find.byKey(const ValueKey('about_android_retry')), findsNothing);
+    expect(find.byKey(const ValueKey('android_update_dialog')), findsNothing);
     expect(installer.installCalls, 0);
 
     debugDefaultTargetPlatformOverride = oldPlatform;
@@ -408,8 +412,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
 
     expect(
         find.text('Failed to download or open the installer.'), findsNothing);
@@ -466,7 +470,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pump();
     await tester.runAsync(() async {
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -483,7 +487,7 @@ void main() {
       }));
 
   testWidgets(
-      'About page keeps update action disabled while cancellation settles',
+      'About page keeps Android progress dialog while cancellation settles',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -529,17 +533,15 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 10));
 
-    await tester.tap(find.byKey(const ValueKey('about_android_cancel')));
+    await tester
+        .tap(find.byKey(const ValueKey('android_update_cancel_download')));
     await tester.pump();
 
-    final autoUpdateButton = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('about_auto_update')),
-    );
-    expect(autoUpdateButton.onPressed, isNull);
+    expect(find.byKey(const ValueKey('android_update_dialog')), findsOneWidget);
 
     downloadCompleter.complete();
     await tester.pumpAndSettle();
@@ -597,7 +599,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 10));
 
@@ -706,7 +708,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
-    expect(find.byKey(const ValueKey('about_manual_update')), findsOneWidget);
+    expect(find.byKey(const ValueKey('about_manual_update')), findsNothing);
+    expect(find.text('Update now'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = oldPlatform;
   },
@@ -773,67 +776,6 @@ void main() {
       findsNothing,
     );
 
-    debugDefaultTargetPlatformOverride = oldPlatform;
-  },
-      variant: const TargetPlatformVariant(<TargetPlatform>{
-        TargetPlatform.android,
-      }));
-
-  testWidgets(
-      'About page clears stale Android retry after refresh result changes',
-      (tester) async {
-    final oldPlatform = debugDefaultTargetPlatformOverride;
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    SharedPreferences.setMockInitialValues({});
-
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.externalDownload,
-      asset: AppUpdateAsset(
-        name: 'SecondLoop-android-arm64-v8a.apk',
-        downloadUri:
-            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
-        sha256: _fakeAndroidApkSha256,
-      ),
-    );
-    final service = _FakeAboutUpdateService(
-      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
-    );
-    final downloader = _FakeAndroidApkDownloader(failuresBeforeSuccess: 1);
-    final installer = _FakeAndroidApkInstaller();
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AboutPage(
-            updateService: service,
-            runtimeVersionLoader: () async =>
-                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
-            androidApkDownloader: downloader,
-            androidApkInstaller: installer,
-            enableAndroidApkInstallInDebug: true,
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('about_android_retry')), findsOneWidget);
-
-    service.result = const AppUpdateCheckResult(currentVersion: '1.0.1+99');
-    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('about_android_retry')), findsNothing);
     debugDefaultTargetPlatformOverride = oldPlatform;
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
