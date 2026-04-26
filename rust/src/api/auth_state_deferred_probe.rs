@@ -160,14 +160,12 @@ enum ProbeMatch {
     NoEncryptedData,
     ValidKey,
     UnableToValidate,
-    Indeterminate,
 }
 
 #[derive(Default)]
 struct ProbeAccumulator {
     found_valid: bool,
     found_unverifiable: bool,
-    found_indeterminate: bool,
 }
 
 impl ProbeAccumulator {
@@ -182,15 +180,11 @@ impl ProbeAccumulator {
                 self.found_unverifiable = true;
                 Some(ProbeMatch::UnableToValidate)
             }
-            ProbeMatch::Indeterminate => {
-                self.found_indeterminate = true;
-                Some(ProbeMatch::UnableToValidate)
-            }
         }
     }
 
     fn finish(self) -> ProbeMatch {
-        if self.found_unverifiable || self.found_indeterminate {
+        if self.found_unverifiable {
             ProbeMatch::UnableToValidate
         } else if self.found_valid {
             ProbeMatch::ValidKey
@@ -233,7 +227,6 @@ fn missing_auth_key_probe_result(result: ProbeMatch) -> MissingAuthKeyProbe {
         ProbeMatch::NoEncryptedData => MissingAuthKeyProbe::NoEncryptedData,
         ProbeMatch::ValidKey => MissingAuthKeyProbe::ValidKey,
         ProbeMatch::UnableToValidate => MissingAuthKeyProbe::UnableToValidate,
-        ProbeMatch::Indeterminate => MissingAuthKeyProbe::UnableToValidate,
     }
 }
 
@@ -498,20 +491,14 @@ ORDER BY rowid
         if blob_len > MAX_PROBE_DB_BLOB_BYTES
             || total_blob_bytes.saturating_add(blob_len) > MAX_TOTAL_PROBE_DB_BLOB_BYTES
         {
-            if let Some(result) = accumulator.add(ProbeMatch::Indeterminate) {
-                return Ok(result);
-            }
-            continue;
+            return Ok(ProbeMatch::UnableToValidate);
         }
         let blob: Vec<u8> = row.get(blob_index)?;
         let bytes_len = blob.len() as u64;
         if bytes_len > MAX_PROBE_DB_BLOB_BYTES
             || total_blob_bytes.saturating_add(bytes_len) > MAX_TOTAL_PROBE_DB_BLOB_BYTES
         {
-            if let Some(result) = accumulator.add(ProbeMatch::Indeterminate) {
-                return Ok(result);
-            }
-            continue;
+            return Ok(ProbeMatch::UnableToValidate);
         }
         total_blob_bytes += bytes_len;
         let aad = aad_for_row(row)?;
@@ -569,10 +556,7 @@ ORDER BY rowid
             ProbeFileRead::NoEncryptedData => continue,
             ProbeFileRead::Blob(blob) => blob,
             ProbeFileRead::Indeterminate => {
-                if let Some(result) = accumulator.add(ProbeMatch::Indeterminate) {
-                    return Ok(result);
-                }
-                continue;
+                return Ok(ProbeMatch::UnableToValidate);
             }
         };
         if let Some(result) = accumulator.add(match probe_blob_matches_key(key, &blob, &aad)? {
