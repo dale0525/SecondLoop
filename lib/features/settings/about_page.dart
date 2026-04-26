@@ -493,7 +493,6 @@ class _AboutMessageText {
   String checkFailed({required Object error}) =>
       _t.settings.about.messages.checkFailed(error: error);
   String get installStarting => _t.settings.about.messages.installStarting;
-  String get stageStarting => _t.settings.about.messages.stageStarting;
   String installFailed({required Object error}) =>
       _t.settings.about.messages.installFailed(error: error);
   String stageFailed({required Object error}) =>

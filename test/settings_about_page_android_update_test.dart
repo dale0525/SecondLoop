@@ -295,16 +295,15 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
 
-    expect(
-        find.byKey(const ValueKey('android_update_confirm')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsOneWidget);
     expect(installer.installCalls, 0);
     expect(downloader.downloadCalls, 1);
 
-    await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+    await tester.tap(find.byKey(const ValueKey('update_progress_retry')));
     await _settleAndroidUpdateFlow(tester);
 
     expect(downloader.downloadCalls, 2);
-    expect(find.byKey(const ValueKey('android_update_confirm')), findsNothing);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsNothing);
 
     debugDefaultTargetPlatformOverride = oldPlatform;
   },

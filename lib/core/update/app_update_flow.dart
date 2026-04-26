@@ -292,7 +292,7 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
           )
         else if (!_isRunning)
           TextButton(
-            key: const ValueKey('android_update_cancel'),
+            key: const ValueKey('update_progress_cancel'),
             onPressed: () {
               Navigator.of(context).pop(AppUpdateFlowResult.cancelled);
             },
@@ -300,13 +300,13 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
           ),
         if (!_isRunning && _errorMessage != null)
           FilledButton(
-            key: const ValueKey('android_update_confirm'),
+            key: const ValueKey('update_progress_retry'),
             onPressed: _startUpdate,
             child: Text(t.common.actions.retry),
           ),
         if (!_isRunning && _errorMessage != null)
           TextButton(
-            key: const ValueKey('android_update_manual'),
+            key: const ValueKey('update_progress_manual'),
             onPressed: _openManualUpdate,
             child: Text(t.settings.about.actions.manualUpdate),
           ),

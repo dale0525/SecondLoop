@@ -330,15 +330,14 @@ void main() {
           'Open the update page to download it now.',
         ),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.text('Preparing update. The app will restart shortly.'),
       findsNothing,
     );
     expect(find.text('Could not open update page'), findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('android_update_confirm')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
   });
 
@@ -383,7 +382,7 @@ void main() {
     expect(find.text('Could not open update page'), findsOneWidget);
 
     launcherSucceeds = true;
-    await tester.tap(find.byKey(const ValueKey('android_update_manual')));
+    await tester.tap(find.byKey(const ValueKey('update_progress_manual')));
     await tester.pumpAndSettle();
 
     expect(opened, <Uri>[update.releasePageUri, update.releasePageUri]);
@@ -425,8 +424,7 @@ void main() {
     expect(
         find.byKey(const ValueKey('update_progress_dialog')), findsOneWidget);
     expect(find.text('Could not open update page'), findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('android_update_confirm')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
   });
 
@@ -541,8 +539,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.installCalls, 1);
-    expect(
-        find.byKey(const ValueKey('android_update_confirm')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(
@@ -626,8 +623,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.stageCalls, 1);
-    expect(
-        find.byKey(const ValueKey('android_update_confirm')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(

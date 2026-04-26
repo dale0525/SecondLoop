@@ -373,7 +373,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
       await settleAndroidUpdateFlow(tester);
-      await tester.tap(find.byKey(const ValueKey('android_update_manual')));
+      await tester.tap(find.byKey(const ValueKey('update_progress_manual')));
       await tester.pumpAndSettle();
 
       expect(
