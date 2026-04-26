@@ -6,8 +6,8 @@ use anyhow::Result;
 use rusqlite::{params, Connection, OpenFlags};
 
 const MIN_ENCRYPTED_BLOB_LEN: usize = 24 + 16;
-// This is a reset/import gate, not a full vault integrity scan.
-const MAX_PROBE_ROWS_PER_FIELD: i64 = 64;
+const MAX_PROBE_FILE_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_TOTAL_PROBE_FILE_BYTES: u64 = 256 * 1024 * 1024;
 
 const FIXED_AAD_PROBES: &[FixedAadProbe] = &[
     FixedAadProbe {
@@ -160,12 +160,14 @@ enum ProbeMatch {
     ValidKey,
     InvalidKey,
     UnableToValidate,
+    Indeterminate,
 }
 
 #[derive(Default)]
 struct ProbeAccumulator {
     found_valid: bool,
     found_unverifiable: bool,
+    found_indeterminate: bool,
 }
 
 impl ProbeAccumulator {
@@ -188,14 +190,18 @@ impl ProbeAccumulator {
                     None
                 }
             }
+            ProbeMatch::Indeterminate => {
+                self.found_indeterminate = true;
+                None
+            }
             ProbeMatch::InvalidKey => Some(ProbeMatch::InvalidKey),
         }
     }
 
     fn finish(self) -> ProbeMatch {
-        if self.found_valid {
+        if self.found_valid && !self.found_indeterminate {
             ProbeMatch::ValidKey
-        } else if self.found_unverifiable {
+        } else if self.found_unverifiable || self.found_indeterminate {
             ProbeMatch::UnableToValidate
         } else {
             ProbeMatch::NoEncryptedData
@@ -237,6 +243,7 @@ fn missing_auth_key_probe_result(result: ProbeMatch) -> MissingAuthKeyProbe {
         ProbeMatch::ValidKey => MissingAuthKeyProbe::ValidKey,
         ProbeMatch::InvalidKey => MissingAuthKeyProbe::InvalidKey,
         ProbeMatch::UnableToValidate => MissingAuthKeyProbe::UnableToValidate,
+        ProbeMatch::Indeterminate => MissingAuthKeyProbe::UnableToValidate,
     }
 }
 
@@ -488,14 +495,10 @@ FROM {quoted_table}
 WHERE typeof({quoted_column}) = 'blob'
   AND length({quoted_column}) >= ?1
 ORDER BY rowid
-LIMIT ?2
 "#
     );
     let mut stmt = conn.prepare(&sql)?;
-    let mut rows = stmt.query(params![
-        MIN_ENCRYPTED_BLOB_LEN as i64,
-        MAX_PROBE_ROWS_PER_FIELD
-    ])?;
+    let mut rows = stmt.query(params![MIN_ENCRYPTED_BLOB_LEN as i64])?;
     let blob_index = id_columns.len();
     let mut accumulator = ProbeAccumulator::default();
     while let Some(row) = rows.next()? {
@@ -543,16 +546,23 @@ where
 SELECT {select_columns}
 FROM {quoted_table}
 ORDER BY rowid
-LIMIT ?1
 "#
     );
     let mut stmt = conn.prepare(&sql)?;
-    let mut rows = stmt.query(params![MAX_PROBE_ROWS_PER_FIELD])?;
+    let mut rows = stmt.query([])?;
     let mut accumulator = ProbeAccumulator::default();
+    let mut total_file_bytes = 0u64;
     while let Some(row) = rows.next()? {
         let (stored_path, aad) = aad_and_path_for_row(row)?;
-        let Some(blob) = read_app_relative_file(app_dir, &stored_path)? else {
-            continue;
+        let blob = match read_app_relative_file(app_dir, &stored_path, &mut total_file_bytes)? {
+            ProbeFileRead::NoEncryptedData => continue,
+            ProbeFileRead::Blob(blob) => blob,
+            ProbeFileRead::Indeterminate => {
+                if let Some(result) = accumulator.add(ProbeMatch::Indeterminate) {
+                    return Ok(result);
+                }
+                continue;
+            }
         };
         if let Some(result) = accumulator.add(match probe_blob_matches_key(key, &blob, &aad)? {
             Some(true) => ProbeMatch::ValidKey,
@@ -577,16 +587,50 @@ fn probe_blob_matches_key(key: &[u8; 32], blob: &[u8], aad: &[u8]) -> Result<Opt
     }
 }
 
-fn read_app_relative_file(app_dir: &Path, stored_path: &str) -> Result<Option<Vec<u8>>> {
+enum ProbeFileRead {
+    NoEncryptedData,
+    Blob(Vec<u8>),
+    Indeterminate,
+}
+
+fn read_app_relative_file(
+    app_dir: &Path,
+    stored_path: &str,
+    total_file_bytes: &mut u64,
+) -> Result<ProbeFileRead> {
     let relative_path = Path::new(stored_path);
     if !is_safe_app_relative_path(relative_path) {
-        return Ok(None);
+        return Ok(ProbeFileRead::Indeterminate);
     }
-    match fs::read(app_dir.join(relative_path)) {
-        Ok(bytes) => Ok(Some(bytes)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error.into()),
+    let full_path = app_dir.join(relative_path);
+    let metadata = match fs::metadata(&full_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ProbeFileRead::NoEncryptedData);
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if !metadata.is_file() {
+        return Ok(ProbeFileRead::Indeterminate);
     }
+    let file_len = metadata.len();
+    if file_len < MIN_ENCRYPTED_BLOB_LEN as u64 {
+        return Ok(ProbeFileRead::NoEncryptedData);
+    }
+    if file_len > MAX_PROBE_FILE_BYTES
+        || total_file_bytes.saturating_add(file_len) > MAX_TOTAL_PROBE_FILE_BYTES
+    {
+        return Ok(ProbeFileRead::Indeterminate);
+    }
+    let bytes = fs::read(&full_path)?;
+    let bytes_len = bytes.len() as u64;
+    if bytes_len > MAX_PROBE_FILE_BYTES
+        || total_file_bytes.saturating_add(bytes_len) > MAX_TOTAL_PROBE_FILE_BYTES
+    {
+        return Ok(ProbeFileRead::Indeterminate);
+    }
+    *total_file_bytes += bytes_len;
+    Ok(ProbeFileRead::Blob(bytes))
 }
 
 fn is_safe_app_relative_path(path: &Path) -> bool {

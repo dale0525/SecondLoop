@@ -2,6 +2,21 @@ use std::fs;
 
 use secondloop_rust::{api::core, crypto, db};
 
+fn insert_attachment_row(
+    conn: &rusqlite::Connection,
+    sha256: &str,
+    stored_path: &str,
+    byte_len: i64,
+    created_at: i64,
+) {
+    conn.execute(
+        r#"INSERT INTO attachments(sha256, mime_type, path, byte_len, created_at)
+           VALUES (?1, 'application/octet-stream', ?2, ?3, ?4)"#,
+        rusqlite::params![sha256, stored_path, byte_len, created_at],
+    )
+    .expect("insert attachment row");
+}
+
 #[test]
 fn reset_rejects_cross_table_mixed_deferred_keys() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -38,6 +53,37 @@ fn reset_rejects_cross_table_mixed_deferred_keys() {
 }
 
 #[test]
+fn reset_rejects_same_table_mixed_deferred_key_after_probe_window() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open db");
+    let first_key = [3u8; 32];
+    let second_key = [4u8; 32];
+    for index in 0..64 {
+        db::create_conversation(&conn, &first_key, &format!("first-{index}"))
+            .expect("seed first-key conversation");
+    }
+    db::create_conversation(&conn, &second_key, "second-after-window")
+        .expect("seed second-key conversation");
+    drop(conn);
+
+    let result = core::db_reset_vault_data_preserving_llm_profiles(
+        dir.path().to_string_lossy().into_owned(),
+        first_key.to_vec(),
+    );
+
+    let error = result.expect_err("mixed keys after the old probe window should be rejected");
+    assert!(
+        error.to_string().contains("invalid key"),
+        "unexpected error: {error}"
+    );
+    let conn = db::open(dir.path()).expect("reopen db");
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
+        .expect("count conversations");
+    assert_eq!(count, 65);
+}
+
+#[test]
 fn reset_allows_missing_auth_with_valid_tag_only_deferred_key() {
     let dir = tempfile::tempdir().expect("tempdir");
     let conn = db::open(dir.path()).expect("open db");
@@ -53,6 +99,39 @@ fn reset_allows_missing_auth_with_valid_tag_only_deferred_key() {
     assert!(
         result.is_ok(),
         "valid tag-only deferred key should allow reset without auth.json: {result:?}"
+    );
+}
+
+#[test]
+fn reset_allows_attachment_file_probe_after_many_missing_paths() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open db");
+    let key = [6u8; 32];
+    for index in 0..64 {
+        let sha256 = format!("{index:064x}");
+        let stored_path = format!("attachments/missing-{index}.bin");
+        insert_attachment_row(&conn, &sha256, &stored_path, 10, index);
+    }
+    let sha256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    let stored_path = format!("attachments/{sha256}.bin");
+    let full_path = dir.path().join(&stored_path);
+    fs::create_dir_all(full_path.parent().expect("attachment parent"))
+        .expect("create attachment dir");
+    let aad = format!("attachment.bytes:{sha256}");
+    let blob = crypto::encrypt_bytes(&key, b"attachment bytes", aad.as_bytes())
+        .expect("encrypt attachment");
+    fs::write(&full_path, blob).expect("write attachment blob");
+    insert_attachment_row(&conn, sha256, &stored_path, 16, 65);
+    drop(conn);
+
+    let result = core::db_reset_vault_data_preserving_llm_profiles(
+        dir.path().to_string_lossy().into_owned(),
+        key.to_vec(),
+    );
+
+    assert!(
+        result.is_ok(),
+        "valid attachment probe should be found after missing file rows: {result:?}"
     );
 }
 
@@ -75,6 +154,56 @@ fn reset_allows_missing_auth_with_valid_attachment_only_deferred_key() {
     assert!(
         result.is_ok(),
         "valid attachment-only deferred key should allow reset without auth.json: {result:?}"
+    );
+}
+
+#[test]
+fn reset_rejects_oversized_attachment_probe_without_reporting_invalid_key() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open db");
+    let key = [6u8; 32];
+    let oversized_sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    let oversized_path = format!("attachments/{oversized_sha256}.bin");
+    let oversized_full_path = dir.path().join(&oversized_path);
+    fs::create_dir_all(oversized_full_path.parent().expect("attachment parent"))
+        .expect("create attachment dir");
+    let oversized_file = fs::File::create(&oversized_full_path).expect("create oversized file");
+    oversized_file
+        .set_len(80 * 1024 * 1024)
+        .expect("make sparse oversized file");
+    insert_attachment_row(
+        &conn,
+        oversized_sha256,
+        &oversized_path,
+        80 * 1024 * 1024,
+        1,
+    );
+
+    let valid_sha256 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    let valid_path = format!("attachments/{valid_sha256}.bin");
+    let valid_full_path = dir.path().join(&valid_path);
+    let aad = format!("attachment.bytes:{valid_sha256}");
+    let blob =
+        crypto::encrypt_bytes(&key, b"valid attachment", aad.as_bytes()).expect("encrypt valid");
+    fs::write(&valid_full_path, blob).expect("write valid attachment");
+    insert_attachment_row(&conn, valid_sha256, &valid_path, 16, 2);
+    drop(conn);
+
+    let result = core::db_reset_vault_data_preserving_llm_profiles(
+        dir.path().to_string_lossy().into_owned(),
+        key.to_vec(),
+    );
+
+    let error = result.expect_err("oversized file probe should fail closed");
+    assert!(
+        error
+            .to_string()
+            .contains("unable to validate key against existing vault data"),
+        "unexpected error: {error}"
+    );
+    assert!(
+        !error.to_string().contains("invalid key"),
+        "oversized probe should not be reported as a definitive invalid key: {error}"
     );
 }
 
