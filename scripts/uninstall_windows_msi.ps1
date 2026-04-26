@@ -503,19 +503,13 @@ function Remove-UninstallResidue {
 }
 
 $expectedInstallLocationPath = Get-ExpectedInstallLocation -DirectoryName $InstallDirName
-$expectedInstallLocation = Normalize-PathValue $expectedInstallLocationPath
-
 $matchingEntries = @(
   Get-UninstallRegistryEntries | Where-Object {
-    $displayName = Get-StringValue $_.DisplayName
-    $installLocation = Normalize-PathValue (Get-StringValue $_.InstallLocation)
-    $hasSafeInstallLocation = Test-RegistryEntryHasSafeInstallLocation -Entry $_ -ExpectedInstallLocation $expectedInstallLocationPath
-
-    $hasSafeInstallLocation -or
-      $displayName -eq $ProductName -or (
-        $expectedInstallLocation -and
-        $installLocation -eq $expectedInstallLocation
-      )
+    Test-RegistryEntryMatchesProduct `
+      -Entry $_ `
+      -ProductName $ProductName `
+      -ExpectedInstallLocation $expectedInstallLocationPath `
+      -ProductCode ''
   }
 )
 

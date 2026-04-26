@@ -352,7 +352,6 @@ New-Item -ItemType Directory -Force -Path $wixObjDir | Out-Null
 $installDirName = $ProductName
 $productRegistryKey = "Software\SecondLoop\$ProductName"
 $shortcutRegKey = $productRegistryKey
-$appStorageRelativePath = "com.secondloop\$ProductName"
 $closeApplicationBlock = if ($DisableCloseApplication) {
   ''
 } else {
@@ -369,12 +368,6 @@ $mainWxsContent = @'
     <Icon Id="AppIcon" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Property Id="SECONDLOOP_LAUNCH_AFTER_INSTALL" Value="1" />
-    <Property Id="SECONDLOOP_APPDATA_CLEANUP_PATH">
-      <RegistrySearch Id="SecondLoopAppDataCleanupPathSearch" Root="HKCU" Key="__PRODUCT_REG_KEY__\CleanupPaths" Name="AppData" Type="raw" />
-    </Property>
-    <Property Id="SECONDLOOP_LOCALAPPDATA_CLEANUP_PATH">
-      <RegistrySearch Id="SecondLoopLocalAppDataCleanupPathSearch" Root="HKCU" Key="__PRODUCT_REG_KEY__\CleanupPaths" Name="LocalAppData" Type="raw" />
-    </Property>
 __CLOSE_APPLICATION_BLOCK__
     <CustomAction Id="SetLaunchApplicationTarget" Property="WixShellExecTarget" Value="[INSTALLFOLDER]secondloop.exe" />
     <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Return="check" Impersonate="yes" />
@@ -385,7 +378,6 @@ __CLOSE_APPLICATION_BLOCK__
     <Feature Id="MainFeature" Title="__PRODUCT_NAME__" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentRef Id="StartMenuShortcutComponent" />
-      <ComponentRef Id="ResidualCleanupComponent" />
     </Feature>
   </Product>
 
@@ -396,7 +388,6 @@ __CLOSE_APPLICATION_BLOCK__
           <Directory Id="INSTALLFOLDER" Name="__INSTALL_DIR_NAME__" />
         </Directory>
       </Directory>
-      <Directory Id="AppDataFolder" />
       <Directory Id="ProgramMenuFolder">
         <Directory Id="ProgramMenuDir" Name="__PRODUCT_NAME__" />
       </Directory>
@@ -417,19 +408,6 @@ __CLOSE_APPLICATION_BLOCK__
       </Component>
     </DirectoryRef>
   </Fragment>
-
-  <Fragment>
-    <DirectoryRef Id="TARGETDIR">
-      <Component Id="ResidualCleanupComponent" Guid="*">
-        <util:RemoveFolderEx Id="RemoveSecondLoopAppData" On="uninstall" Property="SECONDLOOP_APPDATA_CLEANUP_PATH" />
-        <util:RemoveFolderEx Id="RemoveSecondLoopLocalAppData" On="uninstall" Property="SECONDLOOP_LOCALAPPDATA_CLEANUP_PATH" />
-        <RemoveRegistryKey Root="HKCU" Key="__PRODUCT_REG_KEY__" Action="removeOnUninstall" />
-        <RegistryValue Root="HKCU" Key="__PRODUCT_REG_KEY__\CleanupPaths" Name="AppData" Type="string" Value="[AppDataFolder]__APP_STORAGE_RELATIVE_PATH__" />
-        <RegistryValue Root="HKCU" Key="__PRODUCT_REG_KEY__\CleanupPaths" Name="LocalAppData" Type="string" Value="[LocalAppDataFolder]__APP_STORAGE_RELATIVE_PATH__" />
-        <RegistryValue Root="HKCU" Key="__PRODUCT_REG_KEY__\Installer" Name="ResidualCleanup" Type="integer" Value="1" KeyPath="yes" />
-      </Component>
-    </DirectoryRef>
-  </Fragment>
 </Wix>
 '@
 
@@ -439,7 +417,6 @@ $mainWxsContent = $mainWxsContent.Replace('__UPGRADE_CODE__', (Escape-Xml $Upgra
 $mainWxsContent = $mainWxsContent.Replace('__INSTALL_DIR_NAME__', (Escape-Xml $installDirName))
 $mainWxsContent = $mainWxsContent.Replace('__PRODUCT_REG_KEY__', (Escape-Xml $productRegistryKey))
 $mainWxsContent = $mainWxsContent.Replace('__SHORTCUT_REG_KEY__', (Escape-Xml $shortcutRegKey))
-$mainWxsContent = $mainWxsContent.Replace('__APP_STORAGE_RELATIVE_PATH__', (Escape-Xml $appStorageRelativePath))
 $mainWxsContent = $mainWxsContent.Replace('__CLOSE_APPLICATION_BLOCK__', $closeApplicationBlock)
 
 Set-Content -Path $mainWxsPath -Value $mainWxsContent -Encoding UTF8

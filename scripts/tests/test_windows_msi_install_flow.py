@@ -99,31 +99,14 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
             script,
         )
 
-    def test_create_windows_msi_cleans_user_data_and_cache_on_standard_uninstall(self) -> None:
+    def test_create_windows_msi_does_not_purge_user_data_on_standard_uninstall(self) -> None:
         script = self._read_repo_file("scripts/create_windows_msi.ps1")
 
-        self.assertIn("SECONDLOOP_APPDATA_CLEANUP_PATH", script)
-        self.assertIn("SECONDLOOP_LOCALAPPDATA_CLEANUP_PATH", script)
-        self.assertIn('[AppDataFolder]__APP_STORAGE_RELATIVE_PATH__', script)
-        self.assertIn('[LocalAppDataFolder]__APP_STORAGE_RELATIVE_PATH__', script)
-        self.assertIn('<RegistrySearch Id="SecondLoopAppDataCleanupPathSearch"', script)
-        self.assertIn('<RegistrySearch Id="SecondLoopLocalAppDataCleanupPathSearch"', script)
-        self.assertIn(
-            '<RegistryValue Root="HKCU" Key="__PRODUCT_REG_KEY__\\CleanupPaths" Name="AppData" Type="string" Value="[AppDataFolder]__APP_STORAGE_RELATIVE_PATH__" />',
-            script,
-        )
-        self.assertIn(
-            '<RegistryValue Root="HKCU" Key="__PRODUCT_REG_KEY__\\CleanupPaths" Name="LocalAppData" Type="string" Value="[LocalAppDataFolder]__APP_STORAGE_RELATIVE_PATH__" />',
-            script,
-        )
-        self.assertIn(
-            '<util:RemoveFolderEx Id="RemoveSecondLoopAppData" On="uninstall" Property="SECONDLOOP_APPDATA_CLEANUP_PATH" />',
-            script,
-        )
-        self.assertIn(
-            '<util:RemoveFolderEx Id="RemoveSecondLoopLocalAppData" On="uninstall" Property="SECONDLOOP_LOCALAPPDATA_CLEANUP_PATH" />',
-            script,
-        )
+        self.assertNotIn("SECONDLOOP_APPDATA_CLEANUP_PATH", script)
+        self.assertNotIn("SECONDLOOP_LOCALAPPDATA_CLEANUP_PATH", script)
+        self.assertNotIn("RemoveSecondLoopAppData", script)
+        self.assertNotIn("RemoveSecondLoopLocalAppData", script)
+        self.assertNotIn("RemoveFolderEx", script)
 
     def test_create_windows_msi_uses_product_specific_registry_cleanup_keys(self) -> None:
         script = self._read_repo_file("scripts/create_windows_msi.ps1")
@@ -131,7 +114,7 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertIn("$productRegistryKey = \"Software\\SecondLoop\\$ProductName\"", script)
         self.assertIn("ProductRegistryKey", script)
         self.assertIn("$componentRegistryKey = \"$ProductRegistryKey\\Installer\\Components\"", script)
-        self.assertIn('<RemoveRegistryKey Root="HKCU" Key="__PRODUCT_REG_KEY__" Action="removeOnUninstall" />', script)
+        self.assertNotIn("Software\\SecondLoop\\Installer\\Components", script)
         self.assertNotIn("$shortcutRegKey = 'Software\\SecondLoop'", script)
 
     def test_install_script_can_disable_msi_auto_launch_for_manual_launch_mode(self) -> None:
@@ -220,6 +203,15 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
 
         self.assertIn("Test-RegistryEntryHasSafeInstallLocation", body)
         self.assertNotIn("if ($displayName -eq $ProductName) {\n    return $true\n  }", body)
+
+        matching_entries_start = script.find("$matchingEntries = @(")
+        self.assertNotEqual(matching_entries_start, -1, "matching entries block not found")
+        matching_entries_end = script.find("\n)\n\n$selectedEntry", matching_entries_start)
+        self.assertNotEqual(matching_entries_end, -1, "matching entries block was not closed")
+        matching_entries_body = script[matching_entries_start:matching_entries_end]
+        self.assertIn("Test-RegistryEntryMatchesProduct", matching_entries_body)
+        self.assertIn("-Entry $_", matching_entries_body)
+        self.assertNotIn("$displayName -eq $ProductName", matching_entries_body)
 
     def test_uninstall_script_removes_shared_registry_parent_only_when_empty(self) -> None:
         script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
