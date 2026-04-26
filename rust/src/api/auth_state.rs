@@ -131,6 +131,11 @@ pub(crate) fn validate_reset_vault_data_access(app_dir: &Path, key: &[u8; 32]) -
         match missing_auth_key_probe(app_dir, key)? {
             MissingAuthKeyProbe::ValidKey => return Ok(()),
             MissingAuthKeyProbe::InvalidKey => return Err(anyhow!("invalid key")),
+            MissingAuthKeyProbe::UnableToValidate => {
+                return Err(anyhow!(
+                    "unable to validate key against existing vault data"
+                ));
+            }
             MissingAuthKeyProbe::NoEncryptedData => {}
         }
         return Err(anyhow!("vault data exists but auth file is missing"));
@@ -268,9 +273,11 @@ mod tests {
             vec![9u8; 32],
         );
 
-        let error = result.expect_err("invalid deferred key should be rejected");
+        let error = result.expect_err("unverifiable deferred key should be rejected");
         assert!(
-            error.to_string().contains("invalid key"),
+            error
+                .to_string()
+                .contains("unable to validate key against existing vault data"),
             "unexpected error: {error}"
         );
     }

@@ -1,10 +1,13 @@
-use std::path::Path;
+use std::fs;
+use std::path::{Component, Path};
 
 use crate::crypto::{decrypt_bytes, is_ciphertext_too_short_error, is_decrypt_failed_error};
 use anyhow::Result;
 use rusqlite::{params, Connection, OpenFlags};
 
 const MIN_ENCRYPTED_BLOB_LEN: usize = 24 + 16;
+// This is a reset/import gate, not a full vault integrity scan.
+const MAX_PROBE_ROWS_PER_FIELD: i64 = 64;
 
 const FIXED_AAD_PROBES: &[FixedAadProbe] = &[
     FixedAadProbe {
@@ -53,6 +56,12 @@ const ROW_AAD_PROBES: &[RowAadProbe] = &[
         column: "source_urls",
         id_column: "attachment_sha256",
         aad_prefix: "attachment.metadata.source_urls:",
+    },
+    RowAadProbe {
+        table: "attachment_exif",
+        column: "metadata",
+        id_column: "attachment_sha256",
+        aad_prefix: "attachment.exif:",
     },
     RowAadProbe {
         table: "todo_checklist_items",
@@ -129,6 +138,7 @@ pub(super) enum MissingAuthKeyProbe {
     NoEncryptedData,
     ValidKey,
     InvalidKey,
+    UnableToValidate,
 }
 
 struct FixedAadProbe {
@@ -149,45 +159,91 @@ enum ProbeMatch {
     NoEncryptedData,
     ValidKey,
     InvalidKey,
+    UnableToValidate,
+}
+
+#[derive(Default)]
+struct ProbeAccumulator {
+    found_valid: bool,
+    found_unverifiable: bool,
+}
+
+impl ProbeAccumulator {
+    fn add(&mut self, result: ProbeMatch) -> Option<ProbeMatch> {
+        match result {
+            ProbeMatch::NoEncryptedData => None,
+            ProbeMatch::ValidKey => {
+                if self.found_unverifiable {
+                    Some(ProbeMatch::InvalidKey)
+                } else {
+                    self.found_valid = true;
+                    None
+                }
+            }
+            ProbeMatch::UnableToValidate => {
+                if self.found_valid {
+                    Some(ProbeMatch::InvalidKey)
+                } else {
+                    self.found_unverifiable = true;
+                    None
+                }
+            }
+            ProbeMatch::InvalidKey => Some(ProbeMatch::InvalidKey),
+        }
+    }
+
+    fn finish(self) -> ProbeMatch {
+        if self.found_valid {
+            ProbeMatch::ValidKey
+        } else if self.found_unverifiable {
+            ProbeMatch::UnableToValidate
+        } else {
+            ProbeMatch::NoEncryptedData
+        }
+    }
 }
 
 pub(super) fn missing_auth_key_probe(
     app_dir: &Path,
     key: &[u8; 32],
 ) -> Result<MissingAuthKeyProbe> {
-    let mut found_valid = false;
+    let mut accumulator = ProbeAccumulator::default();
 
-    if let Some(result) = probe_db_path(&app_dir.join("secondloop.sqlite3"), key, probe_main_db)? {
-        match result {
-            ProbeMatch::InvalidKey => return Ok(MissingAuthKeyProbe::InvalidKey),
-            ProbeMatch::ValidKey => found_valid = true,
-            ProbeMatch::NoEncryptedData => {}
+    if let Some(result) = probe_db_path(&app_dir.join("secondloop.sqlite3"), key, |conn, key| {
+        probe_main_db(app_dir, conn, key)
+    })? {
+        if let Some(result) = accumulator.add(result) {
+            return Ok(missing_auth_key_probe_result(result));
         }
     }
 
     let external_db_path = app_dir
         .join("external_readonly")
         .join("external_readonly.sqlite3");
-    if let Some(result) = probe_db_path(&external_db_path, key, probe_external_readonly_db)? {
-        match result {
-            ProbeMatch::InvalidKey => return Ok(MissingAuthKeyProbe::InvalidKey),
-            ProbeMatch::ValidKey => found_valid = true,
-            ProbeMatch::NoEncryptedData => {}
+    if let Some(result) = probe_db_path(&external_db_path, key, |conn, key| {
+        probe_external_readonly_db(app_dir, conn, key)
+    })? {
+        if let Some(result) = accumulator.add(result) {
+            return Ok(missing_auth_key_probe_result(result));
         }
     }
 
-    Ok(if found_valid {
-        MissingAuthKeyProbe::ValidKey
-    } else {
-        MissingAuthKeyProbe::NoEncryptedData
-    })
+    Ok(missing_auth_key_probe_result(accumulator.finish()))
 }
 
-fn probe_db_path(
-    db_path: &Path,
-    key: &[u8; 32],
-    probe: fn(&Connection, &[u8; 32]) -> Result<ProbeMatch>,
-) -> Result<Option<ProbeMatch>> {
+fn missing_auth_key_probe_result(result: ProbeMatch) -> MissingAuthKeyProbe {
+    match result {
+        ProbeMatch::NoEncryptedData => MissingAuthKeyProbe::NoEncryptedData,
+        ProbeMatch::ValidKey => MissingAuthKeyProbe::ValidKey,
+        ProbeMatch::InvalidKey => MissingAuthKeyProbe::InvalidKey,
+        ProbeMatch::UnableToValidate => MissingAuthKeyProbe::UnableToValidate,
+    }
+}
+
+fn probe_db_path<F>(db_path: &Path, key: &[u8; 32], probe: F) -> Result<Option<ProbeMatch>>
+where
+    F: FnOnce(&Connection, &[u8; 32]) -> Result<ProbeMatch>,
+{
     if !db_path.exists() {
         return Ok(None);
     }
@@ -198,55 +254,58 @@ fn probe_db_path(
     probe(&conn, key).map(Some)
 }
 
-fn probe_main_db(conn: &Connection, key: &[u8; 32]) -> Result<ProbeMatch> {
-    let mut found_valid = false;
+fn probe_main_db(app_dir: &Path, conn: &Connection, key: &[u8; 32]) -> Result<ProbeMatch> {
+    let mut accumulator = ProbeAccumulator::default();
     for probe in FIXED_AAD_PROBES {
-        match fixed_aad_probe_matches_key(conn, key, probe)? {
-            Some(false) => return Ok(ProbeMatch::InvalidKey),
-            Some(true) => found_valid = true,
-            None => {}
+        if let Some(result) = accumulator.add(fixed_aad_probe_matches_key(conn, key, probe)?) {
+            return Ok(result);
         }
     }
     for probe in ROW_AAD_PROBES {
-        match row_aad_probe_matches_key(conn, key, probe)? {
-            Some(false) => return Ok(ProbeMatch::InvalidKey),
-            Some(true) => found_valid = true,
-            None => {}
+        if let Some(result) = accumulator.add(row_aad_probe_matches_key(conn, key, probe)?) {
+            return Ok(result);
         }
     }
-    Ok(if found_valid {
-        ProbeMatch::ValidKey
-    } else {
-        ProbeMatch::NoEncryptedData
-    })
+    for result in [
+        attachment_place_probe_matches_key(conn, key)?,
+        attachment_annotation_probe_matches_key(conn, key)?,
+        attachment_file_probe_matches_key(app_dir, conn, key)?,
+        attachment_variant_file_probe_matches_key(app_dir, conn, key)?,
+    ] {
+        if let Some(result) = accumulator.add(result) {
+            return Ok(result);
+        }
+    }
+    Ok(accumulator.finish())
 }
 
-fn probe_external_readonly_db(conn: &Connection, key: &[u8; 32]) -> Result<ProbeMatch> {
-    let mut found_valid = false;
+fn probe_external_readonly_db(
+    app_dir: &Path,
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<ProbeMatch> {
+    let mut accumulator = ProbeAccumulator::default();
     for probe in EXTERNAL_ROW_AAD_PROBES {
-        match row_aad_probe_matches_key(conn, key, probe)? {
-            Some(false) => return Ok(ProbeMatch::InvalidKey),
-            Some(true) => found_valid = true,
-            None => {}
+        if let Some(result) = accumulator.add(row_aad_probe_matches_key(conn, key, probe)?) {
+            return Ok(result);
         }
     }
-    match external_chunk_probe_matches_key(conn, key)? {
-        Some(false) => return Ok(ProbeMatch::InvalidKey),
-        Some(true) => found_valid = true,
-        None => {}
+    for result in [
+        external_chunk_probe_matches_key(conn, key)?,
+        external_attachment_file_probe_matches_key(app_dir, conn, key)?,
+    ] {
+        if let Some(result) = accumulator.add(result) {
+            return Ok(result);
+        }
     }
-    Ok(if found_valid {
-        ProbeMatch::ValidKey
-    } else {
-        ProbeMatch::NoEncryptedData
-    })
+    Ok(accumulator.finish())
 }
 
 fn fixed_aad_probe_matches_key(
     conn: &Connection,
     key: &[u8; 32],
     probe: &FixedAadProbe,
-) -> Result<Option<bool>> {
+) -> Result<ProbeMatch> {
     encrypted_probe_matches_key(conn, key, probe.table, probe.column, |_| {
         Ok(probe.aad.to_vec())
     })
@@ -256,19 +315,126 @@ fn row_aad_probe_matches_key(
     conn: &Connection,
     key: &[u8; 32],
     probe: &RowAadProbe,
-) -> Result<Option<bool>> {
+) -> Result<ProbeMatch> {
     encrypted_probe_matches_key(conn, key, probe.table, probe.column, |row| {
         let id: String = row.get(0)?;
         Ok(format!("{}{}", probe.aad_prefix, id).into_bytes())
     })
 }
 
-fn external_chunk_probe_matches_key(conn: &Connection, key: &[u8; 32]) -> Result<Option<bool>> {
-    encrypted_probe_matches_key(conn, key, "external_document_chunks", "chunk_text", |row| {
-        let doc_id: String = row.get(0)?;
-        let chunk_index: i64 = row.get(1)?;
-        Ok(format!("external_chunk.text:{doc_id}:{chunk_index}").into_bytes())
-    })
+fn external_chunk_probe_matches_key(conn: &Connection, key: &[u8; 32]) -> Result<ProbeMatch> {
+    encrypted_probe_matches_key_with_ids(
+        conn,
+        key,
+        "external_document_chunks",
+        "chunk_text",
+        &["doc_id", "chunk_index"],
+        |row| {
+            let doc_id: String = row.get(0)?;
+            let chunk_index: i64 = row.get(1)?;
+            Ok(format!("external_chunk.text:{doc_id}:{chunk_index}").into_bytes())
+        },
+    )
+}
+
+fn attachment_place_probe_matches_key(conn: &Connection, key: &[u8; 32]) -> Result<ProbeMatch> {
+    encrypted_probe_matches_key_with_ids(
+        conn,
+        key,
+        "attachment_places",
+        "payload",
+        &["attachment_sha256", "lang"],
+        |row| {
+            let attachment_sha256: String = row.get(0)?;
+            let lang: String = row.get(1)?;
+            Ok(format!("attachment.place:{attachment_sha256}:{lang}").into_bytes())
+        },
+    )
+}
+
+fn attachment_annotation_probe_matches_key(
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<ProbeMatch> {
+    encrypted_probe_matches_key_with_ids(
+        conn,
+        key,
+        "attachment_annotations",
+        "payload",
+        &["attachment_sha256", "lang"],
+        |row| {
+            let attachment_sha256: String = row.get(0)?;
+            let lang: String = row.get(1)?;
+            Ok(format!("attachment.annotation:{attachment_sha256}:{lang}").into_bytes())
+        },
+    )
+}
+
+fn attachment_file_probe_matches_key(
+    app_dir: &Path,
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<ProbeMatch> {
+    encrypted_file_probe_matches_key(
+        app_dir,
+        conn,
+        key,
+        "attachments",
+        &["sha256", "path"],
+        |row| {
+            let sha256: String = row.get(0)?;
+            let stored_path: String = row.get(1)?;
+            Ok((
+                stored_path,
+                format!("attachment.bytes:{sha256}").into_bytes(),
+            ))
+        },
+    )
+}
+
+fn attachment_variant_file_probe_matches_key(
+    app_dir: &Path,
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<ProbeMatch> {
+    encrypted_file_probe_matches_key(
+        app_dir,
+        conn,
+        key,
+        "attachment_variants",
+        &["attachment_sha256", "variant", "path"],
+        |row| {
+            let attachment_sha256: String = row.get(0)?;
+            let variant: String = row.get(1)?;
+            let stored_path: String = row.get(2)?;
+            Ok((
+                stored_path,
+                format!("attachment.variant.bytes:{attachment_sha256}:{variant}").into_bytes(),
+            ))
+        },
+    )
+}
+
+fn external_attachment_file_probe_matches_key(
+    app_dir: &Path,
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<ProbeMatch> {
+    encrypted_file_probe_matches_key(
+        app_dir,
+        conn,
+        key,
+        "external_attachments",
+        &["sha256", "stored_path"],
+        |row| {
+            let sha256: String = row.get(0)?;
+            let stored_path: String = row.get(1)?;
+            Ok((
+                stored_path,
+                format!("external_attachment.bytes:{sha256}").into_bytes(),
+            ))
+        },
+    )
 }
 
 fn encrypted_probe_matches_key<F>(
@@ -277,19 +443,29 @@ fn encrypted_probe_matches_key<F>(
     table: &str,
     column: &str,
     aad_for_row: F,
-) -> Result<Option<bool>>
+) -> Result<ProbeMatch>
 where
     F: Fn(&rusqlite::Row<'_>) -> Result<Vec<u8>>,
 {
-    let id_columns = if table == "external_document_chunks" {
-        vec!["doc_id", "chunk_index"]
-    } else {
-        vec![id_column_for_probe(table, column).unwrap_or("rowid")]
-    };
+    let id_columns = vec![id_column_for_probe(table, column).unwrap_or("rowid")];
+    encrypted_probe_matches_key_with_ids(conn, key, table, column, &id_columns, aad_for_row)
+}
+
+fn encrypted_probe_matches_key_with_ids<F>(
+    conn: &Connection,
+    key: &[u8; 32],
+    table: &str,
+    column: &str,
+    id_columns: &[&str],
+    aad_for_row: F,
+) -> Result<ProbeMatch>
+where
+    F: Fn(&rusqlite::Row<'_>) -> Result<Vec<u8>>,
+{
     if !super::table_has_rows(conn, table)?
-        || !probe_columns_exist(conn, table, column, &id_columns)?
+        || !probe_columns_exist(conn, table, column, id_columns)?
     {
-        return Ok(None);
+        return Ok(ProbeMatch::NoEncryptedData);
     }
 
     let quoted_table = quote_ident(table);
@@ -312,23 +488,112 @@ FROM {quoted_table}
 WHERE typeof({quoted_column}) = 'blob'
   AND length({quoted_column}) >= ?1
 ORDER BY rowid
+LIMIT ?2
 "#
     );
     let mut stmt = conn.prepare(&sql)?;
-    let mut rows = stmt.query(params![MIN_ENCRYPTED_BLOB_LEN as i64])?;
+    let mut rows = stmt.query(params![
+        MIN_ENCRYPTED_BLOB_LEN as i64,
+        MAX_PROBE_ROWS_PER_FIELD
+    ])?;
     let blob_index = id_columns.len();
-    let mut found_valid = false;
+    let mut accumulator = ProbeAccumulator::default();
     while let Some(row) = rows.next()? {
         let blob: Vec<u8> = row.get(blob_index)?;
         let aad = aad_for_row(row)?;
-        match decrypt_bytes(key, &blob, &aad) {
-            Ok(_) => found_valid = true,
-            Err(error) if is_decrypt_failed_error(&error) => return Ok(Some(false)),
-            Err(error) if is_ciphertext_too_short_error(&error) => {}
-            Err(error) => return Err(error),
+        if let Some(result) = accumulator.add(match probe_blob_matches_key(key, &blob, &aad)? {
+            Some(true) => ProbeMatch::ValidKey,
+            Some(false) => ProbeMatch::UnableToValidate,
+            None => ProbeMatch::NoEncryptedData,
+        }) {
+            return Ok(result);
         }
     }
-    Ok(found_valid.then_some(true))
+    Ok(accumulator.finish())
+}
+
+fn encrypted_file_probe_matches_key<F>(
+    app_dir: &Path,
+    conn: &Connection,
+    key: &[u8; 32],
+    table: &str,
+    columns: &[&str],
+    aad_and_path_for_row: F,
+) -> Result<ProbeMatch>
+where
+    F: Fn(&rusqlite::Row<'_>) -> Result<(String, Vec<u8>)>,
+{
+    let Some((&path_column, id_columns)) = columns.split_last() else {
+        return Ok(ProbeMatch::NoEncryptedData);
+    };
+    if !super::table_has_rows(conn, table)?
+        || !probe_columns_exist(conn, table, path_column, id_columns)?
+    {
+        return Ok(ProbeMatch::NoEncryptedData);
+    }
+
+    let quoted_table = quote_ident(table);
+    let select_columns = columns
+        .iter()
+        .map(|column| quote_ident(column))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        r#"
+SELECT {select_columns}
+FROM {quoted_table}
+ORDER BY rowid
+LIMIT ?1
+"#
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let mut rows = stmt.query(params![MAX_PROBE_ROWS_PER_FIELD])?;
+    let mut accumulator = ProbeAccumulator::default();
+    while let Some(row) = rows.next()? {
+        let (stored_path, aad) = aad_and_path_for_row(row)?;
+        let Some(blob) = read_app_relative_file(app_dir, &stored_path)? else {
+            continue;
+        };
+        if let Some(result) = accumulator.add(match probe_blob_matches_key(key, &blob, &aad)? {
+            Some(true) => ProbeMatch::ValidKey,
+            Some(false) => ProbeMatch::UnableToValidate,
+            None => ProbeMatch::NoEncryptedData,
+        }) {
+            return Ok(result);
+        }
+    }
+    Ok(accumulator.finish())
+}
+
+fn probe_blob_matches_key(key: &[u8; 32], blob: &[u8], aad: &[u8]) -> Result<Option<bool>> {
+    if blob.len() < MIN_ENCRYPTED_BLOB_LEN {
+        return Ok(None);
+    }
+    match decrypt_bytes(key, blob, aad) {
+        Ok(_) => Ok(Some(true)),
+        Err(error) if is_decrypt_failed_error(&error) => Ok(Some(false)),
+        Err(error) if is_ciphertext_too_short_error(&error) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn read_app_relative_file(app_dir: &Path, stored_path: &str) -> Result<Option<Vec<u8>>> {
+    let relative_path = Path::new(stored_path);
+    if !is_safe_app_relative_path(relative_path) {
+        return Ok(None);
+    }
+    match fs::read(app_dir.join(relative_path)) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn is_safe_app_relative_path(path: &Path) -> bool {
+    !path.is_absolute()
+        && path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
 }
 
 fn id_column_for_probe(table: &str, column: &str) -> Option<&'static str> {
