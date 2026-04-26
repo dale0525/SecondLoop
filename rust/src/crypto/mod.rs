@@ -110,6 +110,18 @@ pub fn decrypt_bytes(key: &[u8; 32], blob: &[u8], aad: &[u8]) -> Result<Vec<u8>>
     maybe_unwrap_sync_op_payload(plaintext, aad)
 }
 
+pub fn is_decrypt_failed_error(error: &anyhow::Error) -> bool {
+    error
+        .chain()
+        .any(|cause| cause.to_string() == "decrypt failed")
+}
+
+pub fn is_ciphertext_too_short_error(error: &anyhow::Error) -> bool {
+    error
+        .chain()
+        .any(|cause| cause.to_string() == "ciphertext too short")
+}
+
 fn is_sync_op_aad(aad: &[u8]) -> bool {
     aad.starts_with(b"sync.ops:")
 }
