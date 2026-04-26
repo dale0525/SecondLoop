@@ -320,6 +320,22 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
+    final progressDialog = find.byKey(const ValueKey('update_progress_dialog'));
+    expect(progressDialog, findsOneWidget);
+    expect(
+      find.descendant(
+        of: progressDialog,
+        matching: find.text(
+          'New version v1.1.0 is available. '
+          'Open the update page to download it now.',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Preparing update. The app will restart shortly.'),
+      findsNothing,
+    );
     expect(find.text('Could not open update page'), findsOneWidget);
     expect(
         find.byKey(const ValueKey('android_update_confirm')), findsOneWidget);

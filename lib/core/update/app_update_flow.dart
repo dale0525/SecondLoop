@@ -424,6 +424,11 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
     if (widget.update.canStageForNextLaunch) {
       return context.t.settings.about.messages.stageStarting;
     }
+    if (!widget.update.canSeamlessInstall) {
+      return context.t.settings.updateNotice.manualDownload(
+        version: widget.update.latestTag,
+      );
+    }
     return context.t.settings.about.messages.installStarting;
   }
 

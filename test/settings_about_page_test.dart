@@ -504,7 +504,7 @@ void main() {
         TargetPlatform.windows,
       }));
 
-  testWidgets('About page clears update result after check failure',
+  testWidgets('About page retries update check after check failure',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -532,6 +532,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.text('Update now'), findsNothing);
+    expect(service.checkCalls, 1);
+
+    service.throwOnCheck = null;
+    service.result = const AppUpdateCheckResult(currentVersion: '1.0.1+99');
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+
+    expect(service.checkCalls, 2);
+    expect(find.text("You're on the latest version."), findsOneWidget);
     expect(find.text('Update now'), findsNothing);
   });
 }
