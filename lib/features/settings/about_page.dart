@@ -201,16 +201,28 @@ class _AboutPageState extends State<AboutPage> {
         isAndroidApkAssetForUpdate(update.asset!);
   }
 
+  bool _shouldOpenAndroidApkExternally(AppUpdateAvailability update) {
+    return _isAndroidApkRelease(update) && !_canUseAndroidApkUpdate(update);
+  }
+
   Future<void> _applyManagedUpdate() async {
     if (_checkingUpdate || _updating) return;
     final update = _updateResult?.update;
     if (update == null) return;
 
     final useAndroidApkUpdate = _canUseAndroidApkUpdate(update);
+    final openAndroidApkExternally = _shouldOpenAndroidApkExternally(update);
     setState(() {
       _updating = true;
     });
     try {
+      if (openAndroidApkExternally) {
+        await _openExternalUri(
+          update.releasePageUri,
+          failedMessage: _text.messages.openUpdateFailed,
+        );
+        return;
+      }
       await showAppUpdateProgressDialog(
         context: context,
         update: update,
@@ -271,6 +283,9 @@ class _AboutPageState extends State<AboutPage> {
   IconData _updateActionIcon(AppUpdateAvailability? update) {
     if (update == null) {
       return Icons.system_update_alt_rounded;
+    }
+    if (_shouldOpenAndroidApkExternally(update)) {
+      return Icons.open_in_new_rounded;
     }
     if (_canUseAndroidApkUpdate(update)) {
       return Icons.download_rounded;

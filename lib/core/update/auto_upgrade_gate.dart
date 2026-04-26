@@ -259,7 +259,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     required bool useAndroidApkUpdate,
     required bool fetchReleaseNotes,
   }) async {
-    if (!mounted || _updateNoticeDismissedInSession) {
+    if (!mounted || (!useAndroidApkUpdate && _updateNoticeDismissedInSession)) {
       return;
     }
     if (!useAndroidApkUpdate &&
@@ -303,15 +303,16 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
       );
       if (!mounted) return;
       if (!confirmed) {
+        if (useAndroidApkUpdate) {
+          _dismissedAndroidUpdateTagInSession = update.latestTag;
+          _androidInstallPermissionPendingTag = null;
+          return;
+        }
         await _dismissUpdateNoticeForSession(
           prefs: prefs,
           latestTag: update.latestTag,
           updateTag: null,
         );
-        if (useAndroidApkUpdate) {
-          _dismissedAndroidUpdateTagInSession = update.latestTag;
-          _androidInstallPermissionPendingTag = null;
-        }
         return;
       }
 

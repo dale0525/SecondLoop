@@ -167,4 +167,38 @@ void main() {
           find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
     });
   });
+
+  testWidgets('Android apk ignore only suppresses the same tag in-session',
+      (tester) async {
+    await _runAsAndroid(() async {
+      final service = AndroidAutoUpdateService(
+        result: AppUpdateCheckResult(
+          currentVersion: '1.0.0+1',
+          update: _androidApkUpdate(),
+        ),
+      );
+
+      await _pumpAndroidGate(tester, service: service);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+          find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('update_prompt_ignore')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('update_prompt_dialog')), findsNothing);
+
+      service.result = AppUpdateCheckResult(
+        currentVersion: '1.0.0+1',
+        update: _androidApkUpdate(latestTag: 'v1.2.0'),
+      );
+      await _resumeApp(tester);
+
+      expect(service.checkCalls, 2);
+      expect(
+          find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
+      expect(find.text('Update available: v1.2.0'), findsOneWidget);
+    });
+  });
 }
