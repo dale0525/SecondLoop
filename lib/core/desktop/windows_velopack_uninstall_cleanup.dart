@@ -254,6 +254,29 @@ Future<void> _removeRegistryKey(
   String registryKey,
   WindowsRegistryCommandRunner runner,
 ) async {
+  final result = await _queryRegistryKey(registryKey, runner);
+  if (result == null || result.exitCode != 0) {
+    return;
+  }
+  await _deleteRegistryKey(registryKey, runner);
+}
+
+Future<ProcessResult?> _queryRegistryKey(
+  String registryKey,
+  WindowsRegistryCommandRunner runner,
+) async {
+  try {
+    return await runner('reg.exe', ['query', registryKey])
+        .timeout(const Duration(seconds: 5));
+  } on Object {
+    return null;
+  }
+}
+
+Future<void> _deleteRegistryKey(
+  String registryKey,
+  WindowsRegistryCommandRunner runner,
+) async {
   try {
     await runner('reg.exe', ['delete', registryKey, '/f'])
         .timeout(const Duration(seconds: 5));
@@ -266,22 +289,17 @@ Future<void> _removeRegistryKeyIfEmpty(
   String registryKey,
   WindowsRegistryCommandRunner runner,
 ) async {
-  try {
-    final result = await runner('reg.exe', ['query', registryKey])
-        .timeout(const Duration(seconds: 5));
-    if (result.exitCode != 0) {
-      return;
-    }
-    if (_registryQueryOutputHasChildrenOrValues(
-      registryKey: registryKey,
-      output: result.stdout.toString(),
-    )) {
-      return;
-    }
-    await _removeRegistryKey(registryKey, runner);
-  } on Object {
+  final result = await _queryRegistryKey(registryKey, runner);
+  if (result == null || result.exitCode != 0) {
     return;
   }
+  if (_registryQueryOutputHasChildrenOrValues(
+    registryKey: registryKey,
+    output: result.stdout.toString(),
+  )) {
+    return;
+  }
+  await _deleteRegistryKey(registryKey, runner);
 }
 
 bool _registryQueryOutputHasChildrenOrValues({

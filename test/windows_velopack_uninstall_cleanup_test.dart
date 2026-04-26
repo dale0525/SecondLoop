@@ -182,6 +182,38 @@ void main() {
     );
   });
 
+  test('cleanup skips product registry delete when key is absent', () async {
+    final registryCommands = <List<String>>[];
+
+    await cleanWindowsVelopackUninstallResidue(
+      isWindows: true,
+      environment: const {},
+      registryCommandRunner: (executable, arguments) async {
+        registryCommands.add([executable, ...arguments]);
+        return ProcessResult(1, 1, '',
+            'ERROR: The system was unable to find the specified registry key or value.');
+      },
+    );
+
+    expect(
+      registryCommands,
+      contains(equals([
+        'reg.exe',
+        'query',
+        r'HKCU\Software\SecondLoop\SecondLoop',
+      ])),
+    );
+    expect(
+      registryCommands,
+      isNot(contains(equals([
+        'reg.exe',
+        'delete',
+        r'HKCU\Software\SecondLoop\SecondLoop',
+        '/f',
+      ]))),
+    );
+  });
+
   test('cleanup keeps SecondLoop parent registry key with sibling product',
       () async {
     final deletedKeys = <String>[];

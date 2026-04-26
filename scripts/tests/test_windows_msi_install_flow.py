@@ -188,9 +188,19 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertIn("Join-Path 'Programs' $safeInstallDirName", script)
         self.assertIn("Start Menu\\Programs' $safeProductName", script)
         self.assertIn("Join-Path 'com.secondloop' $safeProductName", script)
-        self.assertIn("shared_preferences.json", script)
-        self.assertIn("flutter_secure_storage.dat", script)
+        self.assertIn("Get-ApplicationDataDirectories", script)
+        self.assertIn("Get-ApplicationCacheDirectories", script)
         self.assertIn("if (-not $KeepUserData)", script)
+
+    def test_uninstall_script_removes_user_data_by_directory_without_redundant_state_files(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+        body = self._extract_function_body(script, "Remove-UninstallResidue")
+
+        self.assertIn("foreach ($path in $appDataDirectories)", body)
+        self.assertIn("foreach ($path in $appCacheDirectories)", body)
+        self.assertNotIn("Get-ApplicationStateFiles", script)
+        self.assertNotIn("shared_preferences.json", script)
+        self.assertNotIn("flutter_secure_storage.dat", script)
 
     def test_uninstall_script_removes_residual_registry_entries_safely(self) -> None:
         script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
@@ -222,6 +232,9 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertIn("Test-RegistryEntryHasSafeInstallLocation", body)
         self.assertIn("Resolve-ProductCode -Entry $Entry", body)
         self.assertIn("Test-RegistryEntryHasLegacyProductIdentity", body)
+        self.assertIn("$hasLegacyProductIdentity = Test-RegistryEntryHasLegacyProductIdentity", body)
+        self.assertIn("$hasSafeInstallLocation -and $hasLegacyProductIdentity", body)
+        self.assertNotIn("if ($hasSafeInstallLocation) {\n    return $true\n  }", body)
         self.assertNotIn("$displayName -eq $ProductName -or", body)
         self.assertNotIn("$displayName -eq $ProductName", body)
         self.assertNotIn("if ($displayName -eq $ProductName) {\n    return $true\n  }", body)

@@ -303,21 +303,6 @@ function Get-ApplicationCacheDirectories {
   return @($directories)
 }
 
-function Get-ApplicationStateFiles {
-  param([string[]]$AppDataDirectories)
-
-  $stateFiles = New-Object System.Collections.Generic.List[string]
-  foreach ($appDataDirectory in $AppDataDirectories) {
-    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'shared_preferences.json')
-    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'flutter_secure_storage.dat')
-    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'secondloop.sqlite3')
-    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'secondloop.sqlite3-wal')
-    Add-UniquePath -Paths $stateFiles -Path (Join-Path $appDataDirectory 'secondloop.sqlite3-shm')
-  }
-
-  return @($stateFiles)
-}
-
 function Remove-FileSystemTree {
   param([string]$Path)
 
@@ -535,6 +520,7 @@ function Test-RegistryEntryMatchesProduct {
   $uninstallString = Get-StringValue $Entry.UninstallString
   $entryProductCode = Resolve-ProductCode -Entry $Entry
   $hasSafeInstallLocation = Test-RegistryEntryHasSafeInstallLocation -Entry $Entry -ExpectedInstallLocation $ExpectedInstallLocation
+  $hasLegacyProductIdentity = Test-RegistryEntryHasLegacyProductIdentity -Entry $Entry -ProductName $ProductName -Publisher $Publisher
 
   if (-not [string]::IsNullOrWhiteSpace($ProductCode)) {
     if ($Entry.PSChildName -eq $ProductCode -or
@@ -544,11 +530,11 @@ function Test-RegistryEntryMatchesProduct {
     }
   }
 
-  if ($hasSafeInstallLocation) {
+  if ($hasSafeInstallLocation -and $hasLegacyProductIdentity) {
     return $true
   }
 
-  if (Test-RegistryEntryHasLegacyProductIdentity -Entry $Entry -ProductName $ProductName -Publisher $Publisher) {
+  if ($hasLegacyProductIdentity) {
     return $true
   }
 
@@ -629,9 +615,6 @@ function Remove-UninstallResidue {
   if (-not $KeepUserData) {
     $appDataDirectories = @(Get-ApplicationDataDirectories -ProductName $ProductName -CompanyName $CompanyName -AppId $effectiveAppId)
     $appCacheDirectories = @(Get-ApplicationCacheDirectories -ProductName $ProductName -CompanyName $CompanyName -AppId $effectiveAppId)
-    foreach ($path in (Get-ApplicationStateFiles -AppDataDirectories $appDataDirectories)) {
-      Add-UniquePath -Paths $pathsToRemove -Path $path
-    }
     foreach ($path in $appDataDirectories) {
       Add-UniquePath -Paths $pathsToRemove -Path $path
     }
