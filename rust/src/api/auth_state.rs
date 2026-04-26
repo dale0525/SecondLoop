@@ -1,9 +1,10 @@
 use std::fs;
 use std::path::Path;
 
+use crate::crypto::decrypt_bytes;
 use crate::{auth, db};
 use anyhow::{anyhow, Result};
-use rusqlite::{params, Connection, OpenFlags};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 
 const USER_DATA_TABLES_WITHOUT_AUTH: &[&str] = &[
     "message_embeddings",
@@ -57,6 +58,20 @@ const USER_DATA_TABLES_WITHOUT_AUTH: &[&str] = &[
     "oplog",
 ];
 
+const MIN_ENCRYPTED_BLOB_LEN: usize = 24 + 16;
+const MISSING_AUTH_KEY_PROBES: &[(&str, &str, &[u8])] = &[
+    ("conversations", "title", b"conversation.title"),
+    ("messages", "content", b"message.content"),
+    ("todos", "title", b"todo.title"),
+    ("events", "title", b"event.title"),
+];
+
+enum MissingAuthKeyProbe {
+    NoEncryptedData,
+    ValidKey,
+    InvalidKey,
+}
+
 fn dir_has_entries(path: &Path) -> Result<bool> {
     match fs::read_dir(path) {
         Ok(mut entries) => Ok(entries.next().is_some()),
@@ -79,6 +94,71 @@ fn table_has_rows(conn: &Connection, table: &str) -> Result<bool> {
     let sql = format!(r#"SELECT EXISTS(SELECT 1 FROM "{quoted_table}" LIMIT 1)"#);
     let has_rows: bool = conn.query_row(&sql, [], |row| row.get(0))?;
     Ok(has_rows)
+}
+
+fn table_column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let quoted_table = table.replace('"', "\"\"");
+    let sql = format!(r#"PRAGMA table_info("{quoted_table}")"#);
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+    for row in rows {
+        if row? == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn encrypted_probe_matches_key(
+    conn: &Connection,
+    key: &[u8; 32],
+    table: &str,
+    column: &str,
+    aad: &[u8],
+) -> Result<Option<bool>> {
+    if !table_has_rows(conn, table)? || !table_column_exists(conn, table, column)? {
+        return Ok(None);
+    }
+
+    let quoted_table = table.replace('"', "\"\"");
+    let quoted_column = column.replace('"', "\"\"");
+    let sql = format!(r#"SELECT "{quoted_column}" FROM "{quoted_table}" LIMIT 1"#);
+    let blob = conn
+        .query_row(&sql, [], |row| row.get::<_, Vec<u8>>(0))
+        .optional()?;
+    let Some(blob) = blob else {
+        return Ok(None);
+    };
+    if blob.len() < MIN_ENCRYPTED_BLOB_LEN {
+        return Ok(None);
+    }
+
+    match decrypt_bytes(key, &blob, aad) {
+        Ok(_) => Ok(Some(true)),
+        Err(error) if error.to_string().contains("decrypt failed") => Ok(Some(false)),
+        Err(error) if error.to_string().contains("ciphertext too short") => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn missing_auth_key_probe(app_dir: &Path, key: &[u8; 32]) -> Result<MissingAuthKeyProbe> {
+    let db_path = app_dir.join("secondloop.sqlite3");
+    if !db_path.exists() {
+        return Ok(MissingAuthKeyProbe::NoEncryptedData);
+    }
+
+    let conn = Connection::open_with_flags(
+        db_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    for (table, column, aad) in MISSING_AUTH_KEY_PROBES {
+        match encrypted_probe_matches_key(&conn, key, table, column, aad)? {
+            Some(true) => return Ok(MissingAuthKeyProbe::ValidKey),
+            Some(false) => return Ok(MissingAuthKeyProbe::InvalidKey),
+            None => {}
+        }
+    }
+    Ok(MissingAuthKeyProbe::NoEncryptedData)
 }
 
 fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
@@ -112,6 +192,10 @@ fn vault_has_user_data_without_auth(app_dir: &Path) -> Result<bool> {
         || external_readonly_exists)
 }
 
+pub(crate) fn has_user_data_without_auth_file(app_dir: &Path) -> Result<bool> {
+    vault_has_user_data_without_auth(app_dir)
+}
+
 pub(crate) fn auth_is_initialized(app_dir: &Path) -> bool {
     auth::is_initialized(app_dir)
 }
@@ -120,6 +204,11 @@ pub(crate) fn validate_reset_vault_data_access(app_dir: &Path, key: &[u8; 32]) -
     if auth::is_initialized(app_dir) {
         auth::validate_key(app_dir, key)?;
     } else if vault_has_user_data_without_auth(app_dir)? {
+        match missing_auth_key_probe(app_dir, key)? {
+            MissingAuthKeyProbe::ValidKey => return Ok(()),
+            MissingAuthKeyProbe::InvalidKey => return Err(anyhow!("invalid key")),
+            MissingAuthKeyProbe::NoEncryptedData => {}
+        }
         return Err(anyhow!("vault data exists but auth file is missing"));
     }
     Ok(())
@@ -244,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn reset_vault_data_preserving_llm_profiles_rejects_missing_auth_when_vault_has_user_data() {
+    fn reset_vault_data_preserving_llm_profiles_rejects_invalid_deferred_key() {
         let dir = tempfile::tempdir().expect("tempdir");
         let conn = db::open(dir.path()).expect("open db");
         let valid_key = [3u8; 32];
@@ -255,13 +344,52 @@ mod tests {
             vec![9u8; 32],
         );
 
-        let error = result.expect_err("vault data without auth should be rejected");
+        let error = result.expect_err("invalid deferred key should be rejected");
         assert!(
-            error
-                .to_string()
-                .contains("vault data exists but auth file is missing"),
+            error.to_string().contains("invalid key"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_allows_missing_auth_with_valid_deferred_key() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        let key = [3u8; 32];
+        db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+        drop(conn);
+
+        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+        );
+
+        assert!(
+            result.is_ok(),
+            "valid deferred session key should allow reset without auth.json: {result:?}"
+        );
+        let conn = db::open(dir.path()).expect("reopen db");
+        let conversations = db::list_conversations(&conn, &key).expect("list conversations");
+        assert!(conversations.is_empty());
+    }
+
+    #[test]
+    fn rollback_snapshot_creation_allows_missing_auth_with_valid_deferred_key() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open db");
+        let key = [3u8; 32];
+        db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+        drop(conn);
+
+        let snapshot = crate::api::migration_archive::migration_archive_create_rollback_snapshot(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+        );
+
+        let snapshot_path = snapshot
+            .expect("valid deferred key should allow rollback snapshot")
+            .expect("snapshot path");
+        assert!(Path::new(&snapshot_path).is_file());
     }
 
     #[test]

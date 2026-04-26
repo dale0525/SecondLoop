@@ -132,6 +132,11 @@ pub fn migration_archive_restore_rollback_snapshot(
     let key = key_from_bytes(key)?;
     let snapshot_path = Path::new(&snapshot_path);
     if !db::migration_archive_is_active_rollback_snapshot(app_dir, snapshot_path)? {
+        if !crate::api::auth_state::auth_is_initialized(app_dir)
+            && crate::api::auth_state::has_user_data_without_auth_file(app_dir)?
+        {
+            return Err(anyhow!("vault data exists but auth file is missing"));
+        }
         crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
     }
     db::migration_archive_restore_rollback_snapshot(app_dir, &key, snapshot_path)
