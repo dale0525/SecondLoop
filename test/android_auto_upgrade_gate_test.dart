@@ -6,170 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/update/app_update_service.dart';
-import 'dart:io';
 
 import 'package:secondloop/core/update/android/android_apk_installer.dart';
 import 'package:secondloop/core/update/android/android_apk_update_coordinator.dart';
 import 'package:secondloop/core/update/auto_upgrade_gate.dart';
 import 'package:secondloop/core/update/release_notes_service.dart';
 
+import 'support/android_auto_upgrade_gate_test_support.dart';
 import 'test_i18n.dart';
-
-const _fakeAndroidApkSha256 =
-    '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81';
-
-class _AndroidAutoUpdateService extends AppUpdateService {
-  _AndroidAutoUpdateService({required this.result});
-
-  final AppUpdateCheckResult result;
-
-  int applyPendingCalls = 0;
-  int checkCalls = 0;
-
-  @override
-  Future<PendingUpdateStartupResult> applyPendingUpdateOnStartup() async {
-    applyPendingCalls += 1;
-    return const PendingUpdateStartupResult.noPendingUpdate();
-  }
-
-  @override
-  Future<AppUpdateCheckResult> checkForUpdates() async {
-    checkCalls += 1;
-    return result;
-  }
-}
-
-class _FakeReleaseNotesService extends ReleaseNotesService {
-  _FakeReleaseNotesService({required this.result});
-
-  final ReleaseNotesFetchResult result;
-  int fetchCalls = 0;
-
-  @override
-  Future<ReleaseNotesFetchResult> fetchReleaseNotes({
-    required String tag,
-    required Locale locale,
-  }) async {
-    fetchCalls += 1;
-    return result;
-  }
-}
-
-class _ThrowingReleaseNotesService extends ReleaseNotesService {
-  _ThrowingReleaseNotesService({required this.error});
-
-  final Object error;
-  int fetchCalls = 0;
-
-  @override
-  Future<ReleaseNotesFetchResult> fetchReleaseNotes({
-    required String tag,
-    required Locale locale,
-  }) async {
-    fetchCalls += 1;
-    throw error;
-  }
-}
-
-class _NoopAndroidApkDownloader implements AndroidApkDownloader {
-  _NoopAndroidApkDownloader({this.completer});
-
-  final Completer<void>? completer;
-
-  @override
-  Future<File> downloadApk({
-    required Uri downloadUri,
-    required String fileName,
-    required AndroidApkDownloadProgressCallback onProgress,
-    AndroidApkDownloadCancelToken? cancelToken,
-  }) async {
-    onProgress(
-        const AndroidApkDownloadProgress(receivedBytes: 50, totalBytes: 100));
-    if (completer != null) {
-      await completer!.future;
-    }
-    if (cancelToken?.isCancelled == true) {
-      throw const AndroidApkDownloadCancelledException();
-    }
-    final file =
-        File('${Directory.systemTemp.path}${Platform.pathSeparator}$fileName');
-    file.writeAsBytesSync(const <int>[1, 2, 3], flush: true);
-    return file;
-  }
-}
-
-class _NoopAndroidApkInstaller implements AndroidApkInstaller {
-  @override
-  Future<void> installApk({required String apkPath}) async {}
-
-  @override
-  Future<bool?> canRequestPackageInstalls() async => null;
-}
-
-class _FakeAndroidApkUpdateCoordinator extends AndroidApkUpdateCoordinator {
-  _FakeAndroidApkUpdateCoordinator({
-    this.error,
-    this.reuseVerifiedDownloads = false,
-    this.canRequestPackageInstallsResult,
-  }) : super(
-          downloader: _NoopAndroidApkDownloader(),
-          installer: _NoopAndroidApkInstaller(),
-        );
-
-  Object? error;
-  final bool reuseVerifiedDownloads;
-  bool? canRequestPackageInstallsResult;
-
-  int performCalls = 0;
-  int downloadCalls = 0;
-  int permissionCheckCalls = 0;
-  final Set<String> _verifiedSha256 = <String>{};
-
-  @override
-  Future<bool?> canRequestPackageInstalls() async {
-    permissionCheckCalls += 1;
-    return canRequestPackageInstallsResult;
-  }
-
-  @override
-  Future<void> performUpdate({
-    required AppUpdateAsset asset,
-    required AndroidApkDownloadProgressCallback onProgress,
-    AndroidApkDownloadCancelToken? cancelToken,
-  }) async {
-    performCalls += 1;
-    final normalizedSha256 = asset.sha256?.trim().toLowerCase();
-    final hasVerifiedCache = reuseVerifiedDownloads &&
-        normalizedSha256 != null &&
-        normalizedSha256.isNotEmpty &&
-        _verifiedSha256.contains(normalizedSha256);
-    if (!hasVerifiedCache) {
-      downloadCalls += 1;
-      onProgress(
-        const AndroidApkDownloadProgress(receivedBytes: 100, totalBytes: 100),
-      );
-      if (reuseVerifiedDownloads &&
-          normalizedSha256 != null &&
-          normalizedSha256.isNotEmpty) {
-        _verifiedSha256.add(normalizedSha256);
-      }
-    } else {
-      onProgress(
-        const AndroidApkDownloadProgress(receivedBytes: 1, totalBytes: 1),
-      );
-    }
-    if (error != null) {
-      throw error!;
-    }
-  }
-}
-
-Future<void> _settleAndroidUpdateFlow(WidgetTester tester) async {
-  await tester.runAsync(() async {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  });
-  await tester.pumpAndSettle();
-}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -188,7 +32,7 @@ void main() {
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    final service = _AndroidAutoUpdateService(
+    final service = AndroidAutoUpdateService(
       result: AppUpdateCheckResult(
         currentVersion: '1.0.0+1',
         update: AppUpdateAvailability(
@@ -200,12 +44,12 @@ void main() {
           asset: AppUpdateAsset(
             name: 'SecondLoop-android-arm64-v8a.apk',
             downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-            sha256: _fakeAndroidApkSha256,
+            sha256: fakeAndroidApkSha256,
           ),
         ),
       ),
     );
-    final releaseNotesService = _FakeReleaseNotesService(
+    final releaseNotesService = FakeReleaseNotesService(
       result: const ReleaseNotesFetchResult(
         notes: ReleaseNotes(
           version: 'v1.1.0',
@@ -222,8 +66,8 @@ void main() {
           home: AutoUpgradeGate(
             updateService: service,
             releaseNotesService: releaseNotesService,
-            androidApkDownloader: _NoopAndroidApkDownloader(),
-            androidApkInstaller: _NoopAndroidApkInstaller(),
+            androidApkDownloader: NoopAndroidApkDownloader(),
+            androidApkInstaller: NoopAndroidApkInstaller(),
             enableInDebug: true,
             child: const Scaffold(body: Text('home')),
           ),
@@ -237,9 +81,9 @@ void main() {
     expect(service.checkCalls, 1);
     expect(releaseNotesService.fetchCalls, 1);
     expect(find.byType(AlertDialog), findsOneWidget);
-    expect(find.textContaining('v1.1.0'), findsOneWidget);
+    expect(find.text('Update available: v1.1.0'), findsOneWidget);
 
-    await tester.tap(find.text('Cancel', skipOffstage: false));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_ignore')));
     await tester.pumpAndSettle();
 
     expect(find.byType(AlertDialog), findsNothing);
@@ -251,7 +95,7 @@ void main() {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     final downloadCompleter = Completer<void>();
-    final service = _AndroidAutoUpdateService(
+    final service = AndroidAutoUpdateService(
       result: AppUpdateCheckResult(
         currentVersion: '1.0.0+1',
         update: AppUpdateAvailability(
@@ -263,12 +107,12 @@ void main() {
           asset: AppUpdateAsset(
             name: 'SecondLoop-android-arm64-v8a.apk',
             downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-            sha256: _fakeAndroidApkSha256,
+            sha256: fakeAndroidApkSha256,
           ),
         ),
       ),
     );
-    final releaseNotesService = _FakeReleaseNotesService(
+    final releaseNotesService = FakeReleaseNotesService(
       result: const ReleaseNotesFetchResult(
         notes: ReleaseNotes(
           version: 'v1.1.0',
@@ -286,8 +130,8 @@ void main() {
             updateService: service,
             releaseNotesService: releaseNotesService,
             androidApkDownloader:
-                _NoopAndroidApkDownloader(completer: downloadCompleter),
-            androidApkInstaller: _NoopAndroidApkInstaller(),
+                NoopAndroidApkDownloader(completer: downloadCompleter),
+            androidApkInstaller: NoopAndroidApkInstaller(),
             enableInDebug: true,
             child: const Scaffold(body: Text('home')),
           ),
@@ -297,8 +141,8 @@ void main() {
 
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await settleAndroidUpdateFlow(tester);
 
     expect(find.byKey(const ValueKey('android_update_cancel_download')),
         findsOneWidget);
@@ -327,7 +171,7 @@ void main() {
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    final service = _AndroidAutoUpdateService(
+    final service = AndroidAutoUpdateService(
       result: AppUpdateCheckResult(
         currentVersion: '1.0.0+1',
         update: AppUpdateAvailability(
@@ -339,13 +183,13 @@ void main() {
           asset: AppUpdateAsset(
             name: 'SecondLoop-android-arm64-v8a.apk',
             downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-            sha256: _fakeAndroidApkSha256,
+            sha256: fakeAndroidApkSha256,
           ),
         ),
       ),
     );
     final releaseNotesService =
-        _FakeReleaseNotesService(result: const ReleaseNotesFetchResult());
+        FakeReleaseNotesService(result: const ReleaseNotesFetchResult());
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -353,8 +197,8 @@ void main() {
           home: AutoUpgradeGate(
             updateService: service,
             releaseNotesService: releaseNotesService,
-            androidApkDownloader: _NoopAndroidApkDownloader(),
-            androidApkInstaller: _NoopAndroidApkInstaller(),
+            androidApkDownloader: NoopAndroidApkDownloader(),
+            androidApkInstaller: NoopAndroidApkInstaller(),
             enableInDebug: true,
             child: const Scaffold(body: Text('home')),
           ),
@@ -366,7 +210,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(AlertDialog), findsOneWidget);
 
-    await tester.tap(find.text('Cancel', skipOffstage: false));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_ignore')));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
 
@@ -385,11 +229,11 @@ void main() {
   testWidgets('checks again when app resumes on Android', (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    final service = _AndroidAutoUpdateService(
+    final service = AndroidAutoUpdateService(
       result: const AppUpdateCheckResult(currentVersion: '1.0.0+1'),
     );
     final releaseNotesService =
-        _FakeReleaseNotesService(result: const ReleaseNotesFetchResult());
+        FakeReleaseNotesService(result: const ReleaseNotesFetchResult());
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -397,8 +241,8 @@ void main() {
           home: AutoUpgradeGate(
             updateService: service,
             releaseNotesService: releaseNotesService,
-            androidApkDownloader: _NoopAndroidApkDownloader(),
-            androidApkInstaller: _NoopAndroidApkInstaller(),
+            androidApkDownloader: NoopAndroidApkDownloader(),
+            androidApkInstaller: NoopAndroidApkInstaller(),
             enableInDebug: true,
             child: const Scaffold(body: Text('home')),
           ),
@@ -423,13 +267,13 @@ void main() {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final coordinator = _FakeAndroidApkUpdateCoordinator(
+      final coordinator = FakeAndroidApkUpdateCoordinator(
         error: const AndroidApkUpdateException(
           type: AndroidApkUpdateFailureType.installLaunch,
           cause: 'android_apk_install_not_started',
         ),
       );
-      final service = _AndroidAutoUpdateService(
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -441,7 +285,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
@@ -452,7 +296,7 @@ void main() {
           MaterialApp(
             home: AutoUpgradeGate(
               updateService: service,
-              releaseNotesService: _FakeReleaseNotesService(
+              releaseNotesService: FakeReleaseNotesService(
                   result: const ReleaseNotesFetchResult()),
               androidApkUpdateCoordinator: coordinator,
               enableInDebug: true,
@@ -464,10 +308,13 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-      await _settleAndroidUpdateFlow(tester);
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+      await settleAndroidUpdateFlow(tester);
 
       expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Could not open update page'), findsOneWidget);
+      expect(find.textContaining('Downloading update'), findsNothing);
+      expect(find.textContaining('Preparing update'), findsNothing);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
@@ -478,13 +325,13 @@ void main() {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final coordinator = _FakeAndroidApkUpdateCoordinator(
+      final coordinator = FakeAndroidApkUpdateCoordinator(
         error: const AndroidApkUpdateException(
           type: AndroidApkUpdateFailureType.installLaunch,
           cause: 'android_apk_install_not_started',
         ),
       );
-      final service = _AndroidAutoUpdateService(
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -496,7 +343,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
@@ -508,7 +355,7 @@ void main() {
           MaterialApp(
             home: AutoUpgradeGate(
               updateService: service,
-              releaseNotesService: _FakeReleaseNotesService(
+              releaseNotesService: FakeReleaseNotesService(
                   result: const ReleaseNotesFetchResult()),
               androidApkUpdateCoordinator: coordinator,
               externalUriLauncher: (uri) async {
@@ -524,9 +371,9 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-      await _settleAndroidUpdateFlow(tester);
-      await tester.tap(find.byKey(const ValueKey('android_update_manual')));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+      await settleAndroidUpdateFlow(tester);
+      await tester.tap(find.byKey(const ValueKey('update_progress_manual')));
       await tester.pumpAndSettle();
 
       expect(
@@ -544,10 +391,10 @@ void main() {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final coordinator = _FakeAndroidApkUpdateCoordinator(
+      final coordinator = FakeAndroidApkUpdateCoordinator(
         error: const AndroidApkInstallerRequiresPermissionSettingsException(),
       );
-      final service = _AndroidAutoUpdateService(
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -559,7 +406,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
@@ -570,7 +417,7 @@ void main() {
           MaterialApp(
             home: AutoUpgradeGate(
               updateService: service,
-              releaseNotesService: _FakeReleaseNotesService(
+              releaseNotesService: FakeReleaseNotesService(
                   result: const ReleaseNotesFetchResult()),
               androidApkUpdateCoordinator: coordinator,
               enableInDebug: true,
@@ -582,10 +429,21 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-      await _settleAndroidUpdateFlow(tester);
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+      await settleAndroidUpdateFlow(tester);
 
       expect(find.text('Could not open update page'), findsNothing);
+      expect(
+        find.text(
+          'Allow installs from this app in system settings, then try again.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('android_update_progress_label')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('update_progress_bar')), findsNothing);
       expect(find.byType(AlertDialog), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
@@ -598,7 +456,7 @@ void main() {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final service = _AndroidAutoUpdateService(
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -610,12 +468,12 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
       );
-      final releaseNotesService = _FakeReleaseNotesService(
+      final releaseNotesService = FakeReleaseNotesService(
         result: const ReleaseNotesFetchResult(),
       );
 
@@ -625,8 +483,8 @@ void main() {
             home: AutoUpgradeGate(
               updateService: service,
               releaseNotesService: releaseNotesService,
-              androidApkDownloader: _NoopAndroidApkDownloader(),
-              androidApkInstaller: _NoopAndroidApkInstaller(),
+              androidApkDownloader: NoopAndroidApkDownloader(),
+              androidApkInstaller: NoopAndroidApkInstaller(),
               enableInDebug: true,
               child: const Scaffold(body: Text('home')),
             ),
@@ -650,11 +508,11 @@ void main() {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final coordinator = _FakeAndroidApkUpdateCoordinator(
+      final coordinator = FakeAndroidApkUpdateCoordinator(
         error: const AndroidApkInstallerRequiresPermissionSettingsException(),
         canRequestPackageInstallsResult: false,
       );
-      final service = _AndroidAutoUpdateService(
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -666,7 +524,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
@@ -677,7 +535,7 @@ void main() {
           MaterialApp(
             home: AutoUpgradeGate(
               updateService: service,
-              releaseNotesService: _FakeReleaseNotesService(
+              releaseNotesService: FakeReleaseNotesService(
                   result: const ReleaseNotesFetchResult()),
               androidApkUpdateCoordinator: coordinator,
               enableInDebug: true,
@@ -691,8 +549,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(AlertDialog), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-      await _settleAndroidUpdateFlow(tester);
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+      await settleAndroidUpdateFlow(tester);
       expect(find.byType(AlertDialog), findsOneWidget);
       await tester.tap(find.text('Cancel', skipOffstage: false));
       await tester.pumpAndSettle();
@@ -717,12 +575,12 @@ void main() {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final coordinator = _FakeAndroidApkUpdateCoordinator(
+      final coordinator = FakeAndroidApkUpdateCoordinator(
         error: const AndroidApkInstallerRequiresPermissionSettingsException(),
         reuseVerifiedDownloads: true,
         canRequestPackageInstallsResult: false,
       );
-      final service = _AndroidAutoUpdateService(
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -734,7 +592,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
@@ -745,7 +603,7 @@ void main() {
           MaterialApp(
             home: AutoUpgradeGate(
               updateService: service,
-              releaseNotesService: _FakeReleaseNotesService(
+              releaseNotesService: FakeReleaseNotesService(
                 result: const ReleaseNotesFetchResult(),
               ),
               androidApkUpdateCoordinator: coordinator,
@@ -758,8 +616,8 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-      await _settleAndroidUpdateFlow(tester);
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+      await settleAndroidUpdateFlow(tester);
       expect(coordinator.downloadCalls, 1);
       expect(coordinator.performCalls, 1);
 
@@ -780,17 +638,16 @@ void main() {
     }
   });
 
-  testWidgets(
-      'reopens Android update dialog after install permission is granted',
+  testWidgets('retries Android update after install permission is granted',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final coordinator = _FakeAndroidApkUpdateCoordinator(
+      final coordinator = FakeAndroidApkUpdateCoordinator(
         error: const AndroidApkInstallerRequiresPermissionSettingsException(),
         canRequestPackageInstallsResult: false,
       );
-      final service = _AndroidAutoUpdateService(
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -802,7 +659,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
@@ -813,7 +670,7 @@ void main() {
           MaterialApp(
             home: AutoUpgradeGate(
               updateService: service,
-              releaseNotesService: _FakeReleaseNotesService(
+              releaseNotesService: FakeReleaseNotesService(
                   result: const ReleaseNotesFetchResult()),
               androidApkUpdateCoordinator: coordinator,
               enableInDebug: true,
@@ -827,37 +684,39 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(AlertDialog), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-      await _settleAndroidUpdateFlow(tester);
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+      await settleAndroidUpdateFlow(tester);
       expect(find.byType(AlertDialog), findsOneWidget);
 
+      coordinator.error = null;
       coordinator.canRequestPackageInstallsResult = true;
-      await tester.tap(find.text('Cancel', skipOffstage: false));
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
-
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       await tester.pump();
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
       expect(coordinator.permissionCheckCalls, 1);
-      expect(find.byType(AlertDialog), findsOneWidget);
-      expect(coordinator.performCalls, 1);
+      expect(coordinator.performCalls, 2);
+      expect(find.byType(AlertDialog), findsNothing);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
   });
 
   testWidgets(
-      'does not reopen Android dialog after installer handoff for same version',
+      'retries Android apk install automatically after install permission is granted',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final coordinator = _FakeAndroidApkUpdateCoordinator();
-      final service = _AndroidAutoUpdateService(
+      final coordinator = FakeAndroidApkUpdateCoordinator(
+        error: const AndroidApkInstallerRequiresPermissionSettingsException(),
+        reuseVerifiedDownloads: true,
+        canRequestPackageInstallsResult: false,
+      );
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -869,7 +728,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
@@ -880,7 +739,72 @@ void main() {
           MaterialApp(
             home: AutoUpgradeGate(
               updateService: service,
-              releaseNotesService: _FakeReleaseNotesService(
+              releaseNotesService: FakeReleaseNotesService(
+                result: const ReleaseNotesFetchResult(),
+              ),
+              androidApkUpdateCoordinator: coordinator,
+              enableInDebug: true,
+              child: const Scaffold(body: Text('home')),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+      await settleAndroidUpdateFlow(tester);
+
+      expect(coordinator.downloadCalls, 1);
+      expect(coordinator.performCalls, 1);
+
+      coordinator.error = null;
+      coordinator.canRequestPackageInstallsResult = true;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(coordinator.permissionCheckCalls, 1);
+      expect(coordinator.downloadCalls, 1);
+      expect(coordinator.performCalls, 2);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
+  testWidgets(
+      'does not reopen Android dialog after installer handoff for same version',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      final coordinator = FakeAndroidApkUpdateCoordinator();
+      final service = AndroidAutoUpdateService(
+        result: AppUpdateCheckResult(
+          currentVersion: '1.0.0+1',
+          update: AppUpdateAvailability(
+            currentVersion: '1.0.0+1',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+            installMode: AppUpdateInstallMode.externalDownload,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-android-arm64-v8a.apk',
+              downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+              sha256: fakeAndroidApkSha256,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AutoUpgradeGate(
+              updateService: service,
+              releaseNotesService: FakeReleaseNotesService(
                 result: const ReleaseNotesFetchResult(),
               ),
               androidApkUpdateCoordinator: coordinator,
@@ -895,8 +819,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(AlertDialog), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-      await _settleAndroidUpdateFlow(tester);
+      await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+      await settleAndroidUpdateFlow(tester);
       expect(find.byType(AlertDialog), findsNothing);
 
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
@@ -917,7 +841,7 @@ void main() {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final service = _AndroidAutoUpdateService(
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -929,12 +853,12 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
       );
-      final releaseNotesService = _ThrowingReleaseNotesService(
+      final releaseNotesService = ThrowingReleaseNotesService(
           error: StateError('release_notes_failed'));
 
       await tester.pumpWidget(
@@ -943,8 +867,8 @@ void main() {
             home: AutoUpgradeGate(
               updateService: service,
               releaseNotesService: releaseNotesService,
-              androidApkDownloader: _NoopAndroidApkDownloader(),
-              androidApkInstaller: _NoopAndroidApkInstaller(),
+              androidApkDownloader: NoopAndroidApkDownloader(),
+              androidApkInstaller: NoopAndroidApkInstaller(),
               enableInDebug: true,
               child: const Scaffold(body: Text('home')),
             ),
@@ -968,7 +892,7 @@ void main() {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
-      final service = _AndroidAutoUpdateService(
+      final service = AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
           update: AppUpdateAvailability(
@@ -980,7 +904,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: _fakeAndroidApkSha256,
+              sha256: fakeAndroidApkSha256,
             ),
           ),
         ),
@@ -991,10 +915,10 @@ void main() {
           MaterialApp(
             home: AutoUpgradeGate(
               updateService: service,
-              releaseNotesService: _FakeReleaseNotesService(
+              releaseNotesService: FakeReleaseNotesService(
                   result: const ReleaseNotesFetchResult()),
-              androidApkDownloader: _NoopAndroidApkDownloader(),
-              androidApkInstaller: _NoopAndroidApkInstaller(),
+              androidApkDownloader: NoopAndroidApkDownloader(),
+              androidApkInstaller: NoopAndroidApkInstaller(),
               enableInDebug: true,
               child: const Scaffold(body: Text('home')),
             ),

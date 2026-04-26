@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../i18n/strings.g.dart';
 import 'android/android_apk_installer.dart';
 import 'android/android_apk_update_coordinator.dart';
+import 'app_update_flow.dart';
 import 'app_update_service.dart';
 import 'release_notes_service.dart';
 import 'update_badge_prefs.dart';
@@ -41,7 +42,6 @@ class AutoUpgradeGate extends StatefulWidget {
       'update_notice_last_shown_at_ms_v1';
   static const updateNoticeDismissedInSessionPrefsKey =
       'update_notice_dismissed_in_session_v1';
-  static const updateReadyAckTagPrefsKey = 'update_ready_ack_tag_v1';
   static Uri fallbackUpdateUri({required String releaseRepo}) {
     final normalizedRepo =
         releaseRepo.trim().isEmpty ? 'dale0525/SecondLoop' : releaseRepo.trim();
@@ -60,11 +60,10 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   bool _noticeSessionInitialized = false;
   bool _updateNoticeDismissedInSession = false;
   Uri? _lastKnownReleasePageUri;
-  bool _androidDialogOpen = false;
+  bool _updateFlowDialogOpen = false;
   bool _androidCheckInFlight = false;
   String? _dismissedAndroidUpdateTagInSession;
   String? _androidInstallPermissionPendingTag;
-  bool _updateNoticePrimaryActionInFlight = false;
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
@@ -75,16 +74,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   late final AndroidApkInstaller _androidApkInstaller;
   late final AndroidApkUpdateCoordinator _androidApkUpdateCoordinator;
 
-  bool get _isWindowsPlatform =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
-  bool get _isMacosPlatform =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
-  bool get _isLinuxPlatform =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
   bool get _isAndroidPlatform =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-  bool get _usesPassiveManagedUpdates =>
-      _isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform;
 
   @override
   void initState() {
@@ -188,8 +179,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
         final result = await _updateService.checkForUpdates();
         final update = result.update;
         if (update == null) {
-          _androidInstallPermissionPendingTag = null;
           await UpdateBadgePrefs.clear();
+          _androidInstallPermissionPendingTag = null;
           if (pendingApplyError != null) {
             await _showPendingApplyFailureNotice(pendingApplyError);
           }
@@ -208,58 +199,42 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
               _androidInstallPermissionPendingTag != update.latestTag) {
             _androidInstallPermissionPendingTag = null;
           }
-          if (_dismissedAndroidUpdateTagInSession == update.latestTag) {
-            return;
-          }
           if (_androidInstallPermissionPendingTag == update.latestTag) {
+            if (_updateFlowDialogOpen) {
+              return;
+            }
             final canInstall =
                 await _androidApkUpdateCoordinator.canRequestPackageInstalls();
             if (canInstall != true) {
               return;
             }
             _androidInstallPermissionPendingTag = null;
+            await _showUpdateProgressOnly(
+              update: update,
+              useAndroidApkUpdate: true,
+            );
+            return;
           }
-          await _showAndroidUpdateDialog(update);
-          return;
-        }
-
-        _androidInstallPermissionPendingTag = null;
-
-        if (_usesPassiveManagedUpdates) {
-          var stagedReady = false;
-          if (_isWindowsPlatform &&
-              _updateService.canStageSilentlyForNextLaunch(update)) {
-            try {
-              await _updateService.stageUpdateForNextLaunch(update);
-              stagedReady = true;
-            } catch (error, stackTrace) {
-              debugPrint('auto_upgrade_stage_skipped: $error');
-              debugPrintStack(stackTrace: stackTrace);
-            }
+          if (_dismissedAndroidUpdateTagInSession == update.latestTag) {
+            return;
           }
-          await _maybeShowPassiveUpdateNotice(
+          await _maybeShowUpdatePrompt(
             prefs: prefs,
             update: update,
-            stagedReady: stagedReady,
+            useAndroidApkUpdate: true,
+            fetchReleaseNotes: true,
           );
           return;
         }
 
-        if (update.canSeamlessInstall) {
-          await _updateService.installAndRestart(update);
-          return;
+        if (_isAndroidPlatform) {
+          _androidInstallPermissionPendingTag = null;
         }
-
-        var stagedReady = false;
-        if (update.canStageForNextLaunch) {
-          await _updateService.stageUpdateForNextLaunch(update);
-          stagedReady = true;
-        }
-
-        await _maybeShowPassiveUpdateNotice(
+        await _maybeShowUpdatePrompt(
           prefs: prefs,
           update: update,
-          stagedReady: stagedReady,
+          useAndroidApkUpdate: false,
+          fetchReleaseNotes: false,
         );
       } catch (error, stackTrace) {
         debugPrint('auto_upgrade_skipped: $error');
@@ -277,48 +252,134 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     return update.canUseAndroidApkInstaller;
   }
 
-  Future<void> _showAndroidUpdateDialog(AppUpdateAvailability update) async {
-    if (!mounted || _androidDialogOpen) return;
-    _androidDialogOpen = true;
+  Future<void> _maybeShowUpdatePrompt({
+    required SharedPreferences prefs,
+    required AppUpdateAvailability update,
+    required bool useAndroidApkUpdate,
+    required bool fetchReleaseNotes,
+  }) async {
+    if (!mounted || (!useAndroidApkUpdate && _updateNoticeDismissedInSession)) {
+      return;
+    }
+    if (!useAndroidApkUpdate &&
+        !_shouldShowUpdateNotice(
+          prefs: prefs,
+          latestTag: update.latestTag,
+        )) {
+      return;
+    }
+    await _showUpdatePromptAndRunFlow(
+      prefs: prefs,
+      update: update,
+      useAndroidApkUpdate: useAndroidApkUpdate,
+      fetchReleaseNotes: fetchReleaseNotes,
+    );
+  }
+
+  Future<void> _showUpdatePromptAndRunFlow({
+    required SharedPreferences prefs,
+    required AppUpdateAvailability update,
+    required bool useAndroidApkUpdate,
+    required bool fetchReleaseNotes,
+  }) async {
+    if (!mounted || _updateFlowDialogOpen) return;
+    _updateFlowDialogOpen = true;
     try {
-      final locale =
-          Localizations.maybeLocaleOf(context) ?? AppLocale.en.flutterLocale;
-      ReleaseNotesFetchResult releaseNotes;
-      try {
-        releaseNotes = await _releaseNotesService.fetchReleaseNotes(
-          tag: update.latestTag,
-          locale: locale,
-        );
-      } catch (error, stackTrace) {
-        debugPrint('android_release_notes_skipped: $error');
-        debugPrintStack(stackTrace: stackTrace);
-        releaseNotes = ReleaseNotesFetchResult(
-          errorMessage: error.toString(),
-          releasePageUri: update.releasePageUri,
-        );
+      final releaseNotes =
+          fetchReleaseNotes ? await _fetchReleaseNotesForPrompt(update) : null;
+      if (!mounted) return;
+      if (!useAndroidApkUpdate) {
+        await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
       }
       if (!mounted) return;
-      await showDialog<void>(
+      final confirmed = await showAppUpdatePromptDialog(
         context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return _AndroidUpdateDialog(
-            update: update,
-            releaseNotes: releaseNotes,
-            coordinator: _androidApkUpdateCoordinator,
-            externalUriLauncher: widget.externalUriLauncher,
-            onPermissionSettingsOpened: () {
-              _androidInstallPermissionPendingTag = update.latestTag;
-            },
-            onDismissed: () {
-              _androidInstallPermissionPendingTag = null;
-              _dismissedAndroidUpdateTagInSession = update.latestTag;
-            },
-          );
-        },
+        update: update,
+        releaseNotes: releaseNotes,
+        message: useAndroidApkUpdate
+            ? context.t.settings.updateDialog.message
+            : null,
+      );
+      if (!mounted) return;
+      if (!confirmed) {
+        if (useAndroidApkUpdate) {
+          _dismissedAndroidUpdateTagInSession = update.latestTag;
+          _androidInstallPermissionPendingTag = null;
+          return;
+        }
+        await _dismissUpdateNoticeForSession(
+          prefs: prefs,
+          latestTag: update.latestTag,
+        );
+        return;
+      }
+
+      await _runUpdateFlow(
+        update: update,
+        useAndroidApkUpdate: useAndroidApkUpdate,
       );
     } finally {
-      _androidDialogOpen = false;
+      _updateFlowDialogOpen = false;
+    }
+  }
+
+  Future<void> _showUpdateProgressOnly({
+    required AppUpdateAvailability update,
+    required bool useAndroidApkUpdate,
+  }) async {
+    if (!mounted || _updateFlowDialogOpen) return;
+    _updateFlowDialogOpen = true;
+    try {
+      await _runUpdateFlow(
+        update: update,
+        useAndroidApkUpdate: useAndroidApkUpdate,
+      );
+    } finally {
+      _updateFlowDialogOpen = false;
+    }
+  }
+
+  Future<void> _runUpdateFlow({
+    required AppUpdateAvailability update,
+    required bool useAndroidApkUpdate,
+  }) async {
+    final result = await showAppUpdateProgressDialog(
+      context: context,
+      update: update,
+      updateService: _updateService,
+      androidApkUpdateCoordinator:
+          useAndroidApkUpdate ? _androidApkUpdateCoordinator : null,
+      externalUriLauncher: widget.externalUriLauncher,
+      useAndroidApkUpdate: useAndroidApkUpdate,
+      onPermissionSettingsOpened: useAndroidApkUpdate
+          ? () {
+              _androidInstallPermissionPendingTag = update.latestTag;
+            }
+          : null,
+    );
+    if (result == AppUpdateFlowResult.completed && useAndroidApkUpdate) {
+      _dismissedAndroidUpdateTagInSession = update.latestTag;
+      _androidInstallPermissionPendingTag = null;
+    }
+  }
+
+  Future<ReleaseNotesFetchResult> _fetchReleaseNotesForPrompt(
+    AppUpdateAvailability update,
+  ) async {
+    final locale =
+        Localizations.maybeLocaleOf(context) ?? AppLocale.en.flutterLocale;
+    try {
+      return await _releaseNotesService.fetchReleaseNotes(
+        tag: update.latestTag,
+        locale: locale,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('android_release_notes_skipped: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return ReleaseNotesFetchResult(
+        errorMessage: error.toString(),
+        releasePageUri: update.releasePageUri,
+      );
     }
   }
 
@@ -351,19 +412,6 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
             unawaited(_openFallbackUpdateUri());
           },
         ),
-      ),
-    );
-  }
-
-  void _showUpdateActionMessage(String message) {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -422,203 +470,11 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     }
   }
 
-  String _updateNoticePrimaryActionLabel({
-    required AppUpdateAvailability update,
-    required bool stagedReady,
-  }) {
-    final aboutActionsT = context.t.settings.about.actions;
-    if (stagedReady || update.canSeamlessInstall) {
-      return aboutActionsT.autoUpdate;
-    }
-    if (update.canStageForNextLaunch) {
-      return aboutActionsT.stageUpdate;
-    }
-    return aboutActionsT.manualUpdate;
-  }
-
-  Future<void> _handleUpdateNoticePrimaryAction({
-    required SharedPreferences prefs,
-    required AppUpdateAvailability update,
-    required bool stagedReady,
-  }) async {
-    final aboutT = context.t.settings.about;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.hideCurrentMaterialBanner();
-    messenger?.hideCurrentSnackBar();
-
-    try {
-      if (stagedReady) {
-        _showUpdateActionMessage(aboutT.messages.installStarting);
-        await _updateService.applyStagedUpdateAndRestart();
-        await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
-        return;
-      }
-
-      if (update.canSeamlessInstall) {
-        _showUpdateActionMessage(aboutT.messages.installStarting);
-        await _updateService.installAndRestart(update);
-        await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
-        return;
-      }
-
-      if (update.canStageForNextLaunch) {
-        _showUpdateActionMessage(aboutT.messages.stageStarting);
-        await _updateService.stageUpdateForNextLaunch(update);
-        await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
-        _showUpdateActionMessage(aboutT.messages.stageReady);
-        return;
-      }
-
-      final opened = await _openFallbackUpdateUri(showFailureMessage: false);
-      if (opened) {
-        await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
-        return;
-      }
-      if (!mounted) return;
-      await _showPassiveUpdateNotice(
-        prefs: prefs,
-        update: update,
-        stagedReady: stagedReady,
-        errorMessage: aboutT.messages.openUpdateFailed,
-      );
-    } catch (error) {
-      if (!mounted) return;
-      final errorMessage = stagedReady || update.canSeamlessInstall
-          ? aboutT.messages.installFailed(error: '$error')
-          : update.canStageForNextLaunch
-              ? aboutT.messages.stageFailed(error: '$error')
-              : aboutT.messages.openUpdateFailed;
-      await _showPassiveUpdateNotice(
-        prefs: prefs,
-        update: update,
-        stagedReady: stagedReady,
-        errorMessage: errorMessage,
-      );
-    } finally {
-      _updateNoticePrimaryActionInFlight = false;
-    }
-  }
-
-  Future<void> _maybeShowPassiveUpdateNotice({
-    required SharedPreferences prefs,
-    required AppUpdateAvailability update,
-    required bool stagedReady,
-  }) async {
-    if (!mounted || _updateNoticeDismissedInSession) {
-      return;
-    }
-
-    if (!_shouldShowUpdateNotice(
-      prefs: prefs,
-      latestTag: update.latestTag,
-      stagedReady: stagedReady,
-    )) {
-      return;
-    }
-
-    await _showPassiveUpdateNotice(
-      prefs: prefs,
-      update: update,
-      stagedReady: stagedReady,
-    );
-  }
-
-  Future<void> _showPassiveUpdateNotice({
-    required SharedPreferences prefs,
-    required AppUpdateAvailability update,
-    required bool stagedReady,
-    String? errorMessage,
-  }) async {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-    final aboutStatusT = context.t.settings.about.status;
-    final updateNoticeT = context.t.settings.updateNotice;
-    final commonActionsT = context.t.common.actions;
-    final primaryActionLabel = _updateNoticePrimaryActionLabel(
-      update: update,
-      stagedReady: stagedReady,
-    );
-    final message = stagedReady
-        ? updateNoticeT.stagedReady(version: update.latestTag)
-        : update.canStageForNextLaunch
-            ? aboutStatusT.availableStaged(version: update.latestTag)
-            : (_isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform) &&
-                    update.canSeamlessInstall
-                ? updateNoticeT.seamlessAvailable(version: update.latestTag)
-                : updateNoticeT.manualDownload(version: update.latestTag);
-    final notNowLabel = commonActionsT.notNow;
-    final errorColor = Theme.of(context).colorScheme.error;
-
-    await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
-    messenger.hideCurrentSnackBar();
-    messenger.hideCurrentMaterialBanner();
-    messenger.showMaterialBanner(
-      MaterialBanner(
-        key: const ValueKey('update_notice_banner'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (errorMessage != null) ...[
-              Text(
-                errorMessage,
-                style: TextStyle(color: errorColor),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Text(message),
-          ],
-        ),
-        forceActionsBelow: true,
-        actions: [
-          TextButton(
-            key: const ValueKey('update_notice_secondary_action'),
-            onPressed: () {
-              ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
-              unawaited(_dismissUpdateNoticeForSession(
-                prefs: prefs,
-                latestTag: update.latestTag,
-                updateTag: stagedReady ? update.latestTag : null,
-              ));
-            },
-            child: Text(notNowLabel),
-          ),
-          FilledButton.tonal(
-            key: const ValueKey('update_notice_primary_action'),
-            onPressed: () {
-              if (_updateNoticePrimaryActionInFlight) {
-                return;
-              }
-              _updateNoticePrimaryActionInFlight = true;
-              ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
-              unawaited(_handleUpdateNoticePrimaryAction(
-                prefs: prefs,
-                update: update,
-                stagedReady: stagedReady,
-              ));
-            },
-            child: Text(primaryActionLabel),
-          ),
-        ],
-      ),
-    );
-  }
-
   bool _shouldShowUpdateNotice({
     required SharedPreferences prefs,
     required String latestTag,
-    required bool stagedReady,
   }) {
     if (_updateNoticeDismissedInSession) return false;
-
-    if (stagedReady) {
-      final readyAckTag =
-          prefs.getString(AutoUpgradeGate.updateReadyAckTagPrefsKey);
-      if (readyAckTag == latestTag) {
-        return false;
-      }
-    }
 
     final lastTag =
         prefs.getString(AutoUpgradeGate.updateNoticeLastTagPrefsKey);
@@ -635,7 +491,6 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   Future<void> _dismissUpdateNoticeForSession({
     required SharedPreferences prefs,
     required String latestTag,
-    required String? updateTag,
   }) async {
     await _persistUpdateNoticeCooldown(prefs, latestTag: latestTag);
     _updateNoticeDismissedInSession = true;
@@ -643,267 +498,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
       AutoUpgradeGate.updateNoticeDismissedInSessionPrefsKey,
       true,
     );
-    if (updateTag != null && updateTag.trim().isNotEmpty) {
-      await prefs.setString(
-          AutoUpgradeGate.updateReadyAckTagPrefsKey, updateTag);
-    }
   }
 
   @override
   Widget build(BuildContext context) => widget.child;
-}
-
-class _AndroidUpdateDialog extends StatefulWidget {
-  const _AndroidUpdateDialog({
-    required this.update,
-    required this.releaseNotes,
-    required this.coordinator,
-    required this.externalUriLauncher,
-    required this.onPermissionSettingsOpened,
-    required this.onDismissed,
-  });
-
-  final AppUpdateAvailability update;
-  final ReleaseNotesFetchResult releaseNotes;
-  final AndroidApkUpdateCoordinator coordinator;
-  final AutoUpgradeGateExternalUriLauncher? externalUriLauncher;
-  final VoidCallback onPermissionSettingsOpened;
-  final VoidCallback onDismissed;
-
-  @override
-  State<_AndroidUpdateDialog> createState() => _AndroidUpdateDialogState();
-}
-
-class _ReleaseNotesBullet extends StatelessWidget {
-  const _ReleaseNotesBullet({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Icon(
-            Icons.circle,
-            size: 6,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text)),
-      ],
-    );
-  }
-}
-
-class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
-  AndroidApkDownloadProgress? _progress;
-  bool _isDownloading = false;
-  bool _hasAttemptedUpdate = false;
-  bool _awaitingInstallPermission = false;
-  String? _statusMessage;
-  String? _errorMessage;
-  AndroidApkDownloadCancelToken? _cancelToken;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.t;
-    final settingsT = t.settings;
-    final commonT = t.common.actions;
-    final notes = widget.releaseNotes.notes;
-    final percent = _progress?.percent;
-
-    return AlertDialog(
-      key: const ValueKey('android_update_dialog'),
-      title:
-          Text(settingsT.updateDialog.title(version: widget.update.latestTag)),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 460),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(settingsT.updateDialog.message),
-              const SizedBox(height: 12),
-              if (notes != null) ...[
-                if (notes.summary.trim().isNotEmpty) ...[
-                  Text(notes.summary.trim()),
-                  const SizedBox(height: 8),
-                ],
-                for (final highlight in notes.highlights)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: _ReleaseNotesBullet(text: highlight),
-                  ),
-                for (final section in notes.sections) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    section.title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  for (final item in section.items)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: _ReleaseNotesBullet(text: item),
-                    ),
-                ],
-              ] else if (widget.releaseNotes.errorMessage != null) ...[
-                Text(settingsT.updateDialog.releaseNotesUnavailable),
-              ],
-              if (_isDownloading) ...[
-                const SizedBox(height: 16),
-                Text(_statusMessage ?? settingsT.updateDialog.downloading),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(value: _progress?.fraction),
-                const SizedBox(height: 8),
-                Text(
-                  percent == null
-                      ? settingsT.updateDialog.downloadProgressUnknown
-                      : settingsT.updateDialog
-                          .downloadProgress(percent: percent),
-                  key: const ValueKey('android_update_progress_label'),
-                ),
-              ],
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  _errorMessage!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          key: ValueKey(_isDownloading
-              ? 'android_update_cancel_download'
-              : 'android_update_cancel'),
-          onPressed: _isDownloading
-              ? _cancelDownload
-              : () {
-                  if (!_hasAttemptedUpdate || !_awaitingInstallPermission) {
-                    widget.onDismissed();
-                  }
-                  Navigator.of(context).pop();
-                },
-          child: Text(commonT.cancel),
-        ),
-        if (!_isDownloading)
-          FilledButton(
-            key: const ValueKey('android_update_confirm'),
-            onPressed: _startUpdate,
-            child: Text(settingsT.updateDialog.updateNow),
-          ),
-        if (_errorMessage != null && !_isDownloading)
-          TextButton(
-            key: const ValueKey('android_update_manual'),
-            onPressed: _openManualUpdate,
-            child: Text(settingsT.about.actions.manualUpdate),
-          ),
-      ],
-    );
-  }
-
-  Future<void> _startUpdate() async {
-    final asset = widget.update.asset;
-    if (asset == null) {
-      setState(() {
-        _errorMessage = context.t.settings.updateDialog.downloadFailed;
-      });
-      return;
-    }
-
-    final cancelToken = AndroidApkDownloadCancelToken();
-    _cancelToken = cancelToken;
-    setState(() {
-      _hasAttemptedUpdate = true;
-      _isDownloading = true;
-      _awaitingInstallPermission = false;
-      _errorMessage = null;
-      _statusMessage = context.t.settings.updateDialog.downloading;
-    });
-
-    try {
-      await widget.coordinator.performUpdate(
-        asset: asset,
-        onProgress: (progress) {
-          if (!mounted) return;
-          setState(() {
-            _progress = progress;
-          });
-        },
-        cancelToken: cancelToken,
-      );
-      if (!mounted) return;
-      setState(() {
-        _statusMessage = context.t.settings.updateDialog.installing;
-      });
-      widget.onDismissed();
-      Navigator.of(context).pop();
-    } on AndroidApkDownloadCancelledException {
-      return;
-    } on AndroidApkInstallerRequiresPermissionSettingsException {
-      if (!mounted) return;
-      setState(() {
-        _isDownloading = false;
-        _awaitingInstallPermission = true;
-        _errorMessage = context.t.settings.updateDialog.permissionRequired;
-      });
-      widget.onPermissionSettingsOpened();
-      return;
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isDownloading = false;
-        _awaitingInstallPermission = false;
-        _errorMessage = _buildErrorMessage(error);
-      });
-    } finally {
-      _cancelToken = null;
-    }
-  }
-
-  void _cancelDownload() {
-    _cancelToken?.cancel();
-    if (!mounted) return;
-    Navigator.of(context).pop();
-  }
-
-  String _buildErrorMessage(Object error) {
-    if (error is AndroidApkUpdateException &&
-        error.type == AndroidApkUpdateFailureType.installLaunch) {
-      return context.t.settings.about.messages.openUpdateFailed;
-    }
-    return context.t.settings.updateDialog.downloadFailed;
-  }
-
-  Future<void> _openManualUpdate() async {
-    final uri = widget.update.releasePageUri;
-    try {
-      final launcher = widget.externalUriLauncher;
-      final opened = launcher != null
-          ? await launcher(uri)
-          : await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened && mounted) {
-        setState(() {
-          _errorMessage = context.t.settings.about.messages.openUpdateFailed;
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = context.t.settings.about.messages.openUpdateFailed;
-      });
-    }
-  }
 }

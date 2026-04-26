@@ -31,11 +31,51 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(MaterialBanner), findsOneWidget);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Manual update'), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_update')), findsOneWidget);
+    expect(find.text('Update'), findsOneWidget);
   });
+
+  testWidgets('desktop update prompt uses ignore and update actions',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+        downloadUri: Uri.parse('https://cdn.example.com/linux.tar.gz'),
+      ),
+    );
+    final service = FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.byType(MaterialBanner), findsNothing);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_ignore')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_update')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('update_prompt_ignore')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsNothing);
+    expect(service.installCalls, 0);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.linux,
+      }));
 
   testWidgets(
       'passive reminder stays visible beyond transient snackbar timeout',
@@ -60,13 +100,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 4));
 
-    expect(find.byType(MaterialBanner), findsOneWidget);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_update')), findsOneWidget);
   });
 
   testWidgets('passive reminder persists cooldown when first shown',
@@ -126,14 +165,14 @@ void main() {
     await pumpGate(tester, service: service);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
-    expect(find.byType(MaterialBanner), findsNothing);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsNothing);
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.checkCalls, 2);
-    expect(find.byType(MaterialBanner), findsNothing);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsNothing);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.android,
@@ -159,8 +198,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_secondary_action')));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_ignore')));
     await tester.pumpAndSettle();
 
     final prefs = await SharedPreferences.getInstance();
@@ -174,7 +212,7 @@ void main() {
     );
   });
 
-  testWidgets('staged update reminder explains next-launch apply behavior',
+  testWidgets('staged update reminder explains immediate restart behavior',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final update = AppUpdateAvailability(
@@ -201,13 +239,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(MaterialBanner), findsOneWidget);
-    expect(find.text('Prepare update'), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
+    expect(find.text('Update'), findsOneWidget);
     expect(
-      find.textContaining('apply next launch'),
+      find.textContaining('restart'),
       findsOneWidget,
     );
-    expect(find.textContaining('download it now'), findsNothing);
+    expect(find.textContaining('next launch'), findsNothing);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -243,9 +281,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
-    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
 
     expect(opened, <Uri>[update.releasePageUri]);
     expect(service.installCalls, 0);
@@ -278,14 +316,116 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    final progressDialog = find.byKey(const ValueKey('update_progress_dialog'));
+    expect(progressDialog, findsOneWidget);
+    expect(
+      find.descendant(
+        of: progressDialog,
+        matching: find.text(
+          'New version v1.1.0 is available. '
+          'Open the update page to download it now.',
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.text('Preparing update. The app will restart shortly.'),
+      findsNothing,
+    );
+    expect(find.text('Could not open update page'), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets(
+      'manual update action closes progress dialog when opening succeeds',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    var launcherSucceeds = false;
+    final opened = <Uri>[];
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+    );
+    final service = FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(
+      tester,
+      service: service,
+      externalUriLauncher: (uri) async {
+        opened.add(uri);
+        return launcherSucceeds;
+      },
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+        find.byKey(const ValueKey('update_progress_dialog')), findsOneWidget);
+    expect(find.text('Could not open update page'), findsOneWidget);
+
+    launcherSucceeds = true;
+    await tester.tap(find.byKey(const ValueKey('update_progress_manual')));
     await tester.pumpAndSettle();
 
+    expect(opened, <Uri>[update.releasePageUri, update.releasePageUri]);
+    expect(find.byKey(const ValueKey('update_progress_dialog')), findsNothing);
+  });
+
+  testWidgets('manual update action keeps retry controls when launcher throws',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+    );
+    final service = FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(
+      tester,
+      service: service,
+      externalUriLauncher: (uri) async {
+        throw StateError('launcher_failed');
+      },
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(
+        find.byKey(const ValueKey('update_progress_dialog')), findsOneWidget);
     expect(find.text('Could not open update page'), findsOneWidget);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Manual update'), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
   });
 
   testWidgets('linux passive reminder installs immediately from primary action',
@@ -314,8 +454,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
     await tester.pumpAndSettle();
 
     expect(service.installCalls, 1);
@@ -354,10 +493,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    final primaryAction =
-        find.byKey(const ValueKey('update_notice_primary_action'));
+    final primaryAction = find.byKey(const ValueKey('update_prompt_update'));
     await tester.tap(primaryAction);
-    await tester.tap(primaryAction);
+    await tester.tap(primaryAction, warnIfMissed: false);
     await tester.pump();
 
     expect(service.installCalls, 1);
@@ -396,15 +534,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.installCalls, 1);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Update now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(
       prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
@@ -415,8 +551,7 @@ void main() {
         TargetPlatform.linux,
       }));
 
-  testWidgets(
-      'windows staged reminder applies staged update from primary action',
+  testWidgets('windows seamless reminder installs from primary action',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final update = AppUpdateAvailability(
@@ -443,12 +578,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
     await tester.pumpAndSettle();
 
-    expect(service.stageCalls, 1);
-    expect(service.applyStagedRestartCalls, 1);
+    expect(service.installCalls, 1);
+    expect(service.stageCalls, 0);
+    expect(service.applyStagedRestartCalls, 0);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -483,19 +618,63 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.stageCalls, 1);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Prepare update'), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_progress_retry')), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     expect(
       prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
       isNotNull,
+    );
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets('windows staged-next-launch action reports restart failure',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = FakeAutoUpdateService(
+      throwOnApplyStagedRestart: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    await tester.tap(find.byKey(const ValueKey('update_prompt_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(service.stageCalls, 1);
+    expect(service.applyStagedRestartCalls, 1);
+    expect(
+      find.textContaining('Auto update failed'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Failed to prepare update'),
+      findsNothing,
     );
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
@@ -530,7 +709,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
   });
 
   testWidgets('skips reminder when same tag was shown within 24h',
@@ -561,6 +740,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(MaterialBanner), findsNothing);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsNothing);
   });
 }

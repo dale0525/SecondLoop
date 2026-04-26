@@ -664,7 +664,7 @@
       "upToDate": "You're on the latest version.",
       "availableSeamless": "Update available ($version). You can auto-update and restart.",
       "availableAndroidApk": "Update available ($version). Download in-app and continue with the installer.",
-      "availableStaged": "Update available ($version). Prepare in background and apply next launch.",
+      "availableStaged": "Update available ($version). Prepare the update and restart now to finish.",
       "availableExternal": "Update available ($version). Download the installer or open the release page manually.",
       "failed": "Update check failed: $error"
     },
@@ -681,8 +681,7 @@
       "updateAvailable": "Update available: $version",
       "checkFailed": "Failed to check updates: $error",
       "installStarting": "Preparing update. The app will restart shortly.",
-      "stageStarting": "Preparing update in background. It will apply on next launch.",
-      "stageReady": "Update is ready and will apply on next launch.",
+      "stageStarting": "Preparing update. The app will restart shortly.",
       "installFailed": "Auto update failed: $error",
       "stageFailed": "Failed to prepare update: $error",
       "openHomepageFailed": "Could not open project homepage",

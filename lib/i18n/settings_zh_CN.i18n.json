@@ -664,7 +664,7 @@
       "upToDate": "当前已是最新版本。",
       "availableSeamless": "发现新版本（$version）。可一键自动更新并重启。",
       "availableAndroidApk": "发现新版本（$version）。可在应用内下载并继续安装。",
-      "availableStaged": "发现新版本（$version）。可后台准备更新，下次启动自动生效。",
+      "availableStaged": "发现新版本（$version）。可准备更新并立即重启完成安装。",
       "availableExternal": "发现新版本（$version）。请手动下载安装包，或前往发布页安装。",
       "failed": "检查更新失败：$error"
     },
@@ -681,8 +681,7 @@
       "updateAvailable": "发现新版本：$version",
       "checkFailed": "检查更新失败：$error",
       "installStarting": "正在准备自动更新，应用即将重启。",
-      "stageStarting": "正在后台准备更新，下次启动将自动生效。",
-      "stageReady": "更新已准备就绪，下次启动将自动更新。",
+      "stageStarting": "正在准备自动更新，应用即将重启。",
       "installFailed": "自动更新失败：$error",
       "stageFailed": "后台准备更新失败：$error",
       "openHomepageFailed": "无法打开项目主页",

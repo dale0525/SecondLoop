@@ -18,21 +18,20 @@ const _fakeAndroidApkSha256 =
 class _FakeAboutUpdateService extends AppUpdateService {
   _FakeAboutUpdateService({
     required this.result,
-    this.releaseRepoValue = 'dale0525/SecondLoop',
   });
 
   AppUpdateCheckResult result;
   Object? throwOnCheck;
-  final String releaseRepoValue;
 
   int checkCalls = 0;
   int installCalls = 0;
   int stageCalls = 0;
+  int applyStagedRestartCalls = 0;
   AppUpdateAvailability? installed;
   AppUpdateAvailability? staged;
 
   @override
-  String get releaseRepo => releaseRepoValue;
+  String get releaseRepo => 'dale0525/SecondLoop';
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates() async {
@@ -53,6 +52,11 @@ class _FakeAboutUpdateService extends AppUpdateService {
   Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
     stageCalls += 1;
     staged = update;
+  }
+
+  @override
+  Future<void> applyStagedUpdateAndRestart() async {
+    applyStagedRestartCalls += 1;
   }
 }
 
@@ -131,7 +135,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('about_open_homepage')), findsOneWidget);
     expect(find.byKey(const ValueKey('about_check_updates')), findsOneWidget);
-    expect(find.byKey(const ValueKey('about_manual_update')), findsOneWidget);
+    expect(find.byKey(const ValueKey('about_manual_update')), findsNothing);
     expect(find.textContaining('1.0.1+99'), findsWidgets);
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
@@ -139,25 +143,81 @@ void main() {
 
     expect(service.checkCalls, 1);
     expect(find.textContaining('v1.1.0'), findsWidgets);
-    expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
+    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.text('Update now'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 100));
     expect(service.installCalls, 1);
     expect(service.installed?.latestTag, 'v1.1.0');
 
-    await tester.tap(find.byKey(const ValueKey('about_manual_update')));
-    await tester.pumpAndSettle();
-    expect(opened.last.toString(), update.releasePageUri.toString());
-
     await tester.tap(find.byKey(const ValueKey('about_open_homepage')));
     await tester.pumpAndSettle();
-    expect(opened.last.toString(), 'https://secondloop.app');
+    expect(opened.single.toString(), 'https://secondloop.app');
   });
 
-  testWidgets('About page manual update prefers release page for Android apk',
+  testWidgets('About page update section keeps one button and updates from it',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+        downloadUri: Uri.parse('https://cdn.example.com/linux.tar.gz'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('about_check_updates')), findsOneWidget);
+    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.byKey(const ValueKey('about_manual_update')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+
+    expect(service.checkCalls, 1);
+    expect(find.byKey(const ValueKey('about_check_updates')), findsOneWidget);
+    expect(find.text('Update now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.byKey(const ValueKey('about_manual_update')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(service.checkCalls, 1);
+    expect(service.installCalls, 1);
+    expect(service.installed?.latestTag, 'v1.1.0');
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.linux,
+      }));
+
+  testWidgets('About page immediate update opens release page when needed',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -201,7 +261,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('about_manual_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
 
     expect(
@@ -214,14 +274,30 @@ void main() {
         TargetPlatform.android,
       }));
 
-  testWidgets('About page manual update falls back to configured release repo',
+  testWidgets(
+      'About page opens release page for Android apk when in-app install is unavailable',
       (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
     SharedPreferences.setMockInitialValues({});
 
     final opened = <Uri>[];
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+        sha256: _fakeAndroidApkSha256,
+      ),
+    );
     final service = _FakeAboutUpdateService(
-      result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
-      releaseRepoValue: 'acme/SecondLoopFork',
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
     );
 
     await tester.pumpWidget(
@@ -241,16 +317,33 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('about_manual_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
 
-    expect(
-      opened.single,
-      Uri.parse('https://github.com/acme/SecondLoopFork/releases/latest'),
-    );
-  });
+    expect(find.byKey(const ValueKey('about_check_updates')), findsOneWidget);
+    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.byKey(const ValueKey('about_manual_update')), findsNothing);
+    expect(find.text('Update now'), findsOneWidget);
+    expect(find.byIcon(Icons.open_in_new_rounded), findsOneWidget);
 
-  testWidgets('About page stages update for next launch', (tester) async {
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 0);
+    expect(
+      opened.single.toString(),
+      'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+    );
+
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
+
+  testWidgets('About page stages and applies update from the single button',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     final update = AppUpdateAvailability(
@@ -284,13 +377,16 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    expect(find.textContaining('restart'), findsOneWidget);
+    expect(find.textContaining('next launch'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(service.installCalls, 0);
     expect(service.stageCalls, 1);
+    expect(service.applyStagedRestartCalls, 1);
     expect(service.staged?.latestTag, 'v1.1.0');
   });
 
@@ -331,9 +427,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
+    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.text('Update now'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 100));
@@ -347,7 +444,7 @@ void main() {
       }));
 
   testWidgets(
-      'About page keeps manual update only on Windows external download',
+      'About page uses single update button for Windows external download',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -389,8 +486,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.byKey(const ValueKey('about_manual_update')), findsNothing);
+    expect(find.text('Update now'), findsOneWidget);
+    expect(find.byIcon(Icons.open_in_new_rounded), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('about_manual_update')));
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
 
     expect(service.installCalls, 0);
@@ -404,27 +504,17 @@ void main() {
         TargetPlatform.windows,
       }));
 
-  testWidgets('About page clears stale update result after check failure',
+  testWidgets('About page retries update check after check failure',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
+    final opened = <Uri>[];
     final service = _FakeAboutUpdateService(
-      result: AppUpdateCheckResult(
+      result: const AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
-        update: AppUpdateAvailability(
-          currentVersion: '1.0.1+99',
-          latestTag: 'v1.1.0',
-          releasePageUri: Uri.parse(
-            'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          ),
-          installMode: AppUpdateInstallMode.stagedNextLaunch,
-          asset: AppUpdateAsset(
-            name: 'pkg.nupkg',
-            downloadUri: Uri.parse('https://cdn.example.com/pkg.nupkg'),
-          ),
-        ),
       ),
     );
+    service.throwOnCheck = StateError('network_down');
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -433,6 +523,10 @@ void main() {
             updateService: service,
             runtimeVersionLoader: () async =>
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            externalUriLauncher: (uri) async {
+              opened.add(uri);
+              return true;
+            },
           ),
         ),
       ),
@@ -441,12 +535,27 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
 
-    service.throwOnCheck = StateError('network_down');
+    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.text('Update now'), findsNothing);
+    expect(find.text('Manual update'), findsOneWidget);
+    expect(service.checkCalls, 1);
+
+    await tester.tap(find.text('Manual update'));
+    await tester.pumpAndSettle();
+    expect(
+      opened.single.toString(),
+      'https://github.com/dale0525/SecondLoop/releases/latest',
+    );
+
+    service.throwOnCheck = null;
+    service.result = const AppUpdateCheckResult(currentVersion: '1.0.1+99');
+
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(service.checkCalls, 2);
+    expect(find.text("You're on the latest version."), findsOneWidget);
+    expect(find.text('Update now'), findsNothing);
   });
 }

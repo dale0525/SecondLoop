@@ -53,10 +53,9 @@ void main() {
     expect(service.installCalls, 0);
     expect(service.stageCalls, 0);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
-    expect(find.byType(MaterialBanner), findsOneWidget);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Update now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_update')), findsOneWidget);
+    expect(find.text('Update'), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.linux,
@@ -89,8 +88,7 @@ void main() {
     expect(service.applyPendingCalls, 1);
   });
 
-  testWidgets(
-      'windows seamless update keeps in-app reminder when staging fails',
+  testWidgets('windows seamless update prompts without silent staging',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     UpdateBadgePrefs.resetForTests();
@@ -120,12 +118,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.installCalls, 0);
-    expect(service.stageCalls, 1);
+    expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
-    expect(find.byType(MaterialBanner), findsOneWidget);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Update now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_update')), findsOneWidget);
+    expect(find.text('Update'), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -160,10 +157,10 @@ void main() {
 
     expect(service.checkCalls, 1);
     expect(service.installCalls, 0);
-    expect(service.stageCalls, 1);
+    expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
-    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -202,14 +199,13 @@ void main() {
     expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
-    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
       }));
 
-  testWidgets(
-      'windows staged-next-launch update is passively staged on startup',
+  testWidgets('windows staged-next-launch update prompts on startup',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     UpdateBadgePrefs.resetForTests();
@@ -238,10 +234,10 @@ void main() {
 
     expect(service.checkCalls, 1);
     expect(service.installCalls, 0);
-    expect(service.stageCalls, 1);
+    expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
-    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -280,7 +276,7 @@ void main() {
     expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.2.0');
-    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -516,10 +512,9 @@ void main() {
     expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.2.0');
-    expect(find.byType(MaterialBanner), findsOneWidget);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Update now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_prompt_update')), findsOneWidget);
+    expect(find.text('Update'), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.macOS,
