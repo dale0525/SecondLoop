@@ -24,6 +24,7 @@ import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../core/sync/vault_reset_error.dart';
 import '../../core/desktop/desktop_boot_prefs.dart';
 import '../../core/desktop/desktop_quick_capture_hotkey_prefs.dart';
 import '../../core/desktop/system_hotkey_conflicts.dart';
@@ -34,6 +35,7 @@ import '../../src/rust/api/oplog_maintenance.dart' as rust_oplog_maintenance;
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
+import '../../web_app/web_formal_settings_scope.dart';
 import '../actions/settings/actions_settings_store.dart';
 import 'cloud_account_page.dart';
 import 'ai_settings_page.dart';
@@ -46,6 +48,7 @@ import 'oplog_maintenance_scope.dart';
 import '../welcome/welcome_page.dart';
 
 part 'settings_page_build.dart';
+part 'settings_page_reset_actions.dart';
 part 'settings_page_theme.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -77,6 +80,14 @@ class _SettingsPageState extends State<SettingsPage> {
   CloudAuthController? _cloudAuthController;
   Listenable? _cloudAuthListenable;
   String? _lastCloudUid;
+
+  void _setState(VoidCallback fn) {
+    if (mounted) {
+      setState(fn);
+    } else {
+      fn();
+    }
+  }
 
   static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
   static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
@@ -188,22 +199,6 @@ class _SettingsPageState extends State<SettingsPage> {
     return AppPlatformCapabilityScope.of(context).supportsDesktopBootSettings;
   }
 
-  String _joinRemotePath(String root, String child) {
-    final r = root.trim().replaceAll(RegExp(r'/+$'), '');
-    final c = child.trim().replaceAll(RegExp(r'^/+'), '');
-    if (r.isEmpty) return c;
-    if (c.isEmpty) return r;
-    return '$r/$c';
-  }
-
-  bool _isOperationTimeoutError(Object error) {
-    if (error is TimeoutException) return true;
-    final message = error.toString().toLowerCase();
-    return message.contains('operation timeout') ||
-        message.contains('timed out') ||
-        message.contains('timeout');
-  }
-
   String _normalizeAppLockWording(String text) {
     return text
         .replaceAll('master password', 'app lock password')
@@ -229,10 +224,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final messenger = ScaffoldMessenger.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final store = _syncConfigStore(context);
 
     setState(() => _busy = true);
     try {
-      final sync = await SyncConfigStore().loadConfiguredSync();
+      final sync = await store.loadConfiguredSync();
       if (sync == null) {
         throw StateError('sync_not_configured');
       }
@@ -277,131 +273,6 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  Future<void> _resetLocalData({required bool clearAllRemoteData}) async {
-    if (_busy) return;
-
-    final t = context.t;
-    final dialogTitle = clearAllRemoteData
-        ? t.settings.resetLocalDataAllDevices.dialogTitle
-        : t.settings.resetLocalDataThisDeviceOnly.dialogTitle;
-    final dialogBody = _normalizeAppLockWording(clearAllRemoteData
-        ? t.settings.resetLocalDataAllDevices.dialogBody
-        : t.settings.resetLocalDataThisDeviceOnly.dialogBody);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(dialogTitle),
-          content: Text(dialogBody),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(context.t.common.actions.reset),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmed != true || !mounted) return;
-
-    final backend = AppBackendScope.of(context);
-    final lock = SessionScope.of(context).lock;
-    final messenger = ScaffoldMessenger.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    SyncEngineScope.maybeOf(context)?.stop();
-
-    setState(() => _busy = true);
-    try {
-      final store = SyncConfigStore();
-      final sync = await store.loadConfiguredSync();
-      if (sync != null) {
-        final deviceId =
-            clearAllRemoteData ? null : await backend.getOrCreateDeviceId();
-        try {
-          await switch (sync.backendType) {
-            SyncBackendType.webdav => backend.syncWebdavClearRemoteRoot(
-                baseUrl: sync.baseUrl ?? '',
-                username: sync.username,
-                password: sync.password,
-                remoteRoot: deviceId == null
-                    ? sync.remoteRoot
-                    : _joinRemotePath(sync.remoteRoot, deviceId),
-              ),
-            SyncBackendType.localDir => backend.syncLocaldirClearRemoteRoot(
-                localDir: sync.localDir ?? '',
-                remoteRoot: deviceId == null
-                    ? sync.remoteRoot
-                    : _joinRemotePath(sync.remoteRoot, deviceId),
-              ),
-            SyncBackendType.managedVault => () async {
-                final idToken = await readCloudAuthIdToken(
-                  CloudAuthScope.maybeOf(context)?.controller,
-                  mode: CloudAuthAccessMode.interactive,
-                );
-                if (idToken == null || idToken.trim().isEmpty) {
-                  throw StateError('missing_cloud_id_token');
-                }
-                final baseUrl = sync.baseUrl ?? '';
-                if (baseUrl.trim().isEmpty) {
-                  throw StateError('missing_base_url');
-                }
-
-                if (deviceId == null) {
-                  await backend.syncManagedVaultClearVault(
-                    baseUrl: baseUrl,
-                    vaultId: sync.remoteRoot,
-                    idToken: idToken,
-                  );
-                  return;
-                }
-
-                await backend.syncManagedVaultClearDevice(
-                  baseUrl: baseUrl,
-                  vaultId: sync.remoteRoot,
-                  idToken: idToken,
-                  deviceId: deviceId,
-                );
-              }(),
-          };
-        } catch (e) {
-          if (!(clearAllRemoteData && _isOperationTimeoutError(e))) {
-            rethrow;
-          }
-          debugPrint(
-              'settings debug reset: ignored remote clear timeout in all-devices mode: $e');
-        }
-      }
-
-      await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kAppLockEnabledPrefsKey);
-      await prefs.remove(_kBiometricUnlockEnabledPrefsKey);
-      await backend.clearSavedSessionKey();
-
-      await BackgroundSync.refreshSchedule(backend: backend);
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(clearAllRemoteData
-              ? t.settings.resetLocalDataAllDevices.failed(error: '$e')
-              : t.settings.resetLocalDataThisDeviceOnly.failed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return;
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-
-    if (!mounted) return;
-    lock();
   }
 
   @override

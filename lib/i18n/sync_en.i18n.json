@@ -8,6 +8,11 @@
     "uploadingMedia": "Uploading files…",
     "finalizing": "Finalizing…"
   },
+  "deleteProgress": {
+    "title": "Deleting…",
+    "localData": "Deleting local synced data…",
+    "allData": "Deleting local and remote data…"
+  },
   "sections": {
     "automation": "Auto sync",
     "backend": "Sync method",
@@ -52,14 +57,19 @@
     }
   },
   "localCache": {
-    "button": "Clear local storage",
+    "button": "Delete local cache",
     "subtitle": "Deletes cached attachment files on this device (remote copies are kept and can be re-downloaded). Make sure sync/upload has completed.",
-    "cleared": "Cleared local cache",
-    "failed": "Clear failed: $error",
+    "cleared": "Deleted local cache",
+    "failed": "Delete failed: $error",
     "dialog": {
-      "title": "Clear local storage?",
+      "title": "Delete local cache?",
       "message": "This deletes cached photos and files on this device to save space. Your remote sync storage keeps a copy; items will be re-downloaded on demand when viewed again.",
-      "confirm": "Clear"
+      "confirm": "Delete"
+    },
+    "secondDialog": {
+      "title": "Delete local cache again?",
+      "message": "This cannot be undone locally. Cached files from this device are removed, and remote copies stay available for re-download.",
+      "confirm": "Delete"
     }
   },
   "localData": {
@@ -71,7 +81,38 @@
       "title": "Delete local data?",
       "message": "This deletes all synced local data on this device, including messages, attachments, and embeddings. Your sync settings are kept, and a later Download will fully replace local data from remote again.",
       "confirm": "Delete"
+    },
+    "secondDialog": {
+      "title": "Delete local data again?",
+      "message": "This cannot be undone on this device. Your remote copy is not changed, and you can download it again later if needed.",
+      "confirm": "Delete"
     }
+  },
+  "allData": {
+    "button": "Delete all data",
+    "deleted": "Deleted local and remote data",
+    "deletedLocalOnly": "Deleted local data only; remote clear timed out, so retry if you still need to remove remote data.",
+    "failed": "Delete failed: $error",
+    "remoteClearUnknownLocalCleanupFailed": "Remote clear timed out, and local cleanup failed. Sync stayed off because remote state is unknown. Error: $error",
+    "remoteDeletedLocalCleanupFailed": "Remote sync data deleted, but local cleanup failed. Sync stayed off to avoid restoring remote data. Error: $error",
+    "notConfigured": "Save your sync settings first.",
+    "dialog": {
+      "title": "Delete all data?",
+      "message": "This deletes all synced local data on this device and clears all remote data for the current sync backend, including WebDAV, local folder sync, or SecondLoop Cloud. Your sync settings are kept.",
+      "confirm": "Delete"
+    },
+    "secondDialog": {
+      "title": "Delete all data again?",
+      "message": "This cannot be undone. This also clears the remote sync data for the current sync method.",
+      "confirm": "Delete"
+    }
+  },
+  "switchDirection": {
+    "title": "Choose sync direction",
+    "message": "You are switching to a different sync location. Choose how SecondLoop should reconcile this device and the remote copy.",
+    "localReplacesRemote": "Replace remote with this device",
+    "remoteReplacesLocal": "Replace this device with remote",
+    "merge": "Merge local and remote"
   },
   "backendLabel": "Sync method",
   "backendWebdav": "WebDAV (your server)",

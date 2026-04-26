@@ -1,36 +1,6 @@
 part of 'sync_settings_page.dart';
 
 extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
-  Future<int> _consumeRustProgressStream(
-    Stream<String> stream, {
-    required void Function(int done, int total) onProgress,
-  }) async {
-    var count = 0;
-    await for (final msg in stream) {
-      Map<String, dynamic>? ev;
-      try {
-        final decoded = jsonDecode(msg);
-        ev = decoded is Map ? decoded.cast<String, dynamic>() : null;
-      } catch (_) {
-        ev = null;
-      }
-      if (ev == null) continue;
-
-      final type = ev['type'];
-      if (type == 'progress') {
-        final done = (ev['done'] as num?)?.toInt();
-        final total = (ev['total'] as num?)?.toInt();
-        if (done != null && total != null) {
-          onProgress(done, total);
-        }
-      } else if (type == 'result') {
-        final v = (ev['count'] as num?)?.toInt();
-        if (v != null) count = v;
-      }
-    }
-    return count;
-  }
-
   Future<bool> _persistBackendConfig() async {
     final t = context.t;
     final backendType = _effectiveBackendType;
@@ -49,10 +19,6 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       return false;
     }
 
-    await _store.writeBackendType(backendType);
-    await _store.writeAutoEnabled(_autoEnabled);
-    await _store.writeRemoteRoot(resolvedRemoteRoot);
-
     switch (backendType) {
       case SyncBackendType.webdav:
         final baseUrl = _requiredTrimmed(_baseUrlController);
@@ -60,9 +26,13 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           _showSnack(t.sync.baseUrlRequired);
           return false;
         }
-        await _store.writeWebdavBaseUrl(baseUrl);
-        await _store.writeWebdavUsername(_optionalTrimmed(_usernameController));
         await _store.writeWebdavPassword(_optionalTrimmed(_passwordController));
+        await _store.writeWebdavSyncSettings(
+          baseUrl: baseUrl,
+          username: _optionalTrimmed(_usernameController),
+          remoteRoot: resolvedRemoteRoot,
+          autoEnabled: _autoEnabled,
+        );
         break;
       case SyncBackendType.localDir:
         final localDir = _requiredTrimmed(_localDirController);
@@ -70,18 +40,35 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           _showSnack(t.sync.localDirRequired);
           return false;
         }
-        await _store.writeLocalDir(localDir);
+        await _store.writeLocalDirSyncSettings(
+          localDir: localDir,
+          remoteRoot: resolvedRemoteRoot,
+          autoEnabled: _autoEnabled,
+        );
         break;
       case SyncBackendType.managedVault:
+        String? managedVaultBaseUrl;
         if (kDebugMode && _showManagedVaultEndpointOverride) {
-          await _store.writeManagedVaultBaseUrl(
-              _requiredTrimmed(_managedVaultBaseUrlController));
+          managedVaultBaseUrl =
+              _requiredTrimmed(_managedVaultBaseUrlController);
+          if (managedVaultBaseUrl.isEmpty) {
+            _showSnack(t.sync.baseUrlRequired);
+            return false;
+          }
+        } else {
+          managedVaultBaseUrl = await _store.readManagedVaultBaseUrl();
         }
-        final resolved = await _store.resolveManagedVaultBaseUrl();
+        final resolved = managedVaultBaseUrl ??
+            (await _store.resolveManagedVaultBaseUrl())?.trim();
         if (resolved == null || resolved.trim().isEmpty) {
           _showSnack(t.sync.baseUrlRequired);
           return false;
         }
+        await _store.writeManagedVaultSyncSettings(
+          baseUrl: managedVaultBaseUrl,
+          remoteRoot: resolvedRemoteRoot,
+          autoEnabled: _autoEnabled,
+        );
         break;
     }
 
@@ -297,34 +284,6 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     }
   }
 
-  bool _shouldRunSaveSyncForConfigChange({
-    required SyncBackendType oldBackendType,
-    required String oldWebdavBaseUrl,
-    required String oldRemoteRoot,
-    required String oldLocalDir,
-    required SyncBackendType newBackendType,
-    required String newWebdavBaseUrl,
-    required String newRemoteRoot,
-    required String newLocalDir,
-  }) {
-    if (newBackendType == SyncBackendType.webdav) {
-      return oldBackendType != newBackendType ||
-          oldWebdavBaseUrl != newWebdavBaseUrl ||
-          oldRemoteRoot != newRemoteRoot;
-    }
-    if (newBackendType == SyncBackendType.localDir) {
-      return oldBackendType != newBackendType ||
-          oldLocalDir != newLocalDir ||
-          oldRemoteRoot != newRemoteRoot;
-    }
-    if (newBackendType == SyncBackendType.managedVault) {
-      // Specifically requested: switching from WebDAV/local-dir to Cloud should
-      // trigger an immediate sync.
-      return oldBackendType != SyncBackendType.managedVault;
-    }
-    return false;
-  }
-
   Future<Uint8List> _deriveManagedVaultSyncKey(AppBackend backend) async {
     final vaultId = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
     if (vaultId == null || vaultId.isEmpty) {
@@ -351,12 +310,95 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return _deriveManagedVaultSyncKey(backend);
   }
 
+  Future<void> _restorePrimarySyncConfigSnapshot({
+    required AppBackend backend,
+    required SyncBackendType backendType,
+    required String webdavBaseUrl,
+    required String? webdavUsername,
+    required String? webdavPassword,
+    required String localDir,
+    required String? managedVaultBaseUrl,
+    required String remoteRoot,
+    required bool autoEnabled,
+    required Uint8List? syncKey,
+    required SyncEngine? engine,
+    bool refreshSchedule = true,
+  }) async {
+    switch (backendType) {
+      case SyncBackendType.webdav:
+        await _store.writeWebdavPassword(webdavPassword);
+        await _store.writeWebdavSyncSettings(
+          baseUrl: webdavBaseUrl,
+          username: webdavUsername,
+          remoteRoot: remoteRoot,
+          autoEnabled: autoEnabled,
+        );
+        break;
+      case SyncBackendType.localDir:
+        await _store.writeLocalDirSyncSettings(
+          localDir: localDir,
+          remoteRoot: remoteRoot,
+          autoEnabled: autoEnabled,
+        );
+        break;
+      case SyncBackendType.managedVault:
+        await _store.writeManagedVaultBaseUrl(managedVaultBaseUrl);
+        await _store.writeManagedVaultSyncSettings(
+          baseUrl: managedVaultBaseUrl,
+          remoteRoot: remoteRoot,
+          autoEnabled: autoEnabled,
+        );
+        break;
+    }
+    if (syncKey != null) {
+      await SyncKeyManager.save(
+        write: _store.writeSyncKey,
+        key: syncKey,
+      );
+    } else {
+      await _store.clearSyncKey();
+    }
+    if (backendType != SyncBackendType.managedVault) {
+      engine?.writeGate.value = const SyncWriteGateState.open();
+    }
+    if (refreshSchedule) {
+      await _refreshBackgroundScheduleBestEffort(backend);
+    }
+  }
+
+  Future<void> _refreshBackgroundScheduleBestEffort(AppBackend backend) async {
+    try {
+      await BackgroundSync.refreshSchedule(
+        backend: backend,
+        configStore: _store,
+      );
+    } catch (e) {
+      debugPrint(
+        'sync settings: failed to refresh background sync schedule: $e',
+      );
+    }
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     _setState(() => _busy = true);
 
     final t = context.t;
+    final engine = SyncEngineScope.maybeOf(context);
     var shouldHideRecoveryHint = false;
+    var shouldRestartStoppedEngine = false;
+    var engineRestartedAfterStop = false;
+    var shouldRefreshBackgroundSchedule = false;
+    AppBackend? backgroundScheduleBackend;
+
+    void restartStoppedEngineIfNeeded() {
+      if (!shouldRestartStoppedEngine || engineRestartedAfterStop) {
+        return;
+      }
+      engine?.start();
+      engineRestartedAfterStop = true;
+    }
+
     try {
       final before = await _store.readAll();
       if (!mounted) return;
@@ -367,10 +409,24 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       };
       final oldWebdavBaseUrl =
           (before[SyncConfigStore.kWebdavBaseUrl] ?? '').trim();
+      final oldWebdavUsername = before[SyncConfigStore.kWebdavUsername];
+      final oldWebdavTargetUsername = oldWebdavUsername?.trim() ?? '';
+      final oldWebdavPassword = await _store.readWebdavPassword();
       final oldRemoteRoot = (before[SyncConfigStore.kRemoteRoot] ?? '').trim();
       final oldLocalDir = (before[SyncConfigStore.kLocalDir] ?? '').trim();
+      final oldManagedVaultBaseUrl =
+          before[SyncConfigStore.kManagedVaultBaseUrl];
+      final oldManagedVaultTargetBaseUrl =
+          (oldManagedVaultBaseUrl ?? await _store.resolveManagedVaultBaseUrl())
+                  ?.trim() ??
+              '';
+      final oldAutoEnabled = before[SyncConfigStore.kAutoEnabled] == null ||
+          before[SyncConfigStore.kAutoEnabled] == '1';
+      final previousSyncKey = await _store.readSyncKey();
+      if (!mounted) return;
 
       final backend = AppBackendScope.of(context);
+      backgroundScheduleBackend = backend;
       final backendType = _effectiveBackendType;
 
       final requiresSyncKey = backendType == SyncBackendType.webdav ||
@@ -380,8 +436,55 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           passphrase != null &&
           !_passphraseIsPlaceholder;
 
-      final persisted = await _persistBackendConfig();
-      if (!persisted) return;
+      final newBackendType = backendType;
+      final newWebdavBaseUrl = _requiredTrimmed(_baseUrlController).trim();
+      final newWebdavUsername = _optionalTrimmed(_usernameController) ?? '';
+      final newManagedVaultBaseUrl = backendType == SyncBackendType.managedVault
+          ? (kDebugMode && _showManagedVaultEndpointOverride
+              ? _requiredTrimmed(_managedVaultBaseUrlController).trim()
+              : (await _store.resolveManagedVaultBaseUrl())?.trim() ?? '')
+          : '';
+      if (!mounted) return;
+      final newRemoteRoot = switch (backendType) {
+        SyncBackendType.managedVault =>
+          CloudAuthScope.maybeOf(context)?.controller.uid?.trim() ?? '',
+        _ => _requiredTrimmed(_remoteRootController).trim(),
+      };
+      final newLocalDir = _requiredTrimmed(_localDirController).trim();
+      final shouldSync = _shouldRunSaveSyncForConfigChange(
+        oldBackendType: oldBackendType,
+        oldWebdavBaseUrl: oldWebdavBaseUrl,
+        oldWebdavUsername: oldWebdavTargetUsername,
+        oldManagedVaultBaseUrl: oldManagedVaultTargetBaseUrl,
+        oldRemoteRoot: oldRemoteRoot,
+        oldLocalDir: oldLocalDir,
+        newBackendType: newBackendType,
+        newWebdavBaseUrl: newWebdavBaseUrl,
+        newWebdavUsername: newWebdavUsername,
+        newManagedVaultBaseUrl: newManagedVaultBaseUrl,
+        newRemoteRoot: newRemoteRoot,
+        newLocalDir: newLocalDir,
+      );
+      SyncSwitchDirection? switchDirection;
+      if (_shouldPromptSyncDirectionForConfigChange(
+        oldBackendType: oldBackendType,
+        oldWebdavBaseUrl: oldWebdavBaseUrl,
+        oldWebdavUsername: oldWebdavTargetUsername,
+        oldManagedVaultBaseUrl: oldManagedVaultTargetBaseUrl,
+        oldRemoteRoot: oldRemoteRoot,
+        oldLocalDir: oldLocalDir,
+        newBackendType: newBackendType,
+        newWebdavBaseUrl: newWebdavBaseUrl,
+        newWebdavUsername: newWebdavUsername,
+        newManagedVaultBaseUrl: newManagedVaultBaseUrl,
+        newRemoteRoot: newRemoteRoot,
+        newLocalDir: newLocalDir,
+      )) {
+        _setState(() => _busy = false);
+        switchDirection = await showSyncSwitchDirectionDialog(context);
+        if (!mounted || switchDirection == null) return;
+        _setState(() => _busy = true);
+      }
 
       Uint8List? syncKey;
       if (backendType == SyncBackendType.managedVault) {
@@ -460,33 +563,28 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         _passphraseIsPlaceholder = true;
       }
 
-      unawaited(BackgroundSync.refreshSchedule(
-          backend: backend, configStore: _store));
+      final wasEngineRunning = engine?.isRunning ?? false;
+      if (shouldSync && engine != null) {
+        await engine.stopImmediatelyAndWait(
+          timeout: kDestructiveSyncStopTimeout,
+        );
+        shouldRestartStoppedEngine = wasEngineRunning;
+      }
+
+      final persisted = await _persistBackendConfig();
+      if (!persisted) {
+        restartStoppedEngineIfNeeded();
+        return;
+      }
+      shouldRefreshBackgroundSchedule = true;
+      if (!mounted) return;
 
       try {
         await _runConnectionTest();
         if (!mounted) return;
         _showSnack(t.sync.connectionOk);
 
-        final newBackendType = backendType;
-        final newWebdavBaseUrl = _requiredTrimmed(_baseUrlController).trim();
-        final newRemoteRoot = _requiredTrimmed(_remoteRootController).trim();
-        final newLocalDir = _requiredTrimmed(_localDirController).trim();
-
-        final shouldSync = !_usesCloudSessionModel &&
-            _shouldRunSaveSyncForConfigChange(
-              oldBackendType: oldBackendType,
-              oldWebdavBaseUrl: oldWebdavBaseUrl,
-              oldRemoteRoot: oldRemoteRoot,
-              oldLocalDir: oldLocalDir,
-              newBackendType: newBackendType,
-              newWebdavBaseUrl: newWebdavBaseUrl,
-              newRemoteRoot: newRemoteRoot,
-              newLocalDir: newLocalDir,
-            );
-
         var didSync = false;
-        final engine = SyncEngineScope.maybeOf(context);
         if (shouldSync) {
           final sessionScope =
               context.getInheritedWidgetOfExactType<SessionScope>();
@@ -498,123 +596,26 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             final activeSyncKey = syncKey;
             switch (newBackendType) {
               case SyncBackendType.webdav:
-                await _runSaveSyncWithProgress(
-                  run: (stage, progress) async {
-                    var stageProgress =
-                        _makeSmoothStageProgressReporter(progress);
-                    stage.value = t.sync.progressDialog.pulling;
-                    progress.value = 0.0;
-                    await _consumeRustProgressStream(
-                      backend.syncWebdavPullProgress(
-                        sessionKey,
-                        activeSyncKey,
-                        baseUrl: newWebdavBaseUrl,
-                        username: _optionalTrimmed(_usernameController),
-                        password: _optionalTrimmed(_passwordController),
-                        remoteRoot: newRemoteRoot,
-                      ),
-                      onProgress: stageProgress.onProgress,
-                    );
-
-                    stageProgress = _makeSmoothStageProgressReporter(progress);
-                    stage.value = t.sync.progressDialog.pushing;
-                    progress.value = 0.0;
-                    await _consumeRustProgressStream(
-                      backend.syncWebdavPushOpsOnlyProgress(
-                        sessionKey,
-                        activeSyncKey,
-                        baseUrl: newWebdavBaseUrl,
-                        username: _optionalTrimmed(_usernameController),
-                        password: _optionalTrimmed(_passwordController),
-                        remoteRoot: newRemoteRoot,
-                      ),
-                      onProgress: stageProgress.onProgress,
-                    );
-
-                    if (_cloudMediaBackupEnabled) {
-                      stage.value = t.sync.progressDialog.uploadingMedia;
-                      progress.value = null;
-
-                      final runner = CloudMediaBackupRunner(
-                        store: BackendCloudMediaBackupStore(
-                          backend: backend,
-                          sessionKey: sessionKey,
-                          scopeId: _store.syncStateScopeIdForFields(
-                            backendType: SyncBackendType.webdav,
-                            baseUrl: newWebdavBaseUrl,
-                            username: _optionalTrimmed(_usernameController),
-                            remoteRoot: newRemoteRoot,
-                            syncKey: activeSyncKey,
-                          ),
-                        ),
-                        client: WebDavCloudMediaBackupClient(
-                          backend: backend,
-                          sessionKey: sessionKey,
-                          syncKey: activeSyncKey,
-                          baseUrl: newWebdavBaseUrl,
-                          username: _optionalTrimmed(_usernameController),
-                          password: _optionalTrimmed(_passwordController),
-                          remoteRoot: newRemoteRoot,
-                        ),
-                        settings: CloudMediaBackupRunnerSettings(
-                          enabled: true,
-                          wifiOnly: _cloudMediaBackupWifiOnly,
-                        ),
-                        getNetwork:
-                            ConnectivityCloudMediaBackupNetworkProvider().call,
-                      );
-                      final result = await runner.runOnce(
-                        allowCellular: false,
-                        onBytesProgress: (doneBytes, totalBytes) {
-                          progress.value = totalBytes <= 0
-                              ? 1.0
-                              : (doneBytes / totalBytes).clamp(0.0, 1.0);
-                        },
-                      );
-                      if (result.needsCellularConfirmation) {
-                        progress.value = 1.0;
-                      }
-                    }
-
-                    stage.value = t.sync.progressDialog.finalizing;
-                    stageProgress.complete();
-                  },
+                await _runWebdavSwitchSyncWithProgress(
+                  direction: switchDirection ?? SyncSwitchDirection.merge,
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: activeSyncKey,
+                  baseUrl: newWebdavBaseUrl,
+                  username: _optionalTrimmed(_usernameController),
+                  password: _optionalTrimmed(_passwordController),
+                  remoteRoot: newRemoteRoot,
                 );
                 didSync = true;
                 break;
               case SyncBackendType.localDir:
-                await _runSaveSyncWithProgress(
-                  run: (stage, progress) async {
-                    var stageProgress =
-                        _makeSmoothStageProgressReporter(progress);
-                    stage.value = t.sync.progressDialog.pulling;
-                    progress.value = 0.0;
-                    await _consumeRustProgressStream(
-                      backend.syncLocaldirPullProgress(
-                        sessionKey,
-                        activeSyncKey,
-                        localDir: newLocalDir,
-                        remoteRoot: newRemoteRoot,
-                      ),
-                      onProgress: stageProgress.onProgress,
-                    );
-
-                    stageProgress = _makeSmoothStageProgressReporter(progress);
-                    stage.value = t.sync.progressDialog.pushing;
-                    progress.value = 0.0;
-                    await _consumeRustProgressStream(
-                      backend.syncLocaldirPushProgress(
-                        sessionKey,
-                        activeSyncKey,
-                        localDir: newLocalDir,
-                        remoteRoot: newRemoteRoot,
-                      ),
-                      onProgress: stageProgress.onProgress,
-                    );
-
-                    stage.value = t.sync.progressDialog.finalizing;
-                    stageProgress.complete();
-                  },
+                await _runLocalDirSwitchSyncWithProgress(
+                  direction: switchDirection ?? SyncSwitchDirection.merge,
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: activeSyncKey,
+                  localDir: newLocalDir,
+                  remoteRoot: newRemoteRoot,
                 );
                 didSync = true;
                 break;
@@ -624,6 +625,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   sessionKey: sessionKey,
                   syncKey: activeSyncKey,
                   engine: engine,
+                  direction: switchDirection ?? SyncSwitchDirection.merge,
                 );
                 break;
             }
@@ -631,37 +633,85 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         }
 
         if (!mounted) return;
-        engine?.start();
+        if (!shouldSync || shouldRestartStoppedEngine) {
+          restartStoppedEngineIfNeeded();
+        }
         if (!(didSync && newBackendType == SyncBackendType.managedVault)) {
           engine?.notifyExternalChange();
         }
-        if (!didSync) {
+        final canScheduleFallbackSync = switchDirection == null ||
+            switchDirection == SyncSwitchDirection.merge;
+        if (!didSync && canScheduleFallbackSync) {
           engine?.triggerPushNow();
           engine?.triggerPullNow();
         }
       } catch (e) {
         if (!mounted) return;
+        final remoteReplaceCommitted = e is SyncRemoteReplaceCommittedException;
+        final replaceLocalRollbackFailed = isSyncReplaceLocalRollbackFailure(e);
+        final displayError = remoteReplaceCommitted ? e.cause : e;
+        if (remoteReplaceCommitted || replaceLocalRollbackFailed) {
+          shouldRestartStoppedEngine = false;
+          await _disableAutoSyncAfterDestructiveCleanup(backend);
+        }
+        final shouldRestorePrimarySnapshot = !remoteReplaceCommitted &&
+            !replaceLocalRollbackFailed &&
+            (switchDirection != null ||
+                (newBackendType == SyncBackendType.managedVault &&
+                    e is _ManagedVaultSaveConfigurationException));
+        var restoredPrimarySnapshot = false;
+        if (shouldRestorePrimarySnapshot) {
+          await _restorePrimarySyncConfigSnapshot(
+            backend: backend,
+            backendType: oldBackendType,
+            webdavBaseUrl: oldWebdavBaseUrl,
+            webdavUsername: oldWebdavUsername,
+            webdavPassword: oldWebdavPassword,
+            localDir: oldLocalDir,
+            managedVaultBaseUrl: oldManagedVaultBaseUrl,
+            remoteRoot: oldRemoteRoot,
+            autoEnabled: oldAutoEnabled,
+            syncKey: previousSyncKey,
+            engine: engine,
+            refreshSchedule: false,
+          );
+          restoredPrimarySnapshot = true;
+          shouldRefreshBackgroundSchedule = true;
+        }
+        if (shouldRestartStoppedEngine &&
+            (switchDirection != SyncSwitchDirection.remoteReplacesLocal ||
+                restoredPrimarySnapshot)) {
+          restartStoppedEngineIfNeeded();
+        }
         if (backendType == SyncBackendType.managedVault) {
-          final details = inspectManagedVaultPushFailure(e);
+          final details = inspectManagedVaultPushFailure(displayError);
           final recoveryBlockedReason =
-              extractManagedVaultRecoveryBlockedReason(e);
+              extractManagedVaultRecoveryBlockedReason(displayError);
           if (details.writeGateState != null &&
               recoveryBlockedReason == null &&
-              SyncEngineScope.maybeOf(context) != null) {
+              !remoteReplaceCommitted &&
+              !replaceLocalRollbackFailed &&
+              !restoredPrimarySnapshot &&
+              engine != null) {
             return;
           }
           _showSnack(
             t.sync.connectionFailed(
-              error: managedVaultUserFacingErrorMessage(e),
+              error: managedVaultUserFacingErrorMessage(displayError),
             ),
           );
           return;
         }
-        _showSnack(t.sync.connectionFailed(error: '$e'));
+        _showSnack(t.sync.connectionFailed(error: '$displayError'));
       }
     } catch (e) {
       _showSnack(t.sync.saveFailed(error: '$e'));
     } finally {
+      final backend = backgroundScheduleBackend;
+      if (shouldRefreshBackgroundSchedule && backend != null) {
+        await _refreshBackgroundScheduleBestEffort(backend);
+      }
+      restartStoppedEngineIfNeeded();
       if (mounted) {
         _setState(() {
           _busy = false;
@@ -693,6 +743,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       stateScopeId = await _currentSyncStateScopeId(syncKey: syncKey);
 
       var pushed = 0;
+      var pulled = 0;
       var recoveredOnly = false;
       var refreshedLocalState = false;
       String? recoveredMessage;
@@ -725,6 +776,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                 hasTotal: hasTotal,
               );
               pushed = result.pushed;
+              pulled = result.pulled;
               recoveredOnly = result.recoveredOnly;
               recoveredMessage = result.recoveredMessage;
               refreshedLocalState = result.refreshedLocalState;
@@ -765,7 +817,12 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         },
       );
       final successMessage = recoveredOnly
-          ? (recoveredMessage ?? t.sync.cloudManagedVault.serverUnavailable)
+          ? [
+              recoveredMessage ?? t.sync.cloudManagedVault.serverUnavailable,
+              pulled == 0
+                  ? t.sync.noNewChanges
+                  : t.sync.pulledOps(count: pulled),
+            ].join(' ')
           : t.sync.pushedOps(count: pushed);
       await _writeLastSyncLog(
         direction: SyncBackgroundDirection.push,

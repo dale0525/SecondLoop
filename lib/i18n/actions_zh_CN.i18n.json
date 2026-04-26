@@ -235,6 +235,8 @@
     "title": "添加到日历？",
     "pickTime": "选择开始时间",
     "noAutoTime": "未找到可自动解析的时间",
-    "pickCustom": "选择日期时间"
+    "pickCustom": "选择日期时间",
+    "localTimeRange": "本地：$range",
+    "timezoneTimeRange": "$timezone：$range"
   }
 }

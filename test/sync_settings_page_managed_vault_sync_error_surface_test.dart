@@ -69,6 +69,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
+    await _chooseMergeDirection(tester);
 
     expect(backend.managedVaultPullCalls, 1);
     expect(find.textContaining('Connection failed:'), findsOneWidget);
@@ -131,6 +132,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
+    await _chooseMergeDirection(tester);
 
     expect(
       backend.calls,
@@ -141,7 +143,7 @@ void main() {
   });
 
   testWidgets(
-      'Save updates write gate when retry push fails after recovery pull',
+      'Save restores previous config when retry push fails during managed-vault switch',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -197,6 +199,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
+    await _chooseMergeDirection(tester);
 
     expect(
       backend.calls,
@@ -206,8 +209,9 @@ void main() {
         'syncManagedVaultPush',
       ],
     );
-    expect(engine.writeGate.value.kind, SyncWriteGateKind.graceReadOnly);
+    expect(engine.writeGate.value.kind, SyncWriteGateKind.open);
     expect(notifications, 1);
+    expect(await store.readBackendType(), SyncBackendType.webdav);
     expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
     engine.stop();
   });
@@ -259,6 +263,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
+    await _chooseMergeDirection(tester);
 
     expect(find.textContaining('Connection failed:'), findsOneWidget);
     expect(
@@ -316,6 +321,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
+    await _chooseMergeDirection(tester);
 
     expect(find.textContaining('Connection failed:'), findsOneWidget);
     expect(
@@ -473,6 +479,12 @@ Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
       scrollable: scrollable,
     );
   }
+  await tester.pumpAndSettle();
+}
+
+Future<void> _chooseMergeDirection(WidgetTester tester) async {
+  expect(find.text('Choose sync direction'), findsOneWidget);
+  await tester.tap(find.text('Merge local and remote'));
   await tester.pumpAndSettle();
 }
 

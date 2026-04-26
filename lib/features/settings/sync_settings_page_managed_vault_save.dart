@@ -1,11 +1,21 @@
 part of 'sync_settings_page.dart';
 
+final class _ManagedVaultSaveConfigurationException implements Exception {
+  const _ManagedVaultSaveConfigurationException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
   Future<bool> _runManagedVaultSaveSync({
     required AppBackend backend,
     required Uint8List sessionKey,
     required Uint8List syncKey,
     required SyncEngine? engine,
+    required SyncSwitchDirection direction,
   }) async {
     final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
     String? idToken;
@@ -27,84 +37,161 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
         vaultId.isEmpty ||
         baseUrl == null ||
         baseUrl.trim().isEmpty) {
-      // If we can't get auth details, fall back to engine scheduling.
+      if (direction == SyncSwitchDirection.merge) {
+        // Non-destructive merge can still fall back to regular engine scheduling.
+        return false;
+      }
+      final message = baseUrl == null || baseUrl.trim().isEmpty
+          ? context.t.sync.baseUrlRequired
+          : context.t.sync.cloudManagedVault.signInRequired;
+      throw _ManagedVaultSaveConfigurationException(message);
+    }
+
+    if (!mounted) {
       return false;
     }
 
     final baseUrlTrimmed = baseUrl.trim();
     final idTokenTrimmed = idToken.trim();
+    final pullingLabel = context.t.sync.progressDialog.pulling;
     final uploadingMediaLabel = context.t.sync.progressDialog.uploadingMedia;
     final finalizingLabel = context.t.sync.progressDialog.finalizing;
+    final serverUnavailableMessage =
+        context.t.sync.cloudManagedVault.serverUnavailable;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(cloudSyncSwitchInProgressPrefsKey, true);
+    await markCloudSyncSwitchInProgress();
     try {
       await _runSaveSyncWithProgress(
         run: (stage, progress) async {
-          var allowMediaUploads = true;
-          var retryPushAfterPull = false;
+          var allowMediaUploads = false;
           final hasTotal = ValueNotifier(false);
-          final initialPush = await _runManagedVaultPushStageWithProgress(
-            backend: backend,
-            sessionKey: sessionKey,
-            syncKey: syncKey,
-            engine: engine,
-            baseUrl: baseUrlTrimmed,
-            vaultId: vaultId,
-            idToken: idTokenTrimmed,
-            stage: stage,
-            progress: progress,
-            hasTotal: hasTotal,
-            allowRecovery: true,
-          );
-          allowMediaUploads = initialPush.recoveryAction ==
-              ManagedVaultPushFailureRecoveryAction.none;
-          retryPushAfterPull = initialPush.recoveryAction ==
-              ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
 
-          await _runManagedVaultPullStageWithProgress(
-            backend: backend,
-            sessionKey: sessionKey,
-            syncKey: syncKey,
-            baseUrl: baseUrlTrimmed,
-            vaultId: vaultId,
-            idToken: idTokenTrimmed,
-            stage: stage,
-            progress: progress,
-            hasTotal: hasTotal,
-          );
-          if (mounted) {
-            engine?.notifyExternalChange();
-          }
-          if (retryPushAfterPull) {
-            await _runManagedVaultPushStageWithProgress(
-              backend: backend,
-              sessionKey: sessionKey,
-              syncKey: syncKey,
-              engine: engine,
-              baseUrl: baseUrlTrimmed,
-              vaultId: vaultId,
-              idToken: idTokenTrimmed,
-              stage: stage,
-              progress: progress,
-              hasTotal: hasTotal,
-              allowRecovery: false,
-            );
-            allowMediaUploads = true;
-            await _runManagedVaultPullStageWithProgress(
-              backend: backend,
-              sessionKey: sessionKey,
-              syncKey: syncKey,
-              baseUrl: baseUrlTrimmed,
-              vaultId: vaultId,
-              idToken: idTokenTrimmed,
-              stage: stage,
-              progress: progress,
-              hasTotal: hasTotal,
-            );
-            if (mounted) {
-              engine?.notifyExternalChange();
-            }
+          switch (direction) {
+            case SyncSwitchDirection.localReplacesRemote:
+              var remoteCleared = false;
+              try {
+                await backend.syncManagedVaultClearVault(
+                  baseUrl: baseUrlTrimmed,
+                  vaultId: vaultId,
+                  idToken: idTokenTrimmed,
+                );
+                remoteCleared = true;
+                await _runManagedVaultPushStageWithProgress(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: syncKey,
+                  engine: engine,
+                  baseUrl: baseUrlTrimmed,
+                  vaultId: vaultId,
+                  idToken: idTokenTrimmed,
+                  stage: stage,
+                  progress: progress,
+                  hasTotal: hasTotal,
+                  allowRecovery: false,
+                );
+                allowMediaUploads = true;
+              } catch (error) {
+                if (remoteCleared) {
+                  throw SyncRemoteReplaceCommittedException(error);
+                }
+                rethrow;
+              }
+              break;
+            case SyncSwitchDirection.remoteReplacesLocal:
+              stage.value = pullingLabel;
+              progress.value = 0.0;
+              hasTotal.value = false;
+              await runDestructiveReplaceLocalWithRollback<void>(
+                backend: backend,
+                sessionKey: sessionKey,
+                run: () => _runManagedVaultPullStageWithProgress(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: syncKey,
+                  baseUrl: baseUrlTrimmed,
+                  vaultId: vaultId,
+                  idToken: idTokenTrimmed,
+                  stage: stage,
+                  progress: progress,
+                  hasTotal: hasTotal,
+                ),
+              );
+              if (mounted) {
+                engine?.notifyExternalChange();
+              }
+              break;
+            case SyncSwitchDirection.merge:
+              var retryPushAfterPull = false;
+              final initialPush = await _runManagedVaultPushStageWithProgress(
+                backend: backend,
+                sessionKey: sessionKey,
+                syncKey: syncKey,
+                engine: engine,
+                baseUrl: baseUrlTrimmed,
+                vaultId: vaultId,
+                idToken: idTokenTrimmed,
+                stage: stage,
+                progress: progress,
+                hasTotal: hasTotal,
+                allowRecovery: true,
+              );
+              allowMediaUploads = initialPush.recoveryAction ==
+                  ManagedVaultPushFailureRecoveryAction.none;
+              retryPushAfterPull = initialPush.recoveryAction ==
+                  ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
+
+              if (initialPush.recoveryAction ==
+                  ManagedVaultPushFailureRecoveryAction.pullOnly) {
+                throw _ManagedVaultSaveConfigurationException(
+                  initialPush.recoveredMessage ?? serverUnavailableMessage,
+                );
+              }
+
+              await _runManagedVaultPullStageWithProgress(
+                backend: backend,
+                sessionKey: sessionKey,
+                syncKey: syncKey,
+                baseUrl: baseUrlTrimmed,
+                vaultId: vaultId,
+                idToken: idTokenTrimmed,
+                stage: stage,
+                progress: progress,
+                hasTotal: hasTotal,
+              );
+              if (mounted) {
+                engine?.notifyExternalChange();
+              }
+              if (retryPushAfterPull) {
+                await _runManagedVaultPushStageWithProgress(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: syncKey,
+                  engine: engine,
+                  baseUrl: baseUrlTrimmed,
+                  vaultId: vaultId,
+                  idToken: idTokenTrimmed,
+                  stage: stage,
+                  progress: progress,
+                  hasTotal: hasTotal,
+                  allowRecovery: false,
+                );
+                allowMediaUploads = true;
+                await _runManagedVaultPullStageWithProgress(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  syncKey: syncKey,
+                  baseUrl: baseUrlTrimmed,
+                  vaultId: vaultId,
+                  idToken: idTokenTrimmed,
+                  stage: stage,
+                  progress: progress,
+                  hasTotal: hasTotal,
+                );
+                if (mounted) {
+                  engine?.notifyExternalChange();
+                }
+              }
+              break;
           }
 
           if (allowMediaUploads && _cloudMediaBackupEnabled) {
@@ -154,7 +241,7 @@ extension _SyncSettingsPageManagedVaultSave on _SyncSettingsPageState {
       );
       return true;
     } finally {
-      await prefs.setBool(cloudSyncSwitchInProgressPrefsKey, false);
+      await clearCloudSyncSwitchInProgress();
     }
   }
 }

@@ -22,6 +22,9 @@ fn zip_has_entry(zip_path: &Path, entry_name: &str) -> bool {
     present
 }
 
+const VALID_TEST_ATTACHMENT_SHA256: &str =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 #[test]
 fn migration_archive_manifest_round_trip_preserves_core_fields() {
     let manifest = MigrationArchiveManifest {
@@ -138,7 +141,7 @@ fn migration_archive_manifest_validation_rejects_attachment_path_traversal() {
         "items": [],
         "attachments": [
           {
-            "sha256": "abc123",
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "archive_path": "../../../secret.txt",
             "original_filename": "secret.txt",
             "mime_type": "text/plain",
@@ -382,6 +385,7 @@ fn migration_archive_import_rolls_back_when_archive_restore_fails() {
     let file = fs::File::create(&bad_archive_path).expect("create bad zip");
     let mut writer = zip::ZipWriter::new(file);
     let options = zip::write::FileOptions::default();
+    let missing_sha = VALID_TEST_ATTACHMENT_SHA256;
     let manifest = MigrationArchiveManifest {
         schema_version: 1,
         archive_kind: "migration".to_string(),
@@ -399,8 +403,8 @@ fn migration_archive_import_rolls_back_when_archive_restore_fails() {
             extra_json: None,
         }],
         attachments: vec![MigrationArchiveAttachment {
-            sha256: "missing-sha".to_string(),
-            archive_path: "attachments/missing-sha.png".to_string(),
+            sha256: missing_sha.to_string(),
+            archive_path: format!("attachments/{missing_sha}.png"),
             original_filename: "missing.png".to_string(),
             mime_type: Some("image/png".to_string()),
             size_bytes: 9,
@@ -429,7 +433,7 @@ fn migration_archive_import_rolls_back_when_archive_restore_fails() {
         .expect_err("import should fail and rollback");
     let err_text = err.to_string();
     assert!(
-        err_text.contains("missing-sha")
+        err_text.contains(missing_sha)
             || err_text.contains("No such file")
             || err_text.contains("cannot find the file")
             || err_text.contains("系统找不到指定的文件")
@@ -485,12 +489,207 @@ fn migration_archive_rollback_snapshot_is_encrypted_on_disk() {
 }
 
 #[test]
+fn migration_archive_failed_encrypted_snapshot_restore_keeps_snapshot_for_recovery() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    fs::create_dir_all(app_dir.join("migration_archive/rollback")).expect("mkdir rollback");
+    let snapshot_path = app_dir.join("migration_archive/rollback/corrupt.bin");
+    fs::write(&snapshot_path, b"not an encrypted snapshot").expect("write corrupt snapshot");
+    let key = [42u8; 32];
+
+    let err = migration_archive_restore_from_encrypted_snapshot(&app_dir, &key, &snapshot_path)
+        .expect_err("corrupt snapshot restore should fail");
+
+    assert!(!err.to_string().is_empty());
+    assert!(
+        snapshot_path.exists(),
+        "failed snapshot restore should keep snapshot for manual recovery"
+    );
+}
+
+#[test]
+fn vault_rollback_snapshot_restores_non_migration_archive_tables_and_attachments() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [53u8; 32];
+
+    conn.execute(
+        r#"INSERT INTO knowledge_pages(
+          page_id, page_type, state, created_at_ms, updated_at_ms,
+          tags_json, primary_evidence_json, related_page_ids_json,
+          source_document_ids_json, claim_ids_json,
+          compiled_title, compiled_summary, compiled_body
+        ) VALUES (
+          'page-1', 'fact', 'active', 1, 1,
+          '[]', '[]', '[]', '[]', '[]',
+          X'7469746C65', X'73756D6D617279', X'626F6479'
+        )"#,
+        [],
+    )
+    .expect("insert knowledge page");
+    let attachments_dir = app_dir.join("attachments");
+    fs::create_dir_all(&attachments_dir).expect("create attachments dir");
+    fs::write(attachments_dir.join("orphan.bin"), b"attachment-bytes").expect("write attachment");
+    let external_readonly_dir = app_dir.join("external_readonly/storage/attachments");
+    fs::create_dir_all(&external_readonly_dir).expect("create external readonly dir");
+    fs::write(external_readonly_dir.join("orphan.bin"), b"external-bytes")
+        .expect("write external readonly file");
+    let embedding_artifacts_dir = app_dir.join("embedding_artifacts");
+    fs::create_dir_all(&embedding_artifacts_dir).expect("create embedding artifacts dir");
+    fs::write(
+        embedding_artifacts_dir.join("orphan.bin"),
+        b"artifact-bytes",
+    )
+    .expect("write embedding artifact file");
+
+    let snapshot_path = migration_archive_create_rollback_snapshot(&app_dir, &key)
+        .expect("create snapshot")
+        .expect("snapshot path");
+    assert!(snapshot_path.exists());
+
+    reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault");
+    let count_after_reset: i64 = conn
+        .query_row("SELECT COUNT(*) FROM knowledge_pages", [], |row| row.get(0))
+        .expect("count after reset");
+    assert_eq!(count_after_reset, 0);
+    assert!(!attachments_dir.join("orphan.bin").exists());
+    assert!(!external_readonly_dir.join("orphan.bin").exists());
+    assert!(!embedding_artifacts_dir.join("orphan.bin").exists());
+    drop(conn);
+
+    migration_archive_restore_rollback_snapshot(&app_dir, &key, &snapshot_path)
+        .expect("restore snapshot");
+    assert!(!snapshot_path.exists());
+
+    let conn = open(&app_dir).expect("reopen db");
+    let count_after_restore: i64 = conn
+        .query_row("SELECT COUNT(*) FROM knowledge_pages", [], |row| row.get(0))
+        .expect("count after restore");
+    assert_eq!(count_after_restore, 1);
+    assert_eq!(
+        fs::read(attachments_dir.join("orphan.bin")).expect("read attachment"),
+        b"attachment-bytes"
+    );
+    assert_eq!(
+        fs::read(external_readonly_dir.join("orphan.bin")).expect("read external readonly file"),
+        b"external-bytes"
+    );
+    assert_eq!(
+        fs::read(embedding_artifacts_dir.join("orphan.bin")).expect("read embedding artifact file"),
+        b"artifact-bytes"
+    );
+}
+
+#[test]
+fn reset_vault_data_preserving_llm_profiles_clears_stale_migration_archive_runtime_data() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+
+    let rollback_file = app_dir.join("migration_archive/rollback/stale.bin");
+    let staging_file = app_dir.join("migration_archive/staging/stale/payload.bin");
+    fs::create_dir_all(rollback_file.parent().expect("rollback parent"))
+        .expect("create rollback dir");
+    fs::create_dir_all(staging_file.parent().expect("staging parent")).expect("create staging dir");
+    fs::write(&rollback_file, b"deleted-data-copy").expect("write rollback file");
+    fs::write(&staging_file, b"deleted-data-copy").expect("write staging file");
+
+    reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault");
+
+    assert!(!rollback_file.exists());
+    assert!(!staging_file.exists());
+}
+
+#[test]
+fn vault_rollback_restore_keeps_current_db_when_attachment_restore_cannot_start() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [55u8; 32];
+
+    let snapshot_conversation =
+        create_conversation(&conn, &key, "Snapshot").expect("snapshot conversation");
+    let attachments_dir = app_dir.join("attachments");
+    fs::create_dir_all(&attachments_dir).expect("create attachments dir");
+    fs::write(attachments_dir.join("snapshot.bin"), b"snapshot")
+        .expect("write snapshot attachment");
+    let snapshot_path = migration_archive_create_rollback_snapshot(&app_dir, &key)
+        .expect("create snapshot")
+        .expect("snapshot path");
+
+    let current_conversation =
+        create_conversation(&conn, &key, "Current").expect("current conversation");
+    drop(conn);
+    fs::remove_dir_all(&attachments_dir).expect("remove current attachments dir");
+    fs::write(&attachments_dir, b"not-a-directory").expect("write attachments blocker");
+
+    let err = migration_archive_restore_rollback_snapshot(&app_dir, &key, &snapshot_path)
+        .expect_err("restore should fail before replacing db");
+
+    assert!(!err.to_string().is_empty());
+    let conn = open(&app_dir).expect("reopen db");
+    let conversations = list_conversations(&conn, &key).expect("list conversations");
+    assert!(
+        conversations
+            .iter()
+            .any(|item| item.id == current_conversation.id),
+        "current database content should survive failed attachment restore"
+    );
+    assert!(
+        conversations
+            .iter()
+            .any(|item| item.id == snapshot_conversation.id),
+        "pre-existing snapshot-era content should still be present"
+    );
+    assert_eq!(
+        fs::read(&attachments_dir).expect("read blocker"),
+        b"not-a-directory"
+    );
+    assert!(snapshot_path.exists());
+}
+
+#[test]
+fn vault_rollback_restore_rejects_snapshot_without_db_without_deleting_current_db() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [54u8; 32];
+
+    let conversation = create_conversation(&conn, &key, "Keep me").expect("conversation");
+    drop(conn);
+
+    let stage_dir = dir.path().join("bad-snapshot-stage");
+    fs::create_dir_all(stage_dir.join("attachments")).expect("create stage attachments");
+    fs::write(stage_dir.join("attachments/orphan.bin"), b"orphan").expect("write staged file");
+    let zip_bytes = migration_archive_write_zip_bytes(&stage_dir).expect("zip stage");
+    let encrypted =
+        encrypt_bytes(&key, &zip_bytes, VAULT_ROLLBACK_SNAPSHOT_AAD).expect("encrypt snapshot");
+    let snapshot_path = app_dir
+        .join("migration_archive/rollback")
+        .join("missing-db.bin");
+    fs::create_dir_all(snapshot_path.parent().expect("rollback dir")).expect("mkdir rollback");
+    fs::write(&snapshot_path, encrypted).expect("write snapshot");
+
+    let err = migration_archive_restore_rollback_snapshot(&app_dir, &key, &snapshot_path)
+        .expect_err("snapshot without db should fail");
+
+    assert!(err.to_string().contains("secondloop.sqlite3"));
+    assert!(app_dir.join("secondloop.sqlite3").exists());
+    let conn = open(&app_dir).expect("reopen db");
+    let conversations = list_conversations(&conn, &key).expect("list conversations");
+    assert!(conversations.iter().any(|item| item.id == conversation.id));
+}
+
+#[test]
 fn migration_archive_restore_from_materialized_source_cleans_up_written_attachments_on_error() {
     let dir = tempfile::tempdir().expect("tempdir");
     let source_root = dir.path().join("source-root");
     let app_dir = dir.path().join("app");
     let key = [29u8; 32];
     fs::create_dir_all(source_root.join("attachments")).expect("create attachments dir");
+    let attachment_bytes = b"blob";
+    let attachment_sha256 = "fa2c8cc4f28176bbeed4b736df569a34c79cd3723e9ec42f9674b4d46ac6b8b8";
 
     let manifest = MigrationArchiveManifest {
         schema_version: MIGRATION_ARCHIVE_SCHEMA_VERSION,
@@ -499,9 +698,9 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
         app_version: "1.0.0".to_string(),
         items: vec![],
         attachments: vec![MigrationArchiveAttachment {
-            sha256: "deadbeef".to_string(),
-            archive_path: "attachments/deadbeef.bin".to_string(),
-            original_filename: "deadbeef.bin".to_string(),
+            sha256: attachment_sha256.to_string(),
+            archive_path: format!("attachments/{attachment_sha256}.bin"),
+            original_filename: format!("{attachment_sha256}.bin"),
             mime_type: Some("application/octet-stream".to_string()),
             size_bytes: 4,
             item_ids: vec!["missing-item".to_string()],
@@ -513,7 +712,11 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
         serde_json::to_vec(&manifest).expect("serialize manifest"),
     )
     .expect("write manifest");
-    fs::write(source_root.join("attachments/deadbeef.bin"), b"blob").expect("write blob");
+    fs::write(
+        source_root.join(format!("attachments/{attachment_sha256}.bin")),
+        attachment_bytes,
+    )
+    .expect("write blob");
 
     let err = migration_archive_restore_from_materialized_source_with_callbacks(
         &app_dir,
@@ -523,8 +726,13 @@ fn migration_archive_restore_from_materialized_source_cleans_up_written_attachme
     )
     .expect_err("restore should fail when attachment owner is missing");
 
-    assert!(err.to_string().contains("attachment owner item not found"));
-    assert!(!app_dir.join("attachments/deadbeef.bin").exists());
+    assert!(
+        err.to_string().contains("attachment owner item not found"),
+        "{err}"
+    );
+    assert!(!app_dir
+        .join(format!("attachments/{attachment_sha256}.bin"))
+        .exists());
 }
 
 #[test]
@@ -564,7 +772,7 @@ fn migration_archive_restore_from_encrypted_snapshot_cleans_up_on_materialize_fa
     let err = migration_archive_restore_from_encrypted_snapshot(&app_dir, &key, &snapshot_path)
         .expect_err("corrupt snapshot should fail");
 
-    assert!(!snapshot_path.exists());
+    assert!(snapshot_path.exists());
     assert!(!err.to_string().is_empty());
 }
 

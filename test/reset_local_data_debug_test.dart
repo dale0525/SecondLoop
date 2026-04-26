@@ -282,6 +282,82 @@ void main() {
     expect(dbFile.existsSync(), isTrue);
   });
 
+  testWidgets(
+      'Debug reset continues local cleanup when vault reset committed but file cleanup failed',
+      (tester) async {
+    Future<void> pumpAndSettleShort() async {
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 2),
+      );
+    }
+
+    SharedPreferences.setMockInitialValues({
+      'app_lock_enabled_v1': true,
+      'biometric_unlock_enabled_v1': true,
+    });
+
+    final backend = _FakeBackend(
+      deviceId: 'deviceA',
+      resetVaultDataError: StateError(
+        'filesystem cleanup failed after vault reset commit: '
+        'attachment staging cleanup: boom',
+      ),
+    );
+    var locked = false;
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () => locked = true,
+          child: wrapWithI18n(
+            const MaterialApp(
+              home: Scaffold(body: SettingsPage()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpAndSettleShort();
+
+    await tester.scrollUntilVisible(
+      find.text('Debug: Reset local data (all devices)'),
+      200,
+    );
+    await pumpAndSettleShort();
+    await tester
+        .ensureVisible(find.text('Debug: Reset local data (all devices)'));
+    await pumpAndSettleShort();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Debug: Reset local data (all devices)'));
+    });
+    await pumpAndSettleShort();
+    expect(find.text('Reset local data?'), findsOneWidget);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Reset'));
+    });
+    await pumpAndSettleShort();
+
+    await tester.runAsync(() async {
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (!locked && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(find.textContaining('Reset failed:'), findsNothing);
+    expect(backend.resetVaultDataCalls, 1);
+    expect(backend.clearSavedSessionKeyCalls, 1);
+    expect(prefs.getBool('app_lock_enabled_v1'), isNull);
+    expect(prefs.getBool('biometric_unlock_enabled_v1'), isNull);
+    expect(locked, isTrue);
+  });
+
   testWidgets('Debug reset (this device) clears only this device remote dir',
       (tester) async {
     Future<void> pumpAndSettleShort() async {
@@ -424,11 +500,17 @@ final class _FakePathProviderPlatform extends PathProviderPlatform {
 }
 
 final class _FakeBackend extends AppBackend {
-  _FakeBackend({required this.deviceId, this.clearRemoteRootError});
+  _FakeBackend({
+    required this.deviceId,
+    this.clearRemoteRootError,
+    this.resetVaultDataError,
+  });
 
   final String deviceId;
   final Object? clearRemoteRootError;
+  final Object? resetVaultDataError;
   int resetVaultDataCalls = 0;
+  int clearSavedSessionKeyCalls = 0;
 
   @override
   Future<void> init() async {}
@@ -449,7 +531,9 @@ final class _FakeBackend extends AppBackend {
   Future<void> saveSessionKey(Uint8List key) async {}
 
   @override
-  Future<void> clearSavedSessionKey() async {}
+  Future<void> clearSavedSessionKey() async {
+    clearSavedSessionKeyCalls += 1;
+  }
 
   @override
   Future<void> validateKey(Uint8List key) async {}
@@ -499,6 +583,8 @@ final class _FakeBackend extends AppBackend {
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
     resetVaultDataCalls += 1;
+    final error = resetVaultDataError;
+    if (error != null) throw error;
   }
 
   @override

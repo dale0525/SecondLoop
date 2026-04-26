@@ -47,23 +47,26 @@ void main() {
       'managed vault FRB pull entrypoint stays async and offloads non-wasm work',
       () async {
     final core = await readRustSource('rust/src/api/core.rs');
+    final pullEntrypoint =
+        await readRustSource('rust/src/api/core_parts/part_05.rs');
 
+    expect(core, contains('include!("core_parts/part_05.rs");'));
     expect(
       RegExp(
         r'#\[flutter_rust_bridge::frb\]\s+pub async fn sync_managed_vault_pull\(',
         multiLine: true,
-      ).hasMatch(core),
+      ).hasMatch(pullEntrypoint),
       isTrue,
     );
     expect(
-      core,
+      pullEntrypoint,
       contains('sync::managed_vault::pull('),
     );
     expect(
-      core,
+      pullEntrypoint,
       contains('tokio::task::spawn_blocking'),
     );
-    expect(core, contains('#[cfg(target_family = "wasm")]'));
+    expect(pullEntrypoint, contains('#[cfg(target_family = "wasm")]'));
   });
 
   test(

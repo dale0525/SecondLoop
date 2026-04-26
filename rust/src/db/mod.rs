@@ -6,6 +6,8 @@ include!("parts/01_kv_and_oplog.rs");
 include!("parts/02_migrate.rs");
 include!("parts/02_migrate_mid.rs");
 include!("parts/02_migrate_tail.rs");
+include!("parts/02_migrate_tail_tests.rs");
+include!("parts/02_reset_vault_data.rs");
 include!("parts/02_migrate_recent.rs");
 include!("parts/13_content_enrichment_kv.rs");
 include!("parts/03_conversations_messages.rs");
@@ -41,6 +43,9 @@ include!("parts/25_external_readonly_search.rs");
 include!("parts/26_external_readonly_phase_b.rs");
 include!("parts/28_migration_archive.rs");
 include!("parts/29_migration_archive_runtime.rs");
+include!("parts/29b_migration_archive_import_runtime.rs");
+include!("parts/29c_migration_archive_file_dirs.rs");
+include!("parts/29d_migration_archive_snapshot_stream.rs");
 include!("parts/30_todo_followup_suggestions.rs");
 include!("parts/31_todo_followup_generation_jobs.rs");
 
@@ -79,6 +84,9 @@ mod embedding_artifact_tests;
 
 #[cfg(test)]
 mod migration_archive_tests;
+
+#[cfg(test)]
+mod migration_archive_regression_tests;
 
 #[cfg(test)]
 mod checklist_schema_tests;

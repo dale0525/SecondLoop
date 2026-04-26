@@ -170,6 +170,78 @@ void main() {
         Uint8List.fromList(List<int>.filled(32, 2)));
   });
 
+  test('SyncConfigStore writes primary sync settings atomically', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = SyncConfigStore();
+
+    await store.writePrimarySyncSettings(
+      backendType: SyncBackendType.managedVault,
+      remoteRoot: 'uid-1',
+      autoEnabled: false,
+    );
+
+    expect(await store.readBackendType(), SyncBackendType.managedVault);
+    expect(await store.readRemoteRoot(), 'uid-1');
+    expect(await store.readAutoEnabled(), isFalse);
+  });
+
+  test('SyncConfigStore writes WebDAV sync settings in one public update',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final listenerStore = SyncConfigStore();
+    final snapshots = <Map<String, String>>[];
+    void onChange() {
+      snapshots.add({});
+    }
+
+    listenerStore.changes.addListener(onChange);
+    addTearDown(() => listenerStore.changes.removeListener(onChange));
+
+    final writer = SyncConfigStore();
+    await writer.writeWebdavSyncSettings(
+      baseUrl: 'https://example.com/dav',
+      username: 'alice',
+      remoteRoot: 'SecondLoop',
+      autoEnabled: false,
+    );
+
+    expect(snapshots, hasLength(1));
+    expect(await listenerStore.readBackendType(), SyncBackendType.webdav);
+    expect(await listenerStore.readWebdavBaseUrl(), 'https://example.com/dav');
+    expect(await listenerStore.readWebdavUsername(), 'alice');
+    expect(await listenerStore.readRemoteRoot(), 'SecondLoop');
+    expect(await listenerStore.readAutoEnabled(), isFalse);
+  });
+
+  test(
+      'SyncConfigStore writes managed vault sync settings in one public update',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final listenerStore = SyncConfigStore();
+    var notifications = 0;
+    void onChange() => notifications += 1;
+
+    listenerStore.changes.addListener(onChange);
+    addTearDown(() => listenerStore.changes.removeListener(onChange));
+
+    final writer = SyncConfigStore();
+    await writer.writeManagedVaultSyncSettings(
+      baseUrl: 'https://vault.example.com',
+      remoteRoot: 'uid_1',
+      autoEnabled: true,
+    );
+
+    expect(notifications, 1);
+    expect(await listenerStore.readBackendType(), SyncBackendType.managedVault);
+    expect(await listenerStore.resolveManagedVaultBaseUrl(),
+        'https://vault.example.com');
+    expect(await listenerStore.readRemoteRoot(), 'uid_1');
+    expect(await listenerStore.readAutoEnabled(), isTrue);
+  });
+
   test('SyncConfigStore migrates legacy unscoped secure storage into a scope',
       () async {
     SharedPreferences.setMockInitialValues({});

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -10,19 +9,28 @@ import '../backend/app_backend.dart';
 import '../cloud/cloud_auth_access.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
+import '../platform/app_platform_capability_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
 import '../../features/settings/ai_settings_page.dart';
 import 'cloud_sync_switch_prefs.dart';
-import 'stage_progress_smoother.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
 import 'sync_engine_gate.dart';
 import 'background_sync.dart';
 import 'sync_key_manager.dart';
 import 'sync_http_error.dart';
+import 'managed_vault_sync_helpers.dart';
+import 'sync_switch_direction.dart';
+import 'sync_switch_direction_dialog.dart';
+import 'vault_replace_local_guard.dart';
+
+part 'cloud_sync_switch_prompt_gate_key.dart';
+part 'cloud_sync_switch_prompt_gate_messages.dart';
+part 'cloud_sync_switch_prompt_gate_prompts.dart';
+part 'cloud_sync_switch_prompt_gate_restore.dart';
 
 final class CloudSyncSwitchPromptGate extends StatefulWidget {
   const CloudSyncSwitchPromptGate({
@@ -53,12 +61,6 @@ final class _CloudSyncSwitchPromptGateState
   bool _promptScheduled = false;
   bool _aiGuidePromptScheduled = false;
 
-  static const _kSyncProgressIndicatorKey =
-      ValueKey('cloud_sync_switch_progress');
-  static const _kSyncProgressPercentKey =
-      ValueKey('cloud_sync_switch_progress_percent');
-  static const _kNoManagedVaultSyncFailureMessage = Object();
-
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
   static const _kCloudAiFeatureGuidePromptedUidPrefsKey =
       'cloud_ai_feature_guide_prompted_uid_v1';
@@ -71,58 +73,9 @@ final class _CloudSyncSwitchPromptGateState
       SnackBar(
         content: Text(message),
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
-  }
-
-  SyncStageProgressReporter _makeSmoothStageProgressReporter(
-    ValueNotifier<double> progress,
-  ) {
-    return SyncStageProgressReporter((value) => progress.value = value);
-  }
-
-  String _managedVaultRecoveredMessageForGate(SyncWriteGateState gate) {
-    final t = context.t;
-    if (gate.kind == SyncWriteGateKind.localRepairRequired) {
-      return t.sync.cloudManagedVault.localSyncDataRepairRequired;
-    }
-    if (gate.kind == SyncWriteGateKind.paymentRequired) {
-      return t.sync.cloudManagedVault.paymentRequired;
-    }
-    if (gate.kind == SyncWriteGateKind.graceReadOnly) {
-      final untilMs = gate.graceUntilMs;
-      if (untilMs != null && DateTime.now().millisecondsSinceEpoch < untilMs) {
-        final dt = DateTime.fromMillisecondsSinceEpoch(untilMs).toLocal();
-        final until = MaterialLocalizations.of(context).formatShortDate(dt);
-        return t.sync.cloudManagedVault.graceReadonlyUntil(until: until);
-      }
-      return t.sync.cloudManagedVault.serverUnavailable;
-    }
-    if (gate.kind == SyncWriteGateKind.storageQuotaExceeded) {
-      return t.sync.cloudManagedVault.storageQuotaExceeded;
-    }
-    return t.sync.cloudManagedVault.serverUnavailable;
-  }
-
-  String _managedVaultUserFacingErrorMessage(Object error) {
-    final status = extractSyncHttpStatusCode(error);
-    final code = extractSyncErrorCode(error);
-    if (status == 400 && code == 'invalid_batch') {
-      return context.t.sync.cloudManagedVault.localSyncDataRepairRequired;
-    }
-    final recoveryBlockedReason =
-        extractManagedVaultRecoveryBlockedReason(error);
-    if (recoveryBlockedReason == 'local_unpushed_changes') {
-      return context.t.sync.cloudManagedVault.localChangesUploadRequired;
-    }
-    if (recoveryBlockedReason == 'local_media_backfill_pending') {
-      return context.t.sync.cloudManagedVault.localMediaBackfillRequired;
-    }
-    final gate = inspectManagedVaultPushFailure(error).writeGateState;
-    if (gate != null) {
-      return _managedVaultRecoveredMessageForGate(gate);
-    }
-    return '$error';
   }
 
   ManagedVaultPushFailureDetails _applyManagedVaultPushFailure(
@@ -148,10 +101,10 @@ final class _CloudSyncSwitchPromptGateState
     required ValueNotifier<double> progress,
   }) async {
     final t = context.t;
-    final stageProgress = _makeSmoothStageProgressReporter(progress);
+    final stageProgress = makeManagedVaultStageProgressReporter(progress);
     stage.value = t.sync.progressDialog.pulling;
     progress.value = 0.0;
-    await _consumeRustProgressStream(
+    await consumeRustProgressStream(
       backend.syncManagedVaultPullProgress(
         sessionKey,
         syncKey,
@@ -162,10 +115,6 @@ final class _CloudSyncSwitchPromptGateState
       onProgress: stageProgress.onProgress,
     );
     stageProgress.complete();
-  }
-
-  String? _managedVaultSyncFailureMessage(Object error) {
-    return _managedVaultUserFacingErrorMessage(error);
   }
 
   Future<void> _clearManagedVaultBackgroundSyncBlockers({
@@ -228,11 +177,13 @@ final class _CloudSyncSwitchPromptGateState
     required ValueNotifier<double> progress,
     required bool allowRecovery,
   }) async {
-    final stageProgress = _makeSmoothStageProgressReporter(progress);
-    stage.value = context.t.sync.progressDialog.pushing;
+    final t = context.t;
+    final materialLocalizations = MaterialLocalizations.of(context);
+    final stageProgress = makeManagedVaultStageProgressReporter(progress);
+    stage.value = t.sync.progressDialog.pushing;
     progress.value = 0.0;
     try {
-      await _consumeRustProgressStream(
+      await consumeRustProgressStream(
         backend.syncManagedVaultPushProgress(
           sessionKey,
           syncKey,
@@ -270,45 +221,13 @@ final class _CloudSyncSwitchPromptGateState
         recoveryAction: details.recoveryAction,
         failureMessage: details.writeGateState == null
             ? null
-            : _managedVaultRecoveredMessageForGate(details.writeGateState!),
+            : _managedVaultRecoveredMessageForGate(
+                t,
+                materialLocalizations,
+                details.writeGateState!,
+              ),
       );
     }
-  }
-
-  bool _shouldRollbackManagedVaultBootstrapAfterFailure(Object error) {
-    if (shouldRollbackManagedVaultBootstrapOnError(error)) {
-      return true;
-    }
-    if (extractManagedVaultRecoveryBlockedReason(error) != null) {
-      return true;
-    }
-    return inspectManagedVaultPushFailure(error).writeGateState != null;
-  }
-
-  Future<void> _restorePreviousSyncConfig({
-    required AppBackend backend,
-    required SyncBackendType previousBackendType,
-    required String? previousRemoteRoot,
-    required Uint8List? previousSyncKey,
-    required SyncEngine? engine,
-  }) async {
-    await _store.writeBackendType(previousBackendType);
-    await _store.writeRemoteRoot(previousRemoteRoot ?? '');
-    if (previousSyncKey != null) {
-      await SyncKeyManager.save(
-        write: _store.writeSyncKey,
-        key: previousSyncKey,
-      );
-    } else {
-      await _store.clearSyncKey();
-    }
-    if (previousBackendType != SyncBackendType.managedVault) {
-      engine?.writeGate.value = const SyncWriteGateState.open();
-    }
-    unawaited(BackgroundSync.refreshSchedule(
-      backend: backend,
-      configStore: _store,
-    ));
   }
 
   @override
@@ -408,36 +327,6 @@ final class _CloudSyncSwitchPromptGateState
     });
   }
 
-  Future<int> _consumeRustProgressStream(
-    Stream<String> stream, {
-    required void Function(int done, int total) onProgress,
-  }) async {
-    var count = 0;
-    await for (final msg in stream) {
-      Map<String, dynamic>? ev;
-      try {
-        final decoded = jsonDecode(msg);
-        ev = decoded is Map ? decoded.cast<String, dynamic>() : null;
-      } catch (_) {
-        ev = null;
-      }
-      if (ev == null) continue;
-
-      final type = ev['type'];
-      if (type == 'progress') {
-        final done = (ev['done'] as num?)?.toInt();
-        final total = (ev['total'] as num?)?.toInt();
-        if (done != null && total != null) {
-          onProgress(done, total);
-        }
-      } else if (type == 'result') {
-        final v = (ev['count'] as num?)?.toInt();
-        if (v != null) count = v;
-      }
-    }
-    return count;
-  }
-
   Future<void> _maybePromptSwitchToCloud() async {
     if (!mounted) return;
     if (_dialogShowing) return;
@@ -449,51 +338,40 @@ final class _CloudSyncSwitchPromptGateState
     final backendType = await _store.readBackendType();
     if (!mounted) return;
     if (backendType == SyncBackendType.managedVault) {
-      await _ensureManagedVaultSyncKey(uid);
+      final savedRemoteRoot = (await _store.readRemoteRoot())?.trim();
+      if (savedRemoteRoot != null &&
+          savedRemoteRoot.isNotEmpty &&
+          savedRemoteRoot != uid) {
+        final syncDirection = await _promptSyncSwitchDirection();
+        if (!mounted) return;
+        if (syncDirection == null) {
+          _promptedForUid = true;
+          return;
+        }
+        final switchHandled =
+            await _switchToCloud(uid, direction: syncDirection);
+        if (!mounted || !switchHandled) return;
+      } else {
+        await _ensureManagedVaultSyncKey(uid);
+      }
       _promptedForUid = true;
       await _maybePromptReviewAiFeatureGuide();
       return;
     }
-
-    final dialogContext = widget.navigatorKey?.currentContext;
-    if (widget.navigatorKey != null && dialogContext == null) {
-      _schedulePrompt();
-      return;
-    }
-    final effectiveContext = dialogContext ?? context;
-    if (!effectiveContext.mounted) {
-      _schedulePrompt();
-      return;
-    }
-
-    final t = effectiveContext.t;
-    _dialogShowing = true;
-    final shouldSwitch = await showDialog<bool>(
-      context: effectiveContext,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(t.sync.cloudManagedVault.switchDialog.title),
-          content: Text(t.sync.cloudManagedVault.switchDialog.message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(t.sync.cloudManagedVault.switchDialog.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(t.sync.cloudManagedVault.switchDialog.confirm),
-            ),
-          ],
-        );
-      },
-    );
-    _dialogShowing = false;
-    _promptedForUid = true;
+    final shouldSwitch = await _promptSwitchToCloud();
 
     if (!mounted) return;
     if (shouldSwitch == true) {
-      await _switchToCloud(uid);
+      final syncDirection = await _promptSyncSwitchDirection();
+      if (!mounted) return;
+      if (syncDirection == null) {
+        _promptedForUid = true;
+        return;
+      }
+      final switchHandled = await _switchToCloud(uid, direction: syncDirection);
+      if (!mounted || !switchHandled) return;
     }
+    _promptedForUid = true;
 
     await _maybePromptReviewAiFeatureGuide();
   }
@@ -512,12 +390,12 @@ final class _CloudSyncSwitchPromptGateState
         _subscriptionController?.status ?? SubscriptionStatus.unknown;
     if (subscriptionStatus != SubscriptionStatus.entitled) return;
 
-    final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
-    if ((prefs.getBool(cloudSyncSwitchInProgressPrefsKey) ?? false) == true) {
+    if (await cloudSyncSwitchInProgress()) {
       _scheduleAiFeatureGuidePrompt();
       return;
     }
+    final prefs = await SharedPreferences.getInstance();
 
     final alreadyPromptedUid =
         (prefs.getString(_kCloudAiFeatureGuidePromptedUidPrefsKey) ?? '')
@@ -573,8 +451,13 @@ final class _CloudSyncSwitchPromptGateState
     }
   }
 
-  Future<({bool completed, String? failureMessage, bool rollbackConfig})>
-      _runManagedVaultSyncWithProgress({
+  Future<
+      ({
+        bool completed,
+        String? failureMessage,
+        bool pauseSync,
+        bool rollbackConfig,
+      })> _runManagedVaultSyncWithProgress({
     required BuildContext dialogContext,
     required SyncEngine? engine,
     required AppBackend backend,
@@ -583,8 +466,11 @@ final class _CloudSyncSwitchPromptGateState
     required String baseUrl,
     required String vaultId,
     required String idToken,
+    required SyncSwitchDirection direction,
+    VoidCallback? onSafeToRestartEngine,
   }) async {
     final t = dialogContext.t;
+    final materialLocalizations = MaterialLocalizations.of(dialogContext);
     final stage = ValueNotifier<String>(t.sync.progressDialog.preparing);
     // Keep progress determinate: an indeterminate LinearProgressIndicator
     // (value: null) animates continuously and can make widget tests using
@@ -592,8 +478,9 @@ final class _CloudSyncSwitchPromptGateState
     final progress = ValueNotifier<double>(0.0);
 
     var completed = true;
+    var pauseSync = false;
     var rollbackConfig = false;
-    Object? runFailureMessage = _kNoManagedVaultSyncFailureMessage;
+    Object? runFailureMessage = kNoManagedVaultSyncFailureMessage;
     bool started = false;
     _dialogShowing = true;
     try {
@@ -605,71 +492,125 @@ final class _CloudSyncSwitchPromptGateState
             started = true;
             unawaited(() async {
               try {
-                var allowMediaUploads = true;
-                var retryPushAfterPull = false;
+                var allowMediaUploads =
+                    direction != SyncSwitchDirection.remoteReplacesLocal;
+                switch (direction) {
+                  case SyncSwitchDirection.localReplacesRemote:
+                    stage.value = t.sync.progressDialog.pushing;
+                    progress.value = 0.0;
+                    var remoteCleared = false;
+                    try {
+                      await backend.syncManagedVaultClearVault(
+                        baseUrl: baseUrl,
+                        vaultId: vaultId,
+                        idToken: idToken,
+                      );
+                      remoteCleared = true;
+                      await _runManagedVaultPushStageWithProgress(
+                        engine: engine,
+                        backend: backend,
+                        sessionKey: sessionKey,
+                        syncKey: syncKey,
+                        baseUrl: baseUrl,
+                        vaultId: vaultId,
+                        idToken: idToken,
+                        stage: stage,
+                        progress: progress,
+                        allowRecovery: false,
+                      );
+                    } catch (error) {
+                      if (remoteCleared) {
+                        throw SyncRemoteReplaceCommittedException(error);
+                      }
+                      rethrow;
+                    }
+                    break;
+                  case SyncSwitchDirection.remoteReplacesLocal:
+                    stage.value = t.sync.progressDialog.pulling;
+                    progress.value = 0.0;
+                    await runDestructiveReplaceLocalWithRollback<void>(
+                      backend: backend,
+                      sessionKey: sessionKey,
+                      run: () => _runManagedVaultPullStageWithProgress(
+                        backend: backend,
+                        sessionKey: sessionKey,
+                        syncKey: syncKey,
+                        baseUrl: baseUrl,
+                        vaultId: vaultId,
+                        idToken: idToken,
+                        stage: stage,
+                        progress: progress,
+                      ),
+                    );
+                    break;
+                  case SyncSwitchDirection.merge:
+                    var retryPushAfterPull = false;
+                    final pushStage =
+                        await _runManagedVaultPushStageWithProgress(
+                      engine: engine,
+                      backend: backend,
+                      sessionKey: sessionKey,
+                      syncKey: syncKey,
+                      baseUrl: baseUrl,
+                      vaultId: vaultId,
+                      idToken: idToken,
+                      stage: stage,
+                      progress: progress,
+                      allowRecovery: true,
+                    );
+                    allowMediaUploads = pushStage.recoveryAction ==
+                        ManagedVaultPushFailureRecoveryAction.none;
+                    retryPushAfterPull = pushStage.recoveryAction ==
+                        ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
 
-                // Push local changes first so the next pull converges to the
-                // authoritative remote head for this vault generation.
-                final pushStage = await _runManagedVaultPushStageWithProgress(
-                  engine: engine,
-                  backend: backend,
-                  sessionKey: sessionKey,
-                  syncKey: syncKey,
-                  baseUrl: baseUrl,
-                  vaultId: vaultId,
-                  idToken: idToken,
-                  stage: stage,
-                  progress: progress,
-                  allowRecovery: true,
-                );
-                allowMediaUploads = pushStage.recoveryAction ==
-                    ManagedVaultPushFailureRecoveryAction.none;
-                retryPushAfterPull = pushStage.recoveryAction ==
-                    ManagedVaultPushFailureRecoveryAction.pullThenRetryPush;
+                    if (pushStage.recoveryAction ==
+                        ManagedVaultPushFailureRecoveryAction.pullOnly) {
+                      completed = false;
+                      rollbackConfig = true;
+                      runFailureMessage = pushStage.failureMessage;
+                      break;
+                    }
 
-                // Pull after push to converge to the latest remote log head.
-                await _runManagedVaultPullStageWithProgress(
-                  backend: backend,
-                  sessionKey: sessionKey,
-                  syncKey: syncKey,
-                  baseUrl: baseUrl,
-                  vaultId: vaultId,
-                  idToken: idToken,
-                  stage: stage,
-                  progress: progress,
-                );
-                if (retryPushAfterPull) {
-                  await _runManagedVaultPushStageWithProgress(
-                    engine: engine,
-                    backend: backend,
-                    sessionKey: sessionKey,
-                    syncKey: syncKey,
-                    baseUrl: baseUrl,
-                    vaultId: vaultId,
-                    idToken: idToken,
-                    stage: stage,
-                    progress: progress,
-                    allowRecovery: false,
-                  );
-                  allowMediaUploads = true;
-                  retryPushAfterPull = false;
-                  await _runManagedVaultPullStageWithProgress(
-                    backend: backend,
-                    sessionKey: sessionKey,
-                    syncKey: syncKey,
-                    baseUrl: baseUrl,
-                    vaultId: vaultId,
-                    idToken: idToken,
-                    stage: stage,
-                    progress: progress,
-                  );
+                    await _runManagedVaultPullStageWithProgress(
+                      backend: backend,
+                      sessionKey: sessionKey,
+                      syncKey: syncKey,
+                      baseUrl: baseUrl,
+                      vaultId: vaultId,
+                      idToken: idToken,
+                      stage: stage,
+                      progress: progress,
+                    );
+                    if (retryPushAfterPull) {
+                      await _runManagedVaultPushStageWithProgress(
+                        engine: engine,
+                        backend: backend,
+                        sessionKey: sessionKey,
+                        syncKey: syncKey,
+                        baseUrl: baseUrl,
+                        vaultId: vaultId,
+                        idToken: idToken,
+                        stage: stage,
+                        progress: progress,
+                        allowRecovery: false,
+                      );
+                      allowMediaUploads = true;
+                      retryPushAfterPull = false;
+                      await _runManagedVaultPullStageWithProgress(
+                        backend: backend,
+                        sessionKey: sessionKey,
+                        syncKey: syncKey,
+                        baseUrl: baseUrl,
+                        vaultId: vaultId,
+                        idToken: idToken,
+                        stage: stage,
+                        progress: progress,
+                      );
+                    }
+                    break;
                 }
-
-                if (pushStage.recoveryAction ==
-                    ManagedVaultPushFailureRecoveryAction.pullOnly) {
-                  completed = false;
-                  rollbackConfig = true;
-                  runFailureMessage = pushStage.failureMessage;
+                if (!rollbackConfig && !pauseSync) {
+                  onSafeToRestartEngine?.call();
                 }
 
                 // Media uploads (optional)
@@ -719,16 +660,31 @@ final class _CloudSyncSwitchPromptGateState
                   }
                 }
 
-                // Finalize
                 stage.value = t.sync.progressDialog.finalizing;
                 progress.value = 1.0;
               } catch (error) {
-                rollbackConfig =
-                    _shouldRollbackManagedVaultBootstrapAfterFailure(error);
-                runFailureMessage = _managedVaultSyncFailureMessage(error);
+                final remoteReplaceCommitted =
+                    error is SyncRemoteReplaceCommittedException;
+                final displayError =
+                    remoteReplaceCommitted ? error.cause : error;
+                pauseSync = remoteReplaceCommitted ||
+                    (direction == SyncSwitchDirection.remoteReplacesLocal &&
+                        error.toString().contains('rollback failed'));
+                rollbackConfig = !remoteReplaceCommitted &&
+                    (direction == SyncSwitchDirection.remoteReplacesLocal ||
+                        shouldRollbackManagedVaultBootstrapAfterFailure(
+                            displayError));
+                runFailureMessage = _managedVaultSyncFailureMessage(
+                  t,
+                  materialLocalizations,
+                  displayError,
+                );
                 // Best-effort: avoid blocking the user on transient sync errors.
                 completed = false;
               } finally {
+                if (!rollbackConfig && !pauseSync) {
+                  onSafeToRestartEngine?.call();
+                }
                 if (context.mounted) {
                   Navigator.of(context).pop();
                 }
@@ -762,7 +718,7 @@ final class _CloudSyncSwitchPromptGateState
                             child: SizedBox(
                               height: 4,
                               child: LinearProgressIndicator(
-                                key: _kSyncProgressIndicatorKey,
+                                key: kCloudSyncProgressKey,
                                 value: value,
                               ),
                             ),
@@ -772,7 +728,7 @@ final class _CloudSyncSwitchPromptGateState
                             width: 48,
                             child: Text(
                               percentLabel,
-                              key: _kSyncProgressPercentKey,
+                              key: kCloudSyncPercentKey,
                               textAlign: TextAlign.right,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
@@ -798,20 +754,34 @@ final class _CloudSyncSwitchPromptGateState
         String message => message,
         _ => null,
       },
+      pauseSync: pauseSync,
       rollbackConfig: rollbackConfig,
     );
   }
 
-  Future<void> _switchToCloud(String uid) async {
+  Future<bool> _switchToCloud(
+    String uid, {
+    required SyncSwitchDirection direction,
+  }) async {
     final backendScope =
         context.getInheritedWidgetOfExactType<AppBackendScope>();
-    if (backendScope == null) return;
+    if (backendScope == null) return false;
     final backend = backendScope.backend;
 
     final previousBackendType = await _store.readBackendType();
-    final previousRemoteRoot = await _store.readRemoteRoot();
+    final previousAll = await _store.readAll();
+    final previousWebdavBaseUrl = previousAll[SyncConfigStore.kWebdavBaseUrl];
+    final previousWebdavUsername = previousAll[SyncConfigStore.kWebdavUsername];
+    final previousWebdavPassword = await _store.readWebdavPassword();
+    final previousLocalDir = previousAll[SyncConfigStore.kLocalDir];
+    final previousManagedVaultBaseUrl =
+        previousAll[SyncConfigStore.kManagedVaultBaseUrl];
+    final previousRemoteRoot = previousAll[SyncConfigStore.kRemoteRoot];
+    final previousAutoEnabled =
+        previousAll[SyncConfigStore.kAutoEnabled] == null ||
+            previousAll[SyncConfigStore.kAutoEnabled] == '1';
     final previousSyncKey = await _store.readSyncKey();
-    if (!mounted) return;
+    if (!mounted) return false;
 
     final sessionKey =
         context.getInheritedWidgetOfExactType<SessionScope>()?.sessionKey;
@@ -825,13 +795,13 @@ final class _CloudSyncSwitchPromptGateState
     } catch (_) {
       idToken = null;
     }
-    if (!mounted) return;
+    if (!mounted) return false;
 
     final dialogContext = widget.navigatorKey?.currentContext;
     final effectiveContext = (dialogContext != null && dialogContext.mounted)
         ? dialogContext
         : context;
-    if (!effectiveContext.mounted) return;
+    if (!effectiveContext.mounted) return false;
 
     final canShowDialog =
         Navigator.maybeOf(effectiveContext, rootNavigator: true) != null;
@@ -858,31 +828,40 @@ final class _CloudSyncSwitchPromptGateState
           },
         );
       }
-      return;
+      return false;
     }
-
-    final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
-      vaultId: uid,
-      deriveSyncKey: backend.deriveSyncKey,
-    );
-    await SyncKeyManager.save(
-      write: _store.writeSyncKey,
-      key: syncKey,
-    );
-
-    await _store.writeBackendType(SyncBackendType.managedVault);
-    await _store.writeRemoteRoot(uid);
-    if (!mounted) return;
-
-    unawaited(BackgroundSync.refreshSchedule(
-      backend: backend,
-      configStore: _store,
-    ));
 
     var didSync = false;
     final engine = SyncEngineScope.maybeOf(context);
-    if (!effectiveContext.mounted) return;
+    var shouldRestartEngine = engine?.isRunning ?? false;
+    var restartedEngineBeforeDialogDismiss = false;
+    var switchInProgressMarked = false;
+    var shouldRefreshBackgroundSchedule = false;
+    void restartEngineBeforeDialogDismiss() {
+      if (!shouldRestartEngine || restartedEngineBeforeDialogDismiss) return;
+      engine?.start();
+      restartedEngineBeforeDialogDismiss = true;
+    }
+
     try {
+      await markCloudSyncSwitchInProgress();
+      switchInProgressMarked = true;
+      await engine?.stopImmediatelyAndWait(
+        timeout: kDestructiveSyncStopTimeout,
+      );
+      if (!effectiveContext.mounted) return false;
+      final syncKey = await _resolveManagedVaultSyncKey(
+        uid: uid,
+        backend: backend,
+      );
+      await _store.writePrimarySyncSettings(
+        backendType: SyncBackendType.managedVault,
+        remoteRoot: uid,
+      );
+      shouldRefreshBackgroundSchedule = true;
+      if (!mounted) return false;
+      if (!effectiveContext.mounted) return false;
+
       final result = await _runManagedVaultSyncWithProgress(
         dialogContext: effectiveContext,
         engine: engine,
@@ -892,63 +871,106 @@ final class _CloudSyncSwitchPromptGateState
         baseUrl: baseUrl.trim(),
         vaultId: uid,
         idToken: idToken.trim(),
+        direction: direction,
+        onSafeToRestartEngine: restartEngineBeforeDialogDismiss,
       );
       if (!result.completed && result.rollbackConfig) {
-        await _restorePreviousSyncConfig(
+        await _restoreCloudSyncPreviousSyncConfig(
+          this,
           backend: backend,
           previousBackendType: previousBackendType,
+          previousWebdavBaseUrl: previousWebdavBaseUrl,
+          previousWebdavUsername: previousWebdavUsername,
+          previousWebdavPassword: previousWebdavPassword,
+          previousLocalDir: previousLocalDir,
+          previousManagedVaultBaseUrl: previousManagedVaultBaseUrl,
           previousRemoteRoot: previousRemoteRoot,
+          previousAutoEnabled: previousAutoEnabled,
           previousSyncKey: previousSyncKey,
           engine: engine,
+          refreshSchedule: false,
         );
+        shouldRefreshBackgroundSchedule = true;
+        if (result.pauseSync) {
+          shouldRestartEngine = false;
+          await _store.writeAutoEnabled(false);
+        }
         if (mounted && result.failureMessage != null) {
           _showSnack(result.failureMessage!);
         }
-        return;
+        return true;
       }
       didSync = result.completed;
+      if (result.pauseSync) {
+        shouldRestartEngine = false;
+        await _store.writeAutoEnabled(false);
+        shouldRefreshBackgroundSchedule = true;
+      }
       if (mounted && result.failureMessage != null) {
         _showSnack(result.failureMessage!);
       }
     } catch (error) {
-      await _restorePreviousSyncConfig(
+      if (error is TimeoutException &&
+          (error.message?.contains(
+                'sync engine did not stop before destructive operation',
+              ) ??
+              false)) {
+        shouldRestartEngine = false;
+      }
+      await _restoreCloudSyncPreviousSyncConfig(
+        this,
         backend: backend,
         previousBackendType: previousBackendType,
+        previousWebdavBaseUrl: previousWebdavBaseUrl,
+        previousWebdavUsername: previousWebdavUsername,
+        previousWebdavPassword: previousWebdavPassword,
+        previousLocalDir: previousLocalDir,
+        previousManagedVaultBaseUrl: previousManagedVaultBaseUrl,
         previousRemoteRoot: previousRemoteRoot,
+        previousAutoEnabled: previousAutoEnabled,
         previousSyncKey: previousSyncKey,
         engine: engine,
+        refreshSchedule: false,
       );
+      shouldRefreshBackgroundSchedule = true;
       if (mounted) {
-        _showSnack(_managedVaultUserFacingErrorMessage(error));
+        _showSnack(
+          _managedVaultUserFacingErrorMessage(
+            context.t,
+            MaterialLocalizations.of(context),
+            error,
+          ),
+        );
       }
-      return;
+      return true;
+    } finally {
+      if (switchInProgressMarked) {
+        try {
+          await clearCloudSyncSwitchInProgress();
+        } catch (e) {
+          debugPrint(
+            'cloud sync switch: failed to clear in-progress marker: $e',
+          );
+        }
+      }
+      if (shouldRefreshBackgroundSchedule) {
+        unawaited(_refreshCloudSyncSwitchBackgroundScheduleBestEffort(
+          backend: backend,
+          store: _store,
+        ));
+      }
+      if (shouldRestartEngine && !restartedEngineBeforeDialogDismiss) {
+        engine?.start();
+      }
     }
 
-    if (!mounted) return;
+    if (!mounted) return true;
     engine?.notifyExternalChange();
-    if (!didSync) {
+    if (!didSync && shouldRestartEngine) {
       engine?.triggerPushNow();
       engine?.triggerPullNow();
     }
-  }
-
-  Future<void> _ensureManagedVaultSyncKey(String uid) async {
-    final backendScope =
-        context.getInheritedWidgetOfExactType<AppBackendScope>();
-    if (backendScope == null) return;
-    final backend = backendScope.backend;
-    try {
-      final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
-        vaultId: uid,
-        deriveSyncKey: backend.deriveSyncKey,
-      );
-      await SyncKeyManager.save(
-        write: _store.writeSyncKey,
-        key: syncKey,
-      );
-    } catch (_) {
-      // Best-effort self-heal for managed-vault key policy.
-    }
+    return true;
   }
 
   @override

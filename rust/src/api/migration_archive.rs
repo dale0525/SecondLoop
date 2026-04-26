@@ -104,8 +104,42 @@ pub fn migration_archive_import(
     key: Vec<u8>,
     archive_path: String,
 ) -> Result<db::MigrationArchiveManifest> {
+    let app_dir = Path::new(&app_dir);
     let key = key_from_bytes(key)?;
-    db::import_migration_archive(Path::new(&app_dir), &key, Path::new(&archive_path))
+    crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
+    db::import_migration_archive(app_dir, &key, Path::new(&archive_path))
+}
+
+#[flutter_rust_bridge::frb]
+pub fn migration_archive_create_rollback_snapshot(
+    app_dir: String,
+    key: Vec<u8>,
+) -> Result<Option<String>> {
+    let app_dir = Path::new(&app_dir);
+    let key = key_from_bytes(key)?;
+    crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
+    db::migration_archive_create_rollback_snapshot(app_dir, &key)
+        .map(|path| path.map(|path| path.to_string_lossy().into_owned()))
+}
+
+#[flutter_rust_bridge::frb]
+pub fn migration_archive_restore_rollback_snapshot(
+    app_dir: String,
+    key: Vec<u8>,
+    snapshot_path: String,
+) -> Result<()> {
+    let app_dir = Path::new(&app_dir);
+    let key = key_from_bytes(key)?;
+    let snapshot_path = Path::new(&snapshot_path);
+    if !db::migration_archive_is_active_rollback_snapshot(app_dir, snapshot_path)? {
+        crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
+    }
+    db::migration_archive_restore_rollback_snapshot(app_dir, &key, snapshot_path)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn migration_archive_remove_rollback_snapshot(snapshot_path: String) -> Result<()> {
+    db::migration_archive_remove_rollback_snapshot(Path::new(&snapshot_path))
 }
 
 #[flutter_rust_bridge::frb]
@@ -115,12 +149,14 @@ pub fn migration_archive_import_progress(
     archive_path: String,
     sink: StreamSink<String>,
 ) -> Result<()> {
+    let app_dir = Path::new(&app_dir);
     let key = key_from_bytes(key)?;
+    crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
     let mut on_event = |progress: db::MigrationArchiveProgress| {
         emit_progress(&sink, progress);
     };
     let manifest = db::import_migration_archive_with_callbacks(
-        Path::new(&app_dir),
+        app_dir,
         &key,
         Path::new(&archive_path),
         &mut on_event,
@@ -135,4 +171,70 @@ pub fn migration_archive_inspect(
     archive_path: String,
 ) -> Result<db::MigrationArchiveManifest> {
     db::inspect_migration_archive(Path::new(&app_dir), Path::new(&archive_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn remove_rollback_snapshot_rejects_untracked_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let outside_path = dir.path().join("outside.bin");
+        std::fs::write(&outside_path, b"not a rollback snapshot").expect("write outside file");
+
+        let result =
+            migration_archive_remove_rollback_snapshot(outside_path.to_string_lossy().into_owned());
+
+        assert!(
+            result.is_err(),
+            "untracked rollback snapshot removal should fail"
+        );
+        assert!(outside_path.exists());
+    }
+
+    #[test]
+    fn remove_rollback_snapshot_allows_active_snapshot() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let app_dir = dir.path().join("app");
+        let key = vec![7u8; 32];
+        let snapshot_path =
+            migration_archive_create_rollback_snapshot(app_dir.to_string_lossy().into_owned(), key)
+                .expect("create rollback snapshot")
+                .expect("snapshot path");
+
+        assert!(Path::new(&snapshot_path).exists());
+
+        migration_archive_remove_rollback_snapshot(snapshot_path.clone())
+            .expect("remove active snapshot");
+
+        assert!(!Path::new(&snapshot_path).exists());
+    }
+
+    #[test]
+    fn remove_rollback_snapshot_keeps_marker_when_file_removal_fails() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let app_dir = dir.path().join("app");
+        let key = vec![7u8; 32];
+        let snapshot_path =
+            migration_archive_create_rollback_snapshot(app_dir.to_string_lossy().into_owned(), key)
+                .expect("create rollback snapshot")
+                .expect("snapshot path");
+        let snapshot_path_buf = PathBuf::from(&snapshot_path);
+        std::fs::remove_file(&snapshot_path_buf).expect("remove snapshot file");
+        std::fs::create_dir(&snapshot_path_buf).expect("create removal blocker");
+
+        let result = migration_archive_remove_rollback_snapshot(snapshot_path.clone());
+
+        assert!(
+            result.is_err(),
+            "directory blocker should make snapshot removal fail"
+        );
+        assert!(
+            db::migration_archive_is_active_rollback_snapshot(&app_dir, &snapshot_path_buf)
+                .expect("read active marker"),
+            "failed removal should keep active marker for retry"
+        );
+    }
 }

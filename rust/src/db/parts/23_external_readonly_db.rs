@@ -75,6 +75,67 @@ fn external_readonly_staging_dir(app_dir: &Path) -> PathBuf {
     external_readonly_root_dir(app_dir).join("staging")
 }
 
+const EXTERNAL_READONLY_USER_DATA_TABLES: &[&str] = &[
+    "external_import_batches",
+    "external_documents",
+    "external_document_chunks",
+    "external_attachments",
+    "external_document_attachments",
+    "external_phase_b_attachments",
+    "external_phase_b_chunk_refs",
+    "external_import_diagnostics",
+];
+
+fn external_readonly_dir_has_entries(path: &Path) -> Result<bool> {
+    match fs::read_dir(path) {
+        Ok(mut entries) => Ok(entries.next().is_some()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn external_readonly_table_has_rows(conn: &Connection, table: &str) -> Result<bool> {
+    let table_exists: bool = conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)"#,
+        params![table],
+        |row| row.get(0),
+    )?;
+    if !table_exists {
+        return Ok(false);
+    }
+
+    let quoted_table = table.replace('"', "\"\"");
+    let sql = format!(r#"SELECT EXISTS(SELECT 1 FROM "{quoted_table}" LIMIT 1)"#);
+    let has_rows: bool = conn.query_row(&sql, [], |row| row.get(0))?;
+    Ok(has_rows)
+}
+
+pub(crate) fn external_readonly_has_user_data(app_dir: &Path) -> Result<bool> {
+    if external_readonly_dir_has_entries(&external_readonly_storage_dir(app_dir))? {
+        return Ok(true);
+    }
+
+    let db_path = external_readonly_db_path(app_dir);
+    if !db_path.exists() {
+        return Ok(false);
+    }
+
+    let conn = Connection::open_with_flags(
+        db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    for table in EXTERNAL_READONLY_USER_DATA_TABLES {
+        if external_readonly_table_has_rows(&conn, table)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+pub(crate) fn remove_external_readonly_data(app_dir: &Path) -> Result<()> {
+    best_effort_remove_dir_all(&external_readonly_root_dir(app_dir))
+}
+
 fn external_cancel_flag_path(app_dir: &Path, batch_id: &str) -> PathBuf {
     external_readonly_root_dir(app_dir).join(format!("cancel-{batch_id}.flag"))
 }

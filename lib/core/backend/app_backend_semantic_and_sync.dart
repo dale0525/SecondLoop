@@ -631,6 +631,21 @@ mixin _AppBackendSemanticAndSyncMixin {
     throw UnimplementedError('importMigrationArchive');
   }
 
+  Future<String?> createVaultRollbackSnapshot(Uint8List key) async {
+    throw UnimplementedError('createVaultRollbackSnapshot');
+  }
+
+  Future<void> restoreVaultRollbackSnapshot(
+    Uint8List key, {
+    required String snapshotPath,
+  }) {
+    throw UnimplementedError('restoreVaultRollbackSnapshot');
+  }
+
+  Future<void> deleteVaultRollbackSnapshot({required String snapshotPath}) {
+    throw UnimplementedError('deleteVaultRollbackSnapshot');
+  }
+
   Stream<String> runMigrationArchiveImportProgress(
     Uint8List key, {
     required String archivePath,

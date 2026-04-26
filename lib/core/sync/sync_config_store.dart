@@ -13,6 +13,9 @@ import 'sync_engine.dart';
 import 'sync_key_manager.dart';
 import 'sync_secret_store.dart';
 
+part 'sync_config_store_backend_settings.dart';
+part 'sync_config_store_scope.dart';
+
 final class SyncConfigStore {
   SyncConfigStore({
     FlutterSecureStorage? storage,
@@ -24,11 +27,11 @@ final class SyncConfigStore {
       defaultValue: '',
     ),
   })  : _unusedLegacySecureStorage = storage,
-        _scopeKey = _normalizeScopeKey(scopeKey),
+        _scopeKey = _normalizeSyncConfigScopeKey(scopeKey),
         _allowSecureStoreMigrationInTestEnvironment =
             allowSecureStoreMigrationInTestEnvironment,
         _secretStore = secretStore ??
-            SyncSecretStore(scopeKey: _normalizeScopeKey(scopeKey)),
+            SyncSecretStore(scopeKey: _normalizeSyncConfigScopeKey(scopeKey)),
         _managedVaultDefaultBaseUrl = managedVaultDefaultBaseUrl;
 
   final FlutterSecureStorage? _unusedLegacySecureStorage;
@@ -44,6 +47,8 @@ final class SyncConfigStore {
   static const _kStateRevisionKey = 'sync_config_state_revision_v1';
   static const prefsBlobKeyForTest = _kPrefsBlobKey;
   static const legacyPrefsBlobKeyForTest = _kLegacyPrefsBlobKey;
+  static const stateRevisionPrefsKeyForTest = _kStateRevisionKey;
+  static const secretPrefsBlobKeyForTest = SyncSecretStore.kPrefsBlobKeyForTest;
   static const syncSecretStoreVersionPrefsKeyForTest =
       SyncConfigMigrator.secretStoreVersionPrefsKey;
   static final ValueNotifier<int> _changeCounter = ValueNotifier<int>(0);
@@ -141,24 +146,6 @@ final class SyncConfigStore {
     return writeMediaDownloadsWifiOnly(enabled);
   }
 
-  Future<SyncBackendType> readBackendType() async {
-    final v = (await _loadConfigMap())[kBackendType];
-    return switch (v) {
-      'localdir' => SyncBackendType.localDir,
-      'managedvault' => SyncBackendType.managedVault,
-      _ => SyncBackendType.webdav,
-    };
-  }
-
-  Future<void> writeBackendType(SyncBackendType type) async {
-    final v = switch (type) {
-      SyncBackendType.localDir => 'localdir',
-      SyncBackendType.managedVault => 'managedvault',
-      SyncBackendType.webdav => 'webdav',
-    };
-    await _writeConfigUpdates({kBackendType: v});
-  }
-
   Future<Uint8List?> readSyncKey() async {
     if (_scopeKey == null) {
       final cached = SyncKeyManager.readCachedSyncKey();
@@ -247,21 +234,6 @@ final class SyncConfigStore {
       (await _loadConfigMap())[kRemoteRoot];
   Future<String?> readLocalDir() async => (await _loadConfigMap())[kLocalDir];
 
-  Future<void> writeWebdavBaseUrl(String baseUrl) async =>
-      _writeConfigUpdates({kWebdavBaseUrl: baseUrl});
-  Future<void> writeManagedVaultBaseUrl(String baseUrl) async =>
-      _writeConfigUpdates({kManagedVaultBaseUrl: baseUrl});
-  Future<void> writeRemoteRoot(String remoteRoot) async =>
-      _writeConfigUpdates({kRemoteRoot: remoteRoot});
-
-  Future<void> writeWebdavUsername(String? username) async {
-    if (username == null || username.isEmpty) {
-      await _writeConfigUpdates({kWebdavUsername: null});
-      return;
-    }
-    await _writeConfigUpdates({kWebdavUsername: username});
-  }
-
   Future<void> writeWebdavPassword(String? password) async {
     await _secretStore.writeWebdavPassword(password);
     await _writeConfigUpdates(
@@ -272,14 +244,6 @@ final class SyncConfigStore {
 
   Future<void> writeRecoveryEnvelopeJson(String? envelopeJson) async {
     await _secretStore.writeRecoveryEnvelopeJson(envelopeJson);
-  }
-
-  Future<void> writeLocalDir(String? localDir) async {
-    if (localDir == null || localDir.isEmpty) {
-      await _writeConfigUpdates({kLocalDir: null});
-      return;
-    }
-    await _writeConfigUpdates({kLocalDir: localDir});
   }
 
   Future<bool> readCloudMediaBackupEnabled() async {
@@ -738,6 +702,9 @@ final class SyncConfigStore {
       await _ensureLoaded();
       await _reloadIfChanged();
 
+      final previousCache = Map<String, String>.from(_cache);
+      final previousLastRaw = _lastRaw;
+      final previousLastStateRevision = _lastStateRevision;
       var changed = false;
       for (final entry in updates.entries) {
         final key = entry.key;
@@ -758,7 +725,25 @@ final class SyncConfigStore {
         }
         return;
       }
-      await _persistCache();
+      try {
+        await _persistCache();
+      } catch (_) {
+        final prefs = await _prefs();
+        try {
+          if (previousLastRaw == null) {
+            await prefs.remove(_prefsBlobKey);
+          } else {
+            await prefs.setString(_prefsBlobKey, previousLastRaw);
+          }
+        } catch (_) {
+          // SharedPreferences updates its local cache before platform writes.
+          // A failed restore attempt still puts the local cache back.
+        }
+        _cache = previousCache;
+        _lastRaw = previousLastRaw;
+        _lastStateRevision = previousLastStateRevision;
+        rethrow;
+      }
     });
   }
 
@@ -1010,11 +995,5 @@ final class SyncConfigStore {
     final scopeKey = _scopeKey;
     if (scopeKey == null) return key;
     return '$key::$scopeKey';
-  }
-
-  static String? _normalizeScopeKey(String? scopeKey) {
-    final normalized = scopeKey?.trim();
-    if (normalized == null || normalized.isEmpty) return null;
-    return normalized;
   }
 }

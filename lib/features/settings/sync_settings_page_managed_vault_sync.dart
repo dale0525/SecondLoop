@@ -3,12 +3,14 @@ part of 'sync_settings_page.dart';
 final class _ManagedVaultManualPushResult {
   const _ManagedVaultManualPushResult({
     required this.pushed,
+    required this.pulled,
     required this.recoveredOnly,
     required this.recoveredMessage,
     required this.refreshedLocalState,
   });
 
   final int pushed;
+  final int pulled;
   final bool recoveredOnly;
   final String? recoveredMessage;
   final bool refreshedLocalState;
@@ -228,6 +230,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     }
 
     var pushed = 0;
+    var pulled = 0;
     var recoveredOnly = false;
     var retryPushAfterPull = false;
     var refreshedLocalState = false;
@@ -252,7 +255,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
         ManagedVaultPushFailureRecoveryAction.pullOnly;
     recoveredMessage = initialPush.recoveredMessage;
 
-    await _runManagedVaultPullStageWithProgress(
+    pulled = await _runManagedVaultPullStageWithProgress(
       backend: backend,
       sessionKey: sessionKey,
       syncKey: syncKey,
@@ -280,7 +283,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
       );
       pushed = retryPush.pushed;
       recoveredOnly = false;
-      await _runManagedVaultPullStageWithProgress(
+      pulled = await _runManagedVaultPullStageWithProgress(
         backend: backend,
         sessionKey: sessionKey,
         syncKey: syncKey,
@@ -296,13 +299,14 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
     stage.value = t.sync.progressDialog.finalizing;
     return _ManagedVaultManualPushResult(
       pushed: pushed,
+      pulled: pulled,
       recoveredOnly: recoveredOnly,
       recoveredMessage: recoveredMessage,
       refreshedLocalState: refreshedLocalState,
     );
   }
 
-  Future<void> _runManagedVaultPullStageWithProgress({
+  Future<int> _runManagedVaultPullStageWithProgress({
     required AppBackend backend,
     required Uint8List sessionKey,
     required Uint8List syncKey,
@@ -321,7 +325,7 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
       progress,
       onHasTotal: () => hasTotal.value = true,
     );
-    await _consumeRustProgressStream(
+    final pulled = await _consumeRustProgressStream(
       backend.syncManagedVaultPullProgress(
         sessionKey,
         syncKey,
@@ -332,5 +336,6 @@ extension _SyncSettingsPageManagedVaultSync on _SyncSettingsPageState {
       onProgress: pullProgressReporter.onProgress,
     );
     pullProgressReporter.complete();
+    return pulled;
   }
 }

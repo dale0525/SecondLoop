@@ -79,9 +79,22 @@ pub fn read_attachment_bytes(
         .optional()?;
     let stored_path = stored_path.ok_or_else(|| anyhow!("attachment not found"))?;
 
-    let blob = fs::read(app_dir.join(stored_path))?;
+    let blob = read_file_with_domain_not_found(
+        &app_dir.join(stored_path),
+        "attachment not found",
+    )?;
     let aad = format!("attachment.bytes:{sha256}");
     decrypt_bytes(key, &blob, aad.as_bytes())
+}
+
+fn read_file_with_domain_not_found(path: &Path, not_found_message: &'static str) -> Result<Vec<u8>> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(bytes),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, not_found_message).into())
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 fn version_newer(
@@ -315,6 +328,7 @@ pub fn purge_message_attachments(
 
 pub fn clear_local_attachment_cache(conn: &Connection, app_dir: &Path) -> Result<()> {
     best_effort_remove_dir_all(&app_dir.join("attachments"))?;
+    fs::create_dir_all(app_dir.join("attachments"))?;
     let _ = conn.execute(r#"DELETE FROM attachment_variants"#, []);
     Ok(())
 }
@@ -896,4 +910,67 @@ WHERE attachment_sha256 = ?1
         ],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod attachment_cache_tests {
+    use std::fs;
+
+    #[test]
+    fn clear_local_attachment_cache_recreates_attachments_dir() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let attachments_dir = dir.path().join("attachments");
+        let attachment_file = attachments_dir.join("stale.bin");
+
+        fs::create_dir_all(&attachments_dir).expect("create attachments dir");
+        fs::write(&attachment_file, b"stale").expect("write attachment file");
+
+        super::clear_local_attachment_cache(&conn, dir.path())
+            .expect("clear local attachment cache");
+
+        assert!(attachments_dir.is_dir());
+        assert!(!attachment_file.exists());
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_recreates_attachments_dir() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let attachments_dir = dir.path().join("attachments");
+        let attachment_file = attachments_dir.join("stale.bin");
+
+        fs::create_dir_all(&attachments_dir).expect("create attachments dir");
+        fs::write(&attachment_file, b"stale").expect("write attachment file");
+
+        crate::db::reset_vault_data_preserving_llm_profiles(&conn)
+            .expect("reset vault data");
+
+        assert!(attachments_dir.is_dir());
+        assert!(!attachment_file.exists());
+    }
+
+    #[test]
+    fn reset_vault_data_preserving_llm_profiles_reports_attachment_cleanup_failure() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let key = [3u8; 32];
+        crate::db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+        fs::write(dir.path().join("attachments"), b"not a directory")
+            .expect("write attachments file");
+
+        let result = crate::db::reset_vault_data_preserving_llm_profiles(&conn);
+
+        assert!(
+            result.is_err(),
+            "attachment cleanup failure should be reported"
+        );
+        let conversations: i64 = conn
+            .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
+            .expect("count conversations");
+        assert_eq!(
+            conversations, 1,
+            "db reset should roll back on cleanup failure"
+        );
+    }
 }

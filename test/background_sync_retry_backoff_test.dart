@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/sync/background_sync.dart';
+import 'package:secondloop/core/sync/cloud_sync_switch_prefs.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/features/media_backup/cloud_media_backup_runner.dart';
@@ -231,6 +232,40 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  test('background sync skips while a cloud sync switch is in progress',
+      () async {
+    final startedAt = DateTime.utc(2026, 1, 1, 12);
+    SharedPreferences.setMockInitialValues({
+      cloudSyncSwitchInProgressPrefsKey: true,
+      cloudSyncSwitchStartedAtPrefsKey: startedAt.millisecondsSinceEpoch,
+    });
+
+    expect(
+      await BackgroundSync.cloudSwitchInProgressForTest(now: startedAt),
+      isTrue,
+    );
+  });
+
+  test('background sync ignores and clears stale cloud sync switch leases',
+      () async {
+    final now = DateTime.utc(2026, 1, 1, 12);
+    SharedPreferences.setMockInitialValues({
+      cloudSyncSwitchInProgressPrefsKey: true,
+      cloudSyncSwitchStartedAtPrefsKey: now
+          .subtract(kCloudSyncSwitchLeaseDuration * 2)
+          .millisecondsSinceEpoch,
+    });
+
+    expect(
+      await BackgroundSync.cloudSwitchInProgressForTest(now: now),
+      isFalse,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(cloudSyncSwitchInProgressPrefsKey), isFalse);
+    expect(prefs.getInt(cloudSyncSwitchStartedAtPrefsKey), isNull);
   });
 
   test('invalid managed-vault batches are non-retryable and user visible', () {

@@ -77,6 +77,61 @@ void main() {
     expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
   });
 
+  testWidgets('managed vault manual upload reports pull-only recovery refresh',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeRemoteRoot('uid_1');
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final backend = _GraceReadonlyPullOnlyBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: const _FakeCloudAuthController(),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
+    await tester.dragUntilVisible(
+      uploadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(uploadButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.calls,
+      <String>[
+        'syncManagedVaultPush',
+        'syncManagedVaultPull',
+      ],
+    );
+    expect(find.textContaining('Uploaded'), findsNothing);
+    expect(find.textContaining('Cloud sync is read-only'), findsOneWidget);
+    expect(find.textContaining('Downloaded 2 changes'), findsOneWidget);
+  });
+
   testWidgets('cloud switch flow runs a final pull after recovery retry push',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -138,6 +193,9 @@ void main() {
     expect(find.text('Switch'), findsOneWidget);
     await tester.tap(find.text('Switch'));
     await tester.pumpAndSettle();
+    expect(find.text('Choose sync direction'), findsOneWidget);
+    await tester.tap(find.text('Merge local and remote'));
+    await tester.pumpAndSettle();
 
     expect(
       backend.calls,
@@ -185,6 +243,36 @@ final class _GenerationMismatchRecoveryBackend extends TestAppBackend {
       );
     }
     return 1;
+  }
+}
+
+final class _GraceReadonlyPullOnlyBackend extends TestAppBackend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    return 2;
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPush');
+    throw Exception(
+      'managed-vault push failed: HTTP 403 {"error":"grace_readonly","grace_until_ms":9999999999999}',
+    );
   }
 }
 

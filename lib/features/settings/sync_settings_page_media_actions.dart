@@ -218,24 +218,11 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
     if (_busy) return;
 
     final t = context.t;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(t.sync.localCache.dialog.title),
-          content: Text(t.sync.localCache.dialog.message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(t.sync.localCache.dialog.confirm),
-            ),
-          ],
-        );
-      },
+    final confirmed = await _confirmDeleteAction(
+      title: t.sync.localCache.dialog.title,
+      message: t.sync.localCache.dialog.message,
+      secondTitle: t.sync.localCache.secondDialog.title,
+      secondMessage: t.sync.localCache.secondDialog.message,
     );
     if (!mounted) return;
     if (confirmed != true) return;
@@ -259,35 +246,71 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
     if (_busy) return;
 
     final t = context.t;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(t.sync.localData.dialog.title),
-          content: Text(t.sync.localData.dialog.message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(t.common.actions.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(t.sync.localData.dialog.confirm),
-            ),
-          ],
-        );
-      },
+    final confirmed = await _confirmDeleteAction(
+      title: t.sync.localData.dialog.title,
+      message: t.sync.localData.dialog.message,
+      secondTitle: t.sync.localData.secondDialog.title,
+      secondMessage: t.sync.localData.secondDialog.message,
     );
-    if (!mounted) return;
-    if (confirmed != true) return;
+    if (!mounted || confirmed != true) return;
 
-    _setState(() => _busy = true);
+    _setState(() {
+      _busy = true;
+      _deleteProgressMessage = t.sync.deleteProgress.localData;
+    });
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final engine = SyncEngineScope.maybeOf(context);
+      final wasRunning = engine?.isRunning ?? false;
+      var shouldRestartEngine = wasRunning;
+      final previousAutoEnabled = _autoEnabled;
+      var autoSyncDisabledForReset = false;
 
-      await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+      try {
+        await engine?.stopImmediatelyAndWait(
+          timeout: kDestructiveSyncStopTimeout,
+        );
+        await _disableAutoSyncAndRefreshSchedule(backend);
+        autoSyncDisabledForReset = true;
+        await backend.resetVaultDataPreservingLlmProfiles(sessionKey);
+        shouldRestartEngine = false;
+        engine?.writeGate.value = const SyncWriteGateState.open();
+      } catch (e) {
+        if (isVaultResetCommittedCleanupFailure(e)) {
+          shouldRestartEngine = false;
+          engine?.writeGate.value = const SyncWriteGateState.open();
+          if (!mounted) return;
+          engine?.notifyExternalChange();
+          _showSnack(t.sync.localData.failed(
+            error: _deleteActionErrorMessage(e),
+          ));
+          return;
+        }
+        if (_isDestructiveSyncStopTimeout(e)) {
+          shouldRestartEngine = false;
+        }
+        if (autoSyncDisabledForReset) {
+          try {
+            await _restoreAutoSyncAndRefreshSchedule(
+              backend,
+              enabled: previousAutoEnabled,
+            );
+          } catch (restoreError) {
+            if (shouldRestartEngine) {
+              engine?.start();
+            }
+            throw StateError(
+              '${_deleteActionErrorMessage(e)}; '
+              'failed to restore auto sync: $restoreError',
+            );
+          }
+        }
+        if (shouldRestartEngine) {
+          engine?.start();
+        }
+        rethrow;
+      }
 
       if (!mounted) return;
       engine?.notifyExternalChange();
@@ -297,9 +320,13 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       _showSnack(t.sync.localData.failed(error: '$e'));
     } finally {
       if (mounted) {
-        _setState(() => _busy = false);
+        _setState(() {
+          _busy = false;
+          _deleteProgressMessage = null;
+        });
       } else {
         _busy = false;
+        _deleteProgressMessage = null;
       }
     }
   }

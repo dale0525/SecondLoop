@@ -8,6 +8,11 @@
     "uploadingMedia": "正在上传文件…",
     "finalizing": "正在收尾…"
   },
+  "deleteProgress": {
+    "title": "正在删除…",
+    "localData": "正在删除本地同步数据…",
+    "allData": "正在删除本地和远端数据…"
+  },
   "sections": {
     "automation": "自动同步",
     "backend": "同步方式",
@@ -52,14 +57,19 @@
     }
   },
   "localCache": {
-    "button": "清理本地存储",
+    "button": "删除本地缓存",
     "subtitle": "删除本机缓存的附件文件（远端保留，需要时可重新下载）。请确保已完成同步/上传。",
-    "cleared": "已清理本地缓存",
-    "failed": "清理失败：$error",
+    "cleared": "已删除本地缓存",
+    "failed": "删除失败：$error",
     "dialog": {
-      "title": "清理本地存储？",
+      "title": "删除本地缓存？",
       "message": "这将删除本机缓存的照片与文件，以节省本地空间。远端同步存储会保留副本；之后查看时会按需重新下载。",
-      "confirm": "清理"
+      "confirm": "删除"
+    },
+    "secondDialog": {
+      "title": "再次确认删除本地缓存？",
+      "message": "此操作无法在本机撤销。本机缓存文件会被移除，远端副本仍会保留，之后可按需重新下载。",
+      "confirm": "删除"
     }
   },
   "localData": {
@@ -71,7 +81,38 @@
       "title": "删除本地数据？",
       "message": "这会删除当前设备上所有会参与同步的本地数据，包括消息、附件和 embedding。你的同步设置会保留；之后点击“下载”会再次用远端数据完整替换本地。",
       "confirm": "删除"
+    },
+    "secondDialog": {
+      "title": "再次确认删除本地数据？",
+      "message": "此操作无法在当前设备上撤销。远端副本不会被改动，如有需要，之后仍可重新下载。",
+      "confirm": "删除"
     }
+  },
+  "allData": {
+    "button": "删除所有数据",
+    "deleted": "已删除本地和远端数据",
+    "deletedLocalOnly": "仅已删除本地数据；远端清理超时，如仍需删除远端数据请重试。",
+    "failed": "删除失败：$error",
+    "remoteClearUnknownLocalCleanupFailed": "远端清理超时且本地清理失败。由于远端状态未知，同步已保持关闭。错误：$error",
+    "remoteDeletedLocalCleanupFailed": "远端同步数据已删除，但本地清理失败。为避免把远端数据重新同步回来，同步已保持关闭。错误：$error",
+    "notConfigured": "请先保存同步设置。",
+    "dialog": {
+      "title": "删除所有数据？",
+      "message": "这会删除当前设备上的所有同步本地数据，并清空当前同步方式对应的全部远端数据，包括 WebDAV、本机文件夹同步或 SecondLoop Cloud。你的同步设置会保留。",
+      "confirm": "删除"
+    },
+    "secondDialog": {
+      "title": "再次确认删除所有数据？",
+      "message": "此操作无法撤销，同时还会清空当前同步方式对应的远端同步数据。",
+      "confirm": "删除"
+    }
+  },
+  "switchDirection": {
+    "title": "选择同步方向",
+    "message": "你正在切换到另一个同步位置。请选择 SecondLoop 如何处理本设备和远端副本。",
+    "localReplacesRemote": "用本设备替换远端",
+    "remoteReplacesLocal": "用远端替换本设备",
+    "merge": "合并本地和远端"
   },
   "backendLabel": "同步方式",
   "backendWebdav": "WebDAV（你自己的服务器）",
