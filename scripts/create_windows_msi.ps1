@@ -62,6 +62,23 @@ function Escape-Xml([string]$Value) {
   return [System.Security.SecurityElement]::Escape($Value)
 }
 
+function Get-SafeRegistryKeyName {
+  param([string]$Value)
+
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return ''
+  }
+
+  $safeValue = $Value -replace '[<>:"/\\|?*]', '_'
+  $safeValue = $safeValue.TrimEnd()
+  $safeValue = $safeValue -replace '[.]+$', ''
+  if ($safeValue.Length -gt 255) {
+    $safeValue = $safeValue.Substring(0, 255)
+  }
+
+  return $safeValue
+}
+
 function Resolve-Tool([string]$Name) {
   $command = Get-Command $Name -ErrorAction SilentlyContinue
   if ($null -eq $command) {
@@ -195,7 +212,9 @@ function Save-XmlDocument {
 function Convert-HarvestToPerUserCompliant {
   param(
     [Parameter(Mandatory = $true)]
-    [string]$HarvestPath
+    [string]$HarvestPath,
+    [Parameter(Mandatory = $true)]
+    [string]$ProductRegistryKey
   )
 
   if (-not (Test-Path $HarvestPath)) {
@@ -212,7 +231,7 @@ function Convert-HarvestToPerUserCompliant {
     throw "No components were harvested under INSTALLFOLDER in: $HarvestPath"
   }
 
-  $componentRegistryKey = 'Software\SecondLoop\Installer\Components'
+  $componentRegistryKey = "$ProductRegistryKey\Installer\Components"
   foreach ($componentNode in $componentNodes) {
     $componentId = $componentNode.GetAttribute('Id')
     if (-not $componentId) {
@@ -270,7 +289,7 @@ function Convert-HarvestToPerUserCompliant {
   if (-not $cleanupRegistry) {
     $cleanupRegistry = $harvestDoc.CreateElement('RegistryValue', $wixNamespace)
     $cleanupRegistry.SetAttribute('Root', 'HKCU')
-    $cleanupRegistry.SetAttribute('Key', 'Software\SecondLoop\Installer')
+    $cleanupRegistry.SetAttribute('Key', "$ProductRegistryKey\Installer")
     $cleanupRegistry.SetAttribute('Name', 'ProgramsDirCleanup')
     $cleanupRegistry.SetAttribute('Type', 'integer')
     $cleanupRegistry.SetAttribute('Value', '1')
@@ -348,7 +367,12 @@ New-Item -ItemType Directory -Force -Path $workDir | Out-Null
 New-Item -ItemType Directory -Force -Path $wixObjDir | Out-Null
 
 $installDirName = $ProductName
-$shortcutRegKey = 'Software\SecondLoop'
+$safeProductRegistryKeyName = Get-SafeRegistryKeyName -Value $ProductName
+if ([string]::IsNullOrWhiteSpace($safeProductRegistryKeyName)) {
+  throw 'ProductName does not contain a valid registry key name.'
+}
+$productRegistryKey = "Software\SecondLoop\$safeProductRegistryKeyName"
+$shortcutRegKey = $productRegistryKey
 $closeApplicationBlock = if ($DisableCloseApplication) {
   ''
 } else {
@@ -365,6 +389,7 @@ $mainWxsContent = @'
     <Icon Id="AppIcon" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Property Id="SECONDLOOP_LAUNCH_AFTER_INSTALL" Value="1" />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" Sequence="execute" />
 __CLOSE_APPLICATION_BLOCK__
     <CustomAction Id="SetLaunchApplicationTarget" Property="WixShellExecTarget" Value="[INSTALLFOLDER]secondloop.exe" />
     <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Return="check" Impersonate="yes" />
@@ -412,6 +437,7 @@ $mainWxsContent = $mainWxsContent.Replace('__PRODUCT_NAME__', (Escape-Xml $Produ
 $mainWxsContent = $mainWxsContent.Replace('__MANUFACTURER__', (Escape-Xml $Manufacturer))
 $mainWxsContent = $mainWxsContent.Replace('__UPGRADE_CODE__', (Escape-Xml $UpgradeCode))
 $mainWxsContent = $mainWxsContent.Replace('__INSTALL_DIR_NAME__', (Escape-Xml $installDirName))
+$mainWxsContent = $mainWxsContent.Replace('__PRODUCT_REG_KEY__', (Escape-Xml $productRegistryKey))
 $mainWxsContent = $mainWxsContent.Replace('__SHORTCUT_REG_KEY__', (Escape-Xml $shortcutRegKey))
 $mainWxsContent = $mainWxsContent.Replace('__CLOSE_APPLICATION_BLOCK__', $closeApplicationBlock)
 
@@ -442,7 +468,7 @@ if ($LASTEXITCODE -ne 0) {
   throw "heat.exe failed with exit code $LASTEXITCODE"
 }
 
-Convert-HarvestToPerUserCompliant -HarvestPath $harvestWxsPath
+Convert-HarvestToPerUserCompliant -HarvestPath $harvestWxsPath -ProductRegistryKey $productRegistryKey
 
 $wixObjOutDir = [System.IO.Path]::GetFullPath($wixObjDir) + [System.IO.Path]::DirectorySeparatorChar
 

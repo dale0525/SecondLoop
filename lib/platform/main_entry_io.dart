@@ -8,6 +8,7 @@ import '../app/app.dart';
 import '../core/backend/app_backend.dart';
 import '../core/desktop/desktop_window_manager_bootstrap.dart';
 import '../core/desktop/desktop_launch_args.dart';
+import '../core/desktop/windows_velopack_uninstall_cleanup.dart';
 import '../core/keyboard/macos_key_event_channel_normalizer.dart';
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/update/app_update_service.dart';
@@ -21,7 +22,7 @@ Future<void> runPlatformApp(
   void Function(Widget app)? appRunner,
 }) async {
   final launchArgs = DesktopLaunchArgs.fromMainArgs(args);
-  if (handleDesktopHookInvocationAndExit(launchArgs)) {
+  if (await handleDesktopHookInvocationAndExit(launchArgs)) {
     return;
   }
 
@@ -73,12 +74,23 @@ Future<void> _runDesktopWindowManagerInitialization(
 }
 
 @visibleForTesting
-bool handleDesktopHookInvocationAndExit(
+Future<bool> handleDesktopHookInvocationAndExit(
   DesktopLaunchArgs launchArgs, {
+  Future<void> Function()? velopackUninstallCleanup,
   void Function(int code)? exitProcess,
-}) {
+}) async {
   if (!launchArgs.shouldExitBeforeLaunchingApp) {
     return false;
+  }
+
+  if (launchArgs.velopackUninstallHookInvocationRequested) {
+    try {
+      await (velopackUninstallCleanup ??
+          cleanCurrentWindowsVelopackUninstallResidue)();
+    } on Object {
+      // Velopack uninstall hooks must exit cleanly even if best-effort cleanup
+      // cannot remove every residual path or registry key.
+    }
   }
 
   final resolvedExitProcess = exitProcess ?? io.exit;

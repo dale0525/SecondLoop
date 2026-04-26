@@ -9,6 +9,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Get-SafePathComponent {
+  param([string]$Value)
+
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return ''
+  }
+
+  $safeValue = $Value -replace '[<>:"/\\|?*]', '_'
+  $safeValue = $safeValue.TrimEnd()
+  $safeValue = $safeValue -replace '[.]+$', ''
+  if ($safeValue.Length -gt 255) {
+    $safeValue = $safeValue.Substring(0, 255)
+  }
+
+  return $safeValue
+}
+
 function Get-InstalledExecutablePath {
   param(
     [string]$DirectoryName,
@@ -19,7 +36,14 @@ function Get-InstalledExecutablePath {
     return ''
   }
 
-  return Join-Path $env:LOCALAPPDATA ("Programs\$DirectoryName\$FileName")
+  $safeDirectoryName = Get-SafePathComponent -Value $DirectoryName
+  $safeFileName = Get-SafePathComponent -Value $FileName
+  if ([string]::IsNullOrWhiteSpace($safeDirectoryName) -or
+      [string]::IsNullOrWhiteSpace($safeFileName)) {
+    return ''
+  }
+
+  return Join-Path $env:LOCALAPPDATA (Join-Path (Join-Path 'Programs' $safeDirectoryName) $safeFileName)
 }
 
 function Normalize-PathValue {
@@ -44,8 +68,9 @@ if (-not (Test-Path $expectedExecutablePath)) {
   exit 0
 }
 
+$safeExecutableName = Get-SafePathComponent -Value $ExecutableName
 $runningInstances = @(
-  Get-Process -Name ([System.IO.Path]::GetFileNameWithoutExtension($ExecutableName)) -ErrorAction SilentlyContinue |
+  Get-Process -Name ([System.IO.Path]::GetFileNameWithoutExtension($safeExecutableName)) -ErrorAction SilentlyContinue |
     Where-Object {
       $processPath = ''
       try {

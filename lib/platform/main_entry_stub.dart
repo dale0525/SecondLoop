@@ -10,10 +10,11 @@ Future<void> runPlatformApp(List<String> args) {
 }
 
 @visibleForTesting
-bool handleDesktopHookInvocationAndExit(
+Future<bool> handleDesktopHookInvocationAndExit(
   DesktopLaunchArgs launchArgs, {
+  Future<void> Function()? velopackUninstallCleanup,
   void Function(int code)? exitProcess,
-}) =>
+}) async =>
     false;
 
 Future<void> runStartupBootstrap({

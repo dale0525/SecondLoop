@@ -8,9 +8,9 @@ import 'package:secondloop/main.dart' as app;
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('desktop hook invocation exits process with code 0', () {
+  test('desktop hook invocation exits process with code 0', () async {
     var exitCode = -1;
-    final handled = app.handleDesktopHookInvocationAndExit(
+    final handled = await app.handleDesktopHookInvocationAndExit(
       DesktopLaunchArgs.fromMainArgs(['--veloapp-install', '1.2.3']),
       exitProcess: (code) => exitCode = code,
     );
@@ -19,9 +19,58 @@ void main() {
     expect(exitCode, 0);
   });
 
-  test('non-hook launch does not trigger process exit', () {
+  test('Velopack uninstall hook cleans residue before exiting', () async {
+    var cleanupCalled = false;
+    var exitCode = -1;
+
+    final handled = await app.handleDesktopHookInvocationAndExit(
+      DesktopLaunchArgs.fromMainArgs(['--veloapp-uninstall', '1.2.3']),
+      velopackUninstallCleanup: () async {
+        cleanupCalled = true;
+      },
+      exitProcess: (code) => exitCode = code,
+    );
+
+    expect(handled, true);
+    expect(cleanupCalled, true);
+    expect(exitCode, 0);
+  });
+
+  test('Velopack uninstall hook exits even when cleanup fails', () async {
+    var exitCode = -1;
+
+    final handled = await app.handleDesktopHookInvocationAndExit(
+      DesktopLaunchArgs.fromMainArgs(['--veloapp-uninstall', '1.2.3']),
+      velopackUninstallCleanup: () async {
+        throw StateError('cleanup failed');
+      },
+      exitProcess: (code) => exitCode = code,
+    );
+
+    expect(handled, true);
+    expect(exitCode, 0);
+  });
+
+  test('non-uninstall Velopack hooks do not run uninstall cleanup', () async {
+    var cleanupCalled = false;
+    var exitCode = -1;
+
+    final handled = await app.handleDesktopHookInvocationAndExit(
+      DesktopLaunchArgs.fromMainArgs(['--veloapp-updated', '1.2.3']),
+      velopackUninstallCleanup: () async {
+        cleanupCalled = true;
+      },
+      exitProcess: (code) => exitCode = code,
+    );
+
+    expect(handled, true);
+    expect(cleanupCalled, false);
+    expect(exitCode, 0);
+  });
+
+  test('non-hook launch does not trigger process exit', () async {
     var exitCalled = false;
-    final handled = app.handleDesktopHookInvocationAndExit(
+    final handled = await app.handleDesktopHookInvocationAndExit(
       DesktopLaunchArgs.fromMainArgs(['--foo']),
       exitProcess: (_) => exitCalled = true,
     );

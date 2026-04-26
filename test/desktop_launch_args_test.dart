@@ -25,6 +25,18 @@ void main() {
     ]);
 
     expect(args.velopackHookInvocationRequested, true);
+    expect(args.velopackUninstallHookInvocationRequested, false);
+    expect(args.shouldExitBeforeLaunchingApp, true);
+  });
+
+  test('detects Velopack uninstall hook invocation', () {
+    final args = DesktopLaunchArgs.fromMainArgs([
+      '--veloapp-uninstall',
+      '1.2.3',
+    ]);
+
+    expect(args.velopackHookInvocationRequested, true);
+    expect(args.velopackUninstallHookInvocationRequested, true);
     expect(args.shouldExitBeforeLaunchingApp, true);
   });
 
@@ -32,6 +44,7 @@ void main() {
     final args = DesktopLaunchArgs.fromMainArgs(['--VELOAPP-UPDATED', '1.2.3']);
 
     expect(args.velopackHookInvocationRequested, true);
+    expect(args.velopackUninstallHookInvocationRequested, false);
     expect(args.shouldExitBeforeLaunchingApp, true);
   });
 }

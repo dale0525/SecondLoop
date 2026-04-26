@@ -12,6 +12,26 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
     def _read_repo_file(self, relative_path: str) -> str:
         return (self.repo_root / relative_path).read_text(encoding="utf-8")
 
+    def _extract_function_body(self, script: str, function_name: str) -> str:
+        marker = f"function {function_name}"
+        start = script.find(marker)
+        self.assertNotEqual(start, -1, f"{function_name} not found")
+
+        brace_start = script.find("{", start)
+        self.assertNotEqual(brace_start, -1, f"{function_name} body not found")
+
+        depth = 0
+        for index in range(brace_start, len(script)):
+            char = script[index]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return script[brace_start + 1 : index]
+
+        self.fail(f"{function_name} body was not closed")
+
     def test_create_windows_msi_defines_auto_launch_custom_action(self) -> None:
         script = self._read_repo_file("scripts/create_windows_msi.ps1")
 
@@ -54,7 +74,7 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         script = self._read_repo_file("scripts/create_windows_msi.ps1")
 
         self.assertIn("function Convert-HarvestToPerUserCompliant", script)
-        self.assertIn("Software\\SecondLoop\\Installer\\Components", script)
+        self.assertIn("$componentRegistryKey = \"$ProductRegistryKey\\Installer\\Components\"", script)
         self.assertIn("RemoveFolder", script)
         self.assertIn("KeyPath', 'no'", script)
         self.assertIn("'-sice:ICE60'", script)
@@ -76,6 +96,41 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
 
         self.assertIn(
             '<MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of [ProductName] is already installed." />',
+            script,
+        )
+
+    def test_create_windows_msi_does_not_purge_user_data_on_standard_uninstall(self) -> None:
+        script = self._read_repo_file("scripts/create_windows_msi.ps1")
+
+        self.assertNotIn("SECONDLOOP_APPDATA_CLEANUP_PATH", script)
+        self.assertNotIn("SECONDLOOP_LOCALAPPDATA_CLEANUP_PATH", script)
+        self.assertNotIn("RemoveSecondLoopAppData", script)
+        self.assertNotIn("RemoveSecondLoopLocalAppData", script)
+        self.assertNotIn("RemoveFolderEx", script)
+
+    def test_create_windows_msi_uses_product_specific_registry_cleanup_keys(self) -> None:
+        script = self._read_repo_file("scripts/create_windows_msi.ps1")
+
+        self.assertIn("function Get-SafeRegistryKeyName", script)
+        self.assertIn(
+            "$safeProductRegistryKeyName = Get-SafeRegistryKeyName -Value $ProductName",
+            script,
+        )
+        self.assertIn(
+            "$productRegistryKey = \"Software\\SecondLoop\\$safeProductRegistryKeyName\"",
+            script,
+        )
+        self.assertIn("ProductRegistryKey", script)
+        self.assertIn("$componentRegistryKey = \"$ProductRegistryKey\\Installer\\Components\"", script)
+        self.assertNotIn("$productRegistryKey = \"Software\\SecondLoop\\$ProductName\"", script)
+        self.assertNotIn("Software\\SecondLoop\\Installer\\Components", script)
+        self.assertNotIn("$shortcutRegKey = 'Software\\SecondLoop'", script)
+
+    def test_create_windows_msi_persists_install_location_for_registry_matching(self) -> None:
+        script = self._read_repo_file("scripts/create_windows_msi.ps1")
+
+        self.assertIn(
+            '<SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" Sequence="execute" />',
             script,
         )
 
@@ -118,9 +173,173 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
         self.assertIn("-InstallDirName $devProductName", run_script)
         self.assertIn("stop_windows_installed_app.ps1", uninstall_script)
         self.assertIn("[string]$InstallDirName = 'SecondLoop Dev'", uninstall_script)
-        self.assertIn("Programs\\$DirectoryName\\$FileName", helper_script)
+        self.assertIn("Join-Path 'Programs' $safeDirectoryName", helper_script)
+        self.assertIn("$safeFileName = Get-SafePathComponent -Value $FileName", helper_script)
         self.assertIn("CloseMainWindow", helper_script)
         self.assertIn("Stop-Process -Id", helper_script)
+
+    def test_uninstall_script_removes_residual_files_shortcuts_and_user_data(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("[switch]$KeepUserData", script)
+        self.assertIn("function Remove-UninstallResidue", script)
+        self.assertIn("Remove-UninstallResidue @cleanupArgs", script)
+        self.assertIn("function Get-InstallResidueDirectories", script)
+        self.assertIn("Join-Path 'Programs' $safeInstallDirName", script)
+        self.assertIn("Start Menu\\Programs' $safeProductName", script)
+        self.assertIn("Join-Path 'com.secondloop' $safeProductName", script)
+        self.assertIn("Get-ApplicationDataDirectories", script)
+        self.assertIn("Get-ApplicationCacheDirectories", script)
+        self.assertIn("if (-not $KeepUserData)", script)
+
+    def test_uninstall_script_removes_user_data_by_directory_without_redundant_state_files(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+        body = self._extract_function_body(script, "Remove-UninstallResidue")
+
+        self.assertIn("foreach ($path in $appDataDirectories)", body)
+        self.assertIn("foreach ($path in $appCacheDirectories)", body)
+        self.assertNotIn("Get-ApplicationStateFiles", script)
+        self.assertNotIn("shared_preferences.json", script)
+        self.assertNotIn("flutter_secure_storage.dat", script)
+
+    def test_uninstall_script_removes_residual_registry_entries_safely(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("[string]$CompanyName = 'com.secondloop'", script)
+        self.assertIn("[string]$AppId = ''", script)
+        self.assertIn("function Remove-ResidualUninstallRegistryEntries", script)
+        self.assertIn("function Remove-RegistryTreeIfEmpty", script)
+        self.assertIn("Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\\Software\\SecondLoop\\Installer'", script)
+        self.assertIn("Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\\Software\\SecondLoop'", script)
+        self.assertIn("ProductCode", script)
+        self.assertIn("InstallLocation", script)
+
+    def test_uninstall_script_uses_allowlisted_install_location_for_cleanup(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("function Test-IsPathEqualOrChild", script)
+        self.assertIn("function Resolve-SafeInstallLocation", script)
+        self.assertIn(
+            "Resolve-SafeInstallLocation -InstallLocation $entryInstallLocation -ExpectedInstallLocation $expectedInstallLocationPath",
+            script,
+        )
+        self.assertNotIn("$selectedInstallLocation = $entryInstallLocation", script)
+
+    def test_uninstall_script_does_not_match_registry_entries_by_display_name_only(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+        body = self._extract_function_body(script, "Test-RegistryEntryMatchesProduct")
+
+        self.assertIn("Test-RegistryEntryHasSafeInstallLocation", body)
+        self.assertIn("Resolve-ProductCode -Entry $Entry", body)
+        self.assertIn("Test-RegistryEntryHasLegacyProductIdentity", body)
+        self.assertIn("$hasLegacyProductIdentity = Test-RegistryEntryHasLegacyProductIdentity", body)
+        self.assertIn("$hasSafeInstallLocation -and $hasLegacyProductIdentity", body)
+        self.assertNotIn("if ($hasSafeInstallLocation) {\n    return $true\n  }", body)
+        self.assertNotIn("$displayName -eq $ProductName -or", body)
+        self.assertNotIn("$displayName -eq $ProductName", body)
+        self.assertNotIn("if ($displayName -eq $ProductName) {\n    return $true\n  }", body)
+
+        matching_entries_start = script.find("$matchingEntries = @(")
+        self.assertNotEqual(matching_entries_start, -1, "matching entries block not found")
+        matching_entries_end = script.find("\n)\n\n$selectedEntry", matching_entries_start)
+        self.assertNotEqual(matching_entries_end, -1, "matching entries block was not closed")
+        matching_entries_body = script[matching_entries_start:matching_entries_end]
+        self.assertIn("Test-RegistryEntryMatchesProduct", matching_entries_body)
+        self.assertIn("-Entry $_", matching_entries_body)
+        self.assertIn("-ProductName $ProductName", matching_entries_body)
+        self.assertIn("-Publisher $Publisher", matching_entries_body)
+        self.assertNotIn("$displayName -eq $ProductName", matching_entries_body)
+
+    def test_uninstall_script_supports_legacy_msi_entries_without_install_location_safely(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+        body = self._extract_function_body(
+            script,
+            "Test-RegistryEntryHasLegacyProductIdentity",
+        )
+
+        self.assertIn("[string]$Publisher = 'SecondLoop'", script)
+        self.assertIn("$displayName = Get-StringValue $Entry.DisplayName", body)
+        self.assertIn("$entryPublisher = Get-StringValue $Entry.Publisher", body)
+        self.assertIn("$entryProductCode = Resolve-ProductCode -Entry $Entry", body)
+        self.assertIn("$displayName -ne $ProductName", body)
+        self.assertIn("$entryPublisher -ne $Publisher", body)
+        self.assertIn("[string]::IsNullOrWhiteSpace($entryProductCode)", body)
+
+    def test_uninstall_script_residual_registry_cleanup_requires_product_identity(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+        body = self._extract_function_body(script, "Remove-ResidualUninstallRegistryEntries")
+        matcher_body = self._extract_function_body(script, "Test-RegistryEntryMatchesResidualCleanup")
+
+        self.assertIn("ProductCode", body)
+        self.assertIn("ExpectedInstallLocation", body)
+        self.assertIn("ProductName", body)
+        self.assertIn("Publisher", body)
+        self.assertIn("Test-RegistryEntryMatchesResidualCleanup", body)
+        self.assertIn("-ProductName $ProductName", body)
+        self.assertIn("-Publisher $Publisher", body)
+        self.assertNotIn("$displayName", body)
+        self.assertIn("Test-RegistryEntryHasSafeInstallLocation", matcher_body)
+        self.assertIn("Test-RegistryEntryHasLegacyProductIdentity", matcher_body)
+        self.assertIn("$hasSafeInstallLocation -and $hasLegacyProductIdentity", matcher_body)
+
+    def test_uninstall_script_removes_shared_registry_parent_only_when_empty(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("function Test-RegistryTreeHasChildrenOrValues", script)
+        self.assertIn("function Remove-RegistryTreeIfEmpty", script)
+        self.assertIn(
+            "Remove-RegistryTreeIfEmpty -RegistryPath 'HKCU:\\Software\\SecondLoop'",
+            script,
+        )
+        self.assertNotIn("Test-AnySecondLoopInstallRemaining", script)
+
+    def test_uninstall_script_removes_empty_application_data_parent_directories(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("function Remove-EmptyDirectoryIfEmpty", script)
+        self.assertIn("function Remove-EmptyApplicationDataParents", script)
+        self.assertIn(
+            "Remove-EmptyApplicationDataParents -ApplicationDirectories $appDataDirectories",
+            script,
+        )
+        self.assertIn(
+            "Remove-EmptyApplicationDataParents -ApplicationDirectories $appCacheDirectories",
+            script,
+        )
+
+    def test_uninstall_script_fails_when_installed_entry_has_no_product_code(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn(
+            "throw \"Unable to resolve MSI product code for '$ProductName'. UninstallString=$($selectedEntry.UninstallString)\"",
+            script,
+        )
+        self.assertNotIn("Skipped msiexec.exe because no MSI product code was available", script)
+        self.assertIn("Residual cleanup completed for missing package", script)
+
+    def test_uninstall_script_preserves_user_data_when_package_entry_is_missing(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+
+        self.assertIn("[switch]$ForceResidualUserDataCleanup", script)
+        self.assertIn("$canRemoveUserData = $selectedEntry -or $ForceResidualUserDataCleanup", script)
+        self.assertIn("if ($KeepUserData -or -not $canRemoveUserData)", script)
+        self.assertIn("$cleanupArgs.KeepUserData = $true", script)
+
+    def test_uninstall_script_sanitizes_user_controlled_path_components(self) -> None:
+        script = self._read_repo_file("scripts/uninstall_windows_msi.ps1")
+        storage_body = self._extract_function_body(script, "Get-AppStorageRelativePath")
+        install_body = self._extract_function_body(script, "Get-InstallResidueDirectories")
+        data_body = self._extract_function_body(script, "Get-ApplicationDataDirectories")
+        cache_body = self._extract_function_body(script, "Get-ApplicationCacheDirectories")
+
+        self.assertIn("$safeProductName = Get-SafeDirectoryName -Value $ResolvedProductName", storage_body)
+        self.assertIn("Join-Path 'com.secondloop' $safeProductName", storage_body)
+        self.assertNotIn("return \"com.secondloop\\$ResolvedProductName\"", storage_body)
+        self.assertIn("$safeInstallDirName = Get-SafeDirectoryName -Value $InstallDirName", install_body)
+        self.assertIn("$safeProductName = Get-SafeDirectoryName -Value $ProductName", install_body)
+        self.assertIn("$safeAppId = Get-SafeDirectoryName -Value $AppId", install_body)
+        self.assertIn("$safeAppId = Get-SafeDirectoryName -Value $AppId", data_body)
+        self.assertIn("$safeAppId = Get-SafeDirectoryName -Value $AppId", cache_body)
 
     def test_run_windows_script_uses_local_fvm_runner_for_flutter_and_dart_commands(self) -> None:
         script = self._read_repo_file("scripts/run_windows.ps1")
