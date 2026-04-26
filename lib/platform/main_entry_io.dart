@@ -84,8 +84,13 @@ Future<bool> handleDesktopHookInvocationAndExit(
   }
 
   if (launchArgs.velopackUninstallHookInvocationRequested) {
-    await (velopackUninstallCleanup ??
-        cleanCurrentWindowsVelopackUninstallResidue)();
+    try {
+      await (velopackUninstallCleanup ??
+          cleanCurrentWindowsVelopackUninstallResidue)();
+    } on Object {
+      // Velopack uninstall hooks must exit cleanly even if best-effort cleanup
+      // cannot remove every residual path or registry key.
+    }
   }
 
   final resolvedExitProcess = exitProcess ?? io.exit;

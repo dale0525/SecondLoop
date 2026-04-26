@@ -36,6 +36,21 @@ void main() {
     expect(exitCode, 0);
   });
 
+  test('Velopack uninstall hook exits even when cleanup fails', () async {
+    var exitCode = -1;
+
+    final handled = await app.handleDesktopHookInvocationAndExit(
+      DesktopLaunchArgs.fromMainArgs(['--veloapp-uninstall', '1.2.3']),
+      velopackUninstallCleanup: () async {
+        throw StateError('cleanup failed');
+      },
+      exitProcess: (code) => exitCode = code,
+    );
+
+    expect(handled, true);
+    expect(exitCode, 0);
+  });
+
   test('non-uninstall Velopack hooks do not run uninstall cleanup', () async {
     var cleanupCalled = false;
     var exitCode = -1;

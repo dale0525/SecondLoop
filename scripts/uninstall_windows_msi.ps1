@@ -349,6 +349,71 @@ function Remove-FileSystemTree {
   }
 }
 
+function Remove-EmptyDirectoryIfEmpty {
+  param(
+    [string]$Path,
+    [string]$ProtectedRoot
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Path)) {
+    return
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($ProtectedRoot)) {
+    $normalizedPath = Normalize-PathValue $Path
+    $normalizedProtectedRoot = Normalize-PathValue $ProtectedRoot
+    if ($normalizedPath -eq $normalizedProtectedRoot) {
+      return
+    }
+  }
+
+  try {
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+      return
+    }
+
+    $child = Get-ChildItem -LiteralPath $Path -Force -ErrorAction Stop | Select-Object -First 1
+    if ($null -ne $child) {
+      return
+    }
+
+    Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+    Write-Host "Removed empty directory: $Path"
+  } catch {
+    Write-Warning "Failed to remove empty directory '$Path': $($_.Exception.Message)"
+  }
+}
+
+function Remove-EmptyApplicationDataParents {
+  param(
+    [string[]]$ApplicationDirectories,
+    [string]$RootDirectory
+  )
+
+  $parentDirectories = New-Object System.Collections.Generic.List[string]
+  foreach ($applicationDirectory in $ApplicationDirectories) {
+    if ([string]::IsNullOrWhiteSpace($applicationDirectory)) {
+      continue
+    }
+
+    try {
+      $parentDirectory = [System.IO.Directory]::GetParent([System.IO.Path]::GetFullPath($applicationDirectory))
+    } catch {
+      continue
+    }
+
+    if ($null -eq $parentDirectory) {
+      continue
+    }
+
+    Add-UniquePath -Paths $parentDirectories -Path $parentDirectory.FullName
+  }
+
+  foreach ($parentDirectory in $parentDirectories) {
+    Remove-EmptyDirectoryIfEmpty -Path $parentDirectory -ProtectedRoot $RootDirectory
+  }
+}
+
 function Remove-RegistryTreeIfExists {
   param([string]$RegistryPath)
 
@@ -430,12 +495,10 @@ function Test-RegistryEntryHasSafeInstallLocation {
 function Test-RegistryEntryMatchesProduct {
   param(
     [psobject]$Entry,
-    [string]$ProductName,
     [string]$ExpectedInstallLocation,
     [string]$ProductCode
   )
 
-  $displayName = Get-StringValue $Entry.DisplayName
   $uninstallString = Get-StringValue $Entry.UninstallString
   $entryProductCode = Resolve-ProductCode -Entry $Entry
   $hasSafeInstallLocation = Test-RegistryEntryHasSafeInstallLocation -Entry $Entry -ExpectedInstallLocation $ExpectedInstallLocation
@@ -448,15 +511,7 @@ function Test-RegistryEntryMatchesProduct {
     }
   }
 
-  if ($displayName -eq $ProductName -and -not [string]::IsNullOrWhiteSpace($entryProductCode)) {
-    return $true
-  }
-
   if ($hasSafeInstallLocation) {
-    return $true
-  }
-
-  if ($displayName -eq $ProductName -and $hasSafeInstallLocation) {
     return $true
   }
 
@@ -465,13 +520,12 @@ function Test-RegistryEntryMatchesProduct {
 
 function Remove-ResidualUninstallRegistryEntries {
   param(
-    [string]$ProductName,
     [string]$ExpectedInstallLocation,
     [string]$ProductCode
   )
 
   Get-UninstallRegistryEntries | Where-Object {
-    Test-RegistryEntryMatchesProduct -Entry $_ -ProductName $ProductName -ExpectedInstallLocation $ExpectedInstallLocation -ProductCode $ProductCode
+    Test-RegistryEntryMatchesProduct -Entry $_ -ExpectedInstallLocation $ExpectedInstallLocation -ProductCode $ProductCode
   } | ForEach-Object {
     Remove-RegistryTreeIfExists -RegistryPath $_.PSPath
   }
@@ -492,6 +546,8 @@ function Remove-UninstallResidue {
   $effectiveAppId = Get-EffectiveAppId -ConfiguredAppId $AppId -ResolvedProductName $ProductName
 
   $pathsToRemove = New-Object System.Collections.Generic.List[string]
+  $appDataDirectories = @()
+  $appCacheDirectories = @()
   foreach ($path in (Get-ShortcutResiduePaths -ProductName $ProductName)) {
     Add-UniquePath -Paths $pathsToRemove -Path $path
   }
@@ -518,7 +574,12 @@ function Remove-UninstallResidue {
     Remove-FileSystemTree -Path $path
   }
 
-  Remove-ResidualUninstallRegistryEntries -ProductName $ProductName -ExpectedInstallLocation $expectedInstallLocationPath -ProductCode $ProductCode
+  if (-not $KeepUserData) {
+    Remove-EmptyApplicationDataParents -ApplicationDirectories $appDataDirectories -RootDirectory $env:APPDATA
+    Remove-EmptyApplicationDataParents -ApplicationDirectories $appCacheDirectories -RootDirectory $env:LOCALAPPDATA
+  }
+
+  Remove-ResidualUninstallRegistryEntries -ExpectedInstallLocation $expectedInstallLocationPath -ProductCode $ProductCode
 
   $safeProductRegistryKeyName = Get-SafeDirectoryName -Value $ProductName
   if (-not [string]::IsNullOrWhiteSpace($safeProductRegistryKeyName)) {
@@ -533,7 +594,6 @@ $matchingEntries = @(
   Get-UninstallRegistryEntries | Where-Object {
     Test-RegistryEntryMatchesProduct `
       -Entry $_ `
-      -ProductName $ProductName `
       -ExpectedInstallLocation $expectedInstallLocationPath `
       -ProductCode ''
   }
