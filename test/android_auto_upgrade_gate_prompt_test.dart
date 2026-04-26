@@ -104,6 +104,9 @@ void main() {
       expect(
           find.byKey(const ValueKey('update_prompt_dialog')), findsOneWidget);
       expect(
+          find.byKey(const ValueKey('update_prompt_ignore')), findsOneWidget);
+      expect(find.byKey(const ValueKey('android_update_cancel')), findsNothing);
+      expect(
         find.text('A newer Android version is available. '
             'You can download and install it now.'),
         findsOneWidget,

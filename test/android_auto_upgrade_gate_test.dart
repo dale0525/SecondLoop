@@ -431,6 +431,12 @@ void main() {
 
       expect(find.text('Could not open update page'), findsNothing);
       expect(
+        find.text(
+          'Allow installs from this app in system settings, then try again.',
+        ),
+        findsOneWidget,
+      );
+      expect(
         find.byKey(const ValueKey('android_update_progress_label')),
         findsNothing,
       );

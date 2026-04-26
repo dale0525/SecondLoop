@@ -122,7 +122,6 @@ class _AppUpdatePromptDialog extends StatelessWidget {
         KeyedSubtree(
           key: const ValueKey('update_prompt_ignore'),
           child: TextButton(
-            key: const ValueKey('android_update_cancel'),
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(t.common.actions.ignore),
           ),
@@ -354,7 +353,7 @@ class _AppUpdateProgressDialogState extends State<_AppUpdateProgressDialog>
         _awaitingInstallPermission = true;
         _applyingStagedUpdate = false;
         _errorMessage = context.t.settings.updateDialog.permissionRequired;
-        _statusMessage = context.t.settings.updateDialog.permissionRequired;
+        _statusMessage = null;
       });
     } catch (error) {
       if (!mounted) return;
