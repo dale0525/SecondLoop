@@ -854,4 +854,32 @@ PRAGMA user_version = 1;
             "unexpected error: {error}"
         );
     }
+
+    #[test]
+    fn rollback_snapshot_restore_rejects_inactive_snapshot_copy_with_valid_deferred_key() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let key = [4u8; 32];
+        let conn = db::open(dir.path()).expect("open db");
+        db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+        drop(conn);
+        let active_snapshot = db::migration_archive_create_rollback_snapshot(dir.path(), &key)
+            .expect("create active snapshot")
+            .expect("snapshot path");
+        let inactive_snapshot = active_snapshot.with_file_name("inactive-copy.bin");
+        fs::copy(&active_snapshot, &inactive_snapshot).expect("copy snapshot");
+
+        let result = crate::api::migration_archive::migration_archive_restore_rollback_snapshot(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+            inactive_snapshot.to_string_lossy().into_owned(),
+        );
+
+        let error = result.expect_err("inactive snapshot copy should stay fail-closed");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+    }
 }

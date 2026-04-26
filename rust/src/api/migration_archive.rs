@@ -132,14 +132,23 @@ pub fn migration_archive_restore_rollback_snapshot(
     let key = key_from_bytes(key)?;
     let snapshot_path = Path::new(&snapshot_path);
     if !db::migration_archive_is_active_rollback_snapshot(app_dir, snapshot_path)? {
-        if !crate::api::auth_state::auth_is_initialized(app_dir)
-            && crate::api::auth_state::has_user_data_without_auth_file(app_dir)?
-        {
-            return Err(anyhow!("vault data exists but auth file is missing"));
-        }
-        crate::api::auth_state::validate_reset_vault_data_access(app_dir, &key)?;
+        validate_inactive_rollback_snapshot_restore_access(app_dir, &key)?;
     }
     db::migration_archive_restore_rollback_snapshot(app_dir, &key, snapshot_path)
+}
+
+// Only active rollback snapshots may bypass current auth for retry; inactive paths are arbitrary files.
+fn validate_inactive_rollback_snapshot_restore_access(
+    app_dir: &Path,
+    key: &[u8; 32],
+) -> Result<()> {
+    if crate::api::auth_state::auth_is_initialized(app_dir) {
+        return crate::api::auth_state::validate_reset_vault_data_access(app_dir, key);
+    }
+    if crate::api::auth_state::has_user_data_without_auth_file(app_dir)? {
+        return Err(anyhow!("vault data exists but auth file is missing"));
+    }
+    Ok(())
 }
 
 #[flutter_rust_bridge::frb]
