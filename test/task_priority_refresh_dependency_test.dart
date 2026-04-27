@@ -13,7 +13,7 @@ void main() {
       const LlmProfile(
         id: 'profile-a',
         name: 'Profile A',
-        providerType: 'openai_compatible',
+        providerType: 'openai-compatible',
         baseUrl: 'https://a.example',
         modelName: 'model-a',
         isActive: true,
@@ -23,7 +23,7 @@ void main() {
       const LlmProfile(
         id: 'profile-b',
         name: 'Profile B',
-        providerType: 'openai_compatible',
+        providerType: 'openai-compatible',
         baseUrl: 'https://b.example',
         modelName: 'model-b',
         isActive: false,
@@ -92,6 +92,36 @@ void main() {
 
     expect(key, contains('fallback.example'));
     expect(key, contains('fallback-model'));
+  });
+
+  test('refresh dependency key ignores unsupported active LLM profiles',
+      () async {
+    final backend = _ProfileBackend(const <LlmProfile>[
+      LlmProfile(
+        id: 'unsupported-active',
+        name: 'Unsupported Active',
+        providerType: 'gemini-compatible',
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        modelName: 'gemini-1.5-flash',
+        isActive: true,
+        createdAtMs: 1,
+        updatedAtMs: 1,
+      ),
+    ]);
+    final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
+
+    final key = await buildTaskPriorityRefreshDependencyKey(
+      backend,
+      sessionKey,
+      subscriptionStatus: SubscriptionStatus.notEntitled,
+      gatewayBaseUrl: 'https://fallback.example',
+      modelName: 'fallback-model',
+      localeTag: 'en-US',
+      cloudUid: null,
+    );
+
+    expect(key, isNot(contains('unsupported-active')));
+    expect(key, isNot(contains('gemini-compatible')));
   });
 }
 

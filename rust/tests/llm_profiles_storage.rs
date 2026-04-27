@@ -95,3 +95,57 @@ fn llm_profiles_can_be_listed_and_activated() {
         .expect("has active");
     assert_eq!(active.api_key.as_deref(), Some("sk-p2"));
 }
+
+#[test]
+fn llm_profiles_reject_unsupported_provider_types() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let err = db::create_llm_profile(
+        &conn,
+        &key,
+        "Gemini",
+        "gemini-compatible",
+        Some("https://generativelanguage.googleapis.com/v1beta"),
+        Some("sk-test"),
+        "gemini-1.5-flash",
+        true,
+    )
+    .expect_err("unsupported provider should be rejected");
+
+    assert!(
+        err.to_string()
+            .contains("unsupported llm provider_type: gemini-compatible"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn active_llm_profile_loader_ignores_unsupported_provider_types() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    conn.execute(
+        r#"INSERT INTO llm_profiles
+           (id, name, provider_type, base_url, api_key, model_name, is_active, created_at, updated_at)
+           VALUES (?1, ?2, ?3, ?4, NULL, ?5, 1, 1, 1)"#,
+        params![
+            "unsupported-active",
+            "Unsupported Active",
+            "gemini-compatible",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-1.5-flash",
+        ],
+    )
+    .expect("insert unsupported active profile");
+
+    let active = db::load_active_llm_profile_config(&conn, &key).expect("load active");
+
+    assert!(active.is_none());
+}

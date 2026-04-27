@@ -260,7 +260,7 @@ Future<String?> resolveTaskPriorityAiCacheScopeKey(
         final profiles = await backend.listLlmProfiles(sessionKey);
         LlmProfile? activeProfile;
         for (final profile in profiles) {
-          if (profile.isActive) {
+          if (profile.isActive && profile.providerType == 'openai-compatible') {
             activeProfile = profile;
             break;
           }

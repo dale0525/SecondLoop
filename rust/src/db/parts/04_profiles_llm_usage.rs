@@ -1,3 +1,12 @@
+const SUPPORTED_LLM_PROVIDER_TYPE: &str = "openai-compatible";
+
+fn ensure_supported_llm_provider_type(provider_type: &str) -> Result<()> {
+    if provider_type == SUPPORTED_LLM_PROVIDER_TYPE {
+        return Ok(());
+    }
+    Err(anyhow!("unsupported llm provider_type: {provider_type}"))
+}
+
 pub fn create_llm_profile(
     conn: &Connection,
     key: &[u8; 32],
@@ -8,6 +17,8 @@ pub fn create_llm_profile(
     model_name: &str,
     set_active: bool,
 ) -> Result<LlmProfile> {
+    ensure_supported_llm_provider_type(provider_type)?;
+
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_ms();
 
@@ -165,12 +176,14 @@ pub fn set_active_llm_profile(conn: &Connection, profile_id: &str) -> Result<()>
         let updated = conn.execute(
             r#"UPDATE llm_profiles
                SET is_active = 1, updated_at = ?2
-               WHERE id = ?1"#,
-            params![profile_id, now],
+               WHERE id = ?1 AND provider_type = ?3"#,
+            params![profile_id, now, SUPPORTED_LLM_PROVIDER_TYPE],
         )?;
 
         if updated == 0 {
-            return Err(anyhow!("llm profile not found: {profile_id}"));
+            return Err(anyhow!(
+                "llm profile not found or unsupported: {profile_id}"
+            ));
         }
 
         conn.execute(
@@ -264,10 +277,10 @@ pub fn load_active_llm_profile_config(
         .query_row(
             r#"SELECT id, provider_type, base_url, api_key, model_name
                FROM llm_profiles
-               WHERE is_active = 1
+               WHERE is_active = 1 AND provider_type = ?1
                ORDER BY updated_at DESC
                LIMIT 1"#,
-            [],
+            params![SUPPORTED_LLM_PROVIDER_TYPE],
             |row| {
                 Ok((
                     row.get::<_, String>(0)?,
