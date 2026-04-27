@@ -98,6 +98,57 @@ void main() {
       ],
     );
   });
+
+  test('WebNativeAppBackend stops runaway media-only push batches', () async {
+    final service = _ManagedVaultPushBridgeService();
+    const watchdogLimit = 1024;
+    const deleteAction = ManagedVaultV2PushMediaAction(
+      kind: ManagedVaultV2PushMediaActionKind.attachmentDelete,
+      remoteId: 'sha-stuck',
+      sha256: 'sha-stuck',
+    );
+    final backend = _ManagedVaultPushBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      batches: List<ManagedVaultV2PushBatch>.generate(
+        watchdogLimit,
+        (_) => ManagedVaultV2PushBatch(
+          hasOps: false,
+          opCount: 0,
+          request: null,
+          mediaActions: const <ManagedVaultV2PushMediaAction>[deleteAction],
+          mediaPhase: ManagedVaultV2PushMediaPhase.repairs,
+          batchJson: _batchJson(
+            mediaPhase: 'repairs',
+            mediaActions: <Object?>[deleteAction.toJson()],
+          ),
+        ),
+      ),
+    );
+
+    await expectLater(
+      backend.syncManagedVaultPush(
+        Uint8List(32),
+        Uint8List(32),
+        baseUrl: kWebFormalSettingsBaseUrl,
+        vaultId: 'vault-123',
+        idToken: 'token-1',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'managed_vault_push_iteration_limit_exceeded',
+        ),
+      ),
+    );
+    expect(service.requests, isEmpty);
+    expect(service.mediaDeletes, hasLength(watchdogLimit));
+    expect(backend.mediaResults, hasLength(watchdogLimit));
+    expect(backend.completedMediaPhases, hasLength(watchdogLimit));
+  });
 }
 
 String _batchJson({

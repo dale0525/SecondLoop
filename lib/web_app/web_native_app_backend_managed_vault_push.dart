@@ -1,5 +1,7 @@
 part of 'web_native_app_backend.dart';
 
+const int _kManagedVaultPushBatchWatchdogLimit = 1024;
+
 enum ManagedVaultV2PushMediaActionKind {
   attachmentUpload,
   attachmentDelete,
@@ -411,7 +413,9 @@ mixin _WebNativeManagedVaultPushBridge on NativeAppBackend {
   }) async {
     final appDir = await _resolveAppDir();
     var totalAccepted = 0;
-    while (true) {
+    for (var iteration = 0;
+        iteration < _kManagedVaultPushBatchWatchdogLimit;
+        iteration += 1) {
       final batch = await prepareManagedVaultV2PushBatch(
         key,
         syncKey,
@@ -471,5 +475,6 @@ mixin _WebNativeManagedVaultPushBridge on NativeAppBackend {
         }
       }
     }
+    throw StateError('managed_vault_push_iteration_limit_exceeded');
   }
 }

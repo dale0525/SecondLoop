@@ -95,7 +95,7 @@ class WebNativeAppBackend extends NativeAppBackend
     return _webAppService != null && isWebFormalSettingsBaseUrl(gatewayBaseUrl);
   }
 
-  bool _shouldBridgeManagedVaultPull(String baseUrl) {
+  bool _shouldBridgeManagedVault(String baseUrl) {
     return _webAppService != null && isWebManagedVaultBridgeBaseUrl(baseUrl);
   }
 
@@ -676,7 +676,7 @@ class WebNativeAppBackend extends NativeAppBackend
     required String idToken,
   }) async {
     final webAppService = _webAppService;
-    if (!_shouldBridgeManagedVaultPull(baseUrl)) {
+    if (!_shouldBridgeManagedVault(baseUrl)) {
       return super.syncManagedVaultPush(
         key,
         syncKey,
@@ -705,7 +705,7 @@ class WebNativeAppBackend extends NativeAppBackend
     required String idToken,
   }) async {
     final webAppService = _webAppService;
-    if (!_shouldBridgeManagedVaultPull(baseUrl)) {
+    if (!_shouldBridgeManagedVault(baseUrl)) {
       return super.syncManagedVaultPull(
         key,
         syncKey,
@@ -734,7 +734,7 @@ class WebNativeAppBackend extends NativeAppBackend
     required String idToken,
   }) async* {
     final webAppService = _webAppService;
-    if (_shouldBridgeManagedVaultPull(baseUrl)) {
+    if (_shouldBridgeManagedVault(baseUrl)) {
       final controller = StreamController<String>();
       unawaited(() async {
         try {
