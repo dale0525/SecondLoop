@@ -78,3 +78,96 @@ pub fn sync_managed_vault_finalize_web_pull(
     )?;
     Ok(true)
 }
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_prepare_web_push_batch(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+) -> Result<String> {
+    let key = key_from_bytes(key)?;
+    let sync_key = key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::prepare_web_push_batch(&conn, &key, &sync_key, &base_url, &vault_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_apply_web_push_response(
+    app_dir: String,
+    base_url: String,
+    vault_id: String,
+    batch_json: String,
+    response_json: String,
+) -> Result<String> {
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::apply_web_push_response(
+        &conn,
+        &base_url,
+        &vault_id,
+        &batch_json,
+        &response_json,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_prepare_web_push_media_upload(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    action_json: String,
+) -> Result<String> {
+    let key = key_from_bytes(key)?;
+    let sync_key = key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::prepare_web_push_media_upload(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &action_json,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_record_web_push_media_result(
+    app_dir: String,
+    base_url: String,
+    vault_id: String,
+    action_json: String,
+    success: bool,
+    error_message: Option<String>,
+) -> Result<bool> {
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::record_web_push_media_result(
+        &conn,
+        &base_url,
+        &vault_id,
+        &action_json,
+        success,
+        error_message.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_complete_web_push_media_batch(
+    app_dir: String,
+    key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    batch_json: String,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::complete_web_push_media_batch(
+        &conn,
+        &key,
+        &base_url,
+        &vault_id,
+        &batch_json,
+    )
+}

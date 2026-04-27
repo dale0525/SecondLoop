@@ -9,6 +9,8 @@ import '../src/rust/api/web_sync.dart' as rust_web_sync;
 import 'web_app_service.dart';
 import 'web_formal_settings_adapters.dart';
 
+part 'web_native_app_backend_managed_vault_push.dart';
+
 class ManagedVaultV2PullState {
   const ManagedVaultV2PullState({
     required this.generationId,
@@ -37,7 +39,38 @@ class ManagedVaultV2PullApplyResult extends ManagedVaultV2PullState {
   final String? recoveryReason;
 }
 
-class WebNativeAppBackend extends NativeAppBackend {
+class ManagedVaultV2PushBatch {
+  const ManagedVaultV2PushBatch({
+    required this.hasOps,
+    required this.opCount,
+    required this.request,
+    required this.batchJson,
+    this.mediaActions = const <ManagedVaultV2PushMediaAction>[],
+    this.mediaPhase = ManagedVaultV2PushMediaPhase.none,
+  });
+
+  final bool hasOps;
+  final int opCount;
+  final Map<String, Object?>? request;
+  final String batchJson;
+  final List<ManagedVaultV2PushMediaAction> mediaActions;
+  final ManagedVaultV2PushMediaPhase mediaPhase;
+}
+
+class ManagedVaultV2PushApplyResult {
+  const ManagedVaultV2PushApplyResult({
+    required this.accepted,
+    required this.generationId,
+    required this.remoteLatestGlobalSeq,
+  });
+
+  final int accepted;
+  final String generationId;
+  final int remoteLatestGlobalSeq;
+}
+
+class WebNativeAppBackend extends NativeAppBackend
+    with _WebNativeManagedVaultPushBridge {
   WebNativeAppBackend({
     required AppDirProvider appDirProvider,
     super.storageScope,
@@ -55,13 +88,14 @@ class WebNativeAppBackend extends NativeAppBackend {
   final WebAppService? _webAppService;
   Future<String>? _appDirFuture;
 
+  @override
   Future<String> _resolveAppDir() => _appDirFuture ??= _appDirProvider();
 
   bool _shouldBridgeCloudGateway(String gatewayBaseUrl) {
     return _webAppService != null && isWebFormalSettingsBaseUrl(gatewayBaseUrl);
   }
 
-  bool _shouldBridgeManagedVaultPull(String baseUrl) {
+  bool _shouldBridgeManagedVault(String baseUrl) {
     return _webAppService != null && isWebManagedVaultBridgeBaseUrl(baseUrl);
   }
 
@@ -149,6 +183,18 @@ class WebNativeAppBackend extends NativeAppBackend {
       lastAppliedGlobalSeq:
           (decoded['last_applied_global_seq'] as num?)?.toInt() ?? 0,
     );
+  }
+
+  @override
+  Map<String, Object?> _decodeObjectMap(
+    Object? value,
+    String errorName,
+  ) {
+    if (value is Map<String, Object?>) return value;
+    if (value is Map) {
+      return value.map((key, value) => MapEntry('$key', value));
+    }
+    throw FormatException(errorName);
   }
 
   Future<ManagedVaultV2PullApplyResult> applyManagedVaultV2PullPage(
@@ -622,6 +668,35 @@ class WebNativeAppBackend extends NativeAppBackend {
   }
 
   @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    final webAppService = _webAppService;
+    if (!_shouldBridgeManagedVault(baseUrl)) {
+      return super.syncManagedVaultPush(
+        key,
+        syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken,
+      );
+    }
+
+    return _syncManagedVaultPushThroughWebAppService(
+      webAppService!,
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+    );
+  }
+
+  @override
   Future<int> syncManagedVaultPull(
     Uint8List key,
     Uint8List syncKey, {
@@ -630,7 +705,7 @@ class WebNativeAppBackend extends NativeAppBackend {
     required String idToken,
   }) async {
     final webAppService = _webAppService;
-    if (!_shouldBridgeManagedVaultPull(baseUrl)) {
+    if (!_shouldBridgeManagedVault(baseUrl)) {
       return super.syncManagedVaultPull(
         key,
         syncKey,
@@ -659,7 +734,7 @@ class WebNativeAppBackend extends NativeAppBackend {
     required String idToken,
   }) async* {
     final webAppService = _webAppService;
-    if (_shouldBridgeManagedVaultPull(baseUrl)) {
+    if (_shouldBridgeManagedVault(baseUrl)) {
       final controller = StreamController<String>();
       unawaited(() async {
         try {
@@ -717,6 +792,25 @@ class WebNativeAppBackend extends NativeAppBackend {
   }) async* {
     yield '{"type":"progress","done":0,"total":0}';
     final pushed = await syncManagedVaultPushOpsOnly(
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken,
+    );
+    yield '{"type":"result","count":$pushed}';
+  }
+
+  @override
+  Stream<String> syncManagedVaultPushProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async* {
+    yield '{"type":"progress","done":0,"total":0}';
+    final pushed = await syncManagedVaultPush(
       key,
       syncKey,
       baseUrl: baseUrl,

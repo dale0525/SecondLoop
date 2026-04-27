@@ -1,0 +1,548 @@
+part of 'web_native_app_backend_test.dart';
+
+final class _ProgressWrappingBackend extends WebNativeAppBackend {
+  _ProgressWrappingBackend({
+    required super.appDirProvider,
+    required super.secureStorage,
+    required super.rustLibInit,
+    this.pullResult = 0,
+    this.pushResult = 0,
+  });
+
+  final int pullResult;
+  final int pushResult;
+
+  int pullCalls = 0;
+  int pushCalls = 0;
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    pullCalls += 1;
+    return pullResult;
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    pushCalls += 1;
+    return pushResult;
+  }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    pushCalls += 1;
+    return pushResult;
+  }
+}
+
+final class _TaskPriorityBridgeService extends WebAppService {
+  String? fetchedIdToken;
+  String? fetchedScope;
+  String? upsertedIdToken;
+  Map<String, Object?>? upsertedPayload;
+
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription({
+    required String idToken,
+  }) async {
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.entitled,
+      canManageSubscription: true,
+    );
+  }
+
+  @override
+  Future<Map<String, Object?>> fetchTaskPriorityAssessments({
+    required String idToken,
+    required String scope,
+  }) async {
+    fetchedIdToken = idToken;
+    fetchedScope = scope;
+    return <String, Object?>{
+      'scope': scope,
+      'entries': <Object?>[
+        <String, Object?>{
+          'todo_id': 'focus',
+          'semantic_adjustment': 8,
+          'reason': 'shared',
+          'confidence': 'high',
+          'request_signature': 'sig-1',
+          'computed_at_ms': 1710000000000,
+        },
+      ],
+    };
+  }
+
+  @override
+  Future<void> upsertTaskPriorityAssessments({
+    required String idToken,
+    required Map<String, Object?> payload,
+  }) async {
+    upsertedIdToken = idToken;
+    upsertedPayload = payload;
+  }
+}
+
+final class _CloudChatBridgeService extends WebAppService {
+  _CloudChatBridgeService({this.reply = 'web reply'});
+
+  final String reply;
+  String? idToken;
+  List<Map<String, String>>? messages;
+
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription({
+    required String idToken,
+  }) async {
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.entitled,
+      canManageSubscription: true,
+    );
+  }
+
+  @override
+  Future<String> sendChat({
+    required String idToken,
+    required List<Map<String, String>> messages,
+  }) async {
+    this.idToken = idToken;
+    this.messages = List<Map<String, String>>.from(messages);
+    return reply;
+  }
+}
+
+final class _CloudChatBridgeBackend extends WebNativeAppBackend {
+  _CloudChatBridgeBackend({
+    required super.appDirProvider,
+    required super.secureStorage,
+    required super.rustLibInit,
+    required super.webAppService,
+  });
+
+  final List<Map<String, String>> storedMessages = <Map<String, String>>[];
+
+  @override
+  Future<Message> insertMessage(
+    Uint8List key,
+    String conversationId, {
+    required String role,
+    required String content,
+    bool isMemory = false,
+  }) async {
+    storedMessages.add(<String, String>{'role': role, 'content': content});
+    return Message(
+      id: 'message-${storedMessages.length - 1}',
+      conversationId: conversationId,
+      role: role,
+      content: content,
+      createdAtMs: PlatformInt64Util.from(0),
+      isMemory: isMemory,
+    );
+  }
+
+  @override
+  Future<List<Message>> listMessages(
+    Uint8List key,
+    String conversationId,
+  ) async {
+    return storedMessages.asMap().entries.map((entry) {
+      final message = entry.value;
+      return Message(
+        id: 'message-${entry.key}',
+        conversationId: conversationId,
+        role: message['role']!,
+        content: message['content']!,
+        createdAtMs: PlatformInt64Util.from(0),
+        isMemory: false,
+      );
+    }).toList(growable: false);
+  }
+}
+
+final class _ManagedVaultPullBridgeService extends WebAppService {
+  _ManagedVaultPullBridgeService({
+    required List<WebManagedVaultPullPage> pages,
+    List<Object> failures = const <Object>[],
+    List<Object>? responses,
+  })  : _pages = List<WebManagedVaultPullPage>.from(pages),
+        _failures = List<Object>.from(failures),
+        _responses = responses == null ? null : List<Object>.from(responses);
+
+  final List<WebManagedVaultPullPage> _pages;
+  final List<Object> _failures;
+  final List<Object>? _responses;
+  final List<int> afterGlobalSeqs = <int>[];
+  final List<String> idTokens = <String>[];
+
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription({
+    required String idToken,
+  }) async {
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.entitled,
+      canManageSubscription: true,
+    );
+  }
+
+  @override
+  Future<WebManagedVaultPullPage> fetchManagedVaultPullPage({
+    required String idToken,
+    required String vaultId,
+    required int afterGlobalSeq,
+    int limit = 500,
+  }) async {
+    idTokens.add(idToken);
+    afterGlobalSeqs.add(afterGlobalSeq);
+    final responses = _responses;
+    if (responses != null) {
+      if (responses.isEmpty) {
+        throw StateError('unexpected_pull_page_request');
+      }
+      final next = responses.removeAt(0);
+      if (next is WebManagedVaultPullPage) return next;
+      throw next;
+    }
+    if (_failures.isNotEmpty) {
+      throw _failures.removeAt(0);
+    }
+    if (_pages.isEmpty) {
+      throw StateError('unexpected_pull_page_request');
+    }
+    return _pages.removeAt(0);
+  }
+}
+
+final class _ManagedVaultPushBridgeService extends WebAppService {
+  _ManagedVaultPushBridgeService({
+    required List<Map<String, Object?>> responses,
+  }) : _responses = List<Map<String, Object?>>.from(responses);
+
+  final List<Map<String, Object?>> _responses;
+  final List<Map<String, Object?>> requests = <Map<String, Object?>>[];
+  final List<String> idTokens = <String>[];
+  final List<String> vaultIds = <String>[];
+  final List<_RecordedManagedVaultMediaUpload> mediaUploads =
+      <_RecordedManagedVaultMediaUpload>[];
+  final List<String> mediaDeletes = <String>[];
+
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription({
+    required String idToken,
+  }) async {
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.entitled,
+      canManageSubscription: true,
+    );
+  }
+
+  @override
+  Future<Map<String, Object?>> pushManagedVaultBatch({
+    required String idToken,
+    required String vaultId,
+    required Map<String, Object?> request,
+  }) async {
+    idTokens.add(idToken);
+    vaultIds.add(vaultId);
+    requests.add(Map<String, Object?>.from(request));
+    if (_responses.isEmpty) {
+      throw StateError('unexpected_push_request');
+    }
+    return _responses.removeAt(0);
+  }
+
+  @override
+  Future<void> uploadManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+    required String mimeType,
+    required int createdAtMs,
+    required List<int> bytes,
+    Map<String, String> headers = const <String, String>{},
+  }) async {
+    idTokens.add(idToken);
+    vaultIds.add(vaultId);
+    mediaUploads.add(
+      _RecordedManagedVaultMediaUpload(
+        remoteId: remoteId,
+        mimeType: mimeType,
+        createdAtMs: createdAtMs,
+        bytes: List<int>.from(bytes),
+        headers: Map<String, String>.from(headers),
+      ),
+    );
+  }
+
+  @override
+  Future<void> deleteManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+  }) async {
+    idTokens.add(idToken);
+    vaultIds.add(vaultId);
+    mediaDeletes.add(remoteId);
+  }
+}
+
+final class _RecordedManagedVaultMediaUpload {
+  const _RecordedManagedVaultMediaUpload({
+    required this.remoteId,
+    required this.mimeType,
+    required this.createdAtMs,
+    required this.bytes,
+    required this.headers,
+  });
+
+  final String remoteId;
+  final String mimeType;
+  final int createdAtMs;
+  final List<int> bytes;
+  final Map<String, String> headers;
+}
+
+final class _RecordedManagedVaultMediaResult {
+  const _RecordedManagedVaultMediaResult({
+    required this.action,
+    required this.success,
+    this.errorMessage,
+  });
+
+  final ManagedVaultV2PushMediaAction action;
+  final bool success;
+  final String? errorMessage;
+}
+
+final class _ManagedVaultPushBridgeBackend extends WebNativeAppBackend {
+  _ManagedVaultPushBridgeBackend({
+    required super.appDirProvider,
+    required super.secureStorage,
+    required super.rustLibInit,
+    required super.webAppService,
+    required List<ManagedVaultV2PushBatch> batches,
+    List<ManagedVaultV2PushMediaUpload> mediaUploads =
+        const <ManagedVaultV2PushMediaUpload>[],
+  })  : _batches = List<ManagedVaultV2PushBatch>.from(batches),
+        _mediaUploads = List<ManagedVaultV2PushMediaUpload>.from(mediaUploads);
+
+  final List<ManagedVaultV2PushBatch> _batches;
+  final List<ManagedVaultV2PushMediaUpload> _mediaUploads;
+  final List<ManagedVaultV2PushBatch> appliedBatches =
+      <ManagedVaultV2PushBatch>[];
+  final List<Map<String, Object?>> appliedResponses = <Map<String, Object?>>[];
+  final List<_RecordedManagedVaultMediaResult> mediaResults =
+      <_RecordedManagedVaultMediaResult>[];
+  final List<ManagedVaultV2PushMediaPhase> completedMediaPhases =
+      <ManagedVaultV2PushMediaPhase>[];
+
+  @override
+  Future<ManagedVaultV2PushBatch> prepareManagedVaultV2PushBatch(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    if (_batches.isEmpty) {
+      throw StateError('unexpected_prepare_push_batch');
+    }
+    return _batches.removeAt(0);
+  }
+
+  @override
+  Future<ManagedVaultV2PushApplyResult> applyManagedVaultV2PushResponse({
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required ManagedVaultV2PushBatch batch,
+    required Map<String, Object?> response,
+  }) async {
+    appliedBatches.add(batch);
+    appliedResponses.add(Map<String, Object?>.from(response));
+    return ManagedVaultV2PushApplyResult(
+      accepted: (response['accepted'] as num?)?.toInt() ?? 0,
+      generationId: '${response['generation_id'] ?? ''}',
+      remoteLatestGlobalSeq:
+          (response['remote_latest_global_seq'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Future<ManagedVaultV2PushMediaUpload> prepareManagedVaultV2PushMediaUpload({
+    required String appDir,
+    required Uint8List key,
+    required Uint8List syncKey,
+    required String baseUrl,
+    required String vaultId,
+    required ManagedVaultV2PushMediaAction action,
+  }) async {
+    if (_mediaUploads.isEmpty) {
+      throw StateError('unexpected_prepare_push_media_upload');
+    }
+    return _mediaUploads.removeAt(0);
+  }
+
+  @override
+  Future<void> recordManagedVaultV2PushMediaResult({
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required ManagedVaultV2PushMediaAction action,
+    required bool success,
+    String? errorMessage,
+  }) async {
+    mediaResults.add(
+      _RecordedManagedVaultMediaResult(
+        action: action,
+        success: success,
+        errorMessage: errorMessage,
+      ),
+    );
+  }
+
+  @override
+  Future<void> completeManagedVaultV2PushMediaBatch({
+    required String appDir,
+    required Uint8List key,
+    required String baseUrl,
+    required String vaultId,
+    required ManagedVaultV2PushBatch batch,
+  }) async {
+    completedMediaPhases.add(batch.mediaPhase);
+  }
+}
+
+final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
+  _ManagedVaultPullBridgeBackend({
+    required super.appDirProvider,
+    required super.secureStorage,
+    required super.rustLibInit,
+    required super.webAppService,
+    List<String> recoveryReasons = const <String>[],
+    Completer<void>? finalizeCompleter,
+  })  : _recoveryReasons = List<String>.from(recoveryReasons),
+        _finalizeCompleter = finalizeCompleter;
+
+  final List<WebManagedVaultPullPage> appliedPages =
+      <WebManagedVaultPullPage>[];
+  final List<int> finalizedAppliedOps = <int>[];
+  final List<String> _recoveryReasons;
+  final Completer<void>? _finalizeCompleter;
+  int _lastAppliedGlobalSeq = 0;
+  String? _generationId;
+  int _recoveredLastAppliedGlobalSeq = 0;
+  String? _recoveredGenerationId;
+  int recoveryCalls = 0;
+
+  void seedPullState({
+    String? generationId,
+    required int lastAppliedGlobalSeq,
+  }) {
+    _generationId = generationId;
+    _lastAppliedGlobalSeq = lastAppliedGlobalSeq;
+  }
+
+  void seedRecoveredPullState({
+    String? generationId,
+    required int lastAppliedGlobalSeq,
+  }) {
+    _recoveredGenerationId = generationId;
+    _recoveredLastAppliedGlobalSeq = lastAppliedGlobalSeq;
+  }
+
+  @override
+  Future<ManagedVaultV2PullState> readManagedVaultV2PullState({
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    return ManagedVaultV2PullState(
+      generationId: _generationId,
+      lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+    );
+  }
+
+  @override
+  Future<ManagedVaultV2PullApplyResult> applyManagedVaultV2PullPage(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required WebManagedVaultPullPage page,
+  }) async {
+    if (_recoveryReasons.isNotEmpty) {
+      final recoveryReason = _recoveryReasons.removeAt(0);
+      _generationId = null;
+      _lastAppliedGlobalSeq = 0;
+      return ManagedVaultV2PullApplyResult(
+        appliedCount: 0,
+        generationId: _generationId,
+        lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+        remoteLatestGlobalSeq: page.remoteLatestGlobalSeq,
+        hasMore: page.hasMore,
+        retryRequired: true,
+        recoveryReason: recoveryReason,
+      );
+    }
+    appliedPages.add(page);
+    _generationId = page.generationId;
+    if (page.ops.isNotEmpty) {
+      _lastAppliedGlobalSeq = page.ops.last.globalSeq;
+    }
+    return ManagedVaultV2PullApplyResult(
+      appliedCount: page.ops.length,
+      generationId: _generationId,
+      lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+      remoteLatestGlobalSeq: page.remoteLatestGlobalSeq,
+      hasMore: page.hasMore,
+    );
+  }
+
+  @override
+  Future<ManagedVaultV2PullState> recoverManagedVaultV2PullState(
+    Uint8List key, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    recoveryCalls += 1;
+    _generationId = _recoveredGenerationId;
+    _lastAppliedGlobalSeq = _recoveredLastAppliedGlobalSeq;
+    return ManagedVaultV2PullState(
+      generationId: _generationId,
+      lastAppliedGlobalSeq: _lastAppliedGlobalSeq,
+    );
+  }
+
+  @override
+  Future<void> finalizeManagedVaultV2Pull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+    required int appliedOps,
+  }) async {
+    finalizedAppliedOps.add(appliedOps);
+    await _finalizeCompleter?.future;
+  }
+}

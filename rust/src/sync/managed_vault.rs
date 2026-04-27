@@ -21,6 +21,7 @@ mod reseed;
 mod runtime;
 pub(crate) mod state_machine;
 mod web_pull;
+mod web_push;
 
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
@@ -35,6 +36,10 @@ use pending_apply::{
 pub use web_pull::{
     apply_web_pull_page, finalize_web_pull, read_web_pull_state, recover_web_pull_state_if_safe,
     WebPullApplyResult, WebPullPage, WebPullState,
+};
+pub use web_push::{
+    apply_web_push_response, complete_web_push_media_batch, prepare_web_push_batch,
+    prepare_web_push_media_upload, record_web_push_media_result, WebPushMediaPhase,
 };
 
 #[derive(Debug, Serialize)]

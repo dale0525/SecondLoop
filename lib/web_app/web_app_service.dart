@@ -168,6 +168,22 @@ abstract class WebAppService {
     required List<int> bytes,
   }) async {}
 
+  Future<void> uploadManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+    required String mimeType,
+    required int createdAtMs,
+    required List<int> bytes,
+    Map<String, String> headers = const <String, String>{},
+  }) async {}
+
+  Future<void> deleteManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+  }) async {}
+
   Future<void> deleteVaultAttachment({
     required String idToken,
     required String vaultId,
@@ -188,6 +204,14 @@ abstract class WebAppService {
     int limit = 500,
   }) async {
     throw UnsupportedError('managed_vault_pull_page_not_available');
+  }
+
+  Future<Map<String, Object?>> pushManagedVaultBatch({
+    required String idToken,
+    required String vaultId,
+    required Map<String, Object?> request,
+  }) async {
+    throw UnsupportedError('managed_vault_push_not_available');
   }
 
   void close() {}
@@ -639,6 +663,86 @@ class WebAppServiceHttp extends WebAppService {
       headers: _vaultHeaders(vaultId),
     );
     return _parseManagedVaultPullPage(json);
+  }
+
+  @override
+  Future<Map<String, Object?>> pushManagedVaultBatch({
+    required String idToken,
+    required String vaultId,
+    required Map<String, Object?> request,
+  }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
+    final json = await _sendJson(
+      '/api/app/vault-proxy/v2/vaults/$vaultId/sync/push',
+      idToken,
+      body: request,
+      headers: _vaultHeaders(vaultId),
+    );
+    return Map<String, Object?>.from(json);
+  }
+
+  @override
+  Future<void> uploadManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+    required String mimeType,
+    required int createdAtMs,
+    required List<int> bytes,
+    Map<String, String> headers = const <String, String>{},
+  }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
+    final request = http.Request(
+      'PUT',
+      Uri(
+        path: '/api/app/vault-proxy/v1/vaults/$vaultId/attachments/$remoteId',
+      ),
+    );
+    request.headers.addAll(<String, String>{
+      'authorization': 'Bearer $idToken',
+      'content-type': 'application/octet-stream',
+      'x-media-byte-len': '${bytes.length}',
+      'x-media-mime': mimeType,
+      'x-media-created-at-ms': '$createdAtMs',
+      ...headers,
+      ..._vaultHeaders(vaultId),
+    });
+    request.bodyBytes = bytes;
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    _decodeJsonResponse(response);
+  }
+
+  @override
+  Future<void> deleteManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+  }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
+    final request = http.Request(
+      'DELETE',
+      Uri(
+        path: '/api/app/vault-proxy/v1/vaults/$vaultId/attachments/$remoteId',
+      ),
+    );
+    request.headers.addAll(<String, String>{
+      'authorization': 'Bearer $idToken',
+      'accept': 'application/json',
+      ..._vaultHeaders(vaultId),
+    });
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode == 404) {
+      return;
+    }
+    _decodeJsonResponse(response);
   }
 
   @override

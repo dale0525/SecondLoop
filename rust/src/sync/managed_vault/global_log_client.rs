@@ -34,7 +34,7 @@ pub(super) enum GlobalLogPullRouteResult {
     ResetRequired(GlobalLogPullErrorResponse),
 }
 
-enum PendingAttachmentAction {
+pub(super) enum PendingAttachmentAction {
     Upload {
         mime_type: String,
         created_at_ms: i64,
@@ -42,11 +42,11 @@ enum PendingAttachmentAction {
     Delete,
 }
 
-struct LocalPushBatch {
-    ops: Vec<GlobalLogPushOp>,
-    max_seq: i64,
-    attachment_actions: BTreeMap<String, PendingAttachmentAction>,
-    artifact_blob_refs: BTreeSet<String>,
+pub(super) struct LocalPushBatch {
+    pub(super) ops: Vec<GlobalLogPushOp>,
+    pub(super) max_seq: i64,
+    pub(super) attachment_actions: BTreeMap<String, PendingAttachmentAction>,
+    pub(super) artifact_blob_refs: BTreeSet<String>,
 }
 
 fn ensure_complete_push_acceptance_from_explicit_seqs(
@@ -75,11 +75,10 @@ fn ensure_complete_push_acceptance_from_explicit_seqs(
     Ok(())
 }
 
-fn ensure_complete_push_acceptance(
+pub(super) fn ensure_complete_push_acceptance_for_count(
     response: &GlobalLogPushResponse,
-    batch: &LocalPushBatch,
+    requested: u64,
 ) -> Result<()> {
-    let requested = batch.ops.len() as u64;
     if response.accepted == 0 {
         if requested > 0 {
             return Err(anyhow!(
@@ -156,6 +155,13 @@ fn ensure_complete_push_acceptance(
     }
 
     Ok(())
+}
+
+fn ensure_complete_push_acceptance(
+    response: &GlobalLogPushResponse,
+    batch: &LocalPushBatch,
+) -> Result<()> {
+    ensure_complete_push_acceptance_for_count(response, batch.ops.len() as u64)
 }
 
 fn unsupported_status(status_code: u16) -> bool {
@@ -272,6 +278,7 @@ fn maybe_collect_local_push_ops(
     sync_key: &[u8; 32],
     device_id: &str,
     last_pushed_seq: i64,
+    limit: i64,
 ) -> Result<LocalPushBatch> {
     let mut stmt = conn.prepare(
         r#"SELECT op_id, seq, op_json
@@ -280,7 +287,7 @@ fn maybe_collect_local_push_ops(
            ORDER BY seq ASC
            LIMIT ?3"#,
     )?;
-    let mut rows = stmt.query(params![device_id, last_pushed_seq, PUSH_LIMIT])?;
+    let mut rows = stmt.query(params![device_id, last_pushed_seq, limit])?;
 
     let mut ops = Vec::new();
     let mut max_seq = last_pushed_seq;
@@ -350,7 +357,19 @@ fn maybe_collect_local_push_ops(
     })
 }
 
-fn has_remote_device_ops(conn: &Connection, device_id: &str) -> Result<bool> {
+pub(super) fn collect_local_push_ops_for_web(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    sync_key: &[u8; 32],
+    device_id: &str,
+    last_pushed_seq: i64,
+    limit: i64,
+) -> Result<LocalPushBatch> {
+    let limit = if limit <= 0 { PUSH_LIMIT } else { limit };
+    maybe_collect_local_push_ops(conn, db_key, sync_key, device_id, last_pushed_seq, limit)
+}
+
+pub(super) fn has_remote_device_ops(conn: &Connection, device_id: &str) -> Result<bool> {
     conn.query_row(
         r#"SELECT EXISTS(SELECT 1 FROM oplog WHERE device_id != ?1 LIMIT 1)"#,
         params![device_id],
@@ -607,8 +626,14 @@ pub(super) fn push_v2(
     loop {
         let last_pushed_seq =
             super::global_log_state::read_last_pushed_local_seq(conn, &scope_id, &device_id)?;
-        let batch =
-            maybe_collect_local_push_ops(conn, db_key, sync_key, &device_id, last_pushed_seq)?;
+        let batch = maybe_collect_local_push_ops(
+            conn,
+            db_key,
+            sync_key,
+            &device_id,
+            last_pushed_seq,
+            PUSH_LIMIT,
+        )?;
         if batch.ops.is_empty() {
             if upload_attachment_bytes {
                 let upload_ctx = super::attachments::AttachmentUploadContext {
