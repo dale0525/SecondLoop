@@ -665,9 +665,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       await _reloadMediaState(forceLoading: false);
       if (next == MediaSourcePreference.byok &&
           _mediaRoute != MediaSourceRouteKind.byok) {
-        await _openLlmProfilesForByokSetupAndRefreshRoutes(
-          providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-        );
+        await _openLlmProfilesForByokSetupAndRefreshRoutes();
       }
     } finally {
       if (mounted) {
@@ -711,19 +709,16 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     await _reloadEmbeddingsState(forceLoading: false);
   }
 
-  Future<void> _openLlmProfilesForByokSetupAndRefreshRoutes({
-    LlmProfilesProviderFilter providerFilter = LlmProfilesProviderFilter.all,
-  }) async {
+  Future<void> _openLlmProfilesForByokSetupAndRefreshRoutes() async {
     if (!mounted) return;
     if (AppBackendScope.maybeOf(context) == null) return;
 
     await pushPageWithInheritedScopes(
       Navigator.of(context),
       context,
-      LlmProfilesPage(
+      const LlmProfilesPage(
         focusTarget: LlmProfilesFocusTarget.addProfileForm,
         highlightFocus: true,
-        providerFilter: providerFilter,
       ),
     );
 

@@ -92,8 +92,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 800));
 
-    final page = tester.widget<LlmProfilesPage>(find.byType(LlmProfilesPage));
-    expect(page.providerFilter, LlmProfilesProviderFilter.openAiCompatibleOnly);
+    expect(find.byType(LlmProfilesPage), findsOneWidget);
   });
 
   testWidgets(

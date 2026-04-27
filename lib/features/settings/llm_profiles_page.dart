@@ -15,22 +15,15 @@ enum LlmProfilesFocusTarget {
   addProfileForm,
 }
 
-enum LlmProfilesProviderFilter {
-  all,
-  openAiCompatibleOnly,
-}
-
 class LlmProfilesPage extends StatefulWidget {
   const LlmProfilesPage({
     this.focusTarget,
     this.highlightFocus = false,
-    this.providerFilter = LlmProfilesProviderFilter.all,
     super.key,
   });
 
   final LlmProfilesFocusTarget? focusTarget;
   final bool highlightFocus;
-  final LlmProfilesProviderFilter providerFilter;
 
   @override
   State<LlmProfilesPage> createState() => _LlmProfilesPageState();
@@ -87,12 +80,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
   }
 
   String _activeProfileHelpText(BuildContext context) {
-    if (widget.providerFilter !=
-        LlmProfilesProviderFilter.openAiCompatibleOnly) {
-      return context.t.llmProfiles.activeProfileHelp;
-    }
-
-    return context.t.llmProfiles.mediaByokOpenAiCompatibleHelp;
+    return context.t.llmProfiles.activeProfileHelp;
   }
 
   String _noVisibleProfilesText(BuildContext context) {
@@ -278,14 +266,6 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     _ensureAllowedProviderType();
     if (widget.highlightFocus && widget.focusTarget != null) {
       _highlightedFocusTarget = widget.focusTarget;
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant LlmProfilesPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.providerFilter != widget.providerFilter) {
-      _ensureAllowedProviderType();
     }
   }
 

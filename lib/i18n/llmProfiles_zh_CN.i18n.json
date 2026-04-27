@@ -2,7 +2,6 @@
   "title": "AI 配置",
   "refreshTooltip": "刷新",
   "activeProfileHelp": "BYOK 功能仅支持 OpenAI-compatible API 配置。",
-  "mediaByokOpenAiCompatibleHelp": "BYOK 仅支持 OpenAI-compatible 配置，列表已隐藏不兼容的历史配置。",
   "noProfilesYet": "暂无配置。",
   "noOpenAiCompatibleProfiles": "没有可用的 OpenAI-compatible 配置。请先新增一个 OpenAI-compatible profile。",
   "addProfile": "添加配置",

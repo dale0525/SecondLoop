@@ -73,10 +73,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
               pushPageWithInheritedScopes(
                 Navigator.of(context),
                 context,
-                const LlmProfilesPage(
-                  providerFilter:
-                      LlmProfilesProviderFilter.openAiCompatibleOnly,
-                ),
+                const LlmProfilesPage(),
               );
             },
     );

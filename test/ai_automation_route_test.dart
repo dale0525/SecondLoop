@@ -52,12 +52,34 @@ void main() {
 
     expect(route, AskAiRouteKind.needsSetup);
   });
+
+  test('automation route: ignores unsupported active LLM profiles', () async {
+    final backend = _Backend(
+      hasByok: true,
+      providerType: 'anthropic-compatible',
+    );
+    final key = Uint8List.fromList(List<int>.filled(32, 1));
+
+    final route = await decideAiAutomationRoute(
+      backend,
+      key,
+      cloudIdToken: null,
+      cloudGatewayBaseUrl: '',
+      subscriptionStatus: SubscriptionStatus.notEntitled,
+    );
+
+    expect(route, AskAiRouteKind.needsSetup);
+  });
 }
 
 final class _Backend extends AppBackend {
-  _Backend({required this.hasByok});
+  _Backend({
+    required this.hasByok,
+    this.providerType = 'openai-compatible',
+  });
 
   final bool hasByok;
+  final String providerType;
 
   @override
   Future<void> init() async {}
@@ -160,11 +182,11 @@ final class _Backend extends AppBackend {
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => hasByok
-      ? const <LlmProfile>[
+      ? <LlmProfile>[
           LlmProfile(
             id: 'p1',
-            name: 'OpenAI',
-            providerType: 'openai-compatible',
+            name: 'BYOK',
+            providerType: providerType,
             baseUrl: 'https://api.openai.com/v1',
             modelName: 'gpt-4o-mini',
             isActive: true,

@@ -52,7 +52,7 @@ void main() {
     expect(find.text('Anthropic'), findsNothing);
   });
 
-  testWidgets('OpenAI-only filter hides incompatible active profiles',
+  testWidgets('Default page hides incompatible active profiles',
       (tester) async {
     final backend = _EmptyLlmProfilesBackend(
       initialProfiles: const <LlmProfile>[
@@ -87,9 +87,7 @@ void main() {
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
               lock: () {},
-              child: const LlmProfilesPage(
-                providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-              ),
+              child: const LlmProfilesPage(),
             ),
           ),
         ),
@@ -102,7 +100,7 @@ void main() {
     expect(find.textContaining('gemini-compatible'), findsNothing);
   });
 
-  testWidgets('Media BYOK mode limits provider selector to OpenAI-compatible',
+  testWidgets('Provider selector remains limited to OpenAI-compatible',
       (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
@@ -112,9 +110,7 @@ void main() {
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
               lock: () {},
-              child: const LlmProfilesPage(
-                providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-              ),
+              child: const LlmProfilesPage(),
             ),
           ),
         ),

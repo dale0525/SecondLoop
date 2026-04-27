@@ -515,10 +515,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
               pushPageWithInheritedScopes(
                 Navigator.of(context),
                 context,
-                const LlmProfilesPage(
-                  providerFilter:
-                      LlmProfilesProviderFilter.openAiCompatibleOnly,
-                ),
+                const LlmProfilesPage(),
               );
             },
           ),

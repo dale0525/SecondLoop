@@ -9,7 +9,7 @@ import 'package:secondloop/src/rust/db.dart';
 void main() {
   test('decideAskAiRoute prefers cloud when entitled and token exists',
       () async {
-    final backend = _ByokBackend();
+    final backend = _ByokBackend(providerType: 'openai-compatible');
     final key = Uint8List.fromList(List<int>.filled(32, 1));
 
     final route = await decideAskAiRoute(
@@ -22,9 +22,28 @@ void main() {
 
     expect(route, AskAiRouteKind.cloudGateway);
   });
+
+  test('decideAskAiRoute ignores unsupported active LLM profiles', () async {
+    final backend = _ByokBackend(providerType: 'gemini-compatible');
+    final key = Uint8List.fromList(List<int>.filled(32, 1));
+
+    final route = await decideAskAiRoute(
+      backend,
+      key,
+      cloudIdToken: null,
+      cloudGatewayBaseUrl: '',
+      subscriptionStatus: SubscriptionStatus.notEntitled,
+    );
+
+    expect(route, AskAiRouteKind.needsSetup);
+  });
 }
 
 final class _ByokBackend extends AppBackend {
+  _ByokBackend({required this.providerType});
+
+  final String providerType;
+
   @override
   Future<void> init() async {}
 
@@ -131,12 +150,11 @@ final class _ByokBackend extends AppBackend {
       Future<bool>.value(false);
 
   @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async => <LlmProfile>[
         LlmProfile(
           id: 'p1',
-          name: 'OpenAI',
-          providerType: 'openai-compatible',
+          name: 'BYOK',
+          providerType: providerType,
           baseUrl: 'https://api.openai.com/v1',
           modelName: 'gpt-4o-mini',
           isActive: true,

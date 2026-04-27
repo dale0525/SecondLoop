@@ -223,9 +223,7 @@ class _MediaAnnotationSettingsPageState
           await pushPageWithInheritedScopes(
             Navigator.of(context),
             context,
-            const LlmProfilesPage(
-              providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-            ),
+            const LlmProfilesPage(),
           );
         },
       );
@@ -456,9 +454,7 @@ class _MediaAnnotationSettingsPageState
         await pushPageWithInheritedScopes(
           Navigator.of(context),
           context,
-          const LlmProfilesPage(
-            providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-          ),
+          const LlmProfilesPage(),
         );
       },
     );
