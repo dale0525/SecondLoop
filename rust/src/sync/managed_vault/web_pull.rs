@@ -197,21 +197,35 @@ pub fn apply_web_pull_page(
 pub fn finalize_web_pull(
     conn: &Connection,
     db_key: &[u8; 32],
-    sync_key: &[u8; 32],
+    _sync_key: &[u8; 32],
     base_url: &str,
     vault_id: &str,
-    id_token: &str,
-    applied_ops: u64,
+    _id_token: &str,
+    _applied_ops: u64,
 ) -> Result<()> {
-    super::finalize_v2_pull_blob_backfill(
+    let scope_id = super::runtime::scope_id(base_url, vault_id);
+    let app_dir = super::super::app_dir_from_conn(conn)?;
+
+    // Web pull fetches remote pages through Dart/Pages async HTTP. Keep this
+    // finalization local-only so it never falls back to sync XHR on the UI
+    // thread when remote media/artifact blobs are still missing.
+    let _ = super::state_machine::transition(
+        conn,
+        &scope_id,
+        super::state_machine::ManagedVaultSyncState::BlobBackfill,
+    );
+    super::media_state::update_v2_pull_backfill_markers(
         conn,
         db_key,
-        sync_key,
-        base_url,
-        vault_id,
-        id_token,
-        applied_ops,
-    )
+        app_dir.as_path(),
+        &scope_id,
+    )?;
+    let _ = super::state_machine::transition(
+        conn,
+        &scope_id,
+        super::state_machine::ManagedVaultSyncState::Completed,
+    );
+    Ok(())
 }
 
 #[cfg(test)]
@@ -398,6 +412,42 @@ mod tests {
             super::super::state_machine::load_state(&conn, &scope_id).expect("load state"),
             Some(super::super::state_machine::ManagedVaultSyncState::Completed),
         );
+    }
+
+    #[test]
+    fn finalize_web_pull_does_not_fetch_missing_artifact_blobs() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let base_url = "http://127.0.0.1:9";
+        let vault_id = "vault-1";
+        let blob_ref = "blob/web-missing-artifact";
+
+        crate::db::record_embedding_artifact_manifest(
+            &conn,
+            crate::db::EmbeddingArtifactManifestInput {
+                source_kind: "message",
+                source_id: "message-1",
+                source_revision: 1,
+                chunk_hash: "chunk-a",
+                chunk_ordinal: 0,
+                profile_id: "profile-1",
+                producer_device_id: Some("web-device"),
+                producer_class: "desktop",
+                quality_tier: "full",
+                vector_format: "f32",
+                dimension: 384,
+                blob_ref,
+                created_at_ms: Some(100),
+            },
+        )
+        .expect("record missing artifact manifest");
+        assert!(!crate::db::has_embedding_artifact_blob(
+            dir.path(),
+            blob_ref
+        ));
+
+        finalize_web_pull(&conn, &[7; 32], &[9; 32], base_url, vault_id, "token-1", 1)
+            .expect("web finalization should stay local-only");
     }
 
     #[test]
