@@ -92,19 +92,6 @@ ManagedVaultV2PushMediaActionKind _parseManagedVaultMediaActionKind(
   }
 }
 
-String _managedVaultMediaPhaseToJson(ManagedVaultV2PushMediaPhase phase) {
-  switch (phase) {
-    case ManagedVaultV2PushMediaPhase.none:
-      return 'none';
-    case ManagedVaultV2PushMediaPhase.batch:
-      return 'batch';
-    case ManagedVaultV2PushMediaPhase.repairs:
-      return 'repairs';
-    case ManagedVaultV2PushMediaPhase.freshDevice:
-      return 'fresh_device';
-  }
-}
-
 ManagedVaultV2PushMediaPhase _parseManagedVaultMediaPhase(Object? value) {
   switch ('${value ?? ''}'.trim()) {
     case '':
@@ -240,7 +227,6 @@ mixin _WebNativeManagedVaultPushBridge on NativeAppBackend {
     required String baseUrl,
     required String vaultId,
     required ManagedVaultV2PushMediaAction action,
-    required ManagedVaultV2PushMediaPhase mediaPhase,
   }) async {
     final decoded = _decodeObjectMap(
       jsonDecode(
@@ -251,7 +237,6 @@ mixin _WebNativeManagedVaultPushBridge on NativeAppBackend {
           baseUrl: baseUrl,
           vaultId: vaultId,
           actionJson: jsonEncode(action.toJson()),
-          mediaPhase: _managedVaultMediaPhaseToJson(mediaPhase),
         ),
       ),
       'invalid_managed_vault_push_media_upload',
@@ -331,7 +316,6 @@ mixin _WebNativeManagedVaultPushBridge on NativeAppBackend {
               baseUrl: baseUrl,
               vaultId: vaultId,
               action: action,
-              mediaPhase: batch.mediaPhase,
             );
             if (upload.hasBody) {
               await webAppService.uploadManagedVaultMedia(

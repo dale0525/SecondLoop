@@ -119,12 +119,9 @@ pub fn sync_managed_vault_prepare_web_push_media_upload(
     base_url: String,
     vault_id: String,
     action_json: String,
-    media_phase: String,
 ) -> Result<String> {
     let key = key_from_bytes(key)?;
     let sync_key = key_from_bytes(sync_key)?;
-    let media_phase: sync::managed_vault::WebPushMediaPhase =
-        serde_json::from_value(serde_json::Value::String(media_phase))?;
     let conn = db::open(Path::new(&app_dir))?;
     sync::managed_vault::prepare_web_push_media_upload(
         &conn,
@@ -133,7 +130,6 @@ pub fn sync_managed_vault_prepare_web_push_media_upload(
         &base_url,
         &vault_id,
         &action_json,
-        media_phase,
     )
 }
 

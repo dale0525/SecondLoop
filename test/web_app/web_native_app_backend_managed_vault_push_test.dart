@@ -303,7 +303,6 @@ final class _ManagedVaultPushBridgeBackend extends WebNativeAppBackend {
     required String baseUrl,
     required String vaultId,
     required ManagedVaultV2PushMediaAction action,
-    required ManagedVaultV2PushMediaPhase mediaPhase,
   }) async {
     if (_mediaUploads.isEmpty) {
       throw StateError('unexpected_prepare_push_media_upload');

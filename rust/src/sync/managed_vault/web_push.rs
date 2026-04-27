@@ -670,7 +670,6 @@ pub fn prepare_web_push_media_upload(
     base_url: &str,
     vault_id: &str,
     action_json: &str,
-    _media_phase: WebPushMediaPhase,
 ) -> Result<String> {
     let action: WebPushMediaAction = serde_json::from_str(action_json)?;
     let upload = match action.kind {

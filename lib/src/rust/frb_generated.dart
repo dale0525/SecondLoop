@@ -1809,8 +1809,7 @@ abstract class RustLibApi extends BaseApi {
       required List<int> syncKey,
       required String baseUrl,
       required String vaultId,
-      required String actionJson,
-      required String mediaPhase});
+      required String actionJson});
 
   Future<String> crateApiWebSyncSyncManagedVaultReadWebPullState(
       {required String appDir,
@@ -12101,8 +12100,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       required List<int> syncKey,
       required String baseUrl,
       required String vaultId,
-      required String actionJson,
-      required String mediaPhase}) {
+      required String actionJson}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -12112,7 +12110,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         sse_encode_String(actionJson, serializer);
-        sse_encode_String(mediaPhase, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 258, port: port_);
       },
@@ -12122,15 +12119,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiWebSyncSyncManagedVaultPrepareWebPushMediaUploadConstMeta,
-      argValues: [
-        appDir,
-        key,
-        syncKey,
-        baseUrl,
-        vaultId,
-        actionJson,
-        mediaPhase
-      ],
+      argValues: [appDir, key, syncKey, baseUrl, vaultId, actionJson],
       apiImpl: this,
     ));
   }
@@ -12145,8 +12134,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
               "syncKey",
               "baseUrl",
               "vaultId",
-              "actionJson",
-              "mediaPhase"
+              "actionJson"
             ],
           );
 

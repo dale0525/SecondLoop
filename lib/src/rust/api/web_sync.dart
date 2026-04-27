@@ -87,8 +87,7 @@ Future<String> syncManagedVaultPrepareWebPushMediaUpload(
         required List<int> syncKey,
         required String baseUrl,
         required String vaultId,
-        required String actionJson,
-        required String mediaPhase}) =>
+        required String actionJson}) =>
     RustLib.instance.api
         .crateApiWebSyncSyncManagedVaultPrepareWebPushMediaUpload(
             appDir: appDir,
@@ -96,8 +95,7 @@ Future<String> syncManagedVaultPrepareWebPushMediaUpload(
             syncKey: syncKey,
             baseUrl: baseUrl,
             vaultId: vaultId,
-            actionJson: actionJson,
-            mediaPhase: mediaPhase);
+            actionJson: actionJson);
 
 Future<bool> syncManagedVaultRecordWebPushMediaResult(
         {required String appDir,

@@ -79,7 +79,6 @@ fn web_push_batch_exposes_attachment_media_action_and_upload_body() {
         base_url,
         vault_id,
         &media_actions[0].to_string(),
-        WebPushMediaPhase::Batch,
     )
     .expect("prepare upload body");
     let upload: serde_json::Value = serde_json::from_str(&upload_json).expect("upload json");

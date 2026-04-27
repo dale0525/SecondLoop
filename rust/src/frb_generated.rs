@@ -10629,7 +10629,6 @@ fn wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_media_upload_
             let api_base_url = <String>::sse_decode(&mut deserializer);
             let api_vault_id = <String>::sse_decode(&mut deserializer);
             let api_action_json = <String>::sse_decode(&mut deserializer);
-            let api_media_phase = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
@@ -10640,7 +10639,6 @@ fn wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_media_upload_
                         api_base_url,
                         api_vault_id,
                         api_action_json,
-                        api_media_phase,
                     )
                 })())
             }
