@@ -111,4 +111,22 @@ void main() {
     expect(section, contains('wrap_normal::<'));
     expect(section, isNot(contains('wrap_sync::<')));
   });
+
+  test('managed-vault web push prepare wire uses the normal worker-pool path',
+      () {
+    final section = _wireSection(
+      'wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_batch_impl',
+    );
+    expect(section, contains('wrap_normal::<'));
+    expect(section, isNot(contains('wrap_sync::<')));
+  });
+
+  test('managed-vault web push apply wire uses the normal worker-pool path',
+      () {
+    final section = _wireSection(
+      'wire__crate__api__web_sync__sync_managed_vault_apply_web_push_response_impl',
+    );
+    expect(section, contains('wrap_normal::<'));
+    expect(section, isNot(contains('wrap_sync::<')));
+  });
 }

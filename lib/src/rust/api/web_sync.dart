@@ -54,3 +54,29 @@ Future<bool> syncManagedVaultFinalizeWebPull(
         vaultId: vaultId,
         firebaseIdToken: firebaseIdToken,
         appliedOps: appliedOps);
+
+Future<String> syncManagedVaultPrepareWebPushBatch(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        required String vaultId}) =>
+    RustLib.instance.api.crateApiWebSyncSyncManagedVaultPrepareWebPushBatch(
+        appDir: appDir,
+        key: key,
+        syncKey: syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId);
+
+Future<String> syncManagedVaultApplyWebPushResponse(
+        {required String appDir,
+        required String baseUrl,
+        required String vaultId,
+        required String batchJson,
+        required String responseJson}) =>
+    RustLib.instance.api.crateApiWebSyncSyncManagedVaultApplyWebPushResponse(
+        appDir: appDir,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        batchJson: batchJson,
+        responseJson: responseJson);

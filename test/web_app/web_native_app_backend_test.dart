@@ -348,6 +348,78 @@ void main() {
     expect(backend.finalizedAppliedOps, <int>[2]);
   });
 
+  test('WebNativeAppBackend pushes managed-vault batches through WebAppService',
+      () async {
+    final service = _ManagedVaultPushBridgeService(
+      responses: <Map<String, Object?>>[
+        <String, Object?>{
+          'generation_id': 'generation-1',
+          'accepted': 2,
+          'committed_from_seq': 1,
+          'committed_to_seq': 2,
+          'remote_latest_global_seq': 2,
+        },
+      ],
+    );
+    final request = <String, Object?>{
+      'base_global_seq': 0,
+      'batch_id': 'batch-1',
+      'ops': <Object?>[
+        <String, Object?>{'op_id': 'op-1'},
+        <String, Object?>{'op_id': 'op-2'},
+      ],
+    };
+    final backend = _ManagedVaultPushBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      batches: <ManagedVaultV2PushBatch>[
+        ManagedVaultV2PushBatch(
+          hasOps: true,
+          opCount: 2,
+          request: request,
+          batchJson: jsonEncode(<String, Object?>{
+            'has_ops': true,
+            'device_id': 'device-a',
+            'last_pushed_seq': 0,
+            'max_seq': 2,
+            'op_count': 2,
+            'request': request,
+          }),
+        ),
+        ManagedVaultV2PushBatch(
+          hasOps: false,
+          opCount: 0,
+          request: null,
+          batchJson: jsonEncode(<String, Object?>{
+            'has_ops': false,
+            'device_id': 'device-a',
+            'last_pushed_seq': 2,
+            'max_seq': 2,
+            'op_count': 0,
+          }),
+        ),
+      ],
+    );
+
+    final pushed = await backend.syncManagedVaultPush(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pushed, 2);
+    expect(service.idTokens, <String>['token-1']);
+    expect(service.vaultIds, <String>['vault-123']);
+    expect(service.requests, <Map<String, Object?>>[request]);
+    expect(backend.appliedBatches, hasLength(1));
+    expect(backend.appliedBatches.single.opCount, 2);
+    expect(backend.appliedResponses.single['accepted'], 2);
+  });
+
   test(
       'WebNativeAppBackend only bridges managed-vault pull for web formal settings base URL',
       () async {

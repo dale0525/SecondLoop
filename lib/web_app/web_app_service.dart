@@ -190,6 +190,14 @@ abstract class WebAppService {
     throw UnsupportedError('managed_vault_pull_page_not_available');
   }
 
+  Future<Map<String, Object?>> pushManagedVaultBatch({
+    required String idToken,
+    required String vaultId,
+    required Map<String, Object?> request,
+  }) async {
+    throw UnsupportedError('managed_vault_push_not_available');
+  }
+
   void close() {}
 }
 
@@ -639,6 +647,24 @@ class WebAppServiceHttp extends WebAppService {
       headers: _vaultHeaders(vaultId),
     );
     return _parseManagedVaultPullPage(json);
+  }
+
+  @override
+  Future<Map<String, Object?>> pushManagedVaultBatch({
+    required String idToken,
+    required String vaultId,
+    required Map<String, Object?> request,
+  }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
+    final json = await _sendJson(
+      '/api/app/vault-proxy/v2/vaults/$vaultId/sync/push',
+      idToken,
+      body: request,
+      headers: _vaultHeaders(vaultId),
+    );
+    return Map<String, Object?>.from(json);
   }
 
   @override

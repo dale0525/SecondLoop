@@ -80,7 +80,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -151334541;
+  int get rustContentHash => -854444227;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1773,6 +1773,13 @@ abstract class RustLibApi extends BaseApi {
       required String vaultId,
       required String responseJson});
 
+  Future<String> crateApiWebSyncSyncManagedVaultApplyWebPushResponse(
+      {required String appDir,
+      required String baseUrl,
+      required String vaultId,
+      required String batchJson,
+      required String responseJson});
+
   Future<bool> crateApiWebSyncSyncManagedVaultFinalizeWebPull(
       {required String appDir,
       required List<int> key,
@@ -1781,6 +1788,13 @@ abstract class RustLibApi extends BaseApi {
       required String vaultId,
       required String firebaseIdToken,
       required BigInt appliedOps});
+
+  Future<String> crateApiWebSyncSyncManagedVaultPrepareWebPushBatch(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId});
 
   Future<String> crateApiWebSyncSyncManagedVaultReadWebPullState(
       {required String appDir,
@@ -11891,6 +11905,47 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<String> crateApiWebSyncSyncManagedVaultApplyWebPushResponse(
+      {required String appDir,
+      required String baseUrl,
+      required String vaultId,
+      required String batchJson,
+      required String responseJson}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(batchJson, serializer);
+        sse_encode_String(responseJson, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 254, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiWebSyncSyncManagedVaultApplyWebPushResponseConstMeta,
+      argValues: [appDir, baseUrl, vaultId, batchJson, responseJson],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiWebSyncSyncManagedVaultApplyWebPushResponseConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_apply_web_push_response",
+            argNames: [
+              "appDir",
+              "baseUrl",
+              "vaultId",
+              "batchJson",
+              "responseJson"
+            ],
+          );
+
+  @override
   Future<bool> crateApiWebSyncSyncManagedVaultFinalizeWebPull(
       {required String appDir,
       required List<int> key,
@@ -11910,7 +11965,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_u_64(appliedOps, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 254, port: port_);
+            funcId: 255, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -11945,6 +12000,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<String> crateApiWebSyncSyncManagedVaultPrepareWebPushBatch(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 256, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiWebSyncSyncManagedVaultPrepareWebPushBatchConstMeta,
+      argValues: [appDir, key, syncKey, baseUrl, vaultId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiWebSyncSyncManagedVaultPrepareWebPushBatchConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_prepare_web_push_batch",
+            argNames: ["appDir", "key", "syncKey", "baseUrl", "vaultId"],
+          );
+
+  @override
   Future<String> crateApiWebSyncSyncManagedVaultReadWebPullState(
       {required String appDir,
       required String baseUrl,
@@ -11956,7 +12046,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 255, port: port_);
+            funcId: 257, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11988,7 +12078,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 256, port: port_);
+            funcId: 258, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,

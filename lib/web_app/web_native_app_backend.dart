@@ -37,6 +37,32 @@ class ManagedVaultV2PullApplyResult extends ManagedVaultV2PullState {
   final String? recoveryReason;
 }
 
+class ManagedVaultV2PushBatch {
+  const ManagedVaultV2PushBatch({
+    required this.hasOps,
+    required this.opCount,
+    required this.request,
+    required this.batchJson,
+  });
+
+  final bool hasOps;
+  final int opCount;
+  final Map<String, Object?>? request;
+  final String batchJson;
+}
+
+class ManagedVaultV2PushApplyResult {
+  const ManagedVaultV2PushApplyResult({
+    required this.accepted,
+    required this.generationId,
+    required this.remoteLatestGlobalSeq,
+  });
+
+  final int accepted;
+  final String generationId;
+  final int remoteLatestGlobalSeq;
+}
+
 class WebNativeAppBackend extends NativeAppBackend {
   WebNativeAppBackend({
     required AppDirProvider appDirProvider,
@@ -148,6 +174,77 @@ class WebNativeAppBackend extends NativeAppBackend {
           : '${decoded['generation_id']}',
       lastAppliedGlobalSeq:
           (decoded['last_applied_global_seq'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, Object?> _decodeObjectMap(
+    Object? value,
+    String errorName,
+  ) {
+    if (value is Map<String, Object?>) return value;
+    if (value is Map) {
+      return value.map((key, value) => MapEntry('$key', value));
+    }
+    throw FormatException(errorName);
+  }
+
+  Future<ManagedVaultV2PushBatch> prepareManagedVaultV2PushBatch(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    final batchJson = await rust_web_sync.syncManagedVaultPrepareWebPushBatch(
+      appDir: appDir,
+      key: key,
+      syncKey: syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+    );
+    final decoded = _decodeObjectMap(
+      jsonDecode(batchJson),
+      'invalid_managed_vault_push_batch',
+    );
+    final hasOps = decoded['has_ops'] == true;
+    final requestValue = decoded['request'];
+    return ManagedVaultV2PushBatch(
+      hasOps: hasOps,
+      opCount: (decoded['op_count'] as num?)?.toInt() ?? 0,
+      request: requestValue == null
+          ? null
+          : _decodeObjectMap(
+              requestValue,
+              'invalid_managed_vault_push_request',
+            ),
+      batchJson: batchJson,
+    );
+  }
+
+  Future<ManagedVaultV2PushApplyResult> applyManagedVaultV2PushResponse({
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required ManagedVaultV2PushBatch batch,
+    required Map<String, Object?> response,
+  }) async {
+    final decoded = _decodeObjectMap(
+      jsonDecode(
+        await rust_web_sync.syncManagedVaultApplyWebPushResponse(
+          appDir: appDir,
+          baseUrl: baseUrl,
+          vaultId: vaultId,
+          batchJson: batch.batchJson,
+          responseJson: jsonEncode(response),
+        ),
+      ),
+      'invalid_managed_vault_push_apply_result',
+    );
+    return ManagedVaultV2PushApplyResult(
+      accepted: (decoded['accepted'] as num?)?.toInt() ?? 0,
+      generationId: '${decoded['generation_id'] ?? ''}',
+      remoteLatestGlobalSeq:
+          (decoded['remote_latest_global_seq'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -453,6 +550,47 @@ class WebNativeAppBackend extends NativeAppBackend {
     }
   }
 
+  Future<int> _syncManagedVaultPushThroughWebAppService(
+    WebAppService webAppService,
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    final appDir = await _resolveAppDir();
+    var totalAccepted = 0;
+    while (true) {
+      final batch = await prepareManagedVaultV2PushBatch(
+        key,
+        syncKey,
+        appDir: appDir,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+      );
+      if (!batch.hasOps) {
+        return totalAccepted;
+      }
+      final request = batch.request;
+      if (request == null) {
+        throw StateError('managed_vault_push_missing_request');
+      }
+      final response = await webAppService.pushManagedVaultBatch(
+        idToken: idToken,
+        vaultId: vaultId,
+        request: request,
+      );
+      final result = await applyManagedVaultV2PushResponse(
+        appDir: appDir,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        batch: batch,
+        response: response,
+      );
+      totalAccepted += result.accepted;
+    }
+  }
+
   @override
   Stream<String> askAiStreamCloudGateway(
     Uint8List key,
@@ -617,6 +755,35 @@ class WebNativeAppBackend extends NativeAppBackend {
 
     return _sendPromptOnlyCloudChat(
       prompt: prompt,
+      idToken: idToken,
+    );
+  }
+
+  @override
+  Future<int> syncManagedVaultPush(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    final webAppService = _webAppService;
+    if (!_shouldBridgeManagedVaultPull(baseUrl)) {
+      return super.syncManagedVaultPush(
+        key,
+        syncKey,
+        baseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken,
+      );
+    }
+
+    return _syncManagedVaultPushThroughWebAppService(
+      webAppService!,
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
       idToken: idToken,
     );
   }

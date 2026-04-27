@@ -229,6 +229,89 @@ final class _ManagedVaultPullBridgeService extends WebAppService {
   }
 }
 
+final class _ManagedVaultPushBridgeService extends WebAppService {
+  _ManagedVaultPushBridgeService({
+    required List<Map<String, Object?>> responses,
+  }) : _responses = List<Map<String, Object?>>.from(responses);
+
+  final List<Map<String, Object?>> _responses;
+  final List<Map<String, Object?>> requests = <Map<String, Object?>>[];
+  final List<String> idTokens = <String>[];
+  final List<String> vaultIds = <String>[];
+
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription({
+    required String idToken,
+  }) async {
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.entitled,
+      canManageSubscription: true,
+    );
+  }
+
+  @override
+  Future<Map<String, Object?>> pushManagedVaultBatch({
+    required String idToken,
+    required String vaultId,
+    required Map<String, Object?> request,
+  }) async {
+    idTokens.add(idToken);
+    vaultIds.add(vaultId);
+    requests.add(Map<String, Object?>.from(request));
+    if (_responses.isEmpty) {
+      throw StateError('unexpected_push_request');
+    }
+    return _responses.removeAt(0);
+  }
+}
+
+final class _ManagedVaultPushBridgeBackend extends WebNativeAppBackend {
+  _ManagedVaultPushBridgeBackend({
+    required super.appDirProvider,
+    required super.secureStorage,
+    required super.rustLibInit,
+    required super.webAppService,
+    required List<ManagedVaultV2PushBatch> batches,
+  }) : _batches = List<ManagedVaultV2PushBatch>.from(batches);
+
+  final List<ManagedVaultV2PushBatch> _batches;
+  final List<ManagedVaultV2PushBatch> appliedBatches =
+      <ManagedVaultV2PushBatch>[];
+  final List<Map<String, Object?>> appliedResponses = <Map<String, Object?>>[];
+
+  @override
+  Future<ManagedVaultV2PushBatch> prepareManagedVaultV2PushBatch(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+  }) async {
+    if (_batches.isEmpty) {
+      throw StateError('unexpected_prepare_push_batch');
+    }
+    return _batches.removeAt(0);
+  }
+
+  @override
+  Future<ManagedVaultV2PushApplyResult> applyManagedVaultV2PushResponse({
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required ManagedVaultV2PushBatch batch,
+    required Map<String, Object?> response,
+  }) async {
+    appliedBatches.add(batch);
+    appliedResponses.add(Map<String, Object?>.from(response));
+    return ManagedVaultV2PushApplyResult(
+      accepted: (response['accepted'] as num?)?.toInt() ?? 0,
+      generationId: '${response['generation_id'] ?? ''}',
+      remoteLatestGlobalSeq:
+          (response['remote_latest_global_seq'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 final class _ManagedVaultPullBridgeBackend extends WebNativeAppBackend {
   _ManagedVaultPullBridgeBackend({
     required super.appDirProvider,

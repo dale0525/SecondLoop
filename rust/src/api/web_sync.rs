@@ -78,3 +78,35 @@ pub fn sync_managed_vault_finalize_web_pull(
     )?;
     Ok(true)
 }
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_prepare_web_push_batch(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+) -> Result<String> {
+    let key = key_from_bytes(key)?;
+    let sync_key = key_from_bytes(sync_key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::prepare_web_push_batch(&conn, &key, &sync_key, &base_url, &vault_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_apply_web_push_response(
+    app_dir: String,
+    base_url: String,
+    vault_id: String,
+    batch_json: String,
+    response_json: String,
+) -> Result<String> {
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::apply_web_push_response(
+        &conn,
+        &base_url,
+        &vault_id,
+        &batch_json,
+        &response_json,
+    )
+}
