@@ -420,19 +420,23 @@ mixin _WebNativeManagedVaultPushBridge on NativeAppBackend {
         vaultId: vaultId,
       );
       if (!batch.hasOps) {
-        if (batch.mediaActions.isNotEmpty) {
-          await _runManagedVaultPushMediaActions(
-            webAppService,
-            key,
-            syncKey,
-            appDir: appDir,
-            baseUrl: baseUrl,
-            vaultId: vaultId,
-            idToken: idToken,
-            batch: batch,
-          );
+        if (batch.mediaActions.isEmpty) {
+          return totalAccepted;
         }
-        return totalAccepted;
+        final mediaSucceeded = await _runManagedVaultPushMediaActions(
+          webAppService,
+          key,
+          syncKey,
+          appDir: appDir,
+          baseUrl: baseUrl,
+          vaultId: vaultId,
+          idToken: idToken,
+          batch: batch,
+        );
+        if (!mediaSucceeded) {
+          return totalAccepted;
+        }
+        continue;
       }
       final request = batch.request;
       if (request == null) {

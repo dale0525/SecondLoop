@@ -129,4 +129,34 @@ void main() {
     expect(section, contains('wrap_normal::<'));
     expect(section, isNot(contains('wrap_sync::<')));
   });
+
+  test(
+      'managed-vault web push media upload wire uses the normal worker-pool path',
+      () {
+    final section = _wireSection(
+      'wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_media_upload_impl',
+    );
+    expect(section, contains('wrap_normal::<'));
+    expect(section, isNot(contains('wrap_sync::<')));
+  });
+
+  test(
+      'managed-vault web push media result wire uses the normal worker-pool path',
+      () {
+    final section = _wireSection(
+      'wire__crate__api__web_sync__sync_managed_vault_record_web_push_media_result_impl',
+    );
+    expect(section, contains('wrap_normal::<'));
+    expect(section, isNot(contains('wrap_sync::<')));
+  });
+
+  test(
+      'managed-vault web push media completion wire uses the normal worker-pool path',
+      () {
+    final section = _wireSection(
+      'wire__crate__api__web_sync__sync_managed_vault_complete_web_push_media_batch_impl',
+    );
+    expect(section, contains('wrap_normal::<'));
+    expect(section, isNot(contains('wrap_sync::<')));
+  });
 }

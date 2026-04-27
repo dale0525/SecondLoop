@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 const PUSH_LIMIT: i64 = 500;
+const REPAIR_MEDIA_ACTION_LIMIT: usize = 8;
 const EMBEDDING_ARTIFACT_MIME: &str = "application/vnd.secondloop.embedding-artifact";
 
 #[derive(Debug, Serialize)]
@@ -96,6 +97,31 @@ fn is_not_found_io_error(error: &anyhow::Error) -> bool {
     error
         .downcast_ref::<std::io::Error>()
         .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
+}
+
+fn fresh_device_media_clean_key(scope_id: &str, device_id: &str) -> String {
+    format!("managed_vault.web_push_fresh_device_media_clean:{scope_id}:{device_id}")
+}
+fn fresh_device_media_clean(conn: &Connection, scope_id: &str, device_id: &str) -> Result<bool> {
+    Ok(
+        super::super::kv_get_i64(conn, &fresh_device_media_clean_key(scope_id, device_id))?
+            .unwrap_or(0)
+            != 0,
+    )
+}
+fn mark_fresh_device_media_clean(conn: &Connection, scope_id: &str, device_id: &str) -> Result<()> {
+    super::super::kv_set_i64(conn, &fresh_device_media_clean_key(scope_id, device_id), 1)
+}
+fn clear_fresh_device_media_clean(
+    conn: &Connection,
+    scope_id: &str,
+    device_id: &str,
+) -> Result<()> {
+    let _ = conn.execute(
+        r#"DELETE FROM kv WHERE key = ?1"#,
+        params![fresh_device_media_clean_key(scope_id, device_id)],
+    )?;
+    Ok(())
 }
 
 fn no_body_upload(
@@ -232,11 +258,38 @@ fn all_local_media_actions(conn: &Connection) -> Result<Vec<WebPushMediaAction>>
     Ok(actions)
 }
 
+fn media_actions_include_attachment_upload(actions: &[WebPushMediaAction]) -> bool {
+    actions
+        .iter()
+        .any(|action| action.kind == WebPushMediaActionKind::AttachmentUpload)
+}
+
+fn prepare_local_attachment_derivations_for_web(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    base_url: &str,
+    vault_id: &str,
+) -> Result<()> {
+    let app_dir = super::super::app_dir_from_conn(conn)?;
+    match crate::db::ensure_all_video_manifest_derivations(conn, db_key, app_dir.as_path()) {
+        Ok(_) => Ok(()),
+        Err(error) if is_not_found_io_error(&error) => {
+            let scope_id = super::runtime::scope_id(base_url, vault_id);
+            crate::sync::blob_repair::record_blob_repair_error(conn, &scope_id, &error.to_string())
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn pending_repair_media_actions(
     conn: &Connection,
     scope_id: &str,
+    limit: usize,
 ) -> Result<Vec<WebPushMediaAction>> {
     let mut actions = Vec::new();
+    if limit == 0 {
+        return Ok(actions);
+    }
     for item in crate::sync::blob_repair::load_blob_repair_items(conn, scope_id)? {
         match item.kind {
             crate::sync::blob_repair::BlobRepairKind::UploadAttachment { sha256 } => {
@@ -280,6 +333,9 @@ fn pending_repair_media_actions(
             }
             _ => {}
         }
+        if actions.len() >= limit {
+            break;
+        }
     }
     Ok(actions)
 }
@@ -306,7 +362,8 @@ pub fn prepare_web_push_batch(
         PUSH_LIMIT,
     )?;
     if batch.ops.is_empty() {
-        let mut media_actions = pending_repair_media_actions(conn, &scope_id)?;
+        let mut media_actions =
+            pending_repair_media_actions(conn, &scope_id, REPAIR_MEDIA_ACTION_LIMIT)?;
         let mut media_phase = if media_actions.is_empty() {
             WebPushMediaPhase::None
         } else {
@@ -314,12 +371,16 @@ pub fn prepare_web_push_batch(
         };
         if media_actions.is_empty()
             && last_pushed_seq == 0
+            && !fresh_device_media_clean(conn, &scope_id, &device_id)?
             && super::global_log_client::has_remote_device_ops(conn, &device_id)?
         {
             media_actions = all_local_media_actions(conn)?;
             if !media_actions.is_empty() {
                 media_phase = WebPushMediaPhase::FreshDevice;
             }
+        }
+        if media_actions_include_attachment_upload(&media_actions) {
+            prepare_local_attachment_derivations_for_web(conn, db_key, base_url, vault_id)?;
         }
         return Ok(serde_json::to_string(&WebPushBatch {
             has_ops: false,
@@ -334,6 +395,9 @@ pub fn prepare_web_push_batch(
     }
 
     let media_actions = local_batch_media_actions(&batch);
+    if media_actions_include_attachment_upload(&media_actions) {
+        prepare_local_attachment_derivations_for_web(conn, db_key, base_url, vault_id)?;
+    }
     let media_phase = if media_actions.is_empty() {
         WebPushMediaPhase::None
     } else {
@@ -385,6 +449,9 @@ pub fn apply_web_push_response(
         &batch.device_id,
         batch.max_seq,
     )?;
+    if batch.max_seq > 0 {
+        clear_fresh_device_media_clean(conn, &scope_id, &batch.device_id)?;
+    }
     if response.accepted > 0 {
         super::maybe_run_managed_vault_retention(conn, &scope_id)?;
     }
@@ -432,18 +499,6 @@ fn prepare_attachment_upload(
         }
     };
     let app_dir = super::super::app_dir_from_conn(conn)?;
-    match crate::db::ensure_all_video_manifest_derivations(conn, db_key, app_dir.as_path()) {
-        Ok(_) => {}
-        Err(error) if is_not_found_io_error(&error) => {
-            let scope_id = super::runtime::scope_id(base_url, vault_id);
-            crate::sync::blob_repair::record_blob_repair_error(
-                conn,
-                &scope_id,
-                &error.to_string(),
-            )?;
-        }
-        Err(error) => return Err(error),
-    }
     let plaintext = match crate::db::read_attachment_bytes(conn, db_key, app_dir.as_path(), sha256)
     {
         Ok(bytes) => bytes,
@@ -683,6 +738,9 @@ pub fn complete_web_push_media_batch(
             app_dir.as_path(),
             &scope_id,
         )?;
+        if batch.media_phase == WebPushMediaPhase::FreshDevice {
+            mark_fresh_device_media_clean(conn, &scope_id, &batch.device_id)?;
+        }
     }
     Ok(true)
 }
@@ -699,7 +757,6 @@ mod tests {
         let sync_key = [9u8; 32];
         let base_url = "http://127.0.0.1:9";
         let vault_id = "vault-1";
-
         let conversation =
             crate::db::create_conversation(&conn, &db_key, "web").expect("create conversation");
         crate::db::insert_message(&conn, &db_key, &conversation.id, "user", "hello from web")
@@ -715,7 +772,6 @@ mod tests {
             .is_some_and(|value| !value.is_empty()));
         let op_count = batch["op_count"].as_u64().expect("op count");
         assert!(op_count > 0);
-
         let response_json = serde_json::json!({
             "generation_id": "generation-1",
             "accepted": op_count,
@@ -791,5 +847,134 @@ mod tests {
             .as_str()
             .is_some_and(|value| !value.is_empty()));
         assert!(upload["byte_len"].as_u64().is_some_and(|value| value > 0));
+    }
+
+    #[test]
+    fn web_push_fresh_device_media_completion_skips_repeat_uploads() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+        let base_url = "http://127.0.0.1:9";
+        let vault_id = "vault-1";
+        let attachment = crate::db::insert_attachment(
+            &conn,
+            &db_key,
+            dir.path(),
+            b"fresh device attachment",
+            "image/png",
+        )
+        .expect("insert attachment");
+        let device_id = super::super::super::get_or_create_device_id(&conn).expect("device id");
+        conn.execute(
+            r#"UPDATE oplog SET device_id = 'remote-device', seq = 1 WHERE device_id = ?1"#,
+            params![device_id],
+        )
+        .expect("seed remote device op");
+        let batch_json = prepare_web_push_batch(&conn, &db_key, &sync_key, base_url, vault_id)
+            .expect("prepare fresh device batch");
+        let batch: serde_json::Value = serde_json::from_str(&batch_json).expect("batch json");
+        assert_eq!(batch["has_ops"].as_bool(), Some(false));
+        assert_eq!(batch["media_phase"].as_str(), Some("fresh_device"));
+        let media_actions = batch["media_actions"].as_array().expect("media actions");
+        assert_eq!(media_actions.len(), 1);
+        assert_eq!(
+            media_actions[0]["remote_id"].as_str(),
+            Some(attachment.sha256.as_str())
+        );
+        complete_web_push_media_batch(&conn, &db_key, base_url, vault_id, &batch_json)
+            .expect("complete fresh device media");
+        let next_batch_json = prepare_web_push_batch(&conn, &db_key, &sync_key, base_url, vault_id)
+            .expect("prepare next batch");
+        let next_batch: serde_json::Value =
+            serde_json::from_str(&next_batch_json).expect("next batch json");
+        assert_eq!(next_batch["has_ops"].as_bool(), Some(false));
+        assert_eq!(next_batch["media_phase"].as_str(), Some("none"));
+        assert_eq!(
+            next_batch["media_actions"]
+                .as_array()
+                .expect("next media actions")
+                .len(),
+            0
+        );
+    }
+
+    #[test]
+    fn web_push_limits_repair_media_actions_per_batch() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+        let base_url = "http://127.0.0.1:9";
+        let vault_id = "vault-1";
+        let scope_id = super::super::runtime::scope_id(base_url, vault_id);
+        for index in 0..9 {
+            crate::sync::blob_repair::enqueue_blob_repair(
+                &conn,
+                &scope_id,
+                crate::sync::blob_repair::BlobRepairKind::UploadAttachment {
+                    sha256: format!("repair-sha-{index}"),
+                },
+            )
+            .expect("enqueue repair");
+        }
+        let batch_json = prepare_web_push_batch(&conn, &db_key, &sync_key, base_url, vault_id)
+            .expect("prepare repair batch");
+        let batch: serde_json::Value = serde_json::from_str(&batch_json).expect("batch json");
+        assert_eq!(batch["has_ops"].as_bool(), Some(false));
+        assert_eq!(batch["media_phase"].as_str(), Some("repairs"));
+        assert_eq!(
+            batch["media_actions"]
+                .as_array()
+                .expect("media actions")
+                .len(),
+            8
+        );
+    }
+
+    #[test]
+    fn web_push_batch_prepares_video_manifest_derivations_once() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+        let base_url = "http://127.0.0.1:9";
+        let vault_id = "vault-1";
+        let segment =
+            crate::db::insert_attachment(&conn, &db_key, dir.path(), b"segment", "video/mp4")
+                .expect("insert segment");
+        let manifest_payload = serde_json::json!({
+            "schema": "secondloop.video_manifest.v2",
+            "video_sha256": segment.sha256.as_str(),
+            "video_mime_type": "video/mp4",
+            "video_segments": [
+                {
+                    "index": 0,
+                    "sha256": segment.sha256.as_str(),
+                    "mime_type": "video/mp4"
+                }
+            ]
+        });
+        let manifest = crate::db::insert_attachment(
+            &conn,
+            &db_key,
+            dir.path(),
+            manifest_payload.to_string().as_bytes(),
+            "application/x.secondloop.video+json",
+        )
+        .expect("insert manifest");
+        assert!(
+            crate::db::list_attachment_derivations_by_root(&conn, &manifest.sha256)
+                .expect("initial derivations")
+                .is_empty()
+        );
+        let _ = prepare_web_push_batch(&conn, &db_key, &sync_key, base_url, vault_id)
+            .expect("prepare batch");
+        let derivations = crate::db::list_attachment_derivations_by_root(&conn, &manifest.sha256)
+            .expect("prepared derivations");
+        let roles: std::collections::BTreeSet<_> =
+            derivations.iter().map(|item| item.role.as_str()).collect();
+        assert!(roles.contains("root_manifest"));
+        assert!(roles.contains("proxy_segment"));
     }
 }
