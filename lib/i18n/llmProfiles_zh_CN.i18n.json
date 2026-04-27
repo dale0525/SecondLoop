@@ -1,8 +1,8 @@
 {
   "title": "AI 配置",
   "refreshTooltip": "刷新",
-  "activeProfileHelp": "当前选择的配置会作为通用 LLM API 配置，被多项智能能力复用。",
-  "mediaByokOpenAiCompatibleHelp": "媒体 BYOK 仅支持 OpenAI-compatible，列表已隐藏不兼容配置（如 Gemini/Anthropic）。",
+  "activeProfileHelp": "BYOK 功能仅支持 OpenAI-compatible API 配置。",
+  "mediaByokOpenAiCompatibleHelp": "BYOK 仅支持 OpenAI-compatible 配置，列表已隐藏不兼容的历史配置。",
   "noProfilesYet": "暂无配置。",
   "noOpenAiCompatibleProfiles": "没有可用的 OpenAI-compatible 配置。请先新增一个 OpenAI-compatible profile。",
   "addProfile": "添加配置",
@@ -20,9 +20,7 @@
     "apiKey": "API Key"
   },
   "providers": {
-    "openaiCompatible": "OpenAI 兼容",
-    "geminiCompatible": "Gemini",
-    "anthropicCompatible": "Anthropic"
+    "openaiCompatible": "OpenAI 兼容"
   },
   "savedActivated": "已保存并设为当前配置",
   "actions": {

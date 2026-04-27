@@ -1,6 +1,4 @@
-pub mod anthropic;
 pub mod gateway;
-pub mod gemini;
 pub mod openai;
 pub(crate) mod request_limiter;
 pub mod timeouts;
@@ -35,36 +33,6 @@ pub fn answer_provider_from_profile(
 
             Ok(Box::new(openai::OpenAiCompatibleProvider::new(
                 base_url, api_key, model_name, None,
-            )))
-        }
-        "gemini-compatible" => {
-            let api_key = profile
-                .api_key
-                .clone()
-                .ok_or_else(|| anyhow!("missing api_key for gemini-compatible provider"))?;
-            let base_url = profile
-                .base_url
-                .clone()
-                .filter(|v| !v.trim().is_empty())
-                .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1beta".to_string());
-
-            Ok(Box::new(gemini::GeminiCompatibleProvider::new(
-                base_url, api_key, model_name,
-            )))
-        }
-        "anthropic-compatible" => {
-            let api_key = profile
-                .api_key
-                .clone()
-                .ok_or_else(|| anyhow!("missing api_key for anthropic-compatible provider"))?;
-            let base_url = profile
-                .base_url
-                .clone()
-                .filter(|v| !v.trim().is_empty())
-                .unwrap_or_else(|| "https://api.anthropic.com/v1".to_string());
-
-            Ok(Box::new(anthropic::AnthropicCompatibleProvider::new(
-                base_url, api_key, model_name, 1024,
             )))
         }
         _ => Err(anyhow!("unsupported provider_type: {provider_type}")),

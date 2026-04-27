@@ -72,10 +72,10 @@ final class _MutableLlmProfilesBackend extends AppBackend {
     ),
     LlmProfile(
       id: 'p2',
-      name: 'Gemini',
-      providerType: 'gemini-compatible',
+      name: 'OpenAI Backup',
+      providerType: 'openai-compatible',
       baseUrl: null,
-      modelName: 'gemini-1.5-flash',
+      modelName: 'gpt-4o-mini',
       isActive: false,
       createdAtMs: 0,
       updatedAtMs: 0,

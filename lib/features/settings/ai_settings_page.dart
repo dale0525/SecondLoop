@@ -897,8 +897,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     }
 
     return _isZhLocale(context)
-        ? '媒体 BYOK 仅支持 OpenAI-compatible 配置。请在“API Key（AI 对话）”里新增或激活 OpenAI-compatible profile（Gemini/Anthropic 不能用于图片理解、OCR、音频转写）。'
-        : 'Media BYOK only supports OpenAI-compatible profiles. Add or activate an OpenAI-compatible profile in API Keys (Ask AI). Gemini/Anthropic profiles cannot run image understanding, OCR, or audio transcription.';
+        ? '媒体 BYOK 仅支持 OpenAI-compatible 配置。请在“API Key（AI 对话）”里新增或激活 OpenAI-compatible profile。'
+        : 'Media BYOK only supports OpenAI-compatible profiles. Add or activate an OpenAI-compatible profile in API Keys (Ask AI).';
   }
 
   @override
