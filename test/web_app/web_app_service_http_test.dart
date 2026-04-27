@@ -201,6 +201,77 @@ void main() {
     expect(response['generation_id'], 'generation-1');
   });
 
+  test('managed-vault media upload uses proxy path and x-media headers',
+      () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode(<String, Object?>{'ok': true}),
+        200,
+        headers: const <String, String>{
+          'content-type': 'application/json; charset=utf-8',
+        },
+      );
+    });
+
+    final service = WebAppServiceHttp(client: client);
+    await service.uploadManagedVaultMedia(
+      idToken: 'token',
+      vaultId: 'vault-123',
+      remoteId: 'sha-1',
+      mimeType: 'image/png',
+      createdAtMs: 100,
+      bytes: <int>[1, 2, 3],
+      headers: const <String, String>{'x-media-root-sha256': 'root-1'},
+    );
+
+    expect(captured, isNotNull);
+    final request = captured! as http.Request;
+    expect(request.method, 'PUT');
+    expect(
+      request.url.path,
+      '/api/app/vault-proxy/v1/vaults/vault-123/attachments/sha-1',
+    );
+    expect(request.headers['authorization'], 'Bearer token');
+    expect(request.headers['x-secondloop-vault-id'], 'vault-123');
+    expect(request.headers['content-type'], 'application/octet-stream');
+    expect(request.headers['x-media-byte-len'], '3');
+    expect(request.headers['x-media-mime'], 'image/png');
+    expect(request.headers['x-media-created-at-ms'], '100');
+    expect(request.headers['x-media-root-sha256'], 'root-1');
+    expect(request.bodyBytes, <int>[1, 2, 3]);
+  });
+
+  test('managed-vault media delete treats missing remote bytes as success',
+      () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode(<String, Object?>{'error': 'not_found'}),
+        404,
+        headers: const <String, String>{
+          'content-type': 'application/json; charset=utf-8',
+        },
+      );
+    });
+
+    final service = WebAppServiceHttp(client: client);
+    await service.deleteManagedVaultMedia(
+      idToken: 'token',
+      vaultId: 'vault-123',
+      remoteId: 'sha-deleted',
+    );
+
+    expect(captured, isNotNull);
+    expect(captured!.method, 'DELETE');
+    expect(
+      captured!.url.path,
+      '/api/app/vault-proxy/v1/vaults/vault-123/attachments/sha-deleted',
+    );
+  });
+
   test('vault attachment bytes request includes auth and vault headers',
       () async {
     http.BaseRequest? captured;

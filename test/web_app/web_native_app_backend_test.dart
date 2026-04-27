@@ -421,6 +421,152 @@ void main() {
   });
 
   test(
+      'WebNativeAppBackend uploads accepted managed-vault media through WebAppService',
+      () async {
+    final service = _ManagedVaultPushBridgeService(
+      responses: <Map<String, Object?>>[
+        <String, Object?>{
+          'generation_id': 'generation-1',
+          'accepted': 1,
+          'committed_from_seq': 1,
+          'committed_to_seq': 1,
+          'remote_latest_global_seq': 1,
+        },
+      ],
+    );
+    const mediaAction = ManagedVaultV2PushMediaAction(
+      kind: ManagedVaultV2PushMediaActionKind.attachmentUpload,
+      remoteId: 'sha-1',
+      sha256: 'sha-1',
+      mimeType: 'image/png',
+      createdAtMs: 100,
+    );
+    final backend = _ManagedVaultPushBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      mediaUploads: <ManagedVaultV2PushMediaUpload>[
+        ManagedVaultV2PushMediaUpload(
+          hasBody: true,
+          remoteId: 'sha-1',
+          mimeType: 'image/png',
+          createdAtMs: 100,
+          bytes: Uint8List.fromList(<int>[1, 2, 3]),
+          headers: const <String, String>{'x-media-root-sha256': 'root-1'},
+        ),
+      ],
+      batches: <ManagedVaultV2PushBatch>[
+        ManagedVaultV2PushBatch(
+          hasOps: true,
+          opCount: 1,
+          request: const <String, Object?>{
+            'base_global_seq': 0,
+            'batch_id': 'batch-1',
+            'ops': <Object?>[
+              <String, Object?>{'op_id': 'op-1'},
+            ],
+          },
+          mediaActions: const <ManagedVaultV2PushMediaAction>[mediaAction],
+          mediaPhase: ManagedVaultV2PushMediaPhase.batch,
+          batchJson: jsonEncode(<String, Object?>{
+            'has_ops': true,
+            'device_id': 'device-a',
+            'last_pushed_seq': 0,
+            'max_seq': 1,
+            'op_count': 1,
+          }),
+        ),
+        ManagedVaultV2PushBatch(
+          hasOps: false,
+          opCount: 0,
+          request: null,
+          mediaActions: const <ManagedVaultV2PushMediaAction>[],
+          mediaPhase: ManagedVaultV2PushMediaPhase.none,
+          batchJson: jsonEncode(<String, Object?>{
+            'has_ops': false,
+            'device_id': 'device-a',
+            'last_pushed_seq': 1,
+            'max_seq': 1,
+            'op_count': 0,
+          }),
+        ),
+      ],
+    );
+
+    final pushed = await backend.syncManagedVaultPush(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pushed, 1);
+    expect(service.mediaUploads, hasLength(1));
+    expect(service.mediaUploads.single.remoteId, 'sha-1');
+    expect(service.mediaUploads.single.bytes, <int>[1, 2, 3]);
+    expect(
+      service.mediaUploads.single.headers['x-media-root-sha256'],
+      'root-1',
+    );
+    expect(backend.mediaResults.single.success, isTrue);
+    expect(backend.completedMediaPhases,
+        contains(ManagedVaultV2PushMediaPhase.batch));
+  });
+
+  test('WebNativeAppBackend drains no-op managed-vault media repair batches',
+      () async {
+    final service = _ManagedVaultPushBridgeService(
+      responses: const <Map<String, Object?>>[],
+    );
+    const deleteAction = ManagedVaultV2PushMediaAction(
+      kind: ManagedVaultV2PushMediaActionKind.attachmentDelete,
+      remoteId: 'sha-deleted',
+      sha256: 'sha-deleted',
+    );
+    final backend = _ManagedVaultPushBridgeBackend(
+      appDirProvider: () async => '/opfs/secondloop/vaults/uid-1',
+      secureStorage: const FlutterSecureStorage(),
+      rustLibInit: () async {},
+      webAppService: service,
+      batches: <ManagedVaultV2PushBatch>[
+        ManagedVaultV2PushBatch(
+          hasOps: false,
+          opCount: 0,
+          request: null,
+          mediaActions: const <ManagedVaultV2PushMediaAction>[deleteAction],
+          mediaPhase: ManagedVaultV2PushMediaPhase.repairs,
+          batchJson: jsonEncode(<String, Object?>{
+            'has_ops': false,
+            'device_id': 'device-a',
+            'last_pushed_seq': 2,
+            'max_seq': 2,
+            'op_count': 0,
+          }),
+        ),
+      ],
+    );
+
+    final pushed = await backend.syncManagedVaultPush(
+      Uint8List(32),
+      Uint8List(32),
+      baseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'vault-123',
+      idToken: 'token-1',
+    );
+
+    expect(pushed, 0);
+    expect(service.requests, isEmpty);
+    expect(service.mediaDeletes, <String>['sha-deleted']);
+    expect(backend.mediaResults.single.success, isTrue);
+    expect(
+      backend.completedMediaPhases,
+      <ManagedVaultV2PushMediaPhase>[ManagedVaultV2PushMediaPhase.repairs],
+    );
+  });
+
+  test(
       'WebNativeAppBackend only bridges managed-vault pull for web formal settings base URL',
       () async {
     final service = _ManagedVaultPullBridgeService(

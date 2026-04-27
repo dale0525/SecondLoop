@@ -80,7 +80,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -854444227;
+  int get rustContentHash => 1768811832;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1780,6 +1780,13 @@ abstract class RustLibApi extends BaseApi {
       required String batchJson,
       required String responseJson});
 
+  Future<bool> crateApiWebSyncSyncManagedVaultCompleteWebPushMediaBatch(
+      {required String appDir,
+      required List<int> key,
+      required String baseUrl,
+      required String vaultId,
+      required String batchJson});
+
   Future<bool> crateApiWebSyncSyncManagedVaultFinalizeWebPull(
       {required String appDir,
       required List<int> key,
@@ -1796,10 +1803,27 @@ abstract class RustLibApi extends BaseApi {
       required String baseUrl,
       required String vaultId});
 
+  Future<String> crateApiWebSyncSyncManagedVaultPrepareWebPushMediaUpload(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String actionJson,
+      required String mediaPhase});
+
   Future<String> crateApiWebSyncSyncManagedVaultReadWebPullState(
       {required String appDir,
       required String baseUrl,
       required String vaultId});
+
+  Future<bool> crateApiWebSyncSyncManagedVaultRecordWebPushMediaResult(
+      {required String appDir,
+      required String baseUrl,
+      required String vaultId,
+      required String actionJson,
+      required bool success,
+      String? errorMessage});
 
   Future<String> crateApiWebSyncSyncManagedVaultRecoverWebPullState(
       {required String appDir,
@@ -11946,6 +11970,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  Future<bool> crateApiWebSyncSyncManagedVaultCompleteWebPushMediaBatch(
+      {required String appDir,
+      required List<int> key,
+      required String baseUrl,
+      required String vaultId,
+      required String batchJson}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(batchJson, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 255, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiWebSyncSyncManagedVaultCompleteWebPushMediaBatchConstMeta,
+      argValues: [appDir, key, baseUrl, vaultId, batchJson],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiWebSyncSyncManagedVaultCompleteWebPushMediaBatchConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_complete_web_push_media_batch",
+            argNames: ["appDir", "key", "baseUrl", "vaultId", "batchJson"],
+          );
+
+  @override
   Future<bool> crateApiWebSyncSyncManagedVaultFinalizeWebPull(
       {required String appDir,
       required List<int> key,
@@ -11965,7 +12025,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_u_64(appliedOps, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 255, port: port_);
+            funcId: 256, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -12015,7 +12075,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 256, port: port_);
+            funcId: 257, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -12035,6 +12095,62 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  Future<String> crateApiWebSyncSyncManagedVaultPrepareWebPushMediaUpload(
+      {required String appDir,
+      required List<int> key,
+      required List<int> syncKey,
+      required String baseUrl,
+      required String vaultId,
+      required String actionJson,
+      required String mediaPhase}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_list_prim_u_8_loose(syncKey, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(actionJson, serializer);
+        sse_encode_String(mediaPhase, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 258, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiWebSyncSyncManagedVaultPrepareWebPushMediaUploadConstMeta,
+      argValues: [
+        appDir,
+        key,
+        syncKey,
+        baseUrl,
+        vaultId,
+        actionJson,
+        mediaPhase
+      ],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiWebSyncSyncManagedVaultPrepareWebPushMediaUploadConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_prepare_web_push_media_upload",
+            argNames: [
+              "appDir",
+              "key",
+              "syncKey",
+              "baseUrl",
+              "vaultId",
+              "actionJson",
+              "mediaPhase"
+            ],
+          );
+
+  @override
   Future<String> crateApiWebSyncSyncManagedVaultReadWebPullState(
       {required String appDir,
       required String baseUrl,
@@ -12046,7 +12162,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 257, port: port_);
+            funcId: 259, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -12065,6 +12181,51 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<bool> crateApiWebSyncSyncManagedVaultRecordWebPushMediaResult(
+      {required String appDir,
+      required String baseUrl,
+      required String vaultId,
+      required String actionJson,
+      required bool success,
+      String? errorMessage}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_String(baseUrl, serializer);
+        sse_encode_String(vaultId, serializer);
+        sse_encode_String(actionJson, serializer);
+        sse_encode_bool(success, serializer);
+        sse_encode_opt_String(errorMessage, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 260, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiWebSyncSyncManagedVaultRecordWebPushMediaResultConstMeta,
+      argValues: [appDir, baseUrl, vaultId, actionJson, success, errorMessage],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiWebSyncSyncManagedVaultRecordWebPushMediaResultConstMeta =>
+          const TaskConstMeta(
+            debugName: "sync_managed_vault_record_web_push_media_result",
+            argNames: [
+              "appDir",
+              "baseUrl",
+              "vaultId",
+              "actionJson",
+              "success",
+              "errorMessage"
+            ],
+          );
+
+  @override
   Future<String> crateApiWebSyncSyncManagedVaultRecoverWebPullState(
       {required String appDir,
       required List<int> key,
@@ -12078,7 +12239,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 258, port: port_);
+            funcId: 261, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,

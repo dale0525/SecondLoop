@@ -80,3 +80,51 @@ Future<String> syncManagedVaultApplyWebPushResponse(
         vaultId: vaultId,
         batchJson: batchJson,
         responseJson: responseJson);
+
+Future<String> syncManagedVaultPrepareWebPushMediaUpload(
+        {required String appDir,
+        required List<int> key,
+        required List<int> syncKey,
+        required String baseUrl,
+        required String vaultId,
+        required String actionJson,
+        required String mediaPhase}) =>
+    RustLib.instance.api
+        .crateApiWebSyncSyncManagedVaultPrepareWebPushMediaUpload(
+            appDir: appDir,
+            key: key,
+            syncKey: syncKey,
+            baseUrl: baseUrl,
+            vaultId: vaultId,
+            actionJson: actionJson,
+            mediaPhase: mediaPhase);
+
+Future<bool> syncManagedVaultRecordWebPushMediaResult(
+        {required String appDir,
+        required String baseUrl,
+        required String vaultId,
+        required String actionJson,
+        required bool success,
+        String? errorMessage}) =>
+    RustLib.instance.api
+        .crateApiWebSyncSyncManagedVaultRecordWebPushMediaResult(
+            appDir: appDir,
+            baseUrl: baseUrl,
+            vaultId: vaultId,
+            actionJson: actionJson,
+            success: success,
+            errorMessage: errorMessage);
+
+Future<bool> syncManagedVaultCompleteWebPushMediaBatch(
+        {required String appDir,
+        required List<int> key,
+        required String baseUrl,
+        required String vaultId,
+        required String batchJson}) =>
+    RustLib.instance.api
+        .crateApiWebSyncSyncManagedVaultCompleteWebPushMediaBatch(
+            appDir: appDir,
+            key: key,
+            baseUrl: baseUrl,
+            vaultId: vaultId,
+            batchJson: batchJson);

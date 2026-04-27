@@ -238,6 +238,9 @@ final class _ManagedVaultPushBridgeService extends WebAppService {
   final List<Map<String, Object?>> requests = <Map<String, Object?>>[];
   final List<String> idTokens = <String>[];
   final List<String> vaultIds = <String>[];
+  final List<_RecordedManagedVaultMediaUpload> mediaUploads =
+      <_RecordedManagedVaultMediaUpload>[];
+  final List<String> mediaDeletes = <String>[];
 
   @override
   Future<WebSubscriptionSnapshot> fetchSubscription({
@@ -263,6 +266,68 @@ final class _ManagedVaultPushBridgeService extends WebAppService {
     }
     return _responses.removeAt(0);
   }
+
+  @override
+  Future<void> uploadManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+    required String mimeType,
+    required int createdAtMs,
+    required List<int> bytes,
+    Map<String, String> headers = const <String, String>{},
+  }) async {
+    idTokens.add(idToken);
+    vaultIds.add(vaultId);
+    mediaUploads.add(
+      _RecordedManagedVaultMediaUpload(
+        remoteId: remoteId,
+        mimeType: mimeType,
+        createdAtMs: createdAtMs,
+        bytes: List<int>.from(bytes),
+        headers: Map<String, String>.from(headers),
+      ),
+    );
+  }
+
+  @override
+  Future<void> deleteManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+  }) async {
+    idTokens.add(idToken);
+    vaultIds.add(vaultId);
+    mediaDeletes.add(remoteId);
+  }
+}
+
+final class _RecordedManagedVaultMediaUpload {
+  const _RecordedManagedVaultMediaUpload({
+    required this.remoteId,
+    required this.mimeType,
+    required this.createdAtMs,
+    required this.bytes,
+    required this.headers,
+  });
+
+  final String remoteId;
+  final String mimeType;
+  final int createdAtMs;
+  final List<int> bytes;
+  final Map<String, String> headers;
+}
+
+final class _RecordedManagedVaultMediaResult {
+  const _RecordedManagedVaultMediaResult({
+    required this.action,
+    required this.success,
+    this.errorMessage,
+  });
+
+  final ManagedVaultV2PushMediaAction action;
+  final bool success;
+  final String? errorMessage;
 }
 
 final class _ManagedVaultPushBridgeBackend extends WebNativeAppBackend {
@@ -272,12 +337,20 @@ final class _ManagedVaultPushBridgeBackend extends WebNativeAppBackend {
     required super.rustLibInit,
     required super.webAppService,
     required List<ManagedVaultV2PushBatch> batches,
-  }) : _batches = List<ManagedVaultV2PushBatch>.from(batches);
+    List<ManagedVaultV2PushMediaUpload> mediaUploads =
+        const <ManagedVaultV2PushMediaUpload>[],
+  })  : _batches = List<ManagedVaultV2PushBatch>.from(batches),
+        _mediaUploads = List<ManagedVaultV2PushMediaUpload>.from(mediaUploads);
 
   final List<ManagedVaultV2PushBatch> _batches;
+  final List<ManagedVaultV2PushMediaUpload> _mediaUploads;
   final List<ManagedVaultV2PushBatch> appliedBatches =
       <ManagedVaultV2PushBatch>[];
   final List<Map<String, Object?>> appliedResponses = <Map<String, Object?>>[];
+  final List<_RecordedManagedVaultMediaResult> mediaResults =
+      <_RecordedManagedVaultMediaResult>[];
+  final List<ManagedVaultV2PushMediaPhase> completedMediaPhases =
+      <ManagedVaultV2PushMediaPhase>[];
 
   @override
   Future<ManagedVaultV2PushBatch> prepareManagedVaultV2PushBatch(
@@ -309,6 +382,51 @@ final class _ManagedVaultPushBridgeBackend extends WebNativeAppBackend {
       remoteLatestGlobalSeq:
           (response['remote_latest_global_seq'] as num?)?.toInt() ?? 0,
     );
+  }
+
+  @override
+  Future<ManagedVaultV2PushMediaUpload> prepareManagedVaultV2PushMediaUpload({
+    required String appDir,
+    required Uint8List key,
+    required Uint8List syncKey,
+    required String baseUrl,
+    required String vaultId,
+    required ManagedVaultV2PushMediaAction action,
+    required ManagedVaultV2PushMediaPhase mediaPhase,
+  }) async {
+    if (_mediaUploads.isEmpty) {
+      throw StateError('unexpected_prepare_push_media_upload');
+    }
+    return _mediaUploads.removeAt(0);
+  }
+
+  @override
+  Future<void> recordManagedVaultV2PushMediaResult({
+    required String appDir,
+    required String baseUrl,
+    required String vaultId,
+    required ManagedVaultV2PushMediaAction action,
+    required bool success,
+    String? errorMessage,
+  }) async {
+    mediaResults.add(
+      _RecordedManagedVaultMediaResult(
+        action: action,
+        success: success,
+        errorMessage: errorMessage,
+      ),
+    );
+  }
+
+  @override
+  Future<void> completeManagedVaultV2PushMediaBatch({
+    required String appDir,
+    required Uint8List key,
+    required String baseUrl,
+    required String vaultId,
+    required ManagedVaultV2PushBatch batch,
+  }) async {
+    completedMediaPhases.add(batch.mediaPhase);
   }
 }
 

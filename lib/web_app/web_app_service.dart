@@ -168,6 +168,22 @@ abstract class WebAppService {
     required List<int> bytes,
   }) async {}
 
+  Future<void> uploadManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+    required String mimeType,
+    required int createdAtMs,
+    required List<int> bytes,
+    Map<String, String> headers = const <String, String>{},
+  }) async {}
+
+  Future<void> deleteManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+  }) async {}
+
   Future<void> deleteVaultAttachment({
     required String idToken,
     required String vaultId,
@@ -665,6 +681,68 @@ class WebAppServiceHttp extends WebAppService {
       headers: _vaultHeaders(vaultId),
     );
     return Map<String, Object?>.from(json);
+  }
+
+  @override
+  Future<void> uploadManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+    required String mimeType,
+    required int createdAtMs,
+    required List<int> bytes,
+    Map<String, String> headers = const <String, String>{},
+  }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
+    final request = http.Request(
+      'PUT',
+      Uri(
+        path: '/api/app/vault-proxy/v1/vaults/$vaultId/attachments/$remoteId',
+      ),
+    );
+    request.headers.addAll(<String, String>{
+      'authorization': 'Bearer $idToken',
+      'content-type': 'application/octet-stream',
+      'x-media-byte-len': '${bytes.length}',
+      'x-media-mime': mimeType,
+      'x-media-created-at-ms': '$createdAtMs',
+      ...headers,
+      ..._vaultHeaders(vaultId),
+    });
+    request.bodyBytes = bytes;
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    _decodeJsonResponse(response);
+  }
+
+  @override
+  Future<void> deleteManagedVaultMedia({
+    required String idToken,
+    required String vaultId,
+    required String remoteId,
+  }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
+    final request = http.Request(
+      'DELETE',
+      Uri(
+        path: '/api/app/vault-proxy/v1/vaults/$vaultId/attachments/$remoteId',
+      ),
+    );
+    request.headers.addAll(<String, String>{
+      'authorization': 'Bearer $idToken',
+      'accept': 'application/json',
+      ..._vaultHeaders(vaultId),
+    });
+    final streamed = await _client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode == 404) {
+      return;
+    }
+    _decodeJsonResponse(response);
   }
 
   @override

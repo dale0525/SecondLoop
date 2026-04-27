@@ -110,3 +110,68 @@ pub fn sync_managed_vault_apply_web_push_response(
         &response_json,
     )
 }
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_prepare_web_push_media_upload(
+    app_dir: String,
+    key: Vec<u8>,
+    sync_key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    action_json: String,
+    media_phase: String,
+) -> Result<String> {
+    let key = key_from_bytes(key)?;
+    let sync_key = key_from_bytes(sync_key)?;
+    let media_phase: sync::managed_vault::WebPushMediaPhase =
+        serde_json::from_value(serde_json::Value::String(media_phase))?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::prepare_web_push_media_upload(
+        &conn,
+        &key,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &action_json,
+        media_phase,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_record_web_push_media_result(
+    app_dir: String,
+    base_url: String,
+    vault_id: String,
+    action_json: String,
+    success: bool,
+    error_message: Option<String>,
+) -> Result<bool> {
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::record_web_push_media_result(
+        &conn,
+        &base_url,
+        &vault_id,
+        &action_json,
+        success,
+        error_message.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_managed_vault_complete_web_push_media_batch(
+    app_dir: String,
+    key: Vec<u8>,
+    base_url: String,
+    vault_id: String,
+    batch_json: String,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    sync::managed_vault::complete_web_push_media_batch(
+        &conn,
+        &key,
+        &base_url,
+        &vault_id,
+        &batch_json,
+    )
+}

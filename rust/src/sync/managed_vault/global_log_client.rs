@@ -34,7 +34,7 @@ pub(super) enum GlobalLogPullRouteResult {
     ResetRequired(GlobalLogPullErrorResponse),
 }
 
-enum PendingAttachmentAction {
+pub(super) enum PendingAttachmentAction {
     Upload {
         mime_type: String,
         created_at_ms: i64,
@@ -45,8 +45,8 @@ enum PendingAttachmentAction {
 pub(super) struct LocalPushBatch {
     pub(super) ops: Vec<GlobalLogPushOp>,
     pub(super) max_seq: i64,
-    attachment_actions: BTreeMap<String, PendingAttachmentAction>,
-    artifact_blob_refs: BTreeSet<String>,
+    pub(super) attachment_actions: BTreeMap<String, PendingAttachmentAction>,
+    pub(super) artifact_blob_refs: BTreeSet<String>,
 }
 
 fn ensure_complete_push_acceptance_from_explicit_seqs(
@@ -369,7 +369,7 @@ pub(super) fn collect_local_push_ops_for_web(
     maybe_collect_local_push_ops(conn, db_key, sync_key, device_id, last_pushed_seq, limit)
 }
 
-fn has_remote_device_ops(conn: &Connection, device_id: &str) -> Result<bool> {
+pub(super) fn has_remote_device_ops(conn: &Connection, device_id: &str) -> Result<bool> {
     conn.query_row(
         r#"SELECT EXISTS(SELECT 1 FROM oplog WHERE device_id != ?1 LIMIT 1)"#,
         params![device_id],

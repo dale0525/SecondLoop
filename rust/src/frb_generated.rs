@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -854444227;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1768811832;
 
 // Section: executor
 
@@ -10471,6 +10471,48 @@ fn wire__crate__api__web_sync__sync_managed_vault_apply_web_push_response_impl(
         },
     )
 }
+fn wire__crate__api__web_sync__sync_managed_vault_complete_web_push_media_batch_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_managed_vault_complete_web_push_media_batch",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_vault_id = <String>::sse_decode(&mut deserializer);
+            let api_batch_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::web_sync::sync_managed_vault_complete_web_push_media_batch(
+                        api_app_dir,
+                        api_key,
+                        api_base_url,
+                        api_vault_id,
+                        api_batch_json,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__web_sync__sync_managed_vault_finalize_web_pull_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -10559,6 +10601,52 @@ fn wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_batch_impl(
         },
     )
 }
+fn wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_media_upload_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_managed_vault_prepare_web_push_media_upload",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_sync_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_vault_id = <String>::sse_decode(&mut deserializer);
+            let api_action_json = <String>::sse_decode(&mut deserializer);
+            let api_media_phase = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::web_sync::sync_managed_vault_prepare_web_push_media_upload(
+                        api_app_dir,
+                        api_key,
+                        api_sync_key,
+                        api_base_url,
+                        api_vault_id,
+                        api_action_json,
+                        api_media_phase,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__web_sync__sync_managed_vault_read_web_pull_state_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -10591,6 +10679,50 @@ fn wire__crate__api__web_sync__sync_managed_vault_read_web_pull_state_impl(
                         api_app_dir,
                         api_base_url,
                         api_vault_id,
+                    )
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__web_sync__sync_managed_vault_record_web_push_media_result_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_managed_vault_record_web_push_media_result",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_vault_id = <String>::sse_decode(&mut deserializer);
+            let api_action_json = <String>::sse_decode(&mut deserializer);
+            let api_success = <bool>::sse_decode(&mut deserializer);
+            let api_error_message = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::web_sync::sync_managed_vault_record_web_push_media_result(
+                        api_app_dir,
+                        api_base_url,
+                        api_vault_id,
+                        api_action_json,
+                        api_success,
+                        api_error_message,
                     )
                 })())
             }
@@ -12388,10 +12520,13 @@ fn pde_ffi_dispatcher_primary_impl(
 252 => wire__crate__api__todo_followup_generation__db_list_due_auto_todo_followup_generation_jobs_impl(port, ptr, rust_vec_len, data_len),
 253 => wire__crate__api__web_sync__sync_managed_vault_apply_web_pull_page_impl(port, ptr, rust_vec_len, data_len),
 254 => wire__crate__api__web_sync__sync_managed_vault_apply_web_push_response_impl(port, ptr, rust_vec_len, data_len),
-255 => wire__crate__api__web_sync__sync_managed_vault_finalize_web_pull_impl(port, ptr, rust_vec_len, data_len),
-256 => wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_batch_impl(port, ptr, rust_vec_len, data_len),
-257 => wire__crate__api__web_sync__sync_managed_vault_read_web_pull_state_impl(port, ptr, rust_vec_len, data_len),
-258 => wire__crate__api__web_sync__sync_managed_vault_recover_web_pull_state_impl(port, ptr, rust_vec_len, data_len),
+255 => wire__crate__api__web_sync__sync_managed_vault_complete_web_push_media_batch_impl(port, ptr, rust_vec_len, data_len),
+256 => wire__crate__api__web_sync__sync_managed_vault_finalize_web_pull_impl(port, ptr, rust_vec_len, data_len),
+257 => wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_batch_impl(port, ptr, rust_vec_len, data_len),
+258 => wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_media_upload_impl(port, ptr, rust_vec_len, data_len),
+259 => wire__crate__api__web_sync__sync_managed_vault_read_web_pull_state_impl(port, ptr, rust_vec_len, data_len),
+260 => wire__crate__api__web_sync__sync_managed_vault_record_web_push_media_result_impl(port, ptr, rust_vec_len, data_len),
+261 => wire__crate__api__web_sync__sync_managed_vault_recover_web_pull_state_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }

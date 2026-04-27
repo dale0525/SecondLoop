@@ -37,7 +37,10 @@ pub use web_pull::{
     apply_web_pull_page, finalize_web_pull, read_web_pull_state, recover_web_pull_state_if_safe,
     WebPullApplyResult, WebPullPage, WebPullState,
 };
-pub use web_push::{apply_web_push_response, prepare_web_push_batch};
+pub use web_push::{
+    apply_web_push_response, complete_web_push_media_batch, prepare_web_push_batch,
+    prepare_web_push_media_upload, record_web_push_media_result, WebPushMediaPhase,
+};
 
 #[derive(Debug, Serialize)]
 struct RegisterDeviceRequest<'a> {
