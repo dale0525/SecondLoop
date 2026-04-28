@@ -29,8 +29,11 @@ enum TaskPriorityAiAvailability {
 class TaskPriorityStore extends ChangeNotifier {
   static const _kAiCachePrefsKey = 'task_priority_ai_cache_v3';
   static const _kAiCacheLastScopeKey = 'last_scope';
+  static const _kSharedCacheCompleteCoverageReadInterval = Duration(minutes: 1);
   final Map<String, _InMemoryAiAssessment> _inMemoryAiAssessments =
       <String, _InMemoryAiAssessment>{};
+  final Map<String, DateTime> _lastSharedAiAssessmentReadAtByScope =
+      <String, DateTime>{};
 
   TaskPriorityStore.fromLoaders({
     required Future<List<Todo>> Function() loadTodos,
@@ -328,12 +331,68 @@ class TaskPriorityStore extends ChangeNotifier {
       final canUsePersistedCache =
           persistedCacheScopeKey != null && persistedCacheScopeKey.isNotEmpty;
       final canUseInMemoryCache = !canUsePersistedCache;
-      final sharedAssessmentsClient = canUseSharedCache
-          ? await _resolveSharedAiAssessmentsClient?.call(
-              cacheScopeKey: sharedCacheScopeKey,
-            )
-          : null;
-      if (_disposed) return;
+      BackendTaskPriorityAiSharedAssessmentsClient? sharedAssessmentsClient;
+      var didResolveSharedAssessmentsClient = false;
+
+      Future<BackendTaskPriorityAiSharedAssessmentsClient?>
+          resolveSharedAssessmentsClient() async {
+        if (!canUseSharedCache || didResolveSharedAssessmentsClient) {
+          return sharedAssessmentsClient;
+        }
+        didResolveSharedAssessmentsClient = true;
+        sharedAssessmentsClient = await _resolveSharedAiAssessmentsClient?.call(
+          cacheScopeKey: sharedCacheScopeKey,
+        );
+        return sharedAssessmentsClient;
+      }
+
+      Future<Map<String, TaskPriorityAiCachedAssessment>>
+          readSharedPersistedAssessments() async {
+        final client = await resolveSharedAssessmentsClient();
+        if (_disposed) {
+          return const <String, TaskPriorityAiCachedAssessment>{};
+        }
+        final entries = client != null
+            ? await client.read(
+                nowLocal: nowLocal,
+                cacheTtl: _aiCacheTtl,
+              )
+            : await _readSharedAiAssessments?.call(
+                  aiService: aiService,
+                  cacheScopeKey: sharedCacheScopeKey!,
+                  nowLocal: nowLocal,
+                ) ??
+                const <String, TaskPriorityAiCachedAssessment>{};
+        if (_disposed) {
+          return const <String, TaskPriorityAiCachedAssessment>{};
+        }
+        _lastSharedAiAssessmentReadAtByScope[sharedCacheScopeKey!] =
+            _nowLocal();
+        return entries;
+      }
+
+      Future<void> writeSharedPersistedAssessments({
+        required Map<String, TaskPriorityAiCachedAssessment> entries,
+        required Iterable<String> activeTodoIds,
+      }) async {
+        final client = await resolveSharedAssessmentsClient();
+        if (_disposed) return;
+        if (client != null) {
+          await client.write(
+            entries: entries,
+            activeTodoIds: activeTodoIds,
+          );
+        } else {
+          await _writeSharedAiAssessments?.call(
+            aiService: aiService,
+            cacheScopeKey: sharedCacheScopeKey!,
+            entries: entries,
+            activeTodoIds: activeTodoIds,
+            nowLocal: nowLocal,
+          );
+        }
+      }
+
       final candidateByTodoId = <String, TaskPriorityAiCandidate>{
         for (final candidate in request.candidates) candidate.todoId: candidate,
       };
@@ -355,6 +414,21 @@ class TaskPriorityStore extends ChangeNotifier {
           request.candidates.every(
             (candidate) => bootstrapPersisted.containsKey(candidate.todoId),
           );
+      final activeTodoIds = rulesSnapshot.activeEntries
+          .map((entry) => entry.todo.id.trim())
+          .where((todoId) => todoId.isNotEmpty)
+          .toSet();
+
+      bool shouldReadSharedPersistedAssessments() {
+        if (!canUseSharedCache) return false;
+        if (!bootstrapHasCompleteCoverage) return true;
+        final lastReadAt =
+            _lastSharedAiAssessmentReadAtByScope[sharedCacheScopeKey];
+        if (lastReadAt == null) return true;
+        return nowLocal.difference(lastReadAt) >=
+            _kSharedCacheCompleteCoverageReadInterval;
+      }
+
       final publishedBootstrap = bootstrapPersisted.isNotEmpty
           ? _publishSnapshot(
               buildTaskPrioritySnapshot(
@@ -390,18 +464,8 @@ class TaskPriorityStore extends ChangeNotifier {
       }
 
       if (_disposed) return;
-      final sharedPersisted = canUseSharedCache
-          ? sharedAssessmentsClient != null
-              ? await sharedAssessmentsClient.read(
-                  nowLocal: nowLocal,
-                  cacheTtl: _aiCacheTtl,
-                )
-              : await _readSharedAiAssessments?.call(
-                    aiService: aiService,
-                    cacheScopeKey: sharedCacheScopeKey,
-                    nowLocal: nowLocal,
-                  ) ??
-                  const <String, TaskPriorityAiCachedAssessment>{}
+      final sharedPersisted = shouldReadSharedPersistedAssessments()
+          ? await readSharedPersistedAssessments()
           : const <String, TaskPriorityAiCachedAssessment>{};
       if (_disposed) return;
       final persisted = canUsePersistedCache
@@ -500,6 +564,8 @@ class TaskPriorityStore extends ChangeNotifier {
         sharedCacheTodoIds.remove(todoId);
         localCacheTodoIds.remove(todoId);
       }
+      final hasInactiveMergedAssessments =
+          mergedPersisted.keys.any((todoId) => !activeTodoIds.contains(todoId));
 
       var didLiveRerankFail = false;
       if (aiService != null && staleCandidates.isNotEmpty) {
@@ -540,35 +606,22 @@ class TaskPriorityStore extends ChangeNotifier {
         await _writePersistedAiAssessments(
           cacheScopeKey: persistedCacheScopeKey,
           entries: mergedPersisted,
-          activeTodoIds:
-              rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
+          activeTodoIds: activeTodoIds,
           nowLocal: nowLocal,
         );
       } else if (canUseInMemoryCache) {
         _writeInMemoryAiAssessments(
           entries: mergedPersisted,
-          activeTodoIds:
-              rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
+          activeTodoIds: activeTodoIds,
         );
       }
       if (_disposed) return;
-      if (canUseSharedCache) {
-        final activeTodoIds =
-            rulesSnapshot.activeEntries.map((entry) => entry.todo.id);
-        if (sharedAssessmentsClient != null) {
-          await sharedAssessmentsClient.write(
-            entries: mergedPersisted,
-            activeTodoIds: activeTodoIds,
-          );
-        } else {
-          await _writeSharedAiAssessments?.call(
-            aiService: aiService,
-            cacheScopeKey: sharedCacheScopeKey,
-            entries: mergedPersisted,
-            activeTodoIds: activeTodoIds,
-            nowLocal: nowLocal,
-          );
-        }
+      if (canUseSharedCache &&
+          (liveTodoIds.isNotEmpty || hasInactiveMergedAssessments)) {
+        await writeSharedPersistedAssessments(
+          entries: mergedPersisted,
+          activeTodoIds: activeTodoIds,
+        );
       }
       if (_disposed) return;
 

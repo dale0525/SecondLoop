@@ -562,7 +562,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
 
     if (!mounted) return;
     syncEngine?.notifyLocalMutation();
-    _refresh();
+    _refresh(refreshTaskPriority: true);
   }
 
   Future<DateTime?> _pickEventStartTime({

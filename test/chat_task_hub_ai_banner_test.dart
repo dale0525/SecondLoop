@@ -13,12 +13,12 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
+import 'task_priority_test_helpers.dart';
 
 Future<void> _pumpUntilFound(
   WidgetTester tester,
@@ -45,44 +45,23 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     final nowLocal = DateTime.now();
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[
-            const Todo(
-              id: 'todo:shared-label',
-              title: 'Shared chat task',
-              dueAtMs: null,
-              status: 'open',
-              sourceEntryId: null,
-              createdAtMs: 0,
-              updatedAtMs: 0,
-              reviewStage: null,
-              nextReviewAtMs: null,
-              lastReviewAtMs: null,
-            ),
-          ],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    const todo = Todo(
+      id: 'todo:shared-label',
+      title: 'Shared chat task',
+      dueAtMs: null,
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+    final requestSignature =
+        stableTaskPriorityRequestSignatureFor(todo, nowLocal);
 
     final backend = _AgendaBackend(
-      todos: const [
-        Todo(
-          id: 'todo:shared-label',
-          title: 'Shared chat task',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
+      todos: const [todo],
       sharedTaskPriorityAssessmentsJson: jsonEncode(<String, Object?>{
         'entries': <Object?>[
           <String, Object?>{
@@ -165,28 +144,20 @@ void main() {
       localeTag: 'en-US',
       partitionKey: '["p1","openai-compatible"]',
     );
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[
-            const Todo(
-              id: 'todo:cached-label',
-              title: 'Cached chat task',
-              dueAtMs: null,
-              status: 'open',
-              sourceEntryId: null,
-              createdAtMs: 0,
-              updatedAtMs: 0,
-              reviewStage: null,
-              nextReviewAtMs: null,
-              lastReviewAtMs: null,
-            ),
-          ],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    const todo = Todo(
+      id: 'todo:cached-label',
+      title: 'Cached chat task',
+      dueAtMs: null,
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+    final requestSignature =
+        stableTaskPriorityRequestSignatureFor(todo, nowLocal);
     SharedPreferences.setMockInitialValues({
       'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
         'scopes': <String, Object?>{
@@ -210,20 +181,7 @@ void main() {
     });
 
     final backend = _AgendaBackend(
-      todos: const [
-        Todo(
-          id: 'todo:cached-label',
-          title: 'Cached chat task',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
+      todos: const [todo],
     );
 
     await tester.pumpWidget(
@@ -273,28 +231,20 @@ void main() {
       localeTag: 'en',
       partitionKey: '["p1","openai-compatible"]',
     );
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[
-            const Todo(
-              id: 'todo:bootstrap-label',
-              title: 'Bootstrap cached task',
-              dueAtMs: null,
-              status: 'open',
-              sourceEntryId: null,
-              createdAtMs: 0,
-              updatedAtMs: 0,
-              reviewStage: null,
-              nextReviewAtMs: null,
-              lastReviewAtMs: null,
-            ),
-          ],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    const todo = Todo(
+      id: 'todo:bootstrap-label',
+      title: 'Bootstrap cached task',
+      dueAtMs: null,
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+    final requestSignature =
+        stableTaskPriorityRequestSignatureFor(todo, nowLocal);
     SharedPreferences.setMockInitialValues({
       'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
         'scopes': <String, Object?>{
@@ -317,20 +267,7 @@ void main() {
     });
 
     final backend = _AgendaBackend(
-      todos: const [
-        Todo(
-          id: 'todo:bootstrap-label',
-          title: 'Bootstrap cached task',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
+      todos: const [todo],
       llmProfiles: const <LlmProfile>[],
     );
 

@@ -69,6 +69,43 @@ void main() {
 
     expect(client.readCacheTtl, cacheTtl);
   });
+
+  test('store skips shared client when local AI cache covers refresh',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _RecordingSharedAssessmentBackend();
+    final service = _ImmediateAiService(cacheScopeKey: 'cloud-scope');
+    var resolveCalls = 0;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => service,
+      resolveSharedAiAssessmentsClient: ({required cacheScopeKey}) async {
+        resolveCalls += 1;
+        expect(cacheScopeKey, 'cloud-scope');
+        return BackendTaskPriorityAiSharedAssessmentsClient(
+          backend: backend,
+          sessionKey: Uint8List(32),
+          gatewayBaseUrl: 'https://gateway.test',
+          idToken: 'test-id-token',
+          modelName: 'cloud-model',
+          localeTag: 'en',
+          cacheScopeKey: cacheScopeKey,
+        );
+      },
+    );
+
+    await store.refresh();
+    store.markDirty();
+    await store.refresh();
+
+    expect(service.calls, 1);
+    expect(resolveCalls, 1);
+    expect(backend.fetchCalls, 1);
+    expect(backend.upsertCalls, 1);
+  });
 }
 
 Todo todo({
@@ -95,11 +132,13 @@ final class _ImmediateAiService extends TaskPriorityAiService {
 
   @override
   final String cacheScopeKey;
+  int calls = 0;
 
   @override
   Future<TaskPriorityAiBatchResult> rerank(
     TaskPriorityAiRequest request,
   ) async {
+    calls += 1;
     return TaskPriorityAiBatchResult(
       entries: request.candidates
           .map(

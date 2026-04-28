@@ -27,7 +27,7 @@ extension _ChatPageStateMethodsOFocusRouting on _ChatPageState {
     );
     if (!mounted) return;
     _collapseTodoAgendaBanner();
-    _refresh();
+    _refresh(refreshTaskPriority: true);
   }
 
   Future<T?> _showModalBottomSheetFromChat<T>({

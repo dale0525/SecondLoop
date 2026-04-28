@@ -5,10 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_store.dart';
 import 'package:secondloop/src/rust/db.dart';
+
+import 'task_priority_test_helpers.dart';
 
 void main() {
   setUp(() {
@@ -216,15 +217,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     var remoteReads = 0;
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = stableTaskPriorityRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
     final store = TaskPriorityStore.fromLoaders(
       nowLocal: () => nowLocal,
       loadTodos: () async => <Todo>[
@@ -275,15 +271,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     var remoteReads = 0;
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = stableTaskPriorityRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
     final store = TaskPriorityStore.fromLoaders(
       nowLocal: () => nowLocal,
       loadTodos: () async => <Todo>[
@@ -384,15 +375,10 @@ void main() {
     expect(warmStore.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
 
     final nowLocal = DateTime(2026, 3, 13, 10, 6);
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = stableTaskPriorityRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
 
     final fallbackStore = TaskPriorityStore.fromLoaders(
       nowLocal: () => nowLocal,
@@ -484,15 +470,10 @@ void main() {
     await store.refresh();
     expect(store.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
 
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = stableTaskPriorityRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
 
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('task_priority_ai_cache_v3');
@@ -562,15 +543,10 @@ void main() {
     await store.refresh();
     expect(store.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
 
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = stableTaskPriorityRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
 
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('task_priority_ai_cache_v3');

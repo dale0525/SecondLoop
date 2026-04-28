@@ -813,7 +813,7 @@ void main() {
         secondStore.snapshot.primaryFocus?.reasonText, 'Second tuple result.');
   });
 
-  test('updatedAtMs churn alone triggers a second rerank', () async {
+  test('updatedAtMs churn alone reuses cached rerank', () async {
     SharedPreferences.setMockInitialValues({});
     final aiService = _CountingAiService(
       const TaskPriorityAiBatchResult(
@@ -841,7 +841,44 @@ void main() {
     store.markDirty();
     await store.refresh();
 
-    expect(aiService.calls, 2);
+    expect(aiService.calls, 1);
+  });
+
+  test('scheduled rule score drift within TTL reuses cached rerank', () async {
+    SharedPreferences.setMockInitialValues({});
+    final aiService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'scheduled',
+            semanticAdjustment: 20,
+            reason: 'Scheduled work remains important.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+    var nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final dueAtMs = DateTime(2026, 3, 15, 10, 0).toUtc().millisecondsSinceEpoch;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal,
+      loadTodos: () async => <Todo>[
+        todo(
+          id: 'scheduled',
+          title: 'Prepare launch notes',
+          updatedAtMs: 10,
+          dueAtMs: dueAtMs,
+        ),
+      ],
+      resolveAiService: () async => aiService,
+    );
+
+    await store.refresh();
+    nowLocal = nowLocal.add(const Duration(minutes: 10));
+    store.markDirty();
+    await store.refresh();
+
+    expect(aiService.calls, 1);
   });
 
   test('ai enhancement is not considered enabled before availability resolves',

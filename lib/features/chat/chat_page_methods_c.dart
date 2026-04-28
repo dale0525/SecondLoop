@@ -201,7 +201,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
         }
 
         if (!mounted) return;
-        _refresh();
+        _refresh(refreshTaskPriority: true);
 
         final snackText = buildFollowupUpdateFeedbackText(
           title: selected.title,
@@ -256,7 +256,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
                   return;
                 }
                 if (!mounted) return;
-                _refresh();
+                _refresh(refreshTaskPriority: true);
               },
             ),
           ),
@@ -307,7 +307,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
         }
 
         if (!mounted) return;
-        _refresh();
+        _refresh(refreshTaskPriority: true);
 
         final snackText = context.t.actions.todoAuto.created(title: title);
         _scaffoldMessengerKey.currentState?.showSnackBar(
@@ -324,7 +324,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
                   return;
                 }
                 if (!mounted) return;
-                _refresh();
+                _refresh(refreshTaskPriority: true);
               },
             ),
           ),
@@ -393,7 +393,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       }
 
       if (!mounted) return;
-      _refresh();
+      _refresh(refreshTaskPriority: true);
       return;
     }
 
@@ -488,7 +488,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     }
 
     if (!mounted) return;
-    _refresh();
+    _refresh(refreshTaskPriority: true);
 
     final snackText = context.t.actions.todoLink.updated(
       title: selected.title,
@@ -512,7 +512,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
               return;
             }
             if (!mounted) return;
-            _refresh();
+            _refresh(refreshTaskPriority: true);
           },
         ),
       ),

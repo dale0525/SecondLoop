@@ -87,7 +87,7 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
     if (ticket.shouldNotifySync) {
       syncEngine?.notifyLocalMutation();
     }
-    _refresh();
+    _refresh(refreshTaskPriority: true);
 
     final actionLabel = _taskHubActionLabel(action);
     final messenger = _scaffoldMessengerKey.currentState;
@@ -119,7 +119,7 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
               if (ticket.shouldNotifySync) {
                 syncEngine?.notifyLocalMutation();
               }
-              _refresh();
+              _refresh(refreshTaskPriority: true);
             } catch (e) {
               if (!mounted) return;
               _scaffoldMessengerKey.currentState
