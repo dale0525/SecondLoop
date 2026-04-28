@@ -2,7 +2,6 @@
   "title": "AI profiles",
   "refreshTooltip": "Refresh",
   "activeProfileHelp": "BYOK features only support OpenAI-compatible API profiles.",
-  "noProfilesYet": "No profiles yet.",
   "noOpenAiCompatibleProfiles": "No OpenAI-compatible profiles are available. Create an OpenAI-compatible profile first.",
   "addProfile": "Add profile",
   "deleted": "AI profile deleted",

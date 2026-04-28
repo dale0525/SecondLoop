@@ -65,12 +65,8 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     'openai-compatible',
   ];
 
-  List<String> get _allowedProviderTypes {
-    return _allProviderTypes;
-  }
-
   bool _isProviderTypeAllowed(String providerType) {
-    return _allowedProviderTypes.contains(providerType);
+    return _allProviderTypes.contains(providerType);
   }
 
   List<LlmProfile> _visibleProfiles(List<LlmProfile> profiles) {
@@ -89,7 +85,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
 
   List<DropdownMenuItem<String>> _providerTypeItems(BuildContext context) {
     final providers = context.t.llmProfiles.providers;
-    return _allowedProviderTypes.map((providerType) {
+    return _allProviderTypes.map((providerType) {
       final label = switch (providerType) {
         'openai-compatible' => providers.openaiCompatible,
         _ => providerType,
@@ -102,9 +98,9 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
   }
 
   bool _ensureAllowedProviderType() {
-    if (_allowedProviderTypes.contains(_providerType)) return false;
+    if (_allProviderTypes.contains(_providerType)) return false;
     final oldProviderType = _providerType;
-    _providerType = _allowedProviderTypes.first;
+    _providerType = _allProviderTypes.first;
     _applyProviderDefaults(oldProviderType);
     return true;
   }
@@ -389,7 +385,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     final apiKey = _apiKeyController.text.trim();
     final modelName = _modelController.text.trim();
 
-    if (!_allowedProviderTypes.contains(_providerType) ||
+    if (!_allProviderTypes.contains(_providerType) ||
         name.isEmpty ||
         modelName.isEmpty ||
         apiKey.isEmpty) {

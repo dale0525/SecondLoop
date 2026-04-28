@@ -173,17 +173,30 @@ pub fn set_active_llm_profile(conn: &Connection, profile_id: &str) -> Result<()>
     conn.execute_batch("BEGIN IMMEDIATE;")?;
 
     let result: Result<()> = (|| {
+        let provider_type = conn
+            .query_row(
+                r#"SELECT provider_type
+                   FROM llm_profiles
+                   WHERE id = ?1
+                   LIMIT 1"#,
+                params![profile_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let Some(provider_type) = provider_type else {
+            return Err(anyhow!("llm profile not found: {profile_id}"));
+        };
+        ensure_supported_llm_provider_type(&provider_type)?;
+
         let updated = conn.execute(
             r#"UPDATE llm_profiles
                SET is_active = 1, updated_at = ?2
-               WHERE id = ?1 AND provider_type = ?3"#,
-            params![profile_id, now, SUPPORTED_LLM_PROVIDER_TYPE],
+               WHERE id = ?1"#,
+            params![profile_id, now],
         )?;
 
         if updated == 0 {
-            return Err(anyhow!(
-                "llm profile not found or unsupported: {profile_id}"
-            ));
+            return Err(anyhow!("llm profile not found: {profile_id}"));
         }
 
         conn.execute(
