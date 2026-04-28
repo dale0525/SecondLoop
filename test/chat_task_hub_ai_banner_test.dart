@@ -13,12 +13,12 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
+import 'task_priority_test_helpers.dart';
 
 Future<void> _pumpUntilFound(
   WidgetTester tester,
@@ -33,28 +33,6 @@ Future<void> _pumpUntilFound(
     }
   }
   expect(finder, findsOneWidget);
-}
-
-String _stableTaskPriorityRequestSignatureFor(Todo todo, DateTime nowLocal) {
-  final candidate = buildTaskPriorityAiRequest(
-    buildTaskPrioritySnapshot(<Todo>[todo], nowLocal: nowLocal),
-    nowLocal: nowLocal,
-  ).candidates.single;
-  return jsonEncode(<String, Object?>{
-    'candidate': <String, Object?>{
-      'todo_id': candidate.todoId,
-      'title': candidate.title,
-      'status': candidate.status,
-      'band': candidate.band.name,
-      'due_state': candidate.dueState,
-      'source_summary': candidate.sourceSummary,
-      'is_repeatedly_deferred': candidate.isRepeatedlyDeferred,
-      'is_potential_blocker': candidate.isPotentialBlocker,
-      'is_quick_win': candidate.isQuickWin,
-      'rule_is_important': candidate.ruleIsImportant,
-      'rule_is_urgent': candidate.ruleIsUrgent,
-    },
-  });
 }
 
 void main() {
@@ -80,7 +58,7 @@ void main() {
       lastReviewAtMs: null,
     );
     final requestSignature =
-        _stableTaskPriorityRequestSignatureFor(todo, nowLocal);
+        stableTaskPriorityRequestSignatureFor(todo, nowLocal);
 
     final backend = _AgendaBackend(
       todos: const [todo],
@@ -179,7 +157,7 @@ void main() {
       lastReviewAtMs: null,
     );
     final requestSignature =
-        _stableTaskPriorityRequestSignatureFor(todo, nowLocal);
+        stableTaskPriorityRequestSignatureFor(todo, nowLocal);
     SharedPreferences.setMockInitialValues({
       'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
         'scopes': <String, Object?>{
@@ -266,7 +244,7 @@ void main() {
       lastReviewAtMs: null,
     );
     final requestSignature =
-        _stableTaskPriorityRequestSignatureFor(todo, nowLocal);
+        stableTaskPriorityRequestSignatureFor(todo, nowLocal);
     SharedPreferences.setMockInitialValues({
       'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
         'scopes': <String, Object?>{
