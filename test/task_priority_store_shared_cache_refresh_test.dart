@@ -137,6 +137,60 @@ void main() {
     );
   });
 
+  test('shared cache read throttle starts after async read completes',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final aiService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            semanticAdjustment: 8,
+            reason: 'Local cached result.',
+            confidence: TaskPriorityAiConfidence.medium,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'cloud-scope',
+    );
+    var currentTime = DateTime(2026, 3, 13, 10, 0);
+    var sharedReadCalls = 0;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => currentTime,
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => aiService,
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async {
+        sharedReadCalls += 1;
+        if (sharedReadCalls == 1) {
+          currentTime = DateTime(2026, 3, 13, 10, 0, 30);
+        }
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      },
+      writeSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required entries,
+        required activeTodoIds,
+        required nowLocal,
+      }) async {},
+    );
+
+    await store.refresh();
+
+    currentTime = DateTime(2026, 3, 13, 10, 1, 1);
+    store.markDirty();
+    await store.refresh();
+
+    expect(aiService.calls, 1);
+    expect(sharedReadCalls, 1);
+  });
+
   test('cache-only refresh writes shared cache when active todos shrink',
       () async {
     SharedPreferences.setMockInitialValues({});

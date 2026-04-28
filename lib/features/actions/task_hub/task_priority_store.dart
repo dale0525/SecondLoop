@@ -352,19 +352,23 @@ class TaskPriorityStore extends ChangeNotifier {
         if (_disposed) {
           return const <String, TaskPriorityAiCachedAssessment>{};
         }
-        _lastSharedAiAssessmentReadAtByScope[sharedCacheScopeKey!] = nowLocal;
-        if (client != null) {
-          return client.read(
-            nowLocal: nowLocal,
-            cacheTtl: _aiCacheTtl,
-          );
+        final entries = client != null
+            ? await client.read(
+                nowLocal: nowLocal,
+                cacheTtl: _aiCacheTtl,
+              )
+            : await _readSharedAiAssessments?.call(
+                  aiService: aiService,
+                  cacheScopeKey: sharedCacheScopeKey!,
+                  nowLocal: nowLocal,
+                ) ??
+                const <String, TaskPriorityAiCachedAssessment>{};
+        if (_disposed) {
+          return const <String, TaskPriorityAiCachedAssessment>{};
         }
-        return await _readSharedAiAssessments?.call(
-              aiService: aiService,
-              cacheScopeKey: sharedCacheScopeKey,
-              nowLocal: nowLocal,
-            ) ??
-            const <String, TaskPriorityAiCachedAssessment>{};
+        _lastSharedAiAssessmentReadAtByScope[sharedCacheScopeKey!] =
+            _nowLocal();
+        return entries;
       }
 
       Future<void> writeSharedPersistedAssessments({
