@@ -762,7 +762,7 @@ void main() {
           LlmProfile(
             id: 'llm_1',
             name: 'BYOK',
-            providerType: 'openai_compatible',
+            providerType: 'openai-compatible',
             baseUrl: 'https://example.com',
             modelName: 'gpt-test',
             isActive: true,
@@ -867,7 +867,7 @@ void main() {
         LlmProfile(
           id: 'llm_1',
           name: 'BYOK',
-          providerType: 'openai_compatible',
+          providerType: 'openai-compatible',
           baseUrl: 'https://example.com',
           modelName: 'gpt-test',
           isActive: true,
@@ -950,7 +950,7 @@ void main() {
         LlmProfile(
           id: 'llm_1',
           name: 'BYOK',
-          providerType: 'openai_compatible',
+          providerType: 'openai-compatible',
           baseUrl: 'https://example.com',
           modelName: 'gpt-test',
           isActive: true,
@@ -1022,7 +1022,7 @@ void main() {
         LlmProfile(
           id: 'llm_1',
           name: 'BYOK',
-          providerType: 'openai_compatible',
+          providerType: 'openai-compatible',
           baseUrl: 'https://example.com',
           modelName: 'gpt-test',
           isActive: true,

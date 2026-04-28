@@ -196,7 +196,7 @@ final class TestBackend extends AppBackend {
                 LlmProfile(
                   id: 'llm_1',
                   name: 'Test profile',
-                  providerType: 'openai_compatible',
+                  providerType: 'openai-compatible',
                   baseUrl: 'https://example.com',
                   modelName: 'gpt-test',
                   isActive: true,
