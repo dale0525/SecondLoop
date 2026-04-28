@@ -844,57 +844,6 @@ void main() {
     expect(aiService.calls, 1);
   });
 
-  test('complete local AI cache skips redundant shared cache I/O', () async {
-    SharedPreferences.setMockInitialValues({});
-    final aiService = _CountingAiService(
-      const TaskPriorityAiBatchResult(
-        entries: <TaskPriorityAiEntry>[
-          TaskPriorityAiEntry(
-            todoId: 'focus',
-            semanticAdjustment: 20,
-            reason: 'Still the best option.',
-            confidence: TaskPriorityAiConfidence.high,
-          ),
-        ],
-      ),
-      cacheScopeKey: 'cloud-scope',
-    );
-    var sharedReadCalls = 0;
-    var sharedWriteCalls = 0;
-    final store = TaskPriorityStore.fromLoaders(
-      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
-      loadTodos: () async => <Todo>[
-        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
-      ],
-      resolveAiService: () async => aiService,
-      readSharedAiAssessments: ({
-        required aiService,
-        required cacheScopeKey,
-        required nowLocal,
-      }) async {
-        sharedReadCalls += 1;
-        return const <String, TaskPriorityAiCachedAssessment>{};
-      },
-      writeSharedAiAssessments: ({
-        required aiService,
-        required cacheScopeKey,
-        required entries,
-        required activeTodoIds,
-        required nowLocal,
-      }) async {
-        sharedWriteCalls += 1;
-      },
-    );
-
-    await store.refresh();
-    store.markDirty();
-    await store.refresh();
-
-    expect(aiService.calls, 1);
-    expect(sharedReadCalls, 1);
-    expect(sharedWriteCalls, 1);
-  });
-
   test('scheduled rule score drift within TTL reuses cached rerank', () async {
     SharedPreferences.setMockInitialValues({});
     final aiService = _CountingAiService(

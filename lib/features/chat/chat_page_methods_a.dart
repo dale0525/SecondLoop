@@ -38,6 +38,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
 
     void onSyncChange() {
       if (!mounted) return;
+      _scheduleTaskPrioritySyncRefresh();
       if (!_isAtBottom) {
         _setState(() {
           _hasUnseenNewMessages = true;

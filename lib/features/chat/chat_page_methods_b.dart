@@ -621,8 +621,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       _attachmentEnrichmentFuturesBySha256.clear();
     });
     if (!refreshTaskPriority) return;
-    _taskPriorityStore?.markDirty();
-    unawaited(_taskPriorityStore?.refresh(force: true) ?? Future<void>.value());
+    _refreshTaskPriorityNow();
   }
 
   Future<void> _send() async {

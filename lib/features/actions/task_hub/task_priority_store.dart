@@ -29,8 +29,11 @@ enum TaskPriorityAiAvailability {
 class TaskPriorityStore extends ChangeNotifier {
   static const _kAiCachePrefsKey = 'task_priority_ai_cache_v3';
   static const _kAiCacheLastScopeKey = 'last_scope';
+  static const _kSharedCacheCompleteCoverageReadInterval = Duration(minutes: 1);
   final Map<String, _InMemoryAiAssessment> _inMemoryAiAssessments =
       <String, _InMemoryAiAssessment>{};
+  final Map<String, DateTime> _lastSharedAiAssessmentReadAtByScope =
+      <String, DateTime>{};
 
   TaskPriorityStore.fromLoaders({
     required Future<List<Todo>> Function() loadTodos,
@@ -349,6 +352,7 @@ class TaskPriorityStore extends ChangeNotifier {
         if (_disposed) {
           return const <String, TaskPriorityAiCachedAssessment>{};
         }
+        _lastSharedAiAssessmentReadAtByScope[sharedCacheScopeKey!] = nowLocal;
         if (client != null) {
           return client.read(
             nowLocal: nowLocal,
@@ -357,7 +361,7 @@ class TaskPriorityStore extends ChangeNotifier {
         }
         return await _readSharedAiAssessments?.call(
               aiService: aiService,
-              cacheScopeKey: sharedCacheScopeKey!,
+              cacheScopeKey: sharedCacheScopeKey,
               nowLocal: nowLocal,
             ) ??
             const <String, TaskPriorityAiCachedAssessment>{};
@@ -406,6 +410,21 @@ class TaskPriorityStore extends ChangeNotifier {
           request.candidates.every(
             (candidate) => bootstrapPersisted.containsKey(candidate.todoId),
           );
+      final activeTodoIds = rulesSnapshot.activeEntries
+          .map((entry) => entry.todo.id.trim())
+          .where((todoId) => todoId.isNotEmpty)
+          .toSet();
+
+      bool shouldReadSharedPersistedAssessments() {
+        if (!canUseSharedCache) return false;
+        if (!bootstrapHasCompleteCoverage) return true;
+        final lastReadAt =
+            _lastSharedAiAssessmentReadAtByScope[sharedCacheScopeKey];
+        if (lastReadAt == null) return true;
+        return nowLocal.difference(lastReadAt) >=
+            _kSharedCacheCompleteCoverageReadInterval;
+      }
+
       final publishedBootstrap = bootstrapPersisted.isNotEmpty
           ? _publishSnapshot(
               buildTaskPrioritySnapshot(
@@ -441,7 +460,7 @@ class TaskPriorityStore extends ChangeNotifier {
       }
 
       if (_disposed) return;
-      final sharedPersisted = canUseSharedCache && !bootstrapHasCompleteCoverage
+      final sharedPersisted = shouldReadSharedPersistedAssessments()
           ? await readSharedPersistedAssessments()
           : const <String, TaskPriorityAiCachedAssessment>{};
       if (_disposed) return;
@@ -541,6 +560,8 @@ class TaskPriorityStore extends ChangeNotifier {
         sharedCacheTodoIds.remove(todoId);
         localCacheTodoIds.remove(todoId);
       }
+      final hasInactiveMergedAssessments =
+          mergedPersisted.keys.any((todoId) => !activeTodoIds.contains(todoId));
 
       var didLiveRerankFail = false;
       if (aiService != null && staleCandidates.isNotEmpty) {
@@ -581,21 +602,18 @@ class TaskPriorityStore extends ChangeNotifier {
         await _writePersistedAiAssessments(
           cacheScopeKey: persistedCacheScopeKey,
           entries: mergedPersisted,
-          activeTodoIds:
-              rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
+          activeTodoIds: activeTodoIds,
           nowLocal: nowLocal,
         );
       } else if (canUseInMemoryCache) {
         _writeInMemoryAiAssessments(
           entries: mergedPersisted,
-          activeTodoIds:
-              rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
+          activeTodoIds: activeTodoIds,
         );
       }
       if (_disposed) return;
-      if (canUseSharedCache && liveTodoIds.isNotEmpty) {
-        final activeTodoIds =
-            rulesSnapshot.activeEntries.map((entry) => entry.todo.id);
+      if (canUseSharedCache &&
+          (liveTodoIds.isNotEmpty || hasInactiveMergedAssessments)) {
         await writeSharedPersistedAssessments(
           entries: mergedPersisted,
           activeTodoIds: activeTodoIds,

@@ -149,6 +149,7 @@ part 'chat_page_methods_m_ask_scope_empty_card.dart';
 part 'chat_page_methods_n_detached_snapshot.dart';
 part 'chat_page_methods_p_ask_ai_meta.dart';
 part 'chat_page_methods_o_focus_routing.dart';
+part 'chat_page_task_priority_refresh.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
 part 'chat_page_message_item_footer.dart';
@@ -495,6 +496,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   int _todoAgendaBannerCollapseSignal = 0;
   bool _detachedAskRecoveryChecked = false;
   Timer? _detachedAskRecoveryTimer;
+  Timer? _taskPrioritySyncRefreshDebounceTimer;
   String? _activeCloudRequestId;
   String? _activeCloudGatewayBaseUrl;
   String? _activeCloudIdToken;
@@ -569,6 +571,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
     _detachedAskRecoveryTimer?.cancel();
+    _cancelTaskPrioritySyncRefreshDebounce();
     if (_taskHubQuickActionSnackToken != null &&
         (_taskHubQuickActionSnackMessenger?.mounted ?? false)) {
       _taskHubQuickActionSnackMessenger?.removeCurrentSnackBar();
