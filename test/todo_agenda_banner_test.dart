@@ -37,6 +37,28 @@ Future<void> _pumpUntilFound(
   expect(finder, findsOneWidget);
 }
 
+String _stableTaskPriorityRequestSignatureFor(Todo todo, DateTime nowLocal) {
+  final candidate = buildTaskPriorityAiRequest(
+    buildTaskPrioritySnapshot(<Todo>[todo], nowLocal: nowLocal),
+    nowLocal: nowLocal,
+  ).candidates.single;
+  return jsonEncode(<String, Object?>{
+    'candidate': <String, Object?>{
+      'todo_id': candidate.todoId,
+      'title': candidate.title,
+      'status': candidate.status,
+      'band': candidate.band.name,
+      'due_state': candidate.dueState,
+      'source_summary': candidate.sourceSummary,
+      'is_repeatedly_deferred': candidate.isRepeatedlyDeferred,
+      'is_potential_blocker': candidate.isPotentialBlocker,
+      'is_quick_win': candidate.isQuickWin,
+      'rule_is_important': candidate.ruleIsImportant,
+      'rule_is_urgent': candidate.ruleIsUrgent,
+    },
+  });
+}
+
 void main() {
   setUp(() {
     BackendTaskPriorityAiService.clearSharedCacheForTest();
@@ -477,44 +499,23 @@ void main() {
   testWidgets('Chat task hub banner shows shared ai source label',
       (tester) async {
     final nowLocal = DateTime.now();
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[
-            const Todo(
-              id: 'todo:shared-label',
-              title: 'Shared chat task',
-              dueAtMs: null,
-              status: 'open',
-              sourceEntryId: null,
-              createdAtMs: 0,
-              updatedAtMs: 0,
-              reviewStage: null,
-              nextReviewAtMs: null,
-              lastReviewAtMs: null,
-            ),
-          ],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    const todo = Todo(
+      id: 'todo:shared-label',
+      title: 'Shared chat task',
+      dueAtMs: null,
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+    final requestSignature =
+        _stableTaskPriorityRequestSignatureFor(todo, nowLocal);
 
     final backend = _AgendaBackend(
-      todos: const [
-        Todo(
-          id: 'todo:shared-label',
-          title: 'Shared chat task',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
+      todos: const [todo],
       sharedTaskPriorityAssessmentsJson: jsonEncode(<String, Object?>{
         'entries': <Object?>[
           <String, Object?>{
@@ -597,28 +598,20 @@ void main() {
       localeTag: 'en-US',
       partitionKey: '["p1","openai-compatible"]',
     );
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[
-            const Todo(
-              id: 'todo:cached-label',
-              title: 'Cached chat task',
-              dueAtMs: null,
-              status: 'open',
-              sourceEntryId: null,
-              createdAtMs: 0,
-              updatedAtMs: 0,
-              reviewStage: null,
-              nextReviewAtMs: null,
-              lastReviewAtMs: null,
-            ),
-          ],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    const todo = Todo(
+      id: 'todo:cached-label',
+      title: 'Cached chat task',
+      dueAtMs: null,
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+    final requestSignature =
+        _stableTaskPriorityRequestSignatureFor(todo, nowLocal);
     SharedPreferences.setMockInitialValues({
       'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
         'scopes': <String, Object?>{
@@ -642,20 +635,7 @@ void main() {
     });
 
     final backend = _AgendaBackend(
-      todos: const [
-        Todo(
-          id: 'todo:cached-label',
-          title: 'Cached chat task',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
+      todos: const [todo],
     );
 
     await tester.pumpWidget(
@@ -705,28 +685,20 @@ void main() {
       localeTag: 'en',
       partitionKey: '["p1","openai-compatible"]',
     );
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[
-            const Todo(
-              id: 'todo:bootstrap-label',
-              title: 'Bootstrap cached task',
-              dueAtMs: null,
-              status: 'open',
-              sourceEntryId: null,
-              createdAtMs: 0,
-              updatedAtMs: 0,
-              reviewStage: null,
-              nextReviewAtMs: null,
-              lastReviewAtMs: null,
-            ),
-          ],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    const todo = Todo(
+      id: 'todo:bootstrap-label',
+      title: 'Bootstrap cached task',
+      dueAtMs: null,
+      status: 'open',
+      sourceEntryId: null,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+    );
+    final requestSignature =
+        _stableTaskPriorityRequestSignatureFor(todo, nowLocal);
     SharedPreferences.setMockInitialValues({
       'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
         'scopes': <String, Object?>{
@@ -749,20 +721,7 @@ void main() {
     });
 
     final backend = _AgendaBackend(
-      todos: const [
-        Todo(
-          id: 'todo:bootstrap-label',
-          title: 'Bootstrap cached task',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
+      todos: const [todo],
       llmProfiles: const <LlmProfile>[],
     );
 
