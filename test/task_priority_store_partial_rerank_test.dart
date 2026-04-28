@@ -81,8 +81,7 @@ void main() {
     expect(service.requestTodoIds.last, <String>['b']);
   });
 
-  test('updating only candidate timestamp reranks that stale candidate',
-      () async {
+  test('updating only candidate timestamp reuses cached candidates', () async {
     SharedPreferences.setMockInitialValues({});
     var updatedAtMs = 20;
     final service = _RecordingAiService();
@@ -103,8 +102,7 @@ void main() {
     store.markDirty();
     await store.refresh();
 
-    expect(service.requestTodoIds, hasLength(2));
-    expect(service.requestTodoIds.last, <String>['b']);
+    expect(service.requestTodoIds, hasLength(1));
   });
 
   test('ttl expiry reranks unchanged candidates', () async {

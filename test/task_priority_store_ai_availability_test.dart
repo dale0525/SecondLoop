@@ -216,15 +216,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     var remoteReads = 0;
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = _stableRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
     final store = TaskPriorityStore.fromLoaders(
       nowLocal: () => nowLocal,
       loadTodos: () async => <Todo>[
@@ -275,15 +270,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     var remoteReads = 0;
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = _stableRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
     final store = TaskPriorityStore.fromLoaders(
       nowLocal: () => nowLocal,
       loadTodos: () async => <Todo>[
@@ -384,15 +374,10 @@ void main() {
     expect(warmStore.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
 
     final nowLocal = DateTime(2026, 3, 13, 10, 6);
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = _stableRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
 
     final fallbackStore = TaskPriorityStore.fromLoaders(
       nowLocal: () => nowLocal,
@@ -484,15 +469,10 @@ void main() {
     await store.refresh();
     expect(store.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
 
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = _stableRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
 
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('task_priority_ai_cache_v3');
@@ -562,15 +542,10 @@ void main() {
     await store.refresh();
     expect(store.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
 
-    final requestSignature = jsonEncode(<String, Object?>{
-      'candidate': buildTaskPriorityAiRequest(
-        buildTaskPrioritySnapshot(
-          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
-          nowLocal: nowLocal,
-        ),
-        nowLocal: nowLocal,
-      ).candidates.single.toJson(),
-    });
+    final requestSignature = _stableRequestSignatureFor(
+      todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      nowLocal,
+    );
 
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('task_priority_ai_cache_v3');
@@ -746,6 +721,28 @@ void main() {
       store.snapshot.enhancementSource,
       TaskPriorityEnhancementSource.aiLive,
     );
+  });
+}
+
+String _stableRequestSignatureFor(Todo todo, DateTime nowLocal) {
+  final candidate = buildTaskPriorityAiRequest(
+    buildTaskPrioritySnapshot(<Todo>[todo], nowLocal: nowLocal),
+    nowLocal: nowLocal,
+  ).candidates.single;
+  return jsonEncode(<String, Object?>{
+    'candidate': <String, Object?>{
+      'todo_id': candidate.todoId,
+      'title': candidate.title,
+      'status': candidate.status,
+      'band': candidate.band.name,
+      'due_state': candidate.dueState,
+      'source_summary': candidate.sourceSummary,
+      'is_repeatedly_deferred': candidate.isRepeatedlyDeferred,
+      'is_potential_blocker': candidate.isPotentialBlocker,
+      'is_quick_win': candidate.isQuickWin,
+      'rule_is_important': candidate.ruleIsImportant,
+      'rule_is_urgent': candidate.ruleIsUrgent,
+    },
   });
 }
 

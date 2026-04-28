@@ -328,12 +328,63 @@ class TaskPriorityStore extends ChangeNotifier {
       final canUsePersistedCache =
           persistedCacheScopeKey != null && persistedCacheScopeKey.isNotEmpty;
       final canUseInMemoryCache = !canUsePersistedCache;
-      final sharedAssessmentsClient = canUseSharedCache
-          ? await _resolveSharedAiAssessmentsClient?.call(
-              cacheScopeKey: sharedCacheScopeKey,
-            )
-          : null;
-      if (_disposed) return;
+      BackendTaskPriorityAiSharedAssessmentsClient? sharedAssessmentsClient;
+      var didResolveSharedAssessmentsClient = false;
+
+      Future<BackendTaskPriorityAiSharedAssessmentsClient?>
+          resolveSharedAssessmentsClient() async {
+        if (!canUseSharedCache || didResolveSharedAssessmentsClient) {
+          return sharedAssessmentsClient;
+        }
+        didResolveSharedAssessmentsClient = true;
+        sharedAssessmentsClient = await _resolveSharedAiAssessmentsClient?.call(
+          cacheScopeKey: sharedCacheScopeKey,
+        );
+        return sharedAssessmentsClient;
+      }
+
+      Future<Map<String, TaskPriorityAiCachedAssessment>>
+          readSharedPersistedAssessments() async {
+        final client = await resolveSharedAssessmentsClient();
+        if (_disposed) {
+          return const <String, TaskPriorityAiCachedAssessment>{};
+        }
+        if (client != null) {
+          return client.read(
+            nowLocal: nowLocal,
+            cacheTtl: _aiCacheTtl,
+          );
+        }
+        return await _readSharedAiAssessments?.call(
+              aiService: aiService,
+              cacheScopeKey: sharedCacheScopeKey!,
+              nowLocal: nowLocal,
+            ) ??
+            const <String, TaskPriorityAiCachedAssessment>{};
+      }
+
+      Future<void> writeSharedPersistedAssessments({
+        required Map<String, TaskPriorityAiCachedAssessment> entries,
+        required Iterable<String> activeTodoIds,
+      }) async {
+        final client = await resolveSharedAssessmentsClient();
+        if (_disposed) return;
+        if (client != null) {
+          await client.write(
+            entries: entries,
+            activeTodoIds: activeTodoIds,
+          );
+        } else {
+          await _writeSharedAiAssessments?.call(
+            aiService: aiService,
+            cacheScopeKey: sharedCacheScopeKey!,
+            entries: entries,
+            activeTodoIds: activeTodoIds,
+            nowLocal: nowLocal,
+          );
+        }
+      }
+
       final candidateByTodoId = <String, TaskPriorityAiCandidate>{
         for (final candidate in request.candidates) candidate.todoId: candidate,
       };
@@ -390,18 +441,8 @@ class TaskPriorityStore extends ChangeNotifier {
       }
 
       if (_disposed) return;
-      final sharedPersisted = canUseSharedCache
-          ? sharedAssessmentsClient != null
-              ? await sharedAssessmentsClient.read(
-                  nowLocal: nowLocal,
-                  cacheTtl: _aiCacheTtl,
-                )
-              : await _readSharedAiAssessments?.call(
-                    aiService: aiService,
-                    cacheScopeKey: sharedCacheScopeKey,
-                    nowLocal: nowLocal,
-                  ) ??
-                  const <String, TaskPriorityAiCachedAssessment>{}
+      final sharedPersisted = canUseSharedCache && !bootstrapHasCompleteCoverage
+          ? await readSharedPersistedAssessments()
           : const <String, TaskPriorityAiCachedAssessment>{};
       if (_disposed) return;
       final persisted = canUsePersistedCache
@@ -552,23 +593,13 @@ class TaskPriorityStore extends ChangeNotifier {
         );
       }
       if (_disposed) return;
-      if (canUseSharedCache) {
+      if (canUseSharedCache && liveTodoIds.isNotEmpty) {
         final activeTodoIds =
             rulesSnapshot.activeEntries.map((entry) => entry.todo.id);
-        if (sharedAssessmentsClient != null) {
-          await sharedAssessmentsClient.write(
-            entries: mergedPersisted,
-            activeTodoIds: activeTodoIds,
-          );
-        } else {
-          await _writeSharedAiAssessments?.call(
-            aiService: aiService,
-            cacheScopeKey: sharedCacheScopeKey,
-            entries: mergedPersisted,
-            activeTodoIds: activeTodoIds,
-            nowLocal: nowLocal,
-          );
-        }
+        await writeSharedPersistedAssessments(
+          entries: mergedPersisted,
+          activeTodoIds: activeTodoIds,
+        );
       }
       if (_disposed) return;
 

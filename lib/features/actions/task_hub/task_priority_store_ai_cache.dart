@@ -289,7 +289,21 @@ String _buildTaskPriorityCandidateRequestSignature(
   TaskPriorityAiCandidate candidate, {
   required DateTime nowLocal,
 }) {
+  // Volatile prompt context should not invalidate semantic AI assessments.
+  final stableCandidate = <String, Object?>{
+    'todo_id': candidate.todoId,
+    'title': candidate.title,
+    'status': candidate.status,
+    'band': candidate.band.name,
+    'due_state': candidate.dueState,
+    'source_summary': candidate.sourceSummary,
+    'is_repeatedly_deferred': candidate.isRepeatedlyDeferred,
+    'is_potential_blocker': candidate.isPotentialBlocker,
+    'is_quick_win': candidate.isQuickWin,
+    'rule_is_important': candidate.ruleIsImportant,
+    'rule_is_urgent': candidate.ruleIsUrgent,
+  };
   return jsonEncode(<String, Object?>{
-    'candidate': candidate.toJson(),
+    'candidate': stableCandidate,
   });
 }
