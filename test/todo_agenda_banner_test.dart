@@ -203,6 +203,142 @@ void main() {
     expect(find.byType(TaskHubPage), findsOneWidget);
   });
 
+  testWidgets('Chat task hub entry refreshes banner after returning',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _AgendaBackend(
+      todos: const [
+        Todo(
+          id: 'todo:refresh',
+          title: 'Review old metrics',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(
+              home: ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('Review old metrics'));
+
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
+    await tester.pumpAndSettle();
+    expect(find.byType(TaskHubPage), findsOneWidget);
+
+    backend.replaceTodo(
+      const Todo(
+        id: 'todo:refresh',
+        title: 'Review fresh metrics',
+        dueAtMs: null,
+        status: 'open',
+        sourceEntryId: 'm1',
+        createdAtMs: 0,
+        updatedAtMs: 10,
+        reviewStage: null,
+        nextReviewAtMs: null,
+        lastReviewAtMs: null,
+      ),
+    );
+    Navigator.of(tester.element(find.byType(TaskHubPage))).pop();
+
+    final banner = find.byKey(const ValueKey('task_hub_banner'));
+    await _pumpUntilFound(
+      tester,
+      find.descendant(of: banner, matching: find.text('Review fresh metrics')),
+    );
+
+    expect(
+      find.descendant(of: banner, matching: find.text('Review old metrics')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('Chat without app bar still shows top task hub entry',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _AgendaBackend(
+      todos: const [
+        Todo(
+          id: 'todo:no-appbar',
+          title: 'Review embedded chat task',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(
+              home: ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+                showAppBar: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('chat_open_task_center')),
+    );
+
+    expect(find.byType(AppBar), findsNothing);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_open_hub')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TaskHubPage), findsOneWidget);
+  });
+
   testWidgets('Task hub banner expanded chat view hides other task rows',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -1004,6 +1140,10 @@ final class _AgendaBackend extends TestAppBackend {
   final List<LlmProfile> _llmProfiles;
   final String? taskPriorityAiResponseJson;
   final String? sharedTaskPriorityAssessmentsJson;
+
+  void replaceTodo(Todo todo) {
+    _todosById[todo.id] = todo;
+  }
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>

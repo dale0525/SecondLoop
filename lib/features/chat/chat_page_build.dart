@@ -16,6 +16,12 @@ extension _ChatPageStateBuild on _ChatPageState {
     final locale = Localizations.localeOf(context);
     final activeTagFilterCount =
         _selectedTagFilterIds.length + _selectedTagExcludeIds.length;
+    final openTaskHubButton = IconButton(
+      key: const ValueKey('chat_open_task_center'),
+      tooltip: context.t.actions.taskHub.openTaskHub,
+      onPressed: () => unawaited(_openTaskHubFromChat()),
+      icon: const Icon(Icons.checklist_rtl_rounded),
+    );
     return ScaffoldMessenger(
       key: _scaffoldMessengerKey,
       child: Scaffold(
@@ -24,23 +30,7 @@ extension _ChatPageStateBuild on _ChatPageState {
             ? AppBar(
                 title: Text(title),
                 actions: [
-                  IconButton(
-                    key: const ValueKey('chat_open_task_center'),
-                    tooltip: context.t.actions.taskHub.openTaskHub,
-                    onPressed: () {
-                      unawaited(
-                        _pushRouteFromChat(
-                          MaterialPageRoute(
-                            builder: (_) => wrapPushedPageWithInheritedScopes(
-                              context,
-                              const TaskHubPage(),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.checklist_rtl_rounded),
-                  ),
+                  openTaskHubButton,
                   IconButton(
                     key: const ValueKey('chat_tag_filter_button'),
                     tooltip: _tagFilterTooltip(locale),
@@ -104,6 +94,17 @@ extension _ChatPageStateBuild on _ChatPageState {
           onTap: _dismissTransientChatUiByBlankTap,
           child: Column(
             children: [
+              if (!widget.showAppBar)
+                SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [openTaskHubButton],
+                    ),
+                  ),
+                ),
               _buildSelectedTagFilterBar(),
               if (!isMobileKeyboardVisible) ...[
                 if (_taskPriorityStore != null)

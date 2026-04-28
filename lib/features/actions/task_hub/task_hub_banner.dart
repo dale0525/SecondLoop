@@ -517,27 +517,29 @@ class _CompactHeaderActionButton extends StatelessWidget {
           ? Colors.transparent
           : tokens.borderSubtle.withOpacity(0.85),
     );
-    return IconButton(
+    return SizedBox.square(
       key: buttonKey,
-      tooltip: tooltip,
-      onPressed: onPressed,
-      visualDensity: VisualDensity.compact,
-      iconSize: 18,
-      padding: EdgeInsets.zero,
-      style: ButtonStyle(
-        minimumSize: const MaterialStatePropertyAll(Size.square(34)),
-        maximumSize: const MaterialStatePropertyAll(Size.square(34)),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        backgroundColor: MaterialStatePropertyAll(backgroundColor),
-        foregroundColor: MaterialStatePropertyAll(foregroundColor),
-        side: MaterialStatePropertyAll(borderSide),
-        shape: MaterialStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(tokens.radiusMd),
+      dimension: 48,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        iconSize: 20,
+        padding: EdgeInsets.zero,
+        style: ButtonStyle(
+          minimumSize: const MaterialStatePropertyAll(Size.square(48)),
+          maximumSize: const MaterialStatePropertyAll(Size.square(48)),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          backgroundColor: MaterialStatePropertyAll(backgroundColor),
+          foregroundColor: MaterialStatePropertyAll(foregroundColor),
+          side: MaterialStatePropertyAll(borderSide),
+          shape: MaterialStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(tokens.radiusMd),
+            ),
           ),
         ),
+        icon: Icon(icon),
       ),
-      icon: Icon(icon),
     );
   }
 }

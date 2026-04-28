@@ -268,6 +268,8 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner_primary_action')),
     );
     expect(actionRect.left, greaterThan(titleRect.right));
+    expect(actionRect.width, greaterThanOrEqualTo(48));
+    expect(actionRect.height, greaterThanOrEqualTo(48));
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
