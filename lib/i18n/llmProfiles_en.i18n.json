@@ -1,9 +1,7 @@
 {
   "title": "AI profiles",
   "refreshTooltip": "Refresh",
-  "activeProfileHelp": "The active profile is reused as the general LLM API profile across intelligence features.",
-  "mediaByokOpenAiCompatibleHelp": "Media BYOK only supports OpenAI-compatible profiles. Incompatible profiles (for example Gemini/Anthropic) are hidden here.",
-  "noProfilesYet": "No profiles yet.",
+  "activeProfileHelp": "BYOK features only support OpenAI-compatible API profiles.",
   "noOpenAiCompatibleProfiles": "No OpenAI-compatible profiles are available. Create an OpenAI-compatible profile first.",
   "addProfile": "Add profile",
   "deleted": "AI profile deleted",
@@ -20,9 +18,7 @@
     "apiKey": "API key"
   },
   "providers": {
-    "openaiCompatible": "OpenAI-compatible",
-    "geminiCompatible": "Gemini",
-    "anthropicCompatible": "Anthropic"
+    "openaiCompatible": "OpenAI-compatible"
   },
   "savedActivated": "AI profile saved and activated",
   "actions": {

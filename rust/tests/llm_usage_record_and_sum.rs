@@ -26,11 +26,11 @@ fn llm_usage_daily_records_and_sums_by_purpose() {
     let profile2 = db::create_llm_profile(
         &conn,
         &key,
-        "Gemini",
-        "gemini-compatible",
-        Some("https://generativelanguage.googleapis.com/v1beta"),
+        "OpenAI Backup",
+        "openai-compatible",
+        Some("https://api.openai.com/v1"),
         Some("sk-test"),
-        "gemini-1.5-flash",
+        "gpt-4o-mini",
         false,
     )
     .expect("create profile2");

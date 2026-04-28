@@ -665,9 +665,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       await _reloadMediaState(forceLoading: false);
       if (next == MediaSourcePreference.byok &&
           _mediaRoute != MediaSourceRouteKind.byok) {
-        await _openLlmProfilesForByokSetupAndRefreshRoutes(
-          providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-        );
+        await _openLlmProfilesForByokSetupAndRefreshRoutes();
       }
     } finally {
       if (mounted) {
@@ -711,19 +709,16 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     await _reloadEmbeddingsState(forceLoading: false);
   }
 
-  Future<void> _openLlmProfilesForByokSetupAndRefreshRoutes({
-    LlmProfilesProviderFilter providerFilter = LlmProfilesProviderFilter.all,
-  }) async {
+  Future<void> _openLlmProfilesForByokSetupAndRefreshRoutes() async {
     if (!mounted) return;
     if (AppBackendScope.maybeOf(context) == null) return;
 
     await pushPageWithInheritedScopes(
       Navigator.of(context),
       context,
-      LlmProfilesPage(
+      const LlmProfilesPage(
         focusTarget: LlmProfilesFocusTarget.addProfileForm,
         highlightFocus: true,
-        providerFilter: providerFilter,
       ),
     );
 
@@ -897,8 +892,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     }
 
     return _isZhLocale(context)
-        ? '媒体 BYOK 仅支持 OpenAI-compatible 配置。请在“API Key（AI 对话）”里新增或激活 OpenAI-compatible profile（Gemini/Anthropic 不能用于图片理解、OCR、音频转写）。'
-        : 'Media BYOK only supports OpenAI-compatible profiles. Add or activate an OpenAI-compatible profile in API Keys (Ask AI). Gemini/Anthropic profiles cannot run image understanding, OCR, or audio transcription.';
+        ? '媒体 BYOK 仅支持 OpenAI-compatible 配置。请在“API Key（AI 对话）”里新增或激活 OpenAI-compatible profile。'
+        : 'Media BYOK only supports OpenAI-compatible profiles. Add or activate an OpenAI-compatible profile in API Keys (Ask AI).';
   }
 
   @override

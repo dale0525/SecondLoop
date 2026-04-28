@@ -20,7 +20,9 @@ Future<bool> hasActiveLlmProfile(
   Uint8List sessionKey,
 ) async {
   final profiles = await backend.listLlmProfiles(sessionKey);
-  return profiles.any((p) => p.isActive);
+  return profiles.any(
+    (p) => p.isActive && p.providerType == 'openai-compatible',
+  );
 }
 
 Future<AskAiRouteKind> decideAskAiRoute(

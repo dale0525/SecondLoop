@@ -184,7 +184,7 @@ void main() {
         const LlmProfile(
           id: 'profile-a',
           name: 'Profile A',
-          providerType: 'openai_compatible',
+          providerType: 'openai-compatible',
           baseUrl: 'https://a.example',
           modelName: 'model-a',
           isActive: true,
@@ -194,7 +194,7 @@ void main() {
         const LlmProfile(
           id: 'profile-b',
           name: 'Profile B',
-          providerType: 'openai_compatible',
+          providerType: 'openai-compatible',
           baseUrl: 'https://b.example',
           modelName: 'model-b',
           isActive: false,

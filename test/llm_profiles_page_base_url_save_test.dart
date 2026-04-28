@@ -11,7 +11,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Saving Gemini profile passes baseUrl to backend',
+  testWidgets('Saving OpenAI-compatible profile passes baseUrl to backend',
       (tester) async {
     final backend = _CaptureCreateLlmProfileBackend();
     await tester.pumpWidget(
@@ -31,18 +31,13 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('llm_provider_type')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Gemini').last);
-    await tester.pumpAndSettle();
-
     await tester.enterText(
       find.byKey(const ValueKey('llm_base_url')),
-      'https://proxy.example.com/v1beta',
+      'https://proxy.example.com/v1',
     );
     await tester.enterText(
       find.byKey(const ValueKey('llm_model_name')),
-      'gemini-1.5-flash',
+      'gpt-4o-mini',
     );
     await tester.enterText(
       find.byWidgetPredicate((w) => w is TextField && w.obscureText),
@@ -55,8 +50,8 @@ void main() {
     await tester.tap(saveButton);
     await tester.pumpAndSettle();
 
-    expect(backend.lastCreateProviderType, 'gemini-compatible');
-    expect(backend.lastCreateBaseUrl, 'https://proxy.example.com/v1beta');
+    expect(backend.lastCreateProviderType, 'openai-compatible');
+    expect(backend.lastCreateBaseUrl, 'https://proxy.example.com/v1');
   });
 }
 

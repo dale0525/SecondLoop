@@ -15,22 +15,15 @@ enum LlmProfilesFocusTarget {
   addProfileForm,
 }
 
-enum LlmProfilesProviderFilter {
-  all,
-  openAiCompatibleOnly,
-}
-
 class LlmProfilesPage extends StatefulWidget {
   const LlmProfilesPage({
     this.focusTarget,
     this.highlightFocus = false,
-    this.providerFilter = LlmProfilesProviderFilter.all,
     super.key,
   });
 
   final LlmProfilesFocusTarget? focusTarget;
   final bool highlightFocus;
-  final LlmProfilesProviderFilter providerFilter;
 
   @override
   State<LlmProfilesPage> createState() => _LlmProfilesPageState();
@@ -58,75 +51,43 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
 
   static const _defaultNameByProvider = <String, String>{
     'openai-compatible': 'OpenAI',
-    'gemini-compatible': 'Gemini',
-    'anthropic-compatible': 'Anthropic',
   };
 
   static const _defaultModelByProvider = <String, String>{
     'openai-compatible': 'gpt-4o-mini',
-    'gemini-compatible': 'gemini-1.5-flash',
-    'anthropic-compatible': 'claude-3-5-sonnet-20240620',
   };
 
   static const _defaultBaseUrlByProvider = <String, String>{
     'openai-compatible': 'https://api.openai.com/v1',
-    'gemini-compatible': 'https://generativelanguage.googleapis.com/v1beta',
-    'anthropic-compatible': 'https://api.anthropic.com/v1',
   };
 
   static const _allProviderTypes = <String>[
     'openai-compatible',
-    'gemini-compatible',
-    'anthropic-compatible',
   ];
 
-  List<String> get _allowedProviderTypes {
-    return switch (widget.providerFilter) {
-      LlmProfilesProviderFilter.all => _allProviderTypes,
-      LlmProfilesProviderFilter.openAiCompatibleOnly => const <String>[
-          'openai-compatible',
-        ],
-    };
-  }
-
   bool _isProviderTypeAllowed(String providerType) {
-    return _allowedProviderTypes.contains(providerType);
+    return _allProviderTypes.contains(providerType);
   }
 
   List<LlmProfile> _visibleProfiles(List<LlmProfile> profiles) {
-    if (widget.providerFilter == LlmProfilesProviderFilter.all) {
-      return profiles;
-    }
     return profiles
         .where((profile) => _isProviderTypeAllowed(profile.providerType))
         .toList(growable: false);
   }
 
   String _activeProfileHelpText(BuildContext context) {
-    if (widget.providerFilter !=
-        LlmProfilesProviderFilter.openAiCompatibleOnly) {
-      return context.t.llmProfiles.activeProfileHelp;
-    }
-
-    return context.t.llmProfiles.mediaByokOpenAiCompatibleHelp;
+    return context.t.llmProfiles.activeProfileHelp;
   }
 
   String _noVisibleProfilesText(BuildContext context) {
-    if (widget.providerFilter !=
-        LlmProfilesProviderFilter.openAiCompatibleOnly) {
-      return context.t.llmProfiles.noProfilesYet;
-    }
-
     return context.t.llmProfiles.noOpenAiCompatibleProfiles;
   }
 
   List<DropdownMenuItem<String>> _providerTypeItems(BuildContext context) {
     final providers = context.t.llmProfiles.providers;
-    return _allowedProviderTypes.map((providerType) {
+    return _allProviderTypes.map((providerType) {
       final label = switch (providerType) {
         'openai-compatible' => providers.openaiCompatible,
-        'gemini-compatible' => providers.geminiCompatible,
-        'anthropic-compatible' => providers.anthropicCompatible,
         _ => providerType,
       };
       return DropdownMenuItem(
@@ -137,9 +98,9 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
   }
 
   bool _ensureAllowedProviderType() {
-    if (_allowedProviderTypes.contains(_providerType)) return false;
+    if (_allProviderTypes.contains(_providerType)) return false;
     final oldProviderType = _providerType;
-    _providerType = _allowedProviderTypes.first;
+    _providerType = _allProviderTypes.first;
     _applyProviderDefaults(oldProviderType);
     return true;
   }
@@ -192,7 +153,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     final profiles = _profiles;
     if (profiles == null) return target;
 
-    final hasActive = profiles.any((p) => p.isActive);
+    final hasActive = _visibleProfiles(profiles).any((p) => p.isActive);
     return hasActive ? target : LlmProfilesFocusTarget.addProfileForm;
   }
 
@@ -301,14 +262,6 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     _ensureAllowedProviderType();
     if (widget.highlightFocus && widget.focusTarget != null) {
       _highlightedFocusTarget = widget.focusTarget;
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant LlmProfilesPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.providerFilter != widget.providerFilter) {
-      _ensureAllowedProviderType();
     }
   }
 
@@ -432,7 +385,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     final apiKey = _apiKeyController.text.trim();
     final modelName = _modelController.text.trim();
 
-    if (!_allowedProviderTypes.contains(_providerType) ||
+    if (!_allProviderTypes.contains(_providerType) ||
         name.isEmpty ||
         modelName.isEmpty ||
         apiKey.isEmpty) {

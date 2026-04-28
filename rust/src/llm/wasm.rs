@@ -133,55 +133,6 @@ pub mod openai {
     }
 }
 
-pub mod anthropic {
-    use anyhow::Result;
-
-    pub struct AnthropicCompatibleProvider;
-
-    impl AnthropicCompatibleProvider {
-        pub fn new(
-            _base_url: String,
-            _api_key: String,
-            _model_name: String,
-            _max_tokens: u32,
-        ) -> Self {
-            Self
-        }
-    }
-
-    impl crate::rag::AnswerProvider for AnthropicCompatibleProvider {
-        fn stream_answer(
-            &self,
-            _prompt: &str,
-            _on_event: &mut dyn FnMut(super::ChatDelta) -> Result<()>,
-        ) -> Result<()> {
-            Err(super::unsupported())
-        }
-    }
-}
-
-pub mod gemini {
-    use anyhow::Result;
-
-    pub struct GeminiCompatibleProvider;
-
-    impl GeminiCompatibleProvider {
-        pub fn new(_base_url: String, _api_key: String, _model_name: String) -> Self {
-            Self
-        }
-    }
-
-    impl crate::rag::AnswerProvider for GeminiCompatibleProvider {
-        fn stream_answer(
-            &self,
-            _prompt: &str,
-            _on_event: &mut dyn FnMut(super::ChatDelta) -> Result<()>,
-        ) -> Result<()> {
-            Err(super::unsupported())
-        }
-    }
-}
-
 pub mod gateway {
     use anyhow::Result;
 
@@ -238,34 +189,6 @@ pub fn answer_provider_from_profile(
                 .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
             Ok(Box::new(openai::OpenAiCompatibleProvider::new(
                 base_url, api_key, model_name, None,
-            )))
-        }
-        "gemini-compatible" => {
-            let api_key = profile
-                .api_key
-                .clone()
-                .ok_or_else(|| anyhow!("missing api_key for gemini-compatible provider"))?;
-            let base_url = profile
-                .base_url
-                .clone()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1beta".to_string());
-            Ok(Box::new(gemini::GeminiCompatibleProvider::new(
-                base_url, api_key, model_name,
-            )))
-        }
-        "anthropic-compatible" => {
-            let api_key = profile
-                .api_key
-                .clone()
-                .ok_or_else(|| anyhow!("missing api_key for anthropic-compatible provider"))?;
-            let base_url = profile
-                .base_url
-                .clone()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| "https://api.anthropic.com/v1".to_string());
-            Ok(Box::new(anthropic::AnthropicCompatibleProvider::new(
-                base_url, api_key, model_name, 1024,
             )))
         }
         _ => Err(anyhow!("unsupported provider_type: {provider_type}")),

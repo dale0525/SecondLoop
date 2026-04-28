@@ -11,7 +11,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('LLM profiles page shows provider selector', (tester) async {
+  testWidgets('LLM profiles page only allows OpenAI-compatible provider',
+      (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
@@ -29,68 +30,29 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('llm_provider_type')), findsOneWidget);
-  });
+    final selector = tester.widget<DropdownButtonFormField<String>>(
+      find.byKey(const ValueKey('llm_provider_type')),
+    );
 
-  testWidgets('Switching provider updates default model name', (tester) async {
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AppBackendScope(
-            backend: _EmptyLlmProfilesBackend(),
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: const LlmProfilesPage(),
-            ),
-          ),
+    final dropdownButton = tester.widget<DropdownButton<String>>(
+      find.descendant(
+        of: find.byKey(const ValueKey('llm_provider_type')),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is DropdownButton<String>,
         ),
       ),
     );
 
-    await tester.pumpAndSettle();
-
-    final openAiModelField = tester.widget<TextField>(
-      find.byKey(const ValueKey('llm_model_name')),
-    );
-    expect(openAiModelField.controller?.text, 'gpt-4o-mini');
-
-    final openAiBaseUrlField = tester.widget<TextField>(
-      find.byKey(const ValueKey('llm_base_url')),
-    );
-    expect(openAiBaseUrlField.controller?.text, 'https://api.openai.com/v1');
-
-    await tester.tap(find.byKey(const ValueKey('llm_provider_type')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Gemini').last);
-    await tester.pumpAndSettle();
-
-    final geminiModelField = tester.widget<TextField>(
-      find.byKey(const ValueKey('llm_model_name')),
-    );
-    expect(geminiModelField.controller?.text, 'gemini-1.5-flash');
-
-    final geminiBaseUrlField = tester.widget<TextField>(
-      find.byKey(const ValueKey('llm_base_url')),
-    );
     expect(
-      geminiBaseUrlField.controller?.text,
-      'https://generativelanguage.googleapis.com/v1beta',
+      dropdownButton.items?.map((item) => item.value).toList(growable: false),
+      const <String>['openai-compatible'],
     );
-
-    await tester.tap(find.byKey(const ValueKey('llm_provider_type')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Anthropic').last);
-    await tester.pumpAndSettle();
-
-    final anthropicBaseUrlField = tester.widget<TextField>(
-      find.byKey(const ValueKey('llm_base_url')),
-    );
-    expect(
-        anthropicBaseUrlField.controller?.text, 'https://api.anthropic.com/v1');
+    expect(selector.onChanged, isNull);
+    expect(find.text('Gemini'), findsNothing);
+    expect(find.text('Anthropic'), findsNothing);
   });
 
-  testWidgets('OpenAI-only filter hides incompatible active profiles',
+  testWidgets('Default page hides incompatible active profiles',
       (tester) async {
     final backend = _EmptyLlmProfilesBackend(
       initialProfiles: const <LlmProfile>[
@@ -125,9 +87,7 @@ void main() {
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
               lock: () {},
-              child: const LlmProfilesPage(
-                providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-              ),
+              child: const LlmProfilesPage(),
             ),
           ),
         ),
@@ -140,7 +100,7 @@ void main() {
     expect(find.textContaining('gemini-compatible'), findsNothing);
   });
 
-  testWidgets('Media BYOK mode limits provider selector to OpenAI-compatible',
+  testWidgets('Provider selector remains limited to OpenAI-compatible',
       (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
@@ -150,9 +110,7 @@ void main() {
             child: SessionScope(
               sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
               lock: () {},
-              child: const LlmProfilesPage(
-                providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-              ),
+              child: const LlmProfilesPage(),
             ),
           ),
         ),
