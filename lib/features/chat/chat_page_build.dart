@@ -16,12 +16,15 @@ extension _ChatPageStateBuild on _ChatPageState {
     final locale = Localizations.localeOf(context);
     final activeTagFilterCount =
         _selectedTagFilterIds.length + _selectedTagExcludeIds.length;
-    final openTaskHubButton = IconButton(
-      key: const ValueKey('chat_open_task_center'),
-      tooltip: context.t.actions.taskHub.openTaskHub,
-      onPressed: () => unawaited(_openTaskHubFromChat()),
-      icon: const Icon(Icons.checklist_rtl_rounded),
-    );
+    Widget buildOpenTaskHubButton() {
+      return IconButton(
+        key: const ValueKey('chat_open_task_center'),
+        tooltip: context.t.actions.taskHub.openTaskHub,
+        onPressed: () => unawaited(_openTaskHubFromChat()),
+        icon: const Icon(Icons.checklist_rtl_rounded),
+      );
+    }
+
     return ScaffoldMessenger(
       key: _scaffoldMessengerKey,
       child: Scaffold(
@@ -30,7 +33,7 @@ extension _ChatPageStateBuild on _ChatPageState {
             ? AppBar(
                 title: Text(title),
                 actions: [
-                  openTaskHubButton,
+                  buildOpenTaskHubButton(),
                   IconButton(
                     key: const ValueKey('chat_tag_filter_button'),
                     tooltip: _tagFilterTooltip(locale),
@@ -101,7 +104,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                     padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
-                      children: [openTaskHubButton],
+                      children: [buildOpenTaskHubButton()],
                     ),
                   ),
                 ),

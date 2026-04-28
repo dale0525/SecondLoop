@@ -118,302 +118,286 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                   .overdueWeeks(count: count),
             ),
           );
+    final useCompactHeaderQuickActions = widget.compact && showQuickPair;
+    final showBottomQuickPair = showQuickPair && !useCompactHeaderQuickActions;
+    final showExpandedPreview = _expanded && !widget.compact;
+    final showBottomSection = !compactCollapsed &&
+        (showBottomQuickPair ||
+            (primary != null && showNavigationActions) ||
+            showExpandedPreview);
     return Padding(
       padding: outerPadding,
       child: SlSurface(
         key: const ValueKey('task_hub_banner'),
-        child: LayoutBuilder(
-          builder: (context, _) {
-            final useCompactHeaderQuickActions =
-                widget.compact && showQuickPair;
-            final showBottomQuickPair =
-                showQuickPair && !useCompactHeaderQuickActions;
-            final showExpandedPreview = _expanded && !widget.compact;
-            final showBottomSection = !compactCollapsed &&
-                (showBottomQuickPair ||
-                    (primary != null && showNavigationActions) ||
-                    showExpandedPreview);
-            return InkWell(
-              borderRadius: BorderRadius.circular(tokens.radiusLg),
-              onTap: () {
-                FocusManager.instance.primaryFocus?.unfocus();
-                if (!widget.compact) {
-                  setState(() => _expanded = !_expanded);
-                }
-              },
-              child: Padding(
-                padding: EdgeInsets.all(innerPadding),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(tokens.radiusLg),
+          onTap: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            if (!widget.compact) {
+              setState(() => _expanded = !_expanded);
+            }
+          },
+          child: Padding(
+            padding: EdgeInsets.all(innerPadding),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildHeaderLabel(
-                            context,
-                            primary: primary,
-                            hasAiReason: hasAiReason,
-                          ),
-                        ),
-                        if (useCompactHeaderQuickActions) ...[
-                          if (showPrimaryQuickAction)
-                            _CompactHeaderActionButton(
-                              buttonKey: const ValueKey(
-                                  'task_hub_banner_primary_action'),
-                              icon: primaryAction.icon,
-                              tooltip: primaryAction.label,
-                              isPrimary: true,
-                              onPressed: () => unawaited(
-                                widget.onQuickAction!(
-                                  primary,
-                                  primaryAction.action,
-                                ),
-                              ),
-                            ),
-                          const SizedBox(width: 4),
-                        ],
-                        if (!widget.compact)
-                          Icon(
-                            _expanded
-                                ? Icons.expand_less_rounded
-                                : Icons.expand_more_rounded,
-                          ),
-                      ],
+                    Expanded(
+                      child: _buildHeaderLabel(
+                        context,
+                        primary: primary,
+                        hasAiReason: hasAiReason,
+                      ),
                     ),
-                    if (showAiSourceLabel) ...[
-                      SizedBox(height: headerSpacing),
-                      Text(
-                        aiSourceLabel,
-                        key: const ValueKey('task_hub_banner_ai_source'),
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                    ],
-                    SizedBox(height: headerSpacing),
-                    if (widget.compact)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              primary?.todo.title ??
-                                  context.t.actions.taskHub.wrapUpHeadline,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                          ),
-                          if (compactRelativeTimeText != null) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              compactRelativeTimeText,
-                              key: const ValueKey(
-                                  'task_hub_banner_relative_time'),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelMedium
-                                  ?.copyWith(
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                              textAlign: TextAlign.right,
-                            ),
-                          ],
-                        ],
-                      )
-                    else
-                      Text(
-                        primary?.todo.title ??
-                            context.t.actions.taskHub.wrapUpHeadline,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                      ),
-                    SizedBox(height: headerSpacing),
-                    Text(
-                      primary?.reasonText ?? _fallbackSubtitle(context),
-                      maxLines: widget.compact ? 1 : 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                    if (showSummaryChips && !widget.snapshot.isEmpty) ...[
-                      SizedBox(height: headerSpacing + 2),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          _BannerStatChip(
-                            label: context.t.actions.taskHub.openSection,
-                            value: widget.snapshot.openDisplayCount,
-                            tone: _BannerStatTone.backlog,
-                          ),
-                          _BannerStatChip(
-                            label: context.t.actions.taskHub.doneSection,
-                            value: widget.snapshot.done.length,
-                            tone: _BannerStatTone.done,
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (showAiHint) ...[
-                      SizedBox(height: headerSpacing),
-                      Text(
-                        context.t.actions.taskHub.aiUpgradeHint,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                              fontStyle: FontStyle.italic,
-                            ),
-                      ),
-                    ],
-                    if (showBottomSection) ...[
-                      SizedBox(height: actionsSpacingTop),
-                      if (showBottomQuickPair) ...[
-                        DecoratedBox(
-                          key: const ValueKey('task_hub_banner_quick_pair'),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withOpacity(widget.compact ? 0.28 : 0.4),
-                            borderRadius:
-                                BorderRadius.circular(tokens.radiusLg),
-                            border: Border.all(
-                              color: tokens.borderSubtle.withOpacity(0.8),
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Row(
-                              children: [
-                                if (widget.compact) ...[
-                                  if (showPrimaryQuickAction)
-                                    Expanded(
-                                      child: SlButton(
-                                        key: const ValueKey(
-                                            'task_hub_banner_primary_action'),
-                                        onPressed: () => unawaited(
-                                          widget.onQuickAction!(
-                                            primary,
-                                            primaryAction.action,
-                                          ),
-                                        ),
-                                        child: Text(primaryAction.label),
-                                      ),
-                                    ),
-                                ] else ...[
-                                  Expanded(
-                                    child: SlButton(
-                                      key: const ValueKey(
-                                          'task_hub_banner_primary_action'),
-                                      onPressed: () => unawaited(
-                                        widget.onQuickAction!(
-                                          primary,
-                                          primaryAction.action,
-                                        ),
-                                      ),
-                                      child: Text(primaryAction.label),
-                                    ),
-                                  ),
-                                  if (secondaryAction != null) ...[
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: SlButton(
-                                        buttonKey: const ValueKey(
-                                            'task_hub_banner_secondary_action'),
-                                        variant: SlButtonVariant.outline,
-                                        onPressed: () => unawaited(
-                                          widget.onQuickAction!(
-                                            primary,
-                                            secondaryAction.action,
-                                          ),
-                                        ),
-                                        child: Text(secondaryAction.label),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ],
+                    if (useCompactHeaderQuickActions) ...[
+                      if (showPrimaryQuickAction)
+                        _CompactHeaderActionButton(
+                          buttonKey:
+                              const ValueKey('task_hub_banner_primary_action'),
+                          icon: primaryAction.icon,
+                          tooltip: primaryAction.label,
+                          isPrimary: true,
+                          onPressed: () => unawaited(
+                            widget.onQuickAction!(
+                              primary,
+                              primaryAction.action,
                             ),
                           ),
                         ),
-                        if (showNavigationActions) ...[
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              if (showOpenFocusAction)
-                                SlButton(
-                                  buttonKey: const ValueKey(
-                                      'task_hub_banner_open_focus'),
-                                  variant: SlButtonVariant.outline,
-                                  onPressed: () =>
-                                      unawaited(widget.onOpenTodo!(primary)),
-                                  child: Text(
-                                    context.t.actions.taskHub.openFocus,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ] else if (primary != null && showNavigationActions)
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            if (showOpenFocusAction)
-                              SlButton(
-                                buttonKey: const ValueKey(
-                                    'task_hub_banner_open_focus'),
-                                variant: SlButtonVariant.outline,
-                                onPressed: () =>
-                                    unawaited(widget.onOpenTodo!(primary)),
-                                child:
-                                    Text(context.t.actions.taskHub.openFocus),
-                              ),
-                          ],
-                        ),
-                      if (showExpandedPreview) ...[
-                        SizedBox(height: actionsSpacingTop),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 360),
-                          child: SingleChildScrollView(
-                            child: _BannerPreviewList(
-                              snapshot: widget.snapshot,
-                              checklistProgressByTodoId:
-                                  widget.checklistProgressByTodoId,
-                              onOpenTodo: widget.onOpenTodo,
-                              onQuickAction: widget.onQuickAction,
-                              onFeedback: widget.onFeedback,
-                              compact: widget.compact,
-                              nowLocal: widget.snapshot.computedAtLocal,
-                            ),
-                          ),
-                        ),
-                      ],
+                      const SizedBox(width: 4),
                     ],
+                    if (!widget.compact)
+                      Icon(
+                        _expanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                      ),
                   ],
                 ),
-              ),
-            );
-          },
+                if (showAiSourceLabel) ...[
+                  SizedBox(height: headerSpacing),
+                  Text(
+                    aiSourceLabel,
+                    key: const ValueKey('task_hub_banner_ai_source'),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
+                SizedBox(height: headerSpacing),
+                if (widget.compact)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          primary?.todo.title ??
+                              context.t.actions.taskHub.wrapUpHeadline,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
+                      ),
+                      if (compactRelativeTimeText != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          compactRelativeTimeText,
+                          key: const ValueKey('task_hub_banner_relative_time'),
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ],
+                    ],
+                  )
+                else
+                  Text(
+                    primary?.todo.title ??
+                        context.t.actions.taskHub.wrapUpHeadline,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                SizedBox(height: headerSpacing),
+                Text(
+                  primary?.reasonText ?? _fallbackSubtitle(context),
+                  maxLines: widget.compact ? 1 : 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                if (showSummaryChips && !widget.snapshot.isEmpty) ...[
+                  SizedBox(height: headerSpacing + 2),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _BannerStatChip(
+                        label: context.t.actions.taskHub.openSection,
+                        value: widget.snapshot.openDisplayCount,
+                        tone: _BannerStatTone.backlog,
+                      ),
+                      _BannerStatChip(
+                        label: context.t.actions.taskHub.doneSection,
+                        value: widget.snapshot.done.length,
+                        tone: _BannerStatTone.done,
+                      ),
+                    ],
+                  ),
+                ],
+                if (showAiHint) ...[
+                  SizedBox(height: headerSpacing),
+                  Text(
+                    context.t.actions.taskHub.aiUpgradeHint,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
+                        ),
+                  ),
+                ],
+                if (showBottomSection) ...[
+                  SizedBox(height: actionsSpacingTop),
+                  if (showBottomQuickPair) ...[
+                    DecoratedBox(
+                      key: const ValueKey('task_hub_banner_quick_pair'),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withOpacity(widget.compact ? 0.28 : 0.4),
+                        borderRadius: BorderRadius.circular(tokens.radiusLg),
+                        border: Border.all(
+                          color: tokens.borderSubtle.withOpacity(0.8),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Row(
+                          children: [
+                            if (widget.compact) ...[
+                              if (showPrimaryQuickAction)
+                                Expanded(
+                                  child: SlButton(
+                                    key: const ValueKey(
+                                        'task_hub_banner_primary_action'),
+                                    onPressed: () => unawaited(
+                                      widget.onQuickAction!(
+                                        primary,
+                                        primaryAction.action,
+                                      ),
+                                    ),
+                                    child: Text(primaryAction.label),
+                                  ),
+                                ),
+                            ] else ...[
+                              Expanded(
+                                child: SlButton(
+                                  key: const ValueKey(
+                                      'task_hub_banner_primary_action'),
+                                  onPressed: () => unawaited(
+                                    widget.onQuickAction!(
+                                      primary,
+                                      primaryAction.action,
+                                    ),
+                                  ),
+                                  child: Text(primaryAction.label),
+                                ),
+                              ),
+                              if (secondaryAction != null) ...[
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: SlButton(
+                                    buttonKey: const ValueKey(
+                                        'task_hub_banner_secondary_action'),
+                                    variant: SlButtonVariant.outline,
+                                    onPressed: () => unawaited(
+                                      widget.onQuickAction!(
+                                        primary,
+                                        secondaryAction.action,
+                                      ),
+                                    ),
+                                    child: Text(secondaryAction.label),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (showNavigationActions) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (showOpenFocusAction)
+                            SlButton(
+                              buttonKey:
+                                  const ValueKey('task_hub_banner_open_focus'),
+                              variant: SlButtonVariant.outline,
+                              onPressed: () =>
+                                  unawaited(widget.onOpenTodo!(primary)),
+                              child: Text(
+                                context.t.actions.taskHub.openFocus,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ] else if (primary != null && showNavigationActions)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (showOpenFocusAction)
+                          SlButton(
+                            buttonKey:
+                                const ValueKey('task_hub_banner_open_focus'),
+                            variant: SlButtonVariant.outline,
+                            onPressed: () =>
+                                unawaited(widget.onOpenTodo!(primary)),
+                            child: Text(context.t.actions.taskHub.openFocus),
+                          ),
+                      ],
+                    ),
+                  if (showExpandedPreview) ...[
+                    SizedBox(height: actionsSpacingTop),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: SingleChildScrollView(
+                        child: _BannerPreviewList(
+                          snapshot: widget.snapshot,
+                          checklistProgressByTodoId:
+                              widget.checklistProgressByTodoId,
+                          onOpenTodo: widget.onOpenTodo,
+                          onQuickAction: widget.onQuickAction,
+                          onFeedback: widget.onFeedback,
+                          compact: widget.compact,
+                          nowLocal: widget.snapshot.computedAtLocal,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
