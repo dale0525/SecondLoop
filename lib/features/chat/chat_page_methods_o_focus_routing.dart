@@ -16,6 +16,20 @@ extension _ChatPageStateMethodsOFocusRouting on _ChatPageState {
     return Navigator.of(context).push(route);
   }
 
+  Future<void> _openTaskHubFromChat() async {
+    await _pushRouteFromChat(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          const TaskHubPage(),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    _collapseTodoAgendaBanner();
+    _refresh(refreshTaskPriority: true);
+  }
+
   Future<T?> _showModalBottomSheetFromChat<T>({
     required WidgetBuilder builder,
     bool isScrollControlled = false,

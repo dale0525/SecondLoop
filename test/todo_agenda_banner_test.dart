@@ -1,21 +1,13 @@
-import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
-import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
-import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/agenda/todo_agenda_banner.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -37,33 +29,7 @@ Future<void> _pumpUntilFound(
   expect(finder, findsOneWidget);
 }
 
-String _stableTaskPriorityRequestSignatureFor(Todo todo, DateTime nowLocal) {
-  final candidate = buildTaskPriorityAiRequest(
-    buildTaskPrioritySnapshot(<Todo>[todo], nowLocal: nowLocal),
-    nowLocal: nowLocal,
-  ).candidates.single;
-  return jsonEncode(<String, Object?>{
-    'candidate': <String, Object?>{
-      'todo_id': candidate.todoId,
-      'title': candidate.title,
-      'status': candidate.status,
-      'band': candidate.band.name,
-      'due_state': candidate.dueState,
-      'source_summary': candidate.sourceSummary,
-      'is_repeatedly_deferred': candidate.isRepeatedlyDeferred,
-      'is_potential_blocker': candidate.isPotentialBlocker,
-      'is_quick_win': candidate.isQuickWin,
-      'rule_is_important': candidate.ruleIsImportant,
-      'rule_is_urgent': candidate.ruleIsUrgent,
-    },
-  });
-}
-
 void main() {
-  setUp(() {
-    BackendTaskPriorityAiService.clearSharedCacheForTest();
-  });
-
   testWidgets('TodoAgendaBanner shows checklist progress in preview rows',
       (tester) async {
     await tester.pumpWidget(
@@ -218,6 +184,144 @@ void main() {
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TaskHubPage), findsOneWidget);
+  });
+
+  testWidgets('Chat task hub entry refreshes banner after returning',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _AgendaBackend(
+      todos: const [
+        Todo(
+          id: 'todo:refresh',
+          title: 'Review old metrics',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(
+              home: ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('Review old metrics'));
+
+    await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
+    await tester.pumpAndSettle();
+    expect(find.byType(TaskHubPage), findsOneWidget);
+
+    backend.replaceTodo(
+      const Todo(
+        id: 'todo:refresh',
+        title: 'Review fresh metrics',
+        dueAtMs: null,
+        status: 'open',
+        sourceEntryId: 'm1',
+        createdAtMs: 0,
+        updatedAtMs: 10,
+        reviewStage: null,
+        nextReviewAtMs: null,
+        lastReviewAtMs: null,
+      ),
+    );
+    Navigator.of(tester.element(find.byType(TaskHubPage))).pop();
+
+    final banner = find.byKey(const ValueKey('task_hub_banner'));
+    await _pumpUntilFound(
+      tester,
+      find.descendant(of: banner, matching: find.text('Review fresh metrics')),
+    );
+
+    expect(
+      find.descendant(of: banner, matching: find.text('Review old metrics')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('Chat without app bar still shows top task hub entry',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _AgendaBackend(
+      todos: const [
+        Todo(
+          id: 'todo:no-appbar',
+          title: 'Review embedded chat task',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(
+              home: ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+                showAppBar: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('chat_open_task_center')),
+    );
+
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_banner')), findsOneWidget);
+    expect(find.text('Review embedded chat task'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_open_hub')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('chat_open_task_center')));
     await tester.pumpAndSettle();
@@ -496,342 +600,6 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('Chat task hub banner shows shared ai source label',
-      (tester) async {
-    final nowLocal = DateTime.now();
-    const todo = Todo(
-      id: 'todo:shared-label',
-      title: 'Shared chat task',
-      dueAtMs: null,
-      status: 'open',
-      sourceEntryId: null,
-      createdAtMs: 0,
-      updatedAtMs: 0,
-      reviewStage: null,
-      nextReviewAtMs: null,
-      lastReviewAtMs: null,
-    );
-    final requestSignature =
-        _stableTaskPriorityRequestSignatureFor(todo, nowLocal);
-
-    final backend = _AgendaBackend(
-      todos: const [todo],
-      sharedTaskPriorityAssessmentsJson: jsonEncode(<String, Object?>{
-        'entries': <Object?>[
-          <String, Object?>{
-            ...const TaskPriorityAiEntry(
-              todoId: 'todo:shared-label',
-              semanticAdjustment: 18,
-              reason: 'Shared AI result.',
-              confidence: TaskPriorityAiConfidence.high,
-            ).toJson(),
-            'request_signature': requestSignature,
-            'computed_at_ms': nowLocal.millisecondsSinceEpoch,
-          },
-        ],
-      }),
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        CloudAuthScope(
-          controller: const _FakeCloudAuthController(),
-          gatewayConfig: const CloudGatewayConfig(
-            baseUrl: 'https://cloud.secondloop.test',
-            modelName: 'cloud',
-          ),
-          child: SubscriptionScope(
-            controller: _FakeSubscriptionController(
-              SubscriptionStatus.entitled,
-            ),
-            child: AppBackendScope(
-              backend: backend,
-              child: SessionScope(
-                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                lock: () {},
-                child: const MaterialApp(
-                  home: ChatPage(
-                    conversation: Conversation(
-                      id: 'loop_home',
-                      title: 'Loop',
-                      createdAtMs: 0,
-                      updatedAtMs: 0,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner')),
-    );
-
-    expect(
-      find.byKey(const ValueKey('task_hub_banner_ai_source')),
-      findsOneWidget,
-    );
-    expect(find.text('Shared AI insight'), findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
-        findsOneWidget);
-    expect(find.byTooltip('AI recommends this now'), findsOneWidget);
-    expect(find.text('Shared AI result.'), findsWidgets);
-  });
-
-  testWidgets('Chat task hub banner shows cached ai source label',
-      (tester) async {
-    final nowLocal = DateTime.now();
-    final cacheScopeKey = buildTaskPriorityAiCacheScopeKey(
-      route: AskAiRouteKind.byok,
-      gatewayBaseUrl: 'https://api.openai.com/v1',
-      modelName: 'gpt-4o-mini',
-      localeTag: 'en',
-      partitionKey: '["p1","openai-compatible"]',
-    );
-    final fallbackCacheScopeKey = buildTaskPriorityAiCacheScopeKey(
-      route: AskAiRouteKind.byok,
-      gatewayBaseUrl: 'https://api.openai.com/v1',
-      modelName: 'gpt-4o-mini',
-      localeTag: 'en-US',
-      partitionKey: '["p1","openai-compatible"]',
-    );
-    const todo = Todo(
-      id: 'todo:cached-label',
-      title: 'Cached chat task',
-      dueAtMs: null,
-      status: 'open',
-      sourceEntryId: null,
-      createdAtMs: 0,
-      updatedAtMs: 0,
-      reviewStage: null,
-      nextReviewAtMs: null,
-      lastReviewAtMs: null,
-    );
-    final requestSignature =
-        _stableTaskPriorityRequestSignatureFor(todo, nowLocal);
-    SharedPreferences.setMockInitialValues({
-      'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
-        'scopes': <String, Object?>{
-          for (final key in <String>[cacheScopeKey, fallbackCacheScopeKey])
-            key: <String, Object?>{
-              'entries': <String, Object?>{
-                'todo:cached-label': TaskPriorityAiCachedAssessment(
-                  entry: const TaskPriorityAiEntry(
-                    todoId: 'todo:cached-label',
-                    semanticAdjustment: 14,
-                    reason: 'Cached AI result.',
-                    confidence: TaskPriorityAiConfidence.high,
-                  ),
-                  requestSignature: requestSignature,
-                  computedAtLocal: nowLocal,
-                ).toJson(),
-              },
-            },
-        },
-      }),
-    });
-
-    final backend = _AgendaBackend(
-      todos: const [todo],
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const MaterialApp(
-              home: ChatPage(
-                conversation: Conversation(
-                  id: 'loop_home',
-                  title: 'Loop',
-                  createdAtMs: 0,
-                  updatedAtMs: 0,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner')),
-    );
-
-    expect(
-      find.byKey(const ValueKey('task_hub_banner_ai_source')),
-      findsOneWidget,
-    );
-    expect(find.text('Cached AI insight'), findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
-        findsOneWidget);
-    expect(find.byTooltip('AI recommends this now'), findsOneWidget);
-    expect(find.text('Cached AI result.'), findsWidgets);
-  });
-
-  testWidgets('Chat task hub banner reuses cached ai result in compact mode',
-      (tester) async {
-    final nowLocal = DateTime.now();
-    final cacheScopeKey = buildTaskPriorityAiCacheScopeKey(
-      route: AskAiRouteKind.byok,
-      gatewayBaseUrl: 'https://api.openai.com/v1',
-      modelName: 'gpt-4o-mini',
-      localeTag: 'en',
-      partitionKey: '["p1","openai-compatible"]',
-    );
-    const todo = Todo(
-      id: 'todo:bootstrap-label',
-      title: 'Bootstrap cached task',
-      dueAtMs: null,
-      status: 'open',
-      sourceEntryId: null,
-      createdAtMs: 0,
-      updatedAtMs: 0,
-      reviewStage: null,
-      nextReviewAtMs: null,
-      lastReviewAtMs: null,
-    );
-    final requestSignature =
-        _stableTaskPriorityRequestSignatureFor(todo, nowLocal);
-    SharedPreferences.setMockInitialValues({
-      'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
-        'scopes': <String, Object?>{
-          cacheScopeKey: <String, Object?>{
-            'entries': <String, Object?>{
-              'todo:bootstrap-label': TaskPriorityAiCachedAssessment(
-                entry: const TaskPriorityAiEntry(
-                  todoId: 'todo:bootstrap-label',
-                  semanticAdjustment: 14,
-                  reason: 'Bootstrap cached AI result.',
-                  confidence: TaskPriorityAiConfidence.high,
-                ),
-                requestSignature: requestSignature,
-                computedAtLocal: nowLocal,
-              ).toJson(),
-            },
-          },
-        },
-      }),
-    });
-
-    final backend = _AgendaBackend(
-      todos: const [todo],
-      llmProfiles: const <LlmProfile>[],
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const MaterialApp(
-              home: ChatPage(
-                conversation: Conversation(
-                  id: 'loop_home',
-                  title: 'Loop',
-                  createdAtMs: 0,
-                  updatedAtMs: 0,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner')),
-    );
-
-    expect(
-      find.byKey(const ValueKey('task_hub_banner_ai_source')),
-      findsOneWidget,
-    );
-    expect(find.text('Cached AI insight'), findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
-        findsOneWidget);
-    expect(find.byTooltip('AI recommends this now'), findsOneWidget);
-    expect(find.text('Bootstrap cached AI result.'), findsWidgets);
-  });
-
-  testWidgets('Chat task hub banner shows live ai source label',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final backend = _AgendaBackend(
-      todos: const [
-        Todo(
-          id: 'todo:ai-label',
-          title: 'AI-ranked chat task',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
-      taskPriorityAiResponseJson: jsonEncode(
-        const TaskPriorityAiBatchResult(
-          entries: <TaskPriorityAiEntry>[
-            TaskPriorityAiEntry(
-              todoId: 'todo:ai-label',
-              semanticAdjustment: 18,
-              reason: 'Live AI result.',
-              confidence: TaskPriorityAiConfidence.high,
-            ),
-          ],
-        ).toJson(),
-      ),
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const MaterialApp(
-              home: ChatPage(
-                conversation: Conversation(
-                  id: 'loop_home',
-                  title: 'Loop',
-                  createdAtMs: 0,
-                  updatedAtMs: 0,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await _pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_banner')),
-    );
-
-    expect(
-      find.byKey(const ValueKey('task_hub_banner_ai_source')),
-      findsOneWidget,
-    );
-    expect(find.text('Live AI insight'), findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
-        findsOneWidget);
-    expect(find.byTooltip('AI recommends this now'), findsOneWidget);
-    expect(find.text('Live AI result.'), findsWidgets);
-  });
-
   testWidgets(
       'Task hub banner primary action shows the new urgency label in chat',
       (tester) async {
@@ -889,58 +657,9 @@ void main() {
   });
 }
 
-final class _FakeCloudAuthController implements CloudAuthController {
-  const _FakeCloudAuthController();
-
-  @override
-  String? get uid => 'cloud-user-1';
-
-  @override
-  String? get email => 'user@example.com';
-
-  @override
-  bool? get emailVerified => true;
-
-  @override
-  Future<String?> getIdToken() async => 'cloud-token';
-
-  @override
-  Future<void> refreshUserInfo() async {}
-
-  @override
-  Future<void> sendEmailVerification() async {}
-
-  @override
-  Future<void> signInWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> signOut() async {}
-
-  @override
-  Future<void> signUpWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-}
-
-final class _FakeSubscriptionController extends ChangeNotifier
-    implements SubscriptionStatusController {
-  _FakeSubscriptionController(this._status);
-
-  final SubscriptionStatus _status;
-
-  @override
-  SubscriptionStatus get status => _status;
-}
-
 final class _AgendaBackend extends TestAppBackend {
   _AgendaBackend({
     required List<Todo> todos,
-    this.taskPriorityAiResponseJson,
-    this.sharedTaskPriorityAssessmentsJson,
     List<LlmProfile>? llmProfiles,
   })  : _todosById = <String, Todo>{
           for (final todo in todos) todo.id: todo,
@@ -961,8 +680,10 @@ final class _AgendaBackend extends TestAppBackend {
 
   final Map<String, Todo> _todosById;
   final List<LlmProfile> _llmProfiles;
-  final String? taskPriorityAiResponseJson;
-  final String? sharedTaskPriorityAssessmentsJson;
+
+  void replaceTodo(Todo todo) {
+    _todosById[todo.id] = todo;
+  }
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
@@ -1065,30 +786,6 @@ final class _AgendaBackend extends TestAppBackend {
     );
     _todosById[todoId] = updated;
     return updated;
-  }
-
-  @override
-  Future<String> fetchTaskPriorityAiAssessmentsCloudGateway(
-    Uint8List key, {
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String cacheScopeKey,
-  }) async {
-    if (sharedTaskPriorityAssessmentsJson == null) {
-      throw UnimplementedError('fetchTaskPriorityAiAssessmentsCloudGateway');
-    }
-    return sharedTaskPriorityAssessmentsJson!;
-  }
-
-  @override
-  Future<String> taskPriorityRerankAi(
-    Uint8List key, {
-    required String prompt,
-  }) async {
-    if (taskPriorityAiResponseJson == null) {
-      throw UnimplementedError('taskPriorityRerankAi');
-    }
-    return taskPriorityAiResponseJson!;
   }
 
   @override
