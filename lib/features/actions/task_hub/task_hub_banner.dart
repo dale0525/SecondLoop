@@ -22,7 +22,6 @@ class TaskHubBanner extends StatefulWidget {
     this.showAiUpgradeHint = false,
     this.collapseSignal = 0,
     this.compact = false,
-    this.onViewAll,
     this.onOpenTodo,
     this.onQuickAction,
     this.onFeedback,
@@ -34,7 +33,6 @@ class TaskHubBanner extends StatefulWidget {
   final bool showAiUpgradeHint;
   final int collapseSignal;
   final bool compact;
-  final VoidCallback? onViewAll;
   final Future<void> Function(TaskPriorityEntry entry)? onOpenTodo;
   final Future<void> Function(
       TaskPriorityEntry entry, TaskHubQuickAction action)? onQuickAction;
@@ -90,21 +88,15 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                 context,
                 entry: primary,
               );
-    final showCompactPrimaryAction = primary != null &&
+    final showPrimaryQuickAction = primary != null &&
         primaryAction != null &&
         widget.onQuickAction != null;
-    final showCompactViewAllAction =
-        primary != null && widget.onViewAll != null;
-    final showQuickPair = !compactCollapsed &&
-        (widget.compact
-            ? (showCompactPrimaryAction || showCompactViewAllAction)
-            : showCompactPrimaryAction);
+    final showQuickPair = !compactCollapsed && showPrimaryQuickAction;
     final showOpenFocusAction = !widget.compact && widget.onOpenTodo != null;
     final showNavigationActions = !widget.compact &&
         !compactCollapsed &&
         primary != null &&
-        (showOpenFocusAction || widget.onViewAll != null);
-    final showOpenHubAction = !compactCollapsed && primary == null;
+        showOpenFocusAction;
     final compactRelativeTimeText = !widget.compact || primary == null
         ? null
         : formatTaskHubRelativeTime(
@@ -131,16 +123,15 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
       child: SlSurface(
         key: const ValueKey('task_hub_banner'),
         child: LayoutBuilder(
-          builder: (context, constraints) {
+          builder: (context, _) {
             final useCompactHeaderQuickActions =
-                widget.compact && constraints.maxWidth >= 600 && showQuickPair;
+                widget.compact && showQuickPair;
             final showBottomQuickPair =
                 showQuickPair && !useCompactHeaderQuickActions;
             final showExpandedPreview = _expanded && !widget.compact;
             final showBottomSection = !compactCollapsed &&
                 (showBottomQuickPair ||
                     (primary != null && showNavigationActions) ||
-                    showOpenHubAction ||
                     showExpandedPreview);
             return InkWell(
               borderRadius: BorderRadius.circular(tokens.radiusLg),
@@ -166,7 +157,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                           ),
                         ),
                         if (useCompactHeaderQuickActions) ...[
-                          if (showCompactPrimaryAction)
+                          if (showPrimaryQuickAction)
                             _CompactHeaderActionButton(
                               buttonKey: const ValueKey(
                                   'task_hub_banner_primary_action'),
@@ -180,16 +171,6 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                                 ),
                               ),
                             ),
-                          if (showCompactViewAllAction) ...[
-                            const SizedBox(width: 6),
-                            _CompactHeaderActionButton(
-                              buttonKey: const ValueKey(
-                                  'task_hub_banner_secondary_action'),
-                              icon: Icons.checklist_rtl_rounded,
-                              tooltip: context.t.actions.taskHub.openTaskHub,
-                              onPressed: widget.onViewAll!,
-                            ),
-                          ],
                           const SizedBox(width: 4),
                         ],
                         if (!widget.compact)
@@ -322,7 +303,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                             child: Row(
                               children: [
                                 if (widget.compact) ...[
-                                  if (showCompactPrimaryAction)
+                                  if (showPrimaryQuickAction)
                                     Expanded(
                                       child: SlButton(
                                         key: const ValueKey(
@@ -336,35 +317,20 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                                         child: Text(primaryAction.label),
                                       ),
                                     ),
-                                  if (showCompactViewAllAction) ...[
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: SlButton(
-                                        buttonKey: const ValueKey(
-                                            'task_hub_banner_secondary_action'),
-                                        variant: SlButtonVariant.outline,
-                                        onPressed: widget.onViewAll,
-                                        child: Text(
-                                          context.t.actions.taskHub.openTaskHub,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
                                 ] else ...[
-                                  if (primaryAction case final regularPrimary?)
-                                    Expanded(
-                                      child: SlButton(
-                                        key: const ValueKey(
-                                            'task_hub_banner_primary_action'),
-                                        onPressed: () => unawaited(
-                                          widget.onQuickAction!(
-                                            primary,
-                                            regularPrimary.action,
-                                          ),
+                                  Expanded(
+                                    child: SlButton(
+                                      key: const ValueKey(
+                                          'task_hub_banner_primary_action'),
+                                      onPressed: () => unawaited(
+                                        widget.onQuickAction!(
+                                          primary,
+                                          primaryAction.action,
                                         ),
-                                        child: Text(regularPrimary.label),
                                       ),
+                                      child: Text(primaryAction.label),
                                     ),
+                                  ),
                                   if (secondaryAction != null) ...[
                                     const SizedBox(width: 8),
                                     Expanded(
@@ -404,16 +370,6 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                                     context.t.actions.taskHub.openFocus,
                                   ),
                                 ),
-                              if (widget.onViewAll != null)
-                                SlButton(
-                                  buttonKey: const ValueKey(
-                                      'task_hub_banner_view_all'),
-                                  variant: SlButtonVariant.outline,
-                                  onPressed: widget.onViewAll,
-                                  child: Text(
-                                    context.t.actions.taskHub.openTaskHub,
-                                  ),
-                                ),
                             ],
                           ),
                         ],
@@ -432,22 +388,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                                 child:
                                     Text(context.t.actions.taskHub.openFocus),
                               ),
-                            if (widget.onViewAll != null)
-                              SlButton(
-                                buttonKey:
-                                    const ValueKey('task_hub_banner_view_all'),
-                                variant: SlButtonVariant.outline,
-                                onPressed: widget.onViewAll,
-                                child:
-                                    Text(context.t.actions.taskHub.openTaskHub),
-                              ),
                           ],
-                        )
-                      else if (showOpenHubAction)
-                        SlButton(
-                          key: const ValueKey('task_hub_banner_open_hub'),
-                          onPressed: widget.onViewAll,
-                          child: Text(context.t.actions.taskHub.openTaskHub),
                         ),
                       if (showExpandedPreview) ...[
                         SizedBox(height: actionsSpacingTop),

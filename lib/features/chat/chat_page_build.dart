@@ -142,19 +142,6 @@ extension _ChatPageStateBuild on _ChatPageState {
                           if (!mounted) return;
                           _refresh();
                         },
-                        onViewAll: () async {
-                          await _pushRouteFromChat(
-                            MaterialPageRoute(
-                              builder: (_) => wrapPushedPageWithInheritedScopes(
-                                context,
-                                const TaskHubPage(),
-                              ),
-                            ),
-                          );
-                          if (!mounted) return;
-                          _collapseTodoAgendaBanner();
-                          _refresh();
-                        },
                       );
                     },
                   ),

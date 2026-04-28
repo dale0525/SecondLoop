@@ -109,7 +109,7 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('compact desktop banner keeps start and view-all actions',
+  testWidgets('compact desktop banner keeps start action on the right',
       (tester) async {
     final now = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -140,7 +140,6 @@ void main() {
       nowLocal: now,
     );
     TaskHubQuickAction? tappedAction;
-    var viewAllTapped = false;
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -157,9 +156,6 @@ void main() {
                     TaskHubBanner(
                       snapshot: snapshot,
                       compact: true,
-                      onViewAll: () {
-                        viewAllTapped = true;
-                      },
                       onQuickAction: (_, action) async {
                         tappedAction = action;
                       },
@@ -182,7 +178,7 @@ void main() {
     expect(find.byKey(const ValueKey('task_hub_banner_primary_action')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_banner_secondary_action')),
-        findsOneWidget);
+        findsNothing);
     expect(find.byKey(const ValueKey('task_hub_banner_relative_time')),
         findsOneWidget);
     expect(
@@ -193,18 +189,19 @@ void main() {
     expect(find.text('Prepare weekly review summary'), findsNothing);
     expect(find.text('Current focus'), findsNothing);
     expect(find.text('Start'), findsNothing);
+    expect(find.byTooltip('Start'), findsOneWidget);
+    expect(find.text('Open task hub'), findsNothing);
     expect(find.text('Tomorrow'), findsNothing);
 
     await tester
-        .tap(find.byKey(const ValueKey('task_hub_banner_secondary_action')));
+        .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
-    expect(tappedAction, isNull);
-    expect(viewAllTapped, isTrue);
+    expect(tappedAction, TaskHubQuickAction.start);
   });
 
-  testWidgets('compact mobile banner keeps text actions at the bottom',
+  testWidgets('compact mobile banner keeps quick action on the right',
       (tester) async {
     final now = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -220,6 +217,8 @@ void main() {
       nowLocal: now,
     );
 
+    TaskHubQuickAction? tappedAction;
+
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
@@ -230,8 +229,9 @@ void main() {
                 child: TaskHubBanner(
                   snapshot: snapshot,
                   compact: true,
-                  onViewAll: () {},
-                  onQuickAction: (_, __) async {},
+                  onQuickAction: (_, action) async {
+                    tappedAction = action;
+                  },
                 ),
               ),
             ),
@@ -247,14 +247,33 @@ void main() {
         find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
     expect(find.byKey(const ValueKey('task_hub_banner_focus_indicator')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_banner_quick_pair')),
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_quick_pair')), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_banner_primary_action')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_secondary_action')),
+        findsNothing);
     expect(find.byKey(const ValueKey('task_hub_banner_relative_time')),
         findsOneWidget);
     expect(find.text('Current focus'), findsNothing);
-    expect(find.text('Start'), findsOneWidget);
-    expect(find.text('Open task hub'), findsOneWidget);
+    expect(find.text('Start'), findsNothing);
+    expect(find.byTooltip('Start'), findsOneWidget);
+    expect(find.text('Open task hub'), findsNothing);
     expect(find.text('Tomorrow'), findsNothing);
+
+    final titleRect = tester.getRect(
+      find.text('Fix billing bug before customer follow-up'),
+    );
+    final actionRect = tester.getRect(
+      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+    );
+    expect(actionRect.left, greaterThan(titleRect.right));
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
+    await tester.pump();
+
+    expect(tappedAction, TaskHubQuickAction.start);
     expect(bannerHeight, lessThan(180));
   });
 
@@ -436,8 +455,7 @@ void main() {
     expect(find.text('Open 1 • 0 done'), findsOneWidget);
   });
 
-  testWidgets('banner shows only one open task hub button in wrap-up state',
-      (tester) async {
+  testWidgets('banner omits task hub button in wrap-up state', (tester) async {
     final snapshot = buildTaskPrioritySnapshot(
       const <Todo>[
         Todo(
@@ -465,9 +483,10 @@ void main() {
     );
 
     expect(
-        find.byKey(const ValueKey('task_hub_banner_open_hub')), findsOneWidget);
+        find.byKey(const ValueKey('task_hub_banner_open_hub')), findsNothing);
     expect(
         find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
+    expect(find.text('Open task hub'), findsNothing);
   });
 
   testWidgets('banner primary action uses shared quick action mapping',
@@ -739,7 +758,6 @@ void main() {
               child: TaskHubBanner(
                 snapshot: snapshot,
                 compact: true,
-                onViewAll: () {},
                 onQuickAction: (_, __) async {},
               ),
             ),
