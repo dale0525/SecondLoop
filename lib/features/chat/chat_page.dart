@@ -128,6 +128,7 @@ import 'audio_recording_recovery_snapshot.dart';
 import 'audio_recording_recovery_store.dart';
 
 part 'chat_page_methods_a.dart';
+part 'chat_page_methods_a_todos.dart';
 part 'chat_page_methods_b.dart';
 part 'chat_page_methods_b_task_hub_quick_actions.dart';
 part 'chat_page_methods_b_attachments.dart';

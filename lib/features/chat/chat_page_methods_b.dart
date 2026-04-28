@@ -608,7 +608,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
   }
 
-  void _refresh() {
+  void _refresh({bool refreshTaskPriority = false}) {
     _setState(() {
       if (_usePagination) {
         _loadingMoreMessages = false;
@@ -620,6 +620,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       _attachmentsFuturesByMessageId.clear();
       _attachmentEnrichmentFuturesBySha256.clear();
     });
+    if (!refreshTaskPriority) return;
     _taskPriorityStore?.markDirty();
     unawaited(_taskPriorityStore?.refresh(force: true) ?? Future<void>.value());
   }

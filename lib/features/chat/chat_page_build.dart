@@ -129,7 +129,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                           );
                           if (!mounted) return;
                           _collapseTodoAgendaBanner();
-                          _refresh();
+                          _refresh(refreshTaskPriority: true);
                         },
                         onQuickAction: (entry, action) async {
                           await _applyTaskHubQuickAction(entry.todo, action);
@@ -140,7 +140,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                             feedback: feedback,
                           );
                           if (!mounted) return;
-                          _refresh();
+                          _refresh(refreshTaskPriority: true);
                         },
                         onViewAll: () async {
                           await _pushRouteFromChat(
@@ -153,7 +153,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                           );
                           if (!mounted) return;
                           _collapseTodoAgendaBanner();
-                          _refresh();
+                          _refresh(refreshTaskPriority: true);
                         },
                       );
                     },
