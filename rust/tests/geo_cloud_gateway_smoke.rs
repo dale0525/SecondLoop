@@ -108,7 +108,7 @@ fn start_mock_server() -> (String, mpsc::Receiver<CapturedRequest>) {
             };
 
             let resp = format!(
-                "HTTP/1.1 {status_code} {status_text}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                "HTTP/1.1 {status_code} {status_text}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
             );
             let _ = stream.write_all(resp.as_bytes());
