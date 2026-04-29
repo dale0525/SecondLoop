@@ -40,6 +40,26 @@ fn decrypted_secretary_optional_string(
         .transpose()
 }
 
+fn insert_secretary_oplog(
+    conn: &Connection,
+    key: &[u8; 32],
+    op_type: &str,
+    ts_ms: i64,
+    payload: serde_json::Value,
+) -> Result<()> {
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": ts_ms,
+        "type": op_type,
+        "payload": payload,
+    });
+    insert_oplog(conn, key, &op)
+}
+
 fn secretary_memory_proposal_title_aad(id: &str) -> Vec<u8> {
     format!("secretary_memory_proposal.title:{id}").into_bytes()
 }
@@ -166,7 +186,37 @@ VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7, ?8, ?9, ?9, NULL, NULL)
         ],
     )?;
 
-    get_secretary_memory_proposal(&conn, key, &id)
+    let record = get_secretary_memory_proposal(conn, key, &id)?;
+    insert_secretary_memory_proposal_upsert_op(conn, key, &record)?;
+    Ok(record)
+}
+
+fn insert_secretary_memory_proposal_upsert_op(
+    conn: &Connection,
+    key: &[u8; 32],
+    record: &SecretaryMemoryProposalRecord,
+) -> Result<()> {
+    insert_secretary_oplog(
+        conn,
+        key,
+        "secretary.memory_proposal.upsert.v1",
+        record.updated_at_ms,
+        serde_json::json!({
+            "proposal_id": record.id,
+            "source_message_id": record.source_message_id,
+            "kind": record.kind,
+            "title": record.title,
+            "body": record.body,
+            "confidence": record.confidence,
+            "state": record.state,
+            "source_refs_json": record.source_refs_json,
+            "action_hint": record.action_hint,
+            "created_at_ms": record.created_at_ms,
+            "updated_at_ms": record.updated_at_ms,
+            "accepted_at_ms": record.accepted_at_ms,
+            "dismissed_at_ms": record.dismissed_at_ms,
+        }),
+    )
 }
 
 pub fn get_secretary_memory_proposal(
@@ -288,7 +338,21 @@ WHERE id = ?1
 "#,
         params![id, state, now_ms],
     )?;
-    get_secretary_memory_proposal(conn, key, id)
+    let record = get_secretary_memory_proposal(conn, key, id)?;
+    insert_secretary_oplog(
+        conn,
+        key,
+        "secretary.memory_proposal.state.v1",
+        record.updated_at_ms,
+        serde_json::json!({
+            "proposal_id": record.id,
+            "state": record.state,
+            "updated_at_ms": record.updated_at_ms,
+            "accepted_at_ms": record.accepted_at_ms,
+            "dismissed_at_ms": record.dismissed_at_ms,
+        }),
+    )?;
+    Ok(record)
 }
 
 fn planning_output_title_aad(id: &str) -> Vec<u8> {
@@ -432,7 +496,36 @@ ON CONFLICT(id) DO UPDATE SET
             input.expires_at_ms,
         ],
     )?;
-    get_planning_output(conn, key, &input.id)
+    let record = get_planning_output(conn, key, &input.id)?;
+    insert_planning_output_upsert_op(conn, key, &record)?;
+    Ok(record)
+}
+
+fn insert_planning_output_upsert_op(
+    conn: &Connection,
+    key: &[u8; 32],
+    record: &PlanningOutputRecord,
+) -> Result<()> {
+    insert_secretary_oplog(
+        conn,
+        key,
+        "planning.output.upsert.v1",
+        record.updated_at_ms,
+        serde_json::json!({
+            "output_id": record.id,
+            "kind": record.kind,
+            "title": record.title,
+            "body": record.body,
+            "items_json": record.items_json,
+            "source_refs_json": record.source_refs_json,
+            "route": record.route,
+            "state": record.state,
+            "created_at_ms": record.created_at_ms,
+            "updated_at_ms": record.updated_at_ms,
+            "expires_at_ms": record.expires_at_ms,
+            "dismissed_at_ms": record.dismissed_at_ms,
+        }),
+    )
 }
 
 pub fn get_planning_output(
@@ -626,7 +719,33 @@ VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
             input.now_ms,
         ],
     )?;
-    get_secretary_run(conn, key, &id)
+    let record = get_secretary_run(conn, key, &id)?;
+    insert_secretary_run_upsert_op(conn, key, &record)?;
+    Ok(record)
+}
+
+fn insert_secretary_run_upsert_op(
+    conn: &Connection,
+    key: &[u8; 32],
+    record: &SecretaryRunRecord,
+) -> Result<()> {
+    insert_secretary_oplog(
+        conn,
+        key,
+        "secretary.run.upsert.v1",
+        record.updated_at_ms,
+        serde_json::json!({
+            "run_id": record.id,
+            "trigger_kind": record.trigger_kind,
+            "route": record.route,
+            "status": record.status,
+            "input_summary": record.input_summary,
+            "output_summary": record.output_summary,
+            "error": record.error,
+            "created_at_ms": record.created_at_ms,
+            "updated_at_ms": record.updated_at_ms,
+        }),
+    )
 }
 
 pub fn get_secretary_run(conn: &Connection, key: &[u8; 32], id: &str) -> Result<SecretaryRunRecord> {
@@ -751,7 +870,33 @@ VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
             input.now_ms,
         ],
     )?;
-    get_secretary_tool_call(conn, key, &id)
+    let record = get_secretary_tool_call(conn, key, &id)?;
+    insert_secretary_tool_call_upsert_op(conn, key, &record)?;
+    Ok(record)
+}
+
+fn insert_secretary_tool_call_upsert_op(
+    conn: &Connection,
+    key: &[u8; 32],
+    record: &SecretaryToolCallRecord,
+) -> Result<()> {
+    insert_secretary_oplog(
+        conn,
+        key,
+        "secretary.tool_call.upsert.v1",
+        record.updated_at_ms,
+        serde_json::json!({
+            "tool_call_id": record.id,
+            "run_id": record.run_id,
+            "tool_name": record.tool_name,
+            "status": record.status,
+            "requires_confirmation": record.requires_confirmation,
+            "input_json": record.input_json,
+            "output_json": record.output_json,
+            "created_at_ms": record.created_at_ms,
+            "updated_at_ms": record.updated_at_ms,
+        }),
+    )
 }
 
 pub fn get_secretary_tool_call(

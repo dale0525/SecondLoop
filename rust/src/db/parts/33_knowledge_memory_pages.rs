@@ -255,7 +255,9 @@ VALUES (
             Some("Accepted secretary memory proposal"),
             now_ms,
         )?;
-        get_memory_page(conn, key, &page_id)
+        let record = get_memory_page(conn, key, &page_id)?;
+        insert_memory_page_upsert_op(conn, key, &record)?;
+        Ok(record)
     })
 }
 
@@ -385,7 +387,9 @@ WHERE page_id = ?1 AND page_type = ?6
             input.reason.as_deref().or(Some("User corrected memory")),
             input.now_ms,
         )?;
-        get_memory_page(conn, key, &input.page_id)
+        let record = get_memory_page(conn, key, &input.page_id)?;
+        insert_memory_page_upsert_op(conn, key, &record)?;
+        Ok(record)
     })
 }
 
@@ -426,8 +430,56 @@ WHERE page_id = ?1 AND page_type = ?4
             params![page_id, state, now_ms, MEMORY_PAGE_TYPE],
         )?;
         insert_memory_page_history(conn, page_id, change_type, "user", None, now_ms)?;
-        get_memory_page(conn, key, page_id)
+        let record = get_memory_page(conn, key, page_id)?;
+        insert_memory_page_state_op(conn, key, &record)?;
+        Ok(record)
     })
+}
+
+fn insert_memory_page_upsert_op(
+    conn: &Connection,
+    key: &[u8; 32],
+    record: &MemoryPageRecord,
+) -> Result<()> {
+    insert_secretary_oplog(
+        conn,
+        key,
+        "knowledge.page.upsert.v1",
+        record.updated_at_ms,
+        serde_json::json!({
+            "page_id": record.page_id,
+            "page_type": record.page_type,
+            "state": record.state,
+            "source_count": record.source_count,
+            "title": record.title,
+            "summary": record.summary,
+            "body": record.body,
+            "primary_evidence_json": record.primary_evidence_json,
+            "source_document_ids_json": record.source_document_ids_json,
+            "confidence_level": record.confidence_level,
+            "human_corrected": record.human_corrected,
+            "created_at_ms": record.created_at_ms,
+            "updated_at_ms": record.updated_at_ms,
+        }),
+    )
+}
+
+fn insert_memory_page_state_op(
+    conn: &Connection,
+    key: &[u8; 32],
+    record: &MemoryPageRecord,
+) -> Result<()> {
+    insert_secretary_oplog(
+        conn,
+        key,
+        "knowledge.page.state.v1",
+        record.updated_at_ms,
+        serde_json::json!({
+            "page_id": record.page_id,
+            "state": record.state,
+            "updated_at_ms": record.updated_at_ms,
+        }),
+    )
 }
 
 fn insert_memory_page_history(
