@@ -25,6 +25,15 @@ extension _ChatPageStateBuild on _ChatPageState {
       );
     }
 
+    Widget buildOpenMemoryReviewButton() {
+      return IconButton(
+        key: const ValueKey('chat_open_secretary_memory'),
+        tooltip: 'Long-term memory',
+        onPressed: () => unawaited(_openMemoryReview()),
+        icon: const Icon(Icons.psychology_alt_outlined),
+      );
+    }
+
     return ScaffoldMessenger(
       key: _scaffoldMessengerKey,
       child: Scaffold(
@@ -33,6 +42,7 @@ extension _ChatPageStateBuild on _ChatPageState {
             ? AppBar(
                 title: Text(title),
                 actions: [
+                  buildOpenMemoryReviewButton(),
                   buildOpenTaskHubButton(),
                   IconButton(
                     key: const ValueKey('chat_tag_filter_button'),
@@ -104,7 +114,10 @@ extension _ChatPageStateBuild on _ChatPageState {
                     padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
-                      children: [buildOpenTaskHubButton()],
+                      children: [
+                        buildOpenMemoryReviewButton(),
+                        buildOpenTaskHubButton(),
+                      ],
                     ),
                   ),
                 ),
@@ -177,7 +190,14 @@ extension _ChatPageStateBuild on _ChatPageState {
                                     : _streamingAnswer;
                             final extraCount = (hasPendingAssistant ? 1 : 0) +
                                 (pendingQuestion == null ? 0 : 1);
-                            if (messages.isEmpty && extraCount == 0) {
+                            final secretaryCards = _buildSecretaryCards(
+                              messages,
+                              _taskPriorityStore?.snapshot,
+                            );
+                            final secretaryExtraCount = secretaryCards.length;
+                            if (messages.isEmpty &&
+                                extraCount == 0 &&
+                                secretaryExtraCount == 0) {
                               if (isLoading) {
                                 return const Center(
                                   child: CircularProgressIndicator(),
@@ -280,44 +300,85 @@ extension _ChatPageStateBuild on _ChatPageState {
                                         messageIndexById[messageId];
                                     if (messageIndex == null) return null;
                                     return _usePagination
-                                        ? messageIndex + extraCount
+                                        ? messageIndex +
+                                            extraCount +
+                                            secretaryExtraCount
                                         : messageIndex;
                                   },
-                                  itemCount: messages.length + extraCount,
-                                  itemBuilder: _buildMessageListItemBuilder(
-                                    messages: messages,
-                                    extraCount: extraCount,
-                                    hasPendingAssistant: hasPendingAssistant,
-                                    pendingAssistantText: pendingAssistantText,
-                                    pendingFailureMessage:
-                                        pendingFailureMessage,
-                                    pendingQuestion: pendingQuestion,
-                                    attachmentsBackend: attachmentsBackend,
-                                    sessionKey: sessionKey,
-                                    jobsByMessageId: jobsByMessageId,
-                                    linkedTodoBadgeByMessageId:
-                                        linkedTodoBadgeByMessageId,
-                                    existingTodoIds: existingTodoIds,
-                                    annotationJobsBySha256:
-                                        annotationJobsBySha256,
-                                    attachmentAnnotationEnabled: snapshotJobs
-                                            .data
-                                            ?.attachmentAnnotationEnabled ??
-                                        false,
-                                    attachmentAnnotationCanRunNow: snapshotJobs
-                                            .data
-                                            ?.attachmentAnnotationCanRunNow ??
-                                        false,
-                                    audioTranscribeEnabled: snapshotJobs
-                                            .data?.audioTranscribeEnabled ??
-                                        false,
-                                    audioTranscribeCanRunNow: snapshotJobs
-                                            .data?.audioTranscribeCanRunNow ??
-                                        false,
-                                    colorScheme: colorScheme,
-                                    tokens: tokens,
-                                    isDesktopPlatform: isDesktopPlatform,
-                                  ),
+                                  itemCount: messages.length +
+                                      extraCount +
+                                      secretaryExtraCount,
+                                  itemBuilder: (context, index) {
+                                    final messageItemBuilder =
+                                        _buildMessageListItemBuilder(
+                                      messages: messages,
+                                      extraCount: extraCount,
+                                      hasPendingAssistant: hasPendingAssistant,
+                                      pendingAssistantText:
+                                          pendingAssistantText,
+                                      pendingFailureMessage:
+                                          pendingFailureMessage,
+                                      pendingQuestion: pendingQuestion,
+                                      attachmentsBackend: attachmentsBackend,
+                                      sessionKey: sessionKey,
+                                      jobsByMessageId: jobsByMessageId,
+                                      linkedTodoBadgeByMessageId:
+                                          linkedTodoBadgeByMessageId,
+                                      existingTodoIds: existingTodoIds,
+                                      annotationJobsBySha256:
+                                          annotationJobsBySha256,
+                                      attachmentAnnotationEnabled: snapshotJobs
+                                              .data
+                                              ?.attachmentAnnotationEnabled ??
+                                          false,
+                                      attachmentAnnotationCanRunNow: snapshotJobs
+                                              .data
+                                              ?.attachmentAnnotationCanRunNow ??
+                                          false,
+                                      audioTranscribeEnabled: snapshotJobs
+                                              .data?.audioTranscribeEnabled ??
+                                          false,
+                                      audioTranscribeCanRunNow: snapshotJobs
+                                              .data?.audioTranscribeCanRunNow ??
+                                          false,
+                                      colorScheme: colorScheme,
+                                      tokens: tokens,
+                                      isDesktopPlatform: isDesktopPlatform,
+                                    );
+                                    if (_usePagination) {
+                                      if (index < extraCount) {
+                                        return messageItemBuilder(
+                                          context,
+                                          index,
+                                        );
+                                      }
+                                      final secretaryIndex = index - extraCount;
+                                      if (secretaryIndex <
+                                          secretaryExtraCount) {
+                                        return _buildSecretaryCardListItem(
+                                          secretaryCards[secretaryIndex],
+                                        );
+                                      }
+                                      return messageItemBuilder(
+                                        context,
+                                        index - secretaryExtraCount,
+                                      );
+                                    }
+
+                                    final messageAndPendingCount =
+                                        messages.length + extraCount;
+                                    if (index < messageAndPendingCount) {
+                                      return messageItemBuilder(
+                                        context,
+                                        index,
+                                      );
+                                    }
+                                    final secretaryIndex =
+                                        index - messageAndPendingCount;
+                                    return _buildSecretaryCardListItem(
+                                      secretaryCards[secretaryIndex],
+                                    );
+                                  },
                                 );
                               },
                             );

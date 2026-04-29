@@ -36,6 +36,9 @@ import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/platform/app_platform_capability_scope.dart';
+import '../../core/secretary/memory_proposal_detector.dart';
+import '../../core/secretary/rule_based_planning_engine.dart';
+import '../../core/secretary/secretary_models.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
@@ -65,6 +68,7 @@ import '../actions/suggestions_parser.dart';
 import '../actions/task_hub/task_hub_banner.dart';
 import '../actions/task_hub/task_hub_page.dart';
 import '../actions/task_hub/task_hub_quick_actions.dart';
+import '../actions/task_hub/task_priority_models.dart';
 import '../actions/task_hub/task_priority_ai.dart';
 import '../actions/task_hub/task_priority_feedback_store.dart';
 import '../actions/task_hub/task_priority_shared_assessments_resolver.dart';
@@ -104,6 +108,9 @@ import '../settings/cloud_account_page.dart';
 import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
 import '../share/share_draft_inbox.dart';
+import '../secretary/chat_secretary_cards.dart';
+import '../secretary/memory_review_page.dart';
+import '../secretary/planning_review_page.dart';
 import 'attachment_annotation_job_ui_state.dart';
 import 'chat_answer_citation_controller.dart';
 import 'chat_answer_evidence_parser.dart';
@@ -157,6 +164,7 @@ part 'chat_page_todo_message_badge.dart';
 part 'chat_page_message_bubble_detail.dart';
 part 'chat_page_linked_todo_badge_loader.dart';
 part 'chat_page_build_helpers.dart';
+part 'chat_page_secretary.dart';
 part 'chat_page_build.dart';
 part 'chat_page_build_desktop_drop.dart';
 
@@ -439,6 +447,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   TaskPriorityStore? _taskPriorityStore;
   final TaskPriorityFeedbackStore _taskPriorityFeedbackStore =
       const TaskPriorityFeedbackStore();
+  final MemoryProposalDetector _secretaryMemoryDetector =
+      const MemoryProposalDetector();
+  final Set<String> _acceptedSecretaryMemorySourceIds = <String>{};
+  final Set<String> _ignoredSecretaryMemorySourceIds = <String>{};
+  final Set<String> _ignoredSecretaryPlanIds = <String>{};
+  final List<SecretaryMemoryPage> _acceptedSecretaryMemories =
+      <SecretaryMemoryPage>[];
+  final Set<String> _acceptedSecretaryPlanItemIds = <String>{};
+  final Set<String> _dismissedSecretaryPlanItemIds = <String>{};
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
   final Map<String, List<Attachment>> _attachmentsCacheByMessageId =
