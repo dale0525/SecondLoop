@@ -182,6 +182,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<LlmUsageAggregate> dco_decode_list_llm_usage_aggregate(dynamic raw);
 
   @protected
+  List<MemoryPageRecord> dco_decode_list_memory_page_record(dynamic raw);
+
+  @protected
   List<Message> dco_decode_list_message(dynamic raw);
 
   @protected
@@ -197,10 +200,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  List<PlanningOutputRecord> dco_decode_list_planning_output_record(
+      dynamic raw);
+
+  @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<SecretaryMemoryProposalRecord>
+      dco_decode_list_secretary_memory_proposal_record(dynamic raw);
 
   @protected
   List<SemanticParseJob> dco_decode_list_semantic_parse_job(dynamic raw);
@@ -257,6 +268,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaAnnotationConfig dco_decode_media_annotation_config(dynamic raw);
+
+  @protected
+  MemoryPageRecord dco_decode_memory_page_record(dynamic raw);
 
   @protected
   Message dco_decode_message(dynamic raw);
@@ -322,6 +336,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
+
+  @protected
+  PlanningOutputRecord dco_decode_planning_output_record(dynamic raw);
+
+  @protected
+  SecretaryMemoryProposalRecord dco_decode_secretary_memory_proposal_record(
+      dynamic raw);
 
   @protected
   SemanticParseJob dco_decode_semantic_parse_job(dynamic raw);
@@ -537,6 +558,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<MemoryPageRecord> sse_decode_list_memory_page_record(
+      SseDeserializer deserializer);
+
+  @protected
   List<Message> sse_decode_list_message(SseDeserializer deserializer);
 
   @protected
@@ -552,10 +577,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<PlanningOutputRecord> sse_decode_list_planning_output_record(
+      SseDeserializer deserializer);
+
+  @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<SecretaryMemoryProposalRecord>
+      sse_decode_list_secretary_memory_proposal_record(
+          SseDeserializer deserializer);
 
   @protected
   List<SemanticParseJob> sse_decode_list_semantic_parse_job(
@@ -622,6 +656,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   MediaAnnotationConfig sse_decode_media_annotation_config(
       SseDeserializer deserializer);
+
+  @protected
+  MemoryPageRecord sse_decode_memory_page_record(SseDeserializer deserializer);
 
   @protected
   Message sse_decode_message(SseDeserializer deserializer);
@@ -694,6 +731,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
+
+  @protected
+  PlanningOutputRecord sse_decode_planning_output_record(
+      SseDeserializer deserializer);
+
+  @protected
+  SecretaryMemoryProposalRecord sse_decode_secretary_memory_proposal_record(
+      SseDeserializer deserializer);
 
   @protected
   SemanticParseJob sse_decode_semantic_parse_job(SseDeserializer deserializer);
@@ -925,6 +970,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<LlmUsageAggregate> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_memory_page_record(
+      List<MemoryPageRecord> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_message(List<Message> self, SseSerializer serializer);
 
   @protected
@@ -940,11 +989,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<MigrationArchiveRelation> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_planning_output_record(
+      List<PlanningOutputRecord> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_secretary_memory_proposal_record(
+      List<SecretaryMemoryProposalRecord> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_semantic_parse_job(
@@ -1010,6 +1067,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_media_annotation_config(
       MediaAnnotationConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_memory_page_record(
+      MemoryPageRecord self, SseSerializer serializer);
 
   @protected
   void sse_encode_message(Message self, SseSerializer serializer);
@@ -1083,6 +1144,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_planning_output_record(
+      PlanningOutputRecord self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_secretary_memory_proposal_record(
+      SecretaryMemoryProposalRecord self, SseSerializer serializer);
 
   @protected
   void sse_encode_semantic_parse_job(

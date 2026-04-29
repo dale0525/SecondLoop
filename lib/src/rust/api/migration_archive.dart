@@ -7,7 +7,7 @@ import '../db.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `emit_progress`, `emit_result`, `key_from_bytes`
+// These functions are ignored because they are not marked as `pub`: `emit_progress`, `emit_result`, `key_from_bytes`, `validate_inactive_rollback_snapshot_restore_access`
 
 Future<MigrationArchiveManifest> migrationArchiveParseManifestJson(
         {required String manifestJson}) =>

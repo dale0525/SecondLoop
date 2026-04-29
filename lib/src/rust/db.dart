@@ -768,6 +768,73 @@ class MediaAnnotationConfig {
           cloudModelName == other.cloudModelName;
 }
 
+class MemoryPageRecord {
+  final String pageId;
+  final String pageType;
+  final String state;
+  final PlatformInt64 sourceCount;
+  final String title;
+  final String summary;
+  final String body;
+  final String primaryEvidenceJson;
+  final String sourceDocumentIdsJson;
+  final double confidenceLevel;
+  final bool humanCorrected;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const MemoryPageRecord({
+    required this.pageId,
+    required this.pageType,
+    required this.state,
+    required this.sourceCount,
+    required this.title,
+    required this.summary,
+    required this.body,
+    required this.primaryEvidenceJson,
+    required this.sourceDocumentIdsJson,
+    required this.confidenceLevel,
+    required this.humanCorrected,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      pageId.hashCode ^
+      pageType.hashCode ^
+      state.hashCode ^
+      sourceCount.hashCode ^
+      title.hashCode ^
+      summary.hashCode ^
+      body.hashCode ^
+      primaryEvidenceJson.hashCode ^
+      sourceDocumentIdsJson.hashCode ^
+      confidenceLevel.hashCode ^
+      humanCorrected.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MemoryPageRecord &&
+          runtimeType == other.runtimeType &&
+          pageId == other.pageId &&
+          pageType == other.pageType &&
+          state == other.state &&
+          sourceCount == other.sourceCount &&
+          title == other.title &&
+          summary == other.summary &&
+          body == other.body &&
+          primaryEvidenceJson == other.primaryEvidenceJson &&
+          sourceDocumentIdsJson == other.sourceDocumentIdsJson &&
+          confidenceLevel == other.confidenceLevel &&
+          humanCorrected == other.humanCorrected &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
 class Message {
   final String id;
   final String conversationId;
@@ -1001,6 +1068,136 @@ class MigrationArchiveRelation {
           fromId == other.fromId &&
           toId == other.toId &&
           relationType == other.relationType;
+}
+
+class PlanningOutputRecord {
+  final String id;
+  final String kind;
+  final String title;
+  final String body;
+  final String itemsJson;
+  final String? sourceRefsJson;
+  final String route;
+  final String state;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+  final PlatformInt64? expiresAtMs;
+  final PlatformInt64? dismissedAtMs;
+
+  const PlanningOutputRecord({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.body,
+    required this.itemsJson,
+    this.sourceRefsJson,
+    required this.route,
+    required this.state,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+    this.expiresAtMs,
+    this.dismissedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      kind.hashCode ^
+      title.hashCode ^
+      body.hashCode ^
+      itemsJson.hashCode ^
+      sourceRefsJson.hashCode ^
+      route.hashCode ^
+      state.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode ^
+      expiresAtMs.hashCode ^
+      dismissedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlanningOutputRecord &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          kind == other.kind &&
+          title == other.title &&
+          body == other.body &&
+          itemsJson == other.itemsJson &&
+          sourceRefsJson == other.sourceRefsJson &&
+          route == other.route &&
+          state == other.state &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs &&
+          expiresAtMs == other.expiresAtMs &&
+          dismissedAtMs == other.dismissedAtMs;
+}
+
+class SecretaryMemoryProposalRecord {
+  final String id;
+  final String? sourceMessageId;
+  final String kind;
+  final String title;
+  final String body;
+  final double confidence;
+  final String state;
+  final String? sourceRefsJson;
+  final String? actionHint;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+  final PlatformInt64? acceptedAtMs;
+  final PlatformInt64? dismissedAtMs;
+
+  const SecretaryMemoryProposalRecord({
+    required this.id,
+    this.sourceMessageId,
+    required this.kind,
+    required this.title,
+    required this.body,
+    required this.confidence,
+    required this.state,
+    this.sourceRefsJson,
+    this.actionHint,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+    this.acceptedAtMs,
+    this.dismissedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      sourceMessageId.hashCode ^
+      kind.hashCode ^
+      title.hashCode ^
+      body.hashCode ^
+      confidence.hashCode ^
+      state.hashCode ^
+      sourceRefsJson.hashCode ^
+      actionHint.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode ^
+      acceptedAtMs.hashCode ^
+      dismissedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SecretaryMemoryProposalRecord &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          sourceMessageId == other.sourceMessageId &&
+          kind == other.kind &&
+          title == other.title &&
+          body == other.body &&
+          confidence == other.confidence &&
+          state == other.state &&
+          sourceRefsJson == other.sourceRefsJson &&
+          actionHint == other.actionHint &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs &&
+          acceptedAtMs == other.acceptedAtMs &&
+          dismissedAtMs == other.dismissedAtMs;
 }
 
 class SemanticParseJob {

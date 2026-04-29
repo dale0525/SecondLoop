@@ -38,6 +38,7 @@ import 'app_backend.dart';
 import 'attachments_backend.dart';
 import 'semantic_parse_attempt_aware_backend.dart';
 import 'semantic_parse_enhancement_backend.dart';
+import 'secretary_backend.dart';
 import '../sync/sync_config_store.dart';
 import 'rust_external_library_resolver.dart';
 import 'serialized_rust_handler.dart';
@@ -55,6 +56,7 @@ part 'native_backend_sync_webdav.dart';
 part 'native_backend_sync_localdir.dart';
 part 'native_backend_sync_managed_vault.dart';
 part 'native_backend_sync_migration.dart';
+part 'native_backend_secretary.dart';
 
 Future<bool> _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimBridge({
   required String appDir,
@@ -309,12 +311,14 @@ class NativeAppBackend extends _NativeAppBackendAccess
         _NativeAppBackendSyncWebdav,
         _NativeAppBackendSyncLocaldir,
         _NativeAppBackendSyncManagedVault,
-        _NativeAppBackendSyncMigration
+        _NativeAppBackendSyncMigration,
+        _NativeAppBackendSecretary
     implements
         AppBackend,
         AttachmentsBackend,
         AttachmentAnnotationMutationsBackend,
         SemanticParseAttemptAwareBackend,
+        SecretaryBackend,
         AssistantCitationWriteBackend,
         DetachedAskCompletionRecoveryBackend {
   @override
@@ -375,6 +379,17 @@ class NativeAppBackend extends _NativeAppBackendAccess
         dbMarkTodoFollowupGenerationJobSkipped,
     DbMarkTodoFollowupGenerationJobCanceledFn?
         dbMarkTodoFollowupGenerationJobCanceled,
+    DbCreateSecretaryMemoryProposalFn? dbCreateSecretaryMemoryProposal,
+    DbListSecretaryMemoryProposalsFn? dbListSecretaryMemoryProposals,
+    DbAcceptSecretaryMemoryProposalFn? dbAcceptSecretaryMemoryProposal,
+    DbDismissSecretaryMemoryProposalFn? dbDismissSecretaryMemoryProposal,
+    DbListMemoryPagesFn? dbListMemoryPages,
+    DbGetMemoryPageFn? dbGetMemoryPage,
+    DbCorrectMemoryPageFn? dbCorrectMemoryPage,
+    DbSetMemoryPageStateFn? dbArchiveMemoryPage,
+    DbSetMemoryPageStateFn? dbRestoreMemoryPage,
+    DbUpsertPlanningOutputFn? dbUpsertPlanningOutput,
+    DbListPlanningOutputsFn? dbListPlanningOutputs,
     RustLibInitFn? rustLibInit,
   })  : _storageScope = _normalizeStorageScope(storageScope),
         _secureBlobStore = SecureBlobStore(
@@ -472,6 +487,26 @@ class NativeAppBackend extends _NativeAppBackendAccess
         _dbMarkTodoFollowupGenerationJobCanceled =
             dbMarkTodoFollowupGenerationJobCanceled ??
                 rust_core.dbMarkTodoFollowupGenerationJobCanceled,
+        _dbCreateSecretaryMemoryProposal = dbCreateSecretaryMemoryProposal ??
+            rust_core.dbCreateSecretaryMemoryProposal,
+        _dbListSecretaryMemoryProposals = dbListSecretaryMemoryProposals ??
+            rust_core.dbListSecretaryMemoryProposals,
+        _dbAcceptSecretaryMemoryProposal = dbAcceptSecretaryMemoryProposal ??
+            rust_core.dbAcceptSecretaryMemoryProposal,
+        _dbDismissSecretaryMemoryProposal = dbDismissSecretaryMemoryProposal ??
+            rust_core.dbDismissSecretaryMemoryProposal,
+        _dbListMemoryPages = dbListMemoryPages ?? rust_core.dbListMemoryPages,
+        _dbGetMemoryPage = dbGetMemoryPage ?? rust_core.dbGetMemoryPage,
+        _dbCorrectMemoryPage =
+            dbCorrectMemoryPage ?? rust_core.dbCorrectMemoryPage,
+        _dbArchiveMemoryPage =
+            dbArchiveMemoryPage ?? rust_core.dbArchiveMemoryPage,
+        _dbRestoreMemoryPage =
+            dbRestoreMemoryPage ?? rust_core.dbRestoreMemoryPage,
+        _dbUpsertPlanningOutput =
+            dbUpsertPlanningOutput ?? rust_core.dbUpsertPlanningOutput,
+        _dbListPlanningOutputs =
+            dbListPlanningOutputs ?? rust_core.dbListPlanningOutputs,
         _recoverInterruptedExternalImportBatchesOnInit =
             recoverInterruptedExternalImportBatchesOnInit,
         _rustLibInit = rustLibInit ??
@@ -568,6 +603,28 @@ class NativeAppBackend extends _NativeAppBackendAccess
   @override
   final DbMarkTodoFollowupGenerationJobCanceledFn
       _dbMarkTodoFollowupGenerationJobCanceled;
+  @override
+  final DbCreateSecretaryMemoryProposalFn _dbCreateSecretaryMemoryProposal;
+  @override
+  final DbListSecretaryMemoryProposalsFn _dbListSecretaryMemoryProposals;
+  @override
+  final DbAcceptSecretaryMemoryProposalFn _dbAcceptSecretaryMemoryProposal;
+  @override
+  final DbDismissSecretaryMemoryProposalFn _dbDismissSecretaryMemoryProposal;
+  @override
+  final DbListMemoryPagesFn _dbListMemoryPages;
+  @override
+  final DbGetMemoryPageFn _dbGetMemoryPage;
+  @override
+  final DbCorrectMemoryPageFn _dbCorrectMemoryPage;
+  @override
+  final DbSetMemoryPageStateFn _dbArchiveMemoryPage;
+  @override
+  final DbSetMemoryPageStateFn _dbRestoreMemoryPage;
+  @override
+  final DbUpsertPlanningOutputFn _dbUpsertPlanningOutput;
+  @override
+  final DbListPlanningOutputsFn _dbListPlanningOutputs;
   final bool _recoverInterruptedExternalImportBatchesOnInit;
   final RustLibInitFn _rustLibInit;
 

@@ -2163,3 +2163,136 @@ Future<void> syncManagedVaultClearVault(
         required String firebaseIdToken}) =>
     RustLib.instance.api.crateApiCoreSyncManagedVaultClearVault(
         baseUrl: baseUrl, vaultId: vaultId, firebaseIdToken: firebaseIdToken);
+
+Future<SecretaryMemoryProposalRecord> dbCreateSecretaryMemoryProposal(
+        {required String appDir,
+        required List<int> key,
+        String? sourceMessageId,
+        required String kind,
+        required String title,
+        required String body,
+        required double confidence,
+        String? sourceRefsJson,
+        String? actionHint,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbCreateSecretaryMemoryProposal(
+        appDir: appDir,
+        key: key,
+        sourceMessageId: sourceMessageId,
+        kind: kind,
+        title: title,
+        body: body,
+        confidence: confidence,
+        sourceRefsJson: sourceRefsJson,
+        actionHint: actionHint,
+        nowMs: nowMs);
+
+Future<List<SecretaryMemoryProposalRecord>> dbListSecretaryMemoryProposals(
+        {required String appDir, required List<int> key, String? state}) =>
+    RustLib.instance.api.crateApiCoreDbListSecretaryMemoryProposals(
+        appDir: appDir, key: key, state: state);
+
+Future<MemoryPageRecord> dbAcceptSecretaryMemoryProposal(
+        {required String appDir,
+        required List<int> key,
+        required String proposalId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbAcceptSecretaryMemoryProposal(
+        appDir: appDir, key: key, proposalId: proposalId, nowMs: nowMs);
+
+Future<SecretaryMemoryProposalRecord> dbDismissSecretaryMemoryProposal(
+        {required String appDir,
+        required List<int> key,
+        required String proposalId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbDismissSecretaryMemoryProposal(
+        appDir: appDir, key: key, proposalId: proposalId, nowMs: nowMs);
+
+Future<List<MemoryPageRecord>> dbListMemoryPages(
+        {required String appDir, required List<int> key, String? state}) =>
+    RustLib.instance.api
+        .crateApiCoreDbListMemoryPages(appDir: appDir, key: key, state: state);
+
+Future<MemoryPageRecord> dbGetMemoryPage(
+        {required String appDir,
+        required List<int> key,
+        required String pageId}) =>
+    RustLib.instance.api
+        .crateApiCoreDbGetMemoryPage(appDir: appDir, key: key, pageId: pageId);
+
+Future<MemoryPageRecord> dbCorrectMemoryPage(
+        {required String appDir,
+        required List<int> key,
+        required String pageId,
+        required String title,
+        required String summary,
+        required String body,
+        String? reason,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbCorrectMemoryPage(
+        appDir: appDir,
+        key: key,
+        pageId: pageId,
+        title: title,
+        summary: summary,
+        body: body,
+        reason: reason,
+        nowMs: nowMs);
+
+Future<MemoryPageRecord> dbArchiveMemoryPage(
+        {required String appDir,
+        required List<int> key,
+        required String pageId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbArchiveMemoryPage(
+        appDir: appDir, key: key, pageId: pageId, nowMs: nowMs);
+
+Future<MemoryPageRecord> dbRestoreMemoryPage(
+        {required String appDir,
+        required List<int> key,
+        required String pageId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbRestoreMemoryPage(
+        appDir: appDir, key: key, pageId: pageId, nowMs: nowMs);
+
+Future<PlanningOutputRecord> dbUpsertPlanningOutput(
+        {required String appDir,
+        required List<int> key,
+        required String id,
+        required String kind,
+        required String title,
+        required String body,
+        required String itemsJson,
+        String? sourceRefsJson,
+        required String route,
+        required String state,
+        required PlatformInt64 createdAtMs,
+        required PlatformInt64 updatedAtMs,
+        PlatformInt64? expiresAtMs}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertPlanningOutput(
+        appDir: appDir,
+        key: key,
+        id: id,
+        kind: kind,
+        title: title,
+        body: body,
+        itemsJson: itemsJson,
+        sourceRefsJson: sourceRefsJson,
+        route: route,
+        state: state,
+        createdAtMs: createdAtMs,
+        updatedAtMs: updatedAtMs,
+        expiresAtMs: expiresAtMs);
+
+Future<List<PlanningOutputRecord>> dbListPlanningOutputs(
+        {required String appDir,
+        required List<int> key,
+        String? kind,
+        required PlatformInt64 nowMs,
+        required bool includeExpired}) =>
+    RustLib.instance.api.crateApiCoreDbListPlanningOutputs(
+        appDir: appDir,
+        key: key,
+        kind: kind,
+        nowMs: nowMs,
+        includeExpired: includeExpired);

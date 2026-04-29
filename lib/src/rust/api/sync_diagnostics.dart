@@ -6,8 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_client`, `build_managed_vault_cursor_remote_diagnostics`, `client`, `json_value_to_i64`, `kv_get_i64`, `kv_get_string`, `kv_scan_i64_map_by_prefix`, `kv_scan_keys_by_prefix`, `managed_vault_scope_id`, `parse_device_seq_map_from_payload`, `probe_managed_vault_v2_head`, `probe_remote_device_seq_map`, `read_local_device_id`, `url`
-// These types are ignored because they are not used by any `pub` functions: `DiagnosticsRegisterDeviceRequest`, `DiagnosticsRegisterDeviceResponse`, `DiagnosticsV2HeadResponse`, `ManagedVaultCursorRemoteDiagnostics`, `PullProbeRequest`
+// These functions are ignored because they are not marked as `pub`: `build_client`, `build_managed_vault_cursor_remote_diagnostics`, `client`, `kv_get_i64`, `kv_get_string`, `kv_scan_i64_map_by_prefix`, `kv_scan_keys_by_prefix`, `managed_vault_scope_id`, `probe_managed_vault_v2_head`, `read_local_device_id`, `url`
+// These types are ignored because they are not used by any `pub` functions: `DiagnosticsV2HeadResponse`, `ManagedVaultCursorRemoteDiagnostics`
 
 Future<String> syncManagedVaultCursorDiagnostics(
         {required String appDir,

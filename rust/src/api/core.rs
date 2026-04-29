@@ -176,3 +176,4 @@ include!("core_parts/part_02.rs");
 include!("core_parts/part_03.rs");
 include!("core_parts/part_04.rs");
 include!("core_parts/part_05.rs");
+include!("core_parts/part_06_secretary.rs");

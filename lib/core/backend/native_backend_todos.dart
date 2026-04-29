@@ -6,7 +6,8 @@ abstract class _NativeAppBackendAccess
         AttachmentsBackend,
         AttachmentAnnotationMutationsBackend,
         AssistantCitationWriteBackend,
-        DetachedAskCompletionRecoveryBackend {
+        DetachedAskCompletionRecoveryBackend,
+        SecretaryBackend {
   Future<String> _getAppDir();
 
   DbListTodosFn get _dbListTodos;
@@ -56,6 +57,17 @@ abstract class _NativeAppBackendAccess
       get _dbMarkTodoFollowupGenerationJobSkipped;
   DbMarkTodoFollowupGenerationJobCanceledFn
       get _dbMarkTodoFollowupGenerationJobCanceled;
+  DbCreateSecretaryMemoryProposalFn get _dbCreateSecretaryMemoryProposal;
+  DbListSecretaryMemoryProposalsFn get _dbListSecretaryMemoryProposals;
+  DbAcceptSecretaryMemoryProposalFn get _dbAcceptSecretaryMemoryProposal;
+  DbDismissSecretaryMemoryProposalFn get _dbDismissSecretaryMemoryProposal;
+  DbListMemoryPagesFn get _dbListMemoryPages;
+  DbGetMemoryPageFn get _dbGetMemoryPage;
+  DbCorrectMemoryPageFn get _dbCorrectMemoryPage;
+  DbSetMemoryPageStateFn get _dbArchiveMemoryPage;
+  DbSetMemoryPageStateFn get _dbRestoreMemoryPage;
+  DbUpsertPlanningOutputFn get _dbUpsertPlanningOutput;
+  DbListPlanningOutputsFn get _dbListPlanningOutputs;
 }
 
 mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
