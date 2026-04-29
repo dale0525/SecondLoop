@@ -131,19 +131,3 @@ class RuleBasedPlanningEngine {
     return DateTime(value.year, value.month, value.day);
   }
 }
-
-extension on SecretaryPlanItem {
-  SecretaryPlanItem copyWith({
-    String? reason,
-    bool? requiresConfirmation,
-  }) {
-    return SecretaryPlanItem(
-      id: id,
-      todoId: todoId,
-      title: title,
-      reason: reason ?? this.reason,
-      dueAtMs: dueAtMs,
-      requiresConfirmation: requiresConfirmation ?? this.requiresConfirmation,
-    );
-  }
-}

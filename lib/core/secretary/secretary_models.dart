@@ -62,6 +62,20 @@ class SecretaryPlanItem {
   final String reason;
   final int? dueAtMs;
   final bool requiresConfirmation;
+
+  SecretaryPlanItem copyWith({
+    String? reason,
+    bool? requiresConfirmation,
+  }) {
+    return SecretaryPlanItem(
+      id: id,
+      todoId: todoId,
+      title: title,
+      reason: reason ?? this.reason,
+      dueAtMs: dueAtMs,
+      requiresConfirmation: requiresConfirmation ?? this.requiresConfirmation,
+    );
+  }
 }
 
 class SecretaryPlanSections {
@@ -82,6 +96,20 @@ class SecretaryPlanSections {
   final List<SecretaryPlanItem> dueSoon;
   final List<SecretaryPlanItem> needsDecision;
   final List<SecretaryPlanItem> missingNextAction;
+
+  SecretaryPlanSections copyWith({
+    List<SecretaryPlanItem>? focus,
+    List<SecretaryPlanItem>? dueSoon,
+    List<SecretaryPlanItem>? needsDecision,
+    List<SecretaryPlanItem>? missingNextAction,
+  }) {
+    return SecretaryPlanSections(
+      focus: focus ?? this.focus,
+      dueSoon: dueSoon ?? this.dueSoon,
+      needsDecision: needsDecision ?? this.needsDecision,
+      missingNextAction: missingNextAction ?? this.missingNextAction,
+    );
+  }
 
   bool get isEmpty =>
       focus.isEmpty &&
@@ -110,6 +138,7 @@ class SecretaryPlan {
     required this.generatedAtMs,
     required this.route,
     required this.sections,
+    this.explanation,
   });
 
   final String id;
@@ -117,6 +146,25 @@ class SecretaryPlan {
   final int generatedAtMs;
   final String route;
   final SecretaryPlanSections sections;
+  final String? explanation;
+
+  SecretaryPlan copyWith({
+    String? id,
+    String? title,
+    int? generatedAtMs,
+    String? route,
+    SecretaryPlanSections? sections,
+    String? explanation,
+  }) {
+    return SecretaryPlan(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      generatedAtMs: generatedAtMs ?? this.generatedAtMs,
+      route: route ?? this.route,
+      sections: sections ?? this.sections,
+      explanation: explanation ?? this.explanation,
+    );
+  }
 
   int get itemCount => sections.itemCount;
 

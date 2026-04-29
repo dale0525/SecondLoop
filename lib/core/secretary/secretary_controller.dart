@@ -7,19 +7,30 @@ import '../../src/rust/platform_int.dart';
 import 'internal_tool_registry.dart';
 import 'memory_proposal_detector.dart';
 import 'rule_based_planning_engine.dart';
+import 'secretary_ai_service.dart';
 import 'secretary_models.dart';
 
 class SecretaryController {
   SecretaryController({
     MemoryProposalDetector detector = const MemoryProposalDetector(),
     SecretaryBackend? backend,
+    SecretaryAiService? aiService,
+    SecretaryAiRouteConfig aiRouteConfig =
+        const SecretaryAiRouteConfig.localOnly(),
+    Duration aiTimeout = const Duration(seconds: 8),
     required RuleBasedPlanningEngine planningEngine,
   })  : _detector = detector,
         _backend = backend,
+        _aiService = aiService,
+        _aiRouteConfig = aiRouteConfig,
+        _aiTimeout = aiTimeout,
         _planningEngine = planningEngine;
 
   final MemoryProposalDetector _detector;
   final SecretaryBackend? _backend;
+  final SecretaryAiService? _aiService;
+  final SecretaryAiRouteConfig _aiRouteConfig;
+  final Duration _aiTimeout;
   final RuleBasedPlanningEngine _planningEngine;
   final Set<String> _acceptedProposalSourceIds = <String>{};
   final Set<String> _dismissedProposalSourceIds = <String>{};
@@ -161,8 +172,22 @@ class SecretaryController {
     Uint8List key,
     List<Todo> todos, {
     required int nowMs,
+    SecretaryAiRouteConfig? aiRouteConfig,
+    String localeTag = 'en-US',
   }) async {
-    final plan = generatePlan(todos);
+    var plan = generatePlan(todos);
+    final aiService = _aiService;
+    final routeConfig = aiRouteConfig ?? _aiRouteConfig;
+    if (aiService != null && !plan.sections.isEmpty && routeConfig.canCallAi) {
+      final enhancement = await aiService.tryEnhancePlan(
+        key,
+        localPlan: plan,
+        routeConfig: routeConfig,
+        localeTag: localeTag,
+        timeout: _aiTimeout,
+      );
+      plan = enhancement?.applyToPlan(plan) ?? plan;
+    }
     final backend = _backend;
     if (backend == null || plan.sections.isEmpty) return plan;
 
@@ -289,8 +314,11 @@ class SecretaryController {
   }
 
   String _planBody(SecretaryPlan plan) {
-    return '${plan.itemCount} suggestions, '
+    final summary = '${plan.itemCount} suggestions, '
         '${plan.requiresConfirmationCount} need confirmation.';
+    final explanation = plan.explanation?.trim();
+    if (explanation == null || explanation.isEmpty) return summary;
+    return '$explanation\n\n$summary';
   }
 
   String _planItemsJson(SecretaryPlan plan) {
