@@ -248,6 +248,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
           _hasMoreMessages = page.length == _kMessagePageSize;
           _loadingMoreMessages = false;
         });
+        unawaited(_syncSecretaryMemory(sessionKey, normalizedPage));
       } else {
         _latestLoadedMessages = normalizedPage;
       }
@@ -269,6 +270,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
           _hasMoreMessages = false;
           _loadingMoreMessages = false;
         });
+        unawaited(_syncSecretaryMemory(sessionKey, normalizedFiltered));
       } else {
         _latestLoadedMessages = normalizedFiltered;
       }
@@ -276,6 +278,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
 
     _latestLoadedMessages = normalizedFiltered;
+    if (mounted) {
+      unawaited(_syncSecretaryMemory(sessionKey, normalizedFiltered));
+    }
     return normalizedFiltered;
   }
 
@@ -768,6 +773,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
           rawText: text,
           createdAtMs: platformIntToInt(committedMessage.createdAtMs),
         );
+        unawaited(_persistSecretaryMemoryProposalForMessage(committedMessage));
       }
     } catch (e) {
       if (!mounted) return;

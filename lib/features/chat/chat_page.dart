@@ -31,6 +31,7 @@ import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
 import '../../core/backend/native_backend.dart';
+import '../../core/backend/secretary_backend.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -38,6 +39,7 @@ import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/secretary/memory_proposal_detector.dart';
 import '../../core/secretary/rule_based_planning_engine.dart';
+import '../../core/secretary/secretary_controller.dart';
 import '../../core/secretary/secretary_models.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
@@ -452,10 +454,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final Set<String> _acceptedSecretaryMemorySourceIds = <String>{};
   final Set<String> _ignoredSecretaryMemorySourceIds = <String>{};
   final Set<String> _ignoredSecretaryPlanIds = <String>{};
+  final List<SecretaryMemoryProposal> _persistedSecretaryMemoryProposals =
+      <SecretaryMemoryProposal>[];
   final List<SecretaryMemoryPage> _acceptedSecretaryMemories =
       <SecretaryMemoryPage>[];
   final Set<String> _acceptedSecretaryPlanItemIds = <String>{};
   final Set<String> _dismissedSecretaryPlanItemIds = <String>{};
+  String? _lastPersistedSecretaryPlanId;
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
   final Map<String, List<Attachment>> _attachmentsCacheByMessageId =

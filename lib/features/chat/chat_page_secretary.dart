@@ -1,12 +1,29 @@
 part of 'chat_page.dart';
 
 extension _ChatPageStateSecretary on _ChatPageState {
+  SecretaryController _secretaryControllerFor(SecretaryBackend backend) {
+    return SecretaryController(
+      backend: backend,
+      planningEngine: const RuleBasedPlanningEngine(nowLocal: DateTime.now),
+    );
+  }
+
   List<SecretaryMemoryProposal> _pendingSecretaryMemoryProposals(
     List<Message> messages,
   ) {
-    final proposals = <SecretaryMemoryProposal>[];
+    final proposals = <SecretaryMemoryProposal>[
+      for (final proposal in _persistedSecretaryMemoryProposals)
+        if (!_acceptedSecretaryMemorySourceIds
+                .contains(proposal.sourceMessageId) &&
+            !_ignoredSecretaryMemorySourceIds
+                .contains(proposal.sourceMessageId))
+          proposal,
+    ];
+    final persistedSourceIds =
+        proposals.map((proposal) => proposal.sourceMessageId).toSet();
     for (final message in messages) {
       if (message.role != 'user') continue;
+      if (persistedSourceIds.contains(message.id)) continue;
       if (_acceptedSecretaryMemorySourceIds.contains(message.id)) continue;
       if (_ignoredSecretaryMemorySourceIds.contains(message.id)) continue;
       final proposal = _secretaryMemoryDetector.detect(
@@ -31,9 +48,9 @@ extension _ChatPageStateSecretary on _ChatPageState {
       cards.add(
         ChatSecretaryMemoryCard(
           proposal: proposal,
-          onAccept: () => _acceptSecretaryMemoryProposal(proposal),
+          onAccept: () => unawaited(_acceptSecretaryMemoryProposal(proposal)),
           onEdit: () => _openMemoryReview(proposals),
-          onIgnore: () => _ignoreSecretaryMemoryProposal(proposal),
+          onIgnore: () => unawaited(_ignoreSecretaryMemoryProposal(proposal)),
         ),
       );
     } else if (proposals.length > 1) {
@@ -64,6 +81,7 @@ extension _ChatPageStateSecretary on _ChatPageState {
 
     final plan = _secretaryPlanFromSnapshot(snapshot);
     if (plan != null && !_ignoredSecretaryPlanIds.contains(plan.id)) {
+      unawaited(_persistSecretaryPlan(plan));
       cards.add(
         ChatSecretaryPlanningCard(
           plan: plan,
@@ -116,7 +134,82 @@ extension _ChatPageStateSecretary on _ChatPageState {
     return 'local-plan-$ids';
   }
 
-  void _acceptSecretaryMemoryProposal(SecretaryMemoryProposal proposal) {
+  Future<void> _persistSecretaryMemoryProposalForMessage(
+      Message message) async {
+    final backendAny = AppBackendScope.maybeOf(context);
+    if (backendAny is! SecretaryBackend) return;
+    final secretaryBackend = backendAny as SecretaryBackend;
+    final session = SessionScope.maybeOf(context);
+    if (session == null) return;
+    final controller = _secretaryControllerFor(secretaryBackend);
+    final proposal = await controller.persistMemoryProposalForMessage(
+      Uint8List.fromList(session.sessionKey),
+      message,
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    if (proposal == null || !mounted) return;
+    _setState(() {
+      _persistedSecretaryMemoryProposals
+        ..removeWhere(
+            (item) => item.sourceMessageId == proposal.sourceMessageId)
+        ..add(proposal);
+    });
+  }
+
+  Future<void> _syncSecretaryMemory(
+    Uint8List sessionKey,
+    List<Message> messages,
+  ) async {
+    final backendAny = AppBackendScope.maybeOf(context);
+    if (backendAny is! SecretaryBackend) return;
+    final secretaryBackend = backendAny as SecretaryBackend;
+    final controller = _secretaryControllerFor(secretaryBackend);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    for (final message in messages.take(40)) {
+      await controller.persistMemoryProposalForMessage(
+        sessionKey,
+        message,
+        nowMs: nowMs,
+      );
+    }
+    final pending = await controller.pendingMemoryProposals(sessionKey);
+    if (!mounted) return;
+    _setState(() {
+      _persistedSecretaryMemoryProposals
+        ..clear()
+        ..addAll(pending);
+    });
+  }
+
+  Future<void> _acceptSecretaryMemoryProposal(
+    SecretaryMemoryProposal proposal,
+  ) async {
+    final backendAny = AppBackendScope.maybeOf(context);
+    final session = SessionScope.maybeOf(context);
+    final hasPersistedProposal = _persistedSecretaryMemoryProposals.any(
+      (item) => item.id == proposal.id,
+    );
+
+    if (backendAny is SecretaryBackend &&
+        session != null &&
+        hasPersistedProposal) {
+      final secretaryBackend = backendAny as SecretaryBackend;
+      final page = await secretaryBackend.acceptSecretaryMemoryProposal(
+        Uint8List.fromList(session.sessionKey),
+        proposalId: proposal.id,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      if (!mounted) return;
+      _setState(() {
+        _acceptedSecretaryMemorySourceIds.add(proposal.sourceMessageId);
+        _persistedSecretaryMemoryProposals.removeWhere(
+          (item) => item.id == proposal.id,
+        );
+        _acceptedSecretaryMemories.add(_memoryPageFromRecord(page));
+      });
+      return;
+    }
+
     _setState(() {
       _acceptedSecretaryMemorySourceIds.add(proposal.sourceMessageId);
       _acceptedSecretaryMemories.add(
@@ -133,9 +226,30 @@ extension _ChatPageStateSecretary on _ChatPageState {
     });
   }
 
-  void _ignoreSecretaryMemoryProposal(SecretaryMemoryProposal proposal) {
+  Future<void> _ignoreSecretaryMemoryProposal(
+    SecretaryMemoryProposal proposal,
+  ) async {
+    final backendAny = AppBackendScope.maybeOf(context);
+    final session = SessionScope.maybeOf(context);
+    final hasPersistedProposal = _persistedSecretaryMemoryProposals.any(
+      (item) => item.id == proposal.id,
+    );
+    if (backendAny is SecretaryBackend &&
+        session != null &&
+        hasPersistedProposal) {
+      final secretaryBackend = backendAny as SecretaryBackend;
+      await secretaryBackend.dismissSecretaryMemoryProposal(
+        Uint8List.fromList(session.sessionKey),
+        proposalId: proposal.id,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    }
+    if (!mounted) return;
     _setState(() {
       _ignoredSecretaryMemorySourceIds.add(proposal.sourceMessageId);
+      _persistedSecretaryMemoryProposals.removeWhere(
+        (item) => item.id == proposal.id,
+      );
     });
   }
 
@@ -162,8 +276,10 @@ extension _ChatPageStateSecretary on _ChatPageState {
           MemoryReviewPage(
             pending: pending,
             current: _acceptedSecretaryMemories,
-            onAcceptProposal: _acceptSecretaryMemoryProposal,
-            onDismissProposal: _ignoreSecretaryMemoryProposal,
+            onAcceptProposal: (proposal) =>
+                unawaited(_acceptSecretaryMemoryProposal(proposal)),
+            onDismissProposal: (proposal) =>
+                unawaited(_ignoreSecretaryMemoryProposal(proposal)),
           ),
         ),
       ),
@@ -207,5 +323,70 @@ extension _ChatPageStateSecretary on _ChatPageState {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: card,
     );
+  }
+
+  SecretaryMemoryPage _memoryPageFromRecord(MemoryPageRecord record) {
+    return SecretaryMemoryPage(
+      id: record.pageId,
+      title: record.title,
+      body: record.body,
+      state: switch (record.state) {
+        'archived' => SecretaryMemoryState.archived,
+        'stale' || 'needs_review' => SecretaryMemoryState.needsReview,
+        _ => SecretaryMemoryState.active,
+      },
+      updatedAtMs: platformIntToInt(record.updatedAtMs),
+      kind: record.pageType,
+    );
+  }
+
+  Future<void> _persistSecretaryPlan(SecretaryPlan plan) async {
+    if (_lastPersistedSecretaryPlanId == plan.id) return;
+    final backendAny = AppBackendScope.maybeOf(context);
+    final session = SessionScope.maybeOf(context);
+    if (backendAny is! SecretaryBackend || session == null) return;
+    final secretaryBackend = backendAny as SecretaryBackend;
+    _lastPersistedSecretaryPlanId = plan.id;
+    await secretaryBackend.upsertPlanningOutput(
+      Uint8List.fromList(session.sessionKey),
+      id: plan.id,
+      kind: 'daily_plan',
+      title: plan.title,
+      body: '${plan.itemCount} suggestions, '
+          '${plan.requiresConfirmationCount} need confirmation.',
+      itemsJson: _secretaryPlanItemsJson(plan),
+      sourceRefsJson: jsonEncode({
+        'todo_ids': [for (final item in plan.sections.allItems) item.todoId],
+      }),
+      route: plan.route,
+      state: 'active',
+      createdAtMs: plan.generatedAtMs,
+      updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+      expiresAtMs:
+          DateTime.now().add(const Duration(days: 1)).millisecondsSinceEpoch,
+    );
+  }
+
+  String _secretaryPlanItemsJson(SecretaryPlan plan) {
+    final items = <Map<String, Object?>>[];
+    void add(String section, List<SecretaryPlanItem> sectionItems) {
+      for (final item in sectionItems) {
+        items.add({
+          'id': item.id,
+          'todo_id': item.todoId,
+          'section': section,
+          'title': item.title,
+          'reason': item.reason,
+          'due_at_ms': item.dueAtMs,
+          'requires_confirmation': item.requiresConfirmation,
+        });
+      }
+    }
+
+    add('focus', plan.sections.focus);
+    add('due_soon', plan.sections.dueSoon);
+    add('needs_decision', plan.sections.needsDecision);
+    add('missing_next_action', plan.sections.missingNextAction);
+    return jsonEncode(items);
   }
 }
