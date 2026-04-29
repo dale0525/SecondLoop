@@ -35,6 +35,10 @@ class SecretaryController {
   final Set<String> _acceptedProposalSourceIds = <String>{};
   final Set<String> _dismissedProposalSourceIds = <String>{};
   final Set<String> _dismissedPlanIds = <String>{};
+  static const int _digestMaxSectionItems = 40;
+  static const int _digestMaxCaptureItems = 20;
+  static const int _digestTitleMaxChars = 160;
+  static const int _digestBodyMaxChars = 700;
 
   List<SecretaryMemoryProposal> pendingMemoryProposalsForMessages(
     List<Message> messages,
@@ -275,6 +279,71 @@ class SecretaryController {
     return SecretaryAuditTrail(run: run, toolCalls: records);
   }
 
+  Future<SecretaryAgentDigest> buildAgentDigest(
+    Uint8List key, {
+    required List<Todo> todos,
+    required String deviceId,
+    required String localeTag,
+    required int nowMs,
+  }) async {
+    final backend = _backend;
+    final memoryPages = backend == null
+        ? const <MemoryPageRecord>[]
+        : await backend.listMemoryPages(key, state: 'active');
+    final pendingProposals = backend == null
+        ? const <SecretaryMemoryProposalRecord>[]
+        : await backend.listSecretaryMemoryProposals(key, state: 'pending');
+
+    final memories = <Map<String, Object?>>[];
+    final preferences = <Map<String, Object?>>[];
+    for (final page in memoryPages.take(_digestMaxSectionItems)) {
+      final item = _digestMemoryPage(page);
+      memories.add(item);
+      if (_isPreferenceMemory(page)) {
+        preferences.add(item);
+      }
+    }
+
+    final commitments = <Map<String, Object?>>[];
+    final upcomingDeadlines = <Map<String, Object?>>[];
+    final staleTasks = <Map<String, Object?>>[];
+    for (final todo in todos) {
+      if (!_isOpenTodo(todo)) continue;
+
+      final item = _digestTodo(todo);
+      if (commitments.length < _digestMaxSectionItems) {
+        commitments.add(item);
+      }
+
+      if (_isUpcomingDeadline(todo, nowMs) &&
+          upcomingDeadlines.length < _digestMaxSectionItems) {
+        upcomingDeadlines.add(item);
+      }
+
+      if (_isStaleTodo(todo, nowMs) &&
+          staleTasks.length < _digestMaxSectionItems) {
+        staleTasks.add(item);
+      }
+    }
+
+    return SecretaryAgentDigest(
+      version: 'agent-digest-$nowMs',
+      generatedAtMs: nowMs,
+      deviceId: _boundedText(deviceId, 96),
+      locale: _boundedText(localeTag, 32),
+      memories: List.unmodifiable(memories),
+      preferences: List.unmodifiable(preferences.take(_digestMaxSectionItems)),
+      commitments: List.unmodifiable(commitments),
+      upcomingDeadlines: List.unmodifiable(upcomingDeadlines),
+      staleTasks: List.unmodifiable(staleTasks),
+      recentUnresolvedCaptures: List.unmodifiable(
+        pendingProposals
+            .take(_digestMaxCaptureItems)
+            .map(_digestPendingProposal),
+      ),
+    );
+  }
+
   void dismissPlan(SecretaryPlan plan) {
     _dismissedPlanIds.add(plan.id);
   }
@@ -355,5 +424,79 @@ class SecretaryController {
   int _endOfLocalDayMs(int nowMs) {
     final now = DateTime.fromMillisecondsSinceEpoch(nowMs);
     return DateTime(now.year, now.month, now.day + 1).millisecondsSinceEpoch;
+  }
+
+  Map<String, Object?> _digestMemoryPage(MemoryPageRecord page) {
+    return <String, Object?>{
+      'page_id': page.pageId,
+      'kind': _boundedText(page.pageType, 48),
+      'title': _boundedText(page.title, _digestTitleMaxChars),
+      'body': _boundedText(page.body, _digestBodyMaxChars),
+      'updated_at_ms': platformIntToInt(page.updatedAtMs),
+    };
+  }
+
+  Map<String, Object?> _digestPendingProposal(
+    SecretaryMemoryProposalRecord proposal,
+  ) {
+    return <String, Object?>{
+      'proposal_id': proposal.id,
+      'source_message_id': proposal.sourceMessageId,
+      'kind': _boundedText(proposal.kind, 48),
+      'title': _boundedText(proposal.title, _digestTitleMaxChars),
+      'body': _boundedText(proposal.body, _digestBodyMaxChars),
+      'created_at_ms': platformIntToInt(proposal.createdAtMs),
+    };
+  }
+
+  Map<String, Object?> _digestTodo(Todo todo) {
+    return <String, Object?>{
+      'todo_id': todo.id,
+      'title': _boundedText(todo.title, _digestTitleMaxChars),
+      'status': _boundedText(todo.status, 32),
+      'due_at_ms': platformIntToNullableInt(todo.dueAtMs),
+      'updated_at_ms': platformIntToInt(todo.updatedAtMs),
+      'review_stage': platformIntToNullableInt(todo.reviewStage),
+    };
+  }
+
+  bool _isPreferenceMemory(MemoryPageRecord page) {
+    final haystack =
+        '${page.pageType} ${page.title} ${page.body}'.toLowerCase().trim();
+    return haystack.contains('preference') ||
+        haystack.contains('prefer') ||
+        haystack.contains('偏好') ||
+        haystack.contains('喜欢') ||
+        haystack.contains('更喜欢');
+  }
+
+  bool _isOpenTodo(Todo todo) {
+    final status = todo.status.toLowerCase();
+    return status != 'done' &&
+        status != 'completed' &&
+        status != 'archived' &&
+        status != 'deleted';
+  }
+
+  bool _isUpcomingDeadline(Todo todo, int nowMs) {
+    final dueAtMs = platformIntToNullableInt(todo.dueAtMs);
+    if (dueAtMs == null) return false;
+    if (dueAtMs < nowMs) return true;
+    return dueAtMs - nowMs <= const Duration(days: 14).inMilliseconds;
+  }
+
+  bool _isStaleTodo(Todo todo, int nowMs) {
+    final reviewStage = platformIntToNullableInt(todo.reviewStage) ?? 0;
+    if (reviewStage >= 2) return true;
+    final nextReviewAtMs = platformIntToNullableInt(todo.nextReviewAtMs);
+    if (nextReviewAtMs != null && nextReviewAtMs <= nowMs) return true;
+    final updatedAtMs = platformIntToInt(todo.updatedAtMs);
+    return nowMs - updatedAtMs >= const Duration(days: 7).inMilliseconds;
+  }
+
+  String _boundedText(String value, int maxChars) {
+    final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= maxChars) return normalized;
+    return normalized.substring(0, maxChars);
   }
 }

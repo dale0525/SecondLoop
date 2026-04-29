@@ -28,6 +28,55 @@
       "subtitle": "在应用内显示待办事项通知"
     }
   },
+  "agentDigest": {
+    "title": "Cloud Agent 摘要",
+    "entrySubtitle": "仅用于云端定时规划的私密摘要",
+    "subtitle": "云端定时规划会读取这份 Cloud 可读摘要，而不是你的完整 vault。",
+    "requiresCloud": "需要 SecondLoop Pro 和 Managed Vault 同步。",
+    "privacyNote": "摘要包含活跃长期记忆、承诺、截止时间、停滞任务、偏好和未处理记录；不会上传完整 vault 明文。",
+    "status": {
+      "enabled": "已启用",
+      "paused": "已暂停"
+    },
+    "fields": {
+      "lastGenerated": "上次生成",
+      "size": "大致大小",
+      "device": "生成设备",
+      "version": "版本"
+    },
+    "values": {
+      "never": "从未",
+      "none": "无",
+      "unknownDevice": "未知设备"
+    },
+    "actions": {
+      "regenerate": "重新生成",
+      "pause": "暂停 Cloud Agent",
+      "delete": "删除 Cloud 摘要"
+    },
+    "dialogs": {
+      "regenerate": {
+        "title": "重新生成 Cloud Agent 摘要？",
+        "body": "这会上传一份有界的 Cloud 可读摘要，用于定时规划；不会上传完整 vault 明文。"
+      },
+      "pause": {
+        "title": "暂停 Cloud Agent？",
+        "body": "重新生成前，云端定时规划不会继续使用这份摘要。"
+      },
+      "delete": {
+        "title": "删除 Cloud 摘要？",
+        "body": "Cloud 中存储的摘要会被删除；重新生成前，云端定时规划可能会跳过。"
+      }
+    },
+    "messages": {
+      "uploaded": "Cloud Agent 摘要已更新。",
+      "paused": "Cloud Agent 已暂停。",
+      "deleted": "Cloud Agent 摘要已删除。",
+      "loadFailed": "无法加载摘要状态：$error",
+      "uploadFailed": "无法上传摘要：$error",
+      "deleteFailed": "无法删除摘要：$error"
+    }
+  },
   "quickCaptureHotkey": {
     "title": "快速记录快捷键",
     "subtitle": "用于从任何地方打开快速记录",

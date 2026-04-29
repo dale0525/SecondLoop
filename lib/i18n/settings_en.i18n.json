@@ -28,6 +28,55 @@
       "subtitle": "Show todo notifications in app"
     }
   },
+  "agentDigest": {
+    "title": "Cloud Agent Digest",
+    "entrySubtitle": "Private summary used only for scheduled Cloud planning",
+    "subtitle": "Scheduled Cloud planning uses this Cloud-readable summary instead of your full vault.",
+    "requiresCloud": "SecondLoop Pro and Managed Vault sync are required.",
+    "privacyNote": "The digest contains active memories, commitments, deadlines, stale tasks, preferences, and unresolved captures. It does not upload full vault plaintext.",
+    "status": {
+      "enabled": "Enabled",
+      "paused": "Paused"
+    },
+    "fields": {
+      "lastGenerated": "Last generated",
+      "size": "Approximate size",
+      "device": "Generating device",
+      "version": "Version"
+    },
+    "values": {
+      "never": "Never",
+      "none": "None",
+      "unknownDevice": "Unknown device"
+    },
+    "actions": {
+      "regenerate": "Regenerate",
+      "pause": "Pause Cloud Agent",
+      "delete": "Delete Cloud Digest"
+    },
+    "dialogs": {
+      "regenerate": {
+        "title": "Regenerate Cloud Agent Digest?",
+        "body": "This uploads a bounded Cloud-readable summary for scheduled planning. Your full vault plaintext is not uploaded."
+      },
+      "pause": {
+        "title": "Pause Cloud Agent?",
+        "body": "Scheduled Cloud planning will stop using this digest until you regenerate it."
+      },
+      "delete": {
+        "title": "Delete Cloud Digest?",
+        "body": "The stored digest will be removed from Cloud. Scheduled planning may skip until you regenerate it."
+      }
+    },
+    "messages": {
+      "uploaded": "Cloud Agent Digest updated.",
+      "paused": "Cloud Agent paused.",
+      "deleted": "Cloud Agent Digest deleted.",
+      "loadFailed": "Could not load digest status: $error",
+      "uploadFailed": "Could not upload digest: $error",
+      "deleteFailed": "Could not delete digest: $error"
+    }
+  },
   "quickCaptureHotkey": {
     "title": "Quick capture shortcut",
     "subtitle": "Global shortcut to open Quick capture",

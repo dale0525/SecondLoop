@@ -67,6 +67,18 @@ final class HttpJsonClient {
         body: body,
       );
 
+  Future<HttpJsonResponse> putJson(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) =>
+      _send(
+        method: 'PUT',
+        uri: uri,
+        headers: headers,
+        body: body,
+      );
+
   Future<HttpJsonResponse> _send({
     required String method,
     required Uri uri,
@@ -79,6 +91,11 @@ final class HttpJsonClient {
       'GET' => await _client.get(uri, headers: headers),
       'DELETE' => await _client.delete(uri, headers: headers),
       'POST' => await _client.post(
+          uri,
+          headers: headers,
+          body: payload == null ? null : jsonEncode(payload),
+        ),
+      'PUT' => await _client.put(
           uri,
           headers: headers,
           body: payload == null ? null : jsonEncode(payload),

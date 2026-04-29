@@ -205,6 +205,20 @@ extension _SettingsPageBuild on _SettingsPageState {
                     );
                   },
           ),
+          ListTile(
+            key: const ValueKey('settings_agent_digest'),
+            title: Text(context.t.settings.agentDigest.title),
+            subtitle: Text(context.t.settings.agentDigest.entrySubtitle),
+            onTap: _busy
+                ? null
+                : () {
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const AgentDigestSettingsPage(),
+                    );
+                  },
+          ),
           if (supportsExternalImport)
             ListTile(
               key: const ValueKey('settings_external_import'),

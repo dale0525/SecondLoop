@@ -38,6 +38,7 @@ import '../../ui/sl_surface.dart';
 import '../../web_app/web_formal_settings_scope.dart';
 import '../actions/settings/actions_settings_store.dart';
 import 'cloud_account_page.dart';
+import 'agent_digest_settings_page.dart';
 import 'ai_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'external_import_page.dart';

@@ -171,3 +171,44 @@ class SecretaryPlan {
   int get requiresConfirmationCount =>
       sections.allItems.where((item) => item.requiresConfirmation).length;
 }
+
+class SecretaryAgentDigest {
+  const SecretaryAgentDigest({
+    required this.version,
+    required this.generatedAtMs,
+    required this.deviceId,
+    required this.locale,
+    required this.memories,
+    required this.preferences,
+    required this.commitments,
+    required this.upcomingDeadlines,
+    required this.staleTasks,
+    required this.recentUnresolvedCaptures,
+  });
+
+  final String version;
+  final int generatedAtMs;
+  final String deviceId;
+  final String locale;
+  final List<Map<String, Object?>> memories;
+  final List<Map<String, Object?>> preferences;
+  final List<Map<String, Object?>> commitments;
+  final List<Map<String, Object?>> upcomingDeadlines;
+  final List<Map<String, Object?>> staleTasks;
+  final List<Map<String, Object?>> recentUnresolvedCaptures;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'version': version,
+      'generated_at_ms': generatedAtMs,
+      'device_id': deviceId,
+      'locale': locale,
+      'memories': memories,
+      'preferences': preferences,
+      'commitments': commitments,
+      'upcoming_deadlines': upcomingDeadlines,
+      'stale_tasks': staleTasks,
+      'recent_unresolved_captures': recentUnresolvedCaptures,
+    };
+  }
+}
