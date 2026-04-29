@@ -90,6 +90,37 @@ typedef DbListPlanningOutputsFn = Future<List<PlanningOutputRecord>> Function({
   required bool includeExpired,
 });
 
+typedef DbCreateSecretaryRunFn = Future<SecretaryRunRecord> Function({
+  required String appDir,
+  required List<int> key,
+  required String triggerKind,
+  required String route,
+  required String status,
+  String? inputSummary,
+  String? outputSummary,
+  String? error,
+  required PlatformInt64 nowMs,
+});
+
+typedef DbCreateSecretaryToolCallFn = Future<SecretaryToolCallRecord> Function({
+  required String appDir,
+  required List<int> key,
+  required String runId,
+  required String toolName,
+  required String status,
+  required bool requiresConfirmation,
+  String? inputJson,
+  String? outputJson,
+  required PlatformInt64 nowMs,
+});
+
+typedef DbListSecretaryToolCallsForRunFn = Future<List<SecretaryToolCallRecord>>
+    Function({
+  required String appDir,
+  required List<int> key,
+  required String runId,
+});
+
 mixin _NativeAppBackendSecretary on _NativeAppBackendAccess {
   @override
   Future<SecretaryMemoryProposalRecord> createSecretaryMemoryProposal(
@@ -280,6 +311,69 @@ mixin _NativeAppBackendSecretary on _NativeAppBackendAccess {
       kind: kind,
       nowMs: PlatformInt64Util.from(nowMs),
       includeExpired: includeExpired,
+    );
+  }
+
+  @override
+  Future<SecretaryRunRecord> createSecretaryRun(
+    Uint8List key, {
+    required String triggerKind,
+    required String route,
+    required String status,
+    String? inputSummary,
+    String? outputSummary,
+    String? error,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbCreateSecretaryRun(
+      appDir: appDir,
+      key: key,
+      triggerKind: triggerKind,
+      route: route,
+      status: status,
+      inputSummary: inputSummary,
+      outputSummary: outputSummary,
+      error: error,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<SecretaryToolCallRecord> createSecretaryToolCall(
+    Uint8List key, {
+    required String runId,
+    required String toolName,
+    required String status,
+    required bool requiresConfirmation,
+    String? inputJson,
+    String? outputJson,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbCreateSecretaryToolCall(
+      appDir: appDir,
+      key: key,
+      runId: runId,
+      toolName: toolName,
+      status: status,
+      requiresConfirmation: requiresConfirmation,
+      inputJson: inputJson,
+      outputJson: outputJson,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<List<SecretaryToolCallRecord>> listSecretaryToolCallsForRun(
+    Uint8List key, {
+    required String runId,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbListSecretaryToolCallsForRun(
+      appDir: appDir,
+      key: key,
+      runId: runId,
     );
   }
 }

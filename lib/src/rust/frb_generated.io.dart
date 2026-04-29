@@ -214,6 +214,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dco_decode_list_secretary_memory_proposal_record(dynamic raw);
 
   @protected
+  List<SecretaryToolCallRecord> dco_decode_list_secretary_tool_call_record(
+      dynamic raw);
+
+  @protected
   List<SemanticParseJob> dco_decode_list_semantic_parse_job(dynamic raw);
 
   @protected
@@ -343,6 +347,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   SecretaryMemoryProposalRecord dco_decode_secretary_memory_proposal_record(
       dynamic raw);
+
+  @protected
+  SecretaryRunRecord dco_decode_secretary_run_record(dynamic raw);
+
+  @protected
+  SecretaryToolCallRecord dco_decode_secretary_tool_call_record(dynamic raw);
 
   @protected
   SemanticParseJob dco_decode_semantic_parse_job(dynamic raw);
@@ -592,6 +602,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           SseDeserializer deserializer);
 
   @protected
+  List<SecretaryToolCallRecord> sse_decode_list_secretary_tool_call_record(
+      SseDeserializer deserializer);
+
+  @protected
   List<SemanticParseJob> sse_decode_list_semantic_parse_job(
       SseDeserializer deserializer);
 
@@ -738,6 +752,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SecretaryMemoryProposalRecord sse_decode_secretary_memory_proposal_record(
+      SseDeserializer deserializer);
+
+  @protected
+  SecretaryRunRecord sse_decode_secretary_run_record(
+      SseDeserializer deserializer);
+
+  @protected
+  SecretaryToolCallRecord sse_decode_secretary_tool_call_record(
       SseDeserializer deserializer);
 
   @protected
@@ -1004,6 +1026,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<SecretaryMemoryProposalRecord> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_secretary_tool_call_record(
+      List<SecretaryToolCallRecord> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_semantic_parse_job(
       List<SemanticParseJob> self, SseSerializer serializer);
 
@@ -1152,6 +1178,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_secretary_memory_proposal_record(
       SecretaryMemoryProposalRecord self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_secretary_run_record(
+      SecretaryRunRecord self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_secretary_tool_call_record(
+      SecretaryToolCallRecord self, SseSerializer serializer);
 
   @protected
   void sse_encode_semantic_parse_job(

@@ -390,6 +390,9 @@ class NativeAppBackend extends _NativeAppBackendAccess
     DbSetMemoryPageStateFn? dbRestoreMemoryPage,
     DbUpsertPlanningOutputFn? dbUpsertPlanningOutput,
     DbListPlanningOutputsFn? dbListPlanningOutputs,
+    DbCreateSecretaryRunFn? dbCreateSecretaryRun,
+    DbCreateSecretaryToolCallFn? dbCreateSecretaryToolCall,
+    DbListSecretaryToolCallsForRunFn? dbListSecretaryToolCallsForRun,
     RustLibInitFn? rustLibInit,
   })  : _storageScope = _normalizeStorageScope(storageScope),
         _secureBlobStore = SecureBlobStore(
@@ -507,6 +510,12 @@ class NativeAppBackend extends _NativeAppBackendAccess
             dbUpsertPlanningOutput ?? rust_core.dbUpsertPlanningOutput,
         _dbListPlanningOutputs =
             dbListPlanningOutputs ?? rust_core.dbListPlanningOutputs,
+        _dbCreateSecretaryRun =
+            dbCreateSecretaryRun ?? rust_core.dbCreateSecretaryRun,
+        _dbCreateSecretaryToolCall =
+            dbCreateSecretaryToolCall ?? rust_core.dbCreateSecretaryToolCall,
+        _dbListSecretaryToolCallsForRun = dbListSecretaryToolCallsForRun ??
+            rust_core.dbListSecretaryToolCallsForRun,
         _recoverInterruptedExternalImportBatchesOnInit =
             recoverInterruptedExternalImportBatchesOnInit,
         _rustLibInit = rustLibInit ??
@@ -625,6 +634,12 @@ class NativeAppBackend extends _NativeAppBackendAccess
   final DbUpsertPlanningOutputFn _dbUpsertPlanningOutput;
   @override
   final DbListPlanningOutputsFn _dbListPlanningOutputs;
+  @override
+  final DbCreateSecretaryRunFn _dbCreateSecretaryRun;
+  @override
+  final DbCreateSecretaryToolCallFn _dbCreateSecretaryToolCall;
+  @override
+  final DbListSecretaryToolCallsForRunFn _dbListSecretaryToolCallsForRun;
   final bool _recoverInterruptedExternalImportBatchesOnInit;
   final RustLibInitFn _rustLibInit;
 

@@ -14,6 +14,7 @@ import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
 import '../../src/rust/db.dart';
+import '../secretary/internal_tool_registry.dart';
 import '../update/update_restart_activity.dart';
 import 'ai_routing.dart';
 import 'embeddings_data_consent_prefs.dart';
@@ -283,6 +284,10 @@ class _SemanticParseAutoActionsGateState
           idToken: (idToken ?? '').trim(),
           modelName: gatewayConfig.modelName,
           embeddingsModelName: _kCloudEmbeddingsModelName,
+        ),
+        secretaryAuditRecorder: BackendSecretaryAuditRecorder(
+          backend: backend,
+          sessionKey: Uint8List.fromList(sessionKey),
         ),
         settings: const SemanticParseAutoActionsRunnerSettings(
           hardTimeout: _kHardTimeout,

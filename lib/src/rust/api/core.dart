@@ -2296,3 +2296,52 @@ Future<List<PlanningOutputRecord>> dbListPlanningOutputs(
         kind: kind,
         nowMs: nowMs,
         includeExpired: includeExpired);
+
+Future<SecretaryRunRecord> dbCreateSecretaryRun(
+        {required String appDir,
+        required List<int> key,
+        required String triggerKind,
+        required String route,
+        required String status,
+        String? inputSummary,
+        String? outputSummary,
+        String? error,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbCreateSecretaryRun(
+        appDir: appDir,
+        key: key,
+        triggerKind: triggerKind,
+        route: route,
+        status: status,
+        inputSummary: inputSummary,
+        outputSummary: outputSummary,
+        error: error,
+        nowMs: nowMs);
+
+Future<SecretaryToolCallRecord> dbCreateSecretaryToolCall(
+        {required String appDir,
+        required List<int> key,
+        required String runId,
+        required String toolName,
+        required String status,
+        required bool requiresConfirmation,
+        String? inputJson,
+        String? outputJson,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbCreateSecretaryToolCall(
+        appDir: appDir,
+        key: key,
+        runId: runId,
+        toolName: toolName,
+        status: status,
+        requiresConfirmation: requiresConfirmation,
+        inputJson: inputJson,
+        outputJson: outputJson,
+        nowMs: nowMs);
+
+Future<List<SecretaryToolCallRecord>> dbListSecretaryToolCallsForRun(
+        {required String appDir,
+        required List<int> key,
+        required String runId}) =>
+    RustLib.instance.api.crateApiCoreDbListSecretaryToolCallsForRun(
+        appDir: appDir, key: key, runId: runId);

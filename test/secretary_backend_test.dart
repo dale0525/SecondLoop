@@ -14,6 +14,7 @@ void main() {
     final calls = <String>[];
     String? listState;
     String? planningKind;
+    String? listedRunId;
 
     final backend = NativeAppBackend(
       appDirProvider: () async => appDir,
@@ -96,6 +97,66 @@ void main() {
         planningKind = kind;
         return [_planningOutput(id: 'plan1', kind: kind ?? 'daily_plan')];
       },
+      dbCreateSecretaryRun: ({
+        required appDir,
+        required key,
+        required triggerKind,
+        required route,
+        required status,
+        inputSummary,
+        outputSummary,
+        error,
+        required nowMs,
+      }) async {
+        calls.add('run:$triggerKind:$route:$status');
+        return _secretaryRun(
+          id: 'run1',
+          triggerKind: triggerKind,
+          route: route,
+          status: status,
+          inputSummary: inputSummary,
+          outputSummary: outputSummary,
+          error: error,
+          nowMs: platformIntToInt(nowMs),
+        );
+      },
+      dbCreateSecretaryToolCall: ({
+        required appDir,
+        required key,
+        required runId,
+        required toolName,
+        required status,
+        required requiresConfirmation,
+        inputJson,
+        outputJson,
+        required nowMs,
+      }) async {
+        calls.add('tool:$runId:$toolName:$requiresConfirmation');
+        return _secretaryToolCall(
+          id: 'call1',
+          runId: runId,
+          toolName: toolName,
+          status: status,
+          requiresConfirmation: requiresConfirmation,
+          inputJson: inputJson,
+          outputJson: outputJson,
+          nowMs: platformIntToInt(nowMs),
+        );
+      },
+      dbListSecretaryToolCallsForRun: ({
+        required appDir,
+        required key,
+        required runId,
+      }) async {
+        listedRunId = runId;
+        return [
+          _secretaryToolCall(
+            id: 'call1',
+            runId: runId,
+            toolName: 'plan.generate',
+          ),
+        ];
+      },
     );
 
     expect(backend, isA<SecretaryBackend>());
@@ -157,6 +218,36 @@ void main() {
     expect(outputs.single.id, 'plan1');
     expect(planningKind, 'daily_plan');
 
+    final run = await backend.createSecretaryRun(
+      key,
+      triggerKind: 'manual',
+      route: 'local_rules',
+      status: 'succeeded',
+      inputSummary: 'input',
+      outputSummary: 'output',
+      nowMs: 180,
+    );
+    expect(run.id, 'run1');
+
+    final tool = await backend.createSecretaryToolCall(
+      key,
+      runId: run.id,
+      toolName: 'plan.generate',
+      status: 'succeeded',
+      requiresConfirmation: false,
+      inputJson: '{}',
+      outputJson: '{}',
+      nowMs: 190,
+    );
+    expect(tool.runId, 'run1');
+
+    final tools = await backend.listSecretaryToolCallsForRun(
+      key,
+      runId: run.id,
+    );
+    expect(tools.single.toolName, 'plan.generate');
+    expect(listedRunId, 'run1');
+
     expect(
         calls,
         containsAll(<String>[
@@ -164,6 +255,8 @@ void main() {
           'accept:p1:120',
           'dismiss:p1:130',
           'plan:plan1:daily_plan:active',
+          'run:manual:local_rules:succeeded',
+          'tool:run1:plan.generate:false',
         ]));
   });
 }
@@ -212,6 +305,52 @@ MemoryPageRecord _memoryPage({
     sourceDocumentIdsJson: '[]',
     confidenceLevel: 0.9,
     humanCorrected: false,
+    createdAtMs: platformIntFromInt(nowMs),
+    updatedAtMs: platformIntFromInt(nowMs),
+  );
+}
+
+SecretaryRunRecord _secretaryRun({
+  required String id,
+  required String triggerKind,
+  required String route,
+  required String status,
+  String? inputSummary,
+  String? outputSummary,
+  String? error,
+  int nowMs = 50,
+}) {
+  return SecretaryRunRecord(
+    id: id,
+    triggerKind: triggerKind,
+    route: route,
+    status: status,
+    inputSummary: inputSummary,
+    outputSummary: outputSummary,
+    error: error,
+    createdAtMs: platformIntFromInt(nowMs),
+    updatedAtMs: platformIntFromInt(nowMs),
+  );
+}
+
+SecretaryToolCallRecord _secretaryToolCall({
+  required String id,
+  required String runId,
+  required String toolName,
+  String status = 'succeeded',
+  bool requiresConfirmation = false,
+  String? inputJson,
+  String? outputJson,
+  int nowMs = 60,
+}) {
+  return SecretaryToolCallRecord(
+    id: id,
+    runId: runId,
+    toolName: toolName,
+    status: status,
+    requiresConfirmation: requiresConfirmation,
+    inputJson: inputJson,
+    outputJson: outputJson,
     createdAtMs: platformIntFromInt(nowMs),
     updatedAtMs: platformIntFromInt(nowMs),
   );

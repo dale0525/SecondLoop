@@ -1200,6 +1200,108 @@ class SecretaryMemoryProposalRecord {
           dismissedAtMs == other.dismissedAtMs;
 }
 
+class SecretaryRunRecord {
+  final String id;
+  final String triggerKind;
+  final String route;
+  final String status;
+  final String? inputSummary;
+  final String? outputSummary;
+  final String? error;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const SecretaryRunRecord({
+    required this.id,
+    required this.triggerKind,
+    required this.route,
+    required this.status,
+    this.inputSummary,
+    this.outputSummary,
+    this.error,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      triggerKind.hashCode ^
+      route.hashCode ^
+      status.hashCode ^
+      inputSummary.hashCode ^
+      outputSummary.hashCode ^
+      error.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SecretaryRunRecord &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          triggerKind == other.triggerKind &&
+          route == other.route &&
+          status == other.status &&
+          inputSummary == other.inputSummary &&
+          outputSummary == other.outputSummary &&
+          error == other.error &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
+class SecretaryToolCallRecord {
+  final String id;
+  final String runId;
+  final String toolName;
+  final String status;
+  final bool requiresConfirmation;
+  final String? inputJson;
+  final String? outputJson;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const SecretaryToolCallRecord({
+    required this.id,
+    required this.runId,
+    required this.toolName,
+    required this.status,
+    required this.requiresConfirmation,
+    this.inputJson,
+    this.outputJson,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      runId.hashCode ^
+      toolName.hashCode ^
+      status.hashCode ^
+      requiresConfirmation.hashCode ^
+      inputJson.hashCode ^
+      outputJson.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SecretaryToolCallRecord &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          runId == other.runId &&
+          toolName == other.toolName &&
+          status == other.status &&
+          requiresConfirmation == other.requiresConfirmation &&
+          inputJson == other.inputJson &&
+          outputJson == other.outputJson &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
 class SemanticParseJob {
   final String messageId;
   final String status;

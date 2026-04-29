@@ -68,6 +68,9 @@ final class _PlanningBackend implements SecretaryBackend {
       <String, PlanningOutputRecord>{};
 
   @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
   Future<List<PlanningOutputRecord>> listPlanningOutputs(
     Uint8List key, {
     String? kind,

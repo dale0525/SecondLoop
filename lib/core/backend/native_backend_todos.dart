@@ -68,6 +68,9 @@ abstract class _NativeAppBackendAccess
   DbSetMemoryPageStateFn get _dbRestoreMemoryPage;
   DbUpsertPlanningOutputFn get _dbUpsertPlanningOutput;
   DbListPlanningOutputsFn get _dbListPlanningOutputs;
+  DbCreateSecretaryRunFn get _dbCreateSecretaryRun;
+  DbCreateSecretaryToolCallFn get _dbCreateSecretaryToolCall;
+  DbListSecretaryToolCallsForRunFn get _dbListSecretaryToolCallsForRun;
 }
 
 mixin _NativeAppBackendTodos on _NativeAppBackendAccess {

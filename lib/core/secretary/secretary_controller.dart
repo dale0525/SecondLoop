@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../backend/secretary_backend.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/platform_int.dart';
+import 'internal_tool_registry.dart';
 import 'memory_proposal_detector.dart';
 import 'rule_based_planning_engine.dart';
 import 'secretary_models.dart';
@@ -204,6 +205,49 @@ class SecretaryController {
       expiresAtMs: _endOfLocalDayMs(nowMs),
     );
     return plan;
+  }
+
+  Future<SecretaryAuditTrail> recordSecretaryRun(
+    Uint8List key, {
+    required String triggerKind,
+    required String route,
+    required String status,
+    String? inputSummary,
+    String? outputSummary,
+    String? error,
+    required int nowMs,
+    List<SecretaryToolCallDraft> toolCalls = const <SecretaryToolCallDraft>[],
+  }) async {
+    final backend = _backend;
+    if (backend == null) {
+      throw StateError('SecretaryBackend is required to record audit runs.');
+    }
+    final run = await backend.createSecretaryRun(
+      key,
+      triggerKind: triggerKind,
+      route: route,
+      status: status,
+      inputSummary: inputSummary,
+      outputSummary: outputSummary,
+      error: error,
+      nowMs: nowMs,
+    );
+    final records = <SecretaryToolCallRecord>[];
+    for (final call in toolCalls) {
+      records.add(
+        await backend.createSecretaryToolCall(
+          key,
+          runId: run.id,
+          toolName: call.toolName,
+          status: call.status,
+          requiresConfirmation: call.requiresConfirmation,
+          inputJson: call.inputJson,
+          outputJson: call.outputJson,
+          nowMs: nowMs,
+        ),
+      );
+    }
+    return SecretaryAuditTrail(run: run, toolCalls: records);
   }
 
   void dismissPlan(SecretaryPlan plan) {

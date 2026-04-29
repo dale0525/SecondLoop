@@ -24,6 +24,7 @@ import '../backend/attachments_backend.dart';
 import '../backend/native_backend.dart';
 import '../backend/semantic_parse_attempt_aware_backend.dart';
 import '../backend/semantic_parse_enhancement_backend.dart';
+import '../secretary/internal_tool_registry.dart';
 import 'semantic_parse.dart';
 
 part 'semantic_parse_auto_actions_runner_store.dart';
@@ -344,16 +345,19 @@ final class SemanticParseAutoActionsRunner {
     required this.store,
     required this.client,
     required this.settings,
+    SecretaryAuditRecorder? secretaryAuditRecorder,
     SemanticParseNowMs? nowMs,
     SemanticParseNowLocal? nowLocal,
   })  : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
-        _nowLocal = nowLocal ?? (() => DateTime.now());
+        _nowLocal = nowLocal ?? (() => DateTime.now()),
+        _secretaryAuditRecorder = secretaryAuditRecorder;
 
   final SemanticParseAutoActionsStore store;
   final SemanticParseAutoActionsClient client;
   final SemanticParseAutoActionsRunnerSettings settings;
   final SemanticParseNowMs _nowMs;
   final SemanticParseNowLocal _nowLocal;
+  final SecretaryAuditRecorder? _secretaryAuditRecorder;
 
   Future<SemanticParseAutoActionsRunResult> runOnce({
     required String localeTag,
@@ -640,6 +644,22 @@ final class SemanticParseAutoActionsRunner {
             );
 
             if (didFinalize) {
+              await _recordSecretaryTodoMutation(
+                messageId: job.messageId,
+                toolName: 'todo.create',
+                inputJson: jsonEncode({
+                  'message_id': job.messageId,
+                  'title': title,
+                  'status': status,
+                  'due_at_ms': dueAtLocal?.toUtc().millisecondsSinceEpoch,
+                }),
+                outputJson: jsonEncode({
+                  'todo_id': 'todo:${job.messageId}',
+                  'title': title,
+                  'status': status,
+                }),
+                nowMs: nowMs,
+              );
               didMutateAny = true;
               processed += 1;
             }
@@ -726,6 +746,23 @@ final class SemanticParseAutoActionsRunner {
             );
 
             if (didFinalize) {
+              await _recordSecretaryTodoMutation(
+                messageId: job.messageId,
+                toolName: 'todo.update',
+                inputJson: jsonEncode({
+                  'message_id': job.messageId,
+                  'todo_id': todoId,
+                  'new_status': newStatus,
+                  'due_at_ms': requestedDueAtMs,
+                }),
+                outputJson: jsonEncode({
+                  'todo_id': todoId,
+                  'title': candidateTitle,
+                  'new_status': newStatus,
+                  'due_at_ms': requestedDueAtMs,
+                }),
+                nowMs: nowMs,
+              );
               didMutateAny = true;
               processed += 1;
             }
@@ -892,5 +929,47 @@ final class SemanticParseAutoActionsRunner {
       expectedAttemptId: attemptId,
       nowMs: nowMs,
     );
+  }
+
+  Future<void> _recordSecretaryTodoMutation({
+    required String messageId,
+    required String toolName,
+    required String inputJson,
+    required String outputJson,
+    required int nowMs,
+  }) async {
+    final recorder = _secretaryAuditRecorder;
+    if (recorder == null) return;
+    await recorder.recordRun(
+      SecretaryAuditRunDraft(
+        triggerKind: 'capture',
+        route: _secretaryAuditRoute(),
+        status: 'succeeded',
+        inputSummary: 'Semantic parse applied to message $messageId',
+        outputSummary: 'Applied $toolName',
+        nowMs: nowMs,
+        toolCalls: [
+          SecretaryToolCallDraft(
+            toolName: toolName,
+            status: 'succeeded',
+            requiresConfirmation: false,
+            inputJson: inputJson,
+            outputJson: outputJson,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _secretaryAuditRoute() {
+    return switch (client) {
+      BackendSemanticParseAutoActionsClient(:final askAiRoute) => switch (
+            askAiRoute) {
+          AskAiRouteKind.cloudGateway => 'cloud',
+          AskAiRouteKind.byok => 'byok',
+          AskAiRouteKind.needsSetup => 'local_rules',
+        },
+      _ => 'local_rules',
+    };
   }
 }

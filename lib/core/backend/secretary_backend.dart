@@ -85,4 +85,31 @@ abstract interface class SecretaryBackend {
     required int nowMs,
     bool includeExpired = false,
   });
+
+  Future<SecretaryRunRecord> createSecretaryRun(
+    Uint8List key, {
+    required String triggerKind,
+    required String route,
+    required String status,
+    String? inputSummary,
+    String? outputSummary,
+    String? error,
+    required int nowMs,
+  });
+
+  Future<SecretaryToolCallRecord> createSecretaryToolCall(
+    Uint8List key, {
+    required String runId,
+    required String toolName,
+    required String status,
+    required bool requiresConfirmation,
+    String? inputJson,
+    String? outputJson,
+    required int nowMs,
+  });
+
+  Future<List<SecretaryToolCallRecord>> listSecretaryToolCallsForRun(
+    Uint8List key, {
+    required String runId,
+  });
 }

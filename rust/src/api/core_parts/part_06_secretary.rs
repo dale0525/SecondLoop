@@ -189,3 +189,72 @@ pub fn db_list_planning_outputs(
     let conn = db::open(Path::new(&app_dir))?;
     db::list_planning_outputs(&conn, &key, kind.as_deref(), now_ms, include_expired)
 }
+
+#[flutter_rust_bridge::frb]
+pub fn db_create_secretary_run(
+    app_dir: String,
+    key: Vec<u8>,
+    trigger_kind: String,
+    route: String,
+    status: String,
+    input_summary: Option<String>,
+    output_summary: Option<String>,
+    error: Option<String>,
+    now_ms: i64,
+) -> Result<db::SecretaryRunRecord> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::create_secretary_run(
+        &conn,
+        &key,
+        db::NewSecretaryRun {
+            trigger_kind,
+            route,
+            status,
+            input_summary,
+            output_summary,
+            error,
+            now_ms,
+        },
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_create_secretary_tool_call(
+    app_dir: String,
+    key: Vec<u8>,
+    run_id: String,
+    tool_name: String,
+    status: String,
+    requires_confirmation: bool,
+    input_json: Option<String>,
+    output_json: Option<String>,
+    now_ms: i64,
+) -> Result<db::SecretaryToolCallRecord> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::create_secretary_tool_call(
+        &conn,
+        &key,
+        db::NewSecretaryToolCall {
+            run_id,
+            tool_name,
+            status,
+            requires_confirmation,
+            input_json,
+            output_json,
+            now_ms,
+        },
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_secretary_tool_calls_for_run(
+    app_dir: String,
+    key: Vec<u8>,
+    run_id: String,
+) -> Result<Vec<db::SecretaryToolCallRecord>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_secretary_tool_calls_for_run(&conn, &key, &run_id)
+}

@@ -89,6 +89,9 @@ final class _FakeSecretaryBackend implements SecretaryBackend {
   int get createdProposalCount => _proposals.length;
 
   @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
   Future<SecretaryMemoryProposalRecord> createSecretaryMemoryProposal(
     Uint8List key, {
     String? sourceMessageId,
