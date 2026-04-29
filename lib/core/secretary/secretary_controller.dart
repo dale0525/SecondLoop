@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../backend/secretary_backend.dart';
+import '../cloud/cloud_secretary_client.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/platform_int.dart';
 import 'internal_tool_registry.dart';
@@ -341,6 +342,55 @@ class SecretaryController {
             .take(_digestMaxCaptureItems)
             .map(_digestPendingProposal),
       ),
+    );
+  }
+
+  SecretaryPlan planFromCloudResult(CloudSecretaryPlanningResult result) {
+    final focus = <SecretaryPlanItem>[];
+    final dueSoon = <SecretaryPlanItem>[];
+    final needsDecision = <SecretaryPlanItem>[];
+    final missingNextAction = <SecretaryPlanItem>[];
+
+    for (final item in result.items) {
+      final planItem = SecretaryPlanItem(
+        id: item.id,
+        todoId: item.todoId,
+        title: item.title,
+        reason: item.reason,
+        dueAtMs: item.dueAtMs,
+        requiresConfirmation: item.requiresConfirmation,
+      );
+      switch (item.section) {
+        case 'due_soon':
+          dueSoon.add(planItem);
+          break;
+        case 'needs_decision':
+          needsDecision.add(planItem);
+          break;
+        case 'missing_next_action':
+          missingNextAction.add(planItem);
+          break;
+        default:
+          focus.add(planItem);
+          break;
+      }
+    }
+
+    return SecretaryPlan(
+      id: result.id,
+      title: result.title,
+      generatedAtMs: result.generatedAtMs,
+      route: 'cloud_agent_digest',
+      sections: SecretaryPlanSections(
+        focus: focus,
+        dueSoon: dueSoon,
+        needsDecision: needsDecision,
+        missingNextAction: missingNextAction,
+      ),
+      explanation: result.body,
+      generatedBy: 'cloud',
+      digestGeneratedAtMs: result.digestGeneratedAtMs,
+      skipReason: result.skipReason,
     );
   }
 

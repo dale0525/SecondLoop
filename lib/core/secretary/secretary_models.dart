@@ -139,6 +139,9 @@ class SecretaryPlan {
     required this.route,
     required this.sections,
     this.explanation,
+    this.generatedBy = 'local',
+    this.digestGeneratedAtMs,
+    this.skipReason,
   });
 
   final String id;
@@ -147,6 +150,9 @@ class SecretaryPlan {
   final String route;
   final SecretaryPlanSections sections;
   final String? explanation;
+  final String generatedBy;
+  final int? digestGeneratedAtMs;
+  final String? skipReason;
 
   SecretaryPlan copyWith({
     String? id,
@@ -155,6 +161,9 @@ class SecretaryPlan {
     String? route,
     SecretaryPlanSections? sections,
     String? explanation,
+    String? generatedBy,
+    int? digestGeneratedAtMs,
+    String? skipReason,
   }) {
     return SecretaryPlan(
       id: id ?? this.id,
@@ -163,6 +172,9 @@ class SecretaryPlan {
       route: route ?? this.route,
       sections: sections ?? this.sections,
       explanation: explanation ?? this.explanation,
+      generatedBy: generatedBy ?? this.generatedBy,
+      digestGeneratedAtMs: digestGeneratedAtMs ?? this.digestGeneratedAtMs,
+      skipReason: skipReason ?? this.skipReason,
     );
   }
 
