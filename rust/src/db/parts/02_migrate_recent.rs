@@ -138,6 +138,11 @@ fn apply_recent_main_db_migrations(conn: &Connection, mut user_version: i64) -> 
         user_version = 50;
     }
 
+    if user_version < 51 {
+        migrate_from_v50_to_v51(conn)?;
+        user_version = 51;
+    }
+
     Ok(user_version)
 }
 
@@ -150,4 +155,85 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     ensure_todo_manual_nudge_columns(&conn)?;
     ensure_content_enrichment_kv_defaults(&conn)?;
     Ok(conn)
+}
+
+fn migrate_from_v50_to_v51(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS secretary_memory_proposals (
+  id TEXT PRIMARY KEY,
+  source_message_id TEXT,
+  kind TEXT NOT NULL,
+  title BLOB NOT NULL,
+  body BLOB NOT NULL,
+  confidence REAL NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending',
+  source_refs_json BLOB,
+  action_hint TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  accepted_at_ms INTEGER,
+  dismissed_at_ms INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_secretary_memory_proposals_state_updated
+  ON secretary_memory_proposals(state, updated_at_ms DESC, created_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_secretary_memory_proposals_source_message
+  ON secretary_memory_proposals(source_message_id, state);
+
+CREATE TABLE IF NOT EXISTS planning_outputs (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  title BLOB NOT NULL,
+  body BLOB NOT NULL,
+  items_json BLOB NOT NULL,
+  source_refs_json BLOB,
+  route TEXT NOT NULL,
+  state TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  expires_at_ms INTEGER,
+  dismissed_at_ms INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_planning_outputs_kind_state_updated
+  ON planning_outputs(kind, state, updated_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_planning_outputs_expires
+  ON planning_outputs(expires_at_ms);
+
+CREATE TABLE IF NOT EXISTS secretary_runs (
+  id TEXT PRIMARY KEY,
+  trigger_kind TEXT NOT NULL,
+  route TEXT NOT NULL,
+  status TEXT NOT NULL,
+  input_summary BLOB,
+  output_summary BLOB,
+  error BLOB,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_secretary_runs_status_updated
+  ON secretary_runs(status, updated_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_secretary_runs_trigger_created
+  ON secretary_runs(trigger_kind, created_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS secretary_tool_calls (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  requires_confirmation INTEGER NOT NULL DEFAULT 0,
+  input_json BLOB,
+  output_json BLOB,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(run_id) REFERENCES secretary_runs(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_secretary_tool_calls_run_created
+  ON secretary_tool_calls(run_id, created_at_ms ASC, id ASC);
+CREATE INDEX IF NOT EXISTS idx_secretary_tool_calls_tool_status
+  ON secretary_tool_calls(tool_name, status, updated_at_ms DESC);
+
+PRAGMA user_version = 51;
+"#,
+    )?;
+    Ok(())
 }

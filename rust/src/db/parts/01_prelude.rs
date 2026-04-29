@@ -514,6 +514,114 @@ pub struct TodoFollowupGenerationJob {
 }
 
 #[derive(Clone, Debug)]
+pub struct NewSecretaryMemoryProposal {
+    pub source_message_id: Option<String>,
+    pub kind: String,
+    pub title: String,
+    pub body: String,
+    pub confidence: f64,
+    pub source_refs_json: Option<String>,
+    pub action_hint: Option<String>,
+    pub now_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct SecretaryMemoryProposalRecord {
+    pub id: String,
+    pub source_message_id: Option<String>,
+    pub kind: String,
+    pub title: String,
+    pub body: String,
+    pub confidence: f64,
+    pub state: String,
+    pub source_refs_json: Option<String>,
+    pub action_hint: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+    pub accepted_at_ms: Option<i64>,
+    pub dismissed_at_ms: Option<i64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct NewPlanningOutput {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub body: String,
+    pub items_json: String,
+    pub source_refs_json: Option<String>,
+    pub route: String,
+    pub state: String,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+    pub expires_at_ms: Option<i64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PlanningOutputRecord {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub body: String,
+    pub items_json: String,
+    pub source_refs_json: Option<String>,
+    pub route: String,
+    pub state: String,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+    pub expires_at_ms: Option<i64>,
+    pub dismissed_at_ms: Option<i64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct NewSecretaryRun {
+    pub trigger_kind: String,
+    pub route: String,
+    pub status: String,
+    pub input_summary: Option<String>,
+    pub output_summary: Option<String>,
+    pub error: Option<String>,
+    pub now_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct SecretaryRunRecord {
+    pub id: String,
+    pub trigger_kind: String,
+    pub route: String,
+    pub status: String,
+    pub input_summary: Option<String>,
+    pub output_summary: Option<String>,
+    pub error: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct NewSecretaryToolCall {
+    pub run_id: String,
+    pub tool_name: String,
+    pub status: String,
+    pub requires_confirmation: bool,
+    pub input_json: Option<String>,
+    pub output_json: Option<String>,
+    pub now_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct SecretaryToolCallRecord {
+    pub id: String,
+    pub run_id: String,
+    pub tool_name: String,
+    pub status: String,
+    pub requires_confirmation: bool,
+    pub input_json: Option<String>,
+    pub output_json: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
 pub struct Event {
     pub id: String,
     pub title: String,

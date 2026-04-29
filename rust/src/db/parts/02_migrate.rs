@@ -4,7 +4,7 @@ fn migrate(conn: &Connection) -> Result<()> {
     user_version = migrate_legacy_schema_part1(conn, user_version)?;
     user_version = migrate_legacy_schema_part2(conn, user_version)?;
     user_version = apply_recent_main_db_migrations(conn, user_version)?;
-    debug_assert!(user_version >= 50);
+    debug_assert!(user_version >= 51);
     Ok(())
 }
 
