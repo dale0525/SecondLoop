@@ -2,6 +2,7 @@
 // The pieces are `include!`'d so everything remains in `crate::db`.
 
 include!("parts/01_prelude.rs");
+include!("parts/01_todo_secretary_records.rs");
 include!("parts/01_kv_and_oplog.rs");
 include!("parts/02_migrate.rs");
 include!("parts/02_migrate_mid.rs");
@@ -49,9 +50,13 @@ include!("parts/29d_migration_archive_snapshot_stream.rs");
 include!("parts/30_todo_followup_suggestions.rs");
 include!("parts/31_todo_followup_generation_jobs.rs");
 include!("parts/32_secretary_records.rs");
+include!("parts/33_knowledge_memory_pages.rs");
 
 #[cfg(test)]
 mod secretary_records_tests;
+
+#[cfg(test)]
+mod knowledge_memory_pages_tests;
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;
