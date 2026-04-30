@@ -93,9 +93,9 @@ void main() {
     expect(
       requests.map((request) => request.url.path),
       [
-        '/v1/vaults/vault-1/agent-digest/meta',
-        '/v1/vaults/vault-1/agent-digest',
-        '/v1/vaults/vault-1/agent-digest',
+        '/api/v1/vaults/vault-1/agent-digest/meta',
+        '/api/v1/vaults/vault-1/agent-digest',
+        '/api/v1/vaults/vault-1/agent-digest',
       ],
     );
     expect(

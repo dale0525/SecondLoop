@@ -85,7 +85,7 @@ final class AgentDigestClient implements AgentDigestApi {
     final response = await _httpClient.get(
       _resolveVaultUri(
         managedVaultBaseUrl,
-        '/v1/vaults/$vaultId/agent-digest/meta',
+        '/api/v1/vaults/$vaultId/agent-digest/meta',
       ),
       headers: _headers(idToken),
     );
@@ -102,7 +102,7 @@ final class AgentDigestClient implements AgentDigestApi {
     final response = await _httpClient.putJson(
       _resolveVaultUri(
         managedVaultBaseUrl,
-        '/v1/vaults/$vaultId/agent-digest',
+        '/api/v1/vaults/$vaultId/agent-digest',
       ),
       headers: _headers(idToken),
       body: digest,
@@ -119,7 +119,7 @@ final class AgentDigestClient implements AgentDigestApi {
     final response = await _httpClient.delete(
       _resolveVaultUri(
         managedVaultBaseUrl,
-        '/v1/vaults/$vaultId/agent-digest',
+        '/api/v1/vaults/$vaultId/agent-digest',
       ),
       headers: _headers(idToken),
     );
