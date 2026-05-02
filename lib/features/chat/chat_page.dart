@@ -158,6 +158,7 @@ part 'chat_page_methods_m_ask_scope_empty_card.dart';
 part 'chat_page_methods_n_detached_snapshot.dart';
 part 'chat_page_methods_p_ask_ai_meta.dart';
 part 'chat_page_methods_o_focus_routing.dart';
+part 'chat_page_state_reset.dart';
 part 'chat_page_task_priority_refresh.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
@@ -460,6 +461,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       <SecretaryMemoryProposal>[];
   final List<SecretaryMemoryPage> _acceptedSecretaryMemories =
       <SecretaryMemoryPage>[];
+  int _secretaryMemorySyncGeneration = 0;
   final Set<String> _acceptedSecretaryPlanItemIds = <String>{};
   final Set<String> _dismissedSecretaryPlanItemIds = <String>{};
   String? _lastPersistedSecretaryPlanId;

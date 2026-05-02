@@ -38,14 +38,15 @@ extension _ChatPageStateMethodsA on _ChatPageState {
 
     void onSyncChange() {
       if (!mounted) return;
+      final forceUiRefresh = engine.forceUiRefreshForCurrentChange;
       _scheduleTaskPrioritySyncRefresh();
-      if (!_isAtBottom) {
+      if (!forceUiRefresh && !_isAtBottom) {
         _setState(() {
           _hasUnseenNewMessages = true;
         });
         return;
       }
-      _refresh();
+      _refresh(resetChatState: forceUiRefresh);
     }
 
     _syncListener = onSyncChange;

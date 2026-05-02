@@ -362,7 +362,7 @@ extension _SyncSettingsPageDeleteActions on _SyncSettingsPageState {
         engine?.start();
       }
       if (shouldNotifyExternalChange) {
-        engine?.notifyExternalChange();
+        engine?.notifyExternalChange(forceUiRefresh: true);
       }
       if (mounted) {
         _setState(() {

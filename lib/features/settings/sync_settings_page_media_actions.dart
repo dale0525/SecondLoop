@@ -281,7 +281,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
           shouldRestartEngine = false;
           engine?.writeGate.value = const SyncWriteGateState.open();
           if (!mounted) return;
-          engine?.notifyExternalChange();
+          engine?.notifyExternalChange(forceUiRefresh: true);
           _showSnack(t.sync.localData.failed(
             error: _deleteActionErrorMessage(e),
           ));
@@ -313,7 +313,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       }
 
       if (!mounted) return;
-      engine?.notifyExternalChange();
+      engine?.notifyExternalChange(forceUiRefresh: true);
       _showSnack(t.sync.localData.deleted);
     } catch (e) {
       if (!mounted) return;

@@ -175,11 +175,22 @@ extension _ChatPageStateSecretary on _ChatPageState {
     final session = SessionScope.maybeOf(context);
     if (session == null) return;
     final controller = _secretaryControllerFor(secretaryBackend);
+    final syncGeneration = _secretaryMemorySyncGeneration;
     final proposal = await controller.persistMemoryProposalForMessage(
       Uint8List.fromList(session.sessionKey),
       message,
       nowMs: DateTime.now().millisecondsSinceEpoch,
     );
+    if (syncGeneration != _secretaryMemorySyncGeneration) {
+      if (proposal != null) {
+        await _dismissStaleSecretaryMemoryProposal(
+          secretaryBackend,
+          Uint8List.fromList(session.sessionKey),
+          proposal,
+        );
+      }
+      return;
+    }
     if (proposal == null || !mounted) return;
     _setState(() {
       _persistedSecretaryMemoryProposals
@@ -202,20 +213,50 @@ extension _ChatPageStateSecretary on _ChatPageState {
     final secretaryBackend = backendAny as SecretaryBackend;
     final controller = _secretaryControllerFor(secretaryBackend);
     final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final syncGeneration = _secretaryMemorySyncGeneration;
     for (final message in messages.take(40)) {
-      await controller.persistMemoryProposalForMessage(
+      if (syncGeneration != _secretaryMemorySyncGeneration) return;
+      final proposal = await controller.persistMemoryProposalForMessage(
         sessionKey,
         message,
         nowMs: nowMs,
       );
+      if (syncGeneration != _secretaryMemorySyncGeneration) {
+        if (proposal != null) {
+          await _dismissStaleSecretaryMemoryProposal(
+            secretaryBackend,
+            sessionKey,
+            proposal,
+          );
+        }
+        return;
+      }
     }
     final pending = await controller.pendingMemoryProposals(sessionKey);
-    if (!mounted) return;
+    if (!mounted || syncGeneration != _secretaryMemorySyncGeneration) return;
     _setState(() {
       _persistedSecretaryMemoryProposals
         ..clear()
         ..addAll(pending);
     });
+  }
+
+  Future<void> _dismissStaleSecretaryMemoryProposal(
+    SecretaryBackend backend,
+    Uint8List sessionKey,
+    SecretaryMemoryProposal proposal,
+  ) async {
+    try {
+      await backend.dismissSecretaryMemoryProposal(
+        sessionKey,
+        proposalId: proposal.id,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {
+      // A stale proposal can only appear from an older async sync after reset.
+      // If cleanup fails, the generation guard still prevents this page state
+      // from showing it.
+    }
   }
 
   Future<void> _acceptSecretaryMemoryProposal(

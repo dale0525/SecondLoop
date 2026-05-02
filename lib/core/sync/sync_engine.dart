@@ -204,6 +204,9 @@ final class SyncEngine {
 
   final ValueNotifier<int> _changeCounter = ValueNotifier<int>(0);
   Listenable get changes => _changeCounter;
+  int _forceUiRefreshChangeCounter = -1;
+  bool get forceUiRefreshForCurrentChange =>
+      _forceUiRefreshChangeCounter == _changeCounter.value;
 
   final ValueNotifier<SyncWriteGateState> writeGate =
       ValueNotifier<SyncWriteGateState>(
@@ -396,8 +399,12 @@ final class SyncEngine {
     writeGate.value = next;
   }
 
-  void _notifyChange() {
-    _changeCounter.value++;
+  void _notifyChange({bool forceUiRefresh = false}) {
+    final next = _changeCounter.value + 1;
+    if (forceUiRefresh) {
+      _forceUiRefreshChangeCounter = next;
+    }
+    _changeCounter.value = next;
   }
 
   void notifyLocalMutation() {
@@ -407,8 +414,8 @@ final class SyncEngine {
     _pushDebounceTimer = Timer(pushDebounce, _queuePush);
   }
 
-  void notifyExternalChange() {
-    _notifyChange();
+  void notifyExternalChange({bool forceUiRefresh = false}) {
+    _notifyChange(forceUiRefresh: forceUiRefresh);
   }
 
   void triggerPushNow() {

@@ -37,19 +37,6 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     await _askAi(questionOverride: question);
   }
 
-  String? _latestCommittedMessageId() {
-    if (_latestLoadedMessages.isEmpty) return null;
-
-    Message latest = _latestLoadedMessages.first;
-    for (var i = 1; i < _latestLoadedMessages.length; i++) {
-      final candidate = _latestLoadedMessages[i];
-      if (candidate.createdAtMs >= latest.createdAtMs) {
-        latest = candidate;
-      }
-    }
-    return latest.id;
-  }
-
   bool _messagesNewestFirst(List<Message> messages) {
     if (messages.length < 2) return _usePagination;
     return messages.first.createdAtMs >= messages.last.createdAtMs;
@@ -613,8 +600,14 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
   }
 
-  void _refresh({bool refreshTaskPriority = false}) {
+  void _refresh({
+    bool refreshTaskPriority = false,
+    bool resetChatState = false,
+  }) {
     _setState(() {
+      if (resetChatState) {
+        _resetChatStateAfterDestructiveSyncRefresh();
+      }
       if (_usePagination) {
         _loadingMoreMessages = false;
         _hasMoreMessages = true;
