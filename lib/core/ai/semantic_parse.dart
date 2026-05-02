@@ -611,7 +611,7 @@ class AiSemanticParse {
     final tagConfidence = tagConfidenceRaw.isFinite
         ? tagConfidenceRaw.clamp(0.0, 1.0).toDouble()
         : confidence;
-    final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
+    final resolvedMorningMinutes = morningMinutes ?? 8 * 60;
     final taskType = _normalizedTaskType(_stringField(map, 'task_type'));
 
     switch (kind) {

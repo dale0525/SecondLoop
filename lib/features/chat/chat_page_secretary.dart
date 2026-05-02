@@ -11,16 +11,28 @@ extension _ChatPageStateSecretary on _ChatPageState {
   List<SecretaryMemoryProposal> _pendingSecretaryMemoryProposals(
     List<Message> messages,
   ) {
-    final proposals = <SecretaryMemoryProposal>[
-      for (final proposal in _persistedSecretaryMemoryProposals)
-        if (!_acceptedSecretaryMemorySourceIds
-                .contains(proposal.sourceMessageId) &&
-            !_ignoredSecretaryMemorySourceIds
-                .contains(proposal.sourceMessageId))
-          proposal,
-    ];
-    final persistedSourceIds =
-        proposals.map((proposal) => proposal.sourceMessageId).toSet();
+    final proposalsBySignature = <String, SecretaryMemoryProposal>{};
+    final acceptedSignatures = <String>{
+      ..._acceptedSecretaryMemorySignatures,
+      for (final memory in _acceptedSecretaryMemories)
+        secretaryMemoryPageSignature(memory),
+    };
+    for (final proposal in _persistedSecretaryMemoryProposals) {
+      if (_acceptedSecretaryMemorySourceIds
+          .contains(proposal.sourceMessageId)) {
+        continue;
+      }
+      if (_ignoredSecretaryMemorySourceIds.contains(proposal.sourceMessageId)) {
+        continue;
+      }
+      final signature = secretaryMemoryProposalSignature(proposal);
+      if (acceptedSignatures.contains(signature)) continue;
+      if (_ignoredSecretaryMemorySignatures.contains(signature)) continue;
+      _putSecretaryMemoryProposal(proposalsBySignature, proposal);
+    }
+    final persistedSourceIds = proposalsBySignature.values
+        .map((proposal) => proposal.sourceMessageId)
+        .toSet();
     for (final message in messages) {
       if (message.role != 'user') continue;
       if (persistedSourceIds.contains(message.id)) continue;
@@ -31,10 +43,26 @@ extension _ChatPageStateSecretary on _ChatPageState {
         text: message.content,
         createdAtMs: platformIntToInt(message.createdAtMs),
       );
-      if (proposal != null) proposals.add(proposal);
+      if (proposal == null) continue;
+      final signature = secretaryMemoryProposalSignature(proposal);
+      if (acceptedSignatures.contains(signature)) continue;
+      if (_ignoredSecretaryMemorySignatures.contains(signature)) continue;
+      _putSecretaryMemoryProposal(proposalsBySignature, proposal);
     }
+    final proposals = proposalsBySignature.values.toList(growable: false);
     proposals.sort((a, b) => b.createdAtMs.compareTo(a.createdAtMs));
     return proposals;
+  }
+
+  void _putSecretaryMemoryProposal(
+    Map<String, SecretaryMemoryProposal> proposalsBySignature,
+    SecretaryMemoryProposal proposal,
+  ) {
+    final signature = secretaryMemoryProposalSignature(proposal);
+    final existing = proposalsBySignature[signature];
+    if (existing == null || proposal.createdAtMs > existing.createdAtMs) {
+      proposalsBySignature[signature] = proposal;
+    }
   }
 
   List<Widget> _buildSecretaryCards(
@@ -61,8 +89,10 @@ extension _ChatPageStateSecretary on _ChatPageState {
             id: 'memory-proposals-summary',
             sourceMessageId: first.sourceMessageId,
             kind: 'fact',
-            title: '${proposals.length} memory suggestions',
-            body: 'Review suggested memory updates before saving them.',
+            title: context.t.chat.secretary.memory.summaryTitle(
+              count: proposals.length,
+            ),
+            body: context.t.chat.secretary.memory.summaryBody,
             confidence: first.confidence,
             createdAtMs: first.createdAtMs,
           ),
@@ -72,6 +102,9 @@ extension _ChatPageStateSecretary on _ChatPageState {
             _setState(() {
               for (final proposal in proposals) {
                 _ignoredSecretaryMemorySourceIds.add(proposal.sourceMessageId);
+                _ignoredSecretaryMemorySignatures.add(
+                  secretaryMemoryProposalSignature(proposal),
+                );
               }
             });
           },
@@ -151,7 +184,11 @@ extension _ChatPageStateSecretary on _ChatPageState {
     _setState(() {
       _persistedSecretaryMemoryProposals
         ..removeWhere(
-            (item) => item.sourceMessageId == proposal.sourceMessageId)
+          (item) =>
+              item.sourceMessageId == proposal.sourceMessageId ||
+              secretaryMemoryProposalSignature(item) ==
+                  secretaryMemoryProposalSignature(proposal),
+        )
         ..add(proposal);
     });
   }
@@ -202,8 +239,14 @@ extension _ChatPageStateSecretary on _ChatPageState {
       if (!mounted) return;
       _setState(() {
         _acceptedSecretaryMemorySourceIds.add(proposal.sourceMessageId);
+        _acceptedSecretaryMemorySignatures.add(
+          secretaryMemoryProposalSignature(proposal),
+        );
         _persistedSecretaryMemoryProposals.removeWhere(
-          (item) => item.id == proposal.id,
+          (item) =>
+              item.id == proposal.id ||
+              secretaryMemoryProposalSignature(item) ==
+                  secretaryMemoryProposalSignature(proposal),
         );
         _acceptedSecretaryMemories.add(_memoryPageFromRecord(page));
       });
@@ -212,6 +255,9 @@ extension _ChatPageStateSecretary on _ChatPageState {
 
     _setState(() {
       _acceptedSecretaryMemorySourceIds.add(proposal.sourceMessageId);
+      _acceptedSecretaryMemorySignatures.add(
+        secretaryMemoryProposalSignature(proposal),
+      );
       _acceptedSecretaryMemories.add(
         SecretaryMemoryPage(
           id: 'memory-${proposal.sourceMessageId}',
@@ -247,8 +293,14 @@ extension _ChatPageStateSecretary on _ChatPageState {
     if (!mounted) return;
     _setState(() {
       _ignoredSecretaryMemorySourceIds.add(proposal.sourceMessageId);
+      _ignoredSecretaryMemorySignatures.add(
+        secretaryMemoryProposalSignature(proposal),
+      );
       _persistedSecretaryMemoryProposals.removeWhere(
-        (item) => item.id == proposal.id,
+        (item) =>
+            item.id == proposal.id ||
+            secretaryMemoryProposalSignature(item) ==
+                secretaryMemoryProposalSignature(proposal),
       );
     });
   }
@@ -260,7 +312,7 @@ extension _ChatPageStateSecretary on _ChatPageState {
   void _remindSecretaryPlanLater(SecretaryPlan plan) {
     _ignoreSecretaryPlan(plan);
     _scaffoldMessengerKey.currentState?.showSnackBar(
-      const SnackBar(content: Text('Plan hidden for now.')),
+      SnackBar(content: Text(context.t.chat.secretary.planning.hiddenSnack)),
     );
   }
 
@@ -352,8 +404,7 @@ extension _ChatPageStateSecretary on _ChatPageState {
       id: plan.id,
       kind: 'daily_plan',
       title: plan.title,
-      body: '${plan.itemCount} suggestions, '
-          '${plan.requiresConfirmationCount} need confirmation.',
+      body: _secretaryPlanSummaryText(plan, trailingPeriod: true),
       itemsJson: _secretaryPlanItemsJson(plan),
       sourceRefsJson: jsonEncode({
         'todo_ids': [for (final item in plan.sections.allItems) item.todoId],
@@ -364,6 +415,29 @@ extension _ChatPageStateSecretary on _ChatPageState {
       updatedAtMs: DateTime.now().millisecondsSinceEpoch,
       expiresAtMs:
           DateTime.now().add(const Duration(days: 1)).millisecondsSinceEpoch,
+    );
+  }
+
+  String _secretaryPlanSummaryText(
+    SecretaryPlan plan, {
+    bool trailingPeriod = false,
+  }) {
+    final t = context.t.chat.secretary.planning;
+    final suggestions = plan.itemCount == 1
+        ? t.oneSuggestion
+        : t.manySuggestions(count: plan.itemCount);
+    final confirmations = plan.requiresConfirmationCount == 1
+        ? t.oneNeedsConfirmation
+        : t.manyNeedConfirmation(count: plan.requiresConfirmationCount);
+    if (trailingPeriod) {
+      return t.persistedBody(
+        suggestions: suggestions,
+        confirmations: confirmations,
+      );
+    }
+    return t.summary(
+      suggestions: suggestions,
+      confirmations: confirmations,
     );
   }
 

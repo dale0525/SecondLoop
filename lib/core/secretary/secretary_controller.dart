@@ -35,6 +35,8 @@ class SecretaryController {
   final RuleBasedPlanningEngine _planningEngine;
   final Set<String> _acceptedProposalSourceIds = <String>{};
   final Set<String> _dismissedProposalSourceIds = <String>{};
+  final Set<String> _acceptedProposalSignatures = <String>{};
+  final Set<String> _dismissedProposalSignatures = <String>{};
   final Set<String> _dismissedPlanIds = <String>{};
   static const int _digestMaxSectionItems = 40;
   static const int _digestMaxCaptureItems = 20;
@@ -44,7 +46,7 @@ class SecretaryController {
   List<SecretaryMemoryProposal> pendingMemoryProposalsForMessages(
     List<Message> messages,
   ) {
-    final proposals = <SecretaryMemoryProposal>[];
+    final proposalsBySignature = <String, SecretaryMemoryProposal>{};
     for (final message in messages) {
       if (message.role != 'user') continue;
       if (_acceptedProposalSourceIds.contains(message.id)) continue;
@@ -54,8 +56,17 @@ class SecretaryController {
         text: message.content,
         createdAtMs: platformIntToInt(message.createdAtMs),
       );
-      if (proposal != null) proposals.add(proposal);
+      if (proposal == null) continue;
+      final signature = secretaryMemoryProposalSignature(proposal);
+      if (_acceptedProposalSignatures.contains(signature)) continue;
+      if (_dismissedProposalSignatures.contains(signature)) continue;
+      final existing = proposalsBySignature[signature];
+      if (existing == null || proposal.createdAtMs > existing.createdAtMs) {
+        proposalsBySignature[signature] = proposal;
+      }
     }
+    final proposals = proposalsBySignature.values.toList(growable: false);
+    proposals.sort((a, b) => b.createdAtMs.compareTo(a.createdAtMs));
     return proposals;
   }
 
@@ -82,10 +93,21 @@ class SecretaryController {
     }
 
     final existing = await backend.listSecretaryMemoryProposals(key);
+    final detectedSignature = secretaryMemoryProposalSignature(detected);
     final alreadyTracked = existing.any(
-      (proposal) => proposal.sourceMessageId == message.id,
+      (proposal) =>
+          proposal.sourceMessageId == message.id ||
+          secretaryMemoryProposalSignature(_proposalFromRecord(proposal)) ==
+              detectedSignature,
     );
     if (alreadyTracked) return null;
+    final existingPages = await backend.listMemoryPages(key);
+    final alreadySaved = existingPages.any(
+      (page) =>
+          secretaryMemoryPageSignature(_memoryPageFromRecord(page)) ==
+          detectedSignature,
+    );
+    if (alreadySaved) return null;
 
     final record = await backend.createSecretaryMemoryProposal(
       key,
@@ -112,7 +134,9 @@ class SecretaryController {
       key,
       state: 'pending',
     );
-    return records.map(_proposalFromRecord).toList(growable: false);
+    return _dedupeMemoryProposals(
+      records.map(_proposalFromRecord),
+    );
   }
 
   Future<SecretaryMemoryPage> acceptMemoryProposal(
@@ -128,10 +152,13 @@ class SecretaryController {
         nowMs: nowMs,
       );
       _acceptedProposalSourceIds.add(proposal.sourceMessageId);
+      _acceptedProposalSignatures
+          .add(secretaryMemoryProposalSignature(proposal));
       return _memoryPageFromRecord(record);
     }
 
     _acceptedProposalSourceIds.add(proposal.sourceMessageId);
+    _acceptedProposalSignatures.add(secretaryMemoryProposalSignature(proposal));
     return SecretaryMemoryPage(
       id: 'memory-${proposal.sourceMessageId}',
       title: proposal.title,
@@ -157,6 +184,8 @@ class SecretaryController {
       );
     }
     _dismissedProposalSourceIds.add(proposal.sourceMessageId);
+    _dismissedProposalSignatures
+        .add(secretaryMemoryProposalSignature(proposal));
   }
 
   SecretaryPlan generatePlan(List<Todo> todos) {
@@ -411,6 +440,22 @@ class SecretaryController {
       createdAtMs: platformIntToInt(record.createdAtMs),
       actionHint: record.actionHint ?? 'propose',
     );
+  }
+
+  List<SecretaryMemoryProposal> _dedupeMemoryProposals(
+    Iterable<SecretaryMemoryProposal> proposals,
+  ) {
+    final bySignature = <String, SecretaryMemoryProposal>{};
+    for (final proposal in proposals) {
+      final signature = secretaryMemoryProposalSignature(proposal);
+      final existing = bySignature[signature];
+      if (existing == null || proposal.createdAtMs > existing.createdAtMs) {
+        bySignature[signature] = proposal;
+      }
+    }
+    final result = bySignature.values.toList(growable: false);
+    result.sort((a, b) => b.createdAtMs.compareTo(a.createdAtMs));
+    return result;
   }
 
   SecretaryMemoryPage _memoryPageFromRecord(MemoryPageRecord record) {

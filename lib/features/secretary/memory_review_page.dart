@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/secretary/secretary_models.dart';
+import '../../i18n/strings.g.dart';
 import '../../ui/sl_button.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
@@ -26,13 +27,14 @@ class MemoryReviewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.secretary.memory;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Long-term memory'),
+        title: Text(t.pageTitle),
         actions: [
           IconButton(
             key: const ValueKey('secretary_memory_create'),
-            tooltip: 'New memory',
+            tooltip: t.newMemoryTooltip,
             onPressed: () {},
             icon: const Icon(Icons.add_rounded),
           ),
@@ -44,7 +46,7 @@ class MemoryReviewPage extends StatelessWidget {
             final wide = constraints.maxWidth >= 760;
             final content = <Widget>[
               SecretaryReviewSection(
-                title: 'Pending',
+                title: t.sections.pending,
                 count: pending.length,
                 children: [
                   for (final proposal in pending)
@@ -60,21 +62,21 @@ class MemoryReviewPage extends StatelessWidget {
                 ],
               ),
               SecretaryReviewSection(
-                title: 'Current',
+                title: t.sections.current,
                 count: current.length,
                 children: [
                   for (final memory in current) _MemoryTile(memory: memory),
                 ],
               ),
               SecretaryReviewSection(
-                title: 'Needs review',
+                title: t.sections.needsReview,
                 count: needsReview.length,
                 children: [
                   for (final memory in needsReview) _MemoryTile(memory: memory),
                 ],
               ),
               SecretaryReviewSection(
-                title: 'Archived',
+                title: t.sections.archived,
                 count: archived.length,
                 children: [
                   for (final memory in archived) _MemoryTile(memory: memory),
@@ -127,6 +129,7 @@ class _PendingMemoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = SlTokens.of(context);
+    final t = context.t;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -157,7 +160,7 @@ class _PendingMemoryTile extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.check_rounded, size: 18),
                   onPressed: onAccept,
-                  child: const Text('Accept'),
+                  child: Text(t.common.actions.accept),
                 ),
                 SlButton(
                   buttonKey: ValueKey(
@@ -166,7 +169,7 @@ class _PendingMemoryTile extends StatelessWidget {
                   icon: const Icon(Icons.close_rounded, size: 18),
                   variant: SlButtonVariant.outline,
                   onPressed: onDismiss,
-                  child: const Text('Ignore'),
+                  child: Text(t.common.actions.ignore),
                 ),
               ],
             ),

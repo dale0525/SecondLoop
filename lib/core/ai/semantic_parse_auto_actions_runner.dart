@@ -416,7 +416,7 @@ final class SemanticParseAutoActionsRunner {
         );
 
         final locale = _localeFromTag(localeTag);
-        final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
+        final resolvedMorningMinutes = morningMinutes ?? 8 * 60;
         var localParsedResult = _parseLocally(
           text: analysisText,
           nowLocal: nowLocal,

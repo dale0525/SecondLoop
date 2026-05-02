@@ -289,5 +289,49 @@
       "relevant": "Relevant",
       "possibleMatch": "Possible match"
     }
+  },
+  "secretary": {
+    "memory": {
+      "cardTitle": "Memory suggestion",
+      "suggestedMemoryLabel": "Suggested memory",
+      "sourceYou": "Source: you",
+      "update": "Update",
+      "summaryTitle": "$count memory suggestions",
+      "summaryBody": "Review suggested memory updates before saving them.",
+      "pageTitle": "Long-term memory",
+      "newMemoryTooltip": "New memory",
+      "sections": {
+        "pending": "Pending",
+        "current": "Current",
+        "needsReview": "Needs review",
+        "archived": "Archived"
+      }
+    },
+    "planning": {
+      "cardTitle": "Daily plan generated",
+      "cardSubtitle": "Based on current tasks and recent activity",
+      "viewPlan": "View plan",
+      "remindLater": "Remind later",
+      "oneSuggestion": "1 suggestion",
+      "manySuggestions": "$count suggestions",
+      "oneNeedsConfirmation": "1 needs confirmation",
+      "manyNeedConfirmation": "$count need confirmation",
+      "summary": "$suggestions, $confirmations",
+      "persistedBody": "$suggestions, $confirmations.",
+      "pageTitle": "Planning Review",
+      "confirmationWarning": "Suggestions need confirmation before changes are written.",
+      "acceptedSnack": "Suggestion accepted.",
+      "ignoredSnack": "Suggestion ignored.",
+      "hiddenSnack": "Plan hidden for now.",
+      "sections": {
+        "focus": "Focus",
+        "dueSoon": "Due soon",
+        "needsDecision": "Needs decision",
+        "missingNextAction": "Missing next action"
+      }
+    },
+    "review": {
+      "empty": "Nothing to review."
+    }
   }
 }

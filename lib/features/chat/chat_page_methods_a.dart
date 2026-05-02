@@ -901,6 +901,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       nowLocal,
       locale: locale,
       dayEndMinutes: settings.dayEndMinutes,
+      morningMinutes: settings.morningMinutes,
       firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
 

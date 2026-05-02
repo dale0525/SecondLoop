@@ -475,6 +475,24 @@ void main() {
     expect(create.title, '老婆的生日提醒我买礼物');
   });
 
+  test('relative morning phrase uses configured morning time', () {
+    final now = DateTime(2026, 1, 24, 12, 0);
+    final decision = MessageActionResolver.resolve(
+      '明天上午提交验收报告',
+      locale: const Locale('zh', 'CN'),
+      nowLocal: now,
+      dayEndMinutes: 21 * 60,
+      morningMinutes: 8 * 60 + 30,
+      firstDayOfWeekIndex: 1,
+      openTodoTargets: const <TodoLinkTarget>[],
+    );
+
+    expect(decision, isA<MessageActionCreateDecision>());
+    final create = decision as MessageActionCreateDecision;
+    expect(create.title, '提交验收报告');
+    expect(create.dueAtLocal, DateTime(2026, 1, 25, 8, 30));
+  });
+
   test(
       'recurring weekly without explicit datetime uses next period start morning',
       () {

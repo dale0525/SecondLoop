@@ -445,6 +445,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
                   DateTime.now(),
                   locale: locale,
                   dayEndMinutes: settings.dayEndMinutes,
+                  morningMinutes: settings.morningMinutes,
                   firstDayOfWeekIndex: firstDayOfWeekIndex,
                 );
 
@@ -502,6 +503,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
                 DateTime.now(),
                 locale: locale,
                 dayEndMinutes: settings.dayEndMinutes,
+                morningMinutes: settings.morningMinutes,
                 firstDayOfWeekIndex: firstDayOfWeekIndex,
               );
 

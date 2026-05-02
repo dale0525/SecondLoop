@@ -371,6 +371,16 @@ final class TemporalRuleResolver {
     'year end',
   };
 
+  static const List<String> _morningTokens = <String>[
+    'morning',
+    '上午',
+    '早上',
+    '早晨',
+    '早间',
+    '明早',
+    '明晨',
+  ];
+
   static const Map<String, ({int month, int day})> _fixedHolidays =
       <String, ({int month, int day})>{
     '圣诞节': (month: 12, day: 25),
@@ -453,6 +463,8 @@ final class TemporalRuleResolver {
     if (relativeDay != null) {
       final base = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
       final day = base.add(Duration(days: relativeDay.value));
+      final inferredTimeOfDay =
+          timeOfDay?.label ?? _inferPartOfDay(normalizedText);
       final point = timeOfDay == null
           ? day
           : DateTime(
@@ -469,8 +481,12 @@ final class TemporalRuleResolver {
         pointLocal: point,
         hasExplicitTime: timeOfDay != null,
         metadata: TemporalMetadata(
-          inferredTimeOfDay: timeOfDay?.label,
-          normalizedExpression: relativeDay.key,
+          inferredTimeOfDay: inferredTimeOfDay,
+          normalizedExpression: _relativeDayExpression(
+            normalizedText,
+            relativeDay.key,
+            inferredTimeOfDay,
+          ),
         ),
       );
     }
@@ -765,6 +781,46 @@ final class TemporalRuleResolver {
       }
     }
     return null;
+  }
+
+  static String? _inferPartOfDay(String normalizedText) {
+    for (final token in _morningTokens) {
+      if (normalizedText.contains(token)) return 'morning';
+    }
+    return null;
+  }
+
+  static String _relativeDayExpression(
+    String normalizedText,
+    String anchor,
+    String? inferredTimeOfDay,
+  ) {
+    if (inferredTimeOfDay != 'morning') return anchor;
+    if (anchor.contains('morning') ||
+        anchor.contains('明早') ||
+        anchor.contains('明晨')) {
+      return anchor;
+    }
+    final candidates = <String>[
+      'tomorrow morning',
+      'today morning',
+      '明天上午',
+      '明天早上',
+      '明天早晨',
+      '明日上午',
+      '明日早上',
+      '今天上午',
+      '今天早上',
+      '今日上午',
+      '后天上午',
+      '後天上午',
+      '大后天上午',
+      '大後天上午',
+    ];
+    for (final candidate in candidates) {
+      if (normalizedText.contains(candidate)) return candidate;
+    }
+    return anchor;
   }
 
   static ({String token, int weekday})? _matchWeekday(String normalizedText) {

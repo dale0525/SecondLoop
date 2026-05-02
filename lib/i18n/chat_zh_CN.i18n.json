@@ -289,5 +289,49 @@
       "relevant": "相关",
       "possibleMatch": "可能匹配"
     }
+  },
+  "secretary": {
+    "memory": {
+      "cardTitle": "记忆建议",
+      "suggestedMemoryLabel": "建议记住",
+      "sourceYou": "来源：你",
+      "update": "更新",
+      "summaryTitle": "$count 条记忆建议",
+      "summaryBody": "保存前先查看这些记忆更新。",
+      "pageTitle": "长期记忆",
+      "newMemoryTooltip": "新建记忆",
+      "sections": {
+        "pending": "待处理",
+        "current": "当前",
+        "needsReview": "需要复核",
+        "archived": "已归档"
+      }
+    },
+    "planning": {
+      "cardTitle": "已生成今日计划",
+      "cardSubtitle": "基于当前事项和近期活动",
+      "viewPlan": "查看计划",
+      "remindLater": "稍后提醒",
+      "oneSuggestion": "1 条建议",
+      "manySuggestions": "$count 条建议",
+      "oneNeedsConfirmation": "1 条需要确认",
+      "manyNeedConfirmation": "$count 条需要确认",
+      "summary": "$suggestions，$confirmations",
+      "persistedBody": "$suggestions，$confirmations。",
+      "pageTitle": "计划复核",
+      "confirmationWarning": "建议需要确认后才会写入更改。",
+      "acceptedSnack": "已接受建议。",
+      "ignoredSnack": "已忽略建议。",
+      "hiddenSnack": "计划已暂时隐藏。",
+      "sections": {
+        "focus": "聚焦",
+        "dueSoon": "即将截止",
+        "needsDecision": "需要决策",
+        "missingNextAction": "缺少下一步"
+      }
+    },
+    "review": {
+      "empty": "没有需要复核的内容。"
+    }
   }
 }

@@ -433,6 +433,7 @@ class LocalTimeResolver {
     DateTime nowLocal, {
     required Locale locale,
     required int dayEndMinutes,
+    int? morningMinutes,
     int firstDayOfWeekIndex = 1,
   }) {
     final normalized = text.trim();
@@ -447,6 +448,7 @@ class LocalTimeResolver {
       mode: TemporalMode.todoDue,
       allowEnhancement: false,
       dayEndMinutes: dayEndMinutes,
+      morningMinutes: morningMinutes,
     );
     if (engineResolution.dueAtLocal != null) {
       final normalizedExpression =

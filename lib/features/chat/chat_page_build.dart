@@ -28,7 +28,7 @@ extension _ChatPageStateBuild on _ChatPageState {
     Widget buildOpenMemoryReviewButton() {
       return IconButton(
         key: const ValueKey('chat_open_secretary_memory'),
-        tooltip: 'Long-term memory',
+        tooltip: context.t.chat.secretary.memory.pageTitle,
         onPressed: () => unawaited(_openMemoryReview()),
         icon: const Icon(Icons.psychology_alt_outlined),
       );

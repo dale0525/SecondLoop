@@ -47,6 +47,83 @@ void main() {
     expect(pending.single.title, contains('morning meetings'));
   });
 
+  test('deduplicates equivalent pending memory proposals across messages', () {
+    final controller = SecretaryController(
+      planningEngine: const RuleBasedPlanningEngine(nowLocal: DateTime.now),
+    );
+
+    final pending = controller.pendingMemoryProposalsForMessages(
+      const <Message>[
+        Message(
+          id: 'm1',
+          conversationId: 'loop_home',
+          role: 'user',
+          content: '我更喜欢上午处理重要任务。',
+          createdAtMs: 100,
+          isMemory: true,
+        ),
+        Message(
+          id: 'm2',
+          conversationId: 'loop_home',
+          role: 'user',
+          content: '我更喜欢上午处理重要任务。',
+          createdAtMs: 200,
+          isMemory: true,
+        ),
+        Message(
+          id: 'm3',
+          conversationId: 'loop_home',
+          role: 'user',
+          content: '我更喜欢上午处理重要任务。',
+          createdAtMs: 300,
+          isMemory: true,
+        ),
+      ],
+    );
+
+    expect(pending, hasLength(1));
+    expect(pending.single.sourceMessageId, 'm3');
+    expect(pending.single.body, '我更喜欢上午处理重要任务');
+  });
+
+  test('does not persist duplicate memory body from another message', () async {
+    final backend = _FakeSecretaryBackend();
+    final controller = SecretaryController(
+      backend: backend,
+      planningEngine: const RuleBasedPlanningEngine(nowLocal: DateTime.now),
+    );
+    final key = Uint8List(32);
+
+    final first = await controller.persistMemoryProposalForMessage(
+      key,
+      const Message(
+        id: 'm1',
+        conversationId: 'loop_home',
+        role: 'user',
+        content: '我更喜欢上午处理重要任务。',
+        createdAtMs: 100,
+        isMemory: true,
+      ),
+      nowMs: 110,
+    );
+    final second = await controller.persistMemoryProposalForMessage(
+      key,
+      const Message(
+        id: 'm2',
+        conversationId: 'loop_home',
+        role: 'user',
+        content: '我更喜欢上午处理重要任务。',
+        createdAtMs: 200,
+        isMemory: true,
+      ),
+      nowMs: 120,
+    );
+
+    expect(first, isNotNull);
+    expect(second, isNull);
+    expect(backend.createdProposalCount, 1);
+  });
+
   test('accepts and dismisses memory proposals through the backend', () async {
     final backend = _FakeSecretaryBackend();
     final controller = SecretaryController(

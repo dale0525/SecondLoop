@@ -453,6 +453,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       const MemoryProposalDetector();
   final Set<String> _acceptedSecretaryMemorySourceIds = <String>{};
   final Set<String> _ignoredSecretaryMemorySourceIds = <String>{};
+  final Set<String> _acceptedSecretaryMemorySignatures = <String>{};
+  final Set<String> _ignoredSecretaryMemorySignatures = <String>{};
   final Set<String> _ignoredSecretaryPlanIds = <String>{};
   final List<SecretaryMemoryProposal> _persistedSecretaryMemoryProposals =
       <SecretaryMemoryProposal>[];

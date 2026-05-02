@@ -473,7 +473,7 @@ class MessageActionResolver {
     final raw = text.trim();
     if (raw.isEmpty) return const MessageActionNoneDecision();
 
-    final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
+    final resolvedMorningMinutes = morningMinutes ?? 8 * 60;
     final updateIntent = inferTodoUpdateIntent(raw);
     final followupEditCue = looksLikeTodoFollowupEdit(raw);
     final followupTemporal = TemporalEngine.resolve(
@@ -485,6 +485,7 @@ class MessageActionResolver {
       mode: TemporalMode.todoFollowupDue,
       allowEnhancement: false,
       dayEndMinutes: dayEndMinutes,
+      morningMinutes: resolvedMorningMinutes,
     );
     final followupDueAtLocal =
         followupEditCue ? followupTemporal.dueAtLocal : null;
@@ -534,12 +535,14 @@ class MessageActionResolver {
       mode: TemporalMode.todoDue,
       allowEnhancement: false,
       dayEndMinutes: dayEndMinutes,
+      morningMinutes: resolvedMorningMinutes,
     );
     final time = LocalTimeResolver.resolve(
       raw,
       nowLocal,
       locale: locale,
       dayEndMinutes: dayEndMinutes,
+      morningMinutes: resolvedMorningMinutes,
       firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
 

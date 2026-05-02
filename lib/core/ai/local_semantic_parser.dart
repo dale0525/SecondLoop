@@ -38,6 +38,7 @@ final class LocalSemanticParser {
       mode: TemporalMode.todoDue,
       allowEnhancement: true,
       dayEndMinutes: dayEndMinutes,
+      morningMinutes: morningMinutes,
     );
 
     final decision = MessageActionResolver.resolve(
@@ -105,6 +106,7 @@ final class LocalSemanticParser {
           mode: TemporalMode.todoFollowupDue,
           allowEnhancement: true,
           dayEndMinutes: dayEndMinutes,
+          morningMinutes: morningMinutes,
         );
         final looksLikeFollowupEdit = looksLikeTodoFollowupEdit(raw);
         final temporalNeedsEnhancement =

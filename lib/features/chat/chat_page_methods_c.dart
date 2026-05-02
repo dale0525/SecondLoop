@@ -34,6 +34,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       nowLocal,
       locale: locale,
       dayEndMinutes: settings.dayEndMinutes,
+      morningMinutes: settings.morningMinutes,
       firstDayOfWeekIndex: firstDayOfWeekIndex,
     );
     final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(rawText);

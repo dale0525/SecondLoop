@@ -112,6 +112,7 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
               nowLocal,
               locale: locale,
               dayEndMinutes: settings.dayEndMinutes,
+              morningMinutes: settings.morningMinutes,
               firstDayOfWeekIndex: firstDayOfWeekIndex,
             );
             if (timeResolution != null &&

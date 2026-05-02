@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../core/secretary/secretary_models.dart';
+import '../../i18n/strings.g.dart';
 import '../../ui/sl_button.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import 'secretary_review_section.dart';
 
-class PlanningReviewPage extends StatelessWidget {
+class PlanningReviewPage extends StatefulWidget {
   const PlanningReviewPage({
     required this.plan,
     this.onAcceptSuggestion,
@@ -19,11 +20,20 @@ class PlanningReviewPage extends StatelessWidget {
   final ValueChanged<String>? onDismissSuggestion;
 
   @override
+  State<PlanningReviewPage> createState() => _PlanningReviewPageState();
+}
+
+class _PlanningReviewPageState extends State<PlanningReviewPage> {
+  final Set<String> _acceptedItemIds = <String>{};
+  final Set<String> _dismissedItemIds = <String>{};
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final t = context.t.chat.secretary.planning;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Planning Review'),
+        title: Text(t.pageTitle),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -46,7 +56,7 @@ class PlanningReviewPage extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Suggestions need confirmation before changes are written.',
+                        t.confirmationWarning,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurface,
                               fontWeight: FontWeight.w600,
@@ -61,12 +71,15 @@ class PlanningReviewPage extends StatelessWidget {
                 builder: (context, constraints) {
                   final wide = constraints.maxWidth >= 860;
                   final sections = [
-                    _section('Focus', plan.sections.focus),
-                    _section('Due soon', plan.sections.dueSoon),
-                    _section('Needs decision', plan.sections.needsDecision),
+                    _section(t.sections.focus, widget.plan.sections.focus),
+                    _section(t.sections.dueSoon, widget.plan.sections.dueSoon),
                     _section(
-                      'Missing next action',
-                      plan.sections.missingNextAction,
+                      t.sections.needsDecision,
+                      widget.plan.sections.needsDecision,
+                    ),
+                    _section(
+                      t.sections.missingNextAction,
+                      widget.plan.sections.missingNextAction,
                     ),
                   ];
                   if (!wide) {
@@ -100,22 +113,48 @@ class PlanningReviewPage extends StatelessWidget {
   }
 
   Widget _section(String title, List<SecretaryPlanItem> items) {
+    final visibleItems = items
+        .where((item) =>
+            !_acceptedItemIds.contains(item.id) &&
+            !_dismissedItemIds.contains(item.id))
+        .toList(growable: false);
     return SecretaryReviewSection(
       title: title,
-      count: items.length,
+      count: visibleItems.length,
       children: [
-        for (final item in items)
+        for (final item in visibleItems)
           _PlanItemTile(
             item: item,
-            onAccept: onAcceptSuggestion == null
+            onAccept: widget.onAcceptSuggestion == null
                 ? null
-                : () => onAcceptSuggestion!(item.id),
-            onDismiss: onDismissSuggestion == null
+                : () => _acceptItem(item.id),
+            onDismiss: widget.onDismissSuggestion == null
                 ? null
-                : () => onDismissSuggestion!(item.id),
+                : () => _dismissItem(item.id),
           ),
       ],
     );
+  }
+
+  void _acceptItem(String itemId) {
+    widget.onAcceptSuggestion!(itemId);
+    setState(() => _acceptedItemIds.add(itemId));
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+            content: Text(context.t.chat.secretary.planning.acceptedSnack)),
+      );
+  }
+
+  void _dismissItem(String itemId) {
+    widget.onDismissSuggestion!(itemId);
+    setState(() => _dismissedItemIds.add(itemId));
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(content: Text(context.t.chat.secretary.planning.ignoredSnack)),
+      );
   }
 }
 
@@ -134,6 +173,7 @@ class _PlanItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = SlTokens.of(context);
+    final t = context.t;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: SlSurface(
@@ -176,14 +216,14 @@ class _PlanItemTile extends StatelessWidget {
                   buttonKey: ValueKey('secretary_plan_accept_${item.id}'),
                   icon: const Icon(Icons.check_rounded, size: 18),
                   onPressed: onAccept,
-                  child: const Text('Accept'),
+                  child: Text(t.common.actions.accept),
                 ),
                 SlButton(
                   buttonKey: ValueKey('secretary_plan_dismiss_${item.id}'),
                   icon: const Icon(Icons.close_rounded, size: 18),
                   variant: SlButtonVariant.outline,
                   onPressed: onDismiss,
-                  child: const Text('Ignore'),
+                  child: Text(t.common.actions.ignore),
                 ),
               ],
             ),

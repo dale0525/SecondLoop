@@ -5,6 +5,8 @@ import 'temporal_resolution.dart';
 import 'temporal_rule_resolver.dart';
 
 final class TemporalEngine {
+  static const int _defaultMorningMinutes = 8 * 60;
+
   static TemporalResolution resolve({
     required String text,
     required DateTime nowLocal,
@@ -14,6 +16,7 @@ final class TemporalEngine {
     required TemporalMode mode,
     required bool allowEnhancement,
     int dayEndMinutes = 21 * 60,
+    int? morningMinutes,
   }) {
     final normalizedText = TemporalRuleResolver.normalize(text);
     if (normalizedText.isEmpty) {
@@ -72,6 +75,7 @@ final class TemporalEngine {
       mode: mode,
       nowLocal: nowLocal,
       dayEndMinutes: dayEndMinutes,
+      morningMinutes: morningMinutes,
       normalizedText: normalizedText,
       allowEnhancement: allowEnhancement,
     );
@@ -82,6 +86,7 @@ final class TemporalEngine {
     required TemporalMode mode,
     required DateTime nowLocal,
     required int dayEndMinutes,
+    required int? morningMinutes,
     required String normalizedText,
     required bool allowEnhancement,
   }) {
@@ -148,14 +153,19 @@ final class TemporalEngine {
           );
         }
         final point = candidate.pointLocal!;
+        final inferredTimeOfDay = candidate.metadata.inferredTimeOfDay;
+        final fallbackMinutes =
+            inferredTimeOfDay == 'morning' || inferredTimeOfDay == '上午'
+                ? morningMinutes ?? _defaultMorningMinutes
+                : dayEndMinutes;
         final dueAtLocal = candidate.hasExplicitTime
             ? point
             : DateTime(
                 point.year,
                 point.month,
                 point.day,
-                dayEndMinutes ~/ 60,
-                dayEndMinutes % 60,
+                fallbackMinutes ~/ 60,
+                fallbackMinutes % 60,
               );
         final adjustedDueAtLocal = !candidate.hasExplicitTime &&
                 candidate.projectedRollForwardDays > 0 &&

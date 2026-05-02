@@ -1,5 +1,29 @@
 import 'secretary_models.dart';
 
+String secretaryMemoryProposalSignature(SecretaryMemoryProposal proposal) {
+  return secretaryMemorySignature(kind: proposal.kind, body: proposal.body);
+}
+
+String secretaryMemoryPageSignature(SecretaryMemoryPage page) {
+  return secretaryMemorySignature(kind: page.kind, body: page.body);
+}
+
+String secretaryMemorySignature({
+  required String kind,
+  required String body,
+}) {
+  return '${_normalizeMemorySignaturePart(kind)}|'
+      '${_normalizeMemorySignaturePart(body)}';
+}
+
+String _normalizeMemorySignaturePart(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll(RegExp(r'[.。]+$'), '')
+      .trim();
+}
+
 class MemoryProposalDetector {
   const MemoryProposalDetector();
 

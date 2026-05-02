@@ -180,6 +180,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         DateTime.now(),
         locale: locale,
         dayEndMinutes: settings.dayEndMinutes,
+        morningMinutes: settings.morningMinutes,
         firstDayOfWeekIndex: firstDayOfWeekIndex,
       );
       final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(text);

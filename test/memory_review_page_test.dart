@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/secretary/secretary_models.dart';
 import 'package:secondloop/features/secretary/memory_review_page.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 
 import 'test_i18n.dart';
 
@@ -43,5 +44,40 @@ void main() {
     expect(find.text('Current'), findsOneWidget);
     expect(find.text('Morning meetings'), findsOneWidget);
     expect(find.text('Writing routine'), findsOneWidget);
+  });
+
+  testWidgets('memory review localizes labels in zh-CN', (tester) async {
+    LocaleSettings.setLocale(AppLocale.zhCn);
+    addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          locale: Locale('zh', 'CN'),
+          home: MemoryReviewPage(
+            pending: [
+              SecretaryMemoryProposal(
+                id: 'p1',
+                sourceMessageId: 'm1',
+                kind: 'preference',
+                title: '上午处理重要任务',
+                body: '我更喜欢上午处理重要任务。',
+                confidence: 0.9,
+                createdAtMs: 1,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('长期记忆'), findsOneWidget);
+    expect(find.text('待处理'), findsOneWidget);
+    expect(find.text('当前'), findsOneWidget);
+    expect(find.text('需要复核'), findsOneWidget);
+    expect(find.text('已归档'), findsOneWidget);
+    expect(find.text('接受'), findsOneWidget);
+    expect(find.text('忽略'), findsOneWidget);
+    expect(find.text('没有需要复核的内容。'), findsWidgets);
   });
 }

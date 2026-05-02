@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/secretary/secretary_models.dart';
+import '../../i18n/strings.g.dart';
 import '../../ui/sl_button.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
@@ -24,6 +25,7 @@ class ChatSecretaryMemoryCard extends StatelessWidget {
     final tokens = SlTokens.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final warningColor = Colors.orange.shade700;
+    final t = context.t;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -49,7 +51,7 @@ class ChatSecretaryMemoryCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Memory suggestion',
+                      t.chat.secretary.memory.cardTitle,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
                             color: warningColor,
                             fontWeight: FontWeight.w700,
@@ -66,6 +68,14 @@ class ChatSecretaryMemoryCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
+                t.chat.secretary.memory.suggestedMemoryLabel,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
                 proposal.title,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
@@ -81,10 +91,10 @@ class ChatSecretaryMemoryCard extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  const _SourceChip(label: 'Source: you'),
+                  _SourceChip(label: t.chat.secretary.memory.sourceYou),
                   if (proposal.actionHint == 'update') ...[
                     const SizedBox(width: 8),
-                    const _SourceChip(label: 'Update'),
+                    _SourceChip(label: t.chat.secretary.memory.update),
                   ],
                 ],
               ),
@@ -99,7 +109,7 @@ class ChatSecretaryMemoryCard extends StatelessWidget {
                     ),
                     icon: const Icon(Icons.check_rounded, size: 18),
                     onPressed: onAccept,
-                    child: const Text('Accept'),
+                    child: Text(t.common.actions.accept),
                   ),
                   SlButton(
                     buttonKey: ValueKey(
@@ -108,7 +118,7 @@ class ChatSecretaryMemoryCard extends StatelessWidget {
                     icon: const Icon(Icons.edit_outlined, size: 18),
                     variant: SlButtonVariant.outline,
                     onPressed: onEdit,
-                    child: const Text('Edit'),
+                    child: Text(t.common.actions.edit),
                   ),
                   SlButton(
                     buttonKey: ValueKey(
@@ -117,7 +127,7 @@ class ChatSecretaryMemoryCard extends StatelessWidget {
                     icon: const Icon(Icons.close_rounded, size: 18),
                     variant: SlButtonVariant.outline,
                     onPressed: onIgnore,
-                    child: const Text('Ignore'),
+                    child: Text(t.common.actions.ignore),
                   ),
                 ],
               ),
@@ -152,6 +162,7 @@ class ChatSecretaryPlanningCard extends StatelessWidget {
     final tokens = SlTokens.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final accent = colorScheme.primary;
+    final t = context.t;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -175,7 +186,7 @@ class ChatSecretaryPlanningCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Daily plan generated',
+                      t.chat.secretary.planning.cardTitle,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                             color: accent,
                             fontWeight: FontWeight.w800,
@@ -186,14 +197,14 @@ class ChatSecretaryPlanningCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                _summaryText(plan),
+                _summaryText(context, plan),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
               ),
               const SizedBox(height: 4),
               Text(
-                'Based on current tasks and recent activity',
+                t.chat.secretary.planning.cardSubtitle,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -207,21 +218,21 @@ class ChatSecretaryPlanningCard extends StatelessWidget {
                     buttonKey: const ValueKey('secretary_plan_view'),
                     icon: const Icon(Icons.open_in_new_rounded, size: 18),
                     onPressed: onViewPlan,
-                    child: const Text('View plan'),
+                    child: Text(t.chat.secretary.planning.viewPlan),
                   ),
                   SlButton(
                     buttonKey: const ValueKey('secretary_plan_remind_later'),
                     icon: const Icon(Icons.schedule_rounded, size: 18),
                     variant: SlButtonVariant.outline,
                     onPressed: onRemindLater,
-                    child: const Text('Remind later'),
+                    child: Text(t.chat.secretary.planning.remindLater),
                   ),
                   SlButton(
                     buttonKey: const ValueKey('secretary_plan_ignore'),
                     icon: const Icon(Icons.close_rounded, size: 18),
                     variant: SlButtonVariant.outline,
                     onPressed: onIgnore,
-                    child: const Text('Ignore'),
+                    child: Text(t.common.actions.ignore),
                   ),
                 ],
               ),
@@ -232,13 +243,18 @@ class ChatSecretaryPlanningCard extends StatelessWidget {
     );
   }
 
-  String _summaryText(SecretaryPlan plan) {
-    final suggestions =
-        plan.itemCount == 1 ? '1 suggestion' : '${plan.itemCount} suggestions';
+  String _summaryText(BuildContext context, SecretaryPlan plan) {
+    final t = context.t.chat.secretary.planning;
+    final suggestions = plan.itemCount == 1
+        ? t.oneSuggestion
+        : t.manySuggestions(count: plan.itemCount);
     final confirmations = plan.requiresConfirmationCount == 1
-        ? '1 needs confirmation'
-        : '${plan.requiresConfirmationCount} need confirmation';
-    return '$suggestions, $confirmations';
+        ? t.oneNeedsConfirmation
+        : t.manyNeedConfirmation(count: plan.requiresConfirmationCount);
+    return t.summary(
+      suggestions: suggestions,
+      confirmations: confirmations,
+    );
   }
 }
 

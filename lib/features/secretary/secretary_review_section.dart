@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 
@@ -63,7 +64,7 @@ class SecretaryReviewSection extends StatelessWidget {
           const SizedBox(height: 12),
           if (children.isEmpty)
             Text(
-              'Nothing to review.',
+              context.t.chat.secretary.review.empty,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
