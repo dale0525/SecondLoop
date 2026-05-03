@@ -175,6 +175,10 @@ fn insert_message_with_is_memory(
     is_memory: bool,
     citations_json: Option<&str>,
 ) -> Result<Message> {
+    if conversation_id == LOOP_HOME_CONVERSATION_ID {
+        get_or_create_loop_home_conversation(conn, key)?;
+    }
+
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_ms();
 

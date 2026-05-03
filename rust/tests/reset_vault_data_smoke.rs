@@ -93,6 +93,26 @@ fn reset_vault_data_preserves_llm_profiles_and_embedding_model() {
 }
 
 #[test]
+fn reset_vault_data_allows_reusing_stale_loop_home_conversation_id() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(Path::new(&app_dir), "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conv = db::get_or_create_loop_home_conversation(&conn, &key).expect("loop home");
+    db::insert_message(&conn, &key, &conv.id, "user", "before reset").expect("insert before reset");
+
+    db::reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault data");
+
+    let msg = db::insert_message(&conn, &key, &conv.id, "user", "我更喜欢上午处理重要任务：")
+        .expect("insert after reset with stale loop home id");
+
+    assert_eq!(msg.conversation_id, "loop_home");
+    assert_eq!(msg.content, "我更喜欢上午处理重要任务：");
+}
+
+#[test]
 fn reset_vault_data_preserves_local_ai_configuration_kv() {
     let temp = tempfile::tempdir().expect("tempdir");
     let app_dir = temp.path().join("secondloop");
