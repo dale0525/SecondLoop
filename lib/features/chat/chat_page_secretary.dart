@@ -130,11 +130,8 @@ extension _ChatPageStateSecretary on _ChatPageState {
 
   SecretaryPlan? _secretaryPlanFromSnapshot(TaskPrioritySnapshot? snapshot) {
     if (snapshot == null || snapshot.isEmpty) return null;
-    final todos = [
-      for (final entry in snapshot.activeEntries) entry.todo,
-    ];
     final plan = const RuleBasedPlanningEngine(nowLocal: DateTime.now)
-        .generateDailyPlan(todos);
+        .generateDailyPlanFromPrioritySnapshot(snapshot);
     final filtered = SecretaryPlanSections(
       focus: _filterSecretaryPlanItems(plan.sections.focus),
       dueSoon: _filterSecretaryPlanItems(plan.sections.dueSoon),

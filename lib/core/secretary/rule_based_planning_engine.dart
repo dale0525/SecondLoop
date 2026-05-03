@@ -1,5 +1,6 @@
 import '../../src/rust/db.dart';
 import '../../src/rust/platform_int.dart';
+import '../../features/actions/task_hub/task_priority_models.dart';
 import 'secretary_models.dart';
 
 class RuleBasedPlanningEngine {
@@ -8,6 +9,102 @@ class RuleBasedPlanningEngine {
   }) : _nowLocal = nowLocal;
 
   final DateTime Function() _nowLocal;
+
+  SecretaryPlan generateDailyPlanFromPrioritySnapshot(
+    TaskPrioritySnapshot snapshot,
+  ) {
+    final now = _nowLocal();
+    if (snapshot.activeEntries.isEmpty) {
+      return SecretaryPlan(
+        id: 'daily-plan-${now.millisecondsSinceEpoch}',
+        title: 'Daily plan',
+        generatedAtMs: now.millisecondsSinceEpoch,
+        route: 'local_rules',
+        sections: const SecretaryPlanSections.empty(),
+      );
+    }
+
+    final focus = <SecretaryPlanItem>[];
+    final dueSoon = <SecretaryPlanItem>[];
+    final needsDecision = <SecretaryPlanItem>[];
+    final missingNextAction = <SecretaryPlanItem>[];
+    final seenTodoIds = <String>{};
+
+    for (final entry in snapshot.activeEntries) {
+      final todo = entry.todo;
+      if (!_isOpenTodo(todo) || !seenTodoIds.add(todo.id)) continue;
+
+      final dueAtMs = platformIntToNullableInt(todo.dueAtMs);
+      final itemBase = _itemBase(todo, dueAtMs: dueAtMs);
+
+      if (entry.hasHardFocusGuard ||
+          entry.isOverdue ||
+          entry.isDueToday ||
+          entry.band == TaskPriorityBand.focus) {
+        focus.add(
+          itemBase.copyWith(
+            reason: _reasonForPriorityEntry(
+              entry,
+              fallback: entry.isOverdue ? 'Overdue' : 'Due today',
+            ),
+            requiresConfirmation: entry.isOverdue || entry.isDueToday,
+          ),
+        );
+        continue;
+      }
+
+      if (entry.isFutureScheduled || entry.band == TaskPriorityBand.scheduled) {
+        dueSoon.add(
+          itemBase.copyWith(
+            reason: _reasonForPriorityEntry(entry, fallback: 'Scheduled soon'),
+          ),
+        );
+        continue;
+      }
+
+      if (entry.isReviewDue ||
+          entry.isSnoozed ||
+          entry.hasManualNudges ||
+          entry.suggestedAction == TaskPrioritySuggestionKind.clarify) {
+        needsDecision.add(
+          itemBase.copyWith(
+            reason: _reasonForPriorityEntry(
+              entry,
+              fallback: entry.hasManualNudges
+                  ? 'User priority signal needs review'
+                  : 'Needs decision',
+            ),
+            requiresConfirmation: true,
+          ),
+        );
+        continue;
+      }
+
+      if (dueAtMs == null) {
+        missingNextAction.add(
+          itemBase.copyWith(
+            reason: _reasonForPriorityEntry(
+              entry,
+              fallback: 'No schedule or next action',
+            ),
+          ),
+        );
+      }
+    }
+
+    return SecretaryPlan(
+      id: 'daily-plan-${now.millisecondsSinceEpoch}',
+      title: 'Daily plan',
+      generatedAtMs: now.millisecondsSinceEpoch,
+      route: 'local_rules',
+      sections: SecretaryPlanSections(
+        focus: focus.take(5).toList(growable: false),
+        dueSoon: dueSoon.take(5).toList(growable: false),
+        needsDecision: needsDecision.take(5).toList(growable: false),
+        missingNextAction: missingNextAction.take(5).toList(growable: false),
+      ),
+    );
+  }
 
   SecretaryPlan generateDailyPlan(List<Todo> todos) {
     final now = _nowLocal();
@@ -129,5 +226,23 @@ class RuleBasedPlanningEngine {
 
   DateTime _startOfDay(DateTime value) {
     return DateTime(value.year, value.month, value.day);
+  }
+
+  String _reasonForPriorityEntry(
+    TaskPriorityEntry entry, {
+    required String fallback,
+  }) {
+    final aiReason = entry.reasonText?.trim();
+    if (aiReason != null && aiReason.isNotEmpty) return aiReason;
+    if (entry.isOverdue) return 'Overdue';
+    if (entry.isDueToday) return 'Due today';
+    if (entry.isFutureScheduled) return 'Scheduled soon';
+    if (entry.isReviewDue) return 'Review due';
+    if (entry.isSnoozed) return 'Snoozed';
+    if (entry.hasManualNudges) return 'User priority signal needs review';
+    if (entry.reasons.contains(TaskPriorityReasonKind.aiSuggested)) {
+      return 'AI priority signal';
+    }
+    return fallback;
   }
 }
