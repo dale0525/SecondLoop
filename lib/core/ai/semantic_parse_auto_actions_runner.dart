@@ -418,6 +418,7 @@ final class SemanticParseAutoActionsRunner {
         final locale = _localeFromTag(localeTag);
         final resolvedMorningMinutes = morningMinutes ?? 8 * 60;
         var localParsedResult = _parseLocally(
+          messageId: job.messageId,
           text: analysisText,
           nowLocal: nowLocal,
           locale: locale,
@@ -452,6 +453,7 @@ final class SemanticParseAutoActionsRunner {
               preferredTodoIds: preferredTodoIds,
             );
             localParsedResult = _parseLocally(
+              messageId: job.messageId,
               text: analysisText,
               nowLocal: nowLocal,
               locale: locale,

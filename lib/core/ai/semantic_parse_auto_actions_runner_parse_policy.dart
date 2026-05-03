@@ -21,6 +21,7 @@ String _localResultJson(LocalSemanticParseResult result) {
     'task_type': result.taskType,
     'suggested_tags': result.suggestedTags,
     'tag_confidence': result.tagConfidence,
+    'todo_command': result.todoCommand?.toJson(),
     'diagnostics': <String, Object?>{
       'local_intent': result.diagnostics.localIntent,
       'has_explicit_status_update': result.diagnostics.hasExplicitStatusUpdate,
@@ -28,6 +29,10 @@ String _localResultJson(LocalSemanticParseResult result) {
       'temporal_needs_enhancement': result.diagnostics.temporalNeedsEnhancement,
       'semantic_needs_enhancement': result.diagnostics.semanticNeedsEnhancement,
       'looks_like_followup_edit': result.diagnostics.looksLikeFollowupEdit,
+      'todo_command_intent': result.diagnostics.todoCommandIntent,
+      'todo_command_needs_enhancement':
+          result.diagnostics.todoCommandNeedsEnhancement,
+      'todo_command_ambiguous': result.diagnostics.todoCommandAmbiguous,
     },
   });
 }
@@ -57,6 +62,16 @@ List<String> _unresolvedFields(LocalSemanticParseResult result) {
       break;
     case LocalSemanticParseKind.none:
       switch (result.diagnostics.localIntent) {
+        case 'ambiguous_todo_command':
+          add('target_todo_id');
+          add('kind');
+          break;
+        case 'todo_command':
+          if (result.diagnostics.todoCommandNeedsEnhancement) {
+            add('kind');
+            add('target_todo_id');
+          }
+          break;
         case 'ambiguous_followup':
           add('todo_id');
           if (result.diagnostics.hasExplicitStatusUpdate) {
@@ -106,17 +121,26 @@ bool _shouldRequestEnhancement(
   }
 
   if (result.confidence < minAutoConfidence) {
+    if (result.diagnostics.localIntent == 'todo_command' &&
+        result.todoCommand != null &&
+        !result.diagnostics.todoCommandNeedsEnhancement) {
+      return false;
+    }
     return true;
   }
 
   return switch (result.kind) {
     LocalSemanticParseKind.create => false,
     LocalSemanticParseKind.followup => false,
-    LocalSemanticParseKind.none => result.diagnostics.localIntent != 'none',
+    LocalSemanticParseKind.none =>
+      result.diagnostics.localIntent == 'todo_command'
+          ? result.diagnostics.todoCommandNeedsEnhancement
+          : result.diagnostics.localIntent != 'none',
   };
 }
 
 LocalSemanticParseResult _parseLocally({
+  required String messageId,
   required String text,
   required DateTime nowLocal,
   required Locale locale,
@@ -140,6 +164,7 @@ LocalSemanticParseResult _parseLocally({
 
   return LocalSemanticParser.parse(
     text: text,
+    messageId: messageId,
     nowLocal: nowLocal,
     locale: locale,
     openTodoTargets: localTargets,
@@ -159,6 +184,7 @@ bool _shouldRetrieveSemanticCandidates(LocalSemanticParseResult result) {
   }
   final diagnostics = result.diagnostics;
   return switch (diagnostics.localIntent) {
+    'ambiguous_todo_command' => true,
     'ambiguous_followup' => true,
     'needs_enhancement' => diagnostics.semanticNeedsEnhancement ||
         _looksLikeUnresolvedFollowupAutomation(diagnostics),
