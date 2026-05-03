@@ -34,6 +34,8 @@ import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
 import '../../src/rust/db.dart';
 import '../../src/rust/frb_generated.dart';
 import '../../src/rust/semantic_parse.dart';
+import '../secretary/todo_command_executor.dart';
+import '../secretary/todo_command_models.dart';
 import 'app_backend.dart';
 import 'attachments_backend.dart';
 import 'semantic_parse_attempt_aware_backend.dart';

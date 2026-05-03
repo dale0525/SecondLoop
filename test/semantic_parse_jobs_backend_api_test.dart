@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/semantic_parse_attempt_aware_backend.dart';
 import 'package:secondloop/core/backend/semantic_parse_enhancement_backend.dart';
+import 'package:secondloop/core/secretary/todo_command_models.dart';
 import 'package:secondloop/src/rust/db.dart';
 import 'package:secondloop/src/rust/semantic_parse.dart' as rust_semantic;
 
@@ -281,6 +282,21 @@ final class _InterfaceBackend extends TestAppBackend
       'dueAtMs': dueAtMs,
       'nowMs': nowMs,
     };
+    return true;
+  }
+
+  @override
+  Future<bool> completeSemanticParseTodoCommandIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required SecretaryTodoCommand command,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    calls.add('atomicTodoCommand');
     return true;
   }
 

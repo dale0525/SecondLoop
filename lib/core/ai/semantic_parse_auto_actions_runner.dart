@@ -18,6 +18,7 @@ import '../../features/actions/todo/todo_thread_match.dart';
 import '../../features/actions/todo/todo_linking.dart';
 import '../../features/tags/tag_repository.dart';
 import '../../src/rust/db.dart';
+import '../../src/rust/platform_int.dart';
 import '../../src/rust/semantic_parse.dart' as rust_semantic;
 import '../backend/app_backend.dart';
 import '../backend/attachments_backend.dart';
@@ -25,11 +26,16 @@ import '../backend/native_backend.dart';
 import '../backend/semantic_parse_attempt_aware_backend.dart';
 import '../backend/semantic_parse_enhancement_backend.dart';
 import '../secretary/internal_tool_registry.dart';
+import '../secretary/todo_command_executor.dart';
+import '../secretary/todo_command_models.dart';
+import '../secretary/todo_command_risk_policy.dart';
 import 'semantic_parse.dart';
 
 part 'semantic_parse_auto_actions_runner_store.dart';
 part 'semantic_parse_auto_actions_runner_client.dart';
+part 'semantic_parse_auto_actions_runner_models.dart';
 part 'semantic_parse_auto_actions_runner_parse_policy.dart';
+part 'semantic_parse_auto_actions_runner_todo_commands.dart';
 
 final class SemanticParseAutoActionJob {
   const SemanticParseAutoActionJob({
@@ -45,32 +51,6 @@ final class SemanticParseAutoActionJob {
   final int attempts;
   final int? nextRetryAtMs;
   final int createdAtMs;
-}
-
-final class SemanticParseTodoCandidate {
-  const SemanticParseTodoCandidate({
-    required this.id,
-    required this.title,
-    required this.status,
-    this.dueLocalIso,
-  });
-
-  final String id;
-  final String title;
-  final String status;
-  final String? dueLocalIso;
-}
-
-final class SemanticParseMessageInput {
-  const SemanticParseMessageInput({
-    required this.sourceText,
-    required this.analysisText,
-    required this.allowCreate,
-  });
-
-  final String sourceText;
-  final String analysisText;
-  final bool allowCreate;
 }
 
 final class SemanticParseJobSucceededArgs {
@@ -238,6 +218,19 @@ abstract class SemanticParseAutoActionsStore {
     required String todoId,
     required String newStatus,
     int? expectedAttemptId,
+  });
+}
+
+abstract interface class SemanticParseTodoCommandCompletingStore {
+  Future<SecretaryTodoCommandExecutionResult?>
+      completeTodoCommandIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    required SecretaryTodoCommand command,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
   });
 }
 
@@ -569,6 +562,26 @@ final class SemanticParseAutoActionsRunner {
             didMutateAny = true;
           }
 
+          continue;
+        }
+
+        final todoCommandOutcome = await _completeTodoCommandIfPresent(
+          messageId: job.messageId,
+          attemptId: attemptId,
+          localParsedResult: localParsedResult,
+          parsed: parsed,
+          pendingSuggestedTags: pendingSuggestedTags,
+          autoApplySuggestedTags: autoApplySuggestedTags,
+          suggestedTagConfidence: suggestedTagConfidence,
+          nowMs: nowMs,
+        );
+        if (todoCommandOutcome.handled) {
+          if (todoCommandOutcome.didMutate) {
+            didMutateAny = true;
+          }
+          if (todoCommandOutcome.didProcess) {
+            processed += 1;
+          }
           continue;
         }
 

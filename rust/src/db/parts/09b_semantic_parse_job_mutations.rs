@@ -570,6 +570,141 @@ fn set_semantic_parse_todo_due_in_existing_txn(
 }
 
 #[allow(clippy::too_many_arguments)]
+pub fn complete_semantic_parse_todo_command_if_current_attempt(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    expected_attempt_id: i64,
+    todo_id: &str,
+    todo_title: Option<&str>,
+    applied_action_kind: &str,
+    new_title: Option<&str>,
+    new_status: Option<&str>,
+    due_at_ms: Option<i64>,
+    manual_importance_nudge_score: Option<i64>,
+    manual_urgency_nudge_score: Option<i64>,
+    pending_suggested_tags: Option<&[String]>,
+    auto_apply_suggested_tags: Option<&[String]>,
+    suggested_tag_confidence: Option<f64>,
+    now_ms: i64,
+) -> Result<bool> {
+    run_immediate_transaction(conn, || {
+        if !semantic_parse_attempt_matches(conn, message_id, expected_attempt_id)? {
+            return Ok(false);
+        }
+
+        let mut applied_tag_ids = Vec::<String>::new();
+        let mut stored_suggested_tags = pending_suggested_tags;
+        let mut stored_tag_confidence = pending_suggested_tags.and(suggested_tag_confidence);
+        let mut stored_tag_state = if pending_suggested_tags.is_some() {
+            Some("pending")
+        } else {
+            Some("none")
+        };
+
+        if let Some(auto_tags) = auto_apply_suggested_tags {
+            let applied = apply_semantic_parse_tags_in_existing_txn(conn, key, message_id, auto_tags)?;
+            if !applied.is_empty() {
+                stored_suggested_tags = Some(auto_tags);
+                stored_tag_confidence = suggested_tag_confidence;
+                stored_tag_state = Some("applied");
+                applied_tag_ids = applied;
+            } else {
+                stored_suggested_tags = None;
+                stored_tag_confidence = None;
+                stored_tag_state = Some("none");
+            }
+        }
+
+        let mut current = get_todo(conn, key, todo_id)?;
+        let mut previous_status = None::<String>;
+        let mut previous_due_at_ms = None::<i64>;
+        let mut did_change = false;
+        let mut did_change_due = false;
+
+        if let Some(status) = new_status.map(str::trim).filter(|value| !value.is_empty()) {
+            if current.status != status {
+                previous_status = Some(current.status.clone());
+                current = set_todo_status_in_txn(conn, key, todo_id, status, Some(message_id))?;
+                did_change = true;
+            }
+        }
+
+        let target_title = new_title
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| current.title.clone());
+        let target_due_at_ms = due_at_ms.or(current.due_at_ms);
+        let target_manual_importance_nudge_score =
+            manual_importance_nudge_score.or(current.manual_importance_nudge_score);
+        let target_manual_urgency_nudge_score =
+            manual_urgency_nudge_score.or(current.manual_urgency_nudge_score);
+
+        let needs_upsert = target_title != current.title
+            || target_due_at_ms != current.due_at_ms
+            || target_manual_importance_nudge_score != current.manual_importance_nudge_score
+            || target_manual_urgency_nudge_score != current.manual_urgency_nudge_score;
+        if needs_upsert {
+            if target_due_at_ms != current.due_at_ms {
+                previous_due_at_ms = current.due_at_ms;
+                did_change_due = true;
+            }
+            current = upsert_todo(
+                conn,
+                key,
+                &current.id,
+                &target_title,
+                target_due_at_ms,
+                &current.status,
+                current.source_entry_id.as_deref(),
+                current.review_stage,
+                current.next_review_at_ms,
+                current.last_review_at_ms,
+                target_manual_importance_nudge_score,
+                target_manual_urgency_nudge_score,
+            )?;
+            did_change = true;
+        }
+
+        let finalized =
+            mark_semantic_parse_job_succeeded_with_tag_metadata_and_due_metadata_if_current_attempt(
+                conn,
+                key,
+                message_id,
+                expected_attempt_id,
+                if did_change { applied_action_kind } else { "none" },
+                if did_change { Some(todo_id) } else { None },
+                if did_change {
+                    todo_title.or(Some(current.title.as_str()))
+                } else {
+                    None
+                },
+                if did_change {
+                    previous_status.as_deref()
+                } else {
+                    None
+                },
+                if did_change { previous_due_at_ms } else { None },
+                if did_change { did_change_due } else { false },
+                stored_suggested_tags,
+                stored_tag_confidence,
+                stored_tag_state,
+                if applied_tag_ids.is_empty() {
+                    None
+                } else {
+                    Some(applied_tag_ids.as_slice())
+                },
+                now_ms,
+            )?;
+        if !finalized {
+            return Err(anyhow!("semantic parse todo command finalize failed inside transaction"));
+        }
+        Ok(true)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn complete_semantic_parse_no_action_if_current_attempt(
     conn: &Connection,
     key: &[u8; 32],

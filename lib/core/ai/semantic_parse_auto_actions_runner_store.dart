@@ -1,7 +1,9 @@
 part of 'semantic_parse_auto_actions_runner.dart';
 
 final class BackendSemanticParseAutoActionsStore
-    implements SemanticParseAutoActionsStore {
+    implements
+        SemanticParseAutoActionsStore,
+        SemanticParseTodoCommandCompletingStore {
   BackendSemanticParseAutoActionsStore({
     required AppBackend backend,
     required Uint8List sessionKey,
@@ -640,6 +642,94 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
+  Future<SecretaryTodoCommandExecutionResult?>
+      completeTodoCommandIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    required SecretaryTodoCommand command,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    if (_backend is! SemanticParseAttemptAwareBackend) {
+      if (!await _hasCurrentRunningAttempt(
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+      )) {
+        return null;
+      }
+      _throwNonAtomicAttemptAwareMutation(
+        'completeTodoCommandIfCurrentAttempt',
+      );
+    }
+
+    final targetTodoId = command.targetTodoId?.trim();
+    if (targetTodoId == null || targetTodoId.isEmpty) {
+      final appliedTagIds = await completeNoActionIfCurrentAttempt(
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+        pendingSuggestedTags: pendingSuggestedTags,
+        autoApplySuggestedTags: autoApplySuggestedTags,
+        suggestedTagConfidence: suggestedTagConfidence,
+        nowMs: nowMs,
+      );
+      if (appliedTagIds == null) return null;
+      return SecretaryTodoCommandExecutionResult.rejected(
+        command: command,
+        reason: 'target_required',
+      );
+    }
+
+    final previous = await _backend.getTodoById(_sessionKey, targetTodoId);
+    if (previous == null) {
+      final appliedTagIds = await completeNoActionIfCurrentAttempt(
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+        pendingSuggestedTags: pendingSuggestedTags,
+        autoApplySuggestedTags: autoApplySuggestedTags,
+        suggestedTagConfidence: suggestedTagConfidence,
+        nowMs: nowMs,
+      );
+      if (appliedTagIds == null) return null;
+      return SecretaryTodoCommandExecutionResult.rejected(
+        command: command,
+        reason: 'target_not_found',
+      );
+    }
+
+    final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+    final finalized =
+        await awareBackend.completeSemanticParseTodoCommandIfCurrentAttempt(
+      _sessionKey,
+      messageId: messageId,
+      expectedAttemptId: expectedAttemptId,
+      command: command,
+      pendingSuggestedTags: pendingSuggestedTags,
+      autoApplySuggestedTags: autoApplySuggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      nowMs: nowMs,
+    );
+    if (!finalized) return null;
+
+    final updated = await _backend.getTodoById(_sessionKey, targetTodoId);
+    final undo = SecretaryTodoCommandUndoSnapshot.fromTodo(previous);
+    final changedFields = _todoCommandChangedFields(
+      previous: previous,
+      updated: updated,
+      command: command,
+    );
+    return SecretaryTodoCommandExecutionResult(
+      command: command,
+      applied: changedFields.isNotEmpty,
+      changedFields: changedFields,
+      undo: undo,
+      updatedTodo: updated,
+      rejectionReason: changedFields.isEmpty ? 'no_change' : null,
+    );
+  }
+
+  @override
   Future<SemanticParseTagApplyResult> applySemanticTags({
     required String messageId,
     required List<String> suggestedTags,
@@ -915,4 +1005,39 @@ final class _SemanticPayloadSnippetResult {
 
   final List<String> snippets;
   final bool hasPreferredSummary;
+}
+
+List<String> _todoCommandChangedFields({
+  required Todo previous,
+  required Todo? updated,
+  required SecretaryTodoCommand command,
+}) {
+  if (updated == null) return const <String>[];
+  final out = <String>[];
+  if (command.newTitle != null && previous.title != updated.title) {
+    out.add('title');
+  }
+  if (command.newStatus != null && previous.status != updated.status) {
+    out.add('status');
+  }
+  if (command.kind == SecretaryTodoCommandKind.dismiss &&
+      previous.status != updated.status) {
+    out.add('status');
+  }
+  if (command.dueAtMs != null &&
+      platformIntToNullableInt(previous.dueAtMs) !=
+          platformIntToNullableInt(updated.dueAtMs)) {
+    out.add('due_at_ms');
+  }
+  if (command.manualImportanceNudgeScore != null &&
+      platformIntToNullableInt(previous.manualImportanceNudgeScore) !=
+          platformIntToNullableInt(updated.manualImportanceNudgeScore)) {
+    out.add('manual_importance_nudge_score');
+  }
+  if (command.manualUrgencyNudgeScore != null &&
+      platformIntToNullableInt(previous.manualUrgencyNudgeScore) !=
+          platformIntToNullableInt(updated.manualUrgencyNudgeScore)) {
+    out.add('manual_urgency_nudge_score');
+  }
+  return out;
 }

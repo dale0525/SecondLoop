@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import '../secretary/todo_command_models.dart';
+
 abstract interface class SemanticParseAttemptAwareBackend {
   Future<int?> claimSemanticParseJobRunning(
     Uint8List key, {
@@ -79,6 +81,17 @@ abstract interface class SemanticParseAttemptAwareBackend {
     String? todoTitle,
     String? newStatus,
     int? dueAtMs,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  });
+
+  Future<bool> completeSemanticParseTodoCommandIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required SecretaryTodoCommand command,
     List<String>? pendingSuggestedTags,
     List<String>? autoApplySuggestedTags,
     double? suggestedTagConfidence,

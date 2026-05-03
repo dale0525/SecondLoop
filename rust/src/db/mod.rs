@@ -65,6 +65,9 @@ mod semantic_parse_jobs_tests;
 mod semantic_parse_jobs_noop_tests;
 
 #[cfg(test)]
+mod semantic_parse_todo_command_tests;
+
+#[cfg(test)]
 mod cloud_media_backup_tests;
 
 #[cfg(test)]

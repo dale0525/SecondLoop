@@ -4,7 +4,7 @@ import 'package:secondloop/core/ai/semantic_parse_auto_actions_runner.dart';
 import 'semantic_parse_local_first_runner_test_support.dart';
 
 void main() {
-  test('runner skips AI for high-confidence local todo command', () async {
+  test('runner executes high-confidence local reprioritize command', () async {
     final store = FakeSemanticParseStore(
       jobs: const <SemanticParseAutoActionJob>[
         SemanticParseAutoActionJob(
@@ -23,44 +23,45 @@ void main() {
     final client = FakeSemanticParseClient();
     final runner = _runner(store: store, client: client);
 
-    await runner.runOnce(localeTag: 'zh-CN', dayEndMinutes: 21 * 60);
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
 
+    expect(result.processed, 1);
     expect(client.parseRequests, 0);
     expect(
       store.jobState('msg:priority')?.appliedActionKind,
       'todo_command:reprioritize',
     );
+    expect(store.updatedImportanceByTodoId['todo:1'], 1);
+    expect(store.updatedUrgencyByTodoId['todo:1'], 1);
   });
 
-  test('runner requests AI when todo command target is ambiguous', () async {
+  test('runner does not auto-apply dismiss command', () async {
     final store = FakeSemanticParseStore(
       jobs: const <SemanticParseAutoActionJob>[
         SemanticParseAutoActionJob(
-          messageId: 'msg:rename',
+          messageId: 'msg:dismiss',
           status: 'pending',
           attempts: 0,
           nextRetryAtMs: null,
           createdAtMs: 0,
         ),
       ],
-      messages: const <String, String>{'msg:rename': '把报销改成提交差旅报销'},
+      messages: const <String, String>{'msg:dismiss': '删除报销'},
       openCandidates: const [
         SemanticParseTodoCandidate(id: 'todo:1', title: '报销', status: 'open'),
-        SemanticParseTodoCandidate(id: 'todo:2', title: '报销', status: 'open'),
       ],
     );
-    final client = FakeSemanticParseClient(
-      responseJson: '{"kind":"none","confidence":0.0}',
-    );
+    final client = FakeSemanticParseClient();
     final runner = _runner(store: store, client: client);
 
     await runner.runOnce(localeTag: 'zh-CN', dayEndMinutes: 21 * 60);
 
-    expect(client.parseRequests, 1);
-    expect(client.lastLocalResultJson, contains('"ambiguous_todo_command"'));
-    expect(
-        client.lastLocalResultJson, contains('"todo_command_ambiguous":true'));
-    expect(client.lastUnresolvedFields, contains('target_todo_id'));
+    expect(client.parseRequests, 0);
+    expect(store.jobState('msg:dismiss')?.appliedActionKind, 'none');
+    expect(store.updatedStatusByTodoId, isNot(contains('todo:1')));
   });
 }
 

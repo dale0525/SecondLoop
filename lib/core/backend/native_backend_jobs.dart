@@ -497,6 +497,47 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
   }
 
   @override
+  Future<bool> completeSemanticParseTodoCommandIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required SecretaryTodoCommand command,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbCompleteSemanticParseTodoCommandIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      todoId: command.targetTodoId ?? '',
+      todoTitle: command.targetTitle,
+      appliedActionKind:
+          'todo_command:${todoCommandKindWireValue(command.kind)}',
+      newTitle: command.newTitle,
+      newStatus: command.kind == SecretaryTodoCommandKind.dismiss
+          ? 'dismissed'
+          : command.newStatus,
+      dueAtMs: command.dueAtMs == null
+          ? null
+          : PlatformInt64Util.from(command.dueAtMs!),
+      manualImportanceNudgeScore: command.manualImportanceNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(command.manualImportanceNudgeScore!),
+      manualUrgencyNudgeScore: command.manualUrgencyNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(command.manualUrgencyNudgeScore!),
+      pendingSuggestedTags: pendingSuggestedTags,
+      autoApplySuggestedTags: autoApplySuggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
   Future<List<String>> applySemanticParseTagsIfCurrentAttempt(
     Uint8List key, {
     required String messageId,

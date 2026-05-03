@@ -1102,6 +1102,42 @@ Future<bool> dbCompleteSemanticParseFollowupIfCurrentAttempt(
             suggestedTagConfidence: suggestedTagConfidence,
             nowMs: nowMs);
 
+Future<bool> dbCompleteSemanticParseTodoCommandIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required String todoId,
+        String? todoTitle,
+        required String appliedActionKind,
+        String? newTitle,
+        String? newStatus,
+        PlatformInt64? dueAtMs,
+        PlatformInt64? manualImportanceNudgeScore,
+        PlatformInt64? manualUrgencyNudgeScore,
+        List<String>? pendingSuggestedTags,
+        List<String>? autoApplySuggestedTags,
+        double? suggestedTagConfidence,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api
+        .crateApiCoreDbCompleteSemanticParseTodoCommandIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            todoId: todoId,
+            todoTitle: todoTitle,
+            appliedActionKind: appliedActionKind,
+            newTitle: newTitle,
+            newStatus: newStatus,
+            dueAtMs: dueAtMs,
+            manualImportanceNudgeScore: manualImportanceNudgeScore,
+            manualUrgencyNudgeScore: manualUrgencyNudgeScore,
+            pendingSuggestedTags: pendingSuggestedTags,
+            autoApplySuggestedTags: autoApplySuggestedTags,
+            suggestedTagConfidence: suggestedTagConfidence,
+            nowMs: nowMs);
+
 Future<List<String>> dbApplySemanticParseTagsIfCurrentAttempt(
         {required String appDir,
         required List<int> key,

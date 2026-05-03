@@ -66,6 +66,27 @@ final class SecretaryInternalToolRegistry {
         requiresConfirmation: true,
         auditText: 'Update a todo',
       ),
+      'todo.status.set': SecretaryInternalTool(
+        name: 'todo.status.set',
+        scope: 'write',
+        availability: {'local', 'byok', 'cloud'},
+        requiresConfirmation: false,
+        auditText: 'Set a todo status',
+      ),
+      'todo.priority.set': SecretaryInternalTool(
+        name: 'todo.priority.set',
+        scope: 'write',
+        availability: {'local', 'byok', 'cloud'},
+        requiresConfirmation: false,
+        auditText: 'Set todo priority signals',
+      ),
+      'todo.dismiss': SecretaryInternalTool(
+        name: 'todo.dismiss',
+        scope: 'write',
+        availability: {'local', 'byok', 'cloud'},
+        requiresConfirmation: true,
+        auditText: 'Dismiss a todo',
+      ),
       'reminder.suggest': SecretaryInternalTool(
         name: 'reminder.suggest',
         scope: 'write',

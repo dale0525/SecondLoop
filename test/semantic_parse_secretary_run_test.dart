@@ -6,6 +6,8 @@ import 'package:secondloop/core/secretary/internal_tool_registry.dart';
 import 'package:secondloop/features/actions/todo/todo_thread_match.dart';
 import 'package:secondloop/src/rust/db.dart';
 
+import 'semantic_parse_local_first_runner_test_support.dart' as support;
+
 void main() {
   test('semantic todo automation writes a capture secretary run', () async {
     final audit = _FakeSecretaryAuditRecorder();
@@ -35,6 +37,55 @@ void main() {
     expect(audit.toolCalls.single.requiresConfirmation, isFalse);
     expect(audit.toolCalls.single.inputJson, contains('msg:audit'));
     expect(audit.toolCalls.single.outputJson, contains('todo:msg:audit'));
+  });
+
+  test('semantic todo command automation writes a tool-specific secretary run',
+      () async {
+    final audit = _FakeSecretaryAuditRecorder();
+    final store = support.FakeSemanticParseStore(
+      jobs: const <SemanticParseAutoActionJob>[
+        SemanticParseAutoActionJob(
+          messageId: 'msg:priority',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: const <String, String>{
+        'msg:priority': 'Make invoice priority higher'
+      },
+      openCandidates: const [
+        SemanticParseTodoCandidate(
+          id: 'todo:invoice',
+          title: 'invoice',
+          status: 'open',
+        ),
+      ],
+    );
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: support.FakeSemanticParseClient(),
+      secretaryAuditRecorder: audit,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 4, 29, 9),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'en-US',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(audit.runs.single.triggerKind, 'capture');
+    expect(audit.toolCalls.single.toolName, 'todo.priority.set');
+    expect(audit.toolCalls.single.requiresConfirmation, isFalse);
+    expect(audit.toolCalls.single.inputJson, contains('msg:priority'));
+    expect(audit.toolCalls.single.outputJson, contains('todo:invoice'));
   });
 }
 

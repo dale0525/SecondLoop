@@ -1,8 +1,13 @@
 import 'package:secondloop/core/ai/semantic_parse_auto_actions_runner.dart';
+import 'package:secondloop/core/secretary/todo_command_executor.dart';
+import 'package:secondloop/core/secretary/todo_command_models.dart';
 import 'package:secondloop/features/actions/todo/todo_thread_match.dart';
 import 'package:secondloop/src/rust/db.dart';
 
-final class FakeSemanticParseStore implements SemanticParseAutoActionsStore {
+final class FakeSemanticParseStore
+    implements
+        SemanticParseAutoActionsStore,
+        SemanticParseTodoCommandCompletingStore {
   FakeSemanticParseStore({
     required List<SemanticParseAutoActionJob> jobs,
     required Map<String, String> messages,
@@ -31,6 +36,8 @@ final class FakeSemanticParseStore implements SemanticParseAutoActionsStore {
   final List<String> createdTodoIds = <String>[];
   final Map<String, String> updatedStatusByTodoId = <String, String>{};
   final Map<String, int> updatedDueByTodoId = <String, int>{};
+  final Map<String, int> updatedImportanceByTodoId = <String, int>{};
+  final Map<String, int> updatedUrgencyByTodoId = <String, int>{};
 
   SemanticParseJob? jobState(String messageId) => _jobs[messageId];
 
@@ -252,6 +259,136 @@ final class FakeSemanticParseStore implements SemanticParseAutoActionsStore {
         nowMs: nowMs,
       ),
       expectedAttemptId: expectedAttemptId,
+    );
+  }
+
+  @override
+  Future<SecretaryTodoCommandExecutionResult?>
+      completeTodoCommandIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    required SecretaryTodoCommand command,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    final current = _jobs[messageId];
+    if (current == null || current.attemptId.toInt() != expectedAttemptId) {
+      return null;
+    }
+    final todoId = command.targetTodoId;
+    if (todoId == null || todoId.isEmpty) {
+      return null;
+    }
+
+    final candidate = _openCandidates
+        .where((item) => item.id == todoId)
+        .cast<SemanticParseTodoCandidate?>()
+        .firstWhere((_) => true, orElse: () => null);
+    final previous = Todo(
+      id: todoId,
+      title: candidate?.title ?? command.targetTitle ?? todoId,
+      dueAtMs: candidate?.dueLocalIso == null
+          ? null
+          : DateTime.tryParse(candidate!.dueLocalIso!)
+              ?.toUtc()
+              .millisecondsSinceEpoch,
+      status: candidate?.status ?? 'open',
+      sourceEntryId: null,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: null,
+      manualImportanceNudgeScore: 0,
+      manualUrgencyNudgeScore: 0,
+    );
+    final changedFields = <String>[];
+    var updatedTitle = previous.title;
+    var updatedStatus = previous.status;
+    var updatedDueAtMs = previous.dueAtMs;
+    var updatedImportance = previous.manualImportanceNudgeScore ?? 0;
+    var updatedUrgency = previous.manualUrgencyNudgeScore ?? 0;
+
+    switch (command.kind) {
+      case SecretaryTodoCommandKind.updateTitle:
+        updatedTitle = command.newTitle ?? updatedTitle;
+        changedFields.add('title');
+        break;
+      case SecretaryTodoCommandKind.reschedule:
+        if (command.dueAtMs != null) {
+          updatedDueAtMs = command.dueAtMs;
+          updatedDueByTodoId[todoId] = command.dueAtMs!;
+          changedFields.add('due_at_ms');
+        }
+        break;
+      case SecretaryTodoCommandKind.setStatus:
+        if (command.newStatus != null) {
+          updatedStatus = command.newStatus!;
+          updatedStatusByTodoId[todoId] = command.newStatus!;
+          changedFields.add('status');
+        }
+        break;
+      case SecretaryTodoCommandKind.dismiss:
+        updatedStatus = 'dismissed';
+        updatedStatusByTodoId[todoId] = 'dismissed';
+        changedFields.add('status');
+        break;
+      case SecretaryTodoCommandKind.reprioritize:
+        if (command.manualImportanceNudgeScore != null) {
+          updatedImportance = command.manualImportanceNudgeScore!;
+          updatedImportanceByTodoId[todoId] = updatedImportance;
+          changedFields.add('manual_importance_nudge_score');
+        }
+        if (command.manualUrgencyNudgeScore != null) {
+          updatedUrgency = command.manualUrgencyNudgeScore!;
+          updatedUrgencyByTodoId[todoId] = updatedUrgency;
+          changedFields.add('manual_urgency_nudge_score');
+        }
+        break;
+      case SecretaryTodoCommandKind.create:
+      case SecretaryTodoCommandKind.batchUpdate:
+      case SecretaryTodoCommandKind.none:
+        return null;
+    }
+
+    final ok = await markJobSucceededIfCurrentAttempt(
+      SemanticParseJobSucceededArgs(
+        messageId: messageId,
+        appliedActionKind:
+            'todo_command:${todoCommandKindWireValue(command.kind)}',
+        appliedTodoId: todoId,
+        appliedTodoTitle: updatedTitle,
+        appliedPrevTodoStatus:
+            previous.status == updatedStatus ? null : previous.status,
+        nowMs: nowMs,
+      ),
+      expectedAttemptId: expectedAttemptId,
+    );
+    if (!ok) return null;
+
+    final updated = Todo(
+      id: todoId,
+      title: updatedTitle,
+      dueAtMs: updatedDueAtMs,
+      status: updatedStatus,
+      sourceEntryId: previous.sourceEntryId,
+      createdAtMs: previous.createdAtMs,
+      updatedAtMs: nowMs,
+      reviewStage: previous.reviewStage,
+      nextReviewAtMs: previous.nextReviewAtMs,
+      lastReviewAtMs: previous.lastReviewAtMs,
+      manualImportanceNudgeScore: updatedImportance,
+      manualUrgencyNudgeScore: updatedUrgency,
+    );
+    return SecretaryTodoCommandExecutionResult(
+      command: command,
+      applied: changedFields.isNotEmpty,
+      changedFields: changedFields,
+      undo: SecretaryTodoCommandUndoSnapshot.fromTodo(previous),
+      updatedTodo: updated,
+      rejectionReason: changedFields.isEmpty ? 'no_change' : null,
     );
   }
 
