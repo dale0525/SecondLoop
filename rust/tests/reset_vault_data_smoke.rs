@@ -140,6 +140,131 @@ ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 }
 
 #[test]
+fn reset_vault_data_deletes_secretary_runtime_data() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(Path::new(&app_dir), "pw", KdfParams::for_test())
+        .expect("init master password");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let _proposal = db::create_secretary_memory_proposal(
+        &conn,
+        &key,
+        db::NewSecretaryMemoryProposal {
+            source_message_id: Some("m1".to_string()),
+            kind: "preference".to_string(),
+            title: "Morning tasks".to_string(),
+            body: "I prefer important tasks in the morning.".to_string(),
+            confidence: 0.91,
+            source_refs_json: Some(r#"{"message_ids":["m1"]}"#.to_string()),
+            action_hint: Some("propose".to_string()),
+            now_ms: 100,
+        },
+    )
+    .expect("create secretary memory proposal");
+    db::upsert_planning_output(
+        &conn,
+        &key,
+        db::NewPlanningOutput {
+            id: "daily-plan".to_string(),
+            kind: "daily_plan".to_string(),
+            title: "Today".to_string(),
+            body: "Focus".to_string(),
+            items_json: r#"[]"#.to_string(),
+            source_refs_json: Some(r#"{"todo_ids":["t1"]}"#.to_string()),
+            route: "local_rules".to_string(),
+            state: "active".to_string(),
+            created_at_ms: 110,
+            updated_at_ms: 110,
+            expires_at_ms: Some(200),
+        },
+    )
+    .expect("create planning output");
+    let run = db::create_secretary_run(
+        &conn,
+        &key,
+        db::NewSecretaryRun {
+            trigger_kind: "chat".to_string(),
+            route: "local_rules".to_string(),
+            status: "completed".to_string(),
+            input_summary: Some("input".to_string()),
+            output_summary: Some("output".to_string()),
+            error: None,
+            now_ms: 120,
+        },
+    )
+    .expect("create secretary run");
+    let run_id = run.id.clone();
+    db::create_secretary_tool_call(
+        &conn,
+        &key,
+        db::NewSecretaryToolCall {
+            run_id: run_id.clone(),
+            tool_name: "remember".to_string(),
+            status: "completed".to_string(),
+            requires_confirmation: true,
+            input_json: Some(r#"{"proposal":"memory"}"#.to_string()),
+            output_json: Some(r#"{"ok":true}"#.to_string()),
+            now_ms: 130,
+        },
+    )
+    .expect("create secretary tool call");
+
+    assert_eq!(
+        db::list_secretary_memory_proposals(&conn, &key, Some("pending"))
+            .expect("list proposals")
+            .len(),
+        1
+    );
+    assert_eq!(
+        db::list_planning_outputs(&conn, &key, Some("daily_plan"), 150, true)
+            .expect("list planning outputs")
+            .len(),
+        1
+    );
+    assert_eq!(
+        db::list_secretary_tool_calls_for_run(&conn, &key, &run_id)
+            .expect("list tool calls")
+            .len(),
+        1
+    );
+    let tool_call_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM secretary_tool_calls", [], |row| {
+            row.get(0)
+        })
+        .expect("tool call count before reset");
+    assert_eq!(tool_call_count, 1);
+
+    db::reset_vault_data_preserving_llm_profiles(&conn).expect("reset vault data");
+
+    assert_eq!(
+        db::list_secretary_memory_proposals(&conn, &key, None)
+            .expect("list proposals after reset")
+            .len(),
+        0
+    );
+    assert_eq!(
+        db::list_planning_outputs(&conn, &key, Some("daily_plan"), 150, true)
+            .expect("list planning outputs after reset")
+            .len(),
+        0
+    );
+    for table in [
+        "secretary_memory_proposals",
+        "planning_outputs",
+        "secretary_runs",
+        "secretary_tool_calls",
+    ] {
+        let count: i64 = conn
+            .query_row(&format!(r#"SELECT COUNT(*) FROM "{table}""#), [], |row| {
+                row.get(0)
+            })
+            .expect("count secretary table after reset");
+        assert_eq!(count, 0, "{table} should be empty after reset");
+    }
+}
+
+#[test]
 fn reset_vault_data_deletes_external_readonly_import_data() {
     let temp = tempfile::tempdir().expect("tempdir");
     let app_dir = temp.path().join("secondloop");

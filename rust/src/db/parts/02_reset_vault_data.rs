@@ -367,6 +367,10 @@ DELETE FROM knowledge_embeddings;
 DELETE FROM knowledge_index_jobs;
 DELETE FROM knowledge_units;
 DELETE FROM knowledge_documents;
+DELETE FROM secretary_tool_calls;
+DELETE FROM secretary_runs;
+DELETE FROM planning_outputs;
+DELETE FROM secretary_memory_proposals;
 UPDATE knowledge_rebuild_state
 SET status = 'empty',
     rebuild_required = 0,
