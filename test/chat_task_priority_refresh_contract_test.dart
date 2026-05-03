@@ -70,6 +70,69 @@ void main() {
     expect(backend.listTodosCalls, initialListTodosCalls + 1);
     engine.stop();
   });
+
+  testWidgets('sync-created todo refresh shows secretary planning card',
+      (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      TaskPriorityAiEnhancementPrefs.prefsKey: false,
+    });
+    final backend = _TaskPriorityCountingBackend();
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: SyncEngineScope(
+            engine: engine,
+            child: wrapWithI18n(
+              const MaterialApp(
+                home: ChatPage(
+                  conversation: Conversation(
+                    id: 'loop_home',
+                    title: 'Loop',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('secretary_planning_card')), findsNothing);
+
+    final dueAtMs =
+        DateTime.now().add(const Duration(days: 1)).millisecondsSinceEpoch;
+    backend.setTodos(<Todo>[
+      Todo(
+        id: 'todo:m1',
+        title: '明天上午提交验收报告',
+        dueAtMs: dueAtMs,
+        status: 'open',
+        sourceEntryId: 'm1',
+        createdAtMs: 1,
+        updatedAtMs: 1,
+      ),
+    ]);
+    engine.notifyExternalChange();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('secretary_planning_card')), findsOneWidget);
+    engine.stop();
+  });
 }
 
 final class _NoopSyncRunner implements SyncRunner {
@@ -81,24 +144,18 @@ final class _NoopSyncRunner implements SyncRunner {
 }
 
 final class _TaskPriorityCountingBackend extends TestAppBackend {
+  final List<Todo> _todos = <Todo>[];
   int listTodosCalls = 0;
+
+  void setTodos(List<Todo> todos) {
+    _todos
+      ..clear()
+      ..addAll(todos);
+  }
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async {
     listTodosCalls += 1;
-    return const <Todo>[
-      Todo(
-        id: 'focus',
-        title: 'Fix prod issue',
-        dueAtMs: null,
-        status: 'open',
-        sourceEntryId: null,
-        createdAtMs: 0,
-        updatedAtMs: 10,
-        reviewStage: null,
-        nextReviewAtMs: null,
-        lastReviewAtMs: null,
-      ),
-    ];
+    return List<Todo>.from(_todos, growable: false);
   }
 }

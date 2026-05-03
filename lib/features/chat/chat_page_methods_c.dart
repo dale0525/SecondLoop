@@ -86,6 +86,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     final looksLikeTodoRelevant = _looksLikeTodoRelevantForAi(trimmedText);
 
     if (!forceTodoSelectionPrompt &&
+        timeResolution == null &&
         !looksLikeReview &&
         !looksLikeLongFormNote &&
         looksLikeTodoRelevant) {
