@@ -382,7 +382,7 @@ final class _SemanticParseEnabledQuickCaptureBackend extends _UnlockedBackend {
         LlmProfile(
           id: 'p1',
           name: 'BYOK',
-          providerType: 'openai',
+          providerType: 'openai-compatible',
           modelName: 'gpt-4o-mini',
           isActive: true,
           createdAtMs: 0,
