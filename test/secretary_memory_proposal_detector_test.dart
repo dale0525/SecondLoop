@@ -65,5 +65,28 @@ void main() {
         isNull,
       );
     });
+
+    test('weak preference hints are opt-in for AI routing', () {
+      expect(
+        detector.detect(
+          messageId: 'm6',
+          text: '下午开会我效率很差。',
+          createdAtMs: 60,
+        ),
+        isNull,
+      );
+
+      final proposal = detector.detect(
+        messageId: 'm6',
+        text: '下午开会我效率很差。',
+        createdAtMs: 60,
+        includeWeakSignals: true,
+      );
+
+      expect(proposal, isNotNull);
+      expect(proposal!.kind, 'preference');
+      expect(proposal.confidence, lessThan(0.7));
+      expect(proposal.body, contains('下午开会'));
+    });
   });
 }

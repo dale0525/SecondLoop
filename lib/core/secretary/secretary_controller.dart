@@ -38,6 +38,8 @@ class SecretaryController {
   final Set<String> _acceptedProposalSignatures = <String>{};
   final Set<String> _dismissedProposalSignatures = <String>{};
   final Set<String> _dismissedPlanIds = <String>{};
+  static const double _localMemoryHighConfidence = 0.82;
+  static const double _localMemoryPersistConfidence = 0.70;
   static const int _digestMaxSectionItems = 40;
   static const int _digestMaxCaptureItems = 20;
   static const int _digestTitleMaxChars = 160;
@@ -76,10 +78,12 @@ class SecretaryController {
     required int nowMs,
   }) async {
     if (message.role != 'user') return null;
+    final canUseAi = _canEnhanceMemoryWithAi;
     final detected = _detector.detect(
       messageId: message.id,
       text: message.content,
       createdAtMs: platformIntToInt(message.createdAtMs),
+      includeWeakSignals: canUseAi,
     );
     if (detected == null) return null;
 
@@ -89,40 +93,84 @@ class SecretaryController {
           _dismissedProposalSourceIds.contains(message.id)) {
         return null;
       }
-      return detected;
+      return _routedMemoryProposal(key, detected);
     }
 
     final existing = await backend.listSecretaryMemoryProposals(key);
-    final detectedSignature = secretaryMemoryProposalSignature(detected);
+    final existingPages = await backend.listMemoryPages(key);
+    if (existing.any((proposal) => proposal.sourceMessageId == message.id)) {
+      return null;
+    }
+
+    final routed = await _routedMemoryProposal(key, detected);
+    if (routed == null) return null;
+
+    final routedSignature = secretaryMemoryProposalSignature(routed);
     final alreadyTracked = existing.any(
       (proposal) =>
-          proposal.sourceMessageId == message.id ||
           secretaryMemoryProposalSignature(_proposalFromRecord(proposal)) ==
-              detectedSignature,
+          routedSignature,
     );
     if (alreadyTracked) return null;
-    final existingPages = await backend.listMemoryPages(key);
     final alreadySaved = existingPages.any(
       (page) =>
           secretaryMemoryPageSignature(_memoryPageFromRecord(page)) ==
-          detectedSignature,
+          routedSignature,
     );
     if (alreadySaved) return null;
 
     final record = await backend.createSecretaryMemoryProposal(
       key,
-      sourceMessageId: detected.sourceMessageId,
-      kind: detected.kind,
-      title: detected.title,
-      body: detected.body,
-      confidence: detected.confidence,
+      sourceMessageId: routed.sourceMessageId,
+      kind: routed.kind,
+      title: routed.title,
+      body: routed.body,
+      confidence: routed.confidence,
       sourceRefsJson: jsonEncode({
-        'message_ids': [detected.sourceMessageId],
+        'message_ids': [routed.sourceMessageId],
       }),
-      actionHint: detected.actionHint,
+      actionHint: routed.actionHint,
       nowMs: nowMs,
     );
     return _proposalFromRecord(record);
+  }
+
+  bool get _canEnhanceMemoryWithAi =>
+      _aiService != null && _aiRouteConfig.canCallAi;
+
+  Future<SecretaryMemoryProposal?> _routedMemoryProposal(
+    Uint8List key,
+    SecretaryMemoryProposal detected,
+  ) async {
+    if (!_canEnhanceMemoryWithAi ||
+        detected.confidence >= _localMemoryHighConfidence) {
+      return _canPersistLocalMemoryProposal(detected) ? detected : null;
+    }
+
+    final draft = await _aiService!.tryEnhanceMemoryProposal(
+      key,
+      proposal: detected,
+      routeConfig: _aiRouteConfig,
+      timeout: _aiTimeout,
+    );
+    if (draft != null) {
+      return SecretaryMemoryProposal(
+        id: detected.id,
+        sourceMessageId: detected.sourceMessageId,
+        kind: draft.kind,
+        title: draft.title,
+        body: draft.body,
+        confidence: draft.confidence,
+        createdAtMs: detected.createdAtMs,
+        actionHint: detected.actionHint,
+      );
+    }
+
+    return _canPersistLocalMemoryProposal(detected) ? detected : null;
+  }
+
+  bool _canPersistLocalMemoryProposal(SecretaryMemoryProposal proposal) {
+    return proposal.confidence >= _localMemoryPersistConfidence;
   }
 
   Future<List<SecretaryMemoryProposal>> pendingMemoryProposals(

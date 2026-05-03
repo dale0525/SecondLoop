@@ -243,6 +243,30 @@ final class SecretaryAiService {
     );
   }
 
+  Future<SecretaryAiMemoryProposalDraft?> tryEnhanceMemoryProposal(
+    Uint8List key, {
+    required SecretaryMemoryProposal proposal,
+    required SecretaryAiRouteConfig routeConfig,
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    try {
+      final draft = await enhanceMemoryProposal(
+        key,
+        proposal: proposal,
+        routeConfig: routeConfig,
+        timeout: timeout,
+      );
+      final changed = draft.kind != proposal.kind ||
+          draft.title != proposal.title ||
+          draft.body != proposal.body ||
+          draft.confidence > proposal.confidence ||
+          draft.supersedesCandidateIds.isNotEmpty;
+      return changed ? draft : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<String> _runPrompt(
     Uint8List key, {
     required String prompt,

@@ -31,13 +31,18 @@ class MemoryProposalDetector {
     required String messageId,
     required String text,
     required int createdAtMs,
+    bool includeWeakSignals = false,
   }) {
     final trimmed = _normalize(text);
     if (trimmed.length < 6) return null;
     if (_looksLikeExternalAction(trimmed)) return null;
 
     final lower = trimmed.toLowerCase();
-    final match = _matchIntent(lower, trimmed);
+    final match = _matchIntent(
+      lower,
+      trimmed,
+      includeWeakSignals: includeWeakSignals,
+    );
     if (match == null) return null;
 
     final body = _cleanMemoryBody(match.body);
@@ -55,7 +60,11 @@ class MemoryProposalDetector {
     );
   }
 
-  _MemoryIntentMatch? _matchIntent(String lower, String original) {
+  _MemoryIntentMatch? _matchIntent(
+    String lower,
+    String original, {
+    required bool includeWeakSignals,
+  }) {
     final rememberPatterns = <String>[
       'remember that',
       'please remember',
@@ -69,7 +78,7 @@ class MemoryProposalDetector {
       return _MemoryIntentMatch(
         kind: _kindFor(body),
         body: body,
-        confidence: 0.88,
+        confidence: 0.9,
       );
     }
 
@@ -84,7 +93,7 @@ class MemoryProposalDetector {
       return _MemoryIntentMatch(
         kind: 'preference',
         body: original,
-        confidence: 0.82,
+        confidence: 0.84,
       );
     }
 
@@ -100,8 +109,17 @@ class MemoryProposalDetector {
       return _MemoryIntentMatch(
         kind: _kindFor(original),
         body: original,
-        confidence: 0.8,
+        confidence: 0.74,
         actionHint: 'update',
+      );
+    }
+
+    if (includeWeakSignals && _looksLikeWeakPreference(lower)) {
+      return _MemoryIntentMatch(
+        kind: 'preference',
+        body: original,
+        confidence: 0.58,
+        actionHint: 'enhance',
       );
     }
 
@@ -154,6 +172,50 @@ class MemoryProposalDetector {
       '付款',
     ];
     return blocked.any(lower.startsWith);
+  }
+
+  bool _looksLikeWeakPreference(String lower) {
+    final hasPreferenceCue = _containsAny(lower, const [
+      'works better for me',
+      'works worse for me',
+      'better for me',
+      'worse for me',
+      'hard for me',
+      'easier for me',
+      'i am more productive',
+      'i am less productive',
+      '效率',
+      '不适合',
+      '更容易',
+      '更难',
+      '很差',
+      '很低',
+      '不太行',
+    ]);
+    if (!hasPreferenceCue) return false;
+
+    return _containsAny(lower, const [
+      'morning',
+      'afternoon',
+      'evening',
+      'night',
+      'meeting',
+      'meetings',
+      'work',
+      'task',
+      '上午',
+      '早上',
+      '下午',
+      '晚上',
+      '开会',
+      '会议',
+      '工作',
+      '任务',
+    ]);
+  }
+
+  bool _containsAny(String lower, List<String> needles) {
+    return needles.any((needle) => needle.isNotEmpty && lower.contains(needle));
   }
 
   String _normalize(String text) => text.replaceAll(RegExp(r'\s+'), ' ').trim();
