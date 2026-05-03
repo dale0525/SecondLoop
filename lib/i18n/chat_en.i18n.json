@@ -330,6 +330,38 @@
         "missingNextAction": "Missing next action"
       }
     },
+    "todoCommand": {
+      "cardTitle": "Todo change needs review",
+      "review": "Review",
+      "confirm": "Confirm",
+      "confirmDelete": "Confirm delete",
+      "pageTitle": "Todo changes",
+      "pendingSection": "Pending changes",
+      "empty": "No todo changes to review.",
+      "appliedSnack": "Todo change applied.",
+      "ignoredSnack": "Todo change ignored.",
+      "failedSnack": "Could not apply todo change.",
+      "unknownTarget": "this task",
+      "unknownTime": "the selected time",
+      "preview": {
+        "rename": "Rename $from -> $to",
+        "delete": "Delete $title",
+        "move": "Move $title to $time",
+        "status": "Mark $title as $status",
+        "priorityUp": "Make $title more important",
+        "priorityDown": "Make $title less important",
+        "priorityUrgentUp": "Make $title more urgent",
+        "priorityUrgentDown": "Make $title less urgent",
+        "unsupported": "Review todo command"
+      },
+      "status": {
+        "done": "done",
+        "inProgress": "in progress",
+        "dismissed": "dismissed",
+        "open": "open",
+        "unknown": "updated"
+      }
+    },
     "review": {
       "empty": "Nothing to review."
     }

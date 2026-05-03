@@ -112,6 +112,21 @@ extension _ChatPageStateSecretary on _ChatPageState {
       );
     }
 
+    final todoCommands = _pendingSecretaryTodoCommands(messages, snapshot);
+    if (todoCommands.isNotEmpty) {
+      final command = todoCommands.first;
+      cards.add(
+        ChatSecretaryTodoCommandCard(
+          command: command,
+          onApply: secretaryTodoCommandCanApplyFromCard(command)
+              ? () => unawaited(_applySecretaryTodoCommand(command))
+              : () => _openTodoCommandReview(todoCommands),
+          onReview: () => _openTodoCommandReview(todoCommands),
+          onIgnore: () => _ignoreSecretaryTodoCommand(command),
+        ),
+      );
+    }
+
     final plan = _secretaryPlanFromSnapshot(snapshot);
     if (plan != null && !_ignoredSecretaryPlanIds.contains(plan.id)) {
       unawaited(_persistSecretaryPlan(plan));
@@ -126,6 +141,72 @@ extension _ChatPageStateSecretary on _ChatPageState {
     }
 
     return cards;
+  }
+
+  List<SecretaryTodoCommand> _pendingSecretaryTodoCommands(
+    List<Message> messages,
+    TaskPrioritySnapshot? snapshot,
+  ) {
+    if (snapshot == null || snapshot.activeEntries.isEmpty) {
+      return const <SecretaryTodoCommand>[];
+    }
+
+    final targetsById = <String, TodoLinkTarget>{};
+    for (final entry in snapshot.activeEntries) {
+      final todo = entry.todo;
+      final status = todo.status.trim();
+      if (status == 'done' || status == 'dismissed') continue;
+      final dueAtMs = platformIntToNullableInt(todo.dueAtMs);
+      targetsById[todo.id] = TodoLinkTarget(
+        id: todo.id,
+        title: todo.title,
+        status: status,
+        dueLocal: dueAtMs == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(dueAtMs).toLocal(),
+      );
+    }
+    if (targetsById.isEmpty) return const <SecretaryTodoCommand>[];
+
+    final locale = Localizations.localeOf(context);
+    final recentUserMessages = messages
+        .where((message) => message.role == 'user')
+        .toList(growable: false)
+      ..sort(
+        (a, b) => platformIntToInt(b.createdAtMs)
+            .compareTo(platformIntToInt(a.createdAtMs)),
+      );
+
+    final commandsById = <String, SecretaryTodoCommand>{};
+    for (final message in recentUserMessages.take(40)) {
+      if (_appliedSecretaryTodoCommandIds.contains(message.id) ||
+          _ignoredSecretaryTodoCommandIds.contains(message.id)) {
+        continue;
+      }
+
+      final parsed = LocalTodoCommandParser.parse(
+        messageId: message.id,
+        text: message.content,
+        nowLocal: DateTime.now(),
+        locale: locale,
+        openTodoTargets: targetsById.values.toList(growable: false),
+      );
+      final command = parsed.command;
+      if (command == null) continue;
+      if (_appliedSecretaryTodoCommandIds.contains(command.id) ||
+          _ignoredSecretaryTodoCommandIds.contains(command.id)) {
+        continue;
+      }
+
+      final risk = const SecretaryTodoCommandRiskPolicy().classify(command);
+      if (risk != SecretaryTodoCommandRisk.review &&
+          risk != SecretaryTodoCommandRisk.confirm) {
+        continue;
+      }
+      commandsById[command.id] = command;
+    }
+
+    return commandsById.values.toList(growable: false);
   }
 
   SecretaryPlan? _secretaryPlanFromSnapshot(TaskPrioritySnapshot? snapshot) {
@@ -351,6 +432,101 @@ extension _ChatPageStateSecretary on _ChatPageState {
     _ignoreSecretaryPlan(plan);
     _scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(content: Text(context.t.chat.secretary.planning.hiddenSnack)),
+    );
+  }
+
+  Future<void> _applySecretaryTodoCommand(
+    SecretaryTodoCommand command,
+  ) async {
+    final backend = AppBackendScope.of(context);
+    final session = SessionScope.maybeOf(context);
+    if (session == null) return;
+
+    final result = await TodoCommandExecutor(
+      backend: backend,
+      sessionKey: Uint8List.fromList(session.sessionKey),
+    ).execute(command, confirmed: true);
+    if (!mounted) return;
+
+    if (result.applied) {
+      _setState(() {
+        _appliedSecretaryTodoCommandIds.add(command.id);
+        _appliedSecretaryTodoCommandIds.add(command.sourceMessageId);
+      });
+      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      _refresh(refreshTaskPriority: true);
+      _scaffoldMessengerKey.currentState
+        ?..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(context.t.chat.secretary.todoCommand.appliedSnack),
+          ),
+        );
+      return;
+    }
+
+    _scaffoldMessengerKey.currentState
+      ?..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(context.t.chat.secretary.todoCommand.failedSnack),
+        ),
+      );
+  }
+
+  void _ignoreSecretaryTodoCommand(SecretaryTodoCommand command) {
+    _setState(() {
+      _ignoredSecretaryTodoCommandIds.add(command.id);
+      _ignoredSecretaryTodoCommandIds.add(command.sourceMessageId);
+    });
+  }
+
+  Future<void> _openTodoCommandReview(
+    List<SecretaryTodoCommand> commands,
+  ) async {
+    if (commands.isEmpty) return;
+    final backend = AppBackendScope.of(context);
+    final session = SessionScope.maybeOf(context);
+    if (session == null) return;
+
+    final page = TodoCommandReviewPage(
+      commands: commands,
+      executor: TodoCommandExecutor(
+        backend: backend,
+        sessionKey: Uint8List.fromList(session.sessionKey),
+      ),
+      onApplied: (result) {
+        final command = result.command;
+        _setState(() {
+          _appliedSecretaryTodoCommandIds.add(command.id);
+          _appliedSecretaryTodoCommandIds.add(command.sourceMessageId);
+        });
+        SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+        _refresh(refreshTaskPriority: true);
+      },
+      onIgnored: _ignoreSecretaryTodoCommand,
+    );
+
+    if (!_isDesktopPlatform &&
+        MediaQuery.sizeOf(context).width < 600 &&
+        commands.length == 1) {
+      await _showModalBottomSheetFromChat<void>(
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (sheetContext) {
+          return SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.72,
+            child: page,
+          );
+        },
+      );
+      return;
+    }
+
+    await _pushRouteFromChat(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(context, page),
+      ),
     );
   }
 

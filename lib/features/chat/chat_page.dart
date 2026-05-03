@@ -37,10 +37,14 @@ import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/platform/app_platform_capability_scope.dart';
+import '../../core/secretary/local_todo_command_parser.dart';
 import '../../core/secretary/memory_proposal_detector.dart';
 import '../../core/secretary/rule_based_planning_engine.dart';
 import '../../core/secretary/secretary_controller.dart';
 import '../../core/secretary/secretary_models.dart';
+import '../../core/secretary/todo_command_executor.dart';
+import '../../core/secretary/todo_command_models.dart';
+import '../../core/secretary/todo_command_risk_policy.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
@@ -113,6 +117,7 @@ import '../share/share_draft_inbox.dart';
 import '../secretary/chat_secretary_cards.dart';
 import '../secretary/memory_review_page.dart';
 import '../secretary/planning_review_page.dart';
+import '../secretary/todo_command_review_page.dart';
 import 'attachment_annotation_job_ui_state.dart';
 import 'chat_answer_citation_controller.dart';
 import 'chat_answer_evidence_parser.dart';
@@ -457,6 +462,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final Set<String> _acceptedSecretaryMemorySignatures = <String>{};
   final Set<String> _ignoredSecretaryMemorySignatures = <String>{};
   final Set<String> _ignoredSecretaryPlanIds = <String>{};
+  final Set<String> _appliedSecretaryTodoCommandIds = <String>{};
+  final Set<String> _ignoredSecretaryTodoCommandIds = <String>{};
   final List<SecretaryMemoryProposal> _persistedSecretaryMemoryProposals =
       <SecretaryMemoryProposal>[];
   final List<SecretaryMemoryPage> _acceptedSecretaryMemories =

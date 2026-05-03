@@ -330,6 +330,38 @@
         "missingNextAction": "缺少下一步"
       }
     },
+    "todoCommand": {
+      "cardTitle": "待办变更需要复核",
+      "review": "复核",
+      "confirm": "确认",
+      "confirmDelete": "确认删除",
+      "pageTitle": "待办变更",
+      "pendingSection": "待处理变更",
+      "empty": "没有需要复核的待办变更。",
+      "appliedSnack": "已应用待办变更。",
+      "ignoredSnack": "已忽略待办变更。",
+      "failedSnack": "无法应用待办变更。",
+      "unknownTarget": "这个事项",
+      "unknownTime": "选定时间",
+      "preview": {
+        "rename": "重命名 $from -> $to",
+        "delete": "删除 $title",
+        "move": "将 $title 移到 $time",
+        "status": "将 $title 标记为$status",
+        "priorityUp": "提高 $title 的重要性",
+        "priorityDown": "降低 $title 的重要性",
+        "priorityUrgentUp": "提高 $title 的紧急度",
+        "priorityUrgentDown": "降低 $title 的紧急度",
+        "unsupported": "复核待办命令"
+      },
+      "status": {
+        "done": "完成",
+        "inProgress": "进行中",
+        "dismissed": "已删除",
+        "open": "未完成",
+        "unknown": "更新状态"
+      }
+    },
     "review": {
       "empty": "没有需要复核的内容。"
     }
