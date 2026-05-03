@@ -3,6 +3,8 @@ import 'package:flutter/widgets.dart';
 import '../../features/actions/todo/message_action_resolver.dart';
 import '../../features/actions/todo/todo_linking.dart';
 import '../../features/actions/todo/todo_thread_match.dart';
+import '../secretary/local_todo_command_parser.dart';
+import '../secretary/todo_command_models.dart';
 import 'semantic_parse_edit_policy.dart';
 import 'local_semantic_parse_result.dart';
 import 'temporal/temporal_engine.dart';
@@ -11,6 +13,7 @@ import 'temporal/temporal_resolution.dart';
 final class LocalSemanticParser {
   static LocalSemanticParseResult parse({
     required String text,
+    String messageId = 'local',
     required DateTime nowLocal,
     required Locale locale,
     required List<TodoLinkTarget> openTodoTargets,
@@ -40,6 +43,50 @@ final class LocalSemanticParser {
       dayEndMinutes: dayEndMinutes,
       morningMinutes: morningMinutes,
     );
+
+    final todoCommandParse = LocalTodoCommandParser.parse(
+      messageId: messageId,
+      text: raw,
+      nowLocal: nowLocal,
+      locale: locale,
+      openTodoTargets: openTodoTargets,
+      dayEndMinutes: dayEndMinutes,
+      morningMinutes: morningMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
+      semanticMatches: semanticMatches,
+    );
+    final todoCommand = todoCommandParse.command;
+    if (todoCommandParse.isAmbiguous) {
+      return LocalSemanticParseResult(
+        kind: LocalSemanticParseKind.none,
+        confidence: 0.45,
+        resolver: SemanticResolver.local,
+        diagnostics: LocalSemanticParseDiagnostics(
+          localIntent: 'ambiguous_todo_command',
+          hasDueSignal: dueForCreate.dueAtLocal != null,
+          temporalNeedsEnhancement: dueForCreate.metadata.needsEnhancement,
+          looksLikeFollowupEdit: followupEditCue,
+          todoCommandIntent: 'ambiguous',
+          todoCommandNeedsEnhancement: true,
+          todoCommandAmbiguous: true,
+        ),
+      );
+    }
+    if (todoCommand != null && _shouldExposeAsTodoCommand(todoCommand.kind)) {
+      return LocalSemanticParseResult(
+        kind: LocalSemanticParseKind.none,
+        confidence: todoCommand.confidence,
+        resolver: SemanticResolver.local,
+        todoCommand: todoCommand,
+        diagnostics: LocalSemanticParseDiagnostics(
+          localIntent: 'todo_command',
+          hasDueSignal: todoCommand.dueAtMs != null,
+          looksLikeFollowupEdit: followupEditCue,
+          todoCommandIntent: _todoCommandIntent(todoCommand.kind),
+          todoCommandNeedsEnhancement: false,
+        ),
+      );
+    }
 
     final decision = MessageActionResolver.resolve(
       raw,
@@ -148,5 +195,33 @@ final class LocalSemanticParser {
           ),
         );
     }
+  }
+
+  static bool _shouldExposeAsTodoCommand(SecretaryTodoCommandKind kind) {
+    return switch (kind) {
+      SecretaryTodoCommandKind.updateTitle ||
+      SecretaryTodoCommandKind.dismiss ||
+      SecretaryTodoCommandKind.reprioritize =>
+        true,
+      SecretaryTodoCommandKind.create ||
+      SecretaryTodoCommandKind.reschedule ||
+      SecretaryTodoCommandKind.setStatus ||
+      SecretaryTodoCommandKind.batchUpdate ||
+      SecretaryTodoCommandKind.none =>
+        false,
+    };
+  }
+
+  static String _todoCommandIntent(SecretaryTodoCommandKind kind) {
+    return switch (kind) {
+      SecretaryTodoCommandKind.create => 'create',
+      SecretaryTodoCommandKind.updateTitle => 'update_title',
+      SecretaryTodoCommandKind.reschedule => 'reschedule',
+      SecretaryTodoCommandKind.setStatus => 'set_status',
+      SecretaryTodoCommandKind.dismiss => 'dismiss',
+      SecretaryTodoCommandKind.reprioritize => 'reprioritize',
+      SecretaryTodoCommandKind.batchUpdate => 'batch_update',
+      SecretaryTodoCommandKind.none => 'none',
+    };
   }
 }

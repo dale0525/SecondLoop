@@ -1,4 +1,5 @@
 import '../../features/actions/todo/message_action_resolver.dart';
+import '../secretary/todo_command_models.dart';
 
 enum LocalSemanticParseKind { none, create, followup }
 
@@ -12,6 +13,9 @@ final class LocalSemanticParseDiagnostics {
     this.temporalNeedsEnhancement = false,
     this.semanticNeedsEnhancement = false,
     this.looksLikeFollowupEdit = false,
+    this.todoCommandIntent = 'none',
+    this.todoCommandNeedsEnhancement = false,
+    this.todoCommandAmbiguous = false,
   });
 
   final String localIntent;
@@ -20,6 +24,9 @@ final class LocalSemanticParseDiagnostics {
   final bool temporalNeedsEnhancement;
   final bool semanticNeedsEnhancement;
   final bool looksLikeFollowupEdit;
+  final String todoCommandIntent;
+  final bool todoCommandNeedsEnhancement;
+  final bool todoCommandAmbiguous;
 }
 
 final class LocalSemanticParseResult {
@@ -35,6 +42,7 @@ final class LocalSemanticParseResult {
     this.taskType,
     this.suggestedTags = const <String>[],
     this.tagConfidence = 0,
+    this.todoCommand,
     this.diagnostics = const LocalSemanticParseDiagnostics(),
   });
 
@@ -49,5 +57,6 @@ final class LocalSemanticParseResult {
   final String? taskType;
   final List<String> suggestedTags;
   final double tagConfidence;
+  final SecretaryTodoCommand? todoCommand;
   final LocalSemanticParseDiagnostics diagnostics;
 }
