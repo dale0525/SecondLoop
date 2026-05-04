@@ -98,6 +98,86 @@ void main() {
     expect(backend.current.status, 'dismissed');
     expect(backend.transitionTodoCalls, 1);
   });
+
+  testWidgets('edit action invokes callback without mutating the todo',
+      (tester) async {
+    final backend = _TodoCommandBackend(
+      _todo(id: 'todo:invoice', title: 'Submit invoice'),
+    );
+    SecretaryTodoCommand? edited;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: TodoCommandReviewPage(
+            commands: [_renameCommand()],
+            executor: TodoCommandExecutor(
+              backend: backend,
+              sessionKey: Uint8List(32),
+            ),
+            onEdit: (command) => edited = command,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_command_review_edit_cmd-rename')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(edited?.id, 'cmd-rename');
+    expect(backend.current.title, 'Submit invoice');
+    expect(backend.upsertTodoCalls, 0);
+  });
+
+  testWidgets('cancel closes review page without mutating the todo',
+      (tester) async {
+    final backend = _TodoCommandBackend(
+      _todo(id: 'todo:invoice', title: 'Submit invoice'),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              return Scaffold(
+                body: TextButton(
+                  key: const ValueKey('open_review'),
+                  onPressed: () {
+                    Navigator.of(context).push<void>(
+                      MaterialPageRoute(
+                        builder: (_) => TodoCommandReviewPage(
+                          commands: [_renameCommand()],
+                          executor: TodoCommandExecutor(
+                            backend: backend,
+                            sessionKey: Uint8List(32),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('Open review'),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open_review')));
+    await tester.pumpAndSettle();
+    expect(find.text('Todo changes'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('todo_command_review_cancel')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Open review'), findsOneWidget);
+    expect(backend.current.title, 'Submit invoice');
+    expect(backend.upsertTodoCalls, 0);
+  });
 }
 
 SecretaryTodoCommand _renameCommand() {

@@ -17,6 +17,7 @@ class TodoCommandReviewPage extends StatefulWidget {
     this.onApplied,
     this.onIgnored,
     this.onEdit,
+    this.onCancel,
     super.key,
   });
 
@@ -25,6 +26,7 @@ class TodoCommandReviewPage extends StatefulWidget {
   final ValueChanged<SecretaryTodoCommandExecutionResult>? onApplied;
   final ValueChanged<SecretaryTodoCommand>? onIgnored;
   final ValueChanged<SecretaryTodoCommand>? onEdit;
+  final VoidCallback? onCancel;
 
   @override
   State<TodoCommandReviewPage> createState() => _TodoCommandReviewPageState();
@@ -45,9 +47,13 @@ class _TodoCommandReviewPageState extends State<TodoCommandReviewPage> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: pending.isEmpty
-              ? Center(child: Text(t.empty))
-              : SecretaryReviewSection(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (pending.isEmpty)
+                Center(child: Text(t.empty))
+              else
+                SecretaryReviewSection(
                   title: t.pendingSection,
                   count: pending.length,
                   children: [
@@ -62,6 +68,19 @@ class _TodoCommandReviewPageState extends State<TodoCommandReviewPage> {
                       ),
                   ],
                 ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SlButton(
+                  buttonKey: const ValueKey('todo_command_review_cancel'),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  variant: SlButtonVariant.outline,
+                  onPressed: _cancel,
+                  child: Text(context.t.common.actions.cancel),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -99,6 +118,11 @@ class _TodoCommandReviewPageState extends State<TodoCommandReviewPage> {
         SnackBar(
             content: Text(context.t.chat.secretary.todoCommand.ignoredSnack)),
       );
+  }
+
+  void _cancel() {
+    widget.onCancel?.call();
+    Navigator.of(context).maybePop();
   }
 }
 

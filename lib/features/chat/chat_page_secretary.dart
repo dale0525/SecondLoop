@@ -123,6 +123,7 @@ extension _ChatPageStateSecretary on _ChatPageState {
               : () => _openTodoCommandReview(todoCommands),
           onReview: () => _openTodoCommandReview(todoCommands),
           onIgnore: () => _ignoreSecretaryTodoCommand(command),
+          onEdit: () => unawaited(_editSecretaryTodoCommand(command)),
         ),
       );
     }
@@ -481,6 +482,14 @@ extension _ChatPageStateSecretary on _ChatPageState {
     });
   }
 
+  Future<void> _editSecretaryTodoCommand(
+    SecretaryTodoCommand command,
+  ) async {
+    final targetTodoId = command.targetTodoId?.trim();
+    if (targetTodoId == null || targetTodoId.isEmpty) return;
+    await _openTodoById(targetTodoId);
+  }
+
   Future<void> _openTodoCommandReview(
     List<SecretaryTodoCommand> commands,
   ) async {
@@ -505,6 +514,7 @@ extension _ChatPageStateSecretary on _ChatPageState {
         _refresh(refreshTaskPriority: true);
       },
       onIgnored: _ignoreSecretaryTodoCommand,
+      onEdit: (command) => unawaited(_editSecretaryTodoCommand(command)),
     );
 
     if (!_isDesktopPlatform &&
