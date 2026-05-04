@@ -253,9 +253,9 @@ extension _ChatPageStateSecretary on _ChatPageState {
     final secretaryBackend = backendAny as SecretaryBackend;
     final session = SessionScope.maybeOf(context);
     if (session == null) return;
-    final controller = _secretaryControllerFor(secretaryBackend);
     final syncGeneration = _secretaryMemorySyncGeneration;
-    final proposal = await controller.persistMemoryProposalForMessage(
+    final proposal = await _persistSecretaryMemoryProposalOnce(
+      secretaryBackend,
       Uint8List.fromList(session.sessionKey),
       message,
       nowMs: DateTime.now().millisecondsSinceEpoch,
@@ -290,12 +290,12 @@ extension _ChatPageStateSecretary on _ChatPageState {
     final backendAny = AppBackendScope.maybeOf(context);
     if (backendAny is! SecretaryBackend) return;
     final secretaryBackend = backendAny as SecretaryBackend;
-    final controller = _secretaryControllerFor(secretaryBackend);
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final syncGeneration = _secretaryMemorySyncGeneration;
     for (final message in messages.take(40)) {
       if (syncGeneration != _secretaryMemorySyncGeneration) return;
-      final proposal = await controller.persistMemoryProposalForMessage(
+      final proposal = await _persistSecretaryMemoryProposalOnce(
+        secretaryBackend,
         sessionKey,
         message,
         nowMs: nowMs,
@@ -311,13 +311,36 @@ extension _ChatPageStateSecretary on _ChatPageState {
         return;
       }
     }
-    final pending = await controller.pendingMemoryProposals(sessionKey);
+    final pending =
+        await _secretaryControllerFor(secretaryBackend).pendingMemoryProposals(
+      sessionKey,
+    );
     if (!mounted || syncGeneration != _secretaryMemorySyncGeneration) return;
     _setState(() {
       _persistedSecretaryMemoryProposals
         ..clear()
         ..addAll(pending);
     });
+  }
+
+  Future<SecretaryMemoryProposal?> _persistSecretaryMemoryProposalOnce(
+    SecretaryBackend backend,
+    Uint8List sessionKey,
+    Message message, {
+    required int nowMs,
+  }) async {
+    if (message.role != 'user') return null;
+    if (!_persistingSecretaryMemorySourceIds.add(message.id)) return null;
+    try {
+      return await _secretaryControllerFor(backend)
+          .persistMemoryProposalForMessage(
+        sessionKey,
+        message,
+        nowMs: nowMs,
+      );
+    } finally {
+      _persistingSecretaryMemorySourceIds.remove(message.id);
+    }
   }
 
   Future<void> _dismissStaleSecretaryMemoryProposal(

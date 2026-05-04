@@ -461,6 +461,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final Set<String> _ignoredSecretaryMemorySourceIds = <String>{};
   final Set<String> _acceptedSecretaryMemorySignatures = <String>{};
   final Set<String> _ignoredSecretaryMemorySignatures = <String>{};
+  final Set<String> _persistingSecretaryMemorySourceIds = <String>{};
   final Set<String> _ignoredSecretaryPlanIds = <String>{};
   final Set<String> _appliedSecretaryTodoCommandIds = <String>{};
   final Set<String> _ignoredSecretaryTodoCommandIds = <String>{};
