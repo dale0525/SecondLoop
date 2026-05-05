@@ -41,6 +41,7 @@ import '../../core/secretary/local_todo_command_parser.dart';
 import '../../core/secretary/memory_proposal_detector.dart';
 import '../../core/secretary/rule_based_planning_engine.dart';
 import '../../core/secretary/secretary_controller.dart';
+import '../../core/secretary/internal_tool_registry.dart';
 import '../../core/secretary/secretary_models.dart';
 import '../../core/secretary/todo_command_executor.dart';
 import '../../core/secretary/todo_command_models.dart';

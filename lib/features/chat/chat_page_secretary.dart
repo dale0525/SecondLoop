@@ -332,12 +332,35 @@ extension _ChatPageStateSecretary on _ChatPageState {
     if (message.role != 'user') return null;
     if (!_persistingSecretaryMemorySourceIds.add(message.id)) return null;
     try {
-      return await _secretaryControllerFor(backend)
+      final proposal = await _secretaryControllerFor(backend)
           .persistMemoryProposalForMessage(
         sessionKey,
         message,
         nowMs: nowMs,
       );
+      if (proposal != null) {
+        await _recordSecretaryAudit(
+          backend: backend,
+          sessionKey: sessionKey,
+          triggerKind: 'capture',
+          route: 'local_rules',
+          toolName: 'memory.propose',
+          status: 'succeeded',
+          inputSummary: 'message:${message.id}',
+          outputSummary: proposal.title,
+          inputJson: jsonEncode(<String, Object?>{
+            'message_id': message.id,
+            'text': message.content,
+          }),
+          outputJson: jsonEncode(<String, Object?>{
+            'proposal_id': proposal.id,
+            'source_message_id': proposal.sourceMessageId,
+            'kind': proposal.kind,
+            'title': proposal.title,
+          }),
+        );
+      }
+      return proposal;
     } finally {
       _persistingSecretaryMemorySourceIds.remove(message.id);
     }
@@ -470,6 +493,11 @@ extension _ChatPageStateSecretary on _ChatPageState {
       backend: backend,
       sessionKey: Uint8List.fromList(session.sessionKey),
     ).execute(command, confirmed: true);
+    await _recordSecretaryTodoCommandAudit(
+      backend,
+      Uint8List.fromList(session.sessionKey),
+      result,
+    );
     if (!mounted) return;
 
     if (result.applied) {
@@ -520,14 +548,18 @@ extension _ChatPageStateSecretary on _ChatPageState {
     final backend = AppBackendScope.of(context);
     final session = SessionScope.maybeOf(context);
     if (session == null) return;
+    final sessionKey = Uint8List.fromList(session.sessionKey);
 
     final page = TodoCommandReviewPage(
       commands: commands,
       executor: TodoCommandExecutor(
         backend: backend,
-        sessionKey: Uint8List.fromList(session.sessionKey),
+        sessionKey: sessionKey,
       ),
       onApplied: (result) {
+        unawaited(
+          _recordSecretaryTodoCommandAudit(backend, sessionKey, result),
+        );
         final command = result.command;
         _setState(() {
           _appliedSecretaryTodoCommandIds.add(command.id);
@@ -663,6 +695,97 @@ extension _ChatPageStateSecretary on _ChatPageState {
       expiresAtMs:
           DateTime.now().add(const Duration(days: 1)).millisecondsSinceEpoch,
     );
+    await _recordSecretaryAudit(
+      backend: secretaryBackend,
+      sessionKey: Uint8List.fromList(session.sessionKey),
+      triggerKind: 'manual',
+      route: plan.route,
+      toolName: 'plan.generate',
+      status: 'succeeded',
+      inputSummary: 'local daily plan',
+      outputSummary: plan.title,
+      inputJson: jsonEncode(<String, Object?>{
+        'plan_id': plan.id,
+        'todo_ids': [for (final item in plan.sections.allItems) item.todoId],
+      }),
+      outputJson: jsonEncode(<String, Object?>{
+        'plan_id': plan.id,
+        'item_count': plan.itemCount,
+        'todo_ids': [for (final item in plan.sections.allItems) item.todoId],
+      }),
+    );
+  }
+
+  Future<void> _recordSecretaryTodoCommandAudit(
+    AppBackend backend,
+    Uint8List sessionKey,
+    SecretaryTodoCommandExecutionResult result,
+  ) async {
+    if (backend is! SecretaryBackend) return;
+    final command = result.command;
+    await _recordSecretaryAudit(
+      backend: backend as SecretaryBackend,
+      sessionKey: sessionKey,
+      triggerKind: 'manual',
+      route: _secretaryRouteForTodoCommand(command.route),
+      toolName: secretaryToolNameForTodoCommand(command.kind),
+      status: result.applied ? 'succeeded' : 'failed',
+      inputSummary: 'message:${command.sourceMessageId}',
+      outputSummary: result.appliedActionKind,
+      inputJson: jsonEncode(command.toJson()),
+      outputJson: result.toAuditOutputJson(),
+    );
+  }
+
+  Future<void> _recordSecretaryAudit({
+    required SecretaryBackend backend,
+    required Uint8List sessionKey,
+    required String triggerKind,
+    required String route,
+    required String toolName,
+    required String status,
+    String? inputSummary,
+    String? outputSummary,
+    String? inputJson,
+    String? outputJson,
+    String? error,
+  }) async {
+    try {
+      final tool = SecretaryInternalToolRegistry.defaults().require(toolName);
+      await BackendSecretaryAuditRecorder(
+        backend: backend,
+        sessionKey: sessionKey,
+      ).recordRun(
+        SecretaryAuditRunDraft(
+          triggerKind: triggerKind,
+          route: route,
+          status: status,
+          inputSummary: inputSummary,
+          outputSummary: outputSummary,
+          error: error,
+          nowMs: DateTime.now().millisecondsSinceEpoch,
+          toolCalls: [
+            SecretaryToolCallDraft(
+              toolName: toolName,
+              status: status,
+              requiresConfirmation: tool.requiresConfirmation,
+              inputJson: inputJson,
+              outputJson: outputJson,
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      // Audit failures must not block the user-visible local action.
+    }
+  }
+
+  String _secretaryRouteForTodoCommand(SecretaryTodoCommandRoute route) {
+    return switch (route) {
+      SecretaryTodoCommandRoute.local => 'local_rules',
+      SecretaryTodoCommandRoute.byok => 'byok',
+      SecretaryTodoCommandRoute.cloud => 'cloud',
+    };
   }
 
   String _secretaryPlanSummaryText(

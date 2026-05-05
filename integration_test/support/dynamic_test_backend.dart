@@ -56,6 +56,12 @@ final class DynamicTestBackend extends TestAppBackend
   List<PlanningOutputRecord> get planningOutputs =>
       _planningOutputs.values.toList(growable: false);
 
+  List<SecretaryRunRecord> get secretaryRuns =>
+      _secretaryRuns.toList(growable: false);
+
+  List<SecretaryToolCallRecord> get secretaryToolCalls =>
+      _secretaryToolCalls.toList(growable: false);
+
   Todo? todoById(String id) => _todosById[id];
 
   static Todo todo({
@@ -65,6 +71,8 @@ final class DynamicTestBackend extends TestAppBackend
     int? dueAtMs,
     int createdAtMs = 1000,
     int updatedAtMs = 1000,
+    int manualImportanceNudgeScore = 0,
+    int manualUrgencyNudgeScore = 0,
   }) {
     return Todo(
       id: id,
@@ -77,8 +85,12 @@ final class DynamicTestBackend extends TestAppBackend
       reviewStage: null,
       nextReviewAtMs: null,
       lastReviewAtMs: null,
-      manualImportanceNudgeScore: platformIntFromInt(0),
-      manualUrgencyNudgeScore: platformIntFromInt(0),
+      manualImportanceNudgeScore: platformIntFromInt(
+        manualImportanceNudgeScore,
+      ),
+      manualUrgencyNudgeScore: platformIntFromInt(
+        manualUrgencyNudgeScore,
+      ),
     );
   }
 

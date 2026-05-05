@@ -84,8 +84,31 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     if (!mounted) return;
     final looksLikeLongFormNote = isLongTextForTodoAutomation(trimmedText);
     final looksLikeTodoRelevant = _looksLikeTodoRelevantForAi(trimmedText);
+    final localSecretaryTodoCommandParse = LocalTodoCommandParser.parse(
+      messageId: message.id,
+      text: rawText,
+      nowLocal: nowLocal,
+      locale: locale,
+      openTodoTargets: targets,
+      dayEndMinutes: settings.dayEndMinutes,
+      morningMinutes: settings.morningMinutes,
+      firstDayOfWeekIndex: firstDayOfWeekIndex,
+      semanticMatches: semanticMatches,
+    );
+    final localSecretaryTodoCommand = localSecretaryTodoCommandParse.command;
+    final localSecretaryTodoCommandRisk = localSecretaryTodoCommand == null
+        ? null
+        : const SecretaryTodoCommandRiskPolicy().classify(
+            localSecretaryTodoCommand,
+          );
+    final hasLocalSecretaryTodoCommand = localSecretaryTodoCommand != null &&
+        localSecretaryTodoCommandRisk != SecretaryTodoCommandRisk.reject;
+    final shouldReserveForSecretaryTodoReview =
+        localSecretaryTodoCommandRisk == SecretaryTodoCommandRisk.review ||
+            localSecretaryTodoCommandRisk == SecretaryTodoCommandRisk.confirm;
 
     if (!forceTodoSelectionPrompt &&
+        !hasLocalSecretaryTodoCommand &&
         timeResolution == null &&
         !looksLikeReview &&
         !looksLikeLongFormNote &&
@@ -146,6 +169,10 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     if (forceTodoSelectionPrompt && decision is MessageActionFollowUpDecision) {
       // For status-only messages like "done"/"完成", always ask which todo to
       // update instead of auto-applying a semantic match.
+      decision = const MessageActionNoneDecision();
+    }
+    if (shouldReserveForSecretaryTodoReview &&
+        decision is MessageActionFollowUpDecision) {
       decision = const MessageActionNoneDecision();
     }
 
@@ -400,6 +427,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
     }
 
     if (targets.isEmpty) return;
+    if (shouldReserveForSecretaryTodoReview) return;
 
     final intent = inferTodoUpdateIntent(rawText);
     final ranked = _mergeTodoCandidatesWithSemanticMatches(
