@@ -32,4 +32,42 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('signed in pro harness opens cloud account manage subscription',
+      (tester) async {
+    final backend = DynamicTestBackend();
+    final harness = await DynamicAppHarness.launch(
+      tester,
+      backend: backend,
+      cloudUid: 'gd9s9Jc2n1PdN7o46An57KlXNnt1',
+      cloudEmail: '812388447@qq.com',
+      cloudIdToken: 'test-id-token',
+      cloudGatewayBaseUrl: 'https://cloud.test',
+      subscriptionEntitled: true,
+      canManageSubscription: true,
+    );
+
+    await harness.openSettings();
+    await harness.openAiSettings();
+    await harness.openAskAiSettings();
+    await harness.openCloudAccountFromAskAi();
+
+    expect(find.byKey(const ValueKey('cloud_manage_subscription')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('cloud_subscribe')), findsNothing);
+  });
+
+  testWidgets('default harness opens agent digest settings', (tester) async {
+    final backend = DynamicTestBackend();
+    final harness = await DynamicAppHarness.launch(
+      tester,
+      backend: backend,
+    );
+
+    await harness.openSettings();
+    await harness.openAgentDigestSettings();
+
+    expect(
+        find.byKey(const ValueKey('agent_digest_regenerate')), findsOneWidget);
+  });
 }

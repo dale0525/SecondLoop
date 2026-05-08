@@ -14,7 +14,10 @@ import 'package:secondloop/core/platform/app_platform_capabilities.dart';
 import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/settings/agent_digest_settings_page.dart';
+import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 
 import '../../test/test_i18n.dart';
@@ -157,6 +160,30 @@ final class DynamicAppHarness {
     await pumpUntilFound(
       find.byType(AiSettingsPage),
       description: 'AI settings page',
+    );
+  }
+
+  Future<void> openAskAiSettings() async {
+    await tapByKey('ai_settings_open_ask_ai_settings');
+    await pumpUntilFound(
+      find.byType(AiAskAiSettingsPage),
+      description: 'Ask AI settings page',
+    );
+  }
+
+  Future<void> openCloudAccountFromAskAi() async {
+    await tapByKey('ask_ai_settings_open_cloud_account');
+    await pumpUntilFound(
+      find.byType(CloudAccountPage),
+      description: 'cloud account page',
+    );
+  }
+
+  Future<void> openAgentDigestSettings() async {
+    await tapByKey('settings_agent_digest');
+    await pumpUntilFound(
+      find.byType(AgentDigestSettingsPage),
+      description: 'agent digest settings page',
     );
   }
 
