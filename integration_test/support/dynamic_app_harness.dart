@@ -5,11 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/app/router.dart';
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/ai/task_priority_ai_enhancement_prefs.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/platform/app_platform_capabilities.dart';
 import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/settings_page.dart';
 
 import '../../test/test_i18n.dart';
 import 'dynamic_test_backend.dart';
@@ -27,6 +33,13 @@ final class DynamicAppHarness {
     WidgetTester tester, {
     required DynamicTestBackend backend,
     Size surfaceSize = const Size(900, 720),
+    String? cloudUid,
+    String? cloudEmail,
+    bool? cloudEmailVerified,
+    String? cloudIdToken,
+    String cloudGatewayBaseUrl = '',
+    bool subscriptionEntitled = false,
+    bool? canManageSubscription,
   }) async {
     SharedPreferences.setMockInitialValues({
       'ask_ai_data_consent_v1': true,
@@ -40,6 +53,44 @@ final class DynamicAppHarness {
       tester: tester,
       backend: backend,
     );
+    final cloudAuthController = _HarnessCloudAuthController(
+      uid: cloudUid,
+      email: cloudEmail,
+      emailVerified: cloudEmailVerified ?? (cloudUid == null ? null : true),
+      idToken: cloudIdToken,
+    );
+    final subscriptionController = _HarnessSubscriptionController(
+      status: subscriptionEntitled
+          ? SubscriptionStatus.entitled
+          : SubscriptionStatus.unknown,
+      canManageSubscription:
+          canManageSubscription ?? (subscriptionEntitled ? true : null),
+    );
+    final cloudGatewayConfig = CloudGatewayConfig(
+      baseUrl: cloudGatewayBaseUrl,
+      modelName: CloudGatewayConfig.defaultConfig.modelName,
+    );
+    final hasCloudContext = (cloudUid?.trim().isNotEmpty ?? false) ||
+        (cloudEmail?.trim().isNotEmpty ?? false) ||
+        (cloudIdToken?.trim().isNotEmpty ?? false) ||
+        cloudGatewayBaseUrl.trim().isNotEmpty ||
+        subscriptionEntitled;
+
+    Widget appShell = SessionScope(
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      lock: () {},
+      child: const AppShell(),
+    );
+    if (hasCloudContext) {
+      appShell = CloudAuthScope(
+        controller: cloudAuthController,
+        gatewayConfig: cloudGatewayConfig,
+        child: SubscriptionScope(
+          controller: subscriptionController,
+          child: appShell,
+        ),
+      );
+    }
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
@@ -57,11 +108,7 @@ final class DynamicAppHarness {
             ),
             child: AppBackendScope(
               backend: backend,
-              child: SessionScope(
-                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                lock: () {},
-                child: const AppShell(),
-              ),
+              child: appShell,
             ),
           ),
         ),
@@ -78,6 +125,39 @@ final class DynamicAppHarness {
     );
     await tester.pump();
     return harness;
+  }
+
+  Future<void> openSettings() async {
+    final chatSettingsButton = find.byKey(const ValueKey('chat_open_settings'));
+    if (chatSettingsButton.evaluate().isNotEmpty) {
+      await tester.ensureVisible(chatSettingsButton);
+      await tester.tap(chatSettingsButton);
+      await tester.pump();
+    } else {
+      final railSettingsButton = find.descendant(
+        of: find.byType(NavigationRail),
+        matching: find.byIcon(Icons.settings_outlined),
+      );
+      await pumpUntilFound(
+        railSettingsButton,
+        description: 'desktop settings tab',
+      );
+      await tester.ensureVisible(railSettingsButton.first);
+      await tester.tap(railSettingsButton.first);
+      await tester.pump();
+    }
+    await pumpUntilFound(
+      find.byType(SettingsPage),
+      description: 'settings page',
+    );
+  }
+
+  Future<void> openAiSettings() async {
+    await tapByKey('settings_ai_source');
+    await pumpUntilFound(
+      find.byType(AiSettingsPage),
+      description: 'AI settings page',
+    );
   }
 
   Future<void> sendChatMessage(String text) async {
@@ -196,5 +276,100 @@ final class DynamicAppHarness {
       'Timed out waiting for $description.\n'
       'Backend trace:\n${backend.debugTrace.join('\n')}',
     );
+  }
+}
+
+final class _HarnessCloudAuthController extends ChangeNotifier
+    implements ObservableCloudAuthController, CloudPasswordRecoveryController {
+  _HarnessCloudAuthController({
+    required String? uid,
+    required String? email,
+    required bool? emailVerified,
+    required String? idToken,
+  })  : _uid = uid,
+        _email = email,
+        _emailVerified = emailVerified,
+        _idToken = idToken;
+
+  String? _uid;
+  String? _email;
+  bool? _emailVerified;
+  String? _idToken;
+
+  @override
+  String? get uid => _uid;
+
+  @override
+  String? get email => _email;
+
+  @override
+  bool? get emailVerified => _emailVerified;
+
+  @override
+  Future<String?> getIdToken() async => _idToken;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {
+    _emailVerified = false;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail({
+    required String email,
+  }) async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    _uid ??= 'automation-user';
+    _email = email;
+    _emailVerified ??= true;
+    _idToken ??= 'automation-id-token';
+    notifyListeners();
+  }
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    await signInWithEmailPassword(email: email, password: password);
+  }
+
+  @override
+  Future<void> signOut() async {
+    _uid = null;
+    _email = null;
+    _emailVerified = null;
+    _idToken = null;
+    notifyListeners();
+  }
+}
+
+final class _HarnessSubscriptionController extends ChangeNotifier
+    implements SubscriptionDetailsController {
+  _HarnessSubscriptionController({
+    required SubscriptionStatus status,
+    required this.canManageSubscription,
+  }) : _status = status;
+
+  SubscriptionStatus _status;
+
+  @override
+  final bool? canManageSubscription;
+
+  @override
+  SubscriptionStatus get status => _status;
+
+  void setStatus(SubscriptionStatus next) {
+    if (_status == next) return;
+    _status = next;
+    notifyListeners();
   }
 }
