@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../backend/secretary_backend.dart';
 import '../cloud/cloud_secretary_client.dart';
+import '../cloud/secretary_runtime_client.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/platform_int.dart';
 import 'internal_tool_registry.dart';
@@ -468,6 +469,31 @@ class SecretaryController {
       generatedBy: 'cloud',
       digestGeneratedAtMs: result.digestGeneratedAtMs,
       skipReason: result.skipReason,
+    );
+  }
+
+  SecretaryPlan planFromRuntimeDraft(SecretaryRuntimePlanDraft draft) {
+    return SecretaryPlan(
+      id: draft.id,
+      title: draft.title,
+      generatedAtMs: draft.generatedAtMs,
+      route: 'cloud_runtime',
+      generatedBy: 'cloud_runtime',
+      sections: SecretaryPlanSections(
+        focus: [
+          for (final item in draft.items)
+            SecretaryPlanItem(
+              id: item.id,
+              todoId: item.taskId,
+              title: item.title,
+              reason: item.status,
+              requiresConfirmation: item.requiresConfirmation,
+            ),
+        ],
+        dueSoon: const <SecretaryPlanItem>[],
+        needsDecision: const <SecretaryPlanItem>[],
+        missingNextAction: const <SecretaryPlanItem>[],
+      ),
     );
   }
 
