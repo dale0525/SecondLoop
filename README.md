@@ -3,7 +3,7 @@
 
   <h1>SecondLoop</h1>
   <p><b>Close your open loops.</b></p>
-  <p>Local‑first personal AI assistant with long‑term memory and an encrypted vault — built for mobile + desktop.</p>
+  <p>Personal AI assistant with long-term memory and an encrypted vault, powered by either self-managed BYOK runtime or SecondLoop Cloud.</p>
   <p><a href="https://secondloop.app">https://secondloop.app</a></p>
   <p>
     English · <a href="README.zh-CN.md">简体中文</a>
@@ -19,35 +19,30 @@
 
 ## ✨ What is SecondLoop?
 
-SecondLoop is an **open-source** (Community Edition), privacy‑first “second brain” that helps you **capture**, **remember**, and **act** — without turning your life into folders and tabs.
+SecondLoop is an **open-source** (Community Edition), privacy-first “second brain” that helps you **capture**, **remember**, and **act** through a required AI runtime — without turning your life into folders and tabs.
 
 The core mental model is **One Timeline** (a single “Main Stream”): capture first, then ask when needed.
 
 ## ⭐ Highlights
 
-- 🧠 **Long-term memory, local-first**: your timeline stays on your device with encryption by default.
+- 🧠 **Long-term memory in an encrypted vault**: your timeline is protected at rest and can be connected to the runtime mode you choose.
 - 🧲 **Ask AI with relevant context**: get answers grounded in your own notes, with streaming output.
+- 🤖 **Unified AI runtime**: chat, embeddings, semantic parsing, media understanding, and multimodal understanding are required capabilities in both supported modes.
 - 🗂️ **Simple filters when needed**: narrow what you are viewing without juggling chat threads.
 - 📥 **Capture from anywhere**: mobile share sheet + desktop global hotkey for quick capture.
 - 🔐 **Privacy by design**: encrypted vault and clear control over where your data lives.
 - 🌍 **Cross-platform**: one app experience across mobile and desktop.
 
-## 🤖 AI Capability Matrix (Local / BYOK / Pro)
+## 🤖 Runtime Modes
 
-| AI capability                                       | Local (on-device)                | BYOK (your API key)           | Pro subscription (SecondLoop Cloud) | Notes                                                                                             |
-| --------------------------------------------------- | -------------------------------- | ----------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Image annotation                                    | ⚠️ Basic on-device description    | ✅ Use your own model API      | ✅ Included via SecondLoop Cloud     | If network AI is unavailable, the app can still provide a lightweight fallback from visible text. |
-| OCR (image/PDF/doc)                                 | ✅ On-device text recognition     | ✅ Use your own model API      | ✅ Included via SecondLoop Cloud     | Works for images and supported documents.                                                         |
-| Speech recognition (audio transcription)            | ⚠️ Available on supported devices | ✅ Use your own model API      | ✅ Included via SecondLoop Cloud     | When offline, the app uses local transcription when available.                                    |
-| Embedding indexing                                  | ✅ Local memory indexing          | ✅ Use your own embedding API  | ✅ Included via SecondLoop Cloud     | New content is indexed in the background.                                                         |
-| Ask AI                                              | ❌                                | ✅ Use your own chat model API | ✅ Included via SecondLoop Cloud     | Route follows your source preference and current availability.                                    |
-| Semantic parsing (intent/time-window understanding) | ❌                                | ✅ Use your own model API      | ✅ Included via SecondLoop Cloud     | Used by smart understanding and auto-actions.                                                     |
-| Embedding search                                    | ✅ Local semantic search          | ✅ Use your own embedding API  | ✅ Included via SecondLoop Cloud     | Search can fall back across available routes.                                                     |
+SecondLoop supports two runtime modes. Core AI capabilities are not optional: the app expects a working LLM, embedding, semantic parsing, media understanding, and multimodal-capable model path.
 
-- `Local` means native on-device processing in iOS / Android / macOS / Windows / Linux clients.
-- `BYOK` means you connect your own model service and API key in settings.
-- `Pro` means an active SecondLoop Pro entitlement with a signed-in cloud account.
-- Capabilities will continue to evolve, while public release compatibility remains a priority.
+| Runtime mode | Who configures model providers | Required AI capabilities | User-facing capability set |
+| --- | --- | --- | --- |
+| Self-managed / BYOK | You provide compatible LLM, embedding, and multimodal model endpoints and keys. | Chat, working set, embeddings, semantic parsing, task intelligence, media understanding, multimodal LLM. | Same app capabilities as Managed Pro. |
+| Managed Pro / SecondLoop Cloud | SecondLoop configures and operates the hosted LLM, embedding, and multimodal providers. | Chat, working set, embeddings, semantic parsing, task intelligence, media understanding, multimodal LLM. | Same app capabilities as Self-managed. |
+
+There is no supported “AI off” product mode, and the app no longer presents local AI fallback as a third runtime mode. Device-native helpers may still be used for platform integration, import, rendering, or performance, but core AI behavior is provided through the active runtime.
 
 ## 🚀 Usage
 
@@ -75,20 +70,20 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 ### Quick walkthrough
 
 1) **Create your vault** (first run)
-   Local data is encrypted at rest. You’ll enter your master password when the vault is first locked/unlocked.
+   Vault data is encrypted at rest. You’ll enter your master password when the vault is first locked/unlocked.
 
 2) **Capture (Send)**
    Use the chat input to quickly save thoughts/links, or:
    - Mobile: share text/URL/images from other apps into SecondLoop
    - Desktop: press `⌘⇧K` (macOS) / `Ctrl+Shift+K` (Windows/Linux) for quick capture
 
-3) **Ask AI (explicit)**
-   Use **Ask AI** when you want an answer; SecondLoop uses your relevant memories as context and sends only what is needed to the model.
+3) **Connect a runtime and use AI**
+   Use self-managed/BYOK if you want to provide your own model endpoints and keys, or sign in to Managed Pro to use SecondLoop Cloud. Once a runtime is available, **Ask AI** and smart organization use only the relevant context needed for the task.
 
 
 ### Privacy note (what gets uploaded)
 
-When Ask AI uses a remote model (BYOK or SecondLoop Cloud), the client uploads **your question + only the relevant context needed for that answer**. It does **not** upload your keys, master password, or your entire vault/history.
+When SecondLoop calls a model through self-managed/BYOK or SecondLoop Cloud, the client uploads **your question + only the relevant context needed for that answer or action**. It does **not** upload your master password, provider keys, or your entire vault/history.
 
 ## 🔄 Desktop update strategy (current)
 
@@ -100,8 +95,8 @@ When Ask AI uses a remote model (BYOK or SecondLoop Cloud), the client uploads *
 
 ## 🧩 Editions (Community vs Cloud)
 
-- **Community Edition (this repo)**: BYOK (bring your own key), local‑first, encrypted vault, and BYOS (bring your own storage) sync backends.
-- **SecondLoop Cloud (premium, managed)**: optional hosted services (account, AI gateway, managed vault, realtime sync).
+- **Community Edition (this repo)**: open-source app with self-managed/BYOK runtime support, encrypted vault, and BYOS (bring your own storage) sync backends.
+- **SecondLoop Cloud / Managed Pro (premium, managed)**: hosted runtime services, account, AI providers, managed vault, realtime sync, billing, and quota infrastructure.
 
 ## 📄 License
 
