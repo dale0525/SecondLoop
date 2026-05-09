@@ -14,11 +14,12 @@ import 'package:secondloop/core/platform/app_platform_capabilities.dart';
 import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/settings/agent_digest_settings_page.dart';
 import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
+import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
+import 'package:secondloop/features/settings/self_managed_setup_page.dart';
 import 'package:secondloop/features/settings/sync_settings_page.dart';
 
 import '../../test/test_i18n.dart';
@@ -180,11 +181,20 @@ final class DynamicAppHarness {
     );
   }
 
-  Future<void> openAgentDigestSettings() async {
-    await tapByKey('settings_agent_digest');
+  Future<void> openRuntimeModeSettings() async {
+    await tapByKey('settings_runtime_mode');
     await pumpUntilFound(
-      find.byType(AgentDigestSettingsPage),
-      description: 'agent digest settings page',
+      find.byType(CloudRuntimeModePage),
+      description: 'runtime mode page',
+    );
+  }
+
+  Future<void> openSelfManagedSetup() async {
+    await openRuntimeModeSettings();
+    await tapByKey('runtime_mode_self_managed');
+    await pumpUntilFound(
+      find.byType(SelfManagedSetupPage),
+      description: 'self-managed setup page',
     );
   }
 

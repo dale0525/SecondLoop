@@ -77,6 +77,59 @@
       "deleteFailed": "无法删除摘要：$error"
     }
   },
+  "runtimeMode": {
+    "title": "云运行时",
+    "subtitle": "选择 self-managed 或 managed pro 运行时",
+    "status": {
+      "notConfigured": "未配置",
+      "selfManagedReady": "已连接 self-managed 运行时",
+      "managedProReady": "已连接 managed pro 运行时"
+    },
+    "options": {
+      "selfManaged": {
+        "title": "Self-managed",
+        "description": "使用你自己的 Cloudflare 账号和模型密钥部署运行时。"
+      },
+      "managedPro": {
+        "title": "Managed Pro",
+        "description": "无需 Cloudflare 配置或 BYOK，直接使用托管运行时。"
+      }
+    },
+    "details": {
+      "apiBaseUrl": "API 地址",
+      "authMode": "鉴权模式",
+      "manifestVersion": "Manifest 版本",
+      "managedSession": "托管会话",
+      "selfManagedConnection": "自管连接"
+    },
+    "actions": {
+      "openSetup": "打开配置",
+      "openManagedDetails": "查看托管详情",
+      "openCloudAccount": "打开云账号"
+    }
+  },
+  "selfManagedSetup": {
+    "title": "Self-managed 配置",
+    "subtitle": "完成 Cloudflare 授权、填写 BYOK 并部署运行时。",
+    "fields": {
+      "providerLabel": "提供商",
+      "apiKeyLabel": "API Key",
+      "accountLabel": "Cloudflare 账号"
+    },
+    "status": {
+      "idle": "准备开始配置",
+      "authorizing": "正在授权 Cloudflare 账号...",
+      "deploying": "正在部署运行时资源...",
+      "ready": "运行时已就绪",
+      "failed": "配置失败"
+    },
+    "actions": {
+      "authorize": "授权 Cloudflare",
+      "deploy": "部署运行时",
+      "retry": "重试",
+      "reset": "重置"
+    }
+  },
   "quickCaptureHotkey": {
     "title": "快速记录快捷键",
     "subtitle": "用于从任何地方打开快速记录",

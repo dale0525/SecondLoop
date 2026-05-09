@@ -63,6 +63,24 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
 
         self.assertIn("SECONDLOOP_APP_NAME='SecondLoop Dev'", command)
 
+    def test_cloud_runtime_automation_smoke_task_exports_dev_app_identity(self) -> None:
+        pixi_config = self._load_pixi_config()
+
+        command = pixi_config["tasks"]["cloud-runtime-automation-smoke"]
+
+        self.assertIn("SECONDLOOP_APP_ID=com.secondloop.secondloopdev", command)
+        self.assertIn("SECONDLOOP_APP_NAME='SecondLoop Dev'", command)
+        self.assertIn("scripts/flutter_with_defines.sh test -d macos", command)
+
+    def test_cloud_runtime_integration_scenarios_task_exports_dev_app_identity(self) -> None:
+        pixi_config = self._load_pixi_config()
+
+        command = pixi_config["tasks"]["cloud-runtime-integration-scenarios-test"]
+
+        self.assertIn("SECONDLOOP_APP_ID=com.secondloop.secondloopdev", command)
+        self.assertIn("SECONDLOOP_APP_NAME='SecondLoop Dev'", command)
+        self.assertIn("scripts/run_cloud_runtime_integration_scenarios.sh", command)
+
     def test_flutter_with_defines_supports_secondloop_app_id_define(self) -> None:
         script = FLUTTER_WITH_DEFINES_SCRIPT.read_text(encoding="utf-8")
 

@@ -277,6 +277,97 @@ resolve_dart_bin() {
   return 1
 }
 
+resolve_pub_cache_root() {
+  if [[ -n "${PUB_CACHE:-}" ]]; then
+    printf '%s\n' "${PUB_CACHE}"
+    return 0
+  fi
+
+  if is_windows_env; then
+    if [[ -n "${LOCALAPPDATA:-}" ]]; then
+      printf '%s\n' "${LOCALAPPDATA}/Pub/Cache"
+      return 0
+    fi
+    if [[ -n "${APPDATA:-}" ]]; then
+      printf '%s\n' "${APPDATA}/Pub/Cache"
+      return 0
+    fi
+  fi
+
+  if [[ -n "${HOME:-}" ]]; then
+    printf '%s\n' "${HOME}/.pub-cache"
+    return 0
+  fi
+
+  return 1
+}
+
+resolve_pub_log_path() {
+  local pub_cache_root
+  pub_cache_root="$(resolve_pub_cache_root)" || return 1
+  printf '%s\n' "${pub_cache_root}/log/pub_log.txt"
+}
+
+pub_log_slice_mentions_advisory_cache_crash() {
+  local log_path="$1"
+  local start_offset="${2:-0}"
+  local log_chunk=""
+
+  [[ -f "${log_path}" ]] || return 1
+
+  if [[ "${start_offset}" =~ ^[0-9]+$ ]] && (( start_offset > 0 )); then
+    log_chunk="$(tail -c "+$((start_offset + 1))" "${log_path}" 2>/dev/null || cat "${log_path}" 2>/dev/null || true)"
+  else
+    log_chunk="$(cat "${log_path}" 2>/dev/null || true)"
+  fi
+
+  [[ "${log_chunk}" == *"HostedSource._getAdvisories.readAdvisoriesFromCache"* ]]
+}
+
+clear_pub_advisory_cache() {
+  local pub_cache_root="$1"
+  local hosted_root="${pub_cache_root}/hosted"
+
+  [[ -d "${hosted_root}" ]] || return 0
+
+  find "${hosted_root}" -type f -path '*/.cache/*-advisories.json' -exec rm -f {} + 2>/dev/null || true
+}
+
+run_with_pub_advisory_cache_retry() {
+  local tool_label="$1"
+  shift
+
+  local pub_log_path=""
+  local pub_log_size_before=0
+  local pub_cache_root=""
+  local status=0
+
+  pub_log_path="$(resolve_pub_log_path 2>/dev/null || true)"
+  if [[ -n "${pub_log_path}" && -f "${pub_log_path}" ]]; then
+    pub_log_size_before="$(wc -c < "${pub_log_path}" 2>/dev/null || echo 0)"
+    pub_log_size_before="${pub_log_size_before//[!0-9]/}"
+    [[ -n "${pub_log_size_before}" ]] || pub_log_size_before=0
+  fi
+
+  if "$@"; then
+    return 0
+  fi
+  status=$?
+
+  if [[ -z "${pub_log_path}" ]] || ! pub_log_slice_mentions_advisory_cache_crash "${pub_log_path}" "${pub_log_size_before}"; then
+    return "${status}"
+  fi
+
+  pub_cache_root="$(resolve_pub_cache_root 2>/dev/null || true)"
+  if [[ -z "${pub_cache_root}" ]]; then
+    return "${status}"
+  fi
+
+  echo "pre-commit: cleared pub advisory cache after ${tool_label} hit a known pub crash; retrying once." >&2
+  clear_pub_advisory_cache "${pub_cache_root}"
+  "$@"
+}
+
 resolve_flutter_bin() {
   if [[ -n "${SECONDLOOP_FLUTTER_BIN:-}" ]]; then
     printf '%s\n' "${SECONDLOOP_FLUTTER_BIN}"
@@ -369,11 +460,11 @@ run_dart_tool() {
   dart_bin="$(resolve_dart_bin)" || die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
 
   if [[ "${dart_bin}" == *.bat || "${dart_bin}" == *.cmd ]]; then
-    run_windows_batch_tool dart "${dart_bin}" "$@"
+    run_with_pub_advisory_cache_retry "dart $*" run_windows_batch_tool dart "${dart_bin}" "$@"
     return $?
   fi
 
-  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${dart_bin}" "$@"
+  run_with_pub_advisory_cache_retry "dart $*" env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${dart_bin}" "$@"
 }
 
 run_flutter_tool() {
@@ -381,11 +472,11 @@ run_flutter_tool() {
   flutter_bin="$(resolve_flutter_bin)" || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
 
   if [[ "${flutter_bin}" == *.bat || "${flutter_bin}" == *.cmd ]]; then
-    run_windows_batch_tool flutter "${flutter_bin}" "$@"
+    run_with_pub_advisory_cache_retry "flutter $*" run_windows_batch_tool flutter "${flutter_bin}" "$@"
     return $?
   fi
 
-  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
+  run_with_pub_advisory_cache_retry "flutter $*" env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
 }
 
 ensure_flutter_package_config() {
@@ -647,7 +738,7 @@ warn_auto_staged_i18n_refresh_changes() {
 }
 
 run_i18n_refresh() {
-  if ! bash scripts/run_i18n_refresh.sh; then
+  if ! run_with_pub_advisory_cache_retry "i18n refresh" bash scripts/run_i18n_refresh.sh; then
     echo "" >&2
     echo "pre-commit: i18n refresh failed." >&2
     echo "Fix locally with: pixi run i18n-refresh" >&2
@@ -656,7 +747,7 @@ run_i18n_refresh() {
 }
 
 run_i18n_analyze() {
-  if ! bash scripts/run_i18n_analyze.sh; then
+  if ! run_with_pub_advisory_cache_retry "i18n analyze" bash scripts/run_i18n_analyze.sh; then
     echo "" >&2
     echo "pre-commit: i18n analyze failed." >&2
     echo "Fix locally with: pixi run i18n-analyze" >&2

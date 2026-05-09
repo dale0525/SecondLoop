@@ -166,15 +166,16 @@ extension _SettingsPageBuild on _SettingsPageState {
         const SizedBox(height: 8),
         sectionCard([
           ListTile(
-            title: Text(context.t.settings.cloudAccount.title),
-            subtitle: Text(context.t.settings.cloudAccount.subtitle),
+            key: const ValueKey('settings_runtime_mode'),
+            title: Text(context.t.settings.runtimeMode.title),
+            subtitle: Text(context.t.settings.runtimeMode.subtitle),
             onTap: _busy
                 ? null
                 : () {
                     pushPageWithInheritedScopes(
                       Navigator.of(context),
                       context,
-                      const CloudAccountPage(),
+                      const CloudRuntimeModePage(),
                     );
                   },
           ),
@@ -203,20 +204,6 @@ extension _SettingsPageBuild on _SettingsPageState {
                       Navigator.of(context),
                       context,
                       const SyncSettingsPage(),
-                    );
-                  },
-          ),
-          ListTile(
-            key: const ValueKey('settings_agent_digest'),
-            title: Text(context.t.settings.agentDigest.title),
-            subtitle: Text(context.t.settings.agentDigest.entrySubtitle),
-            onTap: _busy
-                ? null
-                : () {
-                    pushPageWithInheritedScopes(
-                      Navigator.of(context),
-                      context,
-                      const AgentDigestSettingsPage(),
                     );
                   },
           ),

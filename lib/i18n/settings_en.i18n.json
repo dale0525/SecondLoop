@@ -77,6 +77,59 @@
       "deleteFailed": "Could not delete digest: $error"
     }
   },
+  "runtimeMode": {
+    "title": "Cloud runtime",
+    "subtitle": "Choose self-managed or managed pro runtime",
+    "status": {
+      "notConfigured": "Not configured",
+      "selfManagedReady": "Self-managed runtime connected",
+      "managedProReady": "Managed Pro runtime connected"
+    },
+    "options": {
+      "selfManaged": {
+        "title": "Self-managed",
+        "description": "Deploy your own Cloudflare runtime with your own provider keys."
+      },
+      "managedPro": {
+        "title": "Managed Pro",
+        "description": "Use the hosted runtime without Cloudflare setup or BYOK."
+      }
+    },
+    "details": {
+      "apiBaseUrl": "API base URL",
+      "authMode": "Auth mode",
+      "manifestVersion": "Manifest version",
+      "managedSession": "Managed session",
+      "selfManagedConnection": "Self-managed connection"
+    },
+    "actions": {
+      "openSetup": "Open setup",
+      "openManagedDetails": "View managed details",
+      "openCloudAccount": "Open cloud account"
+    }
+  },
+  "selfManagedSetup": {
+    "title": "Self-managed setup",
+    "subtitle": "Authorize Cloudflare, enter BYOK, and deploy your runtime.",
+    "fields": {
+      "providerLabel": "Provider",
+      "apiKeyLabel": "API key",
+      "accountLabel": "Cloudflare account"
+    },
+    "status": {
+      "idle": "Ready to start setup",
+      "authorizing": "Authorizing Cloudflare account...",
+      "deploying": "Deploying runtime resources...",
+      "ready": "Runtime is ready",
+      "failed": "Setup failed"
+    },
+    "actions": {
+      "authorize": "Authorize Cloudflare",
+      "deploy": "Deploy runtime",
+      "retry": "Retry",
+      "reset": "Reset"
+    }
+  },
   "quickCaptureHotkey": {
     "title": "Quick capture shortcut",
     "subtitle": "Global shortcut to open Quick capture",

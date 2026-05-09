@@ -33,6 +33,12 @@ class I18nWindowsSupportTests(unittest.TestCase):
         self.assertNotIn("resolve_flutter_bin()", script)
         self.assertNotIn("run_flutter()", script)
 
+    def test_refresh_script_reuses_pre_commit_common_pub_cache_recovery(self) -> None:
+        script = I18N_REFRESH_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('source "${repo_root}/scripts/pre_commit_common.sh"', script)
+        self.assertIn('run_with_pub_advisory_cache_retry "dart $*"', script)
+
     def test_analyze_script_supports_windows_local_fvm_batch_wrappers(self) -> None:
         script = I18N_ANALYZE_SCRIPT.read_text(encoding="utf-8")
 

@@ -57,7 +57,7 @@ void main() {
     expect(find.byKey(const ValueKey('cloud_subscribe')), findsNothing);
   });
 
-  testWidgets('default harness opens agent digest settings', (tester) async {
+  testWidgets('default harness opens runtime mode settings', (tester) async {
     final backend = DynamicTestBackend();
     final harness = await DynamicAppHarness.launch(
       tester,
@@ -65,10 +65,12 @@ void main() {
     );
 
     await harness.openSettings();
-    await harness.openAgentDigestSettings();
+    await harness.openSelfManagedSetup();
 
     expect(
-        find.byKey(const ValueKey('agent_digest_regenerate')), findsOneWidget);
+      find.byKey(const ValueKey('self_managed_deploy')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('default harness opens sync settings', (tester) async {

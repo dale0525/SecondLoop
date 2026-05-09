@@ -66,6 +66,7 @@ class CloudAccountPage extends StatelessWidget {
     }
 
     return Scaffold(
+      key: const ValueKey('cloud_account_page_root'),
       appBar: AppBar(
         title: Text(context.t.settings.cloudAccount.title),
       ),

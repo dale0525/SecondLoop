@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
+source "${repo_root}/scripts/pre_commit_common.sh"
 
 is_windows_env() {
   local uname_value
@@ -113,11 +114,11 @@ run_dart() {
   dart_bin="$(resolve_dart_bin)"
 
   if [[ "${dart_bin}" == *.bat || "${dart_bin}" == *.cmd ]]; then
-    run_windows_batch_tool dart "${dart_bin}" "$@"
+    run_with_pub_advisory_cache_retry "dart $*" run_windows_batch_tool dart "${dart_bin}" "$@"
     return $?
   fi
 
-  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${dart_bin}" "$@"
+  run_with_pub_advisory_cache_retry "dart $*" env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${dart_bin}" "$@"
 }
 
 

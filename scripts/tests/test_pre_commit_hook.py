@@ -412,6 +412,18 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertNotIn(".fvm/flutter_sdk/bin/dart.bat", script)
         self.assertNotIn(".fvm/flutter_sdk/bin/flutter.bat", script)
 
+    def test_pre_commit_common_recovers_from_pub_advisory_cache_crash(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("resolve_pub_cache_root()", script)
+        self.assertIn("resolve_pub_log_path()", script)
+        self.assertIn("pub_log_slice_mentions_advisory_cache_crash()", script)
+        self.assertIn("clear_pub_advisory_cache()", script)
+        self.assertIn("run_with_pub_advisory_cache_retry()", script)
+        self.assertIn("HostedSource._getAdvisories.readAdvisoriesFromCache", script)
+        self.assertIn("find \"${hosted_root}\" -type f -path '*/.cache/*-advisories.json'", script)
+        self.assertIn("cleared pub advisory cache", script)
+
     def test_commit_mode_restores_flutter_package_config_after_stash(self) -> None:
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(
             encoding="utf-8"

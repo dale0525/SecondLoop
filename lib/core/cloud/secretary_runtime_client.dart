@@ -1,0 +1,175 @@
+import 'package:flutter/foundation.dart';
+
+import 'runtime_api_client.dart';
+
+@immutable
+class SecretaryRuntimePlanItem {
+  const SecretaryRuntimePlanItem({
+    required this.id,
+    required this.taskId,
+    required this.title,
+    required this.status,
+    required this.requiresConfirmation,
+  });
+
+  final String id;
+  final String taskId;
+  final String title;
+  final String status;
+  final bool requiresConfirmation;
+
+  factory SecretaryRuntimePlanItem.fromJson(Map<String, dynamic> json) {
+    return SecretaryRuntimePlanItem(
+      id: (json['id'] as String?) ?? '',
+      taskId: (json['task_id'] as String?) ?? '',
+      title: (json['title'] as String?) ?? '',
+      status: (json['status'] as String?) ?? 'open',
+      requiresConfirmation: json['requires_confirmation'] == true,
+    );
+  }
+}
+
+@immutable
+class SecretaryRuntimePlanDraft {
+  const SecretaryRuntimePlanDraft({
+    required this.id,
+    required this.title,
+    required this.generatedAtMs,
+    required this.items,
+  });
+
+  final String id;
+  final String title;
+  final int generatedAtMs;
+  final List<SecretaryRuntimePlanItem> items;
+
+  factory SecretaryRuntimePlanDraft.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'];
+    return SecretaryRuntimePlanDraft(
+      id: (json['id'] as String?) ?? '',
+      title: (json['title'] as String?) ?? '',
+      generatedAtMs: (json['generated_at_ms'] as num?)?.toInt() ?? 0,
+      items: rawItems is List
+          ? rawItems
+              .whereType<Map>()
+              .map(
+                (item) => SecretaryRuntimePlanItem.fromJson(
+                  item.map((key, value) => MapEntry('$key', value)),
+                ),
+              )
+              .toList(growable: false)
+          : const <SecretaryRuntimePlanItem>[],
+    );
+  }
+}
+
+@immutable
+class SecretaryRuntimeApprovalItem {
+  const SecretaryRuntimeApprovalItem({
+    required this.id,
+    required this.taskId,
+    required this.title,
+    required this.kind,
+  });
+
+  final String id;
+  final String taskId;
+  final String title;
+  final String kind;
+
+  factory SecretaryRuntimeApprovalItem.fromJson(Map<String, dynamic> json) {
+    return SecretaryRuntimeApprovalItem(
+      id: (json['id'] as String?) ?? '',
+      taskId: (json['task_id'] as String?) ?? '',
+      title: (json['title'] as String?) ?? '',
+      kind: (json['kind'] as String?) ?? '',
+    );
+  }
+}
+
+final class SecretaryRuntimeClient {
+  SecretaryRuntimeClient({
+    RuntimeApiClient? apiClient,
+  }) : _apiClient = apiClient ?? RuntimeApiClient();
+
+  final RuntimeApiClient _apiClient;
+
+  Future<List<SecretaryRuntimePlanDraft>> fetchPlans(String vaultId) async {
+    final response =
+        await _apiClient.getJson('/v1/runtime/vaults/$vaultId/plans');
+    final rawItems = response?['items'];
+    if (rawItems is! List) {
+      return const <SecretaryRuntimePlanDraft>[];
+    }
+    return rawItems
+        .whereType<Map>()
+        .map(
+          (item) => SecretaryRuntimePlanDraft.fromJson(
+            item.map((key, value) => MapEntry('$key', value)),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<SecretaryRuntimePlanDraft> requestPlanRefresh(
+    String vaultId, {
+    String runtimeMode = 'self_managed',
+    String provider = 'openai',
+  }) async {
+    final response = await _apiClient.postJson(
+      '/v1/runtime/vaults/$vaultId/plans/generate',
+      body: <String, Object?>{
+        'runtime_mode': runtimeMode,
+        'provider': provider,
+      },
+    );
+    return SecretaryRuntimePlanDraft.fromJson(
+      Map<String, dynamic>.from(response?['plan'] as Map? ?? const {}),
+    );
+  }
+
+  Future<List<SecretaryRuntimeApprovalItem>> fetchApprovals(
+      String vaultId) async {
+    final response =
+        await _apiClient.getJson('/v1/runtime/vaults/$vaultId/approvals');
+    final rawItems = response?['items'];
+    if (rawItems is! List) {
+      return const <SecretaryRuntimeApprovalItem>[];
+    }
+    return rawItems
+        .whereType<Map>()
+        .map(
+          (item) => SecretaryRuntimeApprovalItem.fromJson(
+            item.map((key, value) => MapEntry('$key', value)),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> submitApprovalDecision(
+    String vaultId, {
+    required String approvalId,
+    required String decision,
+  }) async {
+    await _apiClient.postJson(
+      '/v1/runtime/vaults/$vaultId/approvals/decision',
+      body: <String, Object?>{
+        'approval_id': approvalId,
+        'decision': decision,
+      },
+    );
+  }
+
+  Future<List<String>> fetchRuntimeCapabilities() async {
+    final response = await _apiClient.getJson('/v1/runtime/capabilities');
+    final rawItems = response?['capabilities'];
+    if (rawItems is! List) {
+      return const <String>[];
+    }
+    return rawItems.map((item) => '$item').toList(growable: false);
+  }
+
+  void dispose() {
+    _apiClient.dispose();
+  }
+}
