@@ -34,6 +34,7 @@ Future<Map<String, Object?>> runSelfManagedRuntimeHelper({
     'manifest': result.manifest.toJson(),
     'auth_token': result.authToken,
     'capability_manifest_id': result.capabilityManifestId,
+    'verification': result.verification?.toJson(),
   };
 }
 

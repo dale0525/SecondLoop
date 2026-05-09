@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'runtime_api_client.dart';
+import 'secretary_runtime_conversation_models.dart';
 
 @immutable
 class SecretaryRuntimePlanItem {
@@ -144,6 +145,43 @@ final class SecretaryRuntimeClient {
           ),
         )
         .toList(growable: false);
+  }
+
+  Future<String> createConversation(String vaultId) async {
+    final response = await _apiClient.postJson(
+      '/v1/runtime/vaults/$vaultId/conversations',
+      body: const <String, Object?>{},
+    );
+    return (response?['conversation_id'] as String?) ?? '';
+  }
+
+  Future<SecretaryRuntimeConversationResult> sendConversationMessage(
+    String vaultId, {
+    required String conversationId,
+    required String message,
+    List<Map<String, Object?>> attachments = const [],
+  }) async {
+    final response = await _apiClient.postJson(
+      '/v1/runtime/vaults/$vaultId/conversations/$conversationId/messages',
+      body: <String, Object?>{
+        'message': message,
+        'attachments': attachments,
+      },
+    );
+    return SecretaryRuntimeConversationResult.fromJson(
+      Map<String, dynamic>.from(response ?? const <String, dynamic>{}),
+    );
+  }
+
+  Future<SecretaryRuntimeConversationResult> fetchRun(
+    String vaultId, {
+    required String runId,
+  }) async {
+    final response =
+        await _apiClient.getJson('/v1/runtime/vaults/$vaultId/runs/$runId');
+    return SecretaryRuntimeConversationResult.fromJson(
+      Map<String, dynamic>.from(response ?? const <String, dynamic>{}),
+    );
   }
 
   Future<void> submitApprovalDecision(

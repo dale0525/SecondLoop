@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../tools/self_managed_runtime_helper.dart';
+import '../../tools/self_managed_runtime_lib/deploy_runner.dart';
 
 void main() {
   test('helper emits manifest payload and progress events', () async {
@@ -13,6 +14,17 @@ void main() {
         'embedding_api_key': 'emb-test',
         'multimodal_api_key': 'mm-test',
       },
+      deployRunner: SelfManagedRuntimeDeployRunner(
+        postVerificationJson: (_, __) async => <String, Object?>{
+          'ok': true,
+          'checks': [
+            <String, Object?>{
+              'code': 'structured_output',
+              'passed': true,
+            },
+          ],
+        },
+      ),
       emitEvent: events.add,
     );
 
@@ -20,5 +32,7 @@ void main() {
     final manifest = output['manifest'] as Map<String, Object?>;
     expect(manifest['runtime_mode'], 'self_managed');
     expect(output['auth_token'], 'runtime-token-openai');
+    final verification = output['verification'] as Map<String, Object?>;
+    expect(verification['ok'], isTrue);
   });
 }

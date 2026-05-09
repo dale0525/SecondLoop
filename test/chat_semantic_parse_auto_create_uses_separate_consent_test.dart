@@ -1,9 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:secondloop/core/ai/task_priority_ai_enhancement_prefs.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
@@ -14,7 +15,7 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Semantic parse enqueues jobs without Ask AI consent',
+  testWidgets('Runtime-first chat ignores legacy semantic parse consent',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'ask_ai_data_consent_v1': false,
@@ -53,18 +54,15 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(backend.calls, contains('enqueueSemanticParseJob'));
-
-    await tester.pump(const Duration(milliseconds: 900));
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(backend.calls, isNot(contains('enqueueSemanticParseJob')));
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('Explicit time todo uses local create and shows secretary plan',
+  testWidgets('Runtime-first chat does not locally create explicit time todos',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'ask_ai_data_consent_v1': false,
       'semantic_parse_data_consent_v1': true,
-      TaskPriorityAiEnhancementPrefs.prefsKey: false,
     });
 
     final backend = _Backend();
@@ -104,24 +102,17 @@ void main() {
     await tester.pump();
 
     expect(backend.calls, isNot(contains('enqueueSemanticParseJob')));
-    expect(backend.todos, hasLength(1));
-    expect(backend.todos.single.title, '提交验收报告');
-    final dueAt = DateTime.fromMillisecondsSinceEpoch(
-      platformIntToInt(backend.todos.single.dueAtMs!),
-      isUtc: true,
-    ).toLocal();
-    expect(dueAt.hour, lessThan(12));
-    expect(
-        find.byKey(const ValueKey('secretary_planning_card')), findsOneWidget);
-    expect(find.byKey(const ValueKey('secretary_plan_view')), findsOneWidget);
+    expect(backend.todos, isEmpty);
+    expect(find.byKey(const ValueKey('secretary_planning_card')), findsNothing);
+    expect(find.byKey(const ValueKey('secretary_plan_view')), findsNothing);
   });
 
   testWidgets(
-    'Semantic parse status query ignores legacy disabled consent',
+    'Runtime-first chat does not query or show legacy semantic parse jobs',
     (tester) async {
       SharedPreferences.setMockInitialValues({
         'ask_ai_data_consent_v1': false,
-        'semantic_parse_data_consent_v1': false,
+        'semantic_parse_data_consent_v1': true,
       });
 
       final backend = _SemanticJobsBackend(
@@ -165,8 +156,9 @@ void main() {
       expect(find.text('复习英语课堂视频'), findsOneWidget);
       expect(
         backend.calls,
-        contains('listSemanticParseJobsByMessageIds'),
+        isNot(contains('listSemanticParseJobsByMessageIds')),
       );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     },
   );
 }

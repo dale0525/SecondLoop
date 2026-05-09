@@ -2,25 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/ai/ai_routing.dart';
-import '../../core/ai/foreground_ai_route_preflight.dart';
-import '../../core/ai/semantic_parse_data_consent_prefs.dart';
-import '../../core/ai/semantic_parse_edit_policy.dart';
 import '../../core/backend/app_backend.dart';
-import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/quick_capture/quick_capture_controller.dart';
 import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
-import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_focus_ring.dart';
-import '../actions/review/review_backoff.dart';
-import '../actions/settings/actions_settings_store.dart';
-import '../actions/suggestions_card.dart';
-import '../actions/time/time_resolver.dart';
 
 class QuickCaptureOverlay extends StatefulWidget {
   const QuickCaptureOverlay({
@@ -157,7 +146,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       final conversation =
           await backend.getOrCreateLoopHomeConversation(sessionKey);
 
-      final message = await backend.insertMessage(
+      await backend.insertMessage(
         sessionKey,
         conversation.id,
         role: 'user',
@@ -165,115 +154,6 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       );
       if (!mounted) return;
       syncEngine?.notifyLocalMutation();
-
-      final locale = Localizations.localeOf(context);
-      final firstDayOfWeekIndex =
-          MaterialLocalizations.of(context).firstDayOfWeekIndex;
-      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-          SubscriptionStatus.unknown;
-      final cloudAuthScope = CloudAuthScope.maybeOf(context);
-      final cloudGatewayConfig =
-          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-      final settings = await ActionsSettingsStore.load();
-      final timeResolution = LocalTimeResolver.resolve(
-        text,
-        DateTime.now(),
-        locale: locale,
-        dayEndMinutes: settings.dayEndMinutes,
-        morningMinutes: settings.morningMinutes,
-        firstDayOfWeekIndex: firstDayOfWeekIndex,
-      );
-      final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(text);
-      final looksLikeLongFormNote = isLongTextForTodoAutomation(text);
-      final looksLikeTodoRelevant = looksLikeTodoRelevantForSemanticParse(text);
-
-      if (timeResolution == null &&
-          !looksLikeReview &&
-          !looksLikeLongFormNote &&
-          looksLikeTodoRelevant) {
-        // Keep explicit time captures on the deterministic local flow.
-        // Semantic parsing stays the preferred path only for todo-relevant
-        // inputs that do not already have a clear local time match.
-        final prefs = await SharedPreferences.getInstance();
-        final consented =
-            SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
-        if (consented && mounted) {
-          try {
-            final preparedRoute = await prepareForegroundAiRoute(
-              backend,
-              sessionKey,
-              routePolicy: ForegroundAiRoutePolicy.automation,
-              cloudAuthController: cloudAuthScope?.controller,
-              gatewayConfig: cloudGatewayConfig,
-              subscriptionStatus: subscriptionStatus,
-              warmupPolicy: ForegroundAiWarmupPolicy.cloudOnly,
-              fallbackToNeedsSetupOnRouteError: true,
-            );
-            if (canRunPreparedForegroundAiRoute(preparedRoute)) {
-              await backend.enqueueSemanticParseJob(
-                sessionKey,
-                messageId: message.id,
-                nowMs: DateTime.now().millisecondsSinceEpoch,
-              );
-              syncEngine?.notifyExternalChange();
-              _dismiss();
-              return;
-            }
-          } catch (_) {
-            // Fall through to local capture fallback.
-          }
-        }
-      }
-
-      if (timeResolution != null || looksLikeReview) {
-        if (!mounted) return;
-        final decision = await showCaptureTodoSuggestionSheet(
-          context,
-          title: text,
-          timeResolution: timeResolution,
-        );
-        if (decision != null && mounted) {
-          final todoId = 'todo:${message.id}';
-          switch (decision) {
-            case CaptureTodoScheduleDecision(:final dueAtLocal):
-              await createTodoWithFollowup(
-                backend,
-                sessionKey,
-                id: todoId,
-                title: text,
-                dueAtMs: dueAtLocal.toUtc().millisecondsSinceEpoch,
-                status: 'open',
-                sourceEntryId: message.id,
-                reviewStage: null,
-                nextReviewAtMs: null,
-                lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-              );
-              syncEngine?.notifyLocalMutation();
-              break;
-            case CaptureTodoReviewDecision():
-              final nextLocal = ReviewBackoff.initialNextReviewAt(
-                DateTime.now(),
-                settings,
-              );
-              await createTodoWithFollowup(
-                backend,
-                sessionKey,
-                id: todoId,
-                title: text,
-                dueAtMs: null,
-                status: 'inbox',
-                sourceEntryId: message.id,
-                reviewStage: 0,
-                nextReviewAtMs: nextLocal.toUtc().millisecondsSinceEpoch,
-                lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-              );
-              syncEngine?.notifyLocalMutation();
-              break;
-            case CaptureTodoNoThanksDecision():
-              break;
-          }
-        }
-      }
 
       // Product decision: quick capture should never request reopening
       // the main window after submission, including plain chat fallback.

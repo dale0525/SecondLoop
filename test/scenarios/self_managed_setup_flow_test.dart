@@ -41,6 +41,15 @@ void main() {
             ),
             authToken: 'runtime-test-token',
             capabilityManifestId: 'manifest-self-managed',
+            verification: ModelCapabilityVerificationResult(
+              ok: true,
+              checks: [
+                ModelCapabilityCheckResult(
+                  code: 'structured_output',
+                  passed: true,
+                ),
+              ],
+            ),
           );
         },
       ),

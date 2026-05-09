@@ -48,6 +48,15 @@ void main() {
             ),
             authToken: 'runtime-token-1',
             capabilityManifestId: 'manifest-self-1',
+            verification: ModelCapabilityVerificationResult(
+              ok: true,
+              checks: [
+                ModelCapabilityCheckResult(
+                  code: 'structured_output',
+                  passed: true,
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -64,6 +73,7 @@ void main() {
     );
 
     expect(controller.state.step, SelfManagedSetupStep.ready);
+    expect(controller.state.verification?.ok, isTrue);
     expect(
         (await store.loadConnection())?.profile.authToken, 'runtime-token-1');
   });
@@ -93,5 +103,52 @@ void main() {
 
     expect(controller.state.step, SelfManagedSetupStep.failed);
     expect(controller.state.errorCode, 'cloudflare_auth_failed');
+  });
+
+  test('verification failure does not save runtime connection', () async {
+    final store = RuntimeConnectionStore();
+    final controller = SelfManagedSetupController(
+      connectionStore: store,
+      helperProcess: LocalRuntimeHelperProcess(
+        runner: (_, __) async {
+          return const SelfManagedSetupResult(
+            manifest: CloudRuntimeManifest(
+              manifestVersion: 1,
+              runtimeMode: CloudRuntimeMode.selfManaged,
+              apiBaseUrl: 'https://user-runtime.example/',
+              authMode: CloudRuntimeAuthMode.runtimeToken,
+              capabilities: [CloudRuntimeCapability('chat')],
+            ),
+            authToken: 'runtime-token-1',
+            capabilityManifestId: 'manifest-self-1',
+            verification: ModelCapabilityVerificationResult(
+              ok: false,
+              checks: [
+                ModelCapabilityCheckResult(
+                  code: 'structured_output',
+                  passed: false,
+                  failureCode: 'invalid_structured_output',
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    await controller.deploy(
+      const SelfManagedSetupRequest(
+        cloudflareAccountLabel: 'acct-1',
+        provider: 'openai',
+        apiKey: 'sk-test',
+        embeddingApiKey: 'emb-test',
+        multimodalApiKey: 'mm-test',
+      ),
+    );
+
+    expect(controller.state.step, SelfManagedSetupStep.failed);
+    expect(controller.state.errorCode, 'invalid_structured_output');
+    expect(controller.state.verification?.ok, isFalse);
+    expect(await store.loadConnection(), isNull);
   });
 }

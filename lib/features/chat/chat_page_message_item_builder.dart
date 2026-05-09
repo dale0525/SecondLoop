@@ -793,6 +793,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
               ),
             if (isUser &&
                 !isPending &&
+                !_usesRuntimeFirstSecretarySemantics &&
                 jobsByMessageId.containsKey(stableMsg.id))
               Align(
                 alignment: Alignment.centerRight,

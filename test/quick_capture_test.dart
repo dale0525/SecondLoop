@@ -19,7 +19,7 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets(
-      'Quick capture keeps explicit time phrases on local suggestion flow even when AI automation is available',
+      'Quick capture stores explicit time phrases without local suggestion flow',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
@@ -67,12 +67,12 @@ void main() {
     expect(backend.semanticParseEnqueueCount, 0);
     expect(backend.insertedMessages, hasLength(1));
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
-        findsOneWidget);
+        findsNothing);
     expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
     expect(controller.consumeOpenChatRequest(), isFalse);
   });
 
-  testWidgets('Quick capture enqueues semantic parse for todo-relevant input',
+  testWidgets('Quick capture skips semantic parse for todo-relevant input',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
@@ -117,7 +117,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    expect(backend.semanticParseEnqueueCount, 1);
+    expect(backend.semanticParseEnqueueCount, 0);
     expect(backend.insertedMessages, hasLength(1));
     expect(backend.upsertTodoCount, 0);
     expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
@@ -125,8 +125,7 @@ void main() {
     expect(find.text('Remind me to confirm later'), findsNothing);
   });
 
-  testWidgets(
-      'Quick capture falls back to local capture when cloud token is missing',
+  testWidgets('Quick capture stores capture text when cloud token is missing',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
@@ -185,7 +184,7 @@ void main() {
     expect(backend.semanticParseEnqueueCount, 0);
     expect(backend.insertedMessages, hasLength(1));
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
-        findsOneWidget);
+        findsNothing);
     expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
     expect(controller.consumeOpenChatRequest(), isFalse);
   });
@@ -335,7 +334,7 @@ void main() {
     expect(find.byKey(const ValueKey('chat_filter_menu')), findsNothing);
   });
 
-  testWidgets('Quick capture shows capture sheet for time phrases',
+  testWidgets('Quick capture does not show capture sheet for time phrases',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
@@ -359,16 +358,9 @@ void main() {
 
     expect(backend.insertedMessages, hasLength(1));
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
-        findsOneWidget);
+        findsNothing);
     expect(find.byKey(const ValueKey('capture_todo_option_pick_custom')),
-        findsOneWidget);
-
-    await tester
-        .tap(find.byKey(const ValueKey('capture_todo_option_pick_custom')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('capture_todo_custom_datetime_picker')),
-        findsOneWidget);
+        findsNothing);
   });
 }
 

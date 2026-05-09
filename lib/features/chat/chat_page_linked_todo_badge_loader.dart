@@ -28,12 +28,14 @@ extension _ChatPageStateLinkedTodoBadgeLoader on _ChatPageState {
       final existingTodoIds = todosById.keys.toSet();
       final messageIds = messagesById.keys.toList(growable: false);
       var semanticParseConsented = false;
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        semanticParseConsented =
-            SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
-      } catch (_) {
-        semanticParseConsented = false;
+      if (!_usesRuntimeFirstSecretarySemantics) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          semanticParseConsented =
+              SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
+        } catch (_) {
+          semanticParseConsented = false;
+        }
       }
 
       final undoneFollowupCutoffByMessageId = <String, int>{};

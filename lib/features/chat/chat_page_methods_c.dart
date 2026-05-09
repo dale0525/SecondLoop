@@ -4,6 +4,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
   Future<void> _handleMessageAutoActions(
       Message message, String rawText) async {
     if (!mounted) return;
+    if (_usesRuntimeFirstSecretarySemantics) return;
 
     final locale = Localizations.localeOf(context);
     final firstDayOfWeekIndex =

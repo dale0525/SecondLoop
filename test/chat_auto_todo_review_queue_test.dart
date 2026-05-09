@@ -17,7 +17,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-      'Auto-created inbox todo is scheduled for review reminders when enhanced semantic mode is off',
+      'Runtime-first chat does not auto-create review todos from local commands',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': false,
@@ -54,11 +54,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    final created = backend.upserted.lastWhere((t) => t.id == 'todo:m1');
-    expect(created.status, 'inbox');
-    expect(created.dueAtMs, isNull);
-    expect(created.reviewStage, 0);
-    expect(created.nextReviewAtMs, isNotNull);
+    expect(backend.upserted, isEmpty);
   });
 
   testWidgets('Rolling forward stale review todos notifies sync engine',

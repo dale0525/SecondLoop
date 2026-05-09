@@ -1,11 +1,15 @@
 import 'package:flutter/foundation.dart';
 
+import 'model_capability_verification.dart';
 import 'runtime_manifest.dart';
+
+export 'model_capability_verification.dart';
 
 enum SelfManagedSetupStep {
   idle,
   authorizing,
   deploying,
+  verifying,
   ready,
   failed,
 }
@@ -54,11 +58,13 @@ class SelfManagedSetupResult {
     required this.manifest,
     required this.authToken,
     required this.capabilityManifestId,
+    this.verification,
   });
 
   final CloudRuntimeManifest manifest;
   final String authToken;
   final String capabilityManifestId;
+  final ModelCapabilityVerificationResult? verification;
 }
 
 @immutable
@@ -68,18 +74,21 @@ class SelfManagedSetupState {
     required this.statusMessage,
     this.errorCode,
     this.manifest,
+    this.verification,
   });
 
   const SelfManagedSetupState.idle()
       : step = SelfManagedSetupStep.idle,
         statusMessage = '',
         errorCode = null,
-        manifest = null;
+        manifest = null,
+        verification = null;
 
   final SelfManagedSetupStep step;
   final String statusMessage;
   final String? errorCode;
   final CloudRuntimeManifest? manifest;
+  final ModelCapabilityVerificationResult? verification;
 
   bool get isReady => step == SelfManagedSetupStep.ready;
   bool get hasError => step == SelfManagedSetupStep.failed;
@@ -89,6 +98,7 @@ class SelfManagedSetupState {
     String? statusMessage,
     Object? errorCode = _sentinel,
     Object? manifest = _sentinel,
+    Object? verification = _sentinel,
   }) {
     return SelfManagedSetupState(
       step: step ?? this.step,
@@ -99,6 +109,9 @@ class SelfManagedSetupState {
       manifest: identical(manifest, _sentinel)
           ? this.manifest
           : manifest as CloudRuntimeManifest?,
+      verification: identical(verification, _sentinel)
+          ? this.verification
+          : verification as ModelCapabilityVerificationResult?,
     );
   }
 

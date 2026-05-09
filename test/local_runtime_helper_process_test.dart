@@ -28,6 +28,15 @@ void main() {
           ),
           authToken: 'runtime-token-1',
           capabilityManifestId: 'manifest-self-1',
+          verification: ModelCapabilityVerificationResult(
+            ok: true,
+            checks: [
+              ModelCapabilityCheckResult(
+                code: 'structured_output',
+                passed: true,
+              ),
+            ],
+          ),
         );
       },
     );

@@ -86,6 +86,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         .toList(growable: false);
 
     final semanticJobsFuture = Future<List<SemanticParseJob>>.sync(() async {
+      if (_usesRuntimeFirstSecretarySemantics) {
+        return const <SemanticParseJob>[];
+      }
       if (ids.isEmpty) return const <SemanticParseJob>[];
 
       final prefs = await SharedPreferences.getInstance();
@@ -739,17 +742,23 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
       if (sentMessage != null && text.isNotEmpty) {
         final committedMessage = sentMessage!;
-        _messageAutoActionsQueue ??= MessageAutoActionsQueue(
-          backend: backend,
-          sessionKey: sessionKey,
-          handler: _handleMessageAutoActions,
-        );
-        _messageAutoActionsQueue!.enqueue(
-          message: committedMessage,
-          rawText: text,
-          createdAtMs: platformIntToInt(committedMessage.createdAtMs),
-        );
-        unawaited(_persistSecretaryMemoryProposalForMessage(committedMessage));
+        if (!_usesRuntimeFirstSecretarySemantics) {
+          _messageAutoActionsQueue ??= MessageAutoActionsQueue(
+            backend: backend,
+            sessionKey: sessionKey,
+            handler: _handleMessageAutoActions,
+          );
+          _messageAutoActionsQueue!.enqueue(
+            message: committedMessage,
+            rawText: text,
+            createdAtMs: platformIntToInt(committedMessage.createdAtMs),
+          );
+          unawaited(
+            _persistSecretaryMemoryProposalForMessage(committedMessage),
+          );
+        } else {
+          await _sendMessageToRuntimeSecretary(text);
+        }
       }
     } catch (e) {
       if (!mounted) return;

@@ -36,6 +36,7 @@ import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_capability_auth.dart';
+import '../../core/cloud/secretary_runtime_conversation_sender.dart';
 import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/secretary/local_todo_command_parser.dart';
 import '../../core/secretary/memory_proposal_detector.dart';
@@ -145,6 +146,7 @@ import 'audio_recording_recovery_store.dart';
 part 'chat_page_methods_a.dart';
 part 'chat_page_methods_a_todos.dart';
 part 'chat_page_methods_b.dart';
+part 'chat_page_methods_b_runtime_secretary.dart';
 part 'chat_page_methods_b_task_hub_quick_actions.dart';
 part 'chat_page_methods_b_attachments.dart';
 part 'chat_page_methods_b_attachment_enrichment.dart';
@@ -435,6 +437,7 @@ class ChatPage extends StatefulWidget {
     this.isTabActive = true,
     this.showAppBar = true,
     this.tagRepository = const TagRepository(),
+    this.runtimeConversationSender,
     super.key,
   });
 
@@ -442,12 +445,15 @@ class ChatPage extends StatefulWidget {
   final bool isTabActive;
   final bool showAppBar;
   final TagRepository tagRepository;
+  final ChatRuntimeConversationSender? runtimeConversationSender;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
 }
 
 class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
+  bool get _usesRuntimeFirstSecretarySemantics => true;
+
   final _controller = TextEditingController();
   final _inputFocusNode = FocusNode();
   final _scrollController = ScrollController();

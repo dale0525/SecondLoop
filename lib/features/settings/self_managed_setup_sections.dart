@@ -99,6 +99,8 @@ class SelfManagedSetupSections extends StatelessWidget {
         return context.t.settings.selfManagedSetup.status.authorizing;
       case SelfManagedSetupStep.deploying:
         return context.t.settings.selfManagedSetup.status.deploying;
+      case SelfManagedSetupStep.verifying:
+        return 'Verifying model capabilities...';
       case SelfManagedSetupStep.ready:
         return context.t.settings.selfManagedSetup.status.ready;
       case SelfManagedSetupStep.failed:

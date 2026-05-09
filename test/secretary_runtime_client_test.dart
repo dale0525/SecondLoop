@@ -146,4 +146,122 @@ void main() {
       ['chat', 'working_set'],
     );
   });
+
+  test('creates runtime conversation and sends messages with metadata',
+      () async {
+    final requests = <http.BaseRequest>[];
+    final client = SecretaryRuntimeClient(
+      apiClient: RuntimeApiClient(
+        connectionStore: RuntimeConnectionStore(),
+        httpClient: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path.endsWith('/conversations')) {
+            return http.Response(
+              jsonEncode({'conversation_id': 'conversation-1'}),
+              200,
+            );
+          }
+          expect(
+            request.url.path,
+            '/v1/runtime/vaults/vault-1/conversations/conversation-1/messages',
+          );
+          final decoded = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(decoded['message'], '把“完成周报”改到今天 20:00。');
+          return http.Response(
+            jsonEncode({
+              'run_id': 'run-1',
+              'conversation_id': 'conversation-1',
+              'assistant': {
+                'role': 'assistant',
+                'content': '待确认：改截止时间。',
+              },
+              'metadata': {
+                'run_id': 'run-1',
+                'turn_id': 'turn-run-1',
+                'conversation_id': 'conversation-1',
+                'vault_id': 'vault-1',
+                'response_type': 'formal_mutation_pending',
+                'run_status': 'waiting_for_approval',
+                'approval_required': true,
+                'proposed_mutations': [
+                  {
+                    'entity_type': 'task',
+                    'mutation_type': 'reschedule',
+                    'status': 'pending_approval',
+                  }
+                ],
+                'applied_mutations': [],
+                'approval_items': [
+                  {
+                    'id': 'approval-task-1',
+                    'task_id': 'task-1',
+                    'title': '完成周报',
+                    'kind': 'task_mutation_confirmation',
+                  }
+                ],
+              },
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      ),
+    );
+
+    final conversationId = await client.createConversation('vault-1');
+    final run = await client.sendConversationMessage(
+      'vault-1',
+      conversationId: conversationId,
+      message: '把“完成周报”改到今天 20:00。',
+    );
+
+    expect(conversationId, 'conversation-1');
+    expect(run.runId, 'run-1');
+    expect(run.assistantContent, '待确认：改截止时间。');
+    expect(run.metadata.responseType, 'formal_mutation_pending');
+    expect(run.metadata.runStatus, 'waiting_for_approval');
+    expect(run.metadata.approvalRequired, isTrue);
+    expect(
+        run.metadata.proposedMutations.single['mutation_type'], 'reschedule');
+    expect(run.metadata.appliedMutations, isEmpty);
+    expect(
+        run.metadata.approvalItems.single.kind, 'task_mutation_confirmation');
+    expect(requests.map((request) => request.url.path), [
+      '/v1/runtime/vaults/vault-1/conversations',
+      '/v1/runtime/vaults/vault-1/conversations/conversation-1/messages',
+    ]);
+  });
+
+  test('fetches runtime conversation run results by id', () async {
+    final client = SecretaryRuntimeClient(
+      apiClient: RuntimeApiClient(
+        connectionStore: RuntimeConnectionStore(),
+        httpClient: MockClient((request) async {
+          expect(request.url.path, '/v1/runtime/vaults/vault-1/runs/run-1');
+          return http.Response(
+            jsonEncode({
+              'run_id': 'run-1',
+              'conversation_id': 'conversation-1',
+              'assistant': {'content': 'done'},
+              'metadata': {
+                'run_id': 'run-1',
+                'turn_id': 'turn-run-1',
+                'conversation_id': 'conversation-1',
+                'vault_id': 'vault-1',
+                'response_type': 'unknown_future_type',
+                'run_status': 'unknown_future_status',
+                'approval_required': false,
+              },
+            }),
+            200,
+          );
+        }),
+      ),
+    );
+
+    final run = await client.fetchRun('vault-1', runId: 'run-1');
+
+    expect(run.metadata.responseType, 'unknown_future_type');
+    expect(run.metadata.runStatus, 'unknown_future_status');
+  });
 }

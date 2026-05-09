@@ -610,16 +610,18 @@ extension _ChatPageStateMethodsA on _ChatPageState {
 
         if (sentMessage != null && submission.markdown.trim().isNotEmpty) {
           final committedMessage = sentMessage!;
-          _messageAutoActionsQueue ??= MessageAutoActionsQueue(
-            backend: backend,
-            sessionKey: sessionKey,
-            handler: _handleMessageAutoActions,
-          );
-          _messageAutoActionsQueue!.enqueue(
-            message: committedMessage,
-            rawText: submission.markdown,
-            createdAtMs: platformIntToInt(committedMessage.createdAtMs),
-          );
+          if (!_usesRuntimeFirstSecretarySemantics) {
+            _messageAutoActionsQueue ??= MessageAutoActionsQueue(
+              backend: backend,
+              sessionKey: sessionKey,
+              handler: _handleMessageAutoActions,
+            );
+            _messageAutoActionsQueue!.enqueue(
+              message: committedMessage,
+              rawText: submission.markdown,
+              createdAtMs: platformIntToInt(committedMessage.createdAtMs),
+            );
+          }
         }
       } catch (e) {
         if (!mounted) return;
@@ -833,23 +835,25 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     }
 
     int? undoneFollowupCutoffMs;
-    try {
-      final jobs = await backend.listSemanticParseJobsByMessageIds(
-        sessionKey,
-        messageIds: <String>[message.id],
-      );
-      for (final job in jobs) {
-        if (job.messageId != message.id) continue;
-        if ((job.appliedActionKind ?? '').trim() != 'followup') continue;
-        final undoneAtMs = job.undoneAtMs?.toInt();
-        if (undoneAtMs == null) continue;
-        if (undoneFollowupCutoffMs == null ||
-            undoneAtMs > undoneFollowupCutoffMs) {
-          undoneFollowupCutoffMs = undoneAtMs;
+    if (!_usesRuntimeFirstSecretarySemantics) {
+      try {
+        final jobs = await backend.listSemanticParseJobsByMessageIds(
+          sessionKey,
+          messageIds: <String>[message.id],
+        );
+        for (final job in jobs) {
+          if (job.messageId != message.id) continue;
+          if ((job.appliedActionKind ?? '').trim() != 'followup') continue;
+          final undoneAtMs = job.undoneAtMs?.toInt();
+          if (undoneAtMs == null) continue;
+          if (undoneFollowupCutoffMs == null ||
+              undoneAtMs > undoneFollowupCutoffMs) {
+            undoneFollowupCutoffMs = undoneAtMs;
+          }
         }
+      } catch (_) {
+        undoneFollowupCutoffMs = null;
       }
-    } catch (_) {
-      undoneFollowupCutoffMs = null;
     }
 
     try {

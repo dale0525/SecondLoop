@@ -70,6 +70,22 @@ extension _ChatPageStateSecretary on _ChatPageState {
     TaskPrioritySnapshot? snapshot,
   ) {
     final cards = <Widget>[];
+    if (_usesRuntimeFirstSecretarySemantics) {
+      final plan = _secretaryPlanFromSnapshot(snapshot);
+      if (plan != null && !_ignoredSecretaryPlanIds.contains(plan.id)) {
+        unawaited(_persistSecretaryPlan(plan));
+        cards.add(
+          ChatSecretaryPlanningCard(
+            plan: plan,
+            onViewPlan: () => _openPlanningReview(plan),
+            onRemindLater: () => _remindSecretaryPlanLater(plan),
+            onIgnore: () => _ignoreSecretaryPlan(plan),
+          ),
+        );
+      }
+      return cards;
+    }
+
     final proposals = _pendingSecretaryMemoryProposals(messages);
     if (proposals.length == 1) {
       final proposal = proposals.single;

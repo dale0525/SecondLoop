@@ -18,7 +18,7 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Todo semantic matching uses cloud without local fallback',
+  testWidgets('Runtime-first chat skips local and cloud todo semantic matching',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_source_preference_v1': 'cloud',
@@ -79,16 +79,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(
-      backend.calls,
-      <String>[
-        'searchSimilarTodoThreadsCloudGateway',
-      ],
-    );
-    expect(
-      backend.calls,
-      isNot(contains('searchSimilarTodoThreadsBrok')),
-    );
+    expect(backend.calls, isEmpty);
   });
 }
 

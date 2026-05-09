@@ -42,6 +42,19 @@ final class SelfManagedSetupController extends ChangeNotifier {
           notifyListeners();
         },
       );
+      final verification = result.verification;
+      if (verification == null || !verification.ok) {
+        final failureCode = verification?.firstFailureCode ??
+            'model_capability_verification_failed';
+        _state = _state.copyWith(
+          step: SelfManagedSetupStep.failed,
+          statusMessage: failureCode,
+          errorCode: failureCode,
+          verification: verification,
+        );
+        notifyListeners();
+        return;
+      }
       await _connectionStore.saveConnection(
         CloudRuntimeConnection(
           profile: CloudRuntimeProfile(
@@ -60,6 +73,7 @@ final class SelfManagedSetupController extends ChangeNotifier {
         statusMessage: 'ready',
         errorCode: null,
         manifest: result.manifest,
+        verification: verification,
       );
       notifyListeners();
     } on LocalRuntimeHelperException catch (error) {
