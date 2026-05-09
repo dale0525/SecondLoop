@@ -307,63 +307,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             title: askAiPreferenceLabels.byok.title,
             subtitle: askAiPreferenceLabels.byok.description,
           ),
-          SwitchListTile(
-            key: const ValueKey(
-                'ai_settings_semantic_parse_auto_actions_switch'),
-            title: Text(context.t.settings.semanticParseAutoActions.title),
-            subtitle: Text(semanticParseSubtitle),
-            value: _semanticParseEnabled ?? false,
-            onChanged: _automationLoading || _automationSaving
-                ? null
-                : (value) async {
-                    if (value && !canUseSemanticParse) {
-                      if (subscriptionStatus == SubscriptionStatus.entitled &&
-                          !hasCloudAccount) {
-                        await pushPageWithInheritedScopes(
-                          Navigator.of(context),
-                          context,
-                          const CloudAccountPage(),
-                        );
-                        if (!mounted) return;
-                        await _reloadAutomationState(forceLoading: false);
-                        return;
-                      }
-
-                      await _openLlmProfilesForByokSetupAndRefreshRoutes();
-                      return;
-                    }
-
-                    await _setSemanticParseEnabled(value);
-                  },
-          ),
-          SwitchListTile(
-            key: const ValueKey('ai_settings_task_priority_ai_switch'),
-            title: Text(context.t.settings.taskPriorityAiEnhancement.title),
-            subtitle: Text(taskPriorityAiSubtitle),
-            value: _taskPriorityAiEnabled ?? true,
-            onChanged: _automationLoading || _automationSaving
-                ? null
-                : (value) async {
-                    if (value && !canUseTaskPriorityAi) {
-                      if (subscriptionStatus == SubscriptionStatus.entitled &&
-                          !hasCloudAccount) {
-                        await pushPageWithInheritedScopes(
-                          Navigator.of(context),
-                          context,
-                          const CloudAccountPage(),
-                        );
-                        if (!mounted) return;
-                        await _reloadAutomationState(forceLoading: false);
-                        return;
-                      }
-
-                      await _openLlmProfilesForByokSetupAndRefreshRoutes();
-                      return;
-                    }
-
-                    await _setTaskPriorityAiEnabled(value);
-                  },
-          ),
           ListTile(
             key: const ValueKey('ai_settings_open_llm_profiles_advanced'),
             title: Text(t.askAi.actions.openByok),
@@ -389,29 +332,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
         statusLabel: _embeddingsStatusLabel(context),
         warning: embeddingsWarning,
         actions: [
-          SwitchListTile(
-            key: const ValueKey('ai_settings_cloud_embeddings_switch'),
-            title: Text(context.t.settings.cloudEmbeddings.title),
-            subtitle: Text(cloudEmbeddingsSubtitle),
-            value: _cloudEmbeddingsEnabled ?? false,
-            onChanged: _automationLoading || _automationSaving
-                ? null
-                : (value) async {
-                    if (value && !canUseCloudEmbeddings) {
-                      await pushPageWithInheritedScopes(
-                        Navigator.of(context),
-                        context,
-                        const CloudAccountPage(),
-                      );
-                      if (!mounted) return;
-                      await _reloadAutomationState(forceLoading: false);
-                      await _reloadEmbeddingsState(forceLoading: false);
-                      return;
-                    }
-
-                    await _setCloudEmbeddingsEnabled(value);
-                  },
-          ),
           _buildEmbeddingsPreferenceTile(
             context,
             key: const ValueKey('ai_settings_embeddings_mode_auto'),
@@ -432,13 +352,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             value: EmbeddingsSourcePreference.byok,
             title: embeddingsPreferenceLabels.byok.title,
             subtitle: embeddingsPreferenceLabels.byok.description,
-          ),
-          _buildEmbeddingsPreferenceTile(
-            context,
-            key: const ValueKey('ai_settings_embeddings_mode_local'),
-            value: EmbeddingsSourcePreference.local,
-            title: embeddingsPreferenceLabels.local.title,
-            subtitle: embeddingsPreferenceLabels.local.description,
           ),
           ListTile(
             key: const ValueKey('ai_settings_open_embedding_profiles'),
@@ -486,13 +399,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             value: MediaSourcePreference.byok,
             title: mediaPreferenceLabels.byok.title,
             subtitle: mediaPreferenceLabels.byok.description,
-          ),
-          _buildMediaPreferenceTile(
-            context,
-            key: const ValueKey('ai_settings_media_mode_local'),
-            value: MediaSourcePreference.local,
-            title: mediaPreferenceLabels.local.title,
-            subtitle: _imageLocalSourceSubtitle(context),
           ),
           SwitchListTile(
             key: const ValueKey('ai_settings_media_image_wifi_only'),
@@ -674,51 +580,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                     ),
                   ),
             actions: [
-              if (!_smartOrganizationEnabled && canUseSmartOrganization)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      key: const ValueKey(
-                        'ai_settings_smart_organization_recommended_button',
-                      ),
-                      onPressed: _automationLoading || _automationSaving
-                          ? null
-                          : () async {
-                              await _setSmartOrganizationEnabled(
-                                enabled: true,
-                                canUseSmartOrganization:
-                                    canUseSmartOrganization,
-                                canUseCloudEmbeddings: canUseCloudEmbeddings,
-                              );
-                            },
-                      child: Text(
-                        context.t.settings.aiSelection.smartOrganization.actions
-                            .useRecommended,
-                      ),
-                    ),
-                  ),
-                ),
-              SwitchListTile(
-                key: const ValueKey('ai_settings_smart_organization_switch'),
-                title: Text(
-                    context.t.settings.aiSelection.smartOrganization.title),
-                subtitle: Text(
-                  context
-                      .t.settings.aiSelection.smartOrganization.privacySummary,
-                ),
-                value: _smartOrganizationEnabled,
-                onChanged: _automationLoading || _automationSaving
-                    ? null
-                    : (value) async {
-                        await _setSmartOrganizationEnabled(
-                          enabled: value,
-                          canUseSmartOrganization: canUseSmartOrganization,
-                          canUseCloudEmbeddings: canUseCloudEmbeddings,
-                        );
-                      },
-              ),
               ListTile(
                 key: const ValueKey(
                   'ai_settings_open_smart_organization_settings',

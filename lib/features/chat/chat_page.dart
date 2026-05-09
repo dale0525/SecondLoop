@@ -178,7 +178,6 @@ part 'chat_page_build.dart';
 part 'chat_page_build_desktop_drop.dart';
 
 const _kAskAiDataConsentPrefsKey = 'ask_ai_data_consent_v1';
-const _kEmbeddingsDataConsentPrefsKey = 'embeddings_data_consent_v1';
 const _kCloudEmbeddingsModelName = 'baai/bge-m3';
 const _kAskAiCloudFallbackSnackKey = ValueKey(
   'ask_ai_cloud_fallback_snack',

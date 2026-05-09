@@ -314,7 +314,7 @@ void main() {
   });
 
   testWidgets(
-      'TodoDetailPage regenerate opens AI settings when smart organization consent is disabled',
+      'TodoDetailPage regenerate ignores legacy disabled smart organization consent',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': false,
@@ -330,8 +330,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(backend.enqueuedRegenerate, isFalse);
-    expect(find.byType(AiAskAiSettingsPage), findsOneWidget);
+    expect(backend.enqueuedRegenerate, isTrue);
+    expect(find.byType(AiAskAiSettingsPage), findsNothing);
   });
 
   testWidgets(

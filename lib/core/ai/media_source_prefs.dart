@@ -10,6 +10,7 @@ enum MediaSourcePreference {
 enum MediaSourceRouteKind {
   cloudGateway,
   byok,
+  needsSetup,
   local,
 }
 
@@ -35,7 +36,7 @@ final class MediaSourcePrefs {
     return switch (raw?.trim() ?? '') {
       'cloud' => MediaSourcePreference.cloud,
       'byok' => MediaSourcePreference.byok,
-      'local' => MediaSourcePreference.local,
+      'local' => MediaSourcePreference.auto,
       _ => MediaSourcePreference.auto,
     };
   }
@@ -45,7 +46,7 @@ final class MediaSourcePrefs {
       MediaSourcePreference.auto => null,
       MediaSourcePreference.cloud => 'cloud',
       MediaSourcePreference.byok => 'byok',
-      MediaSourcePreference.local => 'local',
+      MediaSourcePreference.local => null,
     };
   }
 }
@@ -58,7 +59,6 @@ MediaSourceRouteKind resolveMediaSourceRoute(
 }) {
   final canUseCloud = cloudAvailable;
   final canUseByok = hasByokProfile;
-  final canUseLocal = hasLocalCapability;
 
   final preferredOrder = mediaSourceFallbackOrder(preference);
   for (final route in preferredOrder) {
@@ -69,13 +69,14 @@ MediaSourceRouteKind resolveMediaSourceRoute(
       case MediaSourceRouteKind.byok:
         if (canUseByok) return MediaSourceRouteKind.byok;
         break;
+      case MediaSourceRouteKind.needsSetup:
+        return MediaSourceRouteKind.needsSetup;
       case MediaSourceRouteKind.local:
-        if (canUseLocal) return MediaSourceRouteKind.local;
         break;
     }
   }
 
-  return MediaSourceRouteKind.local;
+  return MediaSourceRouteKind.needsSetup;
 }
 
 List<MediaSourceRouteKind> mediaSourceFallbackOrder(
@@ -87,14 +88,13 @@ List<MediaSourceRouteKind> mediaSourceFallbackOrder(
       const <MediaSourceRouteKind>[
         MediaSourceRouteKind.cloudGateway,
         MediaSourceRouteKind.byok,
-        MediaSourceRouteKind.local,
       ],
     MediaSourcePreference.byok => const <MediaSourceRouteKind>[
         MediaSourceRouteKind.byok,
-        MediaSourceRouteKind.local,
       ],
     MediaSourcePreference.local => const <MediaSourceRouteKind>[
-        MediaSourceRouteKind.local,
+        MediaSourceRouteKind.cloudGateway,
+        MediaSourceRouteKind.byok,
       ],
   };
 }

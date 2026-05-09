@@ -15,7 +15,7 @@ import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('Embeddings BYOK preference falls back to local on BYOK error',
+  testWidgets('Embeddings BYOK preference does not fall back to local on error',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_source_preference_v1': 'byok',
@@ -57,7 +57,7 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
 
     expect(backend.calls, contains('byok'));
-    expect(backend.calls, contains('local'));
+    expect(backend.calls, isNot(contains('local')));
   });
 
   testWidgets(
@@ -156,7 +156,7 @@ void main() {
     expect(backend.calls, contains('releaseLocalEmbeddingModelIfIdle'));
   });
 
-  testWidgets('Embeddings local route also triggers local idle release',
+  testWidgets('Legacy local embeddings preference requires remote provider',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_source_preference_v1': 'local',
@@ -183,7 +183,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 3));
 
-    expect(backend.calls, contains('local'));
+    expect(backend.calls, isNot(contains('local')));
     expect(backend.calls, contains('releaseLocalEmbeddingModelIfIdle'));
   });
 }

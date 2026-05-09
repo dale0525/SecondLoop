@@ -52,8 +52,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     final cloudAuthScope = CloudAuthScope.maybeOf(context);
 
     final prefs = await SharedPreferences.getInstance();
-    final consented =
-        prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+    final consented = SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
     if (!consented) {
       if (!mounted) return false;
       await Navigator.of(context).push(

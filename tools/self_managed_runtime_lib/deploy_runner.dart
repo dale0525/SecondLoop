@@ -31,6 +31,9 @@ final class SelfManagedRuntimeDeployRunner {
     required void Function(SelfManagedSetupProgress event) onProgress,
   }) async {
     try {
+      if (!request.hasRequiredAiProviderConfig) {
+        throw StateError('missing_ai_provider_config');
+      }
       onProgress(
         const SelfManagedSetupProgress(
           step: SelfManagedSetupStep.authorizing,
@@ -68,9 +71,6 @@ Future<String> _defaultDeployResources(
   String cloudflareToken,
   SelfManagedRuntimeResourcePlan plan,
 ) async {
-  if (request.apiKey.trim().isEmpty) {
-    throw StateError('resource_apply_failed');
-  }
   return 'https://${request.cloudflareAccountLabel}.runtime.example/';
 }
 

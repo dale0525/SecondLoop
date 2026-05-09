@@ -612,6 +612,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         case MediaSourceRouteKind.byok:
           if (hasByokProfile) return true;
           break;
+        case MediaSourceRouteKind.needsSetup:
+          break;
         case MediaSourceRouteKind.local:
           if (hasLocalCapability) return true;
           break;

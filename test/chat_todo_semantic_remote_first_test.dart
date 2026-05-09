@@ -18,7 +18,7 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Todo semantic matching uses cloud first, then local fallback',
+  testWidgets('Todo semantic matching uses cloud without local fallback',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_source_preference_v1': 'cloud',
@@ -83,7 +83,6 @@ void main() {
       backend.calls,
       <String>[
         'searchSimilarTodoThreadsCloudGateway',
-        'searchSimilarTodoThreads',
       ],
     );
     expect(

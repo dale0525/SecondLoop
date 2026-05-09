@@ -90,7 +90,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
       final prefs = await SharedPreferences.getInstance();
       final semanticParseConsented =
-          prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+          SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
       if (!semanticParseConsented) return const <SemanticParseJob>[];
 
       return backend.listSemanticParseJobsByMessageIds(
@@ -440,43 +440,27 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       backend,
       sessionKey,
     );
-    if (route != EmbeddingsSourceRouteKind.local) {
-      final remoteMatches = await _searchRemoteTodoSemanticMatches(
-        backend,
-        sessionKey,
-        query: query,
-        topK: topK,
-        requireCloud: requireCloud,
-      );
-      if (remoteMatches.isNotEmpty) return remoteMatches;
 
-      return _searchLocalTodoSemanticMatches(
-        backend,
-        sessionKey,
-        query: query,
-        topK: topK,
-      );
-    }
-
-    final localMatches = await _searchLocalTodoSemanticMatches(
-      backend,
-      sessionKey,
-      query: query,
-      topK: topK,
-    );
-    if (_isVeryHighConfidenceTodoSemanticMatch(localMatches)) {
-      return localMatches;
-    }
-
-    final remoteMatches = await _searchRemoteTodoSemanticMatches(
-      backend,
-      sessionKey,
-      query: query,
-      topK: topK,
-      requireCloud: requireCloud,
-    );
-    if (remoteMatches.isNotEmpty) return remoteMatches;
-    return localMatches;
+    return switch (route) {
+      EmbeddingsSourceRouteKind.cloudGateway ||
+      EmbeddingsSourceRouteKind.byok =>
+        _searchRemoteTodoSemanticMatches(
+          backend,
+          sessionKey,
+          query: query,
+          topK: topK,
+          requireCloud: requireCloud,
+        ),
+      EmbeddingsSourceRouteKind.needsSetup => Future.value(
+          const <TodoThreadMatch>[],
+        ),
+      EmbeddingsSourceRouteKind.local => _searchLocalTodoSemanticMatches(
+          backend,
+          sessionKey,
+          query: query,
+          topK: topK,
+        ),
+    };
   }
 
   Future<EmbeddingsSourceRouteKind> _resolveTodoSemanticRouteForSendFlow(
@@ -495,8 +479,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       _ => EmbeddingsSourcePreference.auto,
     };
     final cloudEmbeddingsSelected =
-        prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ??
-            _cloudEmbeddingsConsented;
+        EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
 
     final subscriptionStatus =
         subscriptionScope?.status ?? SubscriptionStatus.unknown;

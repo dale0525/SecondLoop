@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';
-import '../../core/ai/task_priority_ai_enhancement_prefs.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -13,8 +12,6 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import 'ai_settings_page.dart';
-import 'cloud_account_page.dart';
-import 'llm_profiles_page.dart';
 
 class AiSmartOrganizationSettingsPage extends StatefulWidget {
   const AiSmartOrganizationSettingsPage({super.key});
@@ -27,7 +24,6 @@ class AiSmartOrganizationSettingsPage extends StatefulWidget {
 class _AiSmartOrganizationSettingsPageState
     extends State<AiSmartOrganizationSettingsPage> {
   bool _loading = true;
-  bool _saving = false;
   bool? _cloudEmbeddingsEnabled;
   bool? _semanticParseEnabled;
   bool _byokConfigured = false;
@@ -66,92 +62,12 @@ class _AiSmartOrganizationSettingsPageState
     if (!mounted || generation != _generation) return;
     setState(() {
       _cloudEmbeddingsEnabled =
-          prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false;
+          EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
       _semanticParseEnabled =
-          prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+          SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
       _byokConfigured = byokConfigured;
       _loading = false;
     });
-  }
-
-  Future<void> _setEnabled(bool enabled) async {
-    if (_saving || _enabled == enabled) return;
-
-    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-        SubscriptionStatus.unknown;
-    final hasCloudAccount =
-        (CloudAuthScope.maybeOf(context)?.controller.uid ?? '')
-            .trim()
-            .isNotEmpty;
-    final canUseCloudEmbeddings =
-        hasCloudAccount && subscriptionStatus == SubscriptionStatus.entitled;
-    final canUseSmartOrganization = canUseCloudEmbeddings || _byokConfigured;
-
-    if (enabled && !canUseSmartOrganization) {
-      if (subscriptionStatus == SubscriptionStatus.entitled &&
-          !hasCloudAccount) {
-        await pushPageWithInheritedScopes(
-          Navigator.of(context),
-          context,
-          const CloudAccountPage(),
-        );
-        if (!mounted) return;
-        await _reload(forceLoading: false);
-        return;
-      }
-
-      await pushPageWithInheritedScopes(
-        Navigator.of(context),
-        context,
-        const LlmProfilesPage(),
-      );
-      if (!mounted) return;
-      await _reload(forceLoading: false);
-      return;
-    }
-
-    if (enabled) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          final t = context.t;
-          return AlertDialog(
-            title: Text(t.settings.aiSelection.smartOrganization.dialogTitle),
-            content: Text(t.settings.aiSelection.smartOrganization.dialogBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(t.common.actions.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(
-                  t.settings.aiSelection.smartOrganization.dialogActions.enable,
-                ),
-              ),
-            ],
-          );
-        },
-      );
-      if (confirmed != true || !mounted) return;
-    }
-
-    setState(() => _saving = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await SemanticParseDataConsentPrefs.setEnabled(prefs, enabled);
-      await EmbeddingsDataConsentPrefs.setEnabled(
-        prefs,
-        enabled && canUseCloudEmbeddings,
-      );
-      await TaskPriorityAiEnhancementPrefs.write(enabled);
-      if (!mounted) return;
-      await _reload(forceLoading: false);
-    } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
-    }
   }
 
   String _statusLabel(BuildContext context) {
@@ -212,37 +128,6 @@ class _AiSmartOrganizationSettingsPageState
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                SwitchListTile(
-                  key: const ValueKey('smart_organization_settings_switch'),
-                  title: Text(t.title),
-                  subtitle: Text(t.privacySummary),
-                  value: _enabled,
-                  onChanged: _loading || _saving
-                      ? null
-                      : (value) async {
-                          await _setEnabled(value);
-                        },
-                ),
-                if (!_enabled) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        key: const ValueKey(
-                          'smart_organization_settings_recommended_button',
-                        ),
-                        onPressed: _loading || _saving
-                            ? null
-                            : () async {
-                                await _setEnabled(true);
-                              },
-                        child: Text(t.actions.useRecommended),
-                      ),
-                    ),
-                  ),
-                ],
-                const Divider(height: 1),
                 ListTile(
                   key: const ValueKey(
                       'smart_organization_settings_open_advanced'),

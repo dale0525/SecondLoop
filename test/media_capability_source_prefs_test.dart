@@ -56,7 +56,7 @@ void main() {
     expect(await MediaCapabilitySourcePrefs.readDocumentOcr(),
         MediaSourcePreference.cloud);
     expect(await MediaCapabilitySourcePrefs.readUrlFetch(),
-        MediaSourcePreference.local);
+        MediaSourcePreference.auto);
   });
 
   test('audio source local falls back to auto on unsupported platforms',
@@ -75,7 +75,7 @@ void main() {
         MediaSourcePreference.auto);
   });
 
-  test('audio source local stays local on windows', () async {
+  test('audio source local falls back to auto on windows', () async {
     final previous = debugDefaultTargetPlatformOverride;
     addTearDown(() {
       debugDefaultTargetPlatformOverride = previous;
@@ -87,6 +87,6 @@ void main() {
     });
 
     expect(await MediaCapabilitySourcePrefs.readAudio(),
-        MediaSourcePreference.local);
+        MediaSourcePreference.auto);
   });
 }

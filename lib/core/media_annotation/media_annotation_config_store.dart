@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../backend/native_app_dir.dart';
+import '../ai/required_ai_capability_policy.dart';
 import '../../src/rust/api/media_annotation.dart' as rust_media_annotation;
 import '../../src/rust/db.dart';
 
@@ -18,10 +19,11 @@ final class RustMediaAnnotationConfigStore
   @override
   Future<MediaAnnotationConfig> read(Uint8List key) async {
     final appDir = await appDirProvider();
-    return rust_media_annotation.dbGetMediaAnnotationConfig(
+    final config = await rust_media_annotation.dbGetMediaAnnotationConfig(
       appDir: appDir,
       key: key,
     );
+    return RequiredAiCapabilityPolicy.requireMediaAnnotationConfig(config);
   }
 
   @override
@@ -30,7 +32,7 @@ final class RustMediaAnnotationConfigStore
     await rust_media_annotation.dbSetMediaAnnotationConfig(
       appDir: appDir,
       key: key,
-      config: config,
+      config: RequiredAiCapabilityPolicy.requireMediaAnnotationConfig(config),
     );
   }
 }

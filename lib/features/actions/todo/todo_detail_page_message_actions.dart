@@ -82,7 +82,7 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
 
         final prefs = await SharedPreferences.getInstance();
         final consented =
-            prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+            SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
 
         if (consented) {
           final prepared = await prepareForegroundAiRoute(

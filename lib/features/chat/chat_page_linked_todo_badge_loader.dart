@@ -31,7 +31,7 @@ extension _ChatPageStateLinkedTodoBadgeLoader on _ChatPageState {
       try {
         final prefs = await SharedPreferences.getInstance();
         semanticParseConsented =
-            prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+            SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
       } catch (_) {
         semanticParseConsented = false;
       }

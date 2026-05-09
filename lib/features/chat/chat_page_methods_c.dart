@@ -114,8 +114,9 @@ extension _ChatPageStateMethodsC on _ChatPageState {
         !looksLikeLongFormNote &&
         looksLikeTodoRelevant) {
       final prefs = await SharedPreferences.getInstance();
-      final consented =
-          prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+      final consented = SemanticParseDataConsentPrefs.readEffectiveEnabled(
+        prefs,
+      );
       if (consented && mounted) {
         final cloudIdToken = await readCloudCapabilityIdToken(
           cloudAuthScope?.controller,

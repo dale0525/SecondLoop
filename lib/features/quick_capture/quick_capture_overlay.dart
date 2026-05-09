@@ -196,7 +196,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         // inputs that do not already have a clear local time match.
         final prefs = await SharedPreferences.getInstance();
         final consented =
-            prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+            SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
         if (consented && mounted) {
           try {
             final preparedRoute = await prepareForegroundAiRoute(

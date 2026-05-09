@@ -48,7 +48,7 @@ void main() {
   });
 
   testWidgets(
-      'AI settings advanced section reveals existing low-level controls',
+      'AI settings advanced section reveals required source controls without opt-out toggles',
       (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
@@ -74,15 +74,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(mediaSection, findsOneWidget);
 
-    final cloudEmbeddingsSwitch =
-        find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch'));
+    final embeddingsSection =
+        find.byKey(const ValueKey('ai_settings_section_embeddings'));
     await tester.dragUntilVisible(
-      cloudEmbeddingsSwitch,
+      embeddingsSection,
       find.byType(ListView).first,
       const Offset(0, 220),
     );
     await tester.pumpAndSettle();
-    expect(cloudEmbeddingsSwitch, findsOneWidget);
+    expect(embeddingsSection, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('ai_settings_embeddings_mode_cloud')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('ai_settings_embeddings_mode_byok')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('ai_settings_embeddings_mode_local')),
+      findsNothing,
+    );
   });
 
   testWidgets(

@@ -50,6 +50,8 @@ extension _MediaEnrichmentGateUrlEnrichmentExtension
             ),
           );
           break;
+        case MediaSourceRouteKind.needsSetup:
+          break;
         case MediaSourceRouteKind.local:
           break;
       }

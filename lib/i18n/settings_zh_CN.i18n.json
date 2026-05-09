@@ -110,10 +110,12 @@
   },
   "selfManagedSetup": {
     "title": "Self-managed 配置",
-    "subtitle": "完成 Cloudflare 授权、填写 BYOK 并部署运行时。",
+    "subtitle": "完成 Cloudflare 授权，填写必需的 LLM 和 embedding API Key，并部署运行时。",
     "fields": {
       "providerLabel": "提供商",
       "apiKeyLabel": "API Key",
+      "embeddingApiKeyLabel": "Embedding API Key",
+      "multimodalApiKeyLabel": "多模态 LLM API Key",
       "accountLabel": "Cloudflare 账号"
     },
     "status": {
@@ -313,20 +315,21 @@
         "loading": "正在检查当前使用来源...",
         "cloud": "当前使用：SecondLoop Cloud",
         "byok": "当前使用：API 密钥（Embedding/BYOK）",
+        "notConfigured": "需要配置 managed pro 或 embedding API Key 才能使用语义搜索。",
         "local": "当前使用：本机智能检索"
       },
       "preference": {
         "auto": {
           "title": "自动",
-          "description": "自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。"
+          "description": "自动选择：优先 Cloud，其次 API 密钥（BYOK）；两者都不可用时需要先完成配置。"
         },
         "cloud": {
           "title": "SecondLoop Cloud",
-          "description": "优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。"
+          "description": "优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥。"
         },
         "byok": {
           "title": "API 密钥（BYOK）",
-          "description": "优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。"
+          "description": "优先使用你配置的 embedding API Key。"
         },
         "local": {
           "title": "本地能力",
@@ -346,20 +349,21 @@
         "loading": "正在检查当前使用来源...",
         "cloud": "当前使用：SecondLoop Cloud",
         "byok": "当前使用：API 密钥（BYOK）",
+        "notConfigured": "需要配置 managed pro 或多模态 LLM API Key 才能使用媒体理解。",
         "local": "当前使用：本机能力（系统自带）"
       },
       "preference": {
         "auto": {
           "title": "自动",
-          "description": "自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。"
+          "description": "自动选择：优先 Cloud，其次 API 密钥（BYOK）；两者都不可用时需要先完成配置。"
         },
         "cloud": {
           "title": "SecondLoop Cloud",
-          "description": "优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。"
+          "description": "优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥。"
         },
         "byok": {
           "title": "API 密钥（BYOK）",
-          "description": "优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。"
+          "description": "优先使用你配置的多模态 LLM API Key。"
         },
         "local": {
           "title": "本地能力",

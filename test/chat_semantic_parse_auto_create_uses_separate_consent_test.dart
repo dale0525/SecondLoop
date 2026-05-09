@@ -117,7 +117,7 @@ void main() {
   });
 
   testWidgets(
-    'Semantic parse status query is skipped when semantic consent is disabled',
+    'Semantic parse status query ignores legacy disabled consent',
     (tester) async {
       SharedPreferences.setMockInitialValues({
         'ask_ai_data_consent_v1': false,
@@ -165,7 +165,7 @@ void main() {
       expect(find.text('复习英语课堂视频'), findsOneWidget);
       expect(
         backend.calls,
-        isNot(contains('listSemanticParseJobsByMessageIds')),
+        contains('listSemanticParseJobsByMessageIds'),
       );
     },
   );

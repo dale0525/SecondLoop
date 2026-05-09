@@ -151,7 +151,7 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
 
         final prefs = await SharedPreferences.getInstance();
         final consented =
-            prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+            SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
 
         if (consented) {
           final cloudIdToken = await readCloudCapabilityIdToken(

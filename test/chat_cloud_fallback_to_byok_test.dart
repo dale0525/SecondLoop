@@ -61,10 +61,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, contains('askAiStreamCloudGateway'));
+    expect(
+      backend.calls,
+      contains('askAiStreamCloudGatewayWithEmbeddings'),
+    );
     expect(backend.calls, contains('askAiStream'));
     expect(
-      backend.calls.indexOf('askAiStreamCloudGateway'),
+      backend.calls.indexOf('askAiStreamCloudGatewayWithEmbeddings'),
       lessThan(backend.calls.indexOf('askAiStream')),
     );
 
@@ -122,7 +125,9 @@ void main() {
     await tester.pump();
 
     expect(
-        backend.calls.where((call) => call == 'askAiStreamCloudGateway').length,
+        backend.calls
+            .where((call) => call == 'askAiStreamCloudGatewayWithEmbeddings')
+            .length,
         1);
     expect(backend.calls, isNot(contains('askAiStream')));
     expect(find.byKey(const ValueKey('ask_ai_cloud_fallback_snack')),
@@ -303,6 +308,26 @@ final class _CloudFallbackBackend extends AppBackend {
     required String modelName,
   }) {
     calls.add('askAiStreamCloudGateway');
+    return _cloudFailureStream();
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayWithEmbeddings(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String embeddingsModelName,
+  }) {
+    calls.add('askAiStreamCloudGatewayWithEmbeddings');
+    return _cloudFailureStream();
+  }
+
+  Stream<String> _cloudFailureStream() {
     if (!emitRequestIdBeforeFailure) {
       return Stream<String>.fromFuture(
         Future<String>.delayed(

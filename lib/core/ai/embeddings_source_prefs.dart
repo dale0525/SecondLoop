@@ -10,6 +10,7 @@ enum EmbeddingsSourcePreference {
 enum EmbeddingsSourceRouteKind {
   cloudGateway,
   byok,
+  needsSetup,
   local,
 }
 
@@ -35,7 +36,7 @@ final class EmbeddingsSourcePrefs {
     return switch (raw?.trim() ?? '') {
       'cloud' => EmbeddingsSourcePreference.cloud,
       'byok' => EmbeddingsSourcePreference.byok,
-      'local' => EmbeddingsSourcePreference.local,
+      'local' => EmbeddingsSourcePreference.auto,
       _ => EmbeddingsSourcePreference.auto,
     };
   }
@@ -45,7 +46,7 @@ final class EmbeddingsSourcePrefs {
       EmbeddingsSourcePreference.auto => null,
       EmbeddingsSourcePreference.cloud => 'cloud',
       EmbeddingsSourcePreference.byok => 'byok',
-      EmbeddingsSourcePreference.local => 'local',
+      EmbeddingsSourcePreference.local => null,
     };
   }
 }
@@ -59,7 +60,6 @@ EmbeddingsSourceRouteKind resolveEmbeddingsSourceRoute(
 }) {
   final canUseCloud = cloudEmbeddingsSelected && cloudAvailable;
   final canUseByok = hasByokProfile;
-  final canUseLocal = hasLocalCapability;
 
   final preferredOrder = embeddingsSourceFallbackOrder(preference);
   for (final route in preferredOrder) {
@@ -70,13 +70,14 @@ EmbeddingsSourceRouteKind resolveEmbeddingsSourceRoute(
       case EmbeddingsSourceRouteKind.byok:
         if (canUseByok) return EmbeddingsSourceRouteKind.byok;
         break;
+      case EmbeddingsSourceRouteKind.needsSetup:
+        return EmbeddingsSourceRouteKind.needsSetup;
       case EmbeddingsSourceRouteKind.local:
-        if (canUseLocal) return EmbeddingsSourceRouteKind.local;
         break;
     }
   }
 
-  return EmbeddingsSourceRouteKind.local;
+  return EmbeddingsSourceRouteKind.needsSetup;
 }
 
 List<EmbeddingsSourceRouteKind> embeddingsSourceFallbackOrder(
@@ -88,14 +89,13 @@ List<EmbeddingsSourceRouteKind> embeddingsSourceFallbackOrder(
       const <EmbeddingsSourceRouteKind>[
         EmbeddingsSourceRouteKind.cloudGateway,
         EmbeddingsSourceRouteKind.byok,
-        EmbeddingsSourceRouteKind.local,
       ],
     EmbeddingsSourcePreference.byok => const <EmbeddingsSourceRouteKind>[
         EmbeddingsSourceRouteKind.byok,
-        EmbeddingsSourceRouteKind.local,
       ],
     EmbeddingsSourcePreference.local => const <EmbeddingsSourceRouteKind>[
-        EmbeddingsSourceRouteKind.local,
+        EmbeddingsSourceRouteKind.cloudGateway,
+        EmbeddingsSourceRouteKind.byok,
       ],
   };
 }

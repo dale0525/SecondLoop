@@ -22,6 +22,8 @@ class _SelfManagedSetupPageState extends State<SelfManagedSetupPage> {
   final _cloudflareAccountController = TextEditingController();
   final _providerController = TextEditingController(text: 'openai');
   final _apiKeyController = TextEditingController();
+  final _embeddingApiKeyController = TextEditingController();
+  final _multimodalApiKeyController = TextEditingController();
 
   @override
   void initState() {
@@ -34,6 +36,8 @@ class _SelfManagedSetupPageState extends State<SelfManagedSetupPage> {
     _cloudflareAccountController.dispose();
     _providerController.dispose();
     _apiKeyController.dispose();
+    _embeddingApiKeyController.dispose();
+    _multimodalApiKeyController.dispose();
     if (widget.controller == null) {
       _controller.dispose();
     }
@@ -47,70 +51,68 @@ class _SelfManagedSetupPageState extends State<SelfManagedSetupPage> {
       appBar: AppBar(
         title: Text(context.t.settings.selfManagedSetup.title),
       ),
-      body: Padding(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(context.t.settings.selfManagedSetup.subtitle),
-            const SizedBox(height: 16),
-            SelfManagedSetupSections(
-              controller: _controller,
-              cloudflareAccountController: _cloudflareAccountController,
-              providerController: _providerController,
-              apiKeyController: _apiKeyController,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                OutlinedButton(
-                  key: const ValueKey('self_managed_authorize'),
-                  onPressed: _controller.beginCloudflareAuthorization,
-                  child: Text(
-                      context.t.settings.selfManagedSetup.actions.authorize),
-                ),
-                FilledButton(
-                  key: const ValueKey('self_managed_deploy'),
-                  onPressed: () {
-                    _controller.deploy(
-                      SelfManagedSetupRequest(
-                        cloudflareAccountLabel:
-                            _cloudflareAccountController.text,
-                        provider: _providerController.text,
-                        apiKey: _apiKeyController.text,
-                      ),
-                    );
-                  },
-                  child:
-                      Text(context.t.settings.selfManagedSetup.actions.deploy),
-                ),
-                TextButton(
-                  key: const ValueKey('self_managed_retry'),
-                  onPressed: () {
-                    _controller.deploy(
-                      SelfManagedSetupRequest(
-                        cloudflareAccountLabel:
-                            _cloudflareAccountController.text,
-                        provider: _providerController.text,
-                        apiKey: _apiKeyController.text,
-                      ),
-                    );
-                  },
-                  child:
-                      Text(context.t.settings.selfManagedSetup.actions.retry),
-                ),
-                TextButton(
-                  key: const ValueKey('self_managed_reset'),
-                  onPressed: _controller.reset,
-                  child:
-                      Text(context.t.settings.selfManagedSetup.actions.reset),
-                ),
-              ],
-            ),
-          ],
-        ),
+        children: [
+          Text(context.t.settings.selfManagedSetup.subtitle),
+          const SizedBox(height: 16),
+          SelfManagedSetupSections(
+            controller: _controller,
+            cloudflareAccountController: _cloudflareAccountController,
+            providerController: _providerController,
+            apiKeyController: _apiKeyController,
+            embeddingApiKeyController: _embeddingApiKeyController,
+            multimodalApiKeyController: _multimodalApiKeyController,
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              OutlinedButton(
+                key: const ValueKey('self_managed_authorize'),
+                onPressed: _controller.beginCloudflareAuthorization,
+                child:
+                    Text(context.t.settings.selfManagedSetup.actions.authorize),
+              ),
+              FilledButton(
+                key: const ValueKey('self_managed_deploy'),
+                onPressed: () {
+                  _controller.deploy(
+                    SelfManagedSetupRequest(
+                      cloudflareAccountLabel: _cloudflareAccountController.text,
+                      provider: _providerController.text,
+                      apiKey: _apiKeyController.text,
+                      embeddingApiKey: _embeddingApiKeyController.text,
+                      multimodalApiKey: _multimodalApiKeyController.text,
+                    ),
+                  );
+                },
+                child: Text(context.t.settings.selfManagedSetup.actions.deploy),
+              ),
+              TextButton(
+                key: const ValueKey('self_managed_retry'),
+                onPressed: () {
+                  _controller.deploy(
+                    SelfManagedSetupRequest(
+                      cloudflareAccountLabel: _cloudflareAccountController.text,
+                      provider: _providerController.text,
+                      apiKey: _apiKeyController.text,
+                      embeddingApiKey: _embeddingApiKeyController.text,
+                      multimodalApiKey: _multimodalApiKeyController.text,
+                    ),
+                  );
+                },
+                child: Text(context.t.settings.selfManagedSetup.actions.retry),
+              ),
+              TextButton(
+                key: const ValueKey('self_managed_reset'),
+                onPressed: _controller.reset,
+                child: Text(context.t.settings.selfManagedSetup.actions.reset),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

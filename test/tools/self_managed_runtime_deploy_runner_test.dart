@@ -20,6 +20,8 @@ void main() {
         cloudflareAccountLabel: 'acct-1',
         provider: 'openai',
         apiKey: 'sk-test',
+        embeddingApiKey: 'emb-test',
+        multimodalApiKey: 'mm-test',
       ),
       onProgress: events.add,
     );
@@ -44,6 +46,8 @@ void main() {
           cloudflareAccountLabel: 'acct-1',
           provider: 'openai',
           apiKey: 'sk-test',
+          embeddingApiKey: 'emb-test',
+          multimodalApiKey: 'mm-test',
         ),
         onProgress: (_) {},
       ),
@@ -52,6 +56,32 @@ void main() {
           (error) => error.code,
           'code',
           'cloudflare_auth_failed',
+        ),
+      ),
+    );
+  });
+
+  test('deploy runner rejects missing required AI provider config', () async {
+    final runner = SelfManagedRuntimeDeployRunner(
+      cloudflareAuth: SelfManagedCloudflareAuth(
+        authorize: (accountLabel) async => 'cf-token-$accountLabel',
+      ),
+    );
+
+    await expectLater(
+      () => runner.run(
+        const SelfManagedSetupRequest(
+          cloudflareAccountLabel: 'acct-1',
+          provider: 'openai',
+          apiKey: 'sk-test',
+        ),
+        onProgress: (_) {},
+      ),
+      throwsA(
+        isA<LocalRuntimeHelperException>().having(
+          (error) => error.code,
+          'code',
+          'missing_ai_provider_config',
         ),
       ),
     );

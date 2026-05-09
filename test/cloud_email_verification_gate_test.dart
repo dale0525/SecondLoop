@@ -138,7 +138,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pumpAndSettle();
 
-    expect(backend.calls, contains('askAiStreamCloudGateway'));
+    expect(
+      backend.calls,
+      contains('askAiStreamCloudGatewayWithEmbeddings'),
+    );
     expect(backend.calls, isNot(contains('askAiStream')));
 
     expect(find.byKey(const ValueKey('ask_ai_email_not_verified_snack')),
@@ -363,6 +366,26 @@ final class _EmailNotVerifiedBackend extends AppBackend {
     required String modelName,
   }) {
     calls.add('askAiStreamCloudGateway');
+    return _emailNotVerifiedStream();
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayWithEmbeddings(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String embeddingsModelName,
+  }) {
+    calls.add('askAiStreamCloudGatewayWithEmbeddings');
+    return _emailNotVerifiedStream();
+  }
+
+  Stream<String> _emailNotVerifiedStream() {
     return Stream<String>.error(
       Exception(
         'cloud-gateway request failed: HTTP 403 {"error":"email_not_verified"}',

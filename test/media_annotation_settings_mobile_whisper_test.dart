@@ -290,7 +290,7 @@ void main() {
   );
 
   testWidgets(
-    'mobile platform shows local capability runtime card and supports manual download',
+    'mobile platform hides local capability runtime card',
     (tester) async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       final audioStore = _SpyAudioWhisperModelStore(
@@ -312,20 +312,9 @@ void main() {
         ),
       );
 
-      await tester.scrollUntilVisible(
-        downloadButton,
-        220,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-
-      expect(runtimeCard, findsOneWidget);
-      expect(downloadButton, findsOneWidget);
-
-      await tester.tap(downloadButton);
-      await tester.pumpAndSettle();
-
-      expect(audioStore.ensureCalls, 1);
+      expect(runtimeCard, findsNothing);
+      expect(downloadButton, findsNothing);
+      expect(audioStore.ensureCalls, 0);
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
       TargetPlatform.android,

@@ -12,12 +12,21 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
 
     _mutateState(() => _busy = true);
     try {
-      await _store.write(sessionKey, mediaConfig);
-      await _contentStore.writeContentEnrichment(sessionKey, contentConfig);
+      final requiredMediaConfig =
+          RequiredAiCapabilityPolicy.requireMediaAnnotationConfig(mediaConfig);
+      final requiredContentConfig =
+          RequiredAiCapabilityPolicy.requireContentEnrichmentConfig(
+        contentConfig,
+      );
+      await _store.write(sessionKey, requiredMediaConfig);
+      await _contentStore.writeContentEnrichment(
+        sessionKey,
+        requiredContentConfig,
+      );
       if (!mounted) return;
       _mutateState(() {
-        _config = mediaConfig;
-        _contentConfig = contentConfig;
+        _config = requiredMediaConfig;
+        _contentConfig = requiredContentConfig;
       });
     } catch (e) {
       if (!mounted) return;
@@ -32,17 +41,6 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
     }
   }
 
-  bool _isMediaUnderstandingEnabled(
-    MediaAnnotationConfig config,
-    ContentEnrichmentConfig? contentConfig,
-  ) {
-    if (contentConfig == null) return false;
-    return config.annotateEnabled &&
-        config.searchEnabled &&
-        contentConfig.audioTranscribeEnabled &&
-        contentConfig.ocrEnabled;
-  }
-
   String _mediaUnderstandingTitle(BuildContext context) {
     return context.t.settings.mediaAnnotation.legacyEntry.title;
   }
@@ -51,49 +49,12 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
     return context.t.settings.mediaAnnotation.legacyEntry.subtitle;
   }
 
-  String _useSecondLoopCloudTitle(BuildContext context) {
-    return context
-        .t.settings.mediaAnnotation.legacyEntry.useSecondLoopCloudTitle;
-  }
-
-  String _useSecondLoopCloudSubtitle(BuildContext context) {
-    return context
-        .t.settings.mediaAnnotation.legacyEntry.useSecondLoopCloudSubtitle;
-  }
-
   String _mediaUnderstandingWifiOnlyTitle(BuildContext context) {
     return context.t.settings.mediaAnnotation.legacyEntry.wifiOnlyTitle;
   }
 
   String _mediaUnderstandingWifiOnlySubtitle(BuildContext context) {
     return context.t.settings.mediaAnnotation.legacyEntry.wifiOnlySubtitle;
-  }
-
-  Future<void> _setMediaUnderstandingEnabled({
-    required bool enabled,
-    required MediaAnnotationConfig config,
-    required ContentEnrichmentConfig contentConfig,
-  }) async {
-    if (_busy) return;
-    final nextMediaConfig = MediaAnnotationConfig(
-      annotateEnabled: enabled,
-      searchEnabled: enabled,
-      allowCellular: config.allowCellular,
-      providerMode: config.providerMode,
-      byokProfileId: config.byokProfileId,
-      cloudModelName: config.cloudModelName,
-    );
-
-    final nextContentConfig = _copyContentConfig(
-      contentConfig,
-      audioTranscribeEnabled: enabled,
-      ocrEnabled: enabled,
-    );
-
-    await _persistBoth(
-      mediaConfig: nextMediaConfig,
-      contentConfig: nextContentConfig,
-    );
   }
 
   Future<void> _setMediaUnderstandingWifiOnly({
@@ -121,53 +82,6 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
         providerMode: config.providerMode,
         byokProfileId: config.byokProfileId,
         cloudModelName: config.cloudModelName,
-      ),
-    );
-  }
-
-  Future<void> _setUseSecondLoopCloudEnabled({
-    required bool enabled,
-    required MediaAnnotationConfig config,
-  }) async {
-    if (_busy) return;
-    if (!enabled) {
-      final hasByokOverride =
-          (config.byokProfileId?.trim().isNotEmpty ?? false);
-      await _persist(
-        MediaAnnotationConfig(
-          annotateEnabled: config.annotateEnabled,
-          searchEnabled: config.searchEnabled,
-          allowCellular: config.allowCellular,
-          providerMode: hasByokOverride
-              ? _MediaAnnotationSettingsPageState._kProviderByokProfile
-              : _MediaAnnotationSettingsPageState._kProviderFollowAskAi,
-          byokProfileId: config.byokProfileId,
-          cloudModelName: config.cloudModelName,
-        ),
-      );
-      return;
-    }
-
-    final prepared = await _prepareEnableAnnotateConfig(
-      MediaAnnotationConfig(
-        annotateEnabled: true,
-        searchEnabled: config.searchEnabled,
-        allowCellular: config.allowCellular,
-        providerMode: _MediaAnnotationSettingsPageState._kProviderCloudGateway,
-        byokProfileId: config.byokProfileId,
-        cloudModelName: config.cloudModelName,
-      ),
-    );
-    if (prepared == null || !mounted) return;
-
-    await _persist(
-      MediaAnnotationConfig(
-        annotateEnabled: config.annotateEnabled,
-        searchEnabled: config.searchEnabled,
-        allowCellular: prepared.allowCellular,
-        providerMode: _MediaAnnotationSettingsPageState._kProviderCloudGateway,
-        byokProfileId: prepared.byokProfileId,
-        cloudModelName: prepared.cloudModelName,
       ),
     );
   }

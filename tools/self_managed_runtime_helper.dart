@@ -14,6 +14,11 @@ Future<Map<String, Object?>> runSelfManagedRuntimeHelper({
     cloudflareAccountLabel: '${input['cloudflare_account_label'] ?? ''}',
     provider: '${input['provider'] ?? 'openai'}',
     apiKey: '${input['api_key'] ?? ''}',
+    embeddingApiKey: '${input['embedding_api_key'] ?? ''}',
+    multimodalApiKey: '${input['multimodal_api_key'] ?? ''}',
+    requiresMultimodalLlm: input['requires_multimodal_llm'] is bool
+        ? input['requires_multimodal_llm'] as bool
+        : true,
   );
   final runner = deployRunner ?? SelfManagedRuntimeDeployRunner();
   final result = await runner.run(

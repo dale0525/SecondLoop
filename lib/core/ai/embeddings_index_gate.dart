@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ai_routing.dart';
+import 'embeddings_data_consent_prefs.dart';
 import 'embeddings_source_prefs.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
@@ -27,7 +28,6 @@ class EmbeddingsIndexGate extends StatefulWidget {
 
 class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
     with WidgetsBindingObserver {
-  static const _kEmbeddingsDataConsentPrefsKey = 'embeddings_data_consent_v1';
   static const _kCloudEmbeddingsModelName = 'baai/bge-m3';
 
   static const _kTodoBatchLimitLocal = 16;
@@ -172,7 +172,7 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
 
       final prefs = await SharedPreferences.getInstance();
       final cloudEmbeddingsSelected =
-          prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ?? false;
+          EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
 
       final preference = switch (
           (prefs.getString(EmbeddingsSourcePrefs.prefsKey) ?? '').trim()) {
@@ -282,7 +282,7 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
         );
         return _IndexBatchResult(processed: processed, isRemote: true);
       } catch (_) {
-        return processLocal();
+        return const _IndexBatchResult(processed: 0, isRemote: true);
       }
     }
 
@@ -295,18 +295,20 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
             if (hasByokProfile) {
               return processByokWithFallback();
             }
-            return processLocal();
+            return const _IndexBatchResult(processed: 0, isRemote: true);
           }
         }
         if (hasByokProfile) {
           return processByokWithFallback();
         }
-        return processLocal();
+        return const _IndexBatchResult(processed: 0, isRemote: true);
       case EmbeddingsSourceRouteKind.byok:
         if (hasByokProfile) {
           return processByokWithFallback();
         }
-        return processLocal();
+        return const _IndexBatchResult(processed: 0, isRemote: true);
+      case EmbeddingsSourceRouteKind.needsSetup:
+        return const _IndexBatchResult(processed: 0, isRemote: true);
       case EmbeddingsSourceRouteKind.local:
         return processLocal();
     }

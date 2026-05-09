@@ -10,6 +10,8 @@ void main() {
         'cloudflare_account_label': 'acct-1',
         'provider': 'openai',
         'api_key': 'sk-test',
+        'embedding_api_key': 'emb-test',
+        'multimodal_api_key': 'mm-test',
       },
       emitEvent: events.add,
     );

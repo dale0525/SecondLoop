@@ -14,7 +14,7 @@ final class RuntimeTestProfileInjector {
     String authToken = 'runtime-test-token',
     String capabilityManifestId = 'runtime-test-manifest',
     List<CloudRuntimeCapability> capabilities = const [
-      CloudRuntimeCapability('chat'),
+      ...CloudRuntimeRequiredCapabilities.all,
       CloudRuntimeCapability('runtime_test_api'),
     ],
   }) {
@@ -44,7 +44,7 @@ final class RuntimeTestProfileInjector {
     String authToken = 'managed-session-token',
     String capabilityManifestId = 'managed-runtime-manifest',
     List<CloudRuntimeCapability> capabilities = const [
-      CloudRuntimeCapability('chat'),
+      ...CloudRuntimeRequiredCapabilities.all,
       CloudRuntimeCapability('runtime_test_api'),
     ],
   }) {

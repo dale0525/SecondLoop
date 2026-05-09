@@ -24,7 +24,9 @@ SelfManagedRuntimeResourcePlan buildSelfManagedRuntimeResourcePlan() {
       'SECRETARY_AGENT',
     ],
     secrets: [
-      'OPENAI_API_KEY',
+      'LLM_API_KEY',
+      'EMBEDDING_API_KEY',
+      'MULTIMODAL_LLM_API_KEY',
     ],
   );
 }

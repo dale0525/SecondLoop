@@ -20,7 +20,6 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
-import 'cloud_account_page.dart';
 import 'embedding_profiles_page.dart';
 import 'llm_profiles_page.dart';
 import 'media_annotation_settings_page.dart';
@@ -73,14 +72,15 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   bool _askAiPreferenceSaving = false;
   int _askAiLoadGeneration = 0;
 
-  EmbeddingsSourceRouteKind _embeddingsRoute = EmbeddingsSourceRouteKind.local;
+  EmbeddingsSourceRouteKind _embeddingsRoute =
+      EmbeddingsSourceRouteKind.needsSetup;
   EmbeddingsSourcePreference _embeddingsPreference =
       EmbeddingsSourcePreference.auto;
   bool _embeddingsLoading = true;
   bool _embeddingsPreferenceSaving = false;
   int _embeddingsLoadGeneration = 0;
 
-  MediaSourceRouteKind _mediaRoute = MediaSourceRouteKind.local;
+  MediaSourceRouteKind _mediaRoute = MediaSourceRouteKind.needsSetup;
   MediaSourcePreference _mediaPreference = MediaSourcePreference.auto;
   bool _mediaLoading = true;
   bool _mediaPreferenceSaving = false;
@@ -89,7 +89,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   int _mediaLoadGeneration = 0;
 
   bool _automationLoading = true;
-  bool _automationSaving = false;
   bool? _cloudEmbeddingsEnabled;
   bool _cloudEmbeddingsConfigured = false;
   bool? _semanticParseEnabled;
@@ -247,7 +246,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   ) async {
     final backend = AppBackendScope.maybeOf(context);
     if (backend == null) {
-      return EmbeddingsSourceRouteKind.local;
+      return EmbeddingsSourceRouteKind.needsSetup;
     }
 
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -255,7 +254,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
 
     final prefs = await SharedPreferences.getInstance();
     final cloudEmbeddingsSelected =
-        prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false;
+        EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
 
     var hasByokProfile = false;
     try {
@@ -278,7 +277,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   ) async {
     final backend = AppBackendScope.maybeOf(context);
     if (backend == null) {
-      return MediaSourceRouteKind.local;
+      return MediaSourceRouteKind.needsSetup;
     }
 
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -392,11 +391,10 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
 
     final prefs = await SharedPreferences.getInstance();
     final cloudEmbeddingsEnabled =
-        prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey);
+        EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
     final semanticParseEnabled =
-        prefs.getBool(SemanticParseDataConsentPrefs.prefsKey);
-    final taskPriorityAiEnabled =
-        prefs.getBool(TaskPriorityAiEnhancementPrefs.prefsKey);
+        SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
+    final taskPriorityAiEnabled = await TaskPriorityAiEnhancementPrefs.read();
 
     var byokConfigured = false;
     if (backend != null && sessionKey != null) {
@@ -409,204 +407,20 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
 
     if (!mounted || generation != _automationLoadGeneration) return;
     setState(() {
-      _cloudEmbeddingsEnabled = cloudEmbeddingsEnabled ?? false;
-      _cloudEmbeddingsConfigured = cloudEmbeddingsEnabled != null;
-      _semanticParseEnabled = semanticParseEnabled ?? false;
-      _semanticParseConfigured = semanticParseEnabled != null;
-      _taskPriorityAiEnabled = taskPriorityAiEnabled ?? true;
-      _taskPriorityAiConfigured = taskPriorityAiEnabled != null;
+      _cloudEmbeddingsEnabled = cloudEmbeddingsEnabled;
+      _cloudEmbeddingsConfigured = true;
+      _semanticParseEnabled = semanticParseEnabled;
+      _semanticParseConfigured = true;
+      _taskPriorityAiEnabled = taskPriorityAiEnabled;
+      _taskPriorityAiConfigured = true;
       _byokConfigured = byokConfigured;
       _automationLoading = false;
     });
   }
 
-  Future<void> _setCloudEmbeddingsEnabled(bool enabled) async {
-    if (_automationSaving || (_cloudEmbeddingsEnabled ?? false) == enabled) {
-      return;
-    }
-
-    if (enabled) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          final t = context.t;
-          return AlertDialog(
-            title: Text(t.settings.cloudEmbeddings.dialogTitle),
-            content: Text(t.settings.cloudEmbeddings.dialogBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(t.common.actions.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(t.settings.cloudEmbeddings.dialogActions.enable),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (confirmed != true || !mounted) return;
-    }
-
-    setState(() => _automationSaving = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await EmbeddingsDataConsentPrefs.setEnabled(prefs, enabled);
-      if (!mounted) return;
-      await _reloadAutomationState(forceLoading: false);
-      await _reloadEmbeddingsState(forceLoading: false);
-    } finally {
-      if (mounted) {
-        setState(() => _automationSaving = false);
-      }
-    }
-  }
-
-  Future<void> _setSemanticParseEnabled(bool enabled) async {
-    if (_automationSaving || (_semanticParseEnabled ?? false) == enabled) {
-      return;
-    }
-
-    if (enabled) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          final t = context.t;
-          return AlertDialog(
-            title: Text(t.settings.semanticParseAutoActions.dialogTitle),
-            content: Text(t.settings.semanticParseAutoActions.dialogBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(t.common.actions.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(
-                  t.settings.semanticParseAutoActions.dialogActions.enable,
-                ),
-              ),
-            ],
-          );
-        },
-      );
-      if (confirmed != true || !mounted) return;
-    }
-
-    setState(() => _automationSaving = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await SemanticParseDataConsentPrefs.setEnabled(prefs, enabled);
-      if (!mounted) return;
-      await _reloadAutomationState(forceLoading: false);
-    } finally {
-      if (mounted) {
-        setState(() => _automationSaving = false);
-      }
-    }
-  }
-
-  Future<void> _setTaskPriorityAiEnabled(bool enabled) async {
-    if (_automationSaving || (_taskPriorityAiEnabled ?? true) == enabled) {
-      return;
-    }
-
-    setState(() => _automationSaving = true);
-    try {
-      await TaskPriorityAiEnhancementPrefs.write(enabled);
-      if (!mounted) return;
-      await _reloadAutomationState(forceLoading: false);
-    } finally {
-      if (mounted) {
-        setState(() => _automationSaving = false);
-      }
-    }
-  }
-
   bool get _smartOrganizationEnabled {
     return (_semanticParseEnabled ?? false) ||
         (_cloudEmbeddingsEnabled ?? false);
-  }
-
-  Future<void> _setSmartOrganizationEnabled({
-    required bool enabled,
-    required bool canUseSmartOrganization,
-    required bool canUseCloudEmbeddings,
-  }) async {
-    if (_automationSaving || _smartOrganizationEnabled == enabled) {
-      return;
-    }
-
-    if (enabled && !canUseSmartOrganization) {
-      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-          SubscriptionStatus.unknown;
-      final hasCloudAccount =
-          (CloudAuthScope.maybeOf(context)?.controller.uid ?? '')
-              .trim()
-              .isNotEmpty;
-      if (subscriptionStatus == SubscriptionStatus.entitled &&
-          !hasCloudAccount) {
-        await pushPageWithInheritedScopes(
-          Navigator.of(context),
-          context,
-          const CloudAccountPage(),
-        );
-        if (!mounted) return;
-        await _reloadAutomationState(forceLoading: false);
-        await _reloadEmbeddingsState(forceLoading: false);
-        return;
-      }
-
-      await _openLlmProfilesForByokSetupAndRefreshRoutes();
-      return;
-    }
-
-    if (enabled) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          final t = context.t;
-          return AlertDialog(
-            title: Text(t.settings.aiSelection.smartOrganization.dialogTitle),
-            content: Text(t.settings.aiSelection.smartOrganization.dialogBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(t.common.actions.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(
-                  t.settings.aiSelection.smartOrganization.dialogActions.enable,
-                ),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (confirmed != true || !mounted) return;
-    }
-
-    setState(() => _automationSaving = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await SemanticParseDataConsentPrefs.setEnabled(prefs, enabled);
-      await EmbeddingsDataConsentPrefs.setEnabled(
-        prefs,
-        enabled && canUseCloudEmbeddings,
-      );
-      await TaskPriorityAiEnhancementPrefs.write(enabled);
-      if (!mounted) return;
-      await _reloadAutomationState(forceLoading: false);
-      await _reloadEmbeddingsState(forceLoading: false);
-    } finally {
-      if (mounted) {
-        setState(() => _automationSaving = false);
-      }
-    }
   }
 
   void _setAdvancedSettingsExpanded(bool expanded) {
@@ -816,7 +630,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       EmbeddingsSourcePreference.cloud =>
         EmbeddingsSourceRouteKind.cloudGateway,
       EmbeddingsSourcePreference.byok => EmbeddingsSourceRouteKind.byok,
-      EmbeddingsSourcePreference.local => EmbeddingsSourceRouteKind.local,
+      EmbeddingsSourcePreference.local => null,
     };
   }
 
@@ -825,7 +639,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       MediaSourcePreference.auto => null,
       MediaSourcePreference.cloud => MediaSourceRouteKind.cloudGateway,
       MediaSourcePreference.byok => MediaSourceRouteKind.byok,
-      MediaSourcePreference.local => MediaSourceRouteKind.local,
+      MediaSourcePreference.local => null,
     };
   }
 
@@ -851,6 +665,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     return switch (_embeddingsRoute) {
       EmbeddingsSourceRouteKind.cloudGateway => status.cloud,
       EmbeddingsSourceRouteKind.byok => status.byok,
+      EmbeddingsSourceRouteKind.needsSetup => status.notConfigured,
       EmbeddingsSourceRouteKind.local => status.local,
     };
   }
@@ -864,6 +679,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     return switch (_mediaRoute) {
       MediaSourceRouteKind.cloudGateway => status.cloud,
       MediaSourceRouteKind.byok => status.byok,
+      MediaSourceRouteKind.needsSetup => status.notConfigured,
       MediaSourceRouteKind.local => status.local,
     };
   }
@@ -873,12 +689,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         .languageCode
         .toLowerCase()
         .startsWith('zh');
-  }
-
-  String _imageLocalSourceSubtitle(BuildContext context) {
-    return _isZhLocale(context)
-        ? '使用本地文字识别，也就是 OCR。'
-        : 'Use local text recognition (OCR) on-device.';
   }
 
   String _wifiOnlyHint(BuildContext context) {

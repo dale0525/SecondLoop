@@ -10,9 +10,9 @@ import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/ai/media_capability_source_prefs.dart';
 import '../../core/ai/media_capability_wifi_prefs.dart';
 import '../../core/ai/media_source_prefs.dart';
+import '../../core/ai/required_ai_capability_policy.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
-import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/content_enrichment/linux_ocr_model_store.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
@@ -24,7 +24,6 @@ import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
-import 'cloud_account_page.dart';
 import 'llm_profiles_page.dart';
 import 'media_annotation_settings_sections.dart';
 
@@ -303,164 +302,6 @@ class _MediaAnnotationSettingsPageState
     return selected;
   }
 
-  Future<MediaAnnotationConfig?> _prepareEnableAnnotateConfig(
-    MediaAnnotationConfig config,
-  ) async {
-    final desiredMode = config.providerMode.trim();
-
-    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-        SubscriptionStatus.unknown;
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final gatewayConfig =
-        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-
-    final hasGateway = gatewayConfig.baseUrl.trim().isNotEmpty;
-    final idToken = subscriptionStatus == SubscriptionStatus.entitled
-        ? await readCloudCapabilityIdToken(
-            cloudAuthScope?.controller,
-            mode: CloudCapabilityAuthMode.interactive,
-          )
-        : null;
-    final hasIdToken = (idToken?.trim() ?? '').isNotEmpty;
-    if (!mounted) return null;
-
-    if (desiredMode == _kProviderCloudGateway) {
-      if (!hasGateway) {
-        await _showSetupRequiredDialog(
-          reason: context.t.settings.mediaAnnotation.setupRequired.reasons
-              .cloudUnavailable,
-        );
-        return null;
-      }
-      if (subscriptionStatus != SubscriptionStatus.entitled) {
-        await _showSetupRequiredDialog(
-          reason: context.t.settings.mediaAnnotation.setupRequired.reasons
-              .cloudRequiresPro,
-          onOpen: () async {
-            await pushPageWithInheritedScopes(
-              Navigator.of(context),
-              context,
-              const CloudAccountPage(),
-            );
-          },
-        );
-        return null;
-      }
-      if (!hasIdToken) {
-        await _showSetupRequiredDialog(
-          reason: context
-              .t.settings.mediaAnnotation.setupRequired.reasons.cloudSignIn,
-          onOpen: () async {
-            await pushPageWithInheritedScopes(
-              Navigator.of(context),
-              context,
-              const CloudAccountPage(),
-            );
-          },
-        );
-        return null;
-      }
-      return MediaAnnotationConfig(
-        annotateEnabled: true,
-        searchEnabled: config.searchEnabled,
-        allowCellular: config.allowCellular,
-        providerMode: config.providerMode,
-        byokProfileId: config.byokProfileId,
-        cloudModelName: config.cloudModelName,
-      );
-    }
-
-    if (desiredMode == _kProviderByokProfile) {
-      final byokId = config.byokProfileId?.trim();
-      final cachedProfiles = _llmProfiles ?? const <LlmProfile>[];
-      var hasValidSelected = false;
-      if (byokId != null && byokId.isNotEmpty) {
-        for (final p in cachedProfiles) {
-          if (p.id == byokId && p.providerType == 'openai-compatible') {
-            hasValidSelected = true;
-            break;
-          }
-        }
-      }
-
-      var resolvedId = byokId;
-      if (!hasValidSelected) {
-        resolvedId = await _promptOpenAiCompatibleProfileId();
-        final trimmed = resolvedId?.trim();
-        if (trimmed == null || trimmed.isEmpty) return null;
-        resolvedId = trimmed;
-      }
-
-      return MediaAnnotationConfig(
-        annotateEnabled: true,
-        searchEnabled: config.searchEnabled,
-        allowCellular: config.allowCellular,
-        providerMode: config.providerMode,
-        byokProfileId: resolvedId,
-        cloudModelName: config.cloudModelName,
-      );
-    }
-
-    final canUseCloud = subscriptionStatus == SubscriptionStatus.entitled &&
-        hasGateway &&
-        hasIdToken;
-    if (canUseCloud) {
-      return MediaAnnotationConfig(
-        annotateEnabled: true,
-        searchEnabled: config.searchEnabled,
-        allowCellular: config.allowCellular,
-        providerMode: config.providerMode,
-        byokProfileId: config.byokProfileId,
-        cloudModelName: config.cloudModelName,
-      );
-    }
-
-    final backend =
-        context.dependOnInheritedWidgetOfExactType<AppBackendScope>()?.backend;
-    final sessionKey = SessionScope.of(context).sessionKey;
-
-    List<LlmProfile> profiles = _llmProfiles ?? const <LlmProfile>[];
-    if (profiles.isEmpty && backend != null) {
-      profiles =
-          await backend.listLlmProfiles(sessionKey).catchError((_) => profiles);
-    }
-    if (!mounted) return null;
-
-    LlmProfile? active;
-    for (final p in profiles) {
-      if (p.isActive) {
-        active = p;
-        break;
-      }
-    }
-
-    final canUseByok =
-        active != null && active.providerType == 'openai-compatible';
-    if (canUseByok) {
-      return MediaAnnotationConfig(
-        annotateEnabled: true,
-        searchEnabled: config.searchEnabled,
-        allowCellular: config.allowCellular,
-        providerMode: config.providerMode,
-        byokProfileId: config.byokProfileId,
-        cloudModelName: config.cloudModelName,
-      );
-    }
-
-    await _showSetupRequiredDialog(
-      reason:
-          context.t.settings.mediaAnnotation.setupRequired.reasons.followAskAi,
-      onOpen: () async {
-        await pushPageWithInheritedScopes(
-          Navigator.of(context),
-          context,
-          const LlmProfilesPage(),
-        );
-      },
-    );
-    return null;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -491,7 +332,9 @@ class _MediaAnnotationSettingsPageState
     final backend =
         context.dependOnInheritedWidgetOfExactType<AppBackendScope>()?.backend;
     try {
-      final config = await _store.read(sessionKey);
+      final config = RequiredAiCapabilityPolicy.requireMediaAnnotationConfig(
+        await _store.read(sessionKey),
+      );
       ContentEnrichmentConfig? contentConfig;
       Object? contentLoadError;
       LinuxOcrModelStatus linuxOcrModelStatus = const LinuxOcrModelStatus(
@@ -503,7 +346,10 @@ class _MediaAnnotationSettingsPageState
         source: LinuxOcrModelSource.none,
       );
       try {
-        contentConfig = await _contentStore.readContentEnrichment(sessionKey);
+        contentConfig =
+            RequiredAiCapabilityPolicy.requireContentEnrichmentConfig(
+          await _contentStore.readContentEnrichment(sessionKey),
+        );
       } catch (e) {
         contentConfig = null;
         contentLoadError = e;
@@ -616,12 +462,14 @@ class _MediaAnnotationSettingsPageState
     if (_busy) return;
     final messenger = ScaffoldMessenger.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final requiredNext =
+        RequiredAiCapabilityPolicy.requireMediaAnnotationConfig(next);
 
     setState(() => _busy = true);
     try {
-      await _store.write(sessionKey, next);
+      await _store.write(sessionKey, requiredNext);
       if (!mounted) return;
-      setState(() => _config = next);
+      setState(() => _config = requiredNext);
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -905,12 +753,14 @@ class _MediaAnnotationSettingsPageState
     if (_busy) return;
     final messenger = ScaffoldMessenger.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final requiredNext =
+        RequiredAiCapabilityPolicy.requireContentEnrichmentConfig(next);
 
     setState(() => _busy = true);
     try {
-      await _contentStore.writeContentEnrichment(sessionKey, next);
+      await _contentStore.writeContentEnrichment(sessionKey, requiredNext);
       if (!mounted) return;
-      setState(() => _contentConfig = next);
+      setState(() => _contentConfig = requiredNext);
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(

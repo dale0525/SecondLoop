@@ -403,11 +403,13 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       final ocrDesiredMode = switch (ocrRoute) {
         MediaSourceRouteKind.cloudGateway => 'cloud_gateway',
         MediaSourceRouteKind.byok => 'byok_profile',
+        MediaSourceRouteKind.needsSetup => 'disabled',
         MediaSourceRouteKind.local => 'follow_ask_ai',
       };
       final effectiveDesiredMode = switch (effectiveRoute) {
         MediaSourceRouteKind.cloudGateway => 'cloud_gateway',
         MediaSourceRouteKind.byok => 'byok_profile',
+        MediaSourceRouteKind.needsSetup => 'disabled',
         MediaSourceRouteKind.local => 'follow_ask_ai',
       };
 
@@ -416,7 +418,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         searchEnabled: mediaAnnotationConfig.searchEnabled,
         allowCellular: mediaAnnotationConfig.allowCellular,
         providerMode: effectiveDesiredMode,
-        byokProfileId: effectiveRoute == MediaSourceRouteKind.local
+        byokProfileId: effectiveRoute == MediaSourceRouteKind.local ||
+                effectiveRoute == MediaSourceRouteKind.needsSetup
             ? null
             : mediaAnnotationConfig.byokProfileId,
         cloudModelName: mediaAnnotationConfig.cloudModelName,
@@ -426,7 +429,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         searchEnabled: mediaAnnotationConfig.searchEnabled,
         allowCellular: mediaAnnotationConfig.allowCellular,
         providerMode: ocrDesiredMode,
-        byokProfileId: ocrRoute == MediaSourceRouteKind.local
+        byokProfileId: ocrRoute == MediaSourceRouteKind.local ||
+                ocrRoute == MediaSourceRouteKind.needsSetup
             ? null
             : mediaAnnotationConfig.byokProfileId,
         cloudModelName: mediaAnnotationConfig.cloudModelName,
@@ -470,7 +474,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       final allowImageOcrFallback =
           effectiveMediaAnnotationConfig.annotateEnabled &&
               (contentConfig?.ocrEnabled ?? true) &&
-              effectiveRoute != MediaSourceRouteKind.cloudGateway;
+              effectiveRoute == MediaSourceRouteKind.local;
 
       final annotationEnabled =
           effectiveMediaAnnotationConfig.annotateEnabled &&
@@ -571,7 +575,9 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           ? 'device_plus_en'
           : rawConfiguredOcrHints.trim();
 
-      final shouldTryMultimodalOcr = ocrRoute != MediaSourceRouteKind.local;
+      final shouldTryMultimodalOcr =
+          ocrRoute == MediaSourceRouteKind.cloudGateway ||
+              ocrRoute == MediaSourceRouteKind.byok;
       final networkForOcr = await getNetwork();
       final canUseNetworkOcr =
           networkForOcr != MediaEnrichmentNetwork.offline &&

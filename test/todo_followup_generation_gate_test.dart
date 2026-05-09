@@ -337,7 +337,7 @@ void main() {
   });
 
   testWidgets(
-      'Product intent: consent-disabled pass clears queued followup jobs',
+      'Product intent: missing AI route clears queued followup jobs even when legacy consent is disabled',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': false,
@@ -411,7 +411,8 @@ void main() {
     expect(changeCount, greaterThan(0));
   });
 
-  testWidgets('consent-disabled gate skips preview refetch expansion',
+  testWidgets(
+      'required AI gate still uses preview refetch expansion with legacy disabled consent',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': false,
@@ -455,8 +456,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 3));
 
-    expect(backend.listDueJobsCallCount, 1);
-    expect(backend.listDueJobsLimits, const <int>[5]);
+    expect(backend.listDueJobsCallCount, 2);
+    expect(backend.listDueJobsLimits, const <int>[5, 10]);
   });
 
   testWidgets('disposing gate mid-run does not finalize queued jobs',

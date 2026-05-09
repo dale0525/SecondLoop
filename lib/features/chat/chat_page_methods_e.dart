@@ -724,68 +724,6 @@ extension _ChatPageStateMethodsE on _ChatPageState {
 
   Future<bool> _ensureEmbeddingsDataConsent({bool forceDialog = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final existing = prefs.getBool(_kEmbeddingsDataConsentPrefsKey);
-    if (existing == true) {
-      _cloudEmbeddingsConsented = true;
-      return true;
-    }
-    if (existing == false && !forceDialog) {
-      _cloudEmbeddingsConsented = false;
-      return false;
-    }
-    if (!mounted) return false;
-
-    var dontShowAgain = true;
-    final approved = await _showDialogFromChat<bool>(
-      builder: (context) {
-        final t = context.t;
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              key: const ValueKey('embeddings_consent_dialog'),
-              scrollable: true,
-              title: Text(t.chat.embeddingsConsent.title),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(t.chat.embeddingsConsent.body),
-                  const SizedBox(height: 12),
-                  CheckboxListTile(
-                    key: const ValueKey('embeddings_consent_dont_show_again'),
-                    contentPadding: EdgeInsets.zero,
-                    value: dontShowAgain,
-                    onChanged: (value) {
-                      setState(() => dontShowAgain = value ?? true);
-                    },
-                    title: Text(t.chat.embeddingsConsent.dontShowAgain),
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text(t.chat.embeddingsConsent.actions.useLocal),
-                ),
-                FilledButton(
-                  key: const ValueKey('embeddings_consent_continue'),
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: Text(t.chat.embeddingsConsent.actions.enableCloud),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (approved != true) {
-      await EmbeddingsDataConsentPrefs.setEnabled(prefs, false);
-      _cloudEmbeddingsConsented = false;
-      return false;
-    }
-
     _cloudEmbeddingsConsented = true;
     await EmbeddingsDataConsentPrefs.setEnabled(prefs, true);
     return true;

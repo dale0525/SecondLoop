@@ -183,8 +183,7 @@ class _SemanticParseAutoActionsGateState
         backend,
         sessionKey: sessionKey,
       );
-      final enabled =
-          prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+      final enabled = SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
       if (!enabled || !mounted) {
         final canceled = await _cancelDueSemanticParseJobs(
           backend,
@@ -250,7 +249,7 @@ class _SemanticParseAutoActionsGateState
         _ => EmbeddingsSourcePreference.auto,
       };
       final cloudEmbeddingsSelected =
-          prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false;
+          EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
 
       var hasByokEmbeddingsProfile = false;
       try {

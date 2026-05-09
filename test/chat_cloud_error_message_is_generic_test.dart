@@ -79,7 +79,7 @@ void main() {
     expect(errorText.data, startsWith('Ask AI failed'));
     expect(errorText.data, isNot(contains('HTTP 502')));
     expect(errorText.data, isNot(contains('upstream_error')));
-    expect(backend.lastTopK, 0);
+    expect(backend.lastTopK, 10);
 
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
@@ -110,6 +110,28 @@ final class _CloudErrorBackend extends TestAppBackend {
     required String gatewayBaseUrl,
     required String idToken,
     required String modelName,
+  }) {
+    lastTopK = topK;
+    return Stream<String>.fromFuture(
+      Future<String>.delayed(
+        const Duration(milliseconds: 10),
+        () =>
+            '${_kAskAiErrorPrefix}cloud-gateway request failed: HTTP 502 {"error":"upstream_error"}',
+      ),
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayWithEmbeddings(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String embeddingsModelName,
   }) {
     lastTopK = topK;
     return Stream<String>.fromFuture(

@@ -57,6 +57,14 @@ void main() {
       find.byKey(const ValueKey('self_managed_api_key')),
       'sk-test',
     );
+    await tester.enterText(
+      find.byKey(const ValueKey('self_managed_embedding_api_key')),
+      'emb-test',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('self_managed_multimodal_api_key')),
+      'mm-test',
+    );
     await tester.tap(find.byKey(const ValueKey('self_managed_deploy')));
     await tester.pumpAndSettle();
 

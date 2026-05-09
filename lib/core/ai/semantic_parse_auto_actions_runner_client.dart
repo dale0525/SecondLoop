@@ -72,12 +72,12 @@ final class BackendSemanticParseAutoActionsClient
         const <EmbeddingsSourceRouteKind>[
           EmbeddingsSourceRouteKind.cloudGateway,
           EmbeddingsSourceRouteKind.byok,
-          EmbeddingsSourceRouteKind.local,
         ],
       EmbeddingsSourceRouteKind.byok => const <EmbeddingsSourceRouteKind>[
           EmbeddingsSourceRouteKind.byok,
-          EmbeddingsSourceRouteKind.local,
         ],
+      EmbeddingsSourceRouteKind.needsSetup =>
+        const <EmbeddingsSourceRouteKind>[],
       EmbeddingsSourceRouteKind.local => const <EmbeddingsSourceRouteKind>[
           EmbeddingsSourceRouteKind.local,
         ],
@@ -124,6 +124,8 @@ final class BackendSemanticParseAutoActionsClient
           activityLimit: _kActivitySyncLimit,
         );
         break;
+      case EmbeddingsSourceRouteKind.needsSetup:
+        break;
       case EmbeddingsSourceRouteKind.local:
         await _backend.processPendingTodoThreadEmbeddings(
           _sessionKey,
@@ -155,6 +157,8 @@ final class BackendSemanticParseAutoActionsClient
           query,
           topK: topK,
         );
+      case EmbeddingsSourceRouteKind.needsSetup:
+        return Future.value(const <TodoThreadMatch>[]);
       case EmbeddingsSourceRouteKind.local:
         return _backend.searchSimilarTodoThreads(
           _sessionKey,

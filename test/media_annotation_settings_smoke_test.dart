@@ -305,7 +305,7 @@ bool _sourceRadioSelected(WidgetTester tester, Finder finder) {
 }
 
 void main() {
-  testWidgets('Media understanding settings shows one master switch only',
+  testWidgets('Media understanding settings exposes no AI opt-out switches',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -324,7 +324,7 @@ void main() {
 
     expect(
       find.byKey(MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(MediaAnnotationSettingsPage.audioTranscribeSwitchKey),
@@ -367,44 +367,7 @@ void main() {
 
   _registerOcrModeTests();
 
-  testWidgets('Turning off media understanding hides detailed settings',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final store = _FakeMediaAnnotationConfigStore(
-      _defaultMediaConfig(mediaUnderstandingEnabled: true),
-    );
-    final contentStore = _FakeContentEnrichmentConfigStore(
-      _defaultContentConfig(mediaUnderstandingEnabled: true),
-    );
-
-    await _pumpPage(
-      tester,
-      store: store,
-      contentStore: contentStore,
-    );
-
-    final masterSwitch =
-        find.byKey(MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey);
-    await tester.tap(masterSwitch);
-    await tester.pump();
-    await tester.pumpAndSettle();
-
-    expect(store.writes, isNotEmpty);
-    expect(contentStore.writes, isNotEmpty);
-    expect(store.writes.last.annotateEnabled, isFalse);
-    expect(store.writes.last.searchEnabled, isFalse);
-    expect(contentStore.writes.last.audioTranscribeEnabled, isFalse);
-    expect(contentStore.writes.last.ocrEnabled, isFalse);
-    expect(
-      find.byKey(MediaAnnotationSettingsPage.wifiOnlySwitchKey),
-      findsNothing,
-    );
-    expect(find.text('Audio transcription'), findsNothing);
-    expect(find.text('Image caption provider'), findsNothing);
-  });
-
-  testWidgets('Turning on media understanding enables all media flags',
+  testWidgets('Legacy disabled media settings are treated as required enabled',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -421,21 +384,47 @@ void main() {
       contentStore: contentStore,
     );
 
-    final masterSwitch =
-        find.byKey(MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey);
-    await tester.tap(masterSwitch);
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.wifiOnlySwitchKey),
+      findsOneWidget,
+    );
+    expect(find.text('Audio transcription'), findsOneWidget);
+    expect(
+      find.byKey(MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey),
+      findsNothing,
+    );
+  });
+
+  testWidgets('Persisted connectivity changes preserve required media flags',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = _FakeMediaAnnotationConfigStore(
+      _defaultMediaConfig(mediaUnderstandingEnabled: false),
+    );
+    final contentStore = _FakeContentEnrichmentConfigStore(
+      _defaultContentConfig(mediaUnderstandingEnabled: false),
+    );
+
+    await _pumpPage(
+      tester,
+      store: store,
+      contentStore: contentStore,
+    );
+
+    final wifiOnlySwitch =
+        find.byKey(MediaAnnotationSettingsPage.wifiOnlySwitchKey);
+    await tester.tap(wifiOnlySwitch);
     await tester.pump();
     await tester.pumpAndSettle();
 
     expect(store.writes, isNotEmpty);
-    expect(contentStore.writes, isNotEmpty);
     expect(store.writes.last.annotateEnabled, isTrue);
     expect(store.writes.last.searchEnabled, isTrue);
-    expect(contentStore.writes.last.audioTranscribeEnabled, isTrue);
-    expect(contentStore.writes.last.ocrEnabled, isTrue);
   });
 
-  testWidgets('Pro users see Use SecondLoop Cloud switch', (tester) async {
+  testWidgets('Pro users do not see a per-feature SecondLoop Cloud switch',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
@@ -454,7 +443,7 @@ void main() {
 
     expect(
       find.byKey(MediaAnnotationSettingsPage.useSecondLoopCloudSwitchKey),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -504,8 +493,7 @@ void main() {
     );
   });
 
-  testWidgets('Wi-Fi only switch acts as media understanding master control',
-      (tester) async {
+  testWidgets('Wi-Fi only switch changes connectivity only', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     final store = _FakeMediaAnnotationConfigStore(
@@ -530,10 +518,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(store.writes, isNotEmpty);
     expect(store.writes.last.allowCellular, isTrue);
+    expect(store.writes.last.annotateEnabled, isTrue);
+    expect(store.writes.last.searchEnabled, isTrue);
 
     await tester.tap(wifiOnlySwitch);
     await tester.pumpAndSettle();
     expect(store.writes.last.allowCellular, isFalse);
+    expect(store.writes.last.annotateEnabled, isTrue);
+    expect(store.writes.last.searchEnabled, isTrue);
   });
 
   testWidgets('Embedded audio/OCR Wi-Fi toggles are independent',

@@ -49,6 +49,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
     return switch (route) {
       MediaSourceRouteKind.cloudGateway => status.cloud,
       MediaSourceRouteKind.byok => status.byok,
+      MediaSourceRouteKind.needsSetup => status.notConfigured,
       MediaSourceRouteKind.local => status.local,
     };
   }
@@ -324,17 +325,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
         const Center(child: CircularProgressIndicator()),
       if (config != null)
         ...() {
-          final mediaUnderstandingEnabled =
-              _isMediaUnderstandingEnabled(config, contentConfig);
-          final shouldShowDetailedSettings =
-              embedded || mediaUnderstandingEnabled;
-          final subscriptionStatus =
-              SubscriptionScope.maybeOf(context)?.status ??
-                  SubscriptionStatus.unknown;
-          final showSecondLoopCloudSwitch =
-              !embedded && subscriptionStatus == SubscriptionStatus.entitled;
-          final useSecondLoopCloud = config.providerMode ==
-              _MediaAnnotationSettingsPageState._kProviderCloudGateway;
+          final shouldShowDetailedSettings = embedded || contentConfig != null;
           final sourceLabels =
               context.t.settings.aiSelection.mediaUnderstanding.preference;
           final audioRoute = _resolveCapabilityRoute(
@@ -350,20 +341,9 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
               ),
               const SizedBox(height: 8),
               mediaAnnotationSectionCard([
-                SwitchListTile(
-                  key: MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey,
+                ListTile(
                   title: Text(_mediaUnderstandingTitle(context)),
                   subtitle: Text(_mediaUnderstandingSubtitle(context)),
-                  value: mediaUnderstandingEnabled,
-                  onChanged: _busy || contentConfig == null
-                      ? null
-                      : (value) async {
-                          await _setMediaUnderstandingEnabled(
-                            enabled: value,
-                            config: config,
-                            contentConfig: contentConfig,
-                          );
-                        },
                 ),
               ]),
             ],
@@ -371,22 +351,6 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
               const SizedBox(height: 16),
               if (!embedded)
                 mediaAnnotationSectionCard([
-                  if (showSecondLoopCloudSwitch)
-                    SwitchListTile(
-                      key: MediaAnnotationSettingsPage
-                          .useSecondLoopCloudSwitchKey,
-                      title: Text(_useSecondLoopCloudTitle(context)),
-                      subtitle: Text(_useSecondLoopCloudSubtitle(context)),
-                      value: useSecondLoopCloud,
-                      onChanged: _busy
-                          ? null
-                          : (value) async {
-                              await _setUseSecondLoopCloudEnabled(
-                                enabled: value,
-                                config: config,
-                              );
-                            },
-                    ),
                   SwitchListTile(
                     key: MediaAnnotationSettingsPage.wifiOnlySwitchKey,
                     title: Text(_mediaUnderstandingWifiOnlyTitle(context)),
@@ -545,15 +509,6 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                             MediaAnnotationSettingsPage.urlSourceByokTileKey,
                         title: sourceLabels.byok.title,
                         subtitle: sourceLabels.byok.description,
-                      ),
-                      _buildSourcePreferenceTile(
-                        value: MediaSourcePreference.local,
-                        groupValue: _urlSourcePreference,
-                        onChanged: _setUrlSourcePreference,
-                        tileKey:
-                            MediaAnnotationSettingsPage.urlSourceLocalTileKey,
-                        title: sourceLabels.local.title,
-                        subtitle: sourceLabels.local.description,
                       ),
                       _buildOpenApiKeysTile(
                         tileKey: const ValueKey(

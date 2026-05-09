@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../backend/native_app_dir.dart';
+import '../ai/required_ai_capability_policy.dart';
 import '../../src/rust/api/content_enrichment.dart' as rust_content_enrichment;
 import '../../src/rust/db.dart';
 
@@ -23,10 +24,11 @@ final class RustContentEnrichmentConfigStore
   @override
   Future<ContentEnrichmentConfig> readContentEnrichment(Uint8List key) async {
     final appDir = await appDirProvider();
-    return rust_content_enrichment.dbGetContentEnrichmentConfig(
+    final config = await rust_content_enrichment.dbGetContentEnrichmentConfig(
       appDir: appDir,
       key: key,
     );
+    return RequiredAiCapabilityPolicy.requireContentEnrichmentConfig(config);
   }
 
   @override
@@ -38,7 +40,7 @@ final class RustContentEnrichmentConfigStore
     await rust_content_enrichment.dbSetContentEnrichmentConfig(
       appDir: appDir,
       key: key,
-      config: config,
+      config: RequiredAiCapabilityPolicy.requireContentEnrichmentConfig(config),
     );
   }
 

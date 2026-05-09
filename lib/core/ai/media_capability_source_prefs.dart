@@ -59,7 +59,7 @@ final class MediaCapabilitySourcePrefs {
     return switch (raw?.trim() ?? '') {
       'cloud' => MediaSourcePreference.cloud,
       'byok' => MediaSourcePreference.byok,
-      'local' => MediaSourcePreference.local,
+      'local' => MediaSourcePreference.auto,
       _ => MediaSourcePreference.auto,
     };
   }
@@ -69,7 +69,7 @@ final class MediaCapabilitySourcePrefs {
       MediaSourcePreference.auto => null,
       MediaSourcePreference.cloud => 'cloud',
       MediaSourcePreference.byok => 'byok',
-      MediaSourcePreference.local => 'local',
+      MediaSourcePreference.local => null,
     };
   }
 

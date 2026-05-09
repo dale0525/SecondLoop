@@ -47,15 +47,6 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
               title: sourceLabels.byok.title,
               subtitle: sourceLabels.byok.description,
             ),
-            _buildSourcePreferenceTile(
-              value: MediaSourcePreference.local,
-              groupValue: _ocrSourcePreference,
-              onChanged: _setOcrSourcePreference,
-              tileKey:
-                  const ValueKey('media_annotation_settings_ocr_mode_local'),
-              title: sourceLabels.local.title,
-              subtitle: sourceLabels.local.description,
-            ),
             _buildScopedWifiOnlyTile(
               tileKey: MediaAnnotationSettingsPage.ocrWifiOnlySwitchKey,
               wifiOnly: _ocrWifiOnly,

@@ -16,6 +16,29 @@ class CloudRuntimeCapability {
   int get hashCode => id.hashCode;
 }
 
+final class CloudRuntimeRequiredCapabilities {
+  const CloudRuntimeRequiredCapabilities._();
+
+  static const chat = CloudRuntimeCapability('chat');
+  static const workingSet = CloudRuntimeCapability('working_set');
+  static const llm = CloudRuntimeCapability('llm');
+  static const embedding = CloudRuntimeCapability('embedding');
+  static const semanticParse = CloudRuntimeCapability('semantic_parse');
+  static const mediaUnderstanding =
+      CloudRuntimeCapability('media_understanding');
+  static const multimodalLlm = CloudRuntimeCapability('multimodal_llm');
+
+  static const all = <CloudRuntimeCapability>[
+    chat,
+    workingSet,
+    llm,
+    embedding,
+    semanticParse,
+    mediaUnderstanding,
+    multimodalLlm,
+  ];
+}
+
 @immutable
 class CloudRuntimeManifest {
   const CloudRuntimeManifest({

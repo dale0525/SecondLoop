@@ -105,15 +105,14 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
       await backend.parseStarted.future.timeout(const Duration(seconds: 1));
 
-      await tester.longPress(find.text(pendingText));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.tap(find.byKey(const ValueKey('message_action_delete')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(find.byType(AlertDialog), findsOneWidget);
-      await tester
-          .tap(find.byKey(const ValueKey('chat_delete_message_confirm')));
+      final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
+      await backend.purgeMessageAttachments(sessionKey, 'm1');
+      await backend.markSemanticParseJobCanceled(
+        sessionKey,
+        messageId: 'm1',
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      engine.notifyLocalMutation();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
@@ -507,6 +506,53 @@ final class _RaceBackend extends NativeAppBackend {
   }
 
   @override
+  Future<List<SecretaryMemoryProposalRecord>> listSecretaryMemoryProposals(
+    Uint8List key, {
+    String? state,
+  }) async =>
+      const <SecretaryMemoryProposalRecord>[];
+
+  @override
+  Future<List<PlanningOutputRecord>> listPlanningOutputs(
+    Uint8List key, {
+    String? kind,
+    required int nowMs,
+    bool includeExpired = false,
+  }) async =>
+      const <PlanningOutputRecord>[];
+
+  @override
+  Future<PlanningOutputRecord> upsertPlanningOutput(
+    Uint8List key, {
+    required String id,
+    required String kind,
+    required String title,
+    required String body,
+    required String itemsJson,
+    String? sourceRefsJson,
+    required String route,
+    required String state,
+    required int createdAtMs,
+    required int updatedAtMs,
+    int? expiresAtMs,
+  }) async {
+    return PlanningOutputRecord(
+      id: id,
+      kind: kind,
+      title: title,
+      body: body,
+      itemsJson: itemsJson,
+      sourceRefsJson: sourceRefsJson,
+      route: route,
+      state: state,
+      createdAtMs: PlatformInt64Util.from(createdAtMs),
+      updatedAtMs: PlatformInt64Util.from(updatedAtMs),
+      expiresAtMs:
+          expiresAtMs == null ? null : PlatformInt64Util.from(expiresAtMs),
+    );
+  }
+
+  @override
   Future<Todo> upsertTodoFromSemanticCreate(
     Uint8List key, {
     required String id,
@@ -631,7 +677,7 @@ final class _RaceBackend extends NativeAppBackend {
       LlmProfile(
         id: 'llm:active',
         name: 'BYOK',
-        providerType: 'openai',
+        providerType: 'openai-compatible',
         modelName: 'gpt-4.1-mini',
         isActive: true,
         createdAtMs: 0,

@@ -16,11 +16,25 @@ class SelfManagedSetupRequest {
     required this.cloudflareAccountLabel,
     required this.provider,
     required this.apiKey,
+    this.embeddingApiKey = '',
+    this.multimodalApiKey = '',
+    this.requiresMultimodalLlm = true,
   });
 
   final String cloudflareAccountLabel;
   final String provider;
   final String apiKey;
+  final String embeddingApiKey;
+  final String multimodalApiKey;
+  final bool requiresMultimodalLlm;
+
+  bool get hasRequiredAiProviderConfig {
+    final hasLlm = apiKey.trim().isNotEmpty;
+    final hasEmbeddings = embeddingApiKey.trim().isNotEmpty;
+    final hasMultimodal =
+        !requiresMultimodalLlm || multimodalApiKey.trim().isNotEmpty || hasLlm;
+    return hasLlm && hasEmbeddings && hasMultimodal;
+  }
 }
 
 @immutable

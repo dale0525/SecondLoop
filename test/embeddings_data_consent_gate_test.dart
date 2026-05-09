@@ -14,7 +14,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Cloud embeddings shows data consent dialog before using',
+  testWidgets(
+      'Cloud embeddings uses required capability without consent dialog',
       (tester) async {
     SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
 
@@ -56,14 +57,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('embeddings_consent_dialog')),
-        findsOneWidget);
-    expect(backend.calls,
-        isNot(contains('askAiStreamCloudGatewayWithEmbeddings')));
-
-    await tester.tap(find.byKey(const ValueKey('embeddings_consent_continue')));
-    await tester.pumpAndSettle();
-
+    expect(
+        find.byKey(const ValueKey('embeddings_consent_dialog')), findsNothing);
     expect(backend.calls, contains('askAiStreamCloudGatewayWithEmbeddings'));
   });
 }

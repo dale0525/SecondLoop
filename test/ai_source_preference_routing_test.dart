@@ -5,7 +5,7 @@ import 'package:secondloop/core/ai/media_source_prefs.dart';
 
 void main() {
   group('resolveEmbeddingsSourceRoute', () {
-    test('auto prefers cloud, then byok, then local', () {
+    test('auto prefers cloud, then byok, then setup-required', () {
       expect(
         resolveEmbeddingsSourceRoute(
           EmbeddingsSourcePreference.auto,
@@ -33,11 +33,11 @@ void main() {
           cloudAvailable: false,
           hasByokProfile: false,
         ),
-        EmbeddingsSourceRouteKind.local,
+        EmbeddingsSourceRouteKind.needsSetup,
       );
     });
 
-    test('byok falls back to local when profile is unavailable', () {
+    test('byok requires an embedding profile instead of local fallback', () {
       expect(
         resolveEmbeddingsSourceRoute(
           EmbeddingsSourcePreference.byok,
@@ -45,12 +45,11 @@ void main() {
           cloudAvailable: true,
           hasByokProfile: false,
         ),
-        EmbeddingsSourceRouteKind.local,
+        EmbeddingsSourceRouteKind.needsSetup,
       );
     });
 
-    test('byok does not fall back to cloud when local capability is missing',
-        () {
+    test('byok does not fall back to cloud when profile is missing', () {
       expect(
         resolveEmbeddingsSourceRoute(
           EmbeddingsSourcePreference.byok,
@@ -59,11 +58,11 @@ void main() {
           hasByokProfile: false,
           hasLocalCapability: false,
         ),
-        EmbeddingsSourceRouteKind.local,
+        EmbeddingsSourceRouteKind.needsSetup,
       );
     });
 
-    test('cloud falls back to byok/local when cloud is unavailable', () {
+    test('cloud falls back to byok and then setup-required', () {
       expect(
         resolveEmbeddingsSourceRoute(
           EmbeddingsSourcePreference.cloud,
@@ -81,13 +80,45 @@ void main() {
           cloudAvailable: false,
           hasByokProfile: false,
         ),
-        EmbeddingsSourceRouteKind.local,
+        EmbeddingsSourceRouteKind.needsSetup,
+      );
+    });
+
+    test('legacy local preference no longer selects local embeddings', () {
+      expect(
+        resolveEmbeddingsSourceRoute(
+          EmbeddingsSourcePreference.local,
+          cloudEmbeddingsSelected: true,
+          cloudAvailable: true,
+          hasByokProfile: false,
+        ),
+        EmbeddingsSourceRouteKind.cloudGateway,
+      );
+
+      expect(
+        resolveEmbeddingsSourceRoute(
+          EmbeddingsSourcePreference.local,
+          cloudEmbeddingsSelected: true,
+          cloudAvailable: false,
+          hasByokProfile: true,
+        ),
+        EmbeddingsSourceRouteKind.byok,
+      );
+
+      expect(
+        resolveEmbeddingsSourceRoute(
+          EmbeddingsSourcePreference.local,
+          cloudEmbeddingsSelected: false,
+          cloudAvailable: false,
+          hasByokProfile: false,
+        ),
+        EmbeddingsSourceRouteKind.needsSetup,
       );
     });
   });
 
   group('resolveMediaSourceRoute', () {
-    test('auto prefers cloud, then byok, then local', () {
+    test('auto prefers cloud, then byok, then setup-required', () {
       expect(
         resolveMediaSourceRoute(
           MediaSourcePreference.auto,
@@ -112,23 +143,22 @@ void main() {
           cloudAvailable: false,
           hasByokProfile: false,
         ),
-        MediaSourceRouteKind.local,
+        MediaSourceRouteKind.needsSetup,
       );
     });
 
-    test('byok falls back to local when profile is unavailable', () {
+    test('byok requires a multimodal profile instead of local fallback', () {
       expect(
         resolveMediaSourceRoute(
           MediaSourcePreference.byok,
           cloudAvailable: true,
           hasByokProfile: false,
         ),
-        MediaSourceRouteKind.local,
+        MediaSourceRouteKind.needsSetup,
       );
     });
 
-    test('byok does not fall back to cloud when local capability is missing',
-        () {
+    test('byok does not fall back to cloud when profile is missing', () {
       expect(
         resolveMediaSourceRoute(
           MediaSourcePreference.byok,
@@ -136,11 +166,11 @@ void main() {
           hasByokProfile: false,
           hasLocalCapability: false,
         ),
-        MediaSourceRouteKind.local,
+        MediaSourceRouteKind.needsSetup,
       );
     });
 
-    test('cloud falls back to byok/local when cloud is unavailable', () {
+    test('cloud falls back to byok and then setup-required', () {
       expect(
         resolveMediaSourceRoute(
           MediaSourcePreference.cloud,
@@ -156,7 +186,37 @@ void main() {
           cloudAvailable: false,
           hasByokProfile: false,
         ),
-        MediaSourceRouteKind.local,
+        MediaSourceRouteKind.needsSetup,
+      );
+    });
+
+    test('legacy local preference no longer selects local media capability',
+        () {
+      expect(
+        resolveMediaSourceRoute(
+          MediaSourcePreference.local,
+          cloudAvailable: true,
+          hasByokProfile: false,
+        ),
+        MediaSourceRouteKind.cloudGateway,
+      );
+
+      expect(
+        resolveMediaSourceRoute(
+          MediaSourcePreference.local,
+          cloudAvailable: false,
+          hasByokProfile: true,
+        ),
+        MediaSourceRouteKind.byok,
+      );
+
+      expect(
+        resolveMediaSourceRoute(
+          MediaSourcePreference.local,
+          cloudAvailable: false,
+          hasByokProfile: false,
+        ),
+        MediaSourceRouteKind.needsSetup,
       );
     });
   });

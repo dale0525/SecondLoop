@@ -10,7 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/theme_palette_prefs.dart';
 import '../../app/theme_mode_prefs.dart';
 import '../../core/ai/ai_routing.dart';
-import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
@@ -342,23 +341,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _maybeDisableCloudEmbeddingsIfNotAllowed() async {
-    final subscriptionStatus =
-        _subscriptionController?.status ?? SubscriptionStatus.unknown;
-    final cloudUid = (_cloudAuthController?.uid ?? '').trim();
-
-    if (subscriptionStatus == SubscriptionStatus.unknown) return;
-
-    final allowed = subscriptionStatus == SubscriptionStatus.entitled &&
-        cloudUid.isNotEmpty;
-    if (allowed) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final enabled = prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey);
-    if (enabled != true) return;
-
-    await EmbeddingsDataConsentPrefs.setEnabled(prefs, false);
-    if (!mounted) return;
-    await _load();
+    return;
   }
 
   String _localeLabel(BuildContext context, AppLocale locale) {

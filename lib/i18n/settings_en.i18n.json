@@ -110,10 +110,12 @@
   },
   "selfManagedSetup": {
     "title": "Self-managed setup",
-    "subtitle": "Authorize Cloudflare, enter BYOK, and deploy your runtime.",
+    "subtitle": "Authorize Cloudflare, enter required LLM and embedding API keys, and deploy your runtime.",
     "fields": {
       "providerLabel": "Provider",
       "apiKeyLabel": "API key",
+      "embeddingApiKeyLabel": "Embedding API key",
+      "multimodalApiKeyLabel": "Multimodal LLM API key",
       "accountLabel": "Cloudflare account"
     },
     "status": {
@@ -313,20 +315,21 @@
         "loading": "Checking current route...",
         "cloud": "Current route: SecondLoop Cloud",
         "byok": "Current route: Embedding API key (BYOK)",
+        "notConfigured": "Configure managed pro or an embedding API key to use semantic search.",
         "local": "Current route: Local embeddings runtime"
       },
       "preference": {
         "auto": {
           "title": "Auto",
-          "description": "Prefer Cloud, then BYOK, then local runtime."
+          "description": "Prefer Cloud, then BYOK. Setup is required if neither is available."
         },
         "cloud": {
           "title": "SecondLoop Cloud",
-          "description": "Prefer Cloud. If unavailable, fallback to BYOK or local runtime."
+          "description": "Prefer Cloud. If unavailable, fallback to BYOK."
         },
         "byok": {
           "title": "API key (BYOK)",
-          "description": "Prefer BYOK. Automatically fallback to local runtime on failure."
+          "description": "Prefer your embedding API key."
         },
         "local": {
           "title": "Local runtime",
@@ -346,20 +349,21 @@
         "loading": "Checking current route...",
         "cloud": "Current route: SecondLoop Cloud",
         "byok": "Current route: API key profile (BYOK)",
+        "notConfigured": "Configure managed pro or a multimodal LLM API key to use media understanding.",
         "local": "Current route: Local runtime/native capabilities"
       },
       "preference": {
         "auto": {
           "title": "Auto",
-          "description": "Prefer Cloud, then BYOK, then local capabilities."
+          "description": "Prefer Cloud, then BYOK. Setup is required if neither is available."
         },
         "cloud": {
           "title": "SecondLoop Cloud",
-          "description": "Prefer Cloud. If unavailable, fallback to BYOK or local capabilities."
+          "description": "Prefer Cloud. If unavailable, fallback to BYOK."
         },
         "byok": {
           "title": "API key (BYOK)",
-          "description": "Prefer BYOK. Automatically fallback to local capabilities on failure."
+          "description": "Prefer your multimodal LLM API key."
         },
         "local": {
           "title": "Local capabilities",

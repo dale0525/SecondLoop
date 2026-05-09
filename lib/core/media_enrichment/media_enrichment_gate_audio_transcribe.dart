@@ -73,6 +73,8 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
             networkChain.addAll(byokChain);
           }
           break;
+        case MediaSourceRouteKind.needsSetup:
+          break;
         case MediaSourceRouteKind.local:
           if (localRuntimeChain.isNotEmpty) {
             networkChain.addAll(localRuntimeChain);

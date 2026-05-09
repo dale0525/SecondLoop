@@ -12,7 +12,7 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets(
-      'MessageEmbeddingsIndexGate local route drains pending message embeddings',
+      'MessageEmbeddingsIndexGate legacy local route does not drain embeddings',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_source_preference_v1': 'local',
@@ -64,7 +64,7 @@ void main() {
     expect(calls, 0);
 
     await tester.pump(const Duration(seconds: 6));
-    expect(calls, greaterThanOrEqualTo(4));
+    expect(calls, 0);
     expect(releaseCalls, greaterThanOrEqualTo(1));
   });
 

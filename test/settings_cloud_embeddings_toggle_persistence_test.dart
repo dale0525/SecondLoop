@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/ai/embeddings_data_consent_prefs.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
@@ -20,16 +21,12 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 import 'ai_settings_test_helpers.dart';
 
-bool _switchValue(WidgetTester tester, Finder finder) {
-  return tester.widget<SwitchListTile>(finder).value;
-}
-
 void main() {
   testWidgets(
-      'Settings: cloud embeddings preference does not reset when subscription is unknown',
+      'Settings: required embeddings capability ignores legacy opt-out when subscription is unknown',
       (tester) async {
     SharedPreferences.setMockInitialValues({
-      'embeddings_data_consent_v1': true,
+      'embeddings_data_consent_v1': false,
     });
 
     final cloudAuth = _FakeCloudAuthController();
@@ -57,7 +54,10 @@ void main() {
     await tester.pumpAndSettle();
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('embeddings_data_consent_v1'), true);
+    expect(
+      EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs),
+      isTrue,
+    );
 
     final aiEntry = find.byKey(const ValueKey('settings_ai_source'));
     await tester.dragUntilVisible(
@@ -72,16 +72,10 @@ void main() {
 
     expect(find.byType(AiSettingsPage), findsOneWidget);
     await openAiAdvancedSettings(tester);
-    final cloudEmbeddingsSwitch =
-        find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch'));
-    await tester.dragUntilVisible(
-      cloudEmbeddingsSwitch,
-      find.byType(ListView).first,
-      const Offset(0, -220),
+    expect(
+      find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch')),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
-
-    expect(_switchValue(tester, cloudEmbeddingsSwitch), isTrue);
   });
 
   testWidgets('Settings: AI feature guide opens unified AI settings home',

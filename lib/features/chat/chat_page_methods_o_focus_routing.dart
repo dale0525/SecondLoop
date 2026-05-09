@@ -97,9 +97,7 @@ extension _ChatPageStateMethodsOFocusRouting on _ChatPageState {
 
   Future<void> _loadEmbeddingsDataConsentPreference() async {
     final prefs = await SharedPreferences.getInstance();
-    if (!prefs.containsKey(_kEmbeddingsDataConsentPrefsKey)) return;
-
-    final value = prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ?? false;
+    final value = EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
     if (!mounted) return;
     _setState(() => _cloudEmbeddingsConsented = value);
   }

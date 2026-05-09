@@ -115,7 +115,7 @@ void main() {
     expect(backend.searchLocalCalls, 0);
   });
 
-  test('retrieve falls back to local when byok embeddings route fails',
+  test('retrieve does not fall back to local when byok embeddings route fails',
       () async {
     final backend = _RoutingBackend(
       localMatches: const [
@@ -139,13 +139,43 @@ void main() {
       topK: 4,
     );
 
-    expect(matches, hasLength(1));
-    expect(matches.single.todoId, 'todo:local-fallback');
-    expect(matches.single.distance, 0.37);
+    expect(matches, isEmpty);
     expect(backend.processByokCalls, 1);
     expect(backend.searchByokCalls, 1);
-    expect(backend.processLocalCalls, 1);
-    expect(backend.searchLocalCalls, 1);
+    expect(backend.processLocalCalls, 0);
+    expect(backend.searchLocalCalls, 0);
+  });
+
+  test('retrieve returns no matches when embeddings route requires setup',
+      () async {
+    final backend = _RoutingBackend(
+      localMatches: const [
+        TodoThreadMatch(todoId: 'todo:local-fallback', distance: 0.37),
+      ],
+    );
+
+    final client = BackendSemanticParseAutoActionsClient(
+      backend: backend,
+      sessionKey: _sessionKey,
+      askAiRoute: AskAiRouteKind.byok,
+      embeddingsRoute: EmbeddingsSourceRouteKind.needsSetup,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token',
+      modelName: 'gpt-4o-mini',
+    );
+
+    final matches = await client.retrieveTodoCandidateMatches(
+      query: '狗不理包子',
+      topK: 4,
+    );
+
+    expect(matches, isEmpty);
+    expect(backend.processCloudCalls, 0);
+    expect(backend.searchCloudCalls, 0);
+    expect(backend.processByokCalls, 0);
+    expect(backend.searchByokCalls, 0);
+    expect(backend.processLocalCalls, 0);
+    expect(backend.searchLocalCalls, 0);
   });
 
   test('parse uses ask-ai route and does not follow embeddings route',

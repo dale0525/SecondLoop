@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/ai/task_priority_ai_enhancement_prefs.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 
 import 'test_i18n.dart';
@@ -12,7 +13,7 @@ bool _switchValue(WidgetTester tester, Finder finder) {
 }
 
 void main() {
-  testWidgets('AI settings stores embeddings and media source preferences',
+  testWidgets('AI settings stores cloud/BYOK source preferences',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -29,16 +30,16 @@ void main() {
 
     final listView = find.byType(ListView);
 
-    final embeddingsLocal =
-        find.byKey(const ValueKey('ai_settings_embeddings_mode_local'));
+    final embeddingsByok =
+        find.byKey(const ValueKey('ai_settings_embeddings_mode_byok'));
     await tester.dragUntilVisible(
-      embeddingsLocal,
+      embeddingsByok,
       listView,
       const Offset(0, -220),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(embeddingsLocal);
+    await tester.tap(embeddingsByok);
     await tester.pumpAndSettle();
 
     final mediaByok = find.byKey(const ValueKey('ai_settings_media_mode_byok'));
@@ -53,7 +54,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('embeddings_source_preference_v1'), 'local');
+    expect(prefs.getString('embeddings_source_preference_v1'), 'byok');
     expect(prefs.getString('media_source_preference_v1'), 'byok');
   });
 
@@ -95,48 +96,10 @@ void main() {
   });
 
   testWidgets(
-      'AI settings enables task priority enhancement by default and persists changes',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        const MaterialApp(
-          home: AiSettingsPage(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await openAiAdvancedSettings(tester);
-
-    final listView = find.byType(ListView);
-    final taskPrioritySwitch =
-        find.byKey(const ValueKey('ai_settings_task_priority_ai_switch'));
-
-    await tester.dragUntilVisible(
-      taskPrioritySwitch,
-      listView,
-      const Offset(0, -160),
-    );
-    await tester.pumpAndSettle();
-
-    expect(_switchValue(tester, taskPrioritySwitch), isTrue);
-
-    await tester.tap(taskPrioritySwitch);
-    await tester.pumpAndSettle();
-
-    expect(_switchValue(tester, taskPrioritySwitch), isFalse);
-
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('task_priority_ai_enhancement_enabled_v1'), isFalse);
-  });
-
-  testWidgets('AI settings embeds smart search and semantic action toggles',
+      'AI settings keeps task priority enhancement required and non-optional',
       (tester) async {
     SharedPreferences.setMockInitialValues({
-      'embeddings_data_consent_v1': true,
-      'semantic_parse_data_consent_v1': true,
+      TaskPriorityAiEnhancementPrefs.prefsKey: false,
     });
 
     await tester.pumpWidget(
@@ -150,45 +113,49 @@ void main() {
 
     await openAiAdvancedSettings(tester);
 
-    final semanticSwitch = find.byKey(
-      const ValueKey('ai_settings_semantic_parse_auto_actions_switch'),
-    );
-    expect(semanticSwitch, findsOneWidget);
+    final taskPrioritySwitch =
+        find.byKey(const ValueKey('ai_settings_task_priority_ai_switch'));
 
-    final listView = find.byType(ListView);
-    await tester.dragUntilVisible(
-      semanticSwitch,
-      listView,
-      const Offset(0, -160),
-    );
-    await tester.pumpAndSettle();
+    expect(taskPrioritySwitch, findsNothing);
+    expect(await TaskPriorityAiEnhancementPrefs.read(), isTrue);
+  });
 
-    expect(_switchValue(tester, semanticSwitch), isTrue);
+  testWidgets('AI settings does not expose AI capability opt-out toggles',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+      'semantic_parse_data_consent_v1': false,
+    });
 
-    await tester.tap(semanticSwitch);
-    await tester.pumpAndSettle();
-
-    final cloudEmbeddingsSwitch =
-        find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch'));
-    await tester.dragUntilVisible(
-      cloudEmbeddingsSwitch,
-      listView,
-      const Offset(0, -220),
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: AiSettingsPage(),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
-    expect(_switchValue(tester, cloudEmbeddingsSwitch), isTrue);
+    await openAiAdvancedSettings(tester);
 
-    await tester.tap(cloudEmbeddingsSwitch);
-    await tester.pumpAndSettle();
-
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('semantic_parse_data_consent_v1'), isFalse);
-    expect(prefs.getBool('embeddings_data_consent_v1'), isFalse);
+    expect(
+      find.byKey(
+        const ValueKey('ai_settings_semantic_parse_auto_actions_switch'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('ai_settings_smart_organization_switch')),
+      findsNothing,
+    );
   });
 
   testWidgets(
-    'semantic parse toggle requires cloud/byok setup',
+    'AI settings keeps local source choices out of the user-facing surface',
     (tester) async {
       SharedPreferences.setMockInitialValues({
         'semantic_parse_data_consent_v1': false,
@@ -205,27 +172,14 @@ void main() {
 
       await openAiAdvancedSettings(tester);
 
-      final semanticSwitch = find.byKey(
-        const ValueKey('ai_settings_semantic_parse_auto_actions_switch'),
+      expect(
+        find.byKey(const ValueKey('ai_settings_embeddings_mode_local')),
+        findsNothing,
       );
-      final listView = find.byType(ListView);
-      await tester.dragUntilVisible(
-        semanticSwitch,
-        listView,
-        const Offset(0, -160),
+      expect(
+        find.byKey(const ValueKey('ai_settings_media_mode_local')),
+        findsNothing,
       );
-      await tester.pumpAndSettle();
-
-      expect(_switchValue(tester, semanticSwitch), isFalse);
-
-      await tester.tap(semanticSwitch);
-      await tester.pumpAndSettle();
-
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(_switchValue(tester, semanticSwitch), isFalse);
-
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('semantic_parse_data_consent_v1'), isFalse);
     },
   );
 }

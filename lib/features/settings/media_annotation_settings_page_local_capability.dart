@@ -13,8 +13,11 @@ extension _MediaAnnotationSettingsPageLocalCapabilityExtension
   }
 
   bool _shouldShowDesktopLocalCapabilityCard() {
-    final platform = Theme.of(context).platform;
-    return platform != TargetPlatform.android && platform != TargetPlatform.iOS;
+    return false;
+  }
+
+  bool _supportsMobileWhisperRuntimeDownload() {
+    return false;
   }
 
   BuildContext? _localCapabilityCardFocusContext() {
@@ -74,16 +77,8 @@ extension _MediaAnnotationSettingsPageLocalCapabilityExtension
     });
   }
 
-  bool _supportsMobileWhisperRuntimeDownload() {
-    if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
-  }
-
   bool _shouldShowWhisperRuntimeCard() {
-    final store = _audioWhisperModelStore;
-    return store.supportsRuntimeDownload &&
-        _supportsMobileWhisperRuntimeDownload();
+    return false;
   }
 
   Future<bool?> _safeIsAudioWhisperModelAvailable(

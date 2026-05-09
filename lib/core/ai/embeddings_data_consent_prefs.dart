@@ -7,8 +7,10 @@ final class EmbeddingsDataConsentPrefs {
   // `null` means unset, `false` means explicitly disabled.
   static final ValueNotifier<bool?> value = ValueNotifier<bool?>(null);
 
+  static bool readEffectiveEnabled(SharedPreferences prefs) => true;
+
   static Future<void> setEnabled(SharedPreferences prefs, bool enabled) async {
-    await prefs.setBool(prefsKey, enabled);
-    value.value = enabled;
+    await prefs.setBool(prefsKey, true);
+    value.value = true;
   }
 }

@@ -22,6 +22,11 @@ final class RuntimeTestClient {
     List<String> capabilities = const <String>[
       'chat',
       'working_set',
+      'llm',
+      'embedding',
+      'semantic_parse',
+      'media_understanding',
+      'multimodal_llm',
       'runtime_test_api',
     ],
   }) async {

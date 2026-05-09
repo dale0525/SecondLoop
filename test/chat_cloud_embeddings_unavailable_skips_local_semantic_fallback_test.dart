@@ -19,7 +19,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-      'Todo linking uses BYOK semantic first, then local fallback when cloud embeddings unavailable',
+      'Todo linking uses BYOK semantic without local fallback when cloud embeddings unavailable',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': true,
@@ -93,7 +93,7 @@ void main() {
 
     expect(
       backend.calls,
-      <String>['searchSimilarTodoThreadsBrok', 'searchSimilarTodoThreads'],
+      <String>['searchSimilarTodoThreadsBrok'],
     );
     expect(
       backend.calls,
@@ -101,7 +101,7 @@ void main() {
     );
   });
 
-  testWidgets('Todo linking falls back to local semantic when Pro not entitled',
+  testWidgets('Todo linking uses BYOK semantic when Pro is not entitled',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': true,

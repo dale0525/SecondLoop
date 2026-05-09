@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ai_routing.dart';
+import 'embeddings_data_consent_prefs.dart';
 import 'embeddings_source_prefs.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
@@ -28,7 +29,6 @@ class MessageEmbeddingsIndexGate extends StatefulWidget {
 
 class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
     with WidgetsBindingObserver {
-  static const _kEmbeddingsDataConsentPrefsKey = 'embeddings_data_consent_v1';
   static const _kIdleInterval = Duration(seconds: 30);
   static const _kDrainInterval = Duration(milliseconds: 600);
   static const _kFailureInterval = Duration(seconds: 10);
@@ -207,7 +207,7 @@ class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
 
     final prefs = await SharedPreferences.getInstance();
     final cloudEmbeddingsSelected =
-        prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ?? false;
+        EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
 
     final preference = switch (
         (prefs.getString(EmbeddingsSourcePrefs.prefsKey) ?? '').trim()) {

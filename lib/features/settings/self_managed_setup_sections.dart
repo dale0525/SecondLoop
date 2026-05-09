@@ -11,12 +11,16 @@ class SelfManagedSetupSections extends StatelessWidget {
     required this.cloudflareAccountController,
     required this.providerController,
     required this.apiKeyController,
+    required this.embeddingApiKeyController,
+    required this.multimodalApiKeyController,
   });
 
   final SelfManagedSetupController controller;
   final TextEditingController cloudflareAccountController;
   final TextEditingController providerController;
   final TextEditingController apiKeyController;
+  final TextEditingController embeddingApiKeyController;
+  final TextEditingController multimodalApiKeyController;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +55,24 @@ class SelfManagedSetupSections extends StatelessWidget {
               decoration: InputDecoration(
                 labelText:
                     context.t.settings.selfManagedSetup.fields.apiKeyLabel,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('self_managed_embedding_api_key'),
+              controller: embeddingApiKeyController,
+              decoration: InputDecoration(
+                labelText: context
+                    .t.settings.selfManagedSetup.fields.embeddingApiKeyLabel,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('self_managed_multimodal_api_key'),
+              controller: multimodalApiKeyController,
+              decoration: InputDecoration(
+                labelText: context
+                    .t.settings.selfManagedSetup.fields.multimodalApiKeyLabel,
               ),
             ),
             const SizedBox(height: 16),

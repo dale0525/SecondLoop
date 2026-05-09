@@ -58,6 +58,8 @@ void main() {
         cloudflareAccountLabel: 'acct-1',
         provider: 'openai',
         apiKey: 'sk-test',
+        embeddingApiKey: 'emb-test',
+        multimodalApiKey: 'mm-test',
       ),
     );
 
@@ -84,6 +86,8 @@ void main() {
         cloudflareAccountLabel: 'acct-1',
         provider: 'openai',
         apiKey: 'sk-test',
+        embeddingApiKey: 'emb-test',
+        multimodalApiKey: 'mm-test',
       ),
     );
 

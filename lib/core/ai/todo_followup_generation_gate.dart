@@ -192,8 +192,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       );
 
       final prefs = await SharedPreferences.getInstance();
-      final enabled =
-          prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+      final enabled = SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
       if (!mounted) {
         return;
       }

@@ -17,8 +17,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets(
-      'Todo update sheet shows enable-cloud button and opens consent dialog',
+  testWidgets('Todo update sheet does not expose embeddings opt-in button',
       (tester) async {
     SharedPreferences.setMockInitialValues(
         {'embeddings_data_consent_v1': false});
@@ -93,16 +92,12 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('todo_link_sheet_enable_cloud')),
-      findsOneWidget,
+      findsNothing,
     );
 
     await tester.pumpAndSettle();
-    await tester
-        .tap(find.byKey(const ValueKey('todo_link_sheet_enable_cloud')));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('embeddings_consent_dialog')),
-        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('embeddings_consent_dialog')), findsNothing);
   });
 }
 
