@@ -70,4 +70,17 @@ void main() {
     expect(
         find.byKey(const ValueKey('agent_digest_regenerate')), findsOneWidget);
   });
+
+  testWidgets('default harness opens sync settings', (tester) async {
+    final backend = DynamicTestBackend();
+    final harness = await DynamicAppHarness.launch(
+      tester,
+      backend: backend,
+    );
+
+    await harness.openSettings();
+    await harness.openSyncSettings();
+
+    expect(find.byKey(const ValueKey('sync_auto_wifi_only')), findsOneWidget);
+  });
 }

@@ -19,6 +19,7 @@ import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
+import 'package:secondloop/features/settings/sync_settings_page.dart';
 
 import '../../test/test_i18n.dart';
 import 'dynamic_test_backend.dart';
@@ -184,6 +185,14 @@ final class DynamicAppHarness {
     await pumpUntilFound(
       find.byType(AgentDigestSettingsPage),
       description: 'agent digest settings page',
+    );
+  }
+
+  Future<void> openSyncSettings() async {
+    await tapByKey('settings_sync');
+    await pumpUntilFound(
+      find.byType(SyncSettingsPage),
+      description: 'sync settings page',
     );
   }
 
