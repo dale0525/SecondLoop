@@ -28,6 +28,8 @@ class CloudRuntimeModePage extends StatelessWidget {
         future: store.loadConnection(),
         builder: (context, snapshot) {
           final connection = _effectiveConnection(context, snapshot.data);
+          final isManagedPro =
+              connection?.profile.runtimeMode == CloudRuntimeMode.managedPro;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -74,14 +76,18 @@ class CloudRuntimeModePage extends StatelessWidget {
                 _runtimeDetailsTitle(context, connection),
                 key: const ValueKey('runtime_mode_status_title'),
               ),
-              if (connection != null) ...[
+              if (connection == null) ...[
+                const SizedBox(height: 8),
+                Text(context.t.settings.runtimeMode.status.notConfigured),
+              ] else if (isManagedPro) ...[
+                const SizedBox(height: 8),
+                Text(context
+                    .t.settings.runtimeMode.options.managedPro.description),
+              ] else ...[
                 const SizedBox(height: 8),
                 Text(connection.profile.apiBaseUrl),
                 Text(connection.profile.authMode.wireValue),
                 Text('${connection.manifest.manifestVersion}'),
-              ] else ...[
-                const SizedBox(height: 8),
-                Text(context.t.settings.runtimeMode.status.notConfigured),
               ],
             ],
           );
@@ -98,7 +104,7 @@ class CloudRuntimeModePage extends StatelessWidget {
       return context.t.settings.runtimeMode.status.notConfigured;
     }
     return connection.profile.runtimeMode == CloudRuntimeMode.managedPro
-        ? context.t.settings.runtimeMode.details.managedSession
+        ? context.t.settings.runtimeMode.options.managedPro.title
         : context.t.settings.runtimeMode.details.selfManagedConnection;
   }
 

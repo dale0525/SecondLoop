@@ -33,8 +33,7 @@ void main() {
     expect(find.byType(SelfManagedSetupPage), findsOneWidget);
   });
 
-  testWidgets(
-      'selecting managed pro surfaces hosted account and session details',
+  testWidgets('managed pro connection surfaces user-facing account status only',
       (tester) async {
     final store = RuntimeConnectionStore();
     await store.saveConnection(
@@ -66,7 +65,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('https://hosted-runtime.example/'), findsOneWidget);
+    expect(find.text('Managed Pro runtime connected'), findsOneWidget);
+    expect(
+        find.text('Use the hosted runtime without Cloudflare setup or BYOK.'),
+        findsOneWidget);
+    expect(find.text('https://hosted-runtime.example/'), findsNothing);
+    expect(find.text('hosted_session'), findsNothing);
+    expect(find.text('1'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('runtime_mode_managed_pro')));
     await tester.pumpAndSettle();
@@ -78,14 +83,14 @@ void main() {
       (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
-        MaterialApp(
+        const MaterialApp(
           home: CloudAuthScope(
             controller: _FakeCloudAuthController(uid: 'managed-user-1'),
-            gatewayConfig: const CloudGatewayConfig(
+            gatewayConfig: CloudGatewayConfig(
               baseUrl: 'https://gateway.example/root/',
               modelName: 'cloud',
             ),
-            child: const CloudRuntimeModePage(),
+            child: CloudRuntimeModePage(),
           ),
         ),
       ),
@@ -93,8 +98,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Managed Pro runtime connected'), findsOneWidget);
-    expect(find.text('Managed session'), findsOneWidget);
-    expect(find.text('https://gateway.example/root/'), findsOneWidget);
+    expect(find.text('Managed Pro'), findsWidgets);
+    expect(
+        find.text('Use the hosted runtime without Cloudflare setup or BYOK.'),
+        findsOneWidget);
+    expect(find.text('Managed session'), findsNothing);
+    expect(find.text('https://gateway.example/root/'), findsNothing);
+    expect(find.text('hosted_session'), findsNothing);
+    expect(find.text('1'), findsNothing);
     expect(find.text('Not configured'), findsNothing);
   });
 }
