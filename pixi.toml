@@ -19,7 +19,7 @@ FVM_HOME = "%PIXI_PROJECT_ROOT%/.tool/fvm"
 [tasks]
 # Bootstrap task (first clone / new machine / Flutter drift).
 # Installs and pins the required Flutter SDK via FVM, then runs flutter pub get.
-setup-flutter = "dart pub global activate --no-executables fvm 2.4.1 && dart pub global run fvm:main install 3.22.3 && dart pub global run fvm:main use 3.22.3 --force && dart pub global run fvm:main flutter pub get"
+setup-flutter = "dart pub global activate --no-executables fvm 2.4.1 && dart pub global run fvm:main install 3.22.3 && dart pub global run fvm:main use 3.22.3 --force && bash scripts/flutter_pub_get_with_retry.sh"
 
 # Generic command entry points (keeps task count low).
 # Common usage:
