@@ -61,6 +61,30 @@ void main() {
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
         findsNothing);
   });
+
+  testWidgets(
+      'quick capture does not locally create task from natural language',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    final backend = _QuickCaptureRuntimeFirstBackend();
+    final controller = await _pumpQuickCapture(tester, backend);
+
+    controller.show();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.enterText(
+      find.byKey(const ValueKey('quick_capture_input')),
+      '帮我创建一个任务：完成周报。',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(backend.insertedMessages, ['帮我创建一个任务：完成周报。']);
+    expect(backend.calls, isNot(contains('upsertTodo')));
+    expect(backend.calls, isNot(contains('enqueueSemanticParseJob')));
+  });
 }
 
 Future<QuickCaptureController> _pumpQuickCapture(

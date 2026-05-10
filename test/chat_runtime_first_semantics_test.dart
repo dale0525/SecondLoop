@@ -42,6 +42,30 @@ void main() {
     expect(backend.calls, isNot(contains('upsertTodo')));
   });
 
+  testWidgets('chat does not locally mutate priority for urgent task text',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _RuntimeFirstBackend(
+      todos: const [
+        Todo(
+          id: 'task-1',
+          title: '完成周报',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await _pumpChat(tester, backend);
+    await _send(tester, '把“完成周报”标为紧急。');
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(backend.calls, isNot(contains('transitionTodo')));
+    expect(backend.calls, isNot(contains('setTodoStatus')));
+    expect(backend.calls, isNot(contains('upsertTodo')));
+  });
+
   testWidgets('chat does not create local memory proposals from remember text',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -103,6 +127,81 @@ void main() {
     expect(sender.conversationIds, ['loop_home']);
     expect(sender.vaultIds, ['loop_home']);
     expect(find.text('待确认：改截止时间。'), findsOneWidget);
+  });
+
+  testWidgets('chat task creation is rendered from runtime response',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _RuntimeFirstBackend();
+    final sender = _FakeRuntimeSender(
+      result: SecretaryRuntimeConversationResult(
+        runId: 'run-1',
+        conversationId: 'loop_home',
+        assistantContent: '已创建任务：完成周报。',
+        metadata: SecretaryRuntimeResponseMetadata(
+          runId: 'run-1',
+          turnId: 'turn-run-1',
+          conversationId: 'loop_home',
+          vaultId: 'loop_home',
+          responseType: 'task_created',
+          runStatus: 'completed',
+          approvalRequired: false,
+          proposedMutations: const <Map<String, Object?>>[],
+          appliedMutations: const <Map<String, Object?>>[
+            {
+              'entity_type': 'task',
+              'mutation_type': 'create',
+              'status': 'applied',
+              'record_id': 'task-1',
+            },
+          ],
+          approvalItems: const <SecretaryRuntimeApprovalItem>[],
+        ),
+      ),
+    );
+
+    await _pumpChat(tester, backend, runtimeConversationSender: sender);
+    await _send(tester, '帮我创建一个任务：完成周报。');
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(sender.messages, ['帮我创建一个任务：完成周报。']);
+    expect(backend.calls, isNot(contains('upsertTodo')));
+    expect(find.text('已创建任务：完成周报。'), findsOneWidget);
+  });
+
+  testWidgets('chat external email request is surfaced from runtime only',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _RuntimeFirstBackend();
+    final sender = _FakeRuntimeSender(
+      result: SecretaryRuntimeConversationResult(
+        runId: 'run-1',
+        conversationId: 'loop_home',
+        assistantContent: '我可以先起草邮件；发送前需要连接邮箱并确认。',
+        metadata: SecretaryRuntimeResponseMetadata(
+          runId: 'run-1',
+          turnId: 'turn-run-1',
+          conversationId: 'loop_home',
+          vaultId: 'loop_home',
+          responseType: 'needs_configuration',
+          runStatus: 'completed',
+          approvalRequired: false,
+          proposedMutations: const <Map<String, Object?>>[],
+          appliedMutations: const <Map<String, Object?>>[],
+          approvalItems: const <SecretaryRuntimeApprovalItem>[],
+        ),
+      ),
+    );
+
+    await _pumpChat(tester, backend, runtimeConversationSender: sender);
+    await _send(tester, '直接把周报邮件发给 Alice。');
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(sender.messages, ['直接把周报邮件发给 Alice。']);
+    expect(backend.calls, isNot(contains('upsertTodo')));
+    expect(backend.calls, isNot(contains('createSecretaryMemoryProposal')));
+    expect(backend.calls, isNot(contains('enqueueSemanticParseJob')));
+    expect(find.text('我可以先起草邮件；发送前需要连接邮箱并确认。'), findsOneWidget);
   });
 
   testWidgets('chat shows hosted runtime processing state while waiting',
