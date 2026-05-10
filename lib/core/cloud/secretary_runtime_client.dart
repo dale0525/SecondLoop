@@ -72,6 +72,7 @@ class SecretaryRuntimeApprovalItem {
     required this.title,
     required this.kind,
     this.recurringRuleId = '',
+    this.reason = '',
     this.record,
   });
 
@@ -80,6 +81,7 @@ class SecretaryRuntimeApprovalItem {
   final String title;
   final String kind;
   final String recurringRuleId;
+  final String reason;
   final Map<String, Object?>? record;
 
   factory SecretaryRuntimeApprovalItem.fromJson(Map<String, dynamic> json) {
@@ -89,6 +91,7 @@ class SecretaryRuntimeApprovalItem {
       title: (json['title'] as String?) ?? '',
       kind: (json['kind'] as String?) ?? '',
       recurringRuleId: (json['recurring_rule_id'] as String?) ?? '',
+      reason: (json['reason'] as String?) ?? '',
       record: _parseNullableObjectMap(json['record']),
     );
   }
