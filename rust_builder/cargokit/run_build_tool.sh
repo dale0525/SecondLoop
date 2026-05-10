@@ -20,6 +20,27 @@ else
   DART="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
 fi
 
+clear_pub_advisories_cache() {
+  local cache_root="${PUB_CACHE:-}"
+  if [[ -z "$cache_root" && -n "${HOME:-}" ]]; then
+    cache_root="$HOME/.pub-cache"
+  fi
+  if [[ -z "$cache_root" || ! -d "$cache_root/hosted" ]]; then
+    return 0
+  fi
+  find "$cache_root/hosted" -path '*/.cache/*-advisories.json' -type f -delete 2>/dev/null || true
+}
+
+run_pub_get_with_retry() {
+  if "$DART" pub get --no-precompile; then
+    return 0
+  fi
+
+  echo "SecondLoop: dart pub get failed; clearing hosted pub advisories cache and retrying once." >&2
+  clear_pub_advisories_cache
+  "$DART" pub get --no-precompile
+}
+
 cat << EOF > "pubspec.yaml"
 name: build_tool_runner
 version: 1.0.0
@@ -72,7 +93,7 @@ fi
 
 # Run pub get if needed.
 if [ ! -f "$PACKAGE_HASH_FILE" ]; then
-    "$DART" pub get --no-precompile
+    run_pub_get_with_retry
     "$DART" compile kernel bin/build_tool_runner.dart
     echo "$PACKAGE_HASH" > "$PACKAGE_HASH_FILE"
 fi
@@ -90,7 +111,7 @@ exit_code=$?
 
 # 253 means invalid snapshot version.
 if [ $exit_code == 253 ]; then
-  "$DART" pub get --no-precompile
+  run_pub_get_with_retry
   "$DART" compile kernel bin/build_tool_runner.dart
   "$DART" bin/build_tool_runner.dill "$@"
   exit_code=$?

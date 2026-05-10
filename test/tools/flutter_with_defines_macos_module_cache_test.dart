@@ -75,4 +75,21 @@ void main() {
     expect(declarationIndex, greaterThanOrEqualTo(0));
     expect(invocationIndex, greaterThan(declarationIndex));
   });
+
+  test('flutter_with_defines patches macOS Cargokit pub get scripts', () {
+    final content = File('scripts/flutter_with_defines.sh').readAsStringSync();
+
+    expect(content, contains('maybe_patch_macos_cargokit_pub_get()'));
+    expect(content, contains('scripts/patch_cargokit_pub_get.sh'));
+
+    final declarationIndex =
+        content.indexOf('maybe_patch_macos_cargokit_pub_get()');
+    final invocationIndex =
+        content.indexOf('\nmaybe_patch_macos_cargokit_pub_get\n');
+    final flutterCommandIndex = content.indexOf('\nrun_flutter_command()');
+
+    expect(declarationIndex, greaterThanOrEqualTo(0));
+    expect(invocationIndex, greaterThan(declarationIndex));
+    expect(invocationIndex, lessThan(flutterCommandIndex));
+  });
 }

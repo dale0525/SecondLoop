@@ -37,8 +37,6 @@ fi
 
 export PATH=${NEW_PATH%?} # remove trailing :
 
-env
-
 # Platform name (macosx, iphoneos, iphonesimulator)
 export CARGOKIT_DARWIN_PLATFORM_NAME=$PLATFORM_NAME
 

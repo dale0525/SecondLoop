@@ -159,6 +159,18 @@ maybe_clear_macos_stale_app_bundle_for_speech_privacy() {
   fi
 }
 
+maybe_patch_macos_cargokit_pub_get() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return 0
+  fi
+
+  if ! should_sanitize_macos_module_cache; then
+    return 0
+  fi
+
+  bash "${repo_root}/scripts/patch_cargokit_pub_get.sh"
+}
+
 create_macos_xcrun_wrapper() {
   local wrapper_dir
   wrapper_dir="$(mktemp -d -t secondloop_xcrun.XXXXXX)" || {
@@ -275,6 +287,7 @@ fi
 
 maybe_clear_macos_module_cache_conflict
 maybe_clear_macos_stale_app_bundle_for_speech_privacy
+maybe_patch_macos_cargokit_pub_get
 
 run_flutter_command() {
   local -a args=("$@")
