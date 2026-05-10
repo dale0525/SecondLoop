@@ -5,22 +5,33 @@ import 'runtime_test_errors.dart';
 const int runtimeTestContractSchemaVersion = 1;
 
 const Set<String> runtimeTestResponseTypes = <String>{
+  'assistant_message',
   'summary',
+  'clarification_request',
+  'task_created',
   'plan_draft',
-  'approval_request',
   'memory_candidate',
   'reminder_candidate',
+  'recurring_reminder_candidate',
+  'calendar_event_candidate',
+  'email_draft',
   'formal_mutation_pending',
   'high_cost_confirmation',
   'external_side_effect_blocked',
+  'needs_configuration',
   'tool_unavailable',
   'error',
 };
 
 const Set<String> runtimeTestApprovalKinds = <String>{
-  'reminder_confirmation',
-  'memory_confirmation',
   'task_mutation_confirmation',
+  'memory_confirmation',
+  'reminder_confirmation',
+  'recurring_reminder_confirmation',
+  'calendar_event_confirmation',
+  'email_send_confirmation',
+  'high_cost_confirmation',
+  'external_side_effect_confirmation',
 };
 
 @immutable
