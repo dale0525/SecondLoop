@@ -52,6 +52,7 @@ final class SecretaryRuntimeResponseMetadata {
     this.referencedEntities = const <String, Object?>{},
     this.draftEntities = const <Map<String, Object?>>[],
     this.mediaResults = const <Map<String, Object?>>[],
+    this.webResearchDrafts = const <Map<String, Object?>>[],
     this.toolTraceIds = const <String>[],
     this.providerTraceId,
     this.stateSnapshotAfter,
@@ -72,6 +73,7 @@ final class SecretaryRuntimeResponseMetadata {
   final List<Map<String, Object?>> draftEntities;
   final List<SecretaryRuntimeApprovalItem> approvalItems;
   final List<Map<String, Object?>> mediaResults;
+  final List<Map<String, Object?>> webResearchDrafts;
   final List<String> toolTraceIds;
   final String? providerTraceId;
   final Map<String, Object?>? stateSnapshotAfter;
@@ -95,6 +97,7 @@ final class SecretaryRuntimeResponseMetadata {
       draftEntities: _parseObjectList(json['draft_entities']),
       approvalItems: _parseApprovalItems(json['approval_items']),
       mediaResults: _parseObjectList(json['media_results']),
+      webResearchDrafts: _parseObjectList(json['web_research_drafts']),
       toolTraceIds: _parseStringList(json['tool_trace_ids']),
       providerTraceId: _parseString(json['provider_trace_id']),
       stateSnapshotAfter: _parseNullableObjectMap(json['state_snapshot_after']),
