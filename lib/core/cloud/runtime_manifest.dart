@@ -37,6 +37,18 @@ final class CloudRuntimeRequiredCapabilities {
     mediaUnderstanding,
     multimodalLlm,
   ];
+
+  static CloudRuntimeCapability? firstMissingFrom(
+    Iterable<CloudRuntimeCapability> capabilities,
+  ) {
+    final available = capabilities.map((capability) => capability.id).toSet();
+    for (final required in all) {
+      if (!available.contains(required.id)) {
+        return required;
+      }
+    }
+    return null;
+  }
 }
 
 @immutable

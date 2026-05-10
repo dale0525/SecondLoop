@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'local_runtime_helper_process.dart';
 import 'runtime_connection_store.dart';
+import 'runtime_manifest.dart';
 import 'runtime_profile.dart';
 import 'self_managed_setup_models.dart';
 
@@ -50,6 +51,20 @@ final class SelfManagedSetupController extends ChangeNotifier {
           step: SelfManagedSetupStep.failed,
           statusMessage: failureCode,
           errorCode: failureCode,
+          verification: verification,
+        );
+        notifyListeners();
+        return;
+      }
+      final missingCapability =
+          CloudRuntimeRequiredCapabilities.firstMissingFrom(
+        result.manifest.capabilities,
+      );
+      if (missingCapability != null) {
+        _state = _state.copyWith(
+          step: SelfManagedSetupStep.failed,
+          statusMessage: missingCapability.id,
+          errorCode: 'missing_runtime_capability',
           verification: verification,
         );
         notifyListeners();
