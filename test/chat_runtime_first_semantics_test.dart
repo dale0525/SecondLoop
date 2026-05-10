@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart
 import 'package:secondloop/core/cloud/secretary_runtime_client.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -102,6 +104,54 @@ void main() {
     expect(sender.vaultIds, ['loop_home']);
     expect(find.text('待确认：改截止时间。'), findsOneWidget);
   });
+
+  testWidgets('chat shows hosted runtime processing state while waiting',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _RuntimeFirstBackend();
+    final resultCompleter = Completer<SecretaryRuntimeConversationResult>();
+    final sender = _CompletingRuntimeSender(resultCompleter.future);
+
+    await _pumpChat(tester, backend, runtimeConversationSender: sender);
+    await _send(tester, '帮我创建一个任务：完成周报。');
+    await sender.started.future;
+    await tester.pump();
+
+    final processingText = '${t.settings.runtimeMode.title}…';
+    expect(
+      find.byKey(const ValueKey('chat_runtime_secretary_processing')),
+      findsOneWidget,
+    );
+    expect(find.text(processingText), findsWidgets);
+
+    resultCompleter.complete(
+      SecretaryRuntimeConversationResult(
+        runId: 'run-1',
+        conversationId: 'loop_home',
+        assistantContent: '已创建任务：完成周报。',
+        metadata: SecretaryRuntimeResponseMetadata(
+          runId: 'run-1',
+          turnId: 'turn-run-1',
+          conversationId: 'loop_home',
+          vaultId: 'loop_home',
+          responseType: 'task_created',
+          runStatus: 'completed',
+          approvalRequired: false,
+          proposedMutations: const <Map<String, Object?>>[],
+          appliedMutations: const <Map<String, Object?>>[],
+          approvalItems: const <SecretaryRuntimeApprovalItem>[],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('chat_runtime_secretary_processing')),
+      findsNothing,
+    );
+    expect(find.text(processingText), findsNothing);
+    expect(find.text('已创建任务：完成周报。'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpChat(
@@ -152,6 +202,25 @@ final class _FakeRuntimeSender implements ChatRuntimeConversationSender {
     vaultIds.add(vaultId);
     conversationIds.add(conversationId);
     messages.add(message);
+    return result;
+  }
+}
+
+final class _CompletingRuntimeSender implements ChatRuntimeConversationSender {
+  _CompletingRuntimeSender(this.result);
+
+  final Future<SecretaryRuntimeConversationResult> result;
+  final Completer<void> started = Completer<void>();
+
+  @override
+  Future<SecretaryRuntimeConversationResult> send({
+    required String vaultId,
+    required String conversationId,
+    required String message,
+  }) {
+    if (!started.isCompleted) {
+      started.complete();
+    }
     return result;
   }
 }

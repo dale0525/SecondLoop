@@ -20,11 +20,14 @@ final class CloudRuntimeApiException implements Exception {
 final class RuntimeApiClient {
   RuntimeApiClient({
     RuntimeConnectionStore? connectionStore,
+    Future<CloudRuntimeConnection?> Function()? connectionLoader,
     http.Client? httpClient,
   })  : _connectionStore = connectionStore ?? RuntimeConnectionStore(),
+        _connectionLoader = connectionLoader,
         _httpClient = httpClient ?? http.Client();
 
   final RuntimeConnectionStore _connectionStore;
+  final Future<CloudRuntimeConnection?> Function()? _connectionLoader;
   final http.Client _httpClient;
 
   Future<Map<String, dynamic>?> getJson(
@@ -57,7 +60,8 @@ final class RuntimeApiClient {
     Map<String, Object?>? body,
     Map<String, String>? headers,
   }) async {
-    final connection = await _connectionStore.loadConnection();
+    final connection =
+        await (_connectionLoader ?? _connectionStore.loadConnection)();
     if (connection == null) {
       throw StateError('missing_cloud_runtime_connection');
     }

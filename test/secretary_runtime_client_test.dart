@@ -7,6 +7,7 @@ import 'package:secondloop/core/cloud/runtime_api_client.dart';
 import 'package:secondloop/core/cloud/runtime_connection_store.dart';
 import 'package:secondloop/core/cloud/runtime_manifest.dart';
 import 'package:secondloop/core/cloud/runtime_profile.dart';
+import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -263,5 +264,55 @@ void main() {
 
     expect(run.metadata.responseType, 'unknown_future_type');
     expect(run.metadata.runStatus, 'unknown_future_status');
+  });
+
+  test('hosted managed pro sender routes runtime chat through cloud gateway',
+      () async {
+    final requests = <http.BaseRequest>[];
+    final sender = SecretaryRuntimeConversationSender.hostedManagedPro(
+      apiBaseUrl: 'https://gateway.test/root/',
+      hostedSessionTokenGetter: () async => 'hosted-id-token-1',
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        expect(
+          request.url.path,
+          '/v1/runtime/vaults/managed-user-1/conversations/loop_home/messages',
+        );
+        expect(
+          request.headers['x-secondloop-hosted-session'],
+          'hosted-id-token-1',
+        );
+        expect(request.headers.containsKey('authorization'), isFalse);
+        final decoded = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(decoded['message'], '帮我创建一个任务：完成周报。');
+        return http.Response(
+          jsonEncode({
+            'run_id': 'run-1',
+            'conversation_id': 'loop_home',
+            'assistant': {'content': '已创建任务：完成周报。'},
+            'metadata': {
+              'run_id': 'run-1',
+              'turn_id': 'turn-run-1',
+              'conversation_id': 'loop_home',
+              'vault_id': 'managed-user-1',
+              'response_type': 'task_created',
+              'run_status': 'completed',
+              'approval_required': false,
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+
+    final result = await sender.send(
+      vaultId: 'managed-user-1',
+      conversationId: 'loop_home',
+      message: '帮我创建一个任务：完成周报。',
+    );
+
+    expect(result.assistantContent, '已创建任务：完成周报。');
+    expect(requests, hasLength(1));
   });
 }

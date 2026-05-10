@@ -205,6 +205,7 @@ const _kBottomThresholdPx = 60.0;
 const _kTodoAutoSemanticTimeout = Duration(milliseconds: 280);
 const _kTodoLinkSheetRerankTimeout = Duration(milliseconds: 5000);
 const _kAiSemanticParseTimeout = Duration(milliseconds: 2500);
+const _kRuntimeSecretaryRequestTimeout = Duration(seconds: 90);
 const _kAiTimeWindowParseMinConfidence = 0.75;
 const _kTodoSemanticVeryHighConfidenceDistance = 0.12;
 const _kTodoSemanticVeryHighConfidenceGap = 0.12;
@@ -503,6 +504,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _isAtBottom = true;
   bool _hasUnseenNewMessages = false;
   bool _sending = false;
+  bool _runtimeSecretaryRunning = false;
   bool _attachingMedia = false;
   bool _showAttachmentSendFeedback = false;
   AttachmentProcessingStage? _attachmentSendFeedbackStage;

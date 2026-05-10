@@ -183,11 +183,14 @@ extension _ChatPageStateBuild on _ChatPageState {
                             final pendingQuestion = _pendingQuestion;
                             final pendingFailureMessage = _askFailureMessage;
                             final hasPendingAssistant =
-                                _asking && !_stopRequested;
+                                (_asking && !_stopRequested) ||
+                                    _runtimeSecretaryRunning;
                             final pendingAssistantText =
-                                _streamingAnswer.isEmpty
-                                    ? '…'
-                                    : _streamingAnswer;
+                                _runtimeSecretaryRunning
+                                    ? '${context.t.settings.runtimeMode.title}…'
+                                    : _streamingAnswer.isEmpty
+                                        ? '…'
+                                        : _streamingAnswer;
                             final extraCount = (hasPendingAssistant ? 1 : 0) +
                                 (pendingQuestion == null ? 0 : 1);
                             final secretaryCards = _buildSecretaryCards(
@@ -415,6 +418,33 @@ extension _ChatPageStateBuild on _ChatPageState {
                   ),
                 ),
               _buildAskScopeEmptyCard(),
+              if (_runtimeSecretaryRunning)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 880),
+                      child: Row(
+                        key: const ValueKey(
+                          'chat_runtime_secretary_processing',
+                        ),
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${context.t.settings.runtimeMode.title}…',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               if (_showAttachmentSendFeedback)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
