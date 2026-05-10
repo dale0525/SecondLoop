@@ -35,7 +35,7 @@ void main() {
               apiBaseUrl: 'https://self-managed-runtime.example/',
               authMode: CloudRuntimeAuthMode.runtimeToken,
               capabilities: [
-                CloudRuntimeCapability('chat'),
+                ...CloudRuntimeRequiredCapabilities.all,
                 CloudRuntimeCapability('runtime_test_api'),
               ],
             ),
