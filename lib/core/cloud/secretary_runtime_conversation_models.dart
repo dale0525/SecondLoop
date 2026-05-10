@@ -48,6 +48,13 @@ final class SecretaryRuntimeResponseMetadata {
     required this.proposedMutations,
     required this.appliedMutations,
     required this.approvalItems,
+    this.confidence,
+    this.referencedEntities = const <String, Object?>{},
+    this.draftEntities = const <Map<String, Object?>>[],
+    this.toolTraceIds = const <String>[],
+    this.providerTraceId,
+    this.stateSnapshotAfter,
+    this.requiresHighCostConfirmation = false,
   });
 
   final String runId;
@@ -57,9 +64,16 @@ final class SecretaryRuntimeResponseMetadata {
   final String responseType;
   final String runStatus;
   final bool approvalRequired;
+  final double? confidence;
+  final Map<String, Object?> referencedEntities;
   final List<Map<String, Object?>> proposedMutations;
   final List<Map<String, Object?>> appliedMutations;
+  final List<Map<String, Object?>> draftEntities;
   final List<SecretaryRuntimeApprovalItem> approvalItems;
+  final List<String> toolTraceIds;
+  final String? providerTraceId;
+  final Map<String, Object?>? stateSnapshotAfter;
+  final bool requiresHighCostConfirmation;
 
   factory SecretaryRuntimeResponseMetadata.fromJson(
     Map<String, dynamic> json,
@@ -72,11 +86,36 @@ final class SecretaryRuntimeResponseMetadata {
       responseType: _parseString(json['response_type']) ?? '',
       runStatus: _parseString(json['run_status']) ?? '',
       approvalRequired: json['approval_required'] == true,
+      confidence: _parseDouble(json['confidence']),
+      referencedEntities: _parseObjectMap(json['referenced_entities']),
       proposedMutations: _parseObjectList(json['proposed_mutations']),
       appliedMutations: _parseObjectList(json['applied_mutations']),
+      draftEntities: _parseObjectList(json['draft_entities']),
       approvalItems: _parseApprovalItems(json['approval_items']),
+      toolTraceIds: _parseStringList(json['tool_trace_ids']),
+      providerTraceId: _parseString(json['provider_trace_id']),
+      stateSnapshotAfter: _parseNullableObjectMap(json['state_snapshot_after']),
+      requiresHighCostConfirmation:
+          json['requires_high_cost_confirmation'] == true,
     );
   }
+}
+
+double? _parseDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
+}
+
+Map<String, Object?> _parseObjectMap(Object? raw) {
+  if (raw is! Map) return const <String, Object?>{};
+  return raw.map((key, value) => MapEntry('$key', value as Object?));
+}
+
+Map<String, Object?>? _parseNullableObjectMap(Object? raw) {
+  if (raw == null) return null;
+  final parsed = _parseObjectMap(raw);
+  return parsed.isEmpty && raw is! Map ? null : parsed;
 }
 
 List<Map<String, Object?>> _parseObjectList(Object? raw) {
@@ -89,6 +128,11 @@ List<Map<String, Object?>> _parseObjectList(Object? raw) {
         ),
       )
       .toList(growable: false);
+}
+
+List<String> _parseStringList(Object? raw) {
+  if (raw is! List) return const <String>[];
+  return raw.map((item) => '$item').toList(growable: false);
 }
 
 List<SecretaryRuntimeApprovalItem> _parseApprovalItems(Object? raw) {

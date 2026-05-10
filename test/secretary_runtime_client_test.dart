@@ -184,6 +184,10 @@ void main() {
                 'response_type': 'formal_mutation_pending',
                 'run_status': 'waiting_for_approval',
                 'approval_required': true,
+                'confidence': 0.91,
+                'referenced_entities': {
+                  'tasks': ['task-1'],
+                },
                 'proposed_mutations': [
                   {
                     'entity_type': 'task',
@@ -192,6 +196,12 @@ void main() {
                   }
                 ],
                 'applied_mutations': [],
+                'draft_entities': [
+                  {
+                    'entity_type': 'review_note',
+                    'entity_id': 'draft-1',
+                  }
+                ],
                 'approval_items': [
                   {
                     'id': 'approval-task-1',
@@ -200,6 +210,12 @@ void main() {
                     'kind': 'task_mutation_confirmation',
                   }
                 ],
+                'tool_trace_ids': ['trace-vault-1', 'trace-model-1'],
+                'provider_trace_id': 'provider-trace-1',
+                'state_snapshot_after': {
+                  'pending_task_mutations': ['task-1'],
+                },
+                'requires_high_cost_confirmation': false,
               },
             }),
             200,
@@ -222,11 +238,21 @@ void main() {
     expect(run.metadata.responseType, 'formal_mutation_pending');
     expect(run.metadata.runStatus, 'waiting_for_approval');
     expect(run.metadata.approvalRequired, isTrue);
+    expect(run.metadata.confidence, 0.91);
+    expect(run.metadata.referencedEntities['tasks'], ['task-1']);
     expect(
         run.metadata.proposedMutations.single['mutation_type'], 'reschedule');
     expect(run.metadata.appliedMutations, isEmpty);
+    expect(run.metadata.draftEntities.single['entity_id'], 'draft-1');
     expect(
         run.metadata.approvalItems.single.kind, 'task_mutation_confirmation');
+    expect(run.metadata.toolTraceIds, ['trace-vault-1', 'trace-model-1']);
+    expect(run.metadata.providerTraceId, 'provider-trace-1');
+    expect(
+      run.metadata.stateSnapshotAfter?['pending_task_mutations'],
+      ['task-1'],
+    );
+    expect(run.metadata.requiresHighCostConfirmation, isFalse);
     expect(requests.map((request) => request.url.path), [
       '/v1/runtime/vaults/vault-1/conversations',
       '/v1/runtime/vaults/vault-1/conversations/conversation-1/messages',
