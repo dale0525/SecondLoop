@@ -10,6 +10,8 @@ import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_client.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -169,6 +171,66 @@ void main() {
     expect(find.text('已创建任务：完成周报。'), findsOneWidget);
   });
 
+  testWidgets('chat pulls managed vault after runtime applies task creation',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _RuntimeFirstBackend();
+    final syncRunner = _RecordingSyncRunner();
+    final syncEngine = SyncEngine(
+      syncRunner: syncRunner,
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 2)),
+        vaultId: 'managed-user-1',
+        baseUrl: 'https://gateway.test/',
+      ),
+      pullOnStart: false,
+      pullInterval: const Duration(hours: 1),
+      pullJitter: Duration.zero,
+      pushDebounce: const Duration(hours: 1),
+    )..start();
+    final sender = _FakeRuntimeSender(
+      result: SecretaryRuntimeConversationResult(
+        runId: 'run-1',
+        conversationId: 'loop_home',
+        assistantContent: '已创建任务：完成周报。',
+        metadata: SecretaryRuntimeResponseMetadata(
+          runId: 'run-1',
+          turnId: 'turn-run-1',
+          conversationId: 'loop_home',
+          vaultId: 'managed-user-1',
+          responseType: 'task_created',
+          runStatus: 'completed',
+          approvalRequired: false,
+          proposedMutations: const <Map<String, Object?>>[],
+          appliedMutations: const <Map<String, Object?>>[
+            {
+              'entity_type': 'task',
+              'mutation_type': 'create',
+              'status': 'applied',
+              'record_id': 'task-1',
+            },
+          ],
+          approvalItems: const <SecretaryRuntimeApprovalItem>[],
+        ),
+      ),
+    );
+
+    await _pumpChat(
+      tester,
+      backend,
+      runtimeConversationSender: sender,
+      syncEngine: syncEngine,
+    );
+    await _send(tester, '帮我创建一个任务：完成周报。');
+    await tester.pump(const Duration(milliseconds: 500));
+    await syncEngine.waitForIdle();
+    final pullCount = syncRunner.pullCount;
+    await syncEngine.stopImmediatelyAndWait();
+
+    expect(pullCount, 1);
+    expect(backend.calls, isNot(contains('upsertTodo')));
+  });
+
   testWidgets('chat external email request is surfaced from runtime only',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -257,23 +319,27 @@ Future<void> _pumpChat(
   WidgetTester tester,
   AppBackend backend, {
   ChatRuntimeConversationSender? runtimeConversationSender,
+  SyncEngine? syncEngine,
 }) async {
   await tester.pumpWidget(
     wrapWithI18n(
       MaterialApp(
         locale: const Locale('zh', 'CN'),
-        home: SessionScope(
-          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-          lock: () {},
-          child: AppBackendScope(
-            backend: backend,
-            child: ChatPage(
-              runtimeConversationSender: runtimeConversationSender,
-              conversation: const Conversation(
-                id: 'loop_home',
-                title: 'Loop',
-                createdAtMs: 0,
-                updatedAtMs: 0,
+        home: SyncEngineScope(
+          engine: syncEngine,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: AppBackendScope(
+              backend: backend,
+              child: ChatPage(
+                runtimeConversationSender: runtimeConversationSender,
+                conversation: const Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
               ),
             ),
           ),
@@ -457,4 +523,21 @@ final class _RuntimeFirstBackend extends TestAppBackend {
     String? state,
   }) async =>
       const <MemoryPageRecord>[];
+}
+
+final class _RecordingSyncRunner implements SyncRunner {
+  int pushCount = 0;
+  int pullCount = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    pushCount += 1;
+    return 0;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    pullCount += 1;
+    return 1;
+  }
 }

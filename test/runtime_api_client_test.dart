@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -134,6 +136,48 @@ void main() {
     expect(
       capturedRequest.headers.containsKey('x-secondloop-hosted-session'),
       isFalse,
+    );
+  });
+
+  test('client decodes runtime JSON as UTF-8 when charset is omitted',
+      () async {
+    final store = RuntimeConnectionStore();
+    await store.saveConnection(
+      const CloudRuntimeConnection(
+        profile: CloudRuntimeProfile(
+          runtimeMode: CloudRuntimeMode.managedPro,
+          apiBaseUrl: 'https://gateway.example/',
+          authMode: CloudRuntimeAuthMode.hostedSession,
+          authToken: 'hosted-id-token-1',
+          capabilityManifestId: 'manifest-managed-1',
+          manifestVersion: 1,
+        ),
+        manifest: CloudRuntimeManifest(
+          manifestVersion: 1,
+          runtimeMode: CloudRuntimeMode.managedPro,
+          apiBaseUrl: 'https://gateway.example/',
+          authMode: CloudRuntimeAuthMode.hostedSession,
+          capabilities: [CloudRuntimeCapability('chat')],
+        ),
+      ),
+    );
+
+    final client = RuntimeApiClient(
+      connectionStore: store,
+      httpClient: MockClient((_) async {
+        return http.Response.bytes(
+          utf8.encode('{"assistant":{"content":"已创建任务：完成周报。"}}'),
+          200,
+          headers: const {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final response = await client.getJson('/v1/runtime/runs/run-1');
+
+    expect(
+      (response?['assistant'] as Map<String, dynamic>)['content'],
+      '已创建任务：完成周报。',
     );
   });
 

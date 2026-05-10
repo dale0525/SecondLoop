@@ -24,7 +24,11 @@ extension _ChatPageStateRuntimeSecretary on _ChatPageState {
         role: 'assistant',
         content: content,
       );
-      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
+      final syncEngine = SyncEngineScope.maybeOf(context);
+      syncEngine?.notifyLocalMutation();
+      if (result.metadata.appliedMutations.isNotEmpty) {
+        syncEngine?.triggerPullNow();
+      }
       if (!mounted) return;
       _refresh();
     } catch (_) {

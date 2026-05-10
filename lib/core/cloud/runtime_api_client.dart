@@ -79,18 +79,19 @@ final class RuntimeApiClient {
 
     final streamed = await _httpClient.send(request);
     final response = await http.Response.fromStream(streamed);
+    final responseBody = utf8.decode(response.bodyBytes);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw CloudRuntimeApiException(
         uri: uri,
         statusCode: response.statusCode,
-        responseBody: response.body,
+        responseBody: responseBody,
       );
     }
 
-    if (response.body.trim().isEmpty) {
+    if (responseBody.trim().isEmpty) {
       return null;
     }
-    final decoded = jsonDecode(response.body);
+    final decoded = jsonDecode(responseBody);
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('invalid_cloud_runtime_response');
     }
