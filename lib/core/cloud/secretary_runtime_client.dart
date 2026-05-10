@@ -72,6 +72,8 @@ class SecretaryRuntimeApprovalItem {
     required this.title,
     required this.kind,
     this.recurringRuleId = '',
+    this.emailDraftId = '',
+    this.calendarEventId = '',
     this.reason = '',
     this.record,
   });
@@ -81,6 +83,8 @@ class SecretaryRuntimeApprovalItem {
   final String title;
   final String kind;
   final String recurringRuleId;
+  final String emailDraftId;
+  final String calendarEventId;
   final String reason;
   final Map<String, Object?>? record;
 
@@ -91,6 +95,8 @@ class SecretaryRuntimeApprovalItem {
       title: (json['title'] as String?) ?? '',
       kind: (json['kind'] as String?) ?? '',
       recurringRuleId: (json['recurring_rule_id'] as String?) ?? '',
+      emailDraftId: (json['email_draft_id'] as String?) ?? '',
+      calendarEventId: (json['calendar_event_id'] as String?) ?? '',
       reason: (json['reason'] as String?) ?? '',
       record: _parseNullableObjectMap(json['record']),
     );
