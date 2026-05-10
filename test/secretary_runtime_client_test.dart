@@ -305,10 +305,13 @@ void main() {
           '/v1/runtime/vaults/managed-user-1/conversations/loop_home/messages',
         );
         expect(
-          request.headers['x-secondloop-hosted-session'],
-          'hosted-id-token-1',
+          request.headers['authorization'],
+          'Bearer hosted-id-token-1',
         );
-        expect(request.headers.containsKey('authorization'), isFalse);
+        expect(
+          request.headers.containsKey('x-secondloop-hosted-session'),
+          isFalse,
+        );
         final decoded = jsonDecode(request.body) as Map<String, dynamic>;
         expect(decoded['message'], '帮我创建一个任务：完成周报。');
         return http.Response(

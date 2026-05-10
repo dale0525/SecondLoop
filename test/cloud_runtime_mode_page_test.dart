@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/runtime_connection_store.dart';
 import 'package:secondloop/core/cloud/runtime_manifest.dart';
 import 'package:secondloop/core/cloud/runtime_profile.dart';
@@ -71,4 +73,65 @@ void main() {
 
     expect(find.byType(CloudAccountPage), findsOneWidget);
   });
+
+  testWidgets('signed-in managed pro session is shown as connected',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: CloudAuthScope(
+            controller: _FakeCloudAuthController(uid: 'managed-user-1'),
+            gatewayConfig: const CloudGatewayConfig(
+              baseUrl: 'https://gateway.example/root/',
+              modelName: 'cloud',
+            ),
+            child: const CloudRuntimeModePage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Managed Pro runtime connected'), findsOneWidget);
+    expect(find.text('Managed session'), findsOneWidget);
+    expect(find.text('https://gateway.example/root/'), findsOneWidget);
+    expect(find.text('Not configured'), findsNothing);
+  });
+}
+
+final class _FakeCloudAuthController implements CloudAuthController {
+  const _FakeCloudAuthController({required this.uid});
+
+  @override
+  final String? uid;
+
+  @override
+  String? get email => 'qa@example.test';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  Future<String?> getIdToken() async => 'hosted-id-token-1';
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
 }

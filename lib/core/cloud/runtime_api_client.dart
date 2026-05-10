@@ -107,7 +107,7 @@ final class RuntimeApiClient {
       case CloudRuntimeAuthMode.hostedSession:
         return <String, String>{
           'accept': 'application/json',
-          'x-secondloop-hosted-session': profile.authToken,
+          'authorization': 'Bearer ${profile.authToken}',
         };
     }
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/runtime_connection_store.dart';
+import '../../core/cloud/runtime_manifest.dart';
 import '../../core/cloud/runtime_profile.dart';
 import '../../i18n/strings.g.dart';
 import 'cloud_account_page.dart';
@@ -25,7 +27,7 @@ class CloudRuntimeModePage extends StatelessWidget {
       body: FutureBuilder<CloudRuntimeConnection?>(
         future: store.loadConnection(),
         builder: (context, snapshot) {
-          final connection = snapshot.data;
+          final connection = _effectiveConnection(context, snapshot.data);
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -98,5 +100,39 @@ class CloudRuntimeModePage extends StatelessWidget {
     return connection.profile.runtimeMode == CloudRuntimeMode.managedPro
         ? context.t.settings.runtimeMode.details.managedSession
         : context.t.settings.runtimeMode.details.selfManagedConnection;
+  }
+
+  CloudRuntimeConnection? _effectiveConnection(
+    BuildContext context,
+    CloudRuntimeConnection? storedConnection,
+  ) {
+    if (storedConnection != null) {
+      return storedConnection;
+    }
+
+    final cloudScope = CloudAuthScope.maybeOf(context);
+    final uid = cloudScope?.controller.uid?.trim() ?? '';
+    final apiBaseUrl = cloudScope?.gatewayConfig.baseUrl.trim() ?? '';
+    if (uid.isEmpty || apiBaseUrl.isEmpty) {
+      return null;
+    }
+
+    return CloudRuntimeConnection(
+      profile: CloudRuntimeProfile(
+        runtimeMode: CloudRuntimeMode.managedPro,
+        apiBaseUrl: apiBaseUrl,
+        authMode: CloudRuntimeAuthMode.hostedSession,
+        authToken: '',
+        capabilityManifestId: 'managed-pro-runtime',
+        manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+      ),
+      manifest: CloudRuntimeManifest(
+        manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+        runtimeMode: CloudRuntimeMode.managedPro,
+        apiBaseUrl: apiBaseUrl,
+        authMode: CloudRuntimeAuthMode.hostedSession,
+        capabilities: CloudRuntimeRequiredCapabilities.all,
+      ),
+    );
   }
 }

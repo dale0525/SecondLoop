@@ -90,6 +90,53 @@ void main() {
     );
   });
 
+  test('hosted managed pro runtime uses gateway bearer authorization',
+      () async {
+    final store = RuntimeConnectionStore();
+    await store.saveConnection(
+      const CloudRuntimeConnection(
+        profile: CloudRuntimeProfile(
+          runtimeMode: CloudRuntimeMode.managedPro,
+          apiBaseUrl: 'https://gateway.example/',
+          authMode: CloudRuntimeAuthMode.hostedSession,
+          authToken: 'hosted-id-token-1',
+          capabilityManifestId: 'manifest-managed-1',
+          manifestVersion: 1,
+        ),
+        manifest: CloudRuntimeManifest(
+          manifestVersion: 1,
+          runtimeMode: CloudRuntimeMode.managedPro,
+          apiBaseUrl: 'https://gateway.example/',
+          authMode: CloudRuntimeAuthMode.hostedSession,
+          capabilities: [CloudRuntimeCapability('chat')],
+        ),
+      ),
+    );
+
+    late http.BaseRequest capturedRequest;
+    final client = RuntimeApiClient(
+      connectionStore: store,
+      httpClient: MockClient((request) async {
+        capturedRequest = request;
+        return http.Response('{"ok":true}', 200);
+      }),
+    );
+
+    await client.postJson(
+      '/v1/runtime/vaults/managed-user-1/conversations/loop_home/messages',
+      body: const <String, Object?>{'message': '帮我创建一个任务：完成周报。'},
+    );
+
+    expect(
+      capturedRequest.headers['authorization'],
+      'Bearer hosted-id-token-1',
+    );
+    expect(
+      capturedRequest.headers.containsKey('x-secondloop-hosted-session'),
+      isFalse,
+    );
+  });
+
   test('non-2xx responses return structured runtime exceptions', () async {
     final store = RuntimeConnectionStore();
     await store.saveConnection(
