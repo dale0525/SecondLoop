@@ -65,6 +65,8 @@ cloud-runtime-automation-test = "dart pub global run fvm:main flutter test test/
 cloud-runtime-scenarios-test = "dart pub global run fvm:main flutter test test/scenarios"
 cloud-runtime-automation-smoke = "export SECONDLOOP_APP_ID=com.secondloop.secondloopdev SECONDLOOP_APP_NAME='SecondLoop Dev' && bash scripts/flutter_with_defines.sh test -d macos integration_test/cloud_runtime_automation_smoke_test.dart"
 cloud-runtime-integration-scenarios-test = "export SECONDLOOP_APP_ID=com.secondloop.secondloopdev SECONDLOOP_APP_NAME='SecondLoop Dev' && bash scripts/run_cloud_runtime_integration_scenarios.sh"
+managed-pro-acceptance = "python scripts/managed_pro_acceptance.py --include-staging-reset"
+managed-pro-acceptance-dry-run = "python scripts/managed_pro_acceptance.py --dry-run --include-staging-reset"
 
 # Run/build workflows (auto-include setup-flutter + init-env).
 # Typical usage:
