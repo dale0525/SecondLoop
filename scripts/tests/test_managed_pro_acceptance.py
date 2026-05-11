@@ -182,6 +182,38 @@ class ManagedProAcceptanceTests(unittest.TestCase):
             self.assertIn("QA-EVIDENCE-01", payload["cases"])
             self.assertIn("server_cloud_runtime_automation", payload["commands"])
 
+    def test_overall_status_fails_when_any_case_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+
+            def fake_run_command(command, **_kwargs):
+                status = (
+                    "FAIL"
+                    if command.command_id == "app_live_managed_pro_chat_acceptance"
+                    else "PASS"
+                )
+                return managed_pro_acceptance.CommandResult(
+                    command_id=command.command_id,
+                    status=status,
+                    description=command.description,
+                    duration_seconds=0.0,
+                )
+
+            with mock.patch.object(
+                managed_pro_acceptance,
+                "_run_command",
+                side_effect=fake_run_command,
+            ):
+                result = managed_pro_acceptance.run_acceptance(
+                    dry_run=False,
+                    include_staging_reset=True,
+                    include_desktop_integration=True,
+                    output_dir=output_dir,
+                )
+
+        self.assertEqual(result["overall_status"], "FAIL")
+        self.assertEqual(result["cases"]["QA-CHAT-01"]["status"], "FAIL")
+
 
 if __name__ == "__main__":
     unittest.main()

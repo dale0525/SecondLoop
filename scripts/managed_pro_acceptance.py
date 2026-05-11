@@ -432,7 +432,9 @@ def run_acceptance(
         command_results[command.command_id] = result
 
     case_results = _evaluate_cases(suite, command_results)
-    overall_status = _overall_status(case_results.values())
+    overall_status = _overall_status(
+        str(result["status"]) for result in case_results.values()
+    )
     payload = {
         "schema_version": 1,
         "mode": "managed_pro",
