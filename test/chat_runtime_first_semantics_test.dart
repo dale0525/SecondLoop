@@ -155,6 +155,12 @@ void main() {
               'mutation_type': 'create',
               'status': 'applied',
               'record_id': 'task-1',
+              'record': {
+                'kind': 'task',
+                'id': 'task-1',
+                'title': '完成周报',
+                'status': 'open',
+              },
             },
           ],
           approvalItems: const <SecretaryRuntimeApprovalItem>[],
@@ -167,11 +173,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(sender.messages, ['帮我创建一个任务：完成周报。']);
-    expect(backend.calls, isNot(contains('upsertTodo')));
+    expect(backend.calls, contains('upsertTodo'));
+    expect(backend.todoById('task-1')?.title, '完成周报');
+    expect(backend.todoById('task-1')?.status, 'open');
     expect(find.text('已创建任务：完成周报。'), findsOneWidget);
   });
 
-  testWidgets('chat pulls managed vault after runtime applies task creation',
+  testWidgets('chat materializes runtime task creation before sync',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _RuntimeFirstBackend();
@@ -208,6 +216,12 @@ void main() {
               'mutation_type': 'create',
               'status': 'applied',
               'record_id': 'task-1',
+              'record': {
+                'kind': 'task',
+                'id': 'task-1',
+                'title': '完成周报',
+                'status': 'todo',
+              },
             },
           ],
           approvalItems: const <SecretaryRuntimeApprovalItem>[],
@@ -228,7 +242,9 @@ void main() {
     await syncEngine.stopImmediatelyAndWait();
 
     expect(pullCount, 1);
-    expect(backend.calls, isNot(contains('upsertTodo')));
+    expect(backend.calls, contains('upsertTodo'));
+    expect(backend.todoById('task-1')?.title, '完成周报');
+    expect(backend.todoById('task-1')?.status, 'open');
   });
 
   testWidgets('chat external email request is surfaced from runtime only',
@@ -404,6 +420,13 @@ final class _RuntimeFirstBackend extends TestAppBackend {
   final List<Todo> _todos;
   final List<String> calls = <String>[];
 
+  Todo? todoById(String id) {
+    for (final todo in _todos) {
+      if (todo.id == id) return todo;
+    }
+    return null;
+  }
+
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
       List<Todo>.from(_todos, growable: false);
@@ -423,7 +446,7 @@ final class _RuntimeFirstBackend extends TestAppBackend {
     int? manualUrgencyNudgeScore,
   }) async {
     calls.add('upsertTodo');
-    return Todo(
+    final todo = Todo(
       id: id,
       title: title,
       dueAtMs: dueAtMs,
@@ -437,6 +460,9 @@ final class _RuntimeFirstBackend extends TestAppBackend {
       manualImportanceNudgeScore: manualImportanceNudgeScore ?? 0,
       manualUrgencyNudgeScore: manualUrgencyNudgeScore ?? 0,
     );
+    _todos.removeWhere((item) => item.id == id);
+    _todos.add(todo);
+    return todo;
   }
 
   @override

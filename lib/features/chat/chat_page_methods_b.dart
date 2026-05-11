@@ -757,7 +757,10 @@ extension _ChatPageStateMethodsB on _ChatPageState {
             _persistSecretaryMemoryProposalForMessage(committedMessage),
           );
         } else {
-          await _sendMessageToRuntimeSecretary(text);
+          await _sendMessageToRuntimeSecretary(
+            text,
+            sourceMessageId: committedMessage.id,
+          );
         }
       }
     } catch (e) {
