@@ -220,4 +220,16 @@ void main() {
       ),
     );
   });
+
+  test('api exceptions include response details in toString', () {
+    final error = CloudRuntimeApiException(
+      uri: Uri(scheme: 'https', host: 'runtime.example', path: '/v1/test'),
+      statusCode: 400,
+      responseBody: '{"error":"missing_task_mutation_target"}',
+    );
+
+    expect(error.toString(), contains('400'));
+    expect(error.toString(), contains('/v1/test'));
+    expect(error.toString(), contains('missing_task_mutation_target'));
+  });
 }

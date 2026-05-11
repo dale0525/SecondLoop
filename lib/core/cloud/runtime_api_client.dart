@@ -15,6 +15,12 @@ final class CloudRuntimeApiException implements Exception {
   final Uri uri;
   final int statusCode;
   final String responseBody;
+
+  @override
+  String toString() {
+    return 'CloudRuntimeApiException(statusCode: $statusCode, uri: $uri, '
+        'responseBody: $responseBody)';
+  }
 }
 
 final class RuntimeApiClient {

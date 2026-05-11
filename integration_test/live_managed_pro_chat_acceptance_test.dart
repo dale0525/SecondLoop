@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,7 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_store.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/core/cloud/runtime_secretary_app_service.dart';
+import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
 import 'package:secondloop/src/rust/db.dart';
 import 'package:secondloop/src/rust/platform_int.dart';
@@ -87,7 +89,8 @@ void main() {
             .where((mutation) => mutation['mutation_type'] == 'create'),
         isNotEmpty,
         reason:
-            'QA-CHAT-01 must be proven by applied task mutations, not assistant text only.',
+            'QA-CHAT-01 must be proven by applied task mutations, not assistant text only. '
+            'Runtime result: ${_runtimeResultSnapshot(createResult)}',
       );
 
       final createdTask = _singleTodoByTitle(
@@ -115,7 +118,8 @@ void main() {
             .where((item) => item.title.contains('完成周报')),
         isNotEmpty,
         reason:
-            'QA-CHAT-02 must prove the live runtime targeted the existing task.',
+            'QA-CHAT-02 must prove the live runtime targeted the existing task. '
+            'Runtime result: ${_runtimeResultSnapshot(updateResult)}',
       );
 
       final beforeApprovalTask = _singleTodoByTitle(
@@ -127,6 +131,29 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 3)),
   );
+}
+
+String _runtimeResultSnapshot(SecretaryRuntimeConversationResult result) {
+  return jsonEncode(<String, Object?>{
+    'assistant_content': result.assistantContent,
+    'response_type': result.metadata.responseType,
+    'run_status': result.metadata.runStatus,
+    'approval_required': result.metadata.approvalRequired,
+    'proposed_mutations': result.metadata.proposedMutations,
+    'applied_mutations': result.metadata.appliedMutations,
+    'approval_items': result.metadata.approvalItems
+        .map(
+          (item) => <String, Object?>{
+            'id': item.id,
+            'task_id': item.taskId,
+            'title': item.title,
+            'kind': item.kind,
+            'reason': item.reason,
+            'record': item.record,
+          },
+        )
+        .toList(growable: false),
+  });
 }
 
 Todo _singleTodoByTitle(List<Todo> todos, String title) {
