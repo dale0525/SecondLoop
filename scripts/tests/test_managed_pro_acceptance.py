@@ -1,7 +1,9 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts import managed_pro_acceptance
 
@@ -112,6 +114,50 @@ class ManagedProAcceptanceTests(unittest.TestCase):
                 0,
                 f"{case.case_id} must have at least one evidence command",
             )
+
+    def test_chat_cases_require_live_managed_pro_account_evidence(self):
+        suite = managed_pro_acceptance.build_suite()
+        cases = {case.case_id: case for case in suite.cases}
+
+        self.assertIn(
+            "app_live_managed_pro_chat_acceptance",
+            cases["QA-CHAT-01"].evidence_ids,
+        )
+        self.assertIn(
+            "app_live_managed_pro_chat_acceptance",
+            cases["QA-CHAT-02"].evidence_ids,
+        )
+
+    def test_live_account_command_blocks_without_credentials(self):
+        suite = managed_pro_acceptance.build_suite()
+        command = next(
+            item
+            for item in suite.commands
+            if item.command_id == "app_live_managed_pro_chat_acceptance"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            app_root = root / "SecondLoop"
+            server_root = root / "SecondLoopServer"
+            logs_dir = root / "logs"
+            app_root.mkdir()
+            server_root.mkdir()
+            logs_dir.mkdir()
+            with mock.patch.dict(os.environ, {}, clear=True):
+                result = managed_pro_acceptance._run_command(
+                    command,
+                    app_root=app_root,
+                    server_root=server_root,
+                    workspace_root=root,
+                    logs_dir=logs_dir,
+                    dry_run=False,
+                    include_staging_reset=True,
+                    include_desktop_integration=True,
+                )
+
+        self.assertEqual(result.status, "BLOCKED")
+        self.assertIn("SECONDLOOP_LIVE_MANAGED_PRO_ACCEPTANCE", result.reason)
 
     def test_dry_run_writes_machine_and_human_readable_reports(self):
         with tempfile.TemporaryDirectory() as temp_dir:

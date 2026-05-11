@@ -40,6 +40,14 @@ MANAGED_PRO_INTEGRATION_WRAPPERS = (
     "integration_test/scenarios/working_set_summary_test.dart",
 )
 
+LIVE_MANAGED_PRO_ENABLE_KEY = "SECONDLOOP_LIVE_MANAGED_PRO_ACCEPTANCE"
+LIVE_MANAGED_PRO_REQUIRED_KEYS = (
+    LIVE_MANAGED_PRO_ENABLE_KEY,
+    "SECONDLOOP_LIVE_MANAGED_PRO_EMAIL",
+    "SECONDLOOP_LIVE_MANAGED_PRO_PASSWORD",
+    "SECONDLOOP_FIREBASE_WEB_API_KEY",
+)
+
 
 @dataclasses.dataclass(frozen=True)
 class EvidenceCommand:
@@ -172,6 +180,13 @@ def build_suite() -> AcceptanceSuite:
             requires_desktop_integration=True,
         ),
         EvidenceCommand(
+            "app_live_managed_pro_chat_acceptance",
+            "Run live managed pro chat acceptance with a real test account through app runtime interfaces.",
+            ("pixi", "run", "cloud-runtime-live-managed-pro-chat-acceptance"),
+            kind="live_account",
+            requires_desktop_integration=True,
+        ),
+        EvidenceCommand(
             "acceptance_report",
             "Generate final managed pro acceptance JSON and Markdown evidence report.",
             kind="report",
@@ -220,6 +235,7 @@ def build_suite() -> AcceptanceSuite:
             "QA-CHAT-01",
             "Create an ordinary task",
             (
+                "app_live_managed_pro_chat_acceptance",
                 "app_runtime_first_semantics",
                 "server_cloud_runtime_automation",
             ),
@@ -228,6 +244,7 @@ def build_suite() -> AcceptanceSuite:
             "QA-CHAT-02",
             "Task mutation requires approval and does not mark done early",
             (
+                "app_live_managed_pro_chat_acceptance",
                 "app_cloud_runtime_scenarios",
                 "app_cloud_runtime_integration_scenarios",
                 "server_cloud_runtime_automation",
@@ -482,6 +499,8 @@ def _run_command(
         )
     if command.kind == "qa_assets":
         return _run_asset_check(command, workspace_root, start)
+    if command.kind == "live_account":
+        return _run_live_account_command(command, app_root, logs_dir, start)
     if command.kind == "report":
         return CommandResult(
             command_id=command.command_id,
@@ -532,6 +551,87 @@ def _run_process(argv: Iterable[str], *, cwd: Path, log_path: Path) -> str:
             sys.stdout.write(line)
             log_file.write(line)
     return "PASS" if process.wait() == 0 else "FAIL"
+
+
+def _run_live_account_command(
+    command: EvidenceCommand,
+    app_root: Path,
+    logs_dir: Path,
+    start: float,
+) -> CommandResult:
+    missing = _missing_live_managed_pro_env(app_root)
+    if missing:
+        return CommandResult(
+            command_id=command.command_id,
+            status="BLOCKED",
+            description=command.description,
+            duration_seconds=_duration(start),
+            reason="missing live managed pro env: " + ", ".join(missing),
+        )
+    log_path = logs_dir / f"{command.command_id}.log"
+    status = _run_process(command.argv, cwd=app_root, log_path=log_path)
+    screenshot_path = None
+    if status != "PASS":
+        screenshot_path = _capture_failure_screenshot(logs_dir, command.command_id)
+    return CommandResult(
+        command_id=command.command_id,
+        status=status,
+        description=command.description,
+        duration_seconds=_duration(start),
+        log_path=str(log_path),
+        screenshot_path=screenshot_path,
+    )
+
+
+def _missing_live_managed_pro_env(app_root: Path) -> list[str]:
+    values = _combined_env_with_dotenv(app_root)
+    missing: list[str] = []
+    if values.get(LIVE_MANAGED_PRO_ENABLE_KEY, "").strip() != "1":
+        missing.append(f"{LIVE_MANAGED_PRO_ENABLE_KEY}=1")
+    for key in LIVE_MANAGED_PRO_REQUIRED_KEYS:
+        if key == LIVE_MANAGED_PRO_ENABLE_KEY:
+            continue
+        if not values.get(key, "").strip():
+            missing.append(key)
+    if not _resolve_cloud_gateway_base_url(values):
+        missing.append(
+            "SECONDLOOP_CLOUD_GATEWAY_BASE_URL_STAGING/PROD via SECONDLOOP_CLOUD_ENV"
+        )
+    return missing
+
+
+def _combined_env_with_dotenv(app_root: Path) -> dict[str, str]:
+    values = _read_dotenv(app_root / ".env.local")
+    values.update(os.environ)
+    return values
+
+
+def _read_dotenv(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        values[key] = value.strip().strip("\"'")
+    return values
+
+
+def _resolve_cloud_gateway_base_url(values: dict[str, str]) -> str:
+    direct = values.get("SECONDLOOP_CLOUD_GATEWAY_BASE_URL", "").strip()
+    if direct:
+        return direct
+    cloud_env = values.get("SECONDLOOP_CLOUD_ENV", "").strip().lower()
+    if cloud_env in ("staging", "stage"):
+        return values.get("SECONDLOOP_CLOUD_GATEWAY_BASE_URL_STAGING", "").strip()
+    if cloud_env in ("prod", "production"):
+        return values.get("SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD", "").strip()
+    return ""
 
 
 def _run_asset_check(

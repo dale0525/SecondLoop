@@ -36,7 +36,7 @@ import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_capability_auth.dart';
-import '../../core/cloud/secretary_runtime_conversation_models.dart';
+import '../../core/cloud/runtime_secretary_app_service.dart';
 import '../../core/cloud/secretary_runtime_conversation_sender.dart';
 import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/secretary/local_todo_command_parser.dart';
