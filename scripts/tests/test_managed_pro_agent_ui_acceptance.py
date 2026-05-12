@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import tomllib
 import unittest
 
@@ -34,6 +35,11 @@ class ManagedProAgentUiAcceptanceTests(unittest.TestCase):
         self.assertIn("SECONDLOOP_APP_NAME='SecondLoop Dev'", script)
         self.assertIn("build/managed_pro_acceptance", script)
         self.assertIn("SECONDLOOP_MANAGED_PRO_ACCEPTANCE_OUTPUT_DIR", script)
+        self.assertIn("SECONDLOOP_MANAGED_PRO_EMAIL", script)
+        self.assertIn("SECONDLOOP_MANAGED_PRO_PASSWORD", script)
+        self.assertIn("missing required ${name}", script)
+        self.assertIn("require_env SECONDLOOP_MANAGED_PRO_EMAIL", script)
+        self.assertIn("require_env SECONDLOOP_MANAGED_PRO_PASSWORD", script)
         self.assertIn("scripts/flutter_with_defines.sh test", script)
         self.assertNotIn("--concurrency=1", script)
         self.assertIn("integration_test/managed_pro_agent_ui_acceptance_test.dart", script)
@@ -42,6 +48,14 @@ class ManagedProAgentUiAcceptanceTests(unittest.TestCase):
         source = INTEGRATION_TEST.read_text(encoding="utf-8")
 
         self.assertIn("IntegrationTestWidgetsFlutterBinding", source)
+        self.assertIn("CloudAuthScope", source)
+        self.assertIn("CloudAuthControllerImpl", source)
+        self.assertIn("FirebaseIdentityToolkitHttp", source)
+        self.assertIn("SECONDLOOP_MANAGED_PRO_EMAIL", source)
+        self.assertIn("SECONDLOOP_MANAGED_PRO_PASSWORD", source)
+        self.assertIn("tester.enterText", source)
+        self.assertIn("cloud_sign_in", source)
+        self.assertIn("managedProSignIn", source)
         self.assertIn("RepaintBoundary", source)
         self.assertIn("RenderRepaintBoundary", source)
         self.assertIn("toImage", source)
@@ -50,8 +64,9 @@ class ManagedProAgentUiAcceptanceTests(unittest.TestCase):
         self.assertNotIn("endOfFrame", source)
         self.assertIn("tester.tap", source)
         self.assertIn("AppShell", source)
-        self.assertNotIn("812388447@qq.com", source)
-        self.assertNotIn("Abcd1234!", source)
+        self.assertIsNone(re.search(r"\d{6,}@qq\.com", source))
+        self.assertNotIn("SECONDLOOP_MANAGED_PRO_PASSWORD='", source)
+        self.assertNotIn('SECONDLOOP_MANAGED_PRO_PASSWORD="', source)
 
 
 if __name__ == "__main__":

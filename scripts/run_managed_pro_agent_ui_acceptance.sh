@@ -10,6 +10,17 @@ device_id="${SECONDLOOP_FLUTTER_TEST_DEVICE_ID:-macos}"
 
 mkdir -p "${output_dir}/logs"
 
+require_env() {
+  local name="$1"
+  if [[ -z "${!name:-}" ]]; then
+    echo "managed-pro-agent-ui-acceptance: missing required ${name}" >&2
+    exit 1
+  fi
+}
+
+require_env SECONDLOOP_MANAGED_PRO_EMAIL
+require_env SECONDLOOP_MANAGED_PRO_PASSWORD
+
 export SECONDLOOP_APP_ID=com.secondloop.secondloopdev
 export SECONDLOOP_APP_NAME='SecondLoop Dev'
 export SECONDLOOP_MANAGED_PRO_ACCEPTANCE_OUTPUT_DIR="${output_dir}"
@@ -20,7 +31,7 @@ export SECONDLOOP_MANAGED_PRO_ACCEPTANCE_OUTPUT_DIR="${output_dir}"
   echo "device_id=${device_id}"
   echo "app_id=${SECONDLOOP_APP_ID}"
   echo "app_name=${SECONDLOOP_APP_NAME}"
-  echo "managed_pro_email=${SECONDLOOP_MANAGED_PRO_EMAIL:-not_set}"
+  echo "managed_pro_email=${SECONDLOOP_MANAGED_PRO_EMAIL:+provided}"
   echo "managed_pro_password=${SECONDLOOP_MANAGED_PRO_PASSWORD:+provided}"
 } >"${output_dir}/environment.txt"
 
