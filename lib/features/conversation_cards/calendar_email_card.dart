@@ -312,27 +312,41 @@ final class _SectionBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w800,
+        );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactHeader = constraints.maxWidth < 360;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 20, color: scheme.onSurfaceVariant),
-            const SizedBox(width: AgentDesignTokens.gapSm),
-            Expanded(
-              child: Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+            if (compactHeader) ...[
+              Row(
+                children: [
+                  Icon(icon, size: 20, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: AgentDesignTokens.gapSm),
+                  Expanded(child: Text(title, style: titleStyle)),
+                ],
               ),
-            ),
-            trailing,
+              const SizedBox(height: AgentDesignTokens.gapSm),
+              trailing,
+            ] else ...[
+              Row(
+                children: [
+                  Icon(icon, size: 20, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: AgentDesignTokens.gapSm),
+                  Expanded(child: Text(title, style: titleStyle)),
+                  trailing,
+                ],
+              ),
+            ],
+            const SizedBox(height: AgentDesignTokens.gapMd),
+            ...children,
           ],
-        ),
-        const SizedBox(height: AgentDesignTokens.gapMd),
-        ...children,
-      ],
+        );
+      },
     );
   }
 }
