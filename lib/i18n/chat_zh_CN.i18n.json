@@ -225,6 +225,29 @@
     "emailNotConnected": "邮件未连接",
     "approvalRequiredBeforeSend": "发送前需要审核"
   },
+  "research": {
+    "budgetTitle": "高成本研究确认",
+    "requiresConfirmation": "确认成本",
+    "pages": "页面",
+    "tokens": "Token",
+    "cost": "成本",
+    "startResearch": "开始研究",
+    "reduceScope": "缩小范围",
+    "cancel": "取消",
+    "tabs": {
+      "brief": "简报",
+      "keyPoints": "要点",
+      "sources": "来源",
+      "draftNote": "草稿笔记"
+    },
+    "sections": {
+      "brief": "研究简报",
+      "keyPoints": "主要要点",
+      "sources": "引用来源",
+      "draftNote": "可复用笔记"
+    },
+    "fetched": "抓取时间 $time"
+  },
   "tagFilter": {
     "tooltip": "标签筛选",
     "clearFilter": "清空标签筛选",

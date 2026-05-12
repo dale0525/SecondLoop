@@ -225,6 +225,29 @@
     "emailNotConnected": "Email not connected",
     "approvalRequiredBeforeSend": "Approval required before send"
   },
+  "research": {
+    "budgetTitle": "High-cost research confirmation",
+    "requiresConfirmation": "Confirm cost",
+    "pages": "Pages",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "startResearch": "Start research",
+    "reduceScope": "Reduce scope",
+    "cancel": "Cancel",
+    "tabs": {
+      "brief": "Brief",
+      "keyPoints": "Key points",
+      "sources": "Sources",
+      "draftNote": "Draft note"
+    },
+    "sections": {
+      "brief": "Research brief",
+      "keyPoints": "Main points",
+      "sources": "Cited sources",
+      "draftNote": "Reusable note"
+    },
+    "fetched": "Fetched $time"
+  },
   "tagFilter": {
     "tooltip": "Tag filter",
     "clearFilter": "Clear tag filter",
