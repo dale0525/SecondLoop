@@ -30,7 +30,7 @@ void main() {
     expect(find.text('Cancel'), findsOneWidget);
   });
 
-  testWidgets('ResearchResultCard stays generic and shows source citations',
+  testWidgets('ResearchResultCard switches isolated generic result tabs',
       (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
@@ -46,11 +46,32 @@ void main() {
     expect(find.text('Key points'), findsOneWidget);
     expect(find.text('Sources'), findsOneWidget);
     expect(find.text('Draft note'), findsOneWidget);
-    expect(find.text('Policy memo outline'), findsOneWidget);
+    expect(
+      find.text('Use this outline as a note after reviewing the citations.'),
+      findsNothing,
+    );
+    expect(find.text('OpenAI Docs'), findsNothing);
+
+    await tester.tap(find.text('Sources'));
+    await tester.pumpAndSettle();
+
     expect(find.text('OpenAI Docs'), findsOneWidget);
     expect(find.text('openai.com'), findsOneWidget);
     expect(find.text('Fetched May 13, 2026 09:20'), findsOneWidget);
     expect(find.text('[1]'), findsOneWidget);
+    expect(
+      find.text('Use this outline as a note after reviewing the citations.'),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('Draft note'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Use this outline as a note after reviewing the citations.'),
+      findsOneWidget,
+    );
+    expect(find.text('OpenAI Docs'), findsNothing);
 
     expect(find.text('Market size'), findsNothing);
     expect(find.text('Recommendation'), findsNothing);

@@ -16,7 +16,7 @@ final class ReviewQueueList extends StatelessWidget {
   });
 
   final List<ReviewItem> items;
-  final ReviewItem selectedItem;
+  final ReviewItem? selectedItem;
   final ValueChanged<ReviewItem> onSelect;
 
   @override
@@ -55,19 +55,21 @@ final class ReviewQueueList extends StatelessWidget {
         ),
         const SizedBox(height: AgentDesignTokens.gapLg),
         Expanded(
-          child: ListView.separated(
-            itemCount: items.length,
-            separatorBuilder: (_, __) =>
-                const SizedBox(height: AgentDesignTokens.gapSm),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return ReviewQueueItem(
-                item: item,
-                selected: item.id == selectedItem.id,
-                onTap: () => onSelect(item),
-              );
-            },
-          ),
+          child: items.isEmpty
+              ? Center(child: Text(context.t.actions.reviewQueue.empty))
+              : ListView.separated(
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: AgentDesignTokens.gapSm),
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return ReviewQueueItem(
+                      item: item,
+                      selected: item.id == selectedItem?.id,
+                      onTap: () => onSelect(item),
+                    );
+                  },
+                ),
         ),
       ],
     );
@@ -148,10 +150,16 @@ final class ReviewQueueItem extends StatelessWidget {
 final class ReviewDetail extends StatelessWidget {
   const ReviewDetail({
     required this.item,
+    this.onApprove,
+    this.onEdit,
+    this.onReject,
     super.key,
   });
 
   final ReviewItem item;
+  final VoidCallback? onApprove;
+  final VoidCallback? onEdit;
+  final VoidCallback? onReject;
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +183,12 @@ final class ReviewDetail extends StatelessWidget {
           const SizedBox(height: AgentDesignTokens.gapLg),
           _ReviewDiffTable(rows: item.diffRows),
           const SizedBox(height: AgentDesignTokens.gapLg),
-          ReviewActionFooter(item: item),
+          ReviewActionFooter(
+            item: item,
+            onApprove: onApprove,
+            onEdit: onEdit,
+            onReject: onReject,
+          ),
         ],
       ),
     );
@@ -183,9 +196,18 @@ final class ReviewDetail extends StatelessWidget {
 }
 
 final class ReviewActionFooter extends StatelessWidget {
-  const ReviewActionFooter({required this.item, super.key});
+  const ReviewActionFooter({
+    required this.item,
+    this.onApprove,
+    this.onEdit,
+    this.onReject,
+    super.key,
+  });
 
   final ReviewItem item;
+  final VoidCallback? onApprove;
+  final VoidCallback? onEdit;
+  final VoidCallback? onReject;
 
   @override
   Widget build(BuildContext context) {
@@ -196,17 +218,17 @@ final class ReviewActionFooter extends StatelessWidget {
       runSpacing: AgentDesignTokens.gapSm,
       children: [
         FilledButton.icon(
-          onPressed: () {},
+          onPressed: onApprove,
           icon: const Icon(Icons.verified_outlined, size: 18),
           label: Text(t.actions.approve),
         ),
         OutlinedButton.icon(
-          onPressed: () {},
+          onPressed: onEdit,
           icon: const Icon(Icons.edit_outlined, size: 18),
           label: Text(t.actions.edit),
         ),
         TextButton.icon(
-          onPressed: () {},
+          onPressed: onReject,
           style: TextButton.styleFrom(foregroundColor: scheme.error),
           icon: const Icon(Icons.close_rounded, size: 18),
           label: Text(t.actions.reject),

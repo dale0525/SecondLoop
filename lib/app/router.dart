@@ -12,7 +12,8 @@ import '../ui/sl_glass.dart';
 import '../ui/sl_surface.dart';
 import '../ui/sl_tokens.dart';
 
-const _kDesktopShellMaxWidth = 1240.0;
+const _kDesktopShellMaxWidth = double.infinity;
+const _kDesktopShellSidebarWidth = 280.0;
 
 enum AppTab {
   conversation(Icons.chat_bubble_outline, Icons.chat_bubble),
@@ -214,16 +215,50 @@ class _AppShellState extends State<AppShell> {
                             Padding(
                               padding: const EdgeInsets.all(12),
                               child: SizedBox(
-                                width: 92,
+                                width: _kDesktopShellSidebarWidth,
                                 child: SlGlass(
                                   borderRadius:
                                       BorderRadius.circular(tokens.radiusLg),
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 8),
                                   child: NavigationRail(
+                                    extended: true,
+                                    minExtendedWidth:
+                                        _kDesktopShellSidebarWidth,
                                     selectedIndex: _selectedIndex,
                                     onDestinationSelected: _selectTab,
-                                    labelType: NavigationRailLabelType.all,
+                                    labelType: NavigationRailLabelType.none,
+                                    leading: Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        8,
+                                        16,
+                                        18,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.all_inclusive_rounded,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              context.t.app.title,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                     destinations: [
                                       for (final t in AppTab.values)
                                         NavigationRailDestination(

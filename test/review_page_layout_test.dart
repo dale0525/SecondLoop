@@ -56,4 +56,27 @@ void main() {
     expect(find.text('Edit'), findsOneWidget);
     expect(find.text('Reject'), findsOneWidget);
   });
+
+  testWidgets('ReviewPage approve removes selected item from the queue',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(home: ReviewPage()),
+      ),
+    );
+
+    expect(find.text('Move passport renewal'), findsOneWidget);
+    expect(find.text('Remember reply language'), findsOneWidget);
+
+    await tester.tap(find.text('Approve'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Move passport renewal'), findsNothing);
+    expect(find.text('Remember reply language'), findsOneWidget);
+    expect(find.text('Remember: task replies should use Chinese.'),
+        findsOneWidget);
+  });
 }

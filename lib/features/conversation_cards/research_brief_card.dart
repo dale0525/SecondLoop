@@ -108,13 +108,20 @@ final class ResearchBudgetConfirmationCard extends StatelessWidget {
   }
 }
 
-final class ResearchResultCard extends StatelessWidget {
+final class ResearchResultCard extends StatefulWidget {
   const ResearchResultCard({
     required this.result,
     super.key,
   });
 
   final ResearchResult result;
+
+  @override
+  State<ResearchResultCard> createState() => _ResearchResultCardState();
+}
+
+final class _ResearchResultCardState extends State<ResearchResultCard> {
+  String _selectedTabId = 'brief';
 
   @override
   Widget build(BuildContext context) {
@@ -130,7 +137,7 @@ final class ResearchResultCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              result.title,
+              widget.result.title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -143,52 +150,72 @@ final class ResearchResultCard extends StatelessWidget {
                 AgentTabItem(id: 'sources', label: t.tabs.sources),
                 AgentTabItem(id: 'draft_note', label: t.tabs.draftNote),
               ],
-              selectedId: 'brief',
-              onSelected: (_) {},
+              selectedId: _selectedTabId,
+              onSelected: (id) => setState(() => _selectedTabId = id),
             ),
             const SizedBox(height: AgentDesignTokens.gapLg),
-            _ResearchSection(
-                title: t.sections.brief, child: Text(result.brief)),
-            const SizedBox(height: AgentDesignTokens.gapLg),
-            _ResearchSection(
-              title: t.sections.keyPoints,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final point in result.keyPoints)
-                    Padding(
-                      padding: const EdgeInsets.only(
-                          bottom: AgentDesignTokens.gapXs),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('- '),
-                          Expanded(child: Text(point)),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AgentDesignTokens.gapLg),
-            _ResearchSection(
-              title: t.sections.sources,
-              child: Column(
-                children: [
-                  for (final source in result.sources)
-                    _ResearchCitationRow(citation: source),
-                ],
-              ),
-            ),
-            const SizedBox(height: AgentDesignTokens.gapLg),
-            _ResearchSection(
-              title: t.sections.draftNote,
-              child: Text(result.draftNote),
+            _ResearchResultTabBody(
+              selectedTabId: _selectedTabId,
+              result: widget.result,
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+final class _ResearchResultTabBody extends StatelessWidget {
+  const _ResearchResultTabBody({
+    required this.selectedTabId,
+    required this.result,
+  });
+
+  final String selectedTabId;
+  final ResearchResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t.chat.research;
+    return switch (selectedTabId) {
+      'key_points' => _ResearchSection(
+          title: t.sections.keyPoints,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final point in result.keyPoints)
+                Padding(
+                  padding:
+                      const EdgeInsets.only(bottom: AgentDesignTokens.gapXs),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('- '),
+                      Expanded(child: Text(point)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      'sources' => _ResearchSection(
+          title: t.sections.sources,
+          child: Column(
+            children: [
+              for (final source in result.sources)
+                _ResearchCitationRow(citation: source),
+            ],
+          ),
+        ),
+      'draft_note' => _ResearchSection(
+          title: t.sections.draftNote,
+          child: Text(result.draftNote),
+        ),
+      _ => _ResearchSection(
+          title: t.sections.brief,
+          child: Text(result.brief),
+        ),
+    };
   }
 }
 

@@ -3,10 +3,12 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/app/router.dart';
+import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
 import 'package:secondloop/features/conversation_cards/approval_preview_card.dart';
 import 'package:secondloop/features/conversation_cards/calendar_email_card.dart';
@@ -15,6 +17,9 @@ import 'package:secondloop/features/conversation_cards/media_summary_card.dart';
 import 'package:secondloop/features/conversation_cards/research_brief_card.dart';
 import 'package:secondloop/features/conversation_cards/research_models.dart';
 import 'package:secondloop/features/conversation_context/conversation_context_rail.dart';
+import 'package:secondloop/i18n/strings.g.dart';
+import 'package:secondloop/ui/sl_background.dart';
+import 'package:secondloop/ui/sl_tokens.dart';
 
 import '../test_i18n.dart';
 
@@ -38,6 +43,12 @@ const agentMvpGoldenReferenceNames = <String>[
 ];
 
 void main() {
+  setUpAll(() async {
+    await (FontLoader('Inter')
+          ..addFont(rootBundle.load('assets/fonts/inter/Inter-Variable.ttf')))
+        .load();
+  });
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     UpdateBadgePrefs.resetForTests();
@@ -78,6 +89,50 @@ void main() {
     );
   });
 
+  testWidgets('golden demo uses the production light app theme',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_AgentMvpGoldenApp());
+    await tester.pumpAndSettle();
+
+    final context = tester.element(
+      find.byKey(const ValueKey('agent_mvp_golden_root')),
+    );
+    expect(Theme.of(context).brightness, Brightness.light);
+    expect(SlTokens.of(context).surface, const Color(0xFFFFFFFF));
+    expect(SlTokens.of(context).background, const Color(0xFFF6F7FB));
+  });
+
+  testWidgets('golden demo uses deterministic project fonts', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_AgentMvpGoldenApp());
+    await tester.pumpAndSettle();
+
+    final context = tester.element(
+      find.byKey(const ValueKey('agent_mvp_golden_root')),
+    );
+    expect(Theme.of(context).textTheme.bodyMedium?.fontFamily, 'Inter');
+    expect(
+      Theme.of(context).navigationRailTheme.selectedLabelTextStyle?.fontFamily,
+      'Inter',
+    );
+  });
+
+  testWidgets('golden demo includes the production app background',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_AgentMvpGoldenApp());
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SlBackground), findsOneWidget);
+  });
+
   testWidgets('mobile agent MVP demo matches golden', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -104,19 +159,41 @@ final class _AgentMvpGoldenApp extends StatelessWidget {
     return wrapWithI18n(
       MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(useMaterial3: true),
+        theme: _goldenTheme(),
         home: RepaintBoundary(
           key: const ValueKey('agent_mvp_golden_root'),
-          child: AppShell(
-            conversationTabBuilder: (_, __) => const _ConversationDemo(),
-            memoryTabBuilder: (_, __) => const SizedBox.shrink(),
-            reviewTabBuilder: (_, __) => const SizedBox.shrink(),
-            settingsTabBuilder: (_, __) => const SizedBox.shrink(),
+          child: SlBackground(
+            child: AppShell(
+              conversationTabBuilder: (_, __) => const _ConversationDemo(),
+              memoryTabBuilder: (_, __) => const SizedBox.shrink(),
+              reviewTabBuilder: (_, __) => const SizedBox.shrink(),
+              settingsTabBuilder: (_, __) => const SizedBox.shrink(),
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+ThemeData _goldenTheme() {
+  final base = AppTheme.light(
+    locale: LocaleSettings.currentLocale.flutterLocale,
+  );
+  return base.copyWith(
+    textTheme: base.textTheme.apply(fontFamily: 'Inter'),
+    primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'Inter'),
+    navigationRailTheme: base.navigationRailTheme.copyWith(
+      selectedLabelTextStyle:
+          base.navigationRailTheme.selectedLabelTextStyle?.copyWith(
+        fontFamily: 'Inter',
+      ),
+      unselectedLabelTextStyle:
+          base.navigationRailTheme.unselectedLabelTextStyle?.copyWith(
+        fontFamily: 'Inter',
+      ),
+    ),
+  );
 }
 
 final class _ConversationDemo extends StatelessWidget {

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
+import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
 
@@ -87,5 +88,32 @@ void main() {
       debugDefaultTargetPlatformOverride = previousPlatform;
       await tester.binding.setSurfaceSize(null);
     }
+  });
+
+  testWidgets('desktop AppShell uses a wide workspace and branded sidebar',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(2048, 1365));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppShell(
+            conversationTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_conversation_tab')),
+            memoryTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_memory_tab')),
+            reviewTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_review_tab')),
+            settingsTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_settings_tab')),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('SecondLoop'), findsOneWidget);
+    expect(tester.getSize(find.byType(SlPageSurface)).width, greaterThan(1600));
   });
 }

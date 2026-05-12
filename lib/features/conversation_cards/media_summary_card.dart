@@ -92,13 +92,20 @@ final class MediaReviewItem {
   final String subtitle;
 }
 
-final class MediaSummaryCard extends StatelessWidget {
+final class MediaSummaryCard extends StatefulWidget {
   const MediaSummaryCard({
     required this.data,
     super.key,
   });
 
   final MediaSummaryData data;
+
+  @override
+  State<MediaSummaryCard> createState() => _MediaSummaryCardState();
+}
+
+final class _MediaSummaryCardState extends State<MediaSummaryCard> {
+  String _selectedTabId = 'summary';
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +123,7 @@ final class MediaSummaryCard extends StatelessWidget {
             spacing: AgentDesignTokens.gapSm,
             runSpacing: AgentDesignTokens.gapSm,
             children: [
-              for (final attachment in data.attachments)
+              for (final attachment in widget.data.attachments)
                 Chip(
                   avatar: const Icon(Icons.attach_file_rounded, size: 16),
                   label: Text(attachment.name),
@@ -132,17 +139,77 @@ final class MediaSummaryCard extends StatelessWidget {
               AgentTabItem(id: 'actions', label: t.tabs.actions),
               AgentTabItem(id: 'sources', label: t.tabs.sources),
             ],
-            selectedId: 'summary',
-            onSelected: (_) {},
+            selectedId: _selectedTabId,
+            onSelected: (id) => setState(() => _selectedTabId = id),
           ),
           const SizedBox(height: AgentDesignTokens.gapLg),
-          Text(data.summary),
-          const SizedBox(height: AgentDesignTokens.gapLg),
-          _ExtractedFields(fields: data.fields),
-          const SizedBox(height: AgentDesignTokens.gapLg),
-          _SuggestedReviewItems(items: data.reviewItems),
+          _MediaSummaryTabBody(
+            selectedTabId: _selectedTabId,
+            data: widget.data,
+          ),
         ],
       ),
+    );
+  }
+}
+
+final class _MediaSummaryTabBody extends StatelessWidget {
+  const _MediaSummaryTabBody({
+    required this.selectedTabId,
+    required this.data,
+  });
+
+  final String selectedTabId;
+  final MediaSummaryData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t.chat.mediaSummary;
+    return switch (selectedTabId) {
+      'transcript' => _MediaPlainSection(
+          title: t.tabs.transcript,
+          lines: data.attachments
+              .where((attachment) => attachment.type == 'Audio')
+              .map((attachment) => attachment.name)
+              .toList(),
+        ),
+      'fields' => _ExtractedFields(fields: data.fields),
+      'actions' => _SuggestedReviewItems(items: data.reviewItems),
+      'sources' => _MediaPlainSection(
+          title: t.tabs.sources,
+          lines: [
+            for (final attachment in data.attachments)
+              '${attachment.type}: ${attachment.name}',
+          ],
+        ),
+      _ => Text(data.summary),
+    };
+  }
+}
+
+final class _MediaPlainSection extends StatelessWidget {
+  const _MediaPlainSection({
+    required this.title,
+    required this.lines,
+  });
+
+  final String title;
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: AgentDesignTokens.gapSm),
+        for (final line in lines) Text(line),
+      ],
     );
   }
 }
