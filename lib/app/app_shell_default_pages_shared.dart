@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/backend/app_backend.dart';
 import '../core/session/session_scope.dart';
 import '../features/chat/chat_page.dart';
+import '../features/review/review_page.dart';
 import '../features/settings/settings_page.dart';
 import '../i18n/strings.g.dart';
 import '../src/rust/db.dart';
@@ -35,10 +36,7 @@ Widget buildSharedDefaultReviewTab(
   BuildContext context, {
   required bool isActive,
 }) {
-  return _DefaultAgentPlaceholderTab(
-    key: const ValueKey('agent_review_placeholder'),
-    title: context.t.app.tabs.review,
-  );
+  return const ReviewPage();
 }
 
 final class _DefaultChatTab extends StatefulWidget {

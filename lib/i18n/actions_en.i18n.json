@@ -21,6 +21,29 @@
       "start": "Start",
       "done": "Done",
       "dismiss": "Dismiss"
+    },
+    "agentUi": {
+      "title": "Needs your OK queue",
+      "detailTitle": "Task change detail",
+      "filters": {
+        "all": "All",
+        "highRisk": "High risk",
+        "drafts": "Drafts"
+      },
+      "risk": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "status": {
+        "needsApproval": "Needs approval",
+        "draft": "Draft"
+      },
+      "actions": {
+        "approve": "Approve",
+        "edit": "Edit",
+        "reject": "Reject"
+      }
     }
   },
   "todoStatus": {
