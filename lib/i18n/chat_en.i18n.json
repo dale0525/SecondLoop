@@ -204,6 +204,13 @@
     "source": "Source: $name",
     "confidence": "Confidence $percent%"
   },
+  "dailyBrief": {
+    "topPriorities": "Top priorities",
+    "calendarWindows": "Calendar windows",
+    "reminders": "Reminders",
+    "commitmentsOwed": "Commitments owed",
+    "pendingReviews": "Pending reviews"
+  },
   "tagFilter": {
     "tooltip": "Tag filter",
     "clearFilter": "Clear tag filter",
