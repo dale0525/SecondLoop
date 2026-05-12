@@ -211,6 +211,20 @@
     "commitmentsOwed": "Commitments owed",
     "pendingReviews": "Pending reviews"
   },
+  "calendarEmail": {
+    "calendarTitle": "Calendar",
+    "calendarReadSafe": "Calendar read is safe",
+    "inviteTitle": "Calendar invite",
+    "inviteRequiresApproval": "Invite requires approval",
+    "attendees": "Attendees: $names",
+    "icsPreview": "ICS preview",
+    "reviewInvite": "Review invite",
+    "emailTitle": "Email",
+    "draftCanBeSaved": "Draft can be saved",
+    "saveDraft": "Save draft",
+    "emailNotConnected": "Email not connected",
+    "approvalRequiredBeforeSend": "Approval required before send"
+  },
   "tagFilter": {
     "tooltip": "Tag filter",
     "clearFilter": "Clear tag filter",

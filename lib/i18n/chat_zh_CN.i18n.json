@@ -211,6 +211,20 @@
     "commitmentsOwed": "待履行承诺",
     "pendingReviews": "待审核"
   },
+  "calendarEmail": {
+    "calendarTitle": "日历",
+    "calendarReadSafe": "日历读取安全",
+    "inviteTitle": "日历邀请",
+    "inviteRequiresApproval": "发送邀请需要审核",
+    "attendees": "参与人：$names",
+    "icsPreview": "ICS 预览",
+    "reviewInvite": "审核邀请",
+    "emailTitle": "邮件",
+    "draftCanBeSaved": "草稿可保存",
+    "saveDraft": "保存草稿",
+    "emailNotConnected": "邮件未连接",
+    "approvalRequiredBeforeSend": "发送前需要审核"
+  },
   "tagFilter": {
     "tooltip": "标签筛选",
     "clearFilter": "清空标签筛选",
