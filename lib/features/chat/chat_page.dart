@@ -96,6 +96,9 @@ import '../audio_transcribe/audio_transcribe_media_preprocess.dart'
     as audio_preprocess;
 // ignore: unused_import
 import '../media_backup/audio_transcode_worker.dart';
+import '../agent_ui/agent_design_tokens.dart';
+import '../conversation_cards/approval_preview_card.dart';
+import '../conversation_context/conversation_context_rail.dart';
 import '../tags/tag_filter_sheet.dart';
 import '../tags/tag_localization.dart';
 import '../tags/tag_picker.dart';

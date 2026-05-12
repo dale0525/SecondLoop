@@ -16,6 +16,7 @@ extension _ChatPageStateBuild on _ChatPageState {
     final locale = Localizations.localeOf(context);
     final activeTagFilterCount =
         _selectedTagFilterIds.length + _selectedTagExcludeIds.length;
+    final conversationContextSnapshot = ConversationContextSnapshot.demo();
     Widget buildOpenTaskHubButton() {
       return IconButton(
         key: const ValueKey('chat_open_task_center'),
@@ -34,6 +35,10 @@ extension _ChatPageStateBuild on _ChatPageState {
                 title: Text(title),
                 actions: [
                   buildOpenTaskHubButton(),
+                  if (!isDesktopPlatform)
+                    ConversationContextSheetButton(
+                      snapshot: conversationContextSnapshot,
+                    ),
                   IconButton(
                     key: const ValueKey('chat_tag_filter_button'),
                     tooltip: _tagFilterTooltip(locale),
@@ -151,193 +156,234 @@ extension _ChatPageStateBuild on _ChatPageState {
                   ),
               ],
               Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 880),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        FutureBuilder(
-                          future: _messagesFuture,
-                          builder: (context, snapshot) {
-                            final isLoading = snapshot.connectionState !=
-                                ConnectionState.done;
-                            final loadedMessages = _usePagination
-                                ? _paginatedMessages
-                                : snapshot.data ?? const <Message>[];
-                            final messages =
-                                _messagesWithFailedAskQuestion(loadedMessages);
-                            final pendingQuestion = _pendingQuestion;
-                            final pendingFailureMessage = _askFailureMessage;
-                            final hasPendingAssistant =
-                                _asking && !_stopRequested;
-                            final pendingAssistantText =
-                                _streamingAnswer.isEmpty
-                                    ? '…'
-                                    : _streamingAnswer;
-                            final extraCount = (hasPendingAssistant ? 1 : 0) +
-                                (pendingQuestion == null ? 0 : 1);
-                            if (messages.isEmpty && extraCount == 0) {
-                              if (isLoading) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
-                              if (snapshot.hasError) {
-                                return Center(
-                                  child: Text(
-                                    context.t.errors
-                                        .loadFailed(error: '${snapshot.error}'),
-                                  ),
-                                );
-                              }
-                              return Center(
-                                child: Text(context.t.chat.noMessagesYet),
-                              );
-                            }
-
-                            final messageIndexById = <String, int>{};
-                            for (var i = 0; i < messages.length; i++) {
-                              messageIndexById[messages[i].id] = i;
-                            }
-
-                            final backend = AppBackendScope.of(context);
-                            final sessionKey =
-                                SessionScope.of(context).sessionKey;
-                            final attachmentsBackend =
-                                backend is AttachmentsBackend
-                                    ? backend as AttachmentsBackend
-                                    : null;
-                            final combinedJobsFuture =
-                                _cachedChatMessageSupplementDataFuture(
-                              backend: backend,
-                              sessionKey: sessionKey,
-                              messages: messages,
-                            );
-
-                            return FutureBuilder<_ChatMessageSupplementData>(
-                              future: combinedJobsFuture,
-                              builder: (context, snapshotJobs) {
-                                final jobs = snapshotJobs.data?.semanticJobs ??
-                                    const <SemanticParseJob>[];
-                                final linkedTodoBadgeByMessageId =
-                                    snapshotJobs.data?.linkedTodoBadges ??
-                                        const <String, _TodoMessageBadgeMeta>{};
-                                final existingTodoIds =
-                                    snapshotJobs.data?.existingTodoIds ??
-                                        const <String>{};
-                                final jobsByMessageId =
-                                    <String, SemanticParseJob>{};
-                                for (final job in jobs) {
-                                  jobsByMessageId[job.messageId] = job;
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final showContextRail =
+                        isDesktopPlatform && constraints.maxWidth >= 1120;
+                    final messagePane = Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: showContextRail ? 760 : 880,
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            FutureBuilder(
+                              future: _messagesFuture,
+                              builder: (context, snapshot) {
+                                final isLoading = snapshot.connectionState !=
+                                    ConnectionState.done;
+                                final loadedMessages = _usePagination
+                                    ? _paginatedMessages
+                                    : snapshot.data ?? const <Message>[];
+                                final messages = _messagesWithFailedAskQuestion(
+                                    loadedMessages);
+                                final pendingQuestion = _pendingQuestion;
+                                final pendingFailureMessage =
+                                    _askFailureMessage;
+                                final hasPendingAssistant =
+                                    _asking && !_stopRequested;
+                                final pendingAssistantText =
+                                    _streamingAnswer.isEmpty
+                                        ? '…'
+                                        : _streamingAnswer;
+                                final extraCount =
+                                    (hasPendingAssistant ? 1 : 0) +
+                                        (pendingQuestion == null ? 0 : 1);
+                                if (messages.isEmpty && extraCount == 0) {
+                                  if (isLoading) {
+                                    return const Center(
+                                      child: CircularProgressIndicator(),
+                                    );
+                                  }
+                                  if (snapshot.hasError) {
+                                    return Center(
+                                      child: Text(
+                                        context.t.errors.loadFailed(
+                                            error: '${snapshot.error}'),
+                                      ),
+                                    );
+                                  }
+                                  return Center(
+                                    child: Text(context.t.chat.noMessagesYet),
+                                  );
                                 }
 
-                                final annotationJobs =
-                                    snapshotJobs.data?.annotationJobs ??
-                                        const <AttachmentAnnotationJob>[];
-                                final annotationJobsBySha256 =
-                                    <String, AttachmentAnnotationJob>{};
-                                for (final job in annotationJobs) {
-                                  annotationJobsBySha256[job.attachmentSha256] =
-                                      job;
+                                final messageIndexById = <String, int>{};
+                                for (var i = 0; i < messages.length; i++) {
+                                  messageIndexById[messages[i].id] = i;
                                 }
 
-                                return ListView.builder(
-                                  key: _usePagination
-                                      ? const ValueKey('chat_message_list')
-                                      : null,
-                                  controller:
-                                      _usePagination ? _scrollController : null,
-                                  reverse: _usePagination,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
-                                  findChildIndexCallback: (key) {
-                                    if (key is! ValueKey) return null;
-                                    final v = key.value;
-                                    if (v is! String) return null;
-                                    if (!v.startsWith('chat_message_row_')) {
-                                      return null;
-                                    }
-                                    final messageId =
-                                        v.substring('chat_message_row_'.length);
+                                final backend = AppBackendScope.of(context);
+                                final sessionKey =
+                                    SessionScope.of(context).sessionKey;
+                                final attachmentsBackend =
+                                    backend is AttachmentsBackend
+                                        ? backend as AttachmentsBackend
+                                        : null;
+                                final combinedJobsFuture =
+                                    _cachedChatMessageSupplementDataFuture(
+                                  backend: backend,
+                                  sessionKey: sessionKey,
+                                  messages: messages,
+                                );
 
-                                    if (messageId == 'pending_assistant') {
-                                      if (!hasPendingAssistant) return null;
-                                      if (_usePagination) return 0;
-                                      return messages.length +
-                                          (pendingQuestion == null ? 0 : 1);
+                                return FutureBuilder<
+                                    _ChatMessageSupplementData>(
+                                  future: combinedJobsFuture,
+                                  builder: (context, snapshotJobs) {
+                                    final jobs =
+                                        snapshotJobs.data?.semanticJobs ??
+                                            const <SemanticParseJob>[];
+                                    final linkedTodoBadgeByMessageId =
+                                        snapshotJobs.data?.linkedTodoBadges ??
+                                            const <String,
+                                                _TodoMessageBadgeMeta>{};
+                                    final existingTodoIds =
+                                        snapshotJobs.data?.existingTodoIds ??
+                                            const <String>{};
+                                    final jobsByMessageId =
+                                        <String, SemanticParseJob>{};
+                                    for (final job in jobs) {
+                                      jobsByMessageId[job.messageId] = job;
                                     }
 
-                                    if (messageId == 'pending_user') {
-                                      if (pendingQuestion == null) return null;
-                                      if (_usePagination) {
-                                        return hasPendingAssistant ? 1 : 0;
-                                      }
-                                      return messages.length;
+                                    final annotationJobs =
+                                        snapshotJobs.data?.annotationJobs ??
+                                            const <AttachmentAnnotationJob>[];
+                                    final annotationJobsBySha256 =
+                                        <String, AttachmentAnnotationJob>{};
+                                    for (final job in annotationJobs) {
+                                      annotationJobsBySha256[
+                                          job.attachmentSha256] = job;
                                     }
 
-                                    final messageIndex =
-                                        messageIndexById[messageId];
-                                    if (messageIndex == null) return null;
-                                    return _usePagination
-                                        ? messageIndex + extraCount
-                                        : messageIndex;
+                                    return ListView.builder(
+                                      key: _usePagination
+                                          ? const ValueKey('chat_message_list')
+                                          : null,
+                                      controller: _usePagination
+                                          ? _scrollController
+                                          : null,
+                                      reverse: _usePagination,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 16),
+                                      findChildIndexCallback: (key) {
+                                        if (key is! ValueKey) return null;
+                                        final v = key.value;
+                                        if (v is! String) return null;
+                                        if (!v
+                                            .startsWith('chat_message_row_')) {
+                                          return null;
+                                        }
+                                        final messageId = v.substring(
+                                            'chat_message_row_'.length);
+
+                                        if (messageId == 'pending_assistant') {
+                                          if (!hasPendingAssistant) return null;
+                                          if (_usePagination) return 0;
+                                          return messages.length +
+                                              (pendingQuestion == null ? 0 : 1);
+                                        }
+
+                                        if (messageId == 'pending_user') {
+                                          if (pendingQuestion == null) {
+                                            return null;
+                                          }
+                                          if (_usePagination) {
+                                            return hasPendingAssistant ? 1 : 0;
+                                          }
+                                          return messages.length;
+                                        }
+
+                                        final messageIndex =
+                                            messageIndexById[messageId];
+                                        if (messageIndex == null) return null;
+                                        return _usePagination
+                                            ? messageIndex + extraCount
+                                            : messageIndex;
+                                      },
+                                      itemCount: messages.length + extraCount,
+                                      itemBuilder: _buildMessageListItemBuilder(
+                                        messages: messages,
+                                        extraCount: extraCount,
+                                        hasPendingAssistant:
+                                            hasPendingAssistant,
+                                        pendingAssistantText:
+                                            pendingAssistantText,
+                                        pendingFailureMessage:
+                                            pendingFailureMessage,
+                                        pendingQuestion: pendingQuestion,
+                                        attachmentsBackend: attachmentsBackend,
+                                        sessionKey: sessionKey,
+                                        jobsByMessageId: jobsByMessageId,
+                                        linkedTodoBadgeByMessageId:
+                                            linkedTodoBadgeByMessageId,
+                                        existingTodoIds: existingTodoIds,
+                                        annotationJobsBySha256:
+                                            annotationJobsBySha256,
+                                        attachmentAnnotationEnabled: snapshotJobs
+                                                .data
+                                                ?.attachmentAnnotationEnabled ??
+                                            false,
+                                        attachmentAnnotationCanRunNow: snapshotJobs
+                                                .data
+                                                ?.attachmentAnnotationCanRunNow ??
+                                            false,
+                                        audioTranscribeEnabled: snapshotJobs
+                                                .data?.audioTranscribeEnabled ??
+                                            false,
+                                        audioTranscribeCanRunNow: snapshotJobs
+                                                .data
+                                                ?.audioTranscribeCanRunNow ??
+                                            false,
+                                        colorScheme: colorScheme,
+                                        tokens: tokens,
+                                        isDesktopPlatform: isDesktopPlatform,
+                                      ),
+                                    );
                                   },
-                                  itemCount: messages.length + extraCount,
-                                  itemBuilder: _buildMessageListItemBuilder(
-                                    messages: messages,
-                                    extraCount: extraCount,
-                                    hasPendingAssistant: hasPendingAssistant,
-                                    pendingAssistantText: pendingAssistantText,
-                                    pendingFailureMessage:
-                                        pendingFailureMessage,
-                                    pendingQuestion: pendingQuestion,
-                                    attachmentsBackend: attachmentsBackend,
-                                    sessionKey: sessionKey,
-                                    jobsByMessageId: jobsByMessageId,
-                                    linkedTodoBadgeByMessageId:
-                                        linkedTodoBadgeByMessageId,
-                                    existingTodoIds: existingTodoIds,
-                                    annotationJobsBySha256:
-                                        annotationJobsBySha256,
-                                    attachmentAnnotationEnabled: snapshotJobs
-                                            .data
-                                            ?.attachmentAnnotationEnabled ??
-                                        false,
-                                    attachmentAnnotationCanRunNow: snapshotJobs
-                                            .data
-                                            ?.attachmentAnnotationCanRunNow ??
-                                        false,
-                                    audioTranscribeEnabled: snapshotJobs
-                                            .data?.audioTranscribeEnabled ??
-                                        false,
-                                    audioTranscribeCanRunNow: snapshotJobs
-                                            .data?.audioTranscribeCanRunNow ??
-                                        false,
-                                    colorScheme: colorScheme,
-                                    tokens: tokens,
-                                    isDesktopPlatform: isDesktopPlatform,
-                                  ),
                                 );
                               },
-                            );
-                          },
+                            ),
+                            if (_usePagination && !_isAtBottom)
+                              Positioned(
+                                right: 16,
+                                bottom: 16,
+                                child: FloatingActionButton.small(
+                                  key: const ValueKey('chat_jump_to_latest'),
+                                  onPressed: _jumpToLatest,
+                                  backgroundColor:
+                                      colorScheme.secondaryContainer,
+                                  foregroundColor:
+                                      colorScheme.onSecondaryContainer,
+                                  child:
+                                      const Icon(Icons.arrow_downward_rounded),
+                                ),
+                              ),
+                          ],
                         ),
-                        if (_usePagination && !_isAtBottom)
-                          Positioned(
-                            right: 16,
-                            bottom: 16,
-                            child: FloatingActionButton.small(
-                              key: const ValueKey('chat_jump_to_latest'),
-                              onPressed: _jumpToLatest,
-                              backgroundColor: colorScheme.secondaryContainer,
-                              foregroundColor: colorScheme.onSecondaryContainer,
-                              child: const Icon(Icons.arrow_downward_rounded),
+                      ),
+                    );
+                    if (!showContextRail) return messagePane;
+
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: messagePane),
+                          const SizedBox(width: AgentDesignTokens.gapLg),
+                          SizedBox(
+                            width: AgentDesignTokens.contextRailWidth,
+                            child: ConversationContextRail(
+                              snapshot: conversationContextSnapshot,
                             ),
                           ),
-                      ],
-                    ),
-                  ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
               if (_askError != null)
@@ -354,6 +400,20 @@ extension _ChatPageStateBuild on _ChatPageState {
                   ),
                 ),
               _buildAskScopeEmptyCard(),
+              if (isDesktopPlatform &&
+                  !isMobileKeyboardVisible &&
+                  MediaQuery.sizeOf(context).height >= 720)
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 880),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: ApprovalPreviewCard(
+                        change: ApprovalPreviewChange.demo(),
+                      ),
+                    ),
+                  ),
+                ),
               if (_showAttachmentSendFeedback)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),

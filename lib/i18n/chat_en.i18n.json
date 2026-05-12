@@ -171,6 +171,26 @@
   "semanticParseStatusTagSuggested": "Suggested tags: $tags",
   "semanticParseStatusTagApplied": "Added tags: $tags",
   "askAiRecoveredDetached": "Recovered the completed cloud answer.",
+  "agentContext": {
+    "open": "Open context",
+    "todayAtGlance": "Today at a glance",
+    "longTermMemory": "Long-term memory",
+    "people": "People",
+    "recentFiles": "Recent files",
+    "pendingReview": "Pending review",
+    "privacyNote": "Privacy note"
+  },
+  "approvalPreview": {
+    "title": "Task change preview",
+    "needsApproval": "Needs approval",
+    "dueTime": "Due time",
+    "before": "Before",
+    "after": "After",
+    "statusUnchanged": "Status unchanged",
+    "reviewApprove": "Review & Approve",
+    "edit": "Edit",
+    "reject": "Reject"
+  },
   "tagFilter": {
     "tooltip": "Tag filter",
     "clearFilter": "Clear tag filter",

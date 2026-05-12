@@ -171,6 +171,26 @@
   "semanticParseStatusTagSuggested": "建议标签：$tags",
   "semanticParseStatusTagApplied": "已添加标签：$tags",
   "askAiRecoveredDetached": "已恢复已完成的云端回答。",
+  "agentContext": {
+    "open": "打开上下文",
+    "todayAtGlance": "今日概览",
+    "longTermMemory": "长期记忆",
+    "people": "相关联系人",
+    "recentFiles": "最近文件",
+    "pendingReview": "待审核",
+    "privacyNote": "隐私说明"
+  },
+  "approvalPreview": {
+    "title": "任务变更预览",
+    "needsApproval": "需要审核",
+    "dueTime": "截止时间",
+    "before": "变更前",
+    "after": "变更后",
+    "statusUnchanged": "状态不变",
+    "reviewApprove": "审核并批准",
+    "edit": "编辑",
+    "reject": "拒绝"
+  },
   "tagFilter": {
     "tooltip": "标签筛选",
     "clearFilter": "清空标签筛选",
