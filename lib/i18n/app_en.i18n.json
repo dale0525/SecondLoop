@@ -1,8 +1,10 @@
 {
   "title": "SecondLoop",
   "tabs": {
+    "conversation": "Conversation",
     "main": "Loop",
     "memory": "Memory",
+    "review": "Review",
     "settings": "Settings"
   },
   "web": {

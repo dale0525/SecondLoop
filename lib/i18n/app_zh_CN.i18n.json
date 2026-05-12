@@ -1,8 +1,10 @@
 {
   "title": "SecondLoop",
   "tabs": {
+    "conversation": "对话",
     "main": "记录",
     "memory": "记忆",
+    "review": "审核",
     "settings": "设置"
   },
   "web": {

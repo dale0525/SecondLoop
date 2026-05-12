@@ -21,3 +21,23 @@ Widget buildDefaultSettingsTab(
     isActive: isActive,
   );
 }
+
+Widget buildDefaultMemoryTab(
+  BuildContext context, {
+  required bool isActive,
+}) {
+  return shared_defaults.buildSharedDefaultMemoryTab(
+    context,
+    isActive: isActive,
+  );
+}
+
+Widget buildDefaultReviewTab(
+  BuildContext context, {
+  required bool isActive,
+}) {
+  return shared_defaults.buildSharedDefaultReviewTab(
+    context,
+    isActive: isActive,
+  );
+}

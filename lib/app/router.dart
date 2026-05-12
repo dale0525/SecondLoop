@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app_shell_default_pages_stub.dart'
@@ -16,16 +15,22 @@ import '../ui/sl_tokens.dart';
 const _kDesktopShellMaxWidth = 1240.0;
 
 enum AppTab {
-  chat(Icons.chat_bubble_outline, Icons.chat_bubble),
+  conversation(Icons.chat_bubble_outline, Icons.chat_bubble),
+  memory(Icons.psychology_alt_outlined, Icons.psychology_alt),
+  review(Icons.fact_check_outlined, Icons.fact_check),
   settings(Icons.settings_outlined, Icons.settings);
 
   const AppTab(this.icon, this.selectedIcon);
+
+  static const chat = conversation;
 
   final IconData icon;
   final IconData selectedIcon;
 
   String label(BuildContext context) => switch (this) {
-        AppTab.chat => context.t.app.tabs.main,
+        AppTab.conversation => context.t.app.tabs.conversation,
+        AppTab.memory => context.t.app.tabs.memory,
+        AppTab.review => context.t.app.tabs.review,
         AppTab.settings => context.t.app.tabs.settings,
       };
 }
@@ -33,13 +38,20 @@ enum AppTab {
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
-    this.initialTab = AppTab.chat,
+    this.initialTab = AppTab.conversation,
+    this.conversationTabBuilder,
     this.chatTabBuilder,
+    this.memoryTabBuilder,
+    this.reviewTabBuilder,
     this.settingsTabBuilder,
   });
 
   final AppTab initialTab;
+  final Widget Function(BuildContext context, bool isActive)?
+      conversationTabBuilder;
   final Widget Function(BuildContext context, bool isActive)? chatTabBuilder;
+  final Widget Function(BuildContext context, bool isActive)? memoryTabBuilder;
+  final Widget Function(BuildContext context, bool isActive)? reviewTabBuilder;
   final Widget Function(BuildContext context, bool isActive)?
       settingsTabBuilder;
 
@@ -71,11 +83,13 @@ class _AppShellState extends State<AppShell> {
     if (controller == null) return;
 
     final shouldOpenChat = controller.consumeOpenChatRequest();
-    if (!shouldOpenChat || _selectedIndex == AppTab.chat.index || !mounted) {
+    if (!shouldOpenChat ||
+        _selectedIndex == AppTab.conversation.index ||
+        !mounted) {
       return;
     }
 
-    _selectTab(AppTab.chat.index);
+    _selectTab(AppTab.conversation.index);
   }
 
   @override
@@ -110,15 +124,38 @@ class _AppShellState extends State<AppShell> {
       return const SizedBox.shrink();
     }
     return switch (tab) {
-      AppTab.chat => _buildChatTab(context, isActive: isActive),
+      AppTab.conversation => _buildConversationTab(context, isActive: isActive),
+      AppTab.memory => _buildMemoryTab(context, isActive: isActive),
+      AppTab.review => _buildReviewTab(context, isActive: isActive),
       AppTab.settings => _buildSettingsTab(context, isActive: isActive),
     };
   }
 
-  Widget _buildChatTab(BuildContext context, {required bool isActive}) {
-    final builder = widget.chatTabBuilder;
+  Widget _buildConversationTab(
+    BuildContext context, {
+    required bool isActive,
+  }) {
+    final builder = widget.conversationTabBuilder ?? widget.chatTabBuilder;
     if (builder != null) return builder(context, isActive);
     return app_shell_defaults.buildDefaultChatTab(
+      context,
+      isActive: isActive,
+    );
+  }
+
+  Widget _buildMemoryTab(BuildContext context, {required bool isActive}) {
+    final builder = widget.memoryTabBuilder;
+    if (builder != null) return builder(context, isActive);
+    return app_shell_defaults.buildDefaultMemoryTab(
+      context,
+      isActive: isActive,
+    );
+  }
+
+  Widget _buildReviewTab(BuildContext context, {required bool isActive}) {
+    final builder = widget.reviewTabBuilder;
+    if (builder != null) return builder(context, isActive);
+    return app_shell_defaults.buildDefaultReviewTab(
       context,
       isActive: isActive,
     );
@@ -137,34 +174,28 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
     final mediaQuery = MediaQuery.of(context);
-    final isDesktopPlatform = !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.linux);
     return LayoutBuilder(
       builder: (context, constraints) {
         final useCollapsedShell = constraints.maxHeight < 180;
         final useRail = !useCollapsedShell && constraints.maxWidth >= 720;
-        final useDesktopBottomNav =
-            !useCollapsedShell && !useRail && isDesktopPlatform;
-        final content = useRail || useDesktopBottomNav
+        final useBottomNav = !useCollapsedShell && !useRail;
+        final content = useRail || useBottomNav
             ? IndexedStack(
                 index: _selectedIndex,
-                children: <Widget>[
-                  _buildWideShellTab(
-                    context,
-                    AppTab.chat,
-                    isActive: _selectedIndex == AppTab.chat.index,
-                  ),
-                  _buildWideShellTab(
-                    context,
-                    AppTab.settings,
-                    isActive: _selectedIndex == AppTab.settings.index,
-                  ),
+                children: [
+                  for (final tab in AppTab.values)
+                    _buildWideShellTab(
+                      context,
+                      tab,
+                      isActive: _selectedIndex == tab.index,
+                    ),
                 ],
               )
             : switch (AppTab.values[_selectedIndex]) {
-                AppTab.chat => _buildChatTab(context, isActive: true),
+                AppTab.conversation =>
+                  _buildConversationTab(context, isActive: true),
+                AppTab.memory => _buildMemoryTab(context, isActive: true),
+                AppTab.review => _buildReviewTab(context, isActive: true),
                 AppTab.settings => _buildSettingsTab(context, isActive: true),
               };
 
@@ -250,7 +281,7 @@ class _AppShellState extends State<AppShell> {
                         ),
                       ),
                     ),
-          bottomNavigationBar: useDesktopBottomNav
+          bottomNavigationBar: useBottomNav
               ? NavigationBar(
                   key: const ValueKey('app_shell_bottom_nav'),
                   selectedIndex: _selectedIndex,

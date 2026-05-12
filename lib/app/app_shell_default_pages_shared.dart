@@ -21,6 +21,26 @@ Widget buildSharedDefaultSettingsTab(
   return const _DefaultSettingsTab();
 }
 
+Widget buildSharedDefaultMemoryTab(
+  BuildContext context, {
+  required bool isActive,
+}) {
+  return _DefaultAgentPlaceholderTab(
+    key: const ValueKey('agent_memory_placeholder'),
+    title: context.t.app.tabs.memory,
+  );
+}
+
+Widget buildSharedDefaultReviewTab(
+  BuildContext context, {
+  required bool isActive,
+}) {
+  return _DefaultAgentPlaceholderTab(
+    key: const ValueKey('agent_review_placeholder'),
+    title: context.t.app.tabs.review,
+  );
+}
+
 final class _DefaultChatTab extends StatefulWidget {
   const _DefaultChatTab({required this.isActive});
 
@@ -114,6 +134,23 @@ final class _DefaultSettingsTab extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(context.t.settings.title)),
       body: const SettingsPage(),
+    );
+  }
+}
+
+final class _DefaultAgentPlaceholderTab extends StatelessWidget {
+  const _DefaultAgentPlaceholderTab({
+    required this.title,
+    super.key,
+  });
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(child: Text(title)),
     );
   }
 }
