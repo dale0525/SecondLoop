@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/backend/app_backend.dart';
 import '../core/session/session_scope.dart';
 import '../features/chat/chat_page.dart';
+import '../features/memory/memory_page.dart';
 import '../features/review/review_page.dart';
 import '../features/settings/settings_page.dart';
 import '../i18n/strings.g.dart';
@@ -26,10 +27,7 @@ Widget buildSharedDefaultMemoryTab(
   BuildContext context, {
   required bool isActive,
 }) {
-  return _DefaultAgentPlaceholderTab(
-    key: const ValueKey('agent_memory_placeholder'),
-    title: context.t.app.tabs.memory,
-  );
+  return const MemoryPage();
 }
 
 Widget buildSharedDefaultReviewTab(
@@ -132,23 +130,6 @@ final class _DefaultSettingsTab extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(context.t.settings.title)),
       body: const SettingsPage(),
-    );
-  }
-}
-
-final class _DefaultAgentPlaceholderTab extends StatelessWidget {
-  const _DefaultAgentPlaceholderTab({
-    required this.title,
-    super.key,
-  });
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(child: Text(title)),
     );
   }
 }
