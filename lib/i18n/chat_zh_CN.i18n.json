@@ -191,6 +191,19 @@
     "edit": "编辑",
     "reject": "拒绝"
   },
+  "mediaSummary": {
+    "tabs": {
+      "summary": "摘要",
+      "transcript": "转录",
+      "fields": "字段",
+      "actions": "动作",
+      "sources": "来源"
+    },
+    "extractedFields": "提取字段",
+    "suggestedReviewItems": "建议审核项",
+    "source": "来源：$name",
+    "confidence": "置信度 $percent%"
+  },
   "tagFilter": {
     "tooltip": "标签筛选",
     "clearFilter": "清空标签筛选",

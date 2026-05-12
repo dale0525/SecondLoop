@@ -191,6 +191,19 @@
     "edit": "Edit",
     "reject": "Reject"
   },
+  "mediaSummary": {
+    "tabs": {
+      "summary": "Summary",
+      "transcript": "Transcript",
+      "fields": "Fields",
+      "actions": "Actions",
+      "sources": "Sources"
+    },
+    "extractedFields": "Extracted fields",
+    "suggestedReviewItems": "Suggested review items",
+    "source": "Source: $name",
+    "confidence": "Confidence $percent%"
+  },
   "tagFilter": {
     "tooltip": "Tag filter",
     "clearFilter": "Clear tag filter",
