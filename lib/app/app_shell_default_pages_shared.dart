@@ -5,7 +5,7 @@ import '../core/session/session_scope.dart';
 import '../features/chat/chat_page.dart';
 import '../features/memory/memory_page.dart';
 import '../features/review/review_page.dart';
-import '../features/settings/settings_page.dart';
+import '../features/settings/agent_settings_page.dart';
 import '../i18n/strings.g.dart';
 import '../src/rust/db.dart';
 
@@ -20,7 +20,7 @@ Widget buildSharedDefaultSettingsTab(
   BuildContext context, {
   required bool isActive,
 }) {
-  return const _DefaultSettingsTab();
+  return const AgentSettingsPage();
 }
 
 Widget buildSharedDefaultMemoryTab(
@@ -120,16 +120,4 @@ final class _HomeLoadStageError implements Exception {
 
   @override
   String toString() => '$stage: $cause';
-}
-
-final class _DefaultSettingsTab extends StatelessWidget {
-  const _DefaultSettingsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(context.t.settings.title)),
-      body: const SettingsPage(),
-    );
-  }
 }

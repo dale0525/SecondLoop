@@ -986,5 +986,50 @@
     "subtitleDisabled": "已关闭。任务仍会按规则排序，不会使用 AI 帮你判断先做什么。",
     "subtitleUnset": "尚未设置，默认开启。满足 Cloud/BYOK 条件时，会使用 AI 增强任务排序与建议。",
     "subtitleRequiresSetup": "需先登录 SecondLoop Pro 或配置 API 密钥（BYOK）后，才能开启智能任务优先级建议。"
+  },
+  "agentUi": {
+    "tabs": {
+      "account": "账号",
+      "connection": "连接",
+      "permissions": "权限",
+      "memory": "记忆",
+      "activity": "活动"
+    },
+    "account": {
+      "profile": "个人资料",
+      "profileBody": "身份、显示名称和账号状态。",
+      "plan": "套餐",
+      "planBody": "订阅和权益状态。",
+      "billing": "账单",
+      "billingBody": "管理付款和发票。",
+      "security": "安全",
+      "securityBody": "账号安全和应用锁归属。"
+    },
+    "connection": {
+      "runtimeMode": "运行模式",
+      "runtimeModeBody": "本地、托管云或 Web runtime 设置。",
+      "connectionHealth": "连接健康度",
+      "connectionHealthBody": "同步、鉴权和 vault 可达性。"
+    },
+    "permissions": {
+      "allowedActions": "允许的动作",
+      "allowedActionsBody": "外部写入和发送动作保持在审批之后。"
+    },
+    "memory": {
+      "behaviorToggles": "记忆行为开关",
+      "behaviorTogglesBody": "控制记忆候选如何生成和使用。"
+    },
+    "activity": {
+      "timeline": "活动透明时间线",
+      "timelineBody": "查看 agent 计划、读取、起草或请求过什么。",
+      "diagnosticExport": "诊断导出",
+      "diagnosticExportBody": "导出支持所需日志，同时避免暴露 vault secrets。"
+    },
+    "links": {
+      "cloudAccount": "打开 Cloud 账号",
+      "syncSettings": "打开同步设置",
+      "aiSettings": "打开 AI 设置",
+      "diagnostics": "打开诊断"
+    }
   }
 }
