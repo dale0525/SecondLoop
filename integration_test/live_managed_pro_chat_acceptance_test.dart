@@ -35,7 +35,6 @@ void main() {
         appDirProvider: () async => appDir.path,
         storageScope:
             'live-managed-pro-chat-${DateTime.now().microsecondsSinceEpoch}',
-        recoverInterruptedExternalImportBatchesOnInit: false,
       );
       await backend.init();
       final sessionKey =

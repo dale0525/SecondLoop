@@ -79,10 +79,7 @@ class WebNativeAppBackend extends NativeAppBackend
     WebAppService? webAppService,
   })  : _appDirProvider = appDirProvider,
         _webAppService = webAppService,
-        super(
-          appDirProvider: appDirProvider,
-          recoverInterruptedExternalImportBatchesOnInit: false,
-        );
+        super(appDirProvider: appDirProvider);
 
   final AppDirProvider _appDirProvider;
   final WebAppService? _webAppService;

@@ -17,8 +17,6 @@ import '../storage/secure_blob_store.dart';
 import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/api/embedding_lifecycle.dart'
     as rust_embedding_lifecycle;
-import '../../src/rust/api/external_import.dart' as rust_external_import;
-import '../../src/rust/api/migration_archive.dart' as rust_migration_archive;
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/api/detached_ask.dart' as rust_detached_ask;
 import '../../src/rust/api/semantic_parse_enhancement.dart'
@@ -27,6 +25,7 @@ import '../../src/rust/api/semantic_parse_jobs.dart'
     as rust_semantic_parse_jobs;
 import '../../src/rust/api/todo_followup_generation.dart'
     as rust_todo_followup_generation;
+import '../../src/rust/api/vault_rollback.dart' as rust_vault_rollback;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/api/sync_diagnostics.dart' as rust_sync_diagnostics;
@@ -57,8 +56,8 @@ part 'native_backend_sync_core.dart';
 part 'native_backend_sync_webdav.dart';
 part 'native_backend_sync_localdir.dart';
 part 'native_backend_sync_managed_vault.dart';
-part 'native_backend_sync_migration.dart';
 part 'native_backend_secretary.dart';
+part 'native_backend_vault_rollback.dart';
 
 Future<bool> _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimBridge({
   required String appDir,
@@ -313,8 +312,8 @@ class NativeAppBackend extends _NativeAppBackendAccess
         _NativeAppBackendSyncWebdav,
         _NativeAppBackendSyncLocaldir,
         _NativeAppBackendSyncManagedVault,
-        _NativeAppBackendSyncMigration,
-        _NativeAppBackendSecretary
+        _NativeAppBackendSecretary,
+        _NativeAppBackendVaultRollback
     implements
         AppBackend,
         AttachmentsBackend,
@@ -333,7 +332,6 @@ class NativeAppBackend extends _NativeAppBackendAccess
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,
     String? storageScope,
-    bool recoverInterruptedExternalImportBatchesOnInit = true,
     DbListTodosFn? dbListTodos,
     DbGetTodoByIdFn? dbGetTodoById,
     DbUpsertTodoFn? dbUpsertTodo,
@@ -518,8 +516,6 @@ class NativeAppBackend extends _NativeAppBackendAccess
             dbCreateSecretaryToolCall ?? rust_core.dbCreateSecretaryToolCall,
         _dbListSecretaryToolCallsForRun = dbListSecretaryToolCallsForRun ??
             rust_core.dbListSecretaryToolCallsForRun,
-        _recoverInterruptedExternalImportBatchesOnInit =
-            recoverInterruptedExternalImportBatchesOnInit,
         _rustLibInit = rustLibInit ??
             (() => RustLib.init(
                   handler: kIsWeb ? SerializedRustHandler() : null,
@@ -642,7 +638,6 @@ class NativeAppBackend extends _NativeAppBackendAccess
   final DbCreateSecretaryToolCallFn _dbCreateSecretaryToolCall;
   @override
   final DbListSecretaryToolCallsForRunFn _dbListSecretaryToolCallsForRun;
-  final bool _recoverInterruptedExternalImportBatchesOnInit;
   final RustLibInitFn _rustLibInit;
 
   String? _appDir;
@@ -684,26 +679,6 @@ class NativeAppBackend extends _NativeAppBackendAccess
   Future<void> init() async {
     await _rustLibInit();
     await _getAppDir();
-    if (_recoverInterruptedExternalImportBatchesOnInit) {
-      await _recoverInterruptedExternalImportBatches();
-    }
-  }
-
-  Future<void> _recoverInterruptedExternalImportBatches() async {
-    final batches = await listExternalImportBatches();
-    for (final batch in batches) {
-      if (!_isInterruptedExternalImportStatus(batch.status)) {
-        continue;
-      }
-      await deleteExternalImportBatch(batchId: batch.batchId);
-    }
-  }
-
-  static bool _isInterruptedExternalImportStatus(String status) {
-    return switch (status.trim()) {
-      'in_progress' || 'cancelling' || 'rollback' => true,
-      _ => false,
-    };
   }
 
   @override

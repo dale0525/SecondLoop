@@ -147,45 +147,6 @@ mod tests {
     use super::*;
     use crate::db;
 
-    fn seed_external_import_batch(app_dir: &Path) {
-        let conn = db::open_external_readonly_db(app_dir).expect("open external readonly db");
-        conn.execute(
-            r#"INSERT INTO external_import_batches(
-              batch_id, source_kind, source_label, status,
-              created_at_ms, updated_at_ms, stats_json
-            ) VALUES ('batch-1', 'obsidian', 'External', 'completed', 1, 1, '{}')"#,
-            [],
-        )
-        .expect("insert external batch");
-    }
-
-    fn write_empty_migration_archive(path: &Path) {
-        let file = fs::File::create(path).expect("create migration archive");
-        let mut writer = zip::ZipWriter::new(file);
-        let options = zip::write::FileOptions::default();
-        let manifest = db::MigrationArchiveManifest {
-            schema_version: db::MIGRATION_ARCHIVE_SCHEMA_VERSION,
-            archive_kind: "migration".to_string(),
-            exported_at_ms: 1,
-            app_version: "1.0.0".to_string(),
-            items: vec![],
-            attachments: vec![],
-            relations: vec![],
-        };
-        writer
-            .start_file("export-manifest.json", options)
-            .expect("manifest entry");
-        use std::io::Write as _;
-        writer
-            .write_all(
-                serde_json::to_string(&manifest)
-                    .expect("manifest json")
-                    .as_bytes(),
-            )
-            .expect("write manifest");
-        writer.finish().expect("finish migration archive");
-    }
-
     #[test]
     fn reset_vault_data_preserving_llm_profiles_allows_missing_auth_file() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -224,40 +185,6 @@ mod tests {
             error.to_string().contains("invalid key"),
             "unexpected error: {error}"
         );
-    }
-
-    #[test]
-    fn migration_archive_import_rejects_invalid_key_before_resetting_vault() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let valid_key = [8u8; 32];
-        auth::init_master_password_with_existing_key(
-            dir.path(),
-            "password",
-            crate::crypto::KdfParams::for_test(),
-            valid_key,
-        )
-        .expect("initialize auth");
-        let conn = db::open(dir.path()).expect("open db");
-        let conversation =
-            db::create_conversation(&conn, &valid_key, "keep me").expect("seed conversation");
-        drop(conn);
-        let archive_path = dir.path().join("empty-import.zip");
-        write_empty_migration_archive(&archive_path);
-
-        let result = crate::api::migration_archive::migration_archive_import(
-            dir.path().to_string_lossy().into_owned(),
-            vec![9u8; 32],
-            archive_path.to_string_lossy().into_owned(),
-        );
-
-        let error = result.expect_err("invalid key should reject migration import");
-        assert!(
-            error.to_string().contains("invalid key"),
-            "unexpected error: {error}"
-        );
-        let conn = db::open(dir.path()).expect("reopen db");
-        let conversations = db::list_conversations(&conn, &valid_key).expect("list conversations");
-        assert!(conversations.iter().any(|item| item.id == conversation.id));
     }
 
     #[test]
@@ -435,7 +362,7 @@ PRAGMA foreign_keys = ON;
         db::create_conversation(&conn, &key, "hello").expect("seed conversation");
         drop(conn);
 
-        let snapshot = crate::api::migration_archive::migration_archive_create_rollback_snapshot(
+        let snapshot = crate::api::vault_rollback::vault_rollback_create_snapshot(
             dir.path().to_string_lossy().into_owned(),
             key.to_vec(),
         );
@@ -460,25 +387,6 @@ PRAGMA foreign_keys = ON;
         );
 
         let error = result.expect_err("staged attachment data without auth should be rejected");
-        assert!(
-            error
-                .to_string()
-                .contains("vault data exists but auth file is missing"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn reset_vault_data_preserving_llm_profiles_rejects_missing_auth_when_external_data_exists() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        seed_external_import_batch(dir.path());
-
-        let result = crate::api::core::db_reset_vault_data_preserving_llm_profiles(
-            dir.path().to_string_lossy().into_owned(),
-            vec![9u8; 32],
-        );
-
-        let error = result.expect_err("external data without auth should be rejected");
         assert!(
             error
                 .to_string()
@@ -675,7 +583,7 @@ PRAGMA user_version = 1;
         .expect("seed legacy db");
         drop(conn);
 
-        let result = crate::api::migration_archive::migration_archive_create_rollback_snapshot(
+        let result = crate::api::vault_rollback::vault_rollback_create_snapshot(
             dir.path().to_string_lossy().into_owned(),
             vec![9u8; 32],
         );
@@ -758,7 +666,7 @@ PRAGMA user_version = 1;
             .expect("snapshot path");
         fs::remove_file(dir.path().join("auth.json")).expect("remove auth file");
 
-        let result = crate::api::migration_archive::migration_archive_restore_rollback_snapshot(
+        let result = crate::api::vault_rollback::vault_rollback_restore_snapshot(
             dir.path().to_string_lossy().into_owned(),
             key.to_vec(),
             snapshot_path.to_string_lossy().into_owned(),
@@ -796,12 +704,11 @@ PRAGMA user_version = 1;
         fs::remove_dir_all(&attachments_dir).expect("remove attachments dir");
         fs::write(&attachments_dir, b"blocker").expect("write attachments blocker");
 
-        let first_result =
-            crate::api::migration_archive::migration_archive_restore_rollback_snapshot(
-                dir.path().to_string_lossy().into_owned(),
-                key.to_vec(),
-                snapshot_path.to_string_lossy().into_owned(),
-            );
+        let first_result = crate::api::vault_rollback::vault_rollback_restore_snapshot(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+            snapshot_path.to_string_lossy().into_owned(),
+        );
         assert!(
             first_result.is_err(),
             "blocked restore should fail: {first_result:?}"
@@ -810,12 +717,11 @@ PRAGMA user_version = 1;
 
         fs::remove_file(dir.path().join("auth.json")).expect("remove auth file");
         fs::remove_file(&attachments_dir).expect("remove attachments blocker");
-        let retry_result =
-            crate::api::migration_archive::migration_archive_restore_rollback_snapshot(
-                dir.path().to_string_lossy().into_owned(),
-                key.to_vec(),
-                snapshot_path.to_string_lossy().into_owned(),
-            );
+        let retry_result = crate::api::vault_rollback::vault_rollback_restore_snapshot(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+            snapshot_path.to_string_lossy().into_owned(),
+        );
 
         assert!(
             retry_result.is_ok(),
@@ -840,7 +746,7 @@ PRAGMA user_version = 1;
             .expect("create rollback dir");
         fs::write(&snapshot_path, b"inactive").expect("write inactive snapshot");
 
-        let result = crate::api::migration_archive::migration_archive_restore_rollback_snapshot(
+        let result = crate::api::vault_rollback::vault_rollback_restore_snapshot(
             dir.path().to_string_lossy().into_owned(),
             key.to_vec(),
             snapshot_path.to_string_lossy().into_owned(),
@@ -868,13 +774,46 @@ PRAGMA user_version = 1;
         let inactive_snapshot = active_snapshot.with_file_name("inactive-copy.bin");
         fs::copy(&active_snapshot, &inactive_snapshot).expect("copy snapshot");
 
-        let result = crate::api::migration_archive::migration_archive_restore_rollback_snapshot(
+        let result = crate::api::vault_rollback::vault_rollback_restore_snapshot(
             dir.path().to_string_lossy().into_owned(),
             key.to_vec(),
             inactive_snapshot.to_string_lossy().into_owned(),
         );
 
         let error = result.expect_err("inactive snapshot copy should stay fail-closed");
+        assert!(
+            error
+                .to_string()
+                .contains("vault data exists but auth file is missing"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn rollback_snapshot_restore_rejects_forged_active_marker_without_auth_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let key = [4u8; 32];
+        let conn = db::open(dir.path()).expect("open db");
+        db::create_conversation(&conn, &key, "hello").expect("seed conversation");
+        drop(conn);
+        let active_snapshot = db::migration_archive_create_rollback_snapshot(dir.path(), &key)
+            .expect("create active snapshot")
+            .expect("snapshot path");
+        let inactive_snapshot = active_snapshot.with_file_name("forged-active-copy.bin");
+        fs::copy(&active_snapshot, &inactive_snapshot).expect("copy snapshot");
+        fs::write(
+            inactive_snapshot.with_file_name("forged-active-copy.bin.active"),
+            b"active",
+        )
+        .expect("forge active marker");
+
+        let result = crate::api::vault_rollback::vault_rollback_restore_snapshot(
+            dir.path().to_string_lossy().into_owned(),
+            key.to_vec(),
+            inactive_snapshot.to_string_lossy().into_owned(),
+        );
+
+        let error = result.expect_err("forged active marker should stay fail-closed");
         assert!(
             error
                 .to_string()

@@ -2,6 +2,7 @@
 // Do not put code in `mod.rs`, but put in e.g. `simple.rs`.
 //
 
+pub(crate) mod ask_ai_stream_controls;
 pub mod ask_scope;
 pub mod attachments;
 #[cfg(not(target_family = "wasm"))]
@@ -16,9 +17,7 @@ pub mod core;
 pub mod desktop_media;
 pub mod detached_ask;
 pub mod embedding_lifecycle;
-pub mod external_import;
 pub mod media_annotation;
-pub mod migration_archive;
 pub mod oplog_maintenance;
 pub mod remote_embedding_bootstrap;
 pub mod semantic_parse_enhancement;
@@ -36,4 +35,5 @@ pub mod sync_progress;
 pub mod sync_progress;
 pub mod tags;
 pub mod todo_followup_generation;
+pub mod vault_rollback;
 pub mod web_sync;

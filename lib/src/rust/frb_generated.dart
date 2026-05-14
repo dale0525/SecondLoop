@@ -12,9 +12,7 @@ import 'api/core.dart';
 import 'api/desktop_media.dart';
 import 'api/detached_ask.dart';
 import 'api/embedding_lifecycle.dart';
-import 'api/external_import.dart';
 import 'api/media_annotation.dart';
-import 'api/migration_archive.dart';
 import 'api/oplog_maintenance.dart';
 import 'api/semantic_parse_enhancement.dart';
 import 'api/semantic_parse_jobs.dart';
@@ -23,6 +21,7 @@ import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
 import 'api/todo_followup_generation.dart';
+import 'api/vault_rollback.dart';
 import 'api/web_sync.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -80,7 +79,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -1715026919;
+  int get rustContentHash => -1514116489;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1579,38 +1578,6 @@ abstract class RustLibApi extends BaseApi {
   Future<bool> crateApiEmbeddingLifecycleDbReleaseLocalEmbeddingModelIfIdle(
       {required String appDir, required List<int> key, required int maxIdleMs});
 
-  Future<String> crateApiExternalImportExternalImportBatchReportJson(
-      {required String appDir, required String batchId});
-
-  Future<void> crateApiExternalImportExternalImportDeleteBatch(
-      {required String appDir, required String batchId});
-
-  Future<List<ExternalImportBatchSummary>>
-      crateApiExternalImportExternalImportListBatches({required String appDir});
-
-  Future<String> crateApiExternalImportExternalImportPhaseBEstimateJson(
-      {required String appDir, required String batchId});
-
-  Stream<String> crateApiExternalImportExternalImportPhaseBRunProgress(
-      {required String appDir,
-      required List<int> key,
-      required String batchId});
-
-  Future<String> crateApiExternalImportExternalImportPhaseBStateJson(
-      {required String appDir, required String batchId});
-
-  Future<void> crateApiExternalImportExternalImportRequestCancel(
-      {required String appDir, required String batchId});
-
-  Stream<String> crateApiExternalImportExternalImportRunProgress(
-      {required String appDir,
-      required List<int> key,
-      required String sourcePath});
-
-  Future<ExternalImportScanSummary>
-      crateApiExternalImportExternalImportScanSource(
-          {required String appDir, required String sourcePath});
-
   Future<MediaAnnotationConfig>
       crateApiMediaAnnotationDbGetMediaAnnotationConfig(
           {required String appDir, required List<int> key});
@@ -1654,58 +1621,6 @@ abstract class RustLibApi extends BaseApi {
       String? title,
       required String readableTextExcerpt,
       required String readableTextFull});
-
-  Future<String?>
-      crateApiMigrationArchiveMigrationArchiveCreateRollbackSnapshot(
-          {required String appDir, required List<int> key});
-
-  Future<MigrationArchiveManifest>
-      crateApiMigrationArchiveMigrationArchiveExport(
-          {required String appDir,
-          required List<int> key,
-          required String outputPath});
-
-  Future<MigrationArchiveExportEstimate>
-      crateApiMigrationArchiveMigrationArchiveExportEstimate(
-          {required String appDir, required List<int> key});
-
-  Stream<String> crateApiMigrationArchiveMigrationArchiveExportProgress(
-      {required String appDir,
-      required List<int> key,
-      required String outputPath});
-
-  Future<MigrationArchiveManifest>
-      crateApiMigrationArchiveMigrationArchiveImport(
-          {required String appDir,
-          required List<int> key,
-          required String archivePath});
-
-  Stream<String> crateApiMigrationArchiveMigrationArchiveImportProgress(
-      {required String appDir,
-      required List<int> key,
-      required String archivePath});
-
-  Future<MigrationArchiveManifest>
-      crateApiMigrationArchiveMigrationArchiveInspect(
-          {required String appDir, required String archivePath});
-
-  Future<String> crateApiMigrationArchiveMigrationArchiveMarkdownPathForItemId(
-      {required String itemId});
-
-  Future<MigrationArchiveManifest>
-      crateApiMigrationArchiveMigrationArchiveParseManifestJson(
-          {required String manifestJson});
-
-  Future<void> crateApiMigrationArchiveMigrationArchiveRemoveRollbackSnapshot(
-      {required String snapshotPath});
-
-  Future<void> crateApiMigrationArchiveMigrationArchiveRestoreRollbackSnapshot(
-      {required String appDir,
-      required List<int> key,
-      required String snapshotPath});
-
-  Future<String> crateApiMigrationArchiveMigrationArchiveWikilinkForItem(
-      {required String itemId, required String title});
 
   Future<OplogMaintenanceStats> crateApiOplogMaintenanceDbRunOplogMaintenance(
       {required String appDir,
@@ -1890,6 +1805,17 @@ abstract class RustLibApi extends BaseApi {
           required List<int> key,
           required PlatformInt64 nowMs,
           required int limit});
+
+  Future<String?> crateApiVaultRollbackVaultRollbackCreateSnapshot(
+      {required String appDir, required List<int> key});
+
+  Future<void> crateApiVaultRollbackVaultRollbackRemoveSnapshot(
+      {required String snapshotPath});
+
+  Future<void> crateApiVaultRollbackVaultRollbackRestoreSnapshot(
+      {required String appDir,
+      required List<int> key,
+      required String snapshotPath});
 
   Future<String> crateApiWebSyncSyncManagedVaultApplyWebPullPage(
       {required String appDir,
@@ -10707,269 +10633,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  Future<String> crateApiExternalImportExternalImportBatchReportJson(
-      {required String appDir, required String batchId}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_String(batchId, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 214, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_String,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiExternalImportExternalImportBatchReportJsonConstMeta,
-      argValues: [appDir, batchId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiExternalImportExternalImportBatchReportJsonConstMeta =>
-          const TaskConstMeta(
-            debugName: "external_import_batch_report_json",
-            argNames: ["appDir", "batchId"],
-          );
-
-  @override
-  Future<void> crateApiExternalImportExternalImportDeleteBatch(
-      {required String appDir, required String batchId}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_String(batchId, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 215, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiExternalImportExternalImportDeleteBatchConstMeta,
-      argValues: [appDir, batchId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiExternalImportExternalImportDeleteBatchConstMeta =>
-      const TaskConstMeta(
-        debugName: "external_import_delete_batch",
-        argNames: ["appDir", "batchId"],
-      );
-
-  @override
-  Future<List<ExternalImportBatchSummary>>
-      crateApiExternalImportExternalImportListBatches(
-          {required String appDir}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 216, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_list_external_import_batch_summary,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiExternalImportExternalImportListBatchesConstMeta,
-      argValues: [appDir],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiExternalImportExternalImportListBatchesConstMeta =>
-      const TaskConstMeta(
-        debugName: "external_import_list_batches",
-        argNames: ["appDir"],
-      );
-
-  @override
-  Future<String> crateApiExternalImportExternalImportPhaseBEstimateJson(
-      {required String appDir, required String batchId}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_String(batchId, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 217, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_String,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta:
-          kCrateApiExternalImportExternalImportPhaseBEstimateJsonConstMeta,
-      argValues: [appDir, batchId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiExternalImportExternalImportPhaseBEstimateJsonConstMeta =>
-          const TaskConstMeta(
-            debugName: "external_import_phase_b_estimate_json",
-            argNames: ["appDir", "batchId"],
-          );
-
-  @override
-  Stream<String> crateApiExternalImportExternalImportPhaseBRunProgress(
-      {required String appDir,
-      required List<int> key,
-      required String batchId}) {
-    final sink = RustStreamSink<String>();
-    unawaited(handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(batchId, serializer);
-        sse_encode_StreamSink_String_Sse(sink, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 218, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta:
-          kCrateApiExternalImportExternalImportPhaseBRunProgressConstMeta,
-      argValues: [appDir, key, batchId, sink],
-      apiImpl: this,
-    )));
-    return sink.stream;
-  }
-
-  TaskConstMeta
-      get kCrateApiExternalImportExternalImportPhaseBRunProgressConstMeta =>
-          const TaskConstMeta(
-            debugName: "external_import_phase_b_run_progress",
-            argNames: ["appDir", "key", "batchId", "sink"],
-          );
-
-  @override
-  Future<String> crateApiExternalImportExternalImportPhaseBStateJson(
-      {required String appDir, required String batchId}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_String(batchId, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 219, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_String,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiExternalImportExternalImportPhaseBStateJsonConstMeta,
-      argValues: [appDir, batchId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiExternalImportExternalImportPhaseBStateJsonConstMeta =>
-          const TaskConstMeta(
-            debugName: "external_import_phase_b_state_json",
-            argNames: ["appDir", "batchId"],
-          );
-
-  @override
-  Future<void> crateApiExternalImportExternalImportRequestCancel(
-      {required String appDir, required String batchId}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_String(batchId, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 220, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiExternalImportExternalImportRequestCancelConstMeta,
-      argValues: [appDir, batchId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiExternalImportExternalImportRequestCancelConstMeta =>
-          const TaskConstMeta(
-            debugName: "external_import_request_cancel",
-            argNames: ["appDir", "batchId"],
-          );
-
-  @override
-  Stream<String> crateApiExternalImportExternalImportRunProgress(
-      {required String appDir,
-      required List<int> key,
-      required String sourcePath}) {
-    final sink = RustStreamSink<String>();
-    unawaited(handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(sourcePath, serializer);
-        sse_encode_StreamSink_String_Sse(sink, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 221, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiExternalImportExternalImportRunProgressConstMeta,
-      argValues: [appDir, key, sourcePath, sink],
-      apiImpl: this,
-    )));
-    return sink.stream;
-  }
-
-  TaskConstMeta get kCrateApiExternalImportExternalImportRunProgressConstMeta =>
-      const TaskConstMeta(
-        debugName: "external_import_run_progress",
-        argNames: ["appDir", "key", "sourcePath", "sink"],
-      );
-
-  @override
-  Future<ExternalImportScanSummary>
-      crateApiExternalImportExternalImportScanSource(
-          {required String appDir, required String sourcePath}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_String(sourcePath, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 222, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_external_import_scan_summary,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiExternalImportExternalImportScanSourceConstMeta,
-      argValues: [appDir, sourcePath],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiExternalImportExternalImportScanSourceConstMeta =>
-      const TaskConstMeta(
-        debugName: "external_import_scan_source",
-        argNames: ["appDir", "sourcePath"],
-      );
-
-  @override
   Future<MediaAnnotationConfig>
       crateApiMediaAnnotationDbGetMediaAnnotationConfig(
           {required String appDir, required List<int> key}) {
@@ -10979,7 +10642,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 223, port: port_);
+            funcId: 214, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_media_annotation_config,
@@ -11010,7 +10673,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_box_autoadd_media_annotation_config(config, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 224, port: port_);
+            funcId: 215, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11049,7 +10712,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(mimeType, serializer);
         sse_encode_list_prim_u_8_loose(imageBytes, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 225, port: port_);
+            funcId: 216, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11102,7 +10765,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(readableTextExcerpt, serializer);
         sse_encode_String(readableTextFull, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 226, port: port_);
+            funcId: 217, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11172,7 +10835,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(readableTextExcerpt, serializer);
         sse_encode_String(readableTextFull, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 227, port: port_);
+            funcId: 218, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11218,372 +10881,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  Future<String?>
-      crateApiMigrationArchiveMigrationArchiveCreateRollbackSnapshot(
-          {required String appDir, required List<int> key}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 228, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_opt_String,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta:
-          kCrateApiMigrationArchiveMigrationArchiveCreateRollbackSnapshotConstMeta,
-      argValues: [appDir, key],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiMigrationArchiveMigrationArchiveCreateRollbackSnapshotConstMeta =>
-          const TaskConstMeta(
-            debugName: "migration_archive_create_rollback_snapshot",
-            argNames: ["appDir", "key"],
-          );
-
-  @override
-  Future<MigrationArchiveManifest>
-      crateApiMigrationArchiveMigrationArchiveExport(
-          {required String appDir,
-          required List<int> key,
-          required String outputPath}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(outputPath, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 229, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_migration_archive_manifest,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiMigrationArchiveMigrationArchiveExportConstMeta,
-      argValues: [appDir, key, outputPath],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiMigrationArchiveMigrationArchiveExportConstMeta =>
-      const TaskConstMeta(
-        debugName: "migration_archive_export",
-        argNames: ["appDir", "key", "outputPath"],
-      );
-
-  @override
-  Future<MigrationArchiveExportEstimate>
-      crateApiMigrationArchiveMigrationArchiveExportEstimate(
-          {required String appDir, required List<int> key}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 230, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_migration_archive_export_estimate,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta:
-          kCrateApiMigrationArchiveMigrationArchiveExportEstimateConstMeta,
-      argValues: [appDir, key],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiMigrationArchiveMigrationArchiveExportEstimateConstMeta =>
-          const TaskConstMeta(
-            debugName: "migration_archive_export_estimate",
-            argNames: ["appDir", "key"],
-          );
-
-  @override
-  Stream<String> crateApiMigrationArchiveMigrationArchiveExportProgress(
-      {required String appDir,
-      required List<int> key,
-      required String outputPath}) {
-    final sink = RustStreamSink<String>();
-    unawaited(handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(outputPath, serializer);
-        sse_encode_StreamSink_String_Sse(sink, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 231, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta:
-          kCrateApiMigrationArchiveMigrationArchiveExportProgressConstMeta,
-      argValues: [appDir, key, outputPath, sink],
-      apiImpl: this,
-    )));
-    return sink.stream;
-  }
-
-  TaskConstMeta
-      get kCrateApiMigrationArchiveMigrationArchiveExportProgressConstMeta =>
-          const TaskConstMeta(
-            debugName: "migration_archive_export_progress",
-            argNames: ["appDir", "key", "outputPath", "sink"],
-          );
-
-  @override
-  Future<MigrationArchiveManifest>
-      crateApiMigrationArchiveMigrationArchiveImport(
-          {required String appDir,
-          required List<int> key,
-          required String archivePath}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(archivePath, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 232, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_migration_archive_manifest,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiMigrationArchiveMigrationArchiveImportConstMeta,
-      argValues: [appDir, key, archivePath],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiMigrationArchiveMigrationArchiveImportConstMeta =>
-      const TaskConstMeta(
-        debugName: "migration_archive_import",
-        argNames: ["appDir", "key", "archivePath"],
-      );
-
-  @override
-  Stream<String> crateApiMigrationArchiveMigrationArchiveImportProgress(
-      {required String appDir,
-      required List<int> key,
-      required String archivePath}) {
-    final sink = RustStreamSink<String>();
-    unawaited(handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(archivePath, serializer);
-        sse_encode_StreamSink_String_Sse(sink, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 233, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta:
-          kCrateApiMigrationArchiveMigrationArchiveImportProgressConstMeta,
-      argValues: [appDir, key, archivePath, sink],
-      apiImpl: this,
-    )));
-    return sink.stream;
-  }
-
-  TaskConstMeta
-      get kCrateApiMigrationArchiveMigrationArchiveImportProgressConstMeta =>
-          const TaskConstMeta(
-            debugName: "migration_archive_import_progress",
-            argNames: ["appDir", "key", "archivePath", "sink"],
-          );
-
-  @override
-  Future<MigrationArchiveManifest>
-      crateApiMigrationArchiveMigrationArchiveInspect(
-          {required String appDir, required String archivePath}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_String(archivePath, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 234, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_migration_archive_manifest,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta: kCrateApiMigrationArchiveMigrationArchiveInspectConstMeta,
-      argValues: [appDir, archivePath],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta get kCrateApiMigrationArchiveMigrationArchiveInspectConstMeta =>
-      const TaskConstMeta(
-        debugName: "migration_archive_inspect",
-        argNames: ["appDir", "archivePath"],
-      );
-
-  @override
-  Future<String> crateApiMigrationArchiveMigrationArchiveMarkdownPathForItemId(
-      {required String itemId}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(itemId, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 235, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_String,
-        decodeErrorData: null,
-      ),
-      constMeta:
-          kCrateApiMigrationArchiveMigrationArchiveMarkdownPathForItemIdConstMeta,
-      argValues: [itemId],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiMigrationArchiveMigrationArchiveMarkdownPathForItemIdConstMeta =>
-          const TaskConstMeta(
-            debugName: "migration_archive_markdown_path_for_item_id",
-            argNames: ["itemId"],
-          );
-
-  @override
-  Future<MigrationArchiveManifest>
-      crateApiMigrationArchiveMigrationArchiveParseManifestJson(
-          {required String manifestJson}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(manifestJson, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 236, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_migration_archive_manifest,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta:
-          kCrateApiMigrationArchiveMigrationArchiveParseManifestJsonConstMeta,
-      argValues: [manifestJson],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiMigrationArchiveMigrationArchiveParseManifestJsonConstMeta =>
-          const TaskConstMeta(
-            debugName: "migration_archive_parse_manifest_json",
-            argNames: ["manifestJson"],
-          );
-
-  @override
-  Future<void> crateApiMigrationArchiveMigrationArchiveRemoveRollbackSnapshot(
-      {required String snapshotPath}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(snapshotPath, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 237, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta:
-          kCrateApiMigrationArchiveMigrationArchiveRemoveRollbackSnapshotConstMeta,
-      argValues: [snapshotPath],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiMigrationArchiveMigrationArchiveRemoveRollbackSnapshotConstMeta =>
-          const TaskConstMeta(
-            debugName: "migration_archive_remove_rollback_snapshot",
-            argNames: ["snapshotPath"],
-          );
-
-  @override
-  Future<void> crateApiMigrationArchiveMigrationArchiveRestoreRollbackSnapshot(
-      {required String appDir,
-      required List<int> key,
-      required String snapshotPath}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(appDir, serializer);
-        sse_encode_list_prim_u_8_loose(key, serializer);
-        sse_encode_String(snapshotPath, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 238, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
-        decodeErrorData: sse_decode_AnyhowException,
-      ),
-      constMeta:
-          kCrateApiMigrationArchiveMigrationArchiveRestoreRollbackSnapshotConstMeta,
-      argValues: [appDir, key, snapshotPath],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiMigrationArchiveMigrationArchiveRestoreRollbackSnapshotConstMeta =>
-          const TaskConstMeta(
-            debugName: "migration_archive_restore_rollback_snapshot",
-            argNames: ["appDir", "key", "snapshotPath"],
-          );
-
-  @override
-  Future<String> crateApiMigrationArchiveMigrationArchiveWikilinkForItem(
-      {required String itemId, required String title}) {
-    return handler.executeNormal(NormalTask(
-      callFfi: (port_) {
-        final serializer = SseSerializer(generalizedFrbRustBinding);
-        sse_encode_String(itemId, serializer);
-        sse_encode_String(title, serializer);
-        pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 239, port: port_);
-      },
-      codec: SseCodec(
-        decodeSuccessData: sse_decode_String,
-        decodeErrorData: null,
-      ),
-      constMeta:
-          kCrateApiMigrationArchiveMigrationArchiveWikilinkForItemConstMeta,
-      argValues: [itemId, title],
-      apiImpl: this,
-    ));
-  }
-
-  TaskConstMeta
-      get kCrateApiMigrationArchiveMigrationArchiveWikilinkForItemConstMeta =>
-          const TaskConstMeta(
-            debugName: "migration_archive_wikilink_for_item",
-            argNames: ["itemId", "title"],
-          );
-
-  @override
   Future<OplogMaintenanceStats> crateApiOplogMaintenanceDbRunOplogMaintenance(
       {required String appDir,
       required List<int> key,
@@ -11597,7 +10894,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_oplog_maintenance_backend(backend, serializer);
         sse_encode_String(scopeId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 240, port: port_);
+            funcId: 219, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_oplog_maintenance_stats,
@@ -11642,7 +10939,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_todo_candidate(candidates, serializer);
         sse_encode_String(localDay, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 241, port: port_);
+            funcId: 220, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11715,7 +11012,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_String(modelName, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 242, port: port_);
+            funcId: 221, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11793,7 +11090,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_f_64(suggestedTagConfidence, serializer);
         sse_encode_i_64(nowMs, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 243, port: port_);
+            funcId: 222, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -11845,7 +11142,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 244)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 223)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11868,7 +11165,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 245, port: port_);
+            funcId: 224, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11899,7 +11196,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_opt_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 246, port: port_);
+            funcId: 225, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -11937,7 +11234,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 247, port: port_);
+            funcId: 226, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -11981,7 +11278,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 248, port: port_);
+            funcId: 227, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -12027,7 +11324,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 249, port: port_);
+            funcId: 228, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -12075,7 +11372,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 250, port: port_);
+            funcId: 229, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -12124,7 +11421,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 251, port: port_);
+            funcId: 230, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -12174,7 +11471,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 252, port: port_);
+            funcId: 231, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -12233,7 +11530,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 253, port: port_);
+            funcId: 232, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -12285,7 +11582,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 254, port: port_);
+            funcId: 233, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -12313,7 +11610,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(tagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 255, port: port_);
+            funcId: 234, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -12340,7 +11637,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 256, port: port_);
+            funcId: 235, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -12370,7 +11667,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 257, port: port_);
+            funcId: 236, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -12402,7 +11699,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(conversationId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 258, port: port_);
+            funcId: 237, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -12432,7 +11729,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 259, port: port_);
+            funcId: 238, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -12462,7 +11759,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 260, port: port_);
+            funcId: 239, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -12490,7 +11787,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 261, port: port_);
+            funcId: 240, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -12517,7 +11814,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 262, port: port_);
+            funcId: 241, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -12548,7 +11845,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 263, port: port_);
+            funcId: 242, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -12583,7 +11880,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(reason, serializer);
         sse_encode_String(action, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 264, port: port_);
+            funcId: 243, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -12622,7 +11919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 265, port: port_);
+            funcId: 244, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -12650,7 +11947,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(name, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 266, port: port_);
+            funcId: 245, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_tag,
@@ -12682,7 +11979,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_i_64(nowMs, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 267, port: port_);
+            funcId: 246, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_todo_followup_generation_job,
@@ -12703,6 +12000,92 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  Future<String?> crateApiVaultRollbackVaultRollbackCreateSnapshot(
+      {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 247, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_opt_String,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiVaultRollbackVaultRollbackCreateSnapshotConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiVaultRollbackVaultRollbackCreateSnapshotConstMeta =>
+          const TaskConstMeta(
+            debugName: "vault_rollback_create_snapshot",
+            argNames: ["appDir", "key"],
+          );
+
+  @override
+  Future<void> crateApiVaultRollbackVaultRollbackRemoveSnapshot(
+      {required String snapshotPath}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(snapshotPath, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 248, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiVaultRollbackVaultRollbackRemoveSnapshotConstMeta,
+      argValues: [snapshotPath],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiVaultRollbackVaultRollbackRemoveSnapshotConstMeta =>
+          const TaskConstMeta(
+            debugName: "vault_rollback_remove_snapshot",
+            argNames: ["snapshotPath"],
+          );
+
+  @override
+  Future<void> crateApiVaultRollbackVaultRollbackRestoreSnapshot(
+      {required String appDir,
+      required List<int> key,
+      required String snapshotPath}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(snapshotPath, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 249, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiVaultRollbackVaultRollbackRestoreSnapshotConstMeta,
+      argValues: [appDir, key, snapshotPath],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiVaultRollbackVaultRollbackRestoreSnapshotConstMeta =>
+          const TaskConstMeta(
+            debugName: "vault_rollback_restore_snapshot",
+            argNames: ["appDir", "key", "snapshotPath"],
+          );
+
+  @override
   Future<String> crateApiWebSyncSyncManagedVaultApplyWebPullPage(
       {required String appDir,
       required List<int> key,
@@ -12720,7 +12103,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(responseJson, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 268, port: port_);
+            funcId: 250, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -12761,7 +12144,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(batchJson, serializer);
         sse_encode_String(responseJson, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 269, port: port_);
+            funcId: 251, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -12802,7 +12185,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(batchJson, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 270, port: port_);
+            funcId: 252, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -12842,7 +12225,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_u_64(appliedOps, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 271, port: port_);
+            funcId: 253, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -12892,7 +12275,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 272, port: port_);
+            funcId: 254, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -12929,7 +12312,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_String(actionJson, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 273, port: port_);
+            funcId: 255, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -12968,7 +12351,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 274, port: port_);
+            funcId: 256, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -13004,7 +12387,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_bool(success, serializer);
         sse_encode_opt_String(errorMessage, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 275, port: port_);
+            funcId: 257, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -13045,7 +12428,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(baseUrl, serializer);
         sse_encode_String(vaultId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 276, port: port_);
+            funcId: 258, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -13375,46 +12758,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ExternalImportBatchSummary dco_decode_external_import_batch_summary(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
-    return ExternalImportBatchSummary(
-      batchId: dco_decode_String(arr[0]),
-      sourceKind: dco_decode_String(arr[1]),
-      sourceLabel: dco_decode_String(arr[2]),
-      status: dco_decode_String(arr[3]),
-      notesCount: dco_decode_i_64(arr[4]),
-      attachmentsCount: dco_decode_i_64(arr[5]),
-      failedCount: dco_decode_i_64(arr[6]),
-      copiedBytes: dco_decode_i_64(arr[7]),
-      createdAtMs: dco_decode_i_64(arr[8]),
-      updatedAtMs: dco_decode_i_64(arr[9]),
-      completedAtMs: dco_decode_opt_box_autoadd_i_64(arr[10]),
-      lastError: dco_decode_opt_String(arr[11]),
-    );
-  }
-
-  @protected
-  ExternalImportScanSummary dco_decode_external_import_scan_summary(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return ExternalImportScanSummary(
-      detectedSourceKind: dco_decode_String(arr[0]),
-      sourceLabel: dco_decode_String(arr[1]),
-      notesCount: dco_decode_i_64(arr[2]),
-      attachmentsCount: dco_decode_i_64(arr[3]),
-      estimatedDiskUsageBytes: dco_decode_i_64(arr[4]),
-      warnings: dco_decode_list_String(arr[5]),
-    );
-  }
-
-  @protected
   double dco_decode_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
@@ -13484,15 +12827,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<ExternalImportBatchSummary>
-      dco_decode_list_external_import_batch_summary(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_external_import_batch_summary)
-        .toList();
-  }
-
-  @protected
   List<LlmProfile> dco_decode_list_llm_profile(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_llm_profile).toList();
@@ -13514,33 +12848,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<Message> dco_decode_list_message(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_message).toList();
-  }
-
-  @protected
-  List<MigrationArchiveAttachment> dco_decode_list_migration_archive_attachment(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_migration_archive_attachment)
-        .toList();
-  }
-
-  @protected
-  List<MigrationArchiveItem> dco_decode_list_migration_archive_item(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_migration_archive_item)
-        .toList();
-  }
-
-  @protected
-  List<MigrationArchiveRelation> dco_decode_list_migration_archive_relation(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_migration_archive_relation)
-        .toList();
   }
 
   @protected
@@ -13768,88 +13075,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       createdAtMs: dco_decode_i_64(arr[4]),
       isMemory: dco_decode_bool(arr[5]),
       citationsJson: dco_decode_opt_String(arr[6]),
-    );
-  }
-
-  @protected
-  MigrationArchiveAttachment dco_decode_migration_archive_attachment(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return MigrationArchiveAttachment(
-      sha256: dco_decode_String(arr[0]),
-      archivePath: dco_decode_String(arr[1]),
-      originalFilename: dco_decode_String(arr[2]),
-      mimeType: dco_decode_opt_String(arr[3]),
-      sizeBytes: dco_decode_i_64(arr[4]),
-      itemIds: dco_decode_list_String(arr[5]),
-    );
-  }
-
-  @protected
-  MigrationArchiveExportEstimate dco_decode_migration_archive_export_estimate(
-      dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return MigrationArchiveExportEstimate(
-      schemaVersion: dco_decode_i_64(arr[0]),
-      archiveKind: dco_decode_String(arr[1]),
-      itemCount: dco_decode_i_64(arr[2]),
-      attachmentCount: dco_decode_i_64(arr[3]),
-      estimatedSizeBytes: dco_decode_i_64(arr[4]),
-    );
-  }
-
-  @protected
-  MigrationArchiveItem dco_decode_migration_archive_item(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-    return MigrationArchiveItem(
-      id: dco_decode_String(arr[0]),
-      entityType: dco_decode_String(arr[1]),
-      markdownPath: dco_decode_String(arr[2]),
-      createdAtMs: dco_decode_i_64(arr[3]),
-      updatedAtMs: dco_decode_i_64(arr[4]),
-      title: dco_decode_String(arr[5]),
-      tags: dco_decode_list_String(arr[6]),
-      status: dco_decode_opt_String(arr[7]),
-      extraJson: dco_decode_opt_String(arr[8]),
-    );
-  }
-
-  @protected
-  MigrationArchiveManifest dco_decode_migration_archive_manifest(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return MigrationArchiveManifest(
-      schemaVersion: dco_decode_i_64(arr[0]),
-      archiveKind: dco_decode_String(arr[1]),
-      exportedAtMs: dco_decode_i_64(arr[2]),
-      appVersion: dco_decode_String(arr[3]),
-      items: dco_decode_list_migration_archive_item(arr[4]),
-      attachments: dco_decode_list_migration_archive_attachment(arr[5]),
-      relations: dco_decode_list_migration_archive_relation(arr[6]),
-    );
-  }
-
-  @protected
-  MigrationArchiveRelation dco_decode_migration_archive_relation(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return MigrationArchiveRelation(
-      fromId: dco_decode_String(arr[0]),
-      toId: dco_decode_String(arr[1]),
-      relationType: dco_decode_String(arr[2]),
     );
   }
 
@@ -14696,56 +13921,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ExternalImportBatchSummary sse_decode_external_import_batch_summary(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_batchId = sse_decode_String(deserializer);
-    var var_sourceKind = sse_decode_String(deserializer);
-    var var_sourceLabel = sse_decode_String(deserializer);
-    var var_status = sse_decode_String(deserializer);
-    var var_notesCount = sse_decode_i_64(deserializer);
-    var var_attachmentsCount = sse_decode_i_64(deserializer);
-    var var_failedCount = sse_decode_i_64(deserializer);
-    var var_copiedBytes = sse_decode_i_64(deserializer);
-    var var_createdAtMs = sse_decode_i_64(deserializer);
-    var var_updatedAtMs = sse_decode_i_64(deserializer);
-    var var_completedAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
-    var var_lastError = sse_decode_opt_String(deserializer);
-    return ExternalImportBatchSummary(
-        batchId: var_batchId,
-        sourceKind: var_sourceKind,
-        sourceLabel: var_sourceLabel,
-        status: var_status,
-        notesCount: var_notesCount,
-        attachmentsCount: var_attachmentsCount,
-        failedCount: var_failedCount,
-        copiedBytes: var_copiedBytes,
-        createdAtMs: var_createdAtMs,
-        updatedAtMs: var_updatedAtMs,
-        completedAtMs: var_completedAtMs,
-        lastError: var_lastError);
-  }
-
-  @protected
-  ExternalImportScanSummary sse_decode_external_import_scan_summary(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_detectedSourceKind = sse_decode_String(deserializer);
-    var var_sourceLabel = sse_decode_String(deserializer);
-    var var_notesCount = sse_decode_i_64(deserializer);
-    var var_attachmentsCount = sse_decode_i_64(deserializer);
-    var var_estimatedDiskUsageBytes = sse_decode_i_64(deserializer);
-    var var_warnings = sse_decode_list_String(deserializer);
-    return ExternalImportScanSummary(
-        detectedSourceKind: var_detectedSourceKind,
-        sourceLabel: var_sourceLabel,
-        notesCount: var_notesCount,
-        attachmentsCount: var_attachmentsCount,
-        estimatedDiskUsageBytes: var_estimatedDiskUsageBytes,
-        warnings: var_warnings);
-  }
-
-  @protected
   double sse_decode_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat64();
@@ -14865,20 +14040,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<ExternalImportBatchSummary>
-      sse_decode_list_external_import_batch_summary(
-          SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <ExternalImportBatchSummary>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_external_import_batch_summary(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
   List<LlmProfile> sse_decode_list_llm_profile(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -14924,45 +14085,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <Message>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_message(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<MigrationArchiveAttachment> sse_decode_list_migration_archive_attachment(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <MigrationArchiveAttachment>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_migration_archive_attachment(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<MigrationArchiveItem> sse_decode_list_migration_archive_item(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <MigrationArchiveItem>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_migration_archive_item(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<MigrationArchiveRelation> sse_decode_list_migration_archive_relation(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <MigrationArchiveRelation>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_migration_archive_relation(deserializer));
     }
     return ans_;
   }
@@ -15312,101 +14434,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         createdAtMs: var_createdAtMs,
         isMemory: var_isMemory,
         citationsJson: var_citationsJson);
-  }
-
-  @protected
-  MigrationArchiveAttachment sse_decode_migration_archive_attachment(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_sha256 = sse_decode_String(deserializer);
-    var var_archivePath = sse_decode_String(deserializer);
-    var var_originalFilename = sse_decode_String(deserializer);
-    var var_mimeType = sse_decode_opt_String(deserializer);
-    var var_sizeBytes = sse_decode_i_64(deserializer);
-    var var_itemIds = sse_decode_list_String(deserializer);
-    return MigrationArchiveAttachment(
-        sha256: var_sha256,
-        archivePath: var_archivePath,
-        originalFilename: var_originalFilename,
-        mimeType: var_mimeType,
-        sizeBytes: var_sizeBytes,
-        itemIds: var_itemIds);
-  }
-
-  @protected
-  MigrationArchiveExportEstimate sse_decode_migration_archive_export_estimate(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_schemaVersion = sse_decode_i_64(deserializer);
-    var var_archiveKind = sse_decode_String(deserializer);
-    var var_itemCount = sse_decode_i_64(deserializer);
-    var var_attachmentCount = sse_decode_i_64(deserializer);
-    var var_estimatedSizeBytes = sse_decode_i_64(deserializer);
-    return MigrationArchiveExportEstimate(
-        schemaVersion: var_schemaVersion,
-        archiveKind: var_archiveKind,
-        itemCount: var_itemCount,
-        attachmentCount: var_attachmentCount,
-        estimatedSizeBytes: var_estimatedSizeBytes);
-  }
-
-  @protected
-  MigrationArchiveItem sse_decode_migration_archive_item(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_String(deserializer);
-    var var_entityType = sse_decode_String(deserializer);
-    var var_markdownPath = sse_decode_String(deserializer);
-    var var_createdAtMs = sse_decode_i_64(deserializer);
-    var var_updatedAtMs = sse_decode_i_64(deserializer);
-    var var_title = sse_decode_String(deserializer);
-    var var_tags = sse_decode_list_String(deserializer);
-    var var_status = sse_decode_opt_String(deserializer);
-    var var_extraJson = sse_decode_opt_String(deserializer);
-    return MigrationArchiveItem(
-        id: var_id,
-        entityType: var_entityType,
-        markdownPath: var_markdownPath,
-        createdAtMs: var_createdAtMs,
-        updatedAtMs: var_updatedAtMs,
-        title: var_title,
-        tags: var_tags,
-        status: var_status,
-        extraJson: var_extraJson);
-  }
-
-  @protected
-  MigrationArchiveManifest sse_decode_migration_archive_manifest(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_schemaVersion = sse_decode_i_64(deserializer);
-    var var_archiveKind = sse_decode_String(deserializer);
-    var var_exportedAtMs = sse_decode_i_64(deserializer);
-    var var_appVersion = sse_decode_String(deserializer);
-    var var_items = sse_decode_list_migration_archive_item(deserializer);
-    var var_attachments =
-        sse_decode_list_migration_archive_attachment(deserializer);
-    var var_relations =
-        sse_decode_list_migration_archive_relation(deserializer);
-    return MigrationArchiveManifest(
-        schemaVersion: var_schemaVersion,
-        archiveKind: var_archiveKind,
-        exportedAtMs: var_exportedAtMs,
-        appVersion: var_appVersion,
-        items: var_items,
-        attachments: var_attachments,
-        relations: var_relations);
-  }
-
-  @protected
-  MigrationArchiveRelation sse_decode_migration_archive_relation(
-      SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_fromId = sse_decode_String(deserializer);
-    var var_toId = sse_decode_String(deserializer);
-    var var_relationType = sse_decode_String(deserializer);
-    return MigrationArchiveRelation(
-        fromId: var_fromId, toId: var_toId, relationType: var_relationType);
   }
 
   @protected
@@ -16305,36 +15332,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_external_import_batch_summary(
-      ExternalImportBatchSummary self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.batchId, serializer);
-    sse_encode_String(self.sourceKind, serializer);
-    sse_encode_String(self.sourceLabel, serializer);
-    sse_encode_String(self.status, serializer);
-    sse_encode_i_64(self.notesCount, serializer);
-    sse_encode_i_64(self.attachmentsCount, serializer);
-    sse_encode_i_64(self.failedCount, serializer);
-    sse_encode_i_64(self.copiedBytes, serializer);
-    sse_encode_i_64(self.createdAtMs, serializer);
-    sse_encode_i_64(self.updatedAtMs, serializer);
-    sse_encode_opt_box_autoadd_i_64(self.completedAtMs, serializer);
-    sse_encode_opt_String(self.lastError, serializer);
-  }
-
-  @protected
-  void sse_encode_external_import_scan_summary(
-      ExternalImportScanSummary self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.detectedSourceKind, serializer);
-    sse_encode_String(self.sourceLabel, serializer);
-    sse_encode_i_64(self.notesCount, serializer);
-    sse_encode_i_64(self.attachmentsCount, serializer);
-    sse_encode_i_64(self.estimatedDiskUsageBytes, serializer);
-    sse_encode_list_String(self.warnings, serializer);
-  }
-
-  @protected
   void sse_encode_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat64(self);
@@ -16431,16 +15428,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_external_import_batch_summary(
-      List<ExternalImportBatchSummary> self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_external_import_batch_summary(item, serializer);
-    }
-  }
-
-  @protected
   void sse_encode_list_llm_profile(
       List<LlmProfile> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -16476,36 +15463,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_message(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_migration_archive_attachment(
-      List<MigrationArchiveAttachment> self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_migration_archive_attachment(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_migration_archive_item(
-      List<MigrationArchiveItem> self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_migration_archive_item(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_migration_archive_relation(
-      List<MigrationArchiveRelation> self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_migration_archive_relation(item, serializer);
     }
   }
 
@@ -16760,66 +15717,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.createdAtMs, serializer);
     sse_encode_bool(self.isMemory, serializer);
     sse_encode_opt_String(self.citationsJson, serializer);
-  }
-
-  @protected
-  void sse_encode_migration_archive_attachment(
-      MigrationArchiveAttachment self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.sha256, serializer);
-    sse_encode_String(self.archivePath, serializer);
-    sse_encode_String(self.originalFilename, serializer);
-    sse_encode_opt_String(self.mimeType, serializer);
-    sse_encode_i_64(self.sizeBytes, serializer);
-    sse_encode_list_String(self.itemIds, serializer);
-  }
-
-  @protected
-  void sse_encode_migration_archive_export_estimate(
-      MigrationArchiveExportEstimate self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.schemaVersion, serializer);
-    sse_encode_String(self.archiveKind, serializer);
-    sse_encode_i_64(self.itemCount, serializer);
-    sse_encode_i_64(self.attachmentCount, serializer);
-    sse_encode_i_64(self.estimatedSizeBytes, serializer);
-  }
-
-  @protected
-  void sse_encode_migration_archive_item(
-      MigrationArchiveItem self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.id, serializer);
-    sse_encode_String(self.entityType, serializer);
-    sse_encode_String(self.markdownPath, serializer);
-    sse_encode_i_64(self.createdAtMs, serializer);
-    sse_encode_i_64(self.updatedAtMs, serializer);
-    sse_encode_String(self.title, serializer);
-    sse_encode_list_String(self.tags, serializer);
-    sse_encode_opt_String(self.status, serializer);
-    sse_encode_opt_String(self.extraJson, serializer);
-  }
-
-  @protected
-  void sse_encode_migration_archive_manifest(
-      MigrationArchiveManifest self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.schemaVersion, serializer);
-    sse_encode_String(self.archiveKind, serializer);
-    sse_encode_i_64(self.exportedAtMs, serializer);
-    sse_encode_String(self.appVersion, serializer);
-    sse_encode_list_migration_archive_item(self.items, serializer);
-    sse_encode_list_migration_archive_attachment(self.attachments, serializer);
-    sse_encode_list_migration_archive_relation(self.relations, serializer);
-  }
-
-  @protected
-  void sse_encode_migration_archive_relation(
-      MigrationArchiveRelation self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.fromId, serializer);
-    sse_encode_String(self.toId, serializer);
-    sse_encode_String(self.relationType, serializer);
   }
 
   @protected

@@ -12,9 +12,7 @@ import 'api/core.dart';
 import 'api/desktop_media.dart';
 import 'api/detached_ask.dart';
 import 'api/embedding_lifecycle.dart';
-import 'api/external_import.dart';
 import 'api/media_annotation.dart';
-import 'api/migration_archive.dart';
 import 'api/oplog_maintenance.dart';
 import 'api/semantic_parse_enhancement.dart';
 import 'api/semantic_parse_jobs.dart';
@@ -23,6 +21,7 @@ import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
 import 'api/todo_followup_generation.dart';
+import 'api/vault_rollback.dart';
 import 'api/web_sync.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -130,14 +129,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Event dco_decode_event(dynamic raw);
 
   @protected
-  ExternalImportBatchSummary dco_decode_external_import_batch_summary(
-      dynamic raw);
-
-  @protected
-  ExternalImportScanSummary dco_decode_external_import_scan_summary(
-      dynamic raw);
-
-  @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
@@ -172,10 +163,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Event> dco_decode_list_event(dynamic raw);
 
   @protected
-  List<ExternalImportBatchSummary>
-      dco_decode_list_external_import_batch_summary(dynamic raw);
-
-  @protected
   List<LlmProfile> dco_decode_list_llm_profile(dynamic raw);
 
   @protected
@@ -186,18 +173,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Message> dco_decode_list_message(dynamic raw);
-
-  @protected
-  List<MigrationArchiveAttachment> dco_decode_list_migration_archive_attachment(
-      dynamic raw);
-
-  @protected
-  List<MigrationArchiveItem> dco_decode_list_migration_archive_item(
-      dynamic raw);
-
-  @protected
-  List<MigrationArchiveRelation> dco_decode_list_migration_archive_relation(
-      dynamic raw);
 
   @protected
   List<PlanningOutputRecord> dco_decode_list_planning_output_record(
@@ -278,23 +253,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Message dco_decode_message(dynamic raw);
-
-  @protected
-  MigrationArchiveAttachment dco_decode_migration_archive_attachment(
-      dynamic raw);
-
-  @protected
-  MigrationArchiveExportEstimate dco_decode_migration_archive_export_estimate(
-      dynamic raw);
-
-  @protected
-  MigrationArchiveItem dco_decode_migration_archive_item(dynamic raw);
-
-  @protected
-  MigrationArchiveManifest dco_decode_migration_archive_manifest(dynamic raw);
-
-  @protected
-  MigrationArchiveRelation dco_decode_migration_archive_relation(dynamic raw);
 
   @protected
   OcrPayload dco_decode_ocr_payload(dynamic raw);
@@ -511,14 +469,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Event sse_decode_event(SseDeserializer deserializer);
 
   @protected
-  ExternalImportBatchSummary sse_decode_external_import_batch_summary(
-      SseDeserializer deserializer);
-
-  @protected
-  ExternalImportScanSummary sse_decode_external_import_scan_summary(
-      SseDeserializer deserializer);
-
-  @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
@@ -556,11 +506,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Event> sse_decode_list_event(SseDeserializer deserializer);
 
   @protected
-  List<ExternalImportBatchSummary>
-      sse_decode_list_external_import_batch_summary(
-          SseDeserializer deserializer);
-
-  @protected
   List<LlmProfile> sse_decode_list_llm_profile(SseDeserializer deserializer);
 
   @protected
@@ -573,18 +518,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Message> sse_decode_list_message(SseDeserializer deserializer);
-
-  @protected
-  List<MigrationArchiveAttachment> sse_decode_list_migration_archive_attachment(
-      SseDeserializer deserializer);
-
-  @protected
-  List<MigrationArchiveItem> sse_decode_list_migration_archive_item(
-      SseDeserializer deserializer);
-
-  @protected
-  List<MigrationArchiveRelation> sse_decode_list_migration_archive_relation(
-      SseDeserializer deserializer);
 
   @protected
   List<PlanningOutputRecord> sse_decode_list_planning_output_record(
@@ -676,26 +609,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Message sse_decode_message(SseDeserializer deserializer);
-
-  @protected
-  MigrationArchiveAttachment sse_decode_migration_archive_attachment(
-      SseDeserializer deserializer);
-
-  @protected
-  MigrationArchiveExportEstimate sse_decode_migration_archive_export_estimate(
-      SseDeserializer deserializer);
-
-  @protected
-  MigrationArchiveItem sse_decode_migration_archive_item(
-      SseDeserializer deserializer);
-
-  @protected
-  MigrationArchiveManifest sse_decode_migration_archive_manifest(
-      SseDeserializer deserializer);
-
-  @protected
-  MigrationArchiveRelation sse_decode_migration_archive_relation(
-      SseDeserializer deserializer);
 
   @protected
   OcrPayload sse_decode_ocr_payload(SseDeserializer deserializer);
@@ -933,14 +846,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_event(Event self, SseSerializer serializer);
 
   @protected
-  void sse_encode_external_import_batch_summary(
-      ExternalImportBatchSummary self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_external_import_scan_summary(
-      ExternalImportScanSummary self, SseSerializer serializer);
-
-  @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
@@ -980,10 +885,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_event(List<Event> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_external_import_batch_summary(
-      List<ExternalImportBatchSummary> self, SseSerializer serializer);
-
-  @protected
   void sse_encode_list_llm_profile(
       List<LlmProfile> self, SseSerializer serializer);
 
@@ -997,18 +898,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_message(List<Message> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_migration_archive_attachment(
-      List<MigrationArchiveAttachment> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_migration_archive_item(
-      List<MigrationArchiveItem> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_migration_archive_relation(
-      List<MigrationArchiveRelation> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_planning_output_record(
@@ -1100,26 +989,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_message(Message self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_migration_archive_attachment(
-      MigrationArchiveAttachment self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_migration_archive_export_estimate(
-      MigrationArchiveExportEstimate self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_migration_archive_item(
-      MigrationArchiveItem self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_migration_archive_manifest(
-      MigrationArchiveManifest self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_migration_archive_relation(
-      MigrationArchiveRelation self, SseSerializer serializer);
 
   @protected
   void sse_encode_ocr_payload(OcrPayload self, SseSerializer serializer);

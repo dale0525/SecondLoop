@@ -6,7 +6,7 @@ import 'package:secondloop/app/app_shell_default_pages_web.dart'
     as web_defaults;
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
 import 'package:secondloop/features/inbox/inbox_page.dart';
 
 import '../test_backend.dart';
@@ -39,8 +39,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.byType(AgentConversationPage), findsOneWidget);
     expect(find.byType(InboxPage), findsNothing);
-    expect(find.text('Loop'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent_conversation_workspace')),
+        findsOneWidget);
   });
 }

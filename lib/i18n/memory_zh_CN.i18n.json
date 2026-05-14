@@ -163,5 +163,24 @@
     "responseStyle": "用户偏好简洁、务实的回复风格。",
     "responseFormat": "用户偏好尽量使用要点式结构。",
     "activeTaskPattern": "用户当前主要在推进这些任务："
+  },
+  "agentUi": {
+    "tabs": {
+      "preferences": "偏好",
+      "people": "联系人",
+      "projects": "项目",
+      "sources": "来源",
+      "suggestions": "建议"
+    },
+    "candidateMemory": "候选记忆",
+    "selectedPersonDetail": "选中联系人详情",
+    "selectedProjectDetail": "选中项目详情",
+    "sourceSnippets": "来源片段",
+    "groupedCandidates": "分组候选",
+    "actions": {
+      "accept": "接受",
+      "edit": "编辑",
+      "ignore": "忽略"
+    }
   }
 }

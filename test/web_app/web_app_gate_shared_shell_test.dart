@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
-import 'package:secondloop/features/settings/settings_page.dart';
+import 'package:secondloop/features/settings/agent_settings_page.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 import 'package:secondloop/web_app/web_entry_intent.dart';
 
@@ -143,7 +143,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppShell), findsOneWidget);
-    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.byType(AgentSettingsPage), findsOneWidget);
     expect(find.text('Theme'), findsNothing);
     expect(find.byKey(const ValueKey('settings_theme_palette')), findsNothing);
   });

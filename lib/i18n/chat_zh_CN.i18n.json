@@ -124,6 +124,7 @@
     }
   },
   "askAiFailedTemporary": "AI 对话失败了，请重试。",
+  "askAiRetrievalQuotaUnavailable": "AI 无法检索上下文，因为云端额度不可用。请在额度重置后重试。",
   "askAiConsent": {
     "title": "使用 AI 前确认",
     "body": "SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的应用锁密码或完整历史。",
@@ -171,6 +172,99 @@
   "semanticParseStatusTagSuggested": "建议标签：$tags",
   "semanticParseStatusTagApplied": "已添加标签：$tags",
   "askAiRecoveredDetached": "已恢复已完成的云端回答。",
+  "agentContext": {
+    "open": "打开上下文",
+    "todayAtGlance": "今日概览",
+    "longTermMemory": "长期记忆",
+    "people": "相关联系人",
+    "recentFiles": "最近文件",
+    "pendingReview": "待审核",
+    "empty": "暂无上下文。",
+    "privacyNote": "隐私说明"
+  },
+  "approvalPreview": {
+    "title": "任务变更预览",
+    "needsApproval": "需要审核",
+    "dueTime": "截止时间",
+    "before": "变更前",
+    "after": "变更后",
+    "statusUnchanged": "状态不变",
+    "reviewApprove": "审核并批准",
+    "edit": "编辑",
+    "reject": "拒绝"
+  },
+  "mediaSummary": {
+    "tabs": {
+      "summary": "摘要",
+      "transcript": "转录",
+      "fields": "字段",
+      "actions": "动作",
+      "sources": "来源"
+    },
+    "extractedFields": "提取字段",
+    "suggestedReviewItems": "建议审核项",
+    "source": "来源：$name",
+    "confidence": "置信度 $percent%"
+  },
+  "dailyBrief": {
+    "topPriorities": "优先事项",
+    "calendarWindows": "日历空档",
+    "reminders": "提醒",
+    "commitmentsOwed": "待履行承诺",
+    "pendingReviews": "待审核"
+  },
+  "agentConversation": {
+    "ready": "就绪",
+    "you": "你",
+    "now": "刚刚",
+    "thinking": "处理中…",
+    "needsYourOk": "需要确认",
+    "done": "已完成",
+    "conversationLoadFailed": "对话加载失败",
+    "thinkingBody": "正在准备可审核的变更，尚未保存任何内容。",
+    "composerHint": "提问、记录、搜索或添加文件…",
+    "attach": "添加附件",
+    "record": "录音",
+    "working": "处理中",
+    "send": "发送"
+  },
+  "calendarEmail": {
+    "calendarTitle": "日历",
+    "calendarReadSafe": "日历读取安全",
+    "inviteTitle": "日历邀请",
+    "inviteRequiresApproval": "发送邀请需要审核",
+    "attendees": "参与人：$names",
+    "icsPreview": "ICS 预览",
+    "reviewInvite": "审核邀请",
+    "emailTitle": "邮件",
+    "draftCanBeSaved": "草稿可保存",
+    "saveDraft": "保存草稿",
+    "emailNotConnected": "邮件未连接",
+    "approvalRequiredBeforeSend": "发送前需要审核"
+  },
+  "research": {
+    "budgetTitle": "高成本研究确认",
+    "requiresConfirmation": "确认成本",
+    "pages": "页面",
+    "tokens": "Token",
+    "cost": "成本",
+    "startResearch": "开始研究",
+    "reduceScope": "缩小范围",
+    "cancel": "取消",
+    "tabs": {
+      "brief": "简报",
+      "keyPoints": "要点",
+      "sources": "来源",
+      "draftNote": "草稿笔记"
+    },
+    "sections": {
+      "brief": "研究简报",
+      "keyPoints": "主要要点",
+      "sources": "引用来源",
+      "draftNote": "可复用笔记"
+    },
+    "fetched": "抓取时间 $time"
+  },
   "tagFilter": {
     "tooltip": "标签筛选",
     "clearFilter": "清空标签筛选",

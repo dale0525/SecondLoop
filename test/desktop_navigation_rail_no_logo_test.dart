@@ -11,7 +11,7 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Desktop NavigationRail has no loop logo', (tester) async {
+  testWidgets('Desktop agent sidebar has no legacy loop logo', (tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
@@ -34,7 +34,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_shell_sidebar')), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
     expect(find.byIcon(Icons.loop), findsNothing);
   });
 }

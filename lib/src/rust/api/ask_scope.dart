@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_scoped_empty_answer`, `build_scoped_prompt`, `collect_scoped_contexts`, `contains_ascii_scope_phrase`, `contains_non_ascii_scope_phrase`, `emit_ask_ai_meta_if_any`, `emit_scoped_empty_answer`, `finish_ask_ai_stream`, `has_non_ascii_scope_prefix_cue`, `has_non_ascii_scope_suffix_cue`, `is_non_ascii_scope_linker`, `is_scope_separator`, `key_from_bytes`, `list_all_message_ids`, `list_conversation_message_ids`, `list_message_ids_by_tag_scope`, `normalize_scope_match_text`, `normalize_tag_ids`, `question_mentions_tag`, `resolve_scoped_contexts_snapshot`, `resolve_scoped_include_tag_ids`, `stream_scoped_ask_with_provider`, `system_tag_scope_aliases`, `two_char_non_ascii_scope_match_has_context`
+// These functions are ignored because they are not marked as `pub`: `build_scoped_empty_answer`, `build_scoped_prompt`, `collect_scoped_contexts`, `contains_ascii_scope_phrase`, `contains_non_ascii_scope_phrase`, `emit_scoped_empty_answer`, `finish_ask_ai_stream`, `has_non_ascii_scope_prefix_cue`, `has_non_ascii_scope_suffix_cue`, `is_non_ascii_scope_linker`, `is_scope_separator`, `key_from_bytes`, `list_all_message_ids`, `list_conversation_message_ids`, `list_message_ids_by_tag_scope`, `normalize_scope_match_text`, `normalize_tag_ids`, `question_mentions_tag`, `resolve_scoped_contexts_snapshot`, `resolve_scoped_include_tag_ids`, `stream_scoped_ask_with_provider`, `system_tag_scope_aliases`, `two_char_non_ascii_scope_match_has_context`
 // These types are ignored because they are not used by any `pub` functions: `ScopedFocus`, `TimeScope`
 
 Stream<String> ragAskAiStreamScoped(

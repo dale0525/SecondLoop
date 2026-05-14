@@ -74,12 +74,6 @@ class TestAppBackend extends AppBackend {
       List<Message>.from(_messagesByConversation[conversationId] ?? const []);
 
   @override
-  Future<String> readExternalImportBatchReport(
-      {required String batchId}) async {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<Message?> getMessageById(Uint8List key, String messageId) async {
     for (final list in _messagesByConversation.values) {
       for (final msg in list) {
@@ -308,21 +302,4 @@ class TestAppBackend extends AppBackend {
     required String remoteRoot,
   }) async =>
       0;
-
-  @override
-  Future<String> estimateExternalImportPhaseB(
-          {required String batchId}) async =>
-      '{}';
-
-  @override
-  Future<String> readExternalImportPhaseBState(
-          {required String batchId}) async =>
-      '{}';
-
-  @override
-  Stream<String> runExternalImportPhaseBProgress(
-    Uint8List key, {
-    required String batchId,
-  }) =>
-      const Stream<String>.empty();
 }

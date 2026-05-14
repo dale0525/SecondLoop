@@ -8,7 +8,7 @@ import '../frb_generated.dart';
 import '../semantic_parse.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `check_todo_access`, `collect_provider_text`, `default_embedding_model_name_for_platform`, `emit_ask_ai_meta_if_any`, `ensure_todo_access`, `finish_ask_ai_stream`, `is_todo_access_error`, `key_from_bytes`, `list_visible_due_todo_followup_generation_jobs`, `map_attachment_download_error`, `normalize_embedding_model_name`, `sync_key_from_bytes`
+// These functions are ignored because they are not marked as `pub`: `check_todo_access`, `collect_provider_text`, `default_embedding_model_name_for_platform`, `ensure_todo_access`, `finish_ask_ai_stream`, `is_todo_access_error`, `key_from_bytes`, `list_visible_due_todo_followup_generation_jobs`, `map_attachment_download_error`, `normalize_embedding_model_name`, `sync_key_from_bytes`
 
 Future<bool> authIsInitialized({required String appDir}) =>
     RustLib.instance.api.crateApiCoreAuthIsInitialized(appDir: appDir);

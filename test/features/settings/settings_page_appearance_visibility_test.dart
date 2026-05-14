@@ -9,10 +9,8 @@ void main() {
         const AppPlatformCapabilities(
           supportsDesktopHotkey: false,
           supportsBiometricUnlock: false,
-          supportsMigrationArchive: false,
           supportsAudioRecording: false,
           supportsDesktopDrop: false,
-          supportsExternalImport: false,
           supportsDesktopBootSettings: false,
           supportsCameraCapture: false,
           usesCloudSessionModel: false,

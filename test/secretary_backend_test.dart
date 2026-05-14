@@ -18,7 +18,6 @@ void main() {
 
     final backend = NativeAppBackend(
       appDirProvider: () async => appDir,
-      recoverInterruptedExternalImportBatchesOnInit: false,
       dbCreateSecretaryMemoryProposal: ({
         required appDir,
         required key,

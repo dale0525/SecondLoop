@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/settings/settings_page.dart';
+import 'package:secondloop/features/settings/agent_settings_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -28,7 +28,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.byType(AgentSettingsPage), findsOneWidget);
   });
 
   testWidgets('AppShell can open on Settings initially on narrow layouts',
@@ -52,6 +52,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.byType(AgentSettingsPage), findsOneWidget);
   });
 }

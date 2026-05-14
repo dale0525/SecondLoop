@@ -90,6 +90,8 @@ fn knowledge_page_manual_body_aad_for_sync(page_id: &str) -> Vec<u8> {
     format!("knowledge_page.manual_body:{page_id}").into_bytes()
 }
 
+type ExistingKnowledgePageSyncRow = (i64, i64, Option<Vec<u8>>, Option<Vec<u8>>, Option<Vec<u8>>);
+
 fn encrypt_sync_string(key: &[u8; 32], value: &str, aad: Vec<u8>) -> Result<Vec<u8>> {
     encrypt_bytes(key, value.as_bytes(), aad.as_ref())
 }
@@ -214,7 +216,7 @@ fn apply_knowledge_page_upsert(
     let op = "knowledge.page.upsert.v1";
     let page_id = sync_payload_str(payload, op, "page_id")?;
     let updated_at_ms = sync_payload_i64(payload, op, "updated_at_ms")?;
-    let existing: Option<(i64, i64, Option<Vec<u8>>, Option<Vec<u8>>, Option<Vec<u8>>)> = conn
+    let existing: Option<ExistingKnowledgePageSyncRow> = conn
         .query_row(
             r#"
 SELECT updated_at_ms, human_corrected, manual_title, manual_summary, manual_body

@@ -38,15 +38,11 @@ include!("parts/20_message_tag_autofill.rs");
 include!("parts/21_attachment_chunk_index.rs");
 include!("parts/22_detached_ask_completion.rs");
 include!("parts/23_external_readonly_db.rs");
-include!("parts/24_external_readonly_import_parser.rs");
-include!("parts/24_external_readonly_import.rs");
-include!("parts/25_external_readonly_search.rs");
-include!("parts/26_external_readonly_phase_b.rs");
 include!("parts/28_migration_archive.rs");
 include!("parts/29_migration_archive_runtime.rs");
-include!("parts/29b_migration_archive_import_runtime.rs");
 include!("parts/29c_migration_archive_file_dirs.rs");
 include!("parts/29d_migration_archive_snapshot_stream.rs");
+include!("parts/29e_vault_rollback_active_marker.rs");
 include!("parts/30_todo_followup_suggestions.rs");
 include!("parts/31_todo_followup_generation_jobs.rs");
 include!("parts/32_secretary_records.rs");
@@ -86,19 +82,7 @@ mod todo_status_auto_schedule_tests;
 mod detached_ask_completion_tests;
 
 #[cfg(test)]
-mod external_import_tests;
-
-#[cfg(test)]
-mod external_import_phase_b_tests;
-
-#[cfg(test)]
 mod embedding_artifact_tests;
-
-#[cfg(test)]
-mod migration_archive_tests;
-
-#[cfg(test)]
-mod migration_archive_regression_tests;
 
 #[cfg(test)]
 mod checklist_schema_tests;

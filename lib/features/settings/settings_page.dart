@@ -39,8 +39,6 @@ import '../actions/settings/actions_settings_store.dart';
 import 'cloud_runtime_mode_page.dart';
 import 'ai_settings_page.dart';
 import 'sync_settings_page.dart';
-import 'external_import_page.dart';
-import 'migration_archive_page.dart';
 import 'diagnostics_page.dart';
 import 'about_page.dart';
 import 'oplog_maintenance_scope.dart';

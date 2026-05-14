@@ -9,6 +9,8 @@ use serde_json::Value;
 use super::todo_followup::{parse_todo_followup_prompt, TodoFollowupGenerationMode};
 use super::ChatDelta;
 
+const REASONING_DELTA_ROLE_PREFIX: &str = "secondloop_reasoning_delta:";
+
 fn extract_text_from_json_value(value: &Value) -> String {
     match value {
         Value::String(text) => text.clone(),
@@ -31,6 +33,39 @@ fn extract_text_from_json_value(value: &Value) -> String {
         }
         _ => String::new(),
     }
+}
+
+fn reasoning_role(reasoning_delta: String) -> Option<String> {
+    if reasoning_delta.trim().is_empty() {
+        None
+    } else {
+        Some(format!("{REASONING_DELTA_ROLE_PREFIX}{reasoning_delta}"))
+    }
+}
+
+fn extract_reasoning_delta(value: &Value) -> String {
+    for path in [
+        "/choices/0/delta/reasoning_content",
+        "/choices/0/message/reasoning_content",
+        "/choices/0/delta/reasoning",
+        "/choices/0/message/reasoning",
+        "/reasoning",
+    ] {
+        if let Some(reasoning) = value.pointer(path) {
+            let out = extract_text_from_json_value(reasoning);
+            if !out.is_empty() {
+                return out;
+            }
+        }
+    }
+    String::new()
+}
+
+fn is_reasoning_delta_event(value: &Value, event_type: Option<&str>) -> bool {
+    let event_name = event_type
+        .or_else(|| value.get("type").and_then(Value::as_str))
+        .unwrap_or_default();
+    matches!(event_name, "response.reasoning_text.delta")
 }
 
 #[derive(Debug)]
@@ -266,21 +301,21 @@ pub fn read_chat_completions_sse(
         String::new()
     }
 
-    fn parse_sse_payload(data: &str, event_type: Option<&str>) -> Option<ParsedSseEvent> {
+    fn parse_sse_payload(data: &str, event_type: Option<&str>) -> Vec<ParsedSseEvent> {
         if data.trim().is_empty() {
-            return None;
+            return Vec::new();
         }
         if data.trim() == "[DONE]" {
-            return Some(ParsedSseEvent {
+            return vec![ParsedSseEvent {
                 role: None,
                 text_delta: String::new(),
                 done: true,
-            });
+            }];
         }
 
         let parsed_value: Value = match serde_json::from_str(data) {
             Ok(value) => value,
-            Err(_) => return None,
+            Err(_) => return Vec::new(),
         };
 
         let explicit_done = event_type == Some("done")
@@ -289,11 +324,60 @@ pub fn read_chat_completions_sse(
                 .and_then(Value::as_str)
                 .is_some_and(|t| t == "response.completed" || t == "done");
 
-        Some(ParsedSseEvent {
-            role: extract_role(&parsed_value),
-            text_delta: extract_delta_text(&parsed_value),
-            done: explicit_done,
-        })
+        let role = extract_role(&parsed_value);
+        let is_reasoning_event = is_reasoning_delta_event(&parsed_value, event_type);
+        let reasoning_delta = if is_reasoning_event {
+            parsed_value
+                .pointer("/delta")
+                .map(extract_text_from_json_value)
+                .unwrap_or_default()
+        } else {
+            extract_reasoning_delta(&parsed_value)
+        };
+        let text_delta = if is_reasoning_event {
+            String::new()
+        } else {
+            extract_delta_text(&parsed_value)
+        };
+        if reasoning_delta.trim().is_empty() {
+            return vec![ParsedSseEvent {
+                role,
+                text_delta,
+                done: explicit_done,
+            }];
+        }
+
+        let mut events = Vec::new();
+        if let Some(role) = role {
+            events.push(ParsedSseEvent {
+                role: Some(role),
+                text_delta: String::new(),
+                done: false,
+            });
+        }
+        if let Some(role) = reasoning_role(reasoning_delta) {
+            events.push(ParsedSseEvent {
+                role: Some(role),
+                text_delta: String::new(),
+                done: false,
+            });
+        }
+        if !text_delta.is_empty() {
+            events.push(ParsedSseEvent {
+                role: None,
+                text_delta,
+                done: false,
+            });
+        }
+        if explicit_done {
+            events.push(ParsedSseEvent {
+                role: None,
+                text_delta: String::new(),
+                done: true,
+            });
+        }
+
+        events
     }
 
     fn flush_sse_event(
@@ -307,13 +391,11 @@ pub fn read_chat_completions_sse(
         }
 
         let payload = data_lines.join("\n");
-        let done = if let Some(parsed) = parse_sse_payload(&payload, event_type.as_deref()) {
-            let done = parsed.done;
+        let mut done = false;
+        for parsed in parse_sse_payload(&payload, event_type.as_deref()) {
+            done = done || parsed.done;
             emit_parsed_event(parsed, on_event)?;
-            done
-        } else {
-            false
-        };
+        }
 
         data_lines.clear();
         *event_type = None;
@@ -366,6 +448,14 @@ pub fn read_chat_completions_json(
     mut on_event: impl FnMut(ChatDelta) -> Result<()>,
 ) -> Result<()> {
     let root: Value = serde_json::from_reader(reader)?;
+
+    if let Some(role) = reasoning_role(extract_reasoning_delta(&root)) {
+        on_event(ChatDelta {
+            role: Some(role),
+            text_delta: String::new(),
+            done: false,
+        })?;
+    }
 
     let role = root
         .pointer("/choices/0/message/role")

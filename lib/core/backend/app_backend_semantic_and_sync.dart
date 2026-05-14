@@ -598,39 +598,6 @@ mixin _AppBackendSemanticAndSyncMixin {
     throw UnimplementedError('cloudMediaBackupSummary');
   }
 
-  Future<MigrationArchiveExportEstimate> estimateMigrationArchiveExport(
-    Uint8List key,
-  ) {
-    throw UnimplementedError('estimateMigrationArchiveExport');
-  }
-
-  Future<MigrationArchiveManifest> exportMigrationArchive(
-    Uint8List key, {
-    required String outputPath,
-  }) {
-    throw UnimplementedError('exportMigrationArchive');
-  }
-
-  Stream<String> runMigrationArchiveExportProgress(
-    Uint8List key, {
-    required String outputPath,
-  }) {
-    throw UnimplementedError('runMigrationArchiveExportProgress');
-  }
-
-  Future<MigrationArchiveManifest> inspectMigrationArchive({
-    required String archivePath,
-  }) {
-    throw UnimplementedError('inspectMigrationArchive');
-  }
-
-  Future<MigrationArchiveManifest> importMigrationArchive(
-    Uint8List key, {
-    required String archivePath,
-  }) {
-    throw UnimplementedError('importMigrationArchive');
-  }
-
   Future<String?> createVaultRollbackSnapshot(Uint8List key) async {
     throw UnimplementedError('createVaultRollbackSnapshot');
   }
@@ -644,66 +611,5 @@ mixin _AppBackendSemanticAndSyncMixin {
 
   Future<void> deleteVaultRollbackSnapshot({required String snapshotPath}) {
     throw UnimplementedError('deleteVaultRollbackSnapshot');
-  }
-
-  Stream<String> runMigrationArchiveImportProgress(
-    Uint8List key, {
-    required String archivePath,
-  }) {
-    throw UnimplementedError('runMigrationArchiveImportProgress');
-  }
-
-  Future<ExternalImportScanSummary> scanExternalImportSource({
-    required String sourcePath,
-  }) {
-    throw UnimplementedError('scanExternalImportSource');
-  }
-
-  Future<List<ExternalImportBatchSummary>> listExternalImportBatches() {
-    throw UnimplementedError('listExternalImportBatches');
-  }
-
-  Future<String> readExternalImportBatchReport({
-    required String batchId,
-  }) {
-    throw UnimplementedError('readExternalImportBatchReport');
-  }
-
-  Stream<String> runExternalImportProgress(
-    Uint8List key, {
-    required String sourcePath,
-  }) {
-    throw UnimplementedError('runExternalImportProgress');
-  }
-
-  Future<void> deleteExternalImportBatch({
-    required String batchId,
-  }) {
-    throw UnimplementedError('deleteExternalImportBatch');
-  }
-
-  Future<void> requestExternalImportCancel({
-    required String batchId,
-  }) {
-    throw UnimplementedError('requestExternalImportCancel');
-  }
-
-  Future<String> estimateExternalImportPhaseB({
-    required String batchId,
-  }) {
-    throw UnimplementedError('estimateExternalImportPhaseB');
-  }
-
-  Future<String> readExternalImportPhaseBState({
-    required String batchId,
-  }) {
-    throw UnimplementedError('readExternalImportPhaseBState');
-  }
-
-  Stream<String> runExternalImportPhaseBProgress(
-    Uint8List key, {
-    required String batchId,
-  }) {
-    throw UnimplementedError('runExternalImportPhaseBProgress');
   }
 }

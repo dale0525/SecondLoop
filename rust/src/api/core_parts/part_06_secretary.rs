@@ -191,6 +191,7 @@ pub fn db_list_planning_outputs(
 }
 
 #[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
 pub fn db_create_secretary_run(
     app_dir: String,
     key: Vec<u8>,
@@ -220,6 +221,7 @@ pub fn db_create_secretary_run(
 }
 
 #[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
 pub fn db_create_secretary_tool_call(
     app_dir: String,
     key: Vec<u8>,

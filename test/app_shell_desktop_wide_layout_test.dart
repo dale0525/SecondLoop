@@ -7,8 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/ui/sl_surface.dart';
-
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
@@ -39,18 +37,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final railRect = tester.getRect(find.byType(NavigationRail));
-    final pageSurfaceConstrainedRect = tester.getRect(
-      find.descendant(
-        of: find.byType(SlPageSurface),
-        matching: find.byWidgetPredicate(
-          (widget) =>
-              widget is ConstrainedBox && widget.constraints.maxWidth == 1120,
-        ),
-      ),
-    );
-    final visualGap = pageSurfaceConstrainedRect.left - railRect.right;
+    final sidebarRect =
+        tester.getRect(find.byKey(const ValueKey('app_shell_sidebar')));
+    final contentRect = tester
+        .getRect(find.byKey(const ValueKey('agent_conversation_workspace')));
+    final visualGap = contentRect.left - sidebarRect.right;
 
-    expect(visualGap, lessThan(220));
+    expect(find.byKey(const ValueKey('agent_conversation_workspace')),
+        findsOneWidget);
+    expect(visualGap, lessThan(8));
   });
 }

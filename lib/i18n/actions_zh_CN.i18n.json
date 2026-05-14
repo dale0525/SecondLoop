@@ -21,6 +21,29 @@
       "start": "开始",
       "done": "完成",
       "dismiss": "忽略"
+    },
+    "agentUi": {
+      "title": "待你确认队列",
+      "detailTitle": "任务变更详情",
+      "filters": {
+        "all": "全部",
+        "highRisk": "高风险",
+        "drafts": "草稿"
+      },
+      "risk": {
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+      },
+      "status": {
+        "needsApproval": "需要批准",
+        "draft": "草稿"
+      },
+      "actions": {
+        "approve": "批准",
+        "edit": "编辑",
+        "reject": "拒绝"
+      }
     }
   },
   "todoStatus": {

@@ -163,5 +163,24 @@
     "responseStyle": "User prefers concise, practical responses.",
     "responseFormat": "User prefers bullet-style structure when possible.",
     "activeTaskPattern": "User is actively working across these task threads:"
+  },
+  "agentUi": {
+    "tabs": {
+      "preferences": "Preferences",
+      "people": "People",
+      "projects": "Projects",
+      "sources": "Sources",
+      "suggestions": "Suggestions"
+    },
+    "candidateMemory": "Candidate memory",
+    "selectedPersonDetail": "Selected person detail",
+    "selectedProjectDetail": "Selected project detail",
+    "sourceSnippets": "Source snippets",
+    "groupedCandidates": "Grouped candidates",
+    "actions": {
+      "accept": "Accept",
+      "edit": "Edit",
+      "ignore": "Ignore"
+    }
   }
 }
