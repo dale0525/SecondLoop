@@ -146,26 +146,21 @@ fn reset_vault_data_deletes_external_readonly_import_data() {
     let _key = auth::init_master_password(Path::new(&app_dir), "pw", KdfParams::for_test())
         .expect("init master password");
     let conn = db::open(&app_dir).expect("open db");
-    let external_conn = db::open_external_readonly_db(&app_dir).expect("open external db");
 
+    let external_db_path = app_dir.join("external_readonly/external_readonly.sqlite3");
+    std::fs::create_dir_all(external_db_path.parent().expect("external db parent"))
+        .expect("create external db parent");
+    let external_conn = rusqlite::Connection::open(&external_db_path).expect("open external db");
     external_conn
-        .execute(
-            r#"INSERT INTO external_import_batches(
-              batch_id, source_kind, source_label, status,
-              created_at_ms, updated_at_ms, stats_json
-            ) VALUES ('batch-1', 'obsidian', 'External', 'completed', 1, 1, '{}')"#,
-            [],
+        .execute_batch(
+            r#"
+CREATE TABLE external_import_batches(batch_id TEXT PRIMARY KEY);
+CREATE TABLE external_documents(doc_id TEXT PRIMARY KEY, batch_id TEXT NOT NULL);
+INSERT INTO external_import_batches(batch_id) VALUES ('batch-1');
+INSERT INTO external_documents(doc_id, batch_id) VALUES ('doc-1', 'batch-1');
+"#,
         )
-        .expect("insert external batch");
-    external_conn
-        .execute(
-            r#"INSERT INTO external_documents(
-              doc_id, batch_id, title, body_markdown, tags_json,
-              created_at_ms, updated_at_ms, checksum_sha256
-            ) VALUES ('doc-1', 'batch-1', x'01', x'02', x'03', 1, 1, 'checksum')"#,
-            [],
-        )
-        .expect("insert external document");
+        .expect("seed external db");
     std::fs::create_dir_all(app_dir.join("external_readonly/storage/attachments"))
         .expect("create external attachment dir");
     std::fs::write(

@@ -124,6 +124,7 @@
     }
   },
   "askAiFailedTemporary": "Ask AI failed. Please try again.",
+  "askAiRetrievalQuotaUnavailable": "AI could not retrieve context because cloud quota is unavailable. Please retry after quota is reset.",
   "askAiConsent": {
     "title": "Before we use AI",
     "body": "SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your app lock password or your full history.",
@@ -178,6 +179,7 @@
     "people": "People",
     "recentFiles": "Recent files",
     "pendingReview": "Pending review",
+    "empty": "No context yet.",
     "privacyNote": "Privacy note"
   },
   "approvalPreview": {
@@ -210,6 +212,21 @@
     "reminders": "Reminders",
     "commitmentsOwed": "Commitments owed",
     "pendingReviews": "Pending reviews"
+  },
+  "agentConversation": {
+    "ready": "Ready",
+    "you": "You",
+    "now": "Now",
+    "thinking": "Thinking...",
+    "needsYourOk": "Needs your OK",
+    "done": "Done",
+    "conversationLoadFailed": "Conversation could not load",
+    "thinkingBody": "Preparing a reviewable change. Nothing has been saved yet.",
+    "composerHint": "Ask, capture, search, or attach a file...",
+    "attach": "Attach",
+    "record": "Record",
+    "working": "Working",
+    "send": "Send"
   },
   "calendarEmail": {
     "calendarTitle": "Calendar",

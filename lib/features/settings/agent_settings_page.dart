@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
@@ -222,8 +223,10 @@ final class _SettingsDeepLink extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: OutlinedButton.icon(
         onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: pageBuilder),
+          pushPageWithInheritedScopes(
+            Navigator.of(context),
+            context,
+            pageBuilder(context),
           );
         },
         icon: const Icon(Icons.open_in_new_rounded, size: 18),

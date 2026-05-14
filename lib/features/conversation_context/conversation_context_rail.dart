@@ -27,27 +27,32 @@ final class ConversationContextRail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ContextSection(
-            title: context.t.chat.agentContext.todayAtGlance,
-            items: snapshot.todayAtAGlance,
-          ),
-          _ContextSection(
-            title: context.t.chat.agentContext.longTermMemory,
-            items: snapshot.longTermMemory,
-          ),
-          _ContextSection(
-            title: context.t.chat.agentContext.people,
-            items: snapshot.people,
-          ),
-          _ContextSection(
-            title: context.t.chat.agentContext.recentFiles,
-            items: snapshot.recentFiles,
-          ),
-          _ContextSection(
-            title: context.t.chat.agentContext.pendingReview,
-            items: snapshot.pendingReview,
-          ),
-          _PrivacyNote(text: snapshot.privacyNote),
+          if (snapshot.isEmpty)
+            _ContextEmptyState(text: context.t.chat.agentContext.empty)
+          else ...[
+            _ContextSection(
+              title: context.t.chat.agentContext.todayAtGlance,
+              items: snapshot.todayAtAGlance,
+            ),
+            _ContextSection(
+              title: context.t.chat.agentContext.longTermMemory,
+              items: snapshot.longTermMemory,
+            ),
+            _ContextSection(
+              title: context.t.chat.agentContext.people,
+              items: snapshot.people,
+            ),
+            _ContextSection(
+              title: context.t.chat.agentContext.recentFiles,
+              items: snapshot.recentFiles,
+            ),
+            _ContextSection(
+              title: context.t.chat.agentContext.pendingReview,
+              items: snapshot.pendingReview,
+            ),
+            if (snapshot.privacyNote.trim().isNotEmpty)
+              _PrivacyNote(text: snapshot.privacyNote),
+          ],
         ],
       ),
     );
@@ -95,6 +100,29 @@ final class ConversationContextSheetButton extends StatelessWidget {
         );
       },
       icon: const Icon(Icons.view_sidebar_outlined),
+    );
+  }
+}
+
+final class _ContextEmptyState extends StatelessWidget {
+  const _ContextEmptyState({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: AgentDesignTokens.gapLg,
+      ),
+      child: Text(
+        text,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }

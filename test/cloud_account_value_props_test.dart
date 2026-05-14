@@ -5,6 +5,7 @@ import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
+import 'package:secondloop/features/agent_ui/agent_ui_acceptance_driver.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
 
 import 'test_i18n.dart';
@@ -51,6 +52,41 @@ void main() {
     expect(find.byKey(const ValueKey('cloud_subscription_value_props')),
         findsOneWidget);
   });
+
+  testWidgets('Cloud account page can redact signed-in email for screenshots',
+      (tester) async {
+    final auth = _FakeCloudAuthController(email: 'real-managed@example.com');
+    final acceptance = AgentUiAcceptanceController(
+      redactedCloudAccountEmail: 'managed-pro-account',
+    );
+    addTearDown(acceptance.dispose);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AgentUiAcceptanceScope(
+            controller: acceptance,
+            child: SubscriptionScope(
+              controller: _FakeSubscriptionStatusController(
+                  SubscriptionStatus.entitled),
+              child: CloudAuthScope(
+                controller: auth,
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.test',
+                  modelName: 'cloud',
+                ),
+                child: const CloudAccountPage(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('managed-pro-account'), findsOneWidget);
+    expect(find.textContaining('real-managed@example.com'), findsNothing);
+  });
 }
 
 final class _FakeSubscriptionStatusController extends ChangeNotifier
@@ -64,11 +100,13 @@ final class _FakeSubscriptionStatusController extends ChangeNotifier
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {
+  _FakeCloudAuthController({this.email = 'test@example.com'});
+
   @override
   String? get uid => 'uid_1';
 
   @override
-  String? get email => 'test@example.com';
+  final String email;
 
   @override
   bool? get emailVerified => true;

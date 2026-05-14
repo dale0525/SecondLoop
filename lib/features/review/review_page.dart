@@ -19,7 +19,7 @@ final class ReviewPage extends StatefulWidget {
 
 final class _ReviewPageState extends State<ReviewPage> {
   late final List<ReviewItem> _items =
-      List<ReviewItem>.of(widget.items ?? demoReviewItems());
+      List<ReviewItem>.of(widget.items ?? const <ReviewItem>[]);
   late ReviewItem? _selectedItem = _items.isEmpty ? null : _items.first;
 
   void _selectDesktop(ReviewItem item) {

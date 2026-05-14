@@ -214,7 +214,9 @@ final class _CalendarInviteSection extends StatelessWidget {
                 const Icon(Icons.event_note_outlined, size: 18),
                 const SizedBox(width: AgentDesignTokens.gapSm),
                 Expanded(
-                  child: Text('${t.icsPreview}: ${invite.icsSummaryLine}'),
+                  child: Text(
+                    [t.icsPreview, invite.icsSummaryLine].join(': '),
+                  ),
                 ),
               ],
             ),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/backend/app_backend.dart';
 import '../core/session/session_scope.dart';
-import '../features/chat/chat_page.dart';
+import '../features/agent_ui/agent_conversation_page.dart';
 import '../features/memory/memory_page.dart';
 import '../features/review/review_page.dart';
 import '../features/settings/agent_settings_page.dart';
@@ -92,7 +92,7 @@ final class _DefaultChatTabState extends State<_DefaultChatTab> {
             ),
           );
         }
-        return ChatPage(
+        return AgentConversationPage(
           conversation: conversation,
           isTabActive: widget.isActive,
         );

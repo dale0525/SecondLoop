@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
-import 'package:secondloop/ui/sl_surface.dart';
+import 'package:secondloop/ui/sl_tokens.dart';
 
 import 'test_i18n.dart';
 
@@ -38,7 +39,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_shell_sidebar')), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('Conversation'), findsOneWidget);
     expect(find.text('Memory'), findsOneWidget);
     expect(find.text('Review'), findsOneWidget);
@@ -114,6 +116,52 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('SecondLoop'), findsOneWidget);
-    expect(tester.getSize(find.byType(SlPageSurface)).width, greaterThan(1600));
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('app_shell_desktop_workspace')))
+          .width,
+      greaterThan(1600),
+    );
+  });
+
+  testWidgets('AppShell keeps agent workspace on the light agent palette',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.dark,
+          home: AppShell(
+            conversationTabBuilder: (_, __) => Builder(
+              builder: (context) {
+                final tokens = SlTokens.of(context);
+                return ColoredBox(
+                  key: const ValueKey('agent_shell_palette_probe'),
+                  color: tokens.surface,
+                  child: Text(Theme.of(context).brightness.name),
+                );
+              },
+            ),
+            memoryTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_memory_tab')),
+            reviewTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_review_tab')),
+            settingsTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_settings_tab')),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('light'), findsOneWidget);
+    final probe = tester.widget<ColoredBox>(find.byKey(const ValueKey(
+      'agent_shell_palette_probe',
+    )));
+    expect(probe.color, const Color(0xFFFFFFFF));
   });
 }

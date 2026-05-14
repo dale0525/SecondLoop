@@ -13,7 +13,8 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Task hub compact card stays preview-free across tab switches',
+  testWidgets(
+      'default conversation stays on agent workspace across tab switches',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.binding.setSurfaceSize(const Size(900, 720));
@@ -65,18 +66,16 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
-    expect(find.byKey(const ValueKey('chat_open_task_center')), findsOneWidget);
-
-    final rail = find.byType(NavigationRail);
-    await tester.tap(
-      find.descendant(of: rail, matching: find.byIcon(Icons.settings_outlined)),
+    expect(find.byKey(const ValueKey('chat_open_task_center')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent_conversation_workspace')),
+      findsOneWidget,
     );
+
+    await tester.tap(find.byKey(const ValueKey('app_shell_nav_settings')));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.descendant(
-          of: rail, matching: find.byIcon(Icons.chat_bubble_outline)),
-    );
+    await tester.tap(find.byKey(const ValueKey('app_shell_nav_conversation')));
     await tester.pumpAndSettle();
 
     expect(
@@ -84,7 +83,11 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
-    expect(find.byKey(const ValueKey('chat_open_task_center')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_open_task_center')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent_conversation_workspace')),
+      findsOneWidget,
+    );
   });
 }
 

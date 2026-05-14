@@ -47,15 +47,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final cloudAccountTile = find.text(t.settings.cloudAccount.title);
-    await tester.dragUntilVisible(
-      cloudAccountTile,
-      find.byType(ListView).first,
-      const Offset(0, -240),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(cloudAccountTile);
+    final cloudAccountLink = find.text(t.settings.agentUi.links.cloudAccount);
+    await tester.ensureVisible(cloudAccountLink);
+    await tester.tap(cloudAccountLink);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('cloud_manage_subscription')));

@@ -29,10 +29,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-          find.byKey(const ValueKey('settings_external_import')), findsNothing);
-      expect(find.byKey(const ValueKey('settings_migration_archive')),
-          findsNothing);
       expect(find.byKey(const ValueKey('settings_start_with_system_switch')),
           findsNothing);
       expect(find.byKey(const ValueKey('settings_quick_capture_hotkey')),
@@ -62,10 +58,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('settings_external_import')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('settings_migration_archive')),
-          findsOneWidget);
       expect(find.byKey(const ValueKey('settings_start_with_system_switch')),
           findsOneWidget);
     } finally {

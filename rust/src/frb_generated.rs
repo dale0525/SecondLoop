@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1768811832;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1638914144;
 
 // Section: executor
 
@@ -8307,340 +8307,6 @@ fn wire__crate__api__embedding_lifecycle__db_release_local_embedding_model_if_id
         },
     )
 }
-fn wire__crate__api__external_import__external_import_batch_report_json_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "external_import_batch_report_json",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_batch_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::external_import::external_import_batch_report_json(
-                        api_app_dir,
-                        api_batch_id,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__external_import__external_import_delete_batch_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "external_import_delete_batch",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_batch_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::external_import::external_import_delete_batch(
-                        api_app_dir,
-                        api_batch_id,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__external_import__external_import_list_batches_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "external_import_list_batches",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::external_import::external_import_list_batches(api_app_dir)
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__external_import__external_import_phase_b_estimate_json_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "external_import_phase_b_estimate_json",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_batch_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::external_import::external_import_phase_b_estimate_json(
-                        api_app_dir,
-                        api_batch_id,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__external_import__external_import_phase_b_run_progress_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "external_import_phase_b_run_progress",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_batch_id = <String>::sse_decode(&mut deserializer);
-            let api_sink =
-                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
-                    &mut deserializer,
-                );
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::external_import::external_import_phase_b_run_progress(
-                        api_app_dir,
-                        api_key,
-                        api_batch_id,
-                        api_sink,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__external_import__external_import_phase_b_state_json_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "external_import_phase_b_state_json",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_batch_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::external_import::external_import_phase_b_state_json(
-                        api_app_dir,
-                        api_batch_id,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__external_import__external_import_request_cancel_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "external_import_request_cancel",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_batch_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::external_import::external_import_request_cancel(
-                        api_app_dir,
-                        api_batch_id,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__external_import__external_import_run_progress_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "external_import_run_progress",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_source_path = <String>::sse_decode(&mut deserializer);
-            let api_sink =
-                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
-                    &mut deserializer,
-                );
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::external_import::external_import_run_progress(
-                        api_app_dir,
-                        api_key,
-                        api_source_path,
-                        api_sink,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__external_import__external_import_scan_source_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "external_import_scan_source",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_source_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::external_import::external_import_scan_source(
-                        api_app_dir,
-                        api_source_path,
-                    )
-                })())
-            }
-        },
-    )
-}
 fn wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -8863,456 +8529,6 @@ fn wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(
                         api_title,
                         api_readable_text_excerpt,
                         api_readable_text_full,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_create_rollback_snapshot_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_create_rollback_snapshot",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_create_rollback_snapshot(
-                        api_app_dir,
-                        api_key,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_export_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_export",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_output_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_export(
-                        api_app_dir,
-                        api_key,
-                        api_output_path,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_export_estimate_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_export_estimate",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_export_estimate(
-                        api_app_dir,
-                        api_key,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_export_progress_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_export_progress",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_output_path = <String>::sse_decode(&mut deserializer);
-            let api_sink =
-                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
-                    &mut deserializer,
-                );
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_export_progress(
-                        api_app_dir,
-                        api_key,
-                        api_output_path,
-                        api_sink,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_import_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_import",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_archive_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_import(
-                        api_app_dir,
-                        api_key,
-                        api_archive_path,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_import_progress_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_import_progress",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_archive_path = <String>::sse_decode(&mut deserializer);
-            let api_sink =
-                <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
-                    &mut deserializer,
-                );
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_import_progress(
-                        api_app_dir,
-                        api_key,
-                        api_archive_path,
-                        api_sink,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_inspect_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_inspect",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_archive_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_inspect(
-                        api_app_dir,
-                        api_archive_path,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_markdown_path_for_item_id_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_markdown_path_for_item_id",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_item_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    Result::<_, ()>::Ok(
-                        crate::api::migration_archive::migration_archive_markdown_path_for_item_id(
-                            api_item_id,
-                        ),
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_parse_manifest_json_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_parse_manifest_json",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_manifest_json = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_parse_manifest_json(
-                        api_manifest_json,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_remove_rollback_snapshot_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_remove_rollback_snapshot",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_snapshot_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_remove_rollback_snapshot(
-                        api_snapshot_path,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_restore_rollback_snapshot_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_restore_rollback_snapshot",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_app_dir = <String>::sse_decode(&mut deserializer);
-            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
-            let api_snapshot_path = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    crate::api::migration_archive::migration_archive_restore_rollback_snapshot(
-                        api_app_dir,
-                        api_key,
-                        api_snapshot_path,
-                    )
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__migration_archive__migration_archive_wikilink_for_item_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "migration_archive_wikilink_for_item",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_item_id = <String>::sse_decode(&mut deserializer);
-            let api_title = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse((move || {
-                    Result::<_, ()>::Ok(
-                        crate::api::migration_archive::migration_archive_wikilink_for_item(
-                            api_item_id,
-                            api_title,
-                        ),
                     )
                 })())
             }
@@ -10385,6 +9601,109 @@ let api_limit = <u32>::sse_decode(&mut deserializer);deserializer.end(); move |c
                     })())
                 } })
 }
+fn wire__crate__api__vault_rollback__vault_rollback_create_snapshot_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "vault_rollback_create_snapshot",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::vault_rollback::vault_rollback_create_snapshot(api_app_dir, api_key)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__vault_rollback__vault_rollback_remove_snapshot_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "vault_rollback_remove_snapshot",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_snapshot_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::vault_rollback::vault_rollback_remove_snapshot(api_snapshot_path)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__vault_rollback__vault_rollback_restore_snapshot_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "vault_rollback_restore_snapshot",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_snapshot_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::vault_rollback::vault_rollback_restore_snapshot(
+                        api_app_dir,
+                        api_key,
+                        api_snapshot_path,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__web_sync__sync_managed_vault_apply_web_pull_page_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -11075,58 +10394,6 @@ impl SseDecode for crate::db::Event {
     }
 }
 
-impl SseDecode for crate::db::ExternalImportBatchSummary {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_batchId = <String>::sse_decode(deserializer);
-        let mut var_sourceKind = <String>::sse_decode(deserializer);
-        let mut var_sourceLabel = <String>::sse_decode(deserializer);
-        let mut var_status = <String>::sse_decode(deserializer);
-        let mut var_notesCount = <i64>::sse_decode(deserializer);
-        let mut var_attachmentsCount = <i64>::sse_decode(deserializer);
-        let mut var_failedCount = <i64>::sse_decode(deserializer);
-        let mut var_copiedBytes = <i64>::sse_decode(deserializer);
-        let mut var_createdAtMs = <i64>::sse_decode(deserializer);
-        let mut var_updatedAtMs = <i64>::sse_decode(deserializer);
-        let mut var_completedAtMs = <Option<i64>>::sse_decode(deserializer);
-        let mut var_lastError = <Option<String>>::sse_decode(deserializer);
-        return crate::db::ExternalImportBatchSummary {
-            batch_id: var_batchId,
-            source_kind: var_sourceKind,
-            source_label: var_sourceLabel,
-            status: var_status,
-            notes_count: var_notesCount,
-            attachments_count: var_attachmentsCount,
-            failed_count: var_failedCount,
-            copied_bytes: var_copiedBytes,
-            created_at_ms: var_createdAtMs,
-            updated_at_ms: var_updatedAtMs,
-            completed_at_ms: var_completedAtMs,
-            last_error: var_lastError,
-        };
-    }
-}
-
-impl SseDecode for crate::db::ExternalImportScanSummary {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_detectedSourceKind = <String>::sse_decode(deserializer);
-        let mut var_sourceLabel = <String>::sse_decode(deserializer);
-        let mut var_notesCount = <i64>::sse_decode(deserializer);
-        let mut var_attachmentsCount = <i64>::sse_decode(deserializer);
-        let mut var_estimatedDiskUsageBytes = <i64>::sse_decode(deserializer);
-        let mut var_warnings = <Vec<String>>::sse_decode(deserializer);
-        return crate::db::ExternalImportScanSummary {
-            detected_source_kind: var_detectedSourceKind,
-            source_label: var_sourceLabel,
-            notes_count: var_notesCount,
-            attachments_count: var_attachmentsCount,
-            estimated_disk_usage_bytes: var_estimatedDiskUsageBytes,
-            warnings: var_warnings,
-        };
-    }
-}
-
 impl SseDecode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11246,20 +10513,6 @@ impl SseDecode for Vec<crate::db::Event> {
     }
 }
 
-impl SseDecode for Vec<crate::db::ExternalImportBatchSummary> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<crate::db::ExternalImportBatchSummary>::sse_decode(
-                deserializer,
-            ));
-        }
-        return ans_;
-    }
-}
-
 impl SseDecode for Vec<crate::db::LlmProfile> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11291,46 +10544,6 @@ impl SseDecode for Vec<crate::db::Message> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::db::Message>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<crate::db::MigrationArchiveAttachment> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<crate::db::MigrationArchiveAttachment>::sse_decode(
-                deserializer,
-            ));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<crate::db::MigrationArchiveItem> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<crate::db::MigrationArchiveItem>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<crate::db::MigrationArchiveRelation> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<crate::db::MigrationArchiveRelation>::sse_decode(
-                deserializer,
-            ));
         }
         return ans_;
     }
@@ -11608,108 +10821,6 @@ impl SseDecode for crate::db::Message {
             created_at_ms: var_createdAtMs,
             is_memory: var_isMemory,
             citations_json: var_citationsJson,
-        };
-    }
-}
-
-impl SseDecode for crate::db::MigrationArchiveAttachment {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_sha256 = <String>::sse_decode(deserializer);
-        let mut var_archivePath = <String>::sse_decode(deserializer);
-        let mut var_originalFilename = <String>::sse_decode(deserializer);
-        let mut var_mimeType = <Option<String>>::sse_decode(deserializer);
-        let mut var_sizeBytes = <i64>::sse_decode(deserializer);
-        let mut var_itemIds = <Vec<String>>::sse_decode(deserializer);
-        return crate::db::MigrationArchiveAttachment {
-            sha256: var_sha256,
-            archive_path: var_archivePath,
-            original_filename: var_originalFilename,
-            mime_type: var_mimeType,
-            size_bytes: var_sizeBytes,
-            item_ids: var_itemIds,
-        };
-    }
-}
-
-impl SseDecode for crate::db::MigrationArchiveExportEstimate {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_schemaVersion = <i64>::sse_decode(deserializer);
-        let mut var_archiveKind = <String>::sse_decode(deserializer);
-        let mut var_itemCount = <i64>::sse_decode(deserializer);
-        let mut var_attachmentCount = <i64>::sse_decode(deserializer);
-        let mut var_estimatedSizeBytes = <i64>::sse_decode(deserializer);
-        return crate::db::MigrationArchiveExportEstimate {
-            schema_version: var_schemaVersion,
-            archive_kind: var_archiveKind,
-            item_count: var_itemCount,
-            attachment_count: var_attachmentCount,
-            estimated_size_bytes: var_estimatedSizeBytes,
-        };
-    }
-}
-
-impl SseDecode for crate::db::MigrationArchiveItem {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <String>::sse_decode(deserializer);
-        let mut var_entityType = <String>::sse_decode(deserializer);
-        let mut var_markdownPath = <String>::sse_decode(deserializer);
-        let mut var_createdAtMs = <i64>::sse_decode(deserializer);
-        let mut var_updatedAtMs = <i64>::sse_decode(deserializer);
-        let mut var_title = <String>::sse_decode(deserializer);
-        let mut var_tags = <Vec<String>>::sse_decode(deserializer);
-        let mut var_status = <Option<String>>::sse_decode(deserializer);
-        let mut var_extraJson = <Option<String>>::sse_decode(deserializer);
-        return crate::db::MigrationArchiveItem {
-            id: var_id,
-            entity_type: var_entityType,
-            markdown_path: var_markdownPath,
-            created_at_ms: var_createdAtMs,
-            updated_at_ms: var_updatedAtMs,
-            title: var_title,
-            tags: var_tags,
-            status: var_status,
-            extra_json: var_extraJson,
-        };
-    }
-}
-
-impl SseDecode for crate::db::MigrationArchiveManifest {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_schemaVersion = <i64>::sse_decode(deserializer);
-        let mut var_archiveKind = <String>::sse_decode(deserializer);
-        let mut var_exportedAtMs = <i64>::sse_decode(deserializer);
-        let mut var_appVersion = <String>::sse_decode(deserializer);
-        let mut var_items = <Vec<crate::db::MigrationArchiveItem>>::sse_decode(deserializer);
-        let mut var_attachments =
-            <Vec<crate::db::MigrationArchiveAttachment>>::sse_decode(deserializer);
-        let mut var_relations =
-            <Vec<crate::db::MigrationArchiveRelation>>::sse_decode(deserializer);
-        return crate::db::MigrationArchiveManifest {
-            schema_version: var_schemaVersion,
-            archive_kind: var_archiveKind,
-            exported_at_ms: var_exportedAtMs,
-            app_version: var_appVersion,
-            items: var_items,
-            attachments: var_attachments,
-            relations: var_relations,
-        };
-    }
-}
-
-impl SseDecode for crate::db::MigrationArchiveRelation {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_fromId = <String>::sse_decode(deserializer);
-        let mut var_toId = <String>::sse_decode(deserializer);
-        let mut var_relationType = <String>::sse_decode(deserializer);
-        return crate::db::MigrationArchiveRelation {
-            from_id: var_fromId,
-            to_id: var_toId,
-            relation_type: var_relationType,
         };
     }
 }
@@ -12463,68 +11574,50 @@ fn pde_ffi_dispatcher_primary_impl(
 196 => wire__crate__api__desktop_media__desktop_ocr_pdf_impl(port, ptr, rust_vec_len, data_len),
 197 => wire__crate__api__detached_ask__db_apply_detached_ask_completion_once_impl(port, ptr, rust_vec_len, data_len),
 198 => wire__crate__api__embedding_lifecycle__db_release_local_embedding_model_if_idle_impl(port, ptr, rust_vec_len, data_len),
-199 => wire__crate__api__external_import__external_import_batch_report_json_impl(port, ptr, rust_vec_len, data_len),
-200 => wire__crate__api__external_import__external_import_delete_batch_impl(port, ptr, rust_vec_len, data_len),
-201 => wire__crate__api__external_import__external_import_list_batches_impl(port, ptr, rust_vec_len, data_len),
-202 => wire__crate__api__external_import__external_import_phase_b_estimate_json_impl(port, ptr, rust_vec_len, data_len),
-203 => wire__crate__api__external_import__external_import_phase_b_run_progress_impl(port, ptr, rust_vec_len, data_len),
-204 => wire__crate__api__external_import__external_import_phase_b_state_json_impl(port, ptr, rust_vec_len, data_len),
-205 => wire__crate__api__external_import__external_import_request_cancel_impl(port, ptr, rust_vec_len, data_len),
-206 => wire__crate__api__external_import__external_import_run_progress_impl(port, ptr, rust_vec_len, data_len),
-207 => wire__crate__api__external_import__external_import_scan_source_impl(port, ptr, rust_vec_len, data_len),
-208 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(port, ptr, rust_vec_len, data_len),
-209 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(port, ptr, rust_vec_len, data_len),
-210 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(port, ptr, rust_vec_len, data_len),
-211 => wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(port, ptr, rust_vec_len, data_len),
-212 => wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(port, ptr, rust_vec_len, data_len),
-213 => wire__crate__api__migration_archive__migration_archive_create_rollback_snapshot_impl(port, ptr, rust_vec_len, data_len),
-214 => wire__crate__api__migration_archive__migration_archive_export_impl(port, ptr, rust_vec_len, data_len),
-215 => wire__crate__api__migration_archive__migration_archive_export_estimate_impl(port, ptr, rust_vec_len, data_len),
-216 => wire__crate__api__migration_archive__migration_archive_export_progress_impl(port, ptr, rust_vec_len, data_len),
-217 => wire__crate__api__migration_archive__migration_archive_import_impl(port, ptr, rust_vec_len, data_len),
-218 => wire__crate__api__migration_archive__migration_archive_import_progress_impl(port, ptr, rust_vec_len, data_len),
-219 => wire__crate__api__migration_archive__migration_archive_inspect_impl(port, ptr, rust_vec_len, data_len),
-220 => wire__crate__api__migration_archive__migration_archive_markdown_path_for_item_id_impl(port, ptr, rust_vec_len, data_len),
-221 => wire__crate__api__migration_archive__migration_archive_parse_manifest_json_impl(port, ptr, rust_vec_len, data_len),
-222 => wire__crate__api__migration_archive__migration_archive_remove_rollback_snapshot_impl(port, ptr, rust_vec_len, data_len),
-223 => wire__crate__api__migration_archive__migration_archive_restore_rollback_snapshot_impl(port, ptr, rust_vec_len, data_len),
-224 => wire__crate__api__migration_archive__migration_archive_wikilink_for_item_impl(port, ptr, rust_vec_len, data_len),
-225 => wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(port, ptr, rust_vec_len, data_len),
-226 => wire__crate__api__semantic_parse_enhancement__ai_semantic_parse_message_action_enhancement_impl(port, ptr, rust_vec_len, data_len),
-227 => wire__crate__api__semantic_parse_enhancement__ai_semantic_parse_message_action_enhancement_cloud_gateway_impl(port, ptr, rust_vec_len, data_len),
-228 => wire__crate__api__semantic_parse_jobs__db_complete_semantic_parse_followup_if_current_attempt_impl(port, ptr, rust_vec_len, data_len),
-230 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-231 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(port, ptr, rust_vec_len, data_len),
-232 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(port, ptr, rust_vec_len, data_len),
-233 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(port, ptr, rust_vec_len, data_len),
-234 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(port, ptr, rust_vec_len, data_len),
-235 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
-236 => wire__crate__api__sync_progress__sync_managed_vault_push_progress_impl(port, ptr, rust_vec_len, data_len),
-237 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(port, ptr, rust_vec_len, data_len),
-238 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
-239 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
-240 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
-241 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
-242 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(port, ptr, rust_vec_len, data_len),
-243 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(port, ptr, rust_vec_len, data_len),
-244 => wire__crate__api__tags__db_list_message_suggested_tags_impl(port, ptr, rust_vec_len, data_len),
-245 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
-246 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
-247 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
-248 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
-249 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
-250 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
-251 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
-252 => wire__crate__api__todo_followup_generation__db_list_due_auto_todo_followup_generation_jobs_impl(port, ptr, rust_vec_len, data_len),
-253 => wire__crate__api__web_sync__sync_managed_vault_apply_web_pull_page_impl(port, ptr, rust_vec_len, data_len),
-254 => wire__crate__api__web_sync__sync_managed_vault_apply_web_push_response_impl(port, ptr, rust_vec_len, data_len),
-255 => wire__crate__api__web_sync__sync_managed_vault_complete_web_push_media_batch_impl(port, ptr, rust_vec_len, data_len),
-256 => wire__crate__api__web_sync__sync_managed_vault_finalize_web_pull_impl(port, ptr, rust_vec_len, data_len),
-257 => wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_batch_impl(port, ptr, rust_vec_len, data_len),
-258 => wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_media_upload_impl(port, ptr, rust_vec_len, data_len),
-259 => wire__crate__api__web_sync__sync_managed_vault_read_web_pull_state_impl(port, ptr, rust_vec_len, data_len),
-260 => wire__crate__api__web_sync__sync_managed_vault_record_web_push_media_result_impl(port, ptr, rust_vec_len, data_len),
-261 => wire__crate__api__web_sync__sync_managed_vault_recover_web_pull_state_impl(port, ptr, rust_vec_len, data_len),
+199 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(port, ptr, rust_vec_len, data_len),
+200 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(port, ptr, rust_vec_len, data_len),
+201 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(port, ptr, rust_vec_len, data_len),
+202 => wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(port, ptr, rust_vec_len, data_len),
+203 => wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(port, ptr, rust_vec_len, data_len),
+204 => wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(port, ptr, rust_vec_len, data_len),
+205 => wire__crate__api__semantic_parse_enhancement__ai_semantic_parse_message_action_enhancement_impl(port, ptr, rust_vec_len, data_len),
+206 => wire__crate__api__semantic_parse_enhancement__ai_semantic_parse_message_action_enhancement_cloud_gateway_impl(port, ptr, rust_vec_len, data_len),
+207 => wire__crate__api__semantic_parse_jobs__db_complete_semantic_parse_followup_if_current_attempt_impl(port, ptr, rust_vec_len, data_len),
+209 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+210 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(port, ptr, rust_vec_len, data_len),
+211 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(port, ptr, rust_vec_len, data_len),
+212 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(port, ptr, rust_vec_len, data_len),
+213 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(port, ptr, rust_vec_len, data_len),
+214 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
+215 => wire__crate__api__sync_progress__sync_managed_vault_push_progress_impl(port, ptr, rust_vec_len, data_len),
+216 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(port, ptr, rust_vec_len, data_len),
+217 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
+218 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
+219 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
+220 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
+221 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(port, ptr, rust_vec_len, data_len),
+222 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(port, ptr, rust_vec_len, data_len),
+223 => wire__crate__api__tags__db_list_message_suggested_tags_impl(port, ptr, rust_vec_len, data_len),
+224 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
+225 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
+226 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
+227 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
+228 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
+229 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
+230 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
+231 => wire__crate__api__todo_followup_generation__db_list_due_auto_todo_followup_generation_jobs_impl(port, ptr, rust_vec_len, data_len),
+232 => wire__crate__api__vault_rollback__vault_rollback_create_snapshot_impl(port, ptr, rust_vec_len, data_len),
+233 => wire__crate__api__vault_rollback__vault_rollback_remove_snapshot_impl(port, ptr, rust_vec_len, data_len),
+234 => wire__crate__api__vault_rollback__vault_rollback_restore_snapshot_impl(port, ptr, rust_vec_len, data_len),
+235 => wire__crate__api__web_sync__sync_managed_vault_apply_web_pull_page_impl(port, ptr, rust_vec_len, data_len),
+236 => wire__crate__api__web_sync__sync_managed_vault_apply_web_push_response_impl(port, ptr, rust_vec_len, data_len),
+237 => wire__crate__api__web_sync__sync_managed_vault_complete_web_push_media_batch_impl(port, ptr, rust_vec_len, data_len),
+238 => wire__crate__api__web_sync__sync_managed_vault_finalize_web_pull_impl(port, ptr, rust_vec_len, data_len),
+239 => wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_batch_impl(port, ptr, rust_vec_len, data_len),
+240 => wire__crate__api__web_sync__sync_managed_vault_prepare_web_push_media_upload_impl(port, ptr, rust_vec_len, data_len),
+241 => wire__crate__api__web_sync__sync_managed_vault_read_web_pull_state_impl(port, ptr, rust_vec_len, data_len),
+242 => wire__crate__api__web_sync__sync_managed_vault_record_web_push_media_result_impl(port, ptr, rust_vec_len, data_len),
+243 => wire__crate__api__web_sync__sync_managed_vault_recover_web_pull_state_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -12537,7 +11630,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        229 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        208 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -12840,62 +11933,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::db::Event> for crate::db::Event {
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::db::ExternalImportBatchSummary {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.batch_id.into_into_dart().into_dart(),
-            self.source_kind.into_into_dart().into_dart(),
-            self.source_label.into_into_dart().into_dart(),
-            self.status.into_into_dart().into_dart(),
-            self.notes_count.into_into_dart().into_dart(),
-            self.attachments_count.into_into_dart().into_dart(),
-            self.failed_count.into_into_dart().into_dart(),
-            self.copied_bytes.into_into_dart().into_dart(),
-            self.created_at_ms.into_into_dart().into_dart(),
-            self.updated_at_ms.into_into_dart().into_dart(),
-            self.completed_at_ms.into_into_dart().into_dart(),
-            self.last_error.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::db::ExternalImportBatchSummary
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::db::ExternalImportBatchSummary>
-    for crate::db::ExternalImportBatchSummary
-{
-    fn into_into_dart(self) -> crate::db::ExternalImportBatchSummary {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::db::ExternalImportScanSummary {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.detected_source_kind.into_into_dart().into_dart(),
-            self.source_label.into_into_dart().into_dart(),
-            self.notes_count.into_into_dart().into_dart(),
-            self.attachments_count.into_into_dart().into_dart(),
-            self.estimated_disk_usage_bytes.into_into_dart().into_dart(),
-            self.warnings.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::db::ExternalImportScanSummary
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::db::ExternalImportScanSummary>
-    for crate::db::ExternalImportScanSummary
-{
-    fn into_into_dart(self) -> crate::db::ExternalImportScanSummary {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::db::LlmProfile {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -12982,131 +12019,6 @@ impl flutter_rust_bridge::IntoDart for crate::db::Message {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::db::Message {}
 impl flutter_rust_bridge::IntoIntoDart<crate::db::Message> for crate::db::Message {
     fn into_into_dart(self) -> crate::db::Message {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::db::MigrationArchiveAttachment {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.sha256.into_into_dart().into_dart(),
-            self.archive_path.into_into_dart().into_dart(),
-            self.original_filename.into_into_dart().into_dart(),
-            self.mime_type.into_into_dart().into_dart(),
-            self.size_bytes.into_into_dart().into_dart(),
-            self.item_ids.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::db::MigrationArchiveAttachment
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::db::MigrationArchiveAttachment>
-    for crate::db::MigrationArchiveAttachment
-{
-    fn into_into_dart(self) -> crate::db::MigrationArchiveAttachment {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::db::MigrationArchiveExportEstimate {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.schema_version.into_into_dart().into_dart(),
-            self.archive_kind.into_into_dart().into_dart(),
-            self.item_count.into_into_dart().into_dart(),
-            self.attachment_count.into_into_dart().into_dart(),
-            self.estimated_size_bytes.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::db::MigrationArchiveExportEstimate
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::db::MigrationArchiveExportEstimate>
-    for crate::db::MigrationArchiveExportEstimate
-{
-    fn into_into_dart(self) -> crate::db::MigrationArchiveExportEstimate {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::db::MigrationArchiveItem {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.id.into_into_dart().into_dart(),
-            self.entity_type.into_into_dart().into_dart(),
-            self.markdown_path.into_into_dart().into_dart(),
-            self.created_at_ms.into_into_dart().into_dart(),
-            self.updated_at_ms.into_into_dart().into_dart(),
-            self.title.into_into_dart().into_dart(),
-            self.tags.into_into_dart().into_dart(),
-            self.status.into_into_dart().into_dart(),
-            self.extra_json.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::db::MigrationArchiveItem
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::db::MigrationArchiveItem>
-    for crate::db::MigrationArchiveItem
-{
-    fn into_into_dart(self) -> crate::db::MigrationArchiveItem {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::db::MigrationArchiveManifest {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.schema_version.into_into_dart().into_dart(),
-            self.archive_kind.into_into_dart().into_dart(),
-            self.exported_at_ms.into_into_dart().into_dart(),
-            self.app_version.into_into_dart().into_dart(),
-            self.items.into_into_dart().into_dart(),
-            self.attachments.into_into_dart().into_dart(),
-            self.relations.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::db::MigrationArchiveManifest
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::db::MigrationArchiveManifest>
-    for crate::db::MigrationArchiveManifest
-{
-    fn into_into_dart(self) -> crate::db::MigrationArchiveManifest {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::db::MigrationArchiveRelation {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.from_id.into_into_dart().into_dart(),
-            self.to_id.into_into_dart().into_dart(),
-            self.relation_type.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::db::MigrationArchiveRelation
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::db::MigrationArchiveRelation>
-    for crate::db::MigrationArchiveRelation
-{
-    fn into_into_dart(self) -> crate::db::MigrationArchiveRelation {
         self
     }
 }
@@ -13742,36 +12654,6 @@ impl SseEncode for crate::db::Event {
     }
 }
 
-impl SseEncode for crate::db::ExternalImportBatchSummary {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.batch_id, serializer);
-        <String>::sse_encode(self.source_kind, serializer);
-        <String>::sse_encode(self.source_label, serializer);
-        <String>::sse_encode(self.status, serializer);
-        <i64>::sse_encode(self.notes_count, serializer);
-        <i64>::sse_encode(self.attachments_count, serializer);
-        <i64>::sse_encode(self.failed_count, serializer);
-        <i64>::sse_encode(self.copied_bytes, serializer);
-        <i64>::sse_encode(self.created_at_ms, serializer);
-        <i64>::sse_encode(self.updated_at_ms, serializer);
-        <Option<i64>>::sse_encode(self.completed_at_ms, serializer);
-        <Option<String>>::sse_encode(self.last_error, serializer);
-    }
-}
-
-impl SseEncode for crate::db::ExternalImportScanSummary {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.detected_source_kind, serializer);
-        <String>::sse_encode(self.source_label, serializer);
-        <i64>::sse_encode(self.notes_count, serializer);
-        <i64>::sse_encode(self.attachments_count, serializer);
-        <i64>::sse_encode(self.estimated_disk_usage_bytes, serializer);
-        <Vec<String>>::sse_encode(self.warnings, serializer);
-    }
-}
-
 impl SseEncode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13873,16 +12755,6 @@ impl SseEncode for Vec<crate::db::Event> {
     }
 }
 
-impl SseEncode for Vec<crate::db::ExternalImportBatchSummary> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::db::ExternalImportBatchSummary>::sse_encode(item, serializer);
-        }
-    }
-}
-
 impl SseEncode for Vec<crate::db::LlmProfile> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -13909,36 +12781,6 @@ impl SseEncode for Vec<crate::db::Message> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::db::Message>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<crate::db::MigrationArchiveAttachment> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::db::MigrationArchiveAttachment>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<crate::db::MigrationArchiveItem> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::db::MigrationArchiveItem>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<crate::db::MigrationArchiveRelation> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::db::MigrationArchiveRelation>::sse_encode(item, serializer);
         }
     }
 }
@@ -14141,66 +12983,6 @@ impl SseEncode for crate::db::Message {
         <i64>::sse_encode(self.created_at_ms, serializer);
         <bool>::sse_encode(self.is_memory, serializer);
         <Option<String>>::sse_encode(self.citations_json, serializer);
-    }
-}
-
-impl SseEncode for crate::db::MigrationArchiveAttachment {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.sha256, serializer);
-        <String>::sse_encode(self.archive_path, serializer);
-        <String>::sse_encode(self.original_filename, serializer);
-        <Option<String>>::sse_encode(self.mime_type, serializer);
-        <i64>::sse_encode(self.size_bytes, serializer);
-        <Vec<String>>::sse_encode(self.item_ids, serializer);
-    }
-}
-
-impl SseEncode for crate::db::MigrationArchiveExportEstimate {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i64>::sse_encode(self.schema_version, serializer);
-        <String>::sse_encode(self.archive_kind, serializer);
-        <i64>::sse_encode(self.item_count, serializer);
-        <i64>::sse_encode(self.attachment_count, serializer);
-        <i64>::sse_encode(self.estimated_size_bytes, serializer);
-    }
-}
-
-impl SseEncode for crate::db::MigrationArchiveItem {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.id, serializer);
-        <String>::sse_encode(self.entity_type, serializer);
-        <String>::sse_encode(self.markdown_path, serializer);
-        <i64>::sse_encode(self.created_at_ms, serializer);
-        <i64>::sse_encode(self.updated_at_ms, serializer);
-        <String>::sse_encode(self.title, serializer);
-        <Vec<String>>::sse_encode(self.tags, serializer);
-        <Option<String>>::sse_encode(self.status, serializer);
-        <Option<String>>::sse_encode(self.extra_json, serializer);
-    }
-}
-
-impl SseEncode for crate::db::MigrationArchiveManifest {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i64>::sse_encode(self.schema_version, serializer);
-        <String>::sse_encode(self.archive_kind, serializer);
-        <i64>::sse_encode(self.exported_at_ms, serializer);
-        <String>::sse_encode(self.app_version, serializer);
-        <Vec<crate::db::MigrationArchiveItem>>::sse_encode(self.items, serializer);
-        <Vec<crate::db::MigrationArchiveAttachment>>::sse_encode(self.attachments, serializer);
-        <Vec<crate::db::MigrationArchiveRelation>>::sse_encode(self.relations, serializer);
-    }
-}
-
-impl SseEncode for crate::db::MigrationArchiveRelation {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.from_id, serializer);
-        <String>::sse_encode(self.to_id, serializer);
-        <String>::sse_encode(self.relation_type, serializer);
     }
 }
 

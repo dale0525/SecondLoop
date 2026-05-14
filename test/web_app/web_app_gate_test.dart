@@ -8,7 +8,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
-import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
 import 'package:secondloop/features/lock/lock_gate.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
@@ -346,7 +346,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppShell), findsOneWidget);
-    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.byType(AgentConversationPage), findsOneWidget);
     expect(find.text('Files'), findsNothing);
   });
 
@@ -418,7 +418,7 @@ void main() {
     expect(backendScope.backend, isA<WebNativeAppBackend>());
   });
 
-  testWidgets('wide-screen entitled shell uses a navigation rail',
+  testWidgets('wide-screen entitled shell uses the agent sidebar',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -436,9 +436,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_shell_sidebar')), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
     expect(find.byType(NavigationBar), findsNothing);
-    expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.byType(AgentConversationPage), findsOneWidget);
     expect(find.text('Files'), findsNothing);
   });
 

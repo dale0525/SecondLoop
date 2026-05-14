@@ -37,6 +37,7 @@ build/
 # Local tools/cache
 .tool
 .tool/
+.tmp/
 
 # Local logs
 logs/

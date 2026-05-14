@@ -19,15 +19,20 @@ final class MemoryPreferencesBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.t.memory.agentUi;
+    if (preferences.isEmpty && suggestions.isEmpty) {
+      return const _MemoryEmptyState();
+    }
     return _MemoryBodyFrame(
       children: [
         for (final preference in preferences)
           _MemoryRow(title: preference.title, detail: preference.detail),
-        _MemorySectionTitle(t.candidateMemory),
-        _MemoryRow(
-          title: suggestions.first.title,
-          detail: suggestions.first.summary,
-        ),
+        if (suggestions.isNotEmpty) ...[
+          _MemorySectionTitle(t.candidateMemory),
+          _MemoryRow(
+            title: suggestions.first.title,
+            detail: suggestions.first.summary,
+          ),
+        ],
       ],
     );
   }
@@ -40,6 +45,9 @@ final class MemoryPeopleBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (people.isEmpty) {
+      return const _MemoryEmptyState();
+    }
     final selected = people.first;
     return _MemorySplitBody(
       listChildren: [
@@ -59,6 +67,9 @@ final class MemoryProjectsBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (projects.isEmpty) {
+      return const _MemoryEmptyState();
+    }
     final selected = projects.first;
     return _MemorySplitBody(
       listChildren: [
@@ -78,6 +89,9 @@ final class MemorySourcesBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (sources.isEmpty) {
+      return const _MemoryEmptyState();
+    }
     final selected = sources.first;
     return _MemorySplitBody(
       listChildren: [
@@ -98,6 +112,9 @@ final class MemorySuggestionsBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.t.memory.agentUi;
+    if (suggestions.isEmpty) {
+      return const _MemoryEmptyState();
+    }
     final suggestion = suggestions.first;
     return _MemoryBodyFrame(
       children: [
@@ -113,6 +130,21 @@ final class MemorySuggestionsBody extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+final class _MemoryEmptyState extends StatelessWidget {
+  const _MemoryEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        context.t.memory.emptyState,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
     );
   }
 }

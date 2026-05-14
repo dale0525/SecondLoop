@@ -9,8 +9,6 @@ extension _SettingsPageBuild on _SettingsPageState {
         (defaultTargetPlatform == TargetPlatform.iOS ||
             defaultTargetPlatform == TargetPlatform.android);
     final supportsDesktopHotkey = capabilities.supportsDesktopHotkey;
-    final supportsExternalImport = capabilities.supportsExternalImport;
-    final supportsMigrationArchive = capabilities.supportsMigrationArchive;
     final supportsDesktopBootSettings =
         capabilities.supportsDesktopBootSettings;
     final supportsBiometricUnlock = capabilities.supportsBiometricUnlock;
@@ -205,36 +203,6 @@ extension _SettingsPageBuild on _SettingsPageState {
                     );
                   },
           ),
-          if (supportsExternalImport)
-            ListTile(
-              key: const ValueKey('settings_external_import'),
-              title: Text(context.t.settings.externalImport.title),
-              subtitle: Text(context.t.settings.externalImport.introTitle),
-              onTap: _busy
-                  ? null
-                  : () {
-                      pushPageWithInheritedScopes(
-                        Navigator.of(context),
-                        context,
-                        const ExternalImportPage(),
-                      );
-                    },
-            ),
-          if (supportsMigrationArchive)
-            ListTile(
-              key: const ValueKey('settings_migration_archive'),
-              title: Text(context.t.settings.migrationArchive.title),
-              subtitle: Text(context.t.settings.migrationArchive.subtitle),
-              onTap: _busy
-                  ? null
-                  : () {
-                      pushPageWithInheritedScopes(
-                        Navigator.of(context),
-                        context,
-                        const MigrationArchivePage(),
-                      );
-                    },
-            ),
           if (supportsDesktopBootSettings)
             SwitchListTile(
               key: const ValueKey('settings_start_with_system_switch'),

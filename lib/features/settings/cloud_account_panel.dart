@@ -15,6 +15,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
+import '../agent_ui/agent_ui_acceptance_driver.dart';
 import 'cloud_usage_card.dart';
 import 'vault_usage_card.dart';
 
@@ -619,6 +620,9 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
     final controller = scope?.controller;
     final uid = controller?.uid;
     final email = controller?.email;
+    final displayEmail =
+        AgentUiAcceptanceScope.maybeOf(context)?.redactedCloudAccountEmail ??
+            email;
 
     if (uid != _subscriptionUid) {
       _subscriptionUid = uid;
@@ -775,7 +779,7 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
               children: [
                 Text(
                   context.t.settings.cloudAccount
-                      .signedInAs(email: email ?? '—'),
+                      .signedInAs(email: displayEmail ?? '—'),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 12),

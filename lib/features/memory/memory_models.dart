@@ -83,6 +83,16 @@ final class MemoryDemoData {
   final List<MemorySource> sources;
   final List<MemorySuggestion> suggestions;
 
+  static MemoryDemoData empty() {
+    return const MemoryDemoData(
+      preferences: [],
+      people: [],
+      projects: [],
+      sources: [],
+      suggestions: [],
+    );
+  }
+
   static MemoryDemoData demo() {
     return const MemoryDemoData(
       preferences: [

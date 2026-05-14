@@ -8,6 +8,8 @@ import '../agent_ui/agent_status_chip.dart';
 import '../agent_ui/agent_tab_bar.dart';
 import 'research_models.dart';
 
+const _bulletPrefix = '- ';
+
 final class ResearchBudgetConfirmationCard extends StatelessWidget {
   const ResearchBudgetConfirmationCard({
     required this.estimate,
@@ -190,7 +192,7 @@ final class _ResearchResultTabBody extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('- '),
+                      const Text(_bulletPrefix),
                       Expanded(child: Text(point)),
                     ],
                   ),

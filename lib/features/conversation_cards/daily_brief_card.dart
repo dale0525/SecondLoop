@@ -6,6 +6,8 @@ import '../../ui/sl_tokens.dart';
 import '../agent_ui/agent_design_tokens.dart';
 import 'reminder_candidate_card.dart';
 
+const _bulletPrefix = '- ';
+
 final class DailyBriefData {
   const DailyBriefData({
     required this.topPriorities,
@@ -127,7 +129,7 @@ final class _BriefSection extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('- '),
+                  const Text(_bulletPrefix),
                   Expanded(child: Text(item)),
                 ],
               ),

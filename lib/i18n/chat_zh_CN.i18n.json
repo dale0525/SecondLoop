@@ -124,6 +124,7 @@
     }
   },
   "askAiFailedTemporary": "AI 对话失败了，请重试。",
+  "askAiRetrievalQuotaUnavailable": "AI 无法检索上下文，因为云端额度不可用。请在额度重置后重试。",
   "askAiConsent": {
     "title": "使用 AI 前确认",
     "body": "SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的应用锁密码或完整历史。",
@@ -178,6 +179,7 @@
     "people": "相关联系人",
     "recentFiles": "最近文件",
     "pendingReview": "待审核",
+    "empty": "暂无上下文。",
     "privacyNote": "隐私说明"
   },
   "approvalPreview": {
@@ -210,6 +212,21 @@
     "reminders": "提醒",
     "commitmentsOwed": "待履行承诺",
     "pendingReviews": "待审核"
+  },
+  "agentConversation": {
+    "ready": "就绪",
+    "you": "你",
+    "now": "刚刚",
+    "thinking": "处理中…",
+    "needsYourOk": "需要确认",
+    "done": "已完成",
+    "conversationLoadFailed": "对话加载失败",
+    "thinkingBody": "正在准备可审核的变更，尚未保存任何内容。",
+    "composerHint": "提问、记录、搜索或添加文件…",
+    "attach": "添加附件",
+    "record": "录音",
+    "working": "处理中",
+    "send": "发送"
   },
   "calendarEmail": {
     "calendarTitle": "日历",

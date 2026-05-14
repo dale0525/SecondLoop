@@ -8,12 +8,28 @@ final class ConversationContextSnapshot {
     required this.privacyNote,
   });
 
+  const ConversationContextSnapshot.empty()
+      : todayAtAGlance = const <ConversationContextItem>[],
+        longTermMemory = const <ConversationContextItem>[],
+        people = const <ConversationContextItem>[],
+        recentFiles = const <ConversationContextItem>[],
+        pendingReview = const <ConversationContextItem>[],
+        privacyNote = '';
+
   final List<ConversationContextItem> todayAtAGlance;
   final List<ConversationContextItem> longTermMemory;
   final List<ConversationContextItem> people;
   final List<ConversationContextItem> recentFiles;
   final List<ConversationContextItem> pendingReview;
   final String privacyNote;
+
+  bool get isEmpty =>
+      todayAtAGlance.isEmpty &&
+      longTermMemory.isEmpty &&
+      people.isEmpty &&
+      recentFiles.isEmpty &&
+      pendingReview.isEmpty &&
+      privacyNote.trim().isEmpty;
 
   static ConversationContextSnapshot demo() {
     return const ConversationContextSnapshot(

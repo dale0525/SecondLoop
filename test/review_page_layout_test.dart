@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/features/review/review_models.dart';
 import 'package:secondloop/features/review/review_page.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('ReviewPage shows approval queue and selected task detail',
+  testWidgets('default ReviewPage does not show demo review items',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -14,6 +15,23 @@ void main() {
     await tester.pumpWidget(
       wrapWithI18n(
         const MaterialApp(home: ReviewPage()),
+      ),
+    );
+
+    expect(find.text('No items to confirm'), findsWidgets);
+    expect(find.text('Move passport renewal'), findsNothing);
+    expect(find.text('Remember reply language'), findsNothing);
+    expect(find.text('Team follow-up draft'), findsNothing);
+  });
+
+  testWidgets('ReviewPage shows approval queue and selected task detail',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(home: ReviewPage(items: demoReviewItems())),
       ),
     );
 
@@ -37,7 +55,7 @@ void main() {
 
     await tester.pumpWidget(
       wrapWithI18n(
-        const MaterialApp(home: ReviewPage()),
+        MaterialApp(home: ReviewPage(items: demoReviewItems())),
       ),
     );
 
@@ -64,7 +82,7 @@ void main() {
 
     await tester.pumpWidget(
       wrapWithI18n(
-        const MaterialApp(home: ReviewPage()),
+        MaterialApp(home: ReviewPage(items: demoReviewItems())),
       ),
     );
 

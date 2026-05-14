@@ -98,7 +98,10 @@ void registerSyncSettingsPageCoreBTests() {
             engine: engine,
             child: wrapWithI18n(
               const MaterialApp(
-                home: ChatPage(conversation: conversation),
+                home: AgentConversationPage(
+                  conversation: conversation,
+                  isTabActive: true,
+                ),
               ),
             ),
           ),
@@ -107,9 +110,12 @@ void registerSyncSettingsPageCoreBTests() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('No messages yet'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent_conversation_workspace')),
+      findsOneWidget,
+    );
 
-    final chatContext = tester.element(find.byType(ChatPage));
+    final chatContext = tester.element(find.byType(AgentConversationPage));
     // ignore: discarded_futures
     Navigator.of(chatContext).push(
       MaterialPageRoute(

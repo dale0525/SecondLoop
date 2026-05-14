@@ -309,14 +309,7 @@ void main() {
         MyApp(backend: backend, quickCaptureController: controller));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find
-          .descendant(
-            of: find.byType(NavigationRail),
-            matching: find.byIcon(Icons.settings_outlined),
-          )
-          .first,
-    );
+    await tester.tap(find.byKey(const ValueKey('app_shell_nav_settings')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('chat_filter_menu')), findsNothing);
@@ -382,7 +375,7 @@ final class _SemanticParseEnabledQuickCaptureBackend extends _UnlockedBackend {
         LlmProfile(
           id: 'p1',
           name: 'BYOK',
-          providerType: 'openai',
+          providerType: 'openai-compatible',
           modelName: 'gpt-4o-mini',
           isActive: true,
           createdAtMs: 0,

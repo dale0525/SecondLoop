@@ -58,4 +58,16 @@ Answer...
     expect(stripped, isNot(contains('secondloop_actions')));
     expect(stripped, isNot(contains('"suggestions"')));
   });
+
+  test('tryParse returns null for malformed fenced JSON block', () {
+    const text = '''
+Answer...
+
+```secondloop_actions
+{"version":1,"suggestions":[
+```
+''';
+
+    expect(SuggestionsParser.tryParse(text), isNull);
+  });
 }

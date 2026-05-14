@@ -12,27 +12,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
+import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/cloud_auth_store.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
+import 'package:secondloop/core/platform/app_platform_capabilities.dart';
+import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
+import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/cloud_subscription_controller.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
-import 'package:secondloop/features/conversation_cards/approval_preview_card.dart';
-import 'package:secondloop/features/conversation_cards/calendar_email_card.dart';
-import 'package:secondloop/features/conversation_cards/daily_brief_card.dart';
-import 'package:secondloop/features/conversation_cards/media_summary_card.dart';
-import 'package:secondloop/features/conversation_cards/research_brief_card.dart';
-import 'package:secondloop/features/conversation_cards/research_models.dart';
-import 'package:secondloop/features/conversation_context/conversation_context_rail.dart';
-import 'package:secondloop/features/memory/memory_page.dart';
-import 'package:secondloop/features/review/review_page.dart';
-import 'package:secondloop/features/settings/agent_settings_page.dart';
+import 'package:secondloop/features/agent_ui/agent_ui_acceptance_driver.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/ui/sl_background.dart';
 
+import '../test/test_backend.dart';
 import '../test/test_i18n.dart';
+
+const _redactedManagedProAccountLabel = 'managed-pro-account';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -48,6 +46,9 @@ void main() {
 
     final credentials = _managedProCredentials();
     final screenshotKey = GlobalKey(debugLabel: 'managed_pro_acceptance_root');
+    final agentUiAcceptanceController = AgentUiAcceptanceController(
+      redactedCloudAccountEmail: _redactedManagedProAccountLabel,
+    );
     final cloudAuthController = CloudAuthControllerImpl(
       identityToolkit: FirebaseIdentityToolkitHttp(
         webApiKey: const String.fromEnvironment(
@@ -62,6 +63,7 @@ void main() {
       cloudGatewayBaseUrl: CloudGatewayConfig.defaultConfig.baseUrl,
     );
     addTearDown(() async {
+      agentUiAcceptanceController.dispose();
       await cloudAuthController.signOut();
       subscriptionController.dispose();
       cloudAuthController.dispose();
@@ -72,9 +74,17 @@ void main() {
         screenshotKey: screenshotKey,
         cloudAuthController: cloudAuthController,
         subscriptionController: subscriptionController,
+        agentUiAcceptanceController: agentUiAcceptanceController,
       ),
     );
     await tester.pumpAndSettle();
+    agentUiAcceptanceController.simulateManagedProConversationWorkspace();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('agent_conversation_workspace')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
 
     final outputDir = _acceptanceOutputDirectory();
     await _writeScreenshot(
@@ -83,6 +93,7 @@ void main() {
       name: '01-conversation-home',
     );
 
+    await tester.ensureVisible(find.text('Fields'));
     await tester.tap(find.text('Fields'));
     await tester.pumpAndSettle();
     expect(find.text('Extracted fields'), findsOneWidget);
@@ -189,10 +200,12 @@ Future<void> _signInManagedProAccount({
   );
   await _pumpUntil(
     tester,
-    () => find.textContaining(credentials.email).evaluate().isNotEmpty,
+    () => cloudAuthController.email == credentials.email,
     timeout: const Duration(seconds: 30),
-    reason: 'managed pro signed-in account was not rendered',
+    reason: 'managed pro signed-in account info was not refreshed',
   );
+  expect(find.textContaining(credentials.email), findsNothing);
+  expect(find.textContaining(_redactedManagedProAccountLabel), findsOneWidget);
 
   await tester.tap(find.byKey(const ValueKey('cloud_subscription_refresh')));
   await _pumpUntil(
@@ -270,6 +283,15 @@ Future<void> _writeReport(
     'appName': Platform.environment['SECONDLOOP_APP_NAME'],
     'managedProEmailSet':
         (Platform.environment['SECONDLOOP_MANAGED_PRO_EMAIL'] ?? '').isNotEmpty,
+    'conversationPath': {
+      'usesDefaultAppShell': true,
+      'usesAgentConversationPage': true,
+      'appExposedInterface':
+          'AgentUiAcceptanceController.simulateManagedProConversationWorkspace',
+    },
+    'screenshotRedaction': {
+      'cloudAccountEmail': 'redacted',
+    },
     'managedProSignIn': {
       'uidPresent': cloudAuthController.uid != null,
       'emailVerified': cloudAuthController.emailVerified,
@@ -296,11 +318,13 @@ final class _ManagedProAcceptanceApp extends StatelessWidget {
     required this.screenshotKey,
     required this.cloudAuthController,
     required this.subscriptionController,
+    required this.agentUiAcceptanceController,
   });
 
   final GlobalKey screenshotKey;
   final CloudAuthControllerImpl cloudAuthController;
   final CloudSubscriptionController subscriptionController;
+  final AgentUiAcceptanceController agentUiAcceptanceController;
 
   @override
   Widget build(BuildContext context) {
@@ -311,18 +335,33 @@ final class _ManagedProAcceptanceApp extends StatelessWidget {
         child: RepaintBoundary(
           key: screenshotKey,
           child: wrapWithI18n(
-            MaterialApp(
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.light(
-                locale: LocaleSettings.currentLocale.flutterLocale,
-              ),
-              home: SlBackground(
-                child: AppShell(
-                  conversationTabBuilder: (_, __) =>
-                      const _AcceptanceConversation(),
-                  memoryTabBuilder: (_, __) => const MemoryPage(),
-                  reviewTabBuilder: (_, __) => const ReviewPage(),
-                  settingsTabBuilder: (_, __) => const AgentSettingsPage(),
+            AgentUiAcceptanceScope(
+              controller: agentUiAcceptanceController,
+              child: MaterialApp(
+                debugShowCheckedModeBanner: false,
+                theme: AppTheme.light(
+                  locale: LocaleSettings.currentLocale.flutterLocale,
+                ),
+                home: SlBackground(
+                  child: AppPlatformCapabilityScope(
+                    capabilities: const AppPlatformCapabilities(
+                      supportsDesktopHotkey: true,
+                      supportsBiometricUnlock: false,
+                      supportsAudioRecording: false,
+                      supportsDesktopDrop: true,
+                      supportsDesktopBootSettings: true,
+                      supportsCameraCapture: false,
+                      usesCloudSessionModel: false,
+                    ),
+                    child: AppBackendScope(
+                      backend: TestAppBackend(),
+                      child: SessionScope(
+                        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                        lock: () {},
+                        child: const AppShell(),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -359,46 +398,5 @@ final class _InMemoryCloudAuthStore implements CloudAuthStore {
   @override
   Future<void> save(CloudAuthStoredSession session) async {
     _session = session;
-  }
-}
-
-final class _AcceptanceConversation extends StatelessWidget {
-  const _AcceptanceConversation();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ApprovalPreviewCard(change: ApprovalPreviewChange.demo()),
-                const SizedBox(height: 16),
-                MediaSummaryCard(data: MediaSummaryData.demo()),
-                const SizedBox(height: 16),
-                DailyBriefCard(data: DailyBriefData.demo()),
-                const SizedBox(height: 16),
-                CalendarEmailCard(data: CalendarEmailData.demo()),
-                const SizedBox(height: 16),
-                ResearchBudgetConfirmationCard(
-                  estimate: ResearchBudgetEstimate.demo(),
-                ),
-                const SizedBox(height: 16),
-                ResearchResultCard(result: ResearchResult.demo()),
-              ],
-            ),
-          ),
-        ),
-        SizedBox(
-          width: 320,
-          child: ConversationContextRail(
-            snapshot: ConversationContextSnapshot.demo(),
-          ),
-        ),
-      ],
-    );
   }
 }

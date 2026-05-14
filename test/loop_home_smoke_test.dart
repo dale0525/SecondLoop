@@ -20,7 +20,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Set master password'), findsNothing);
-    expect(find.text('Loop'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('agent_conversation_workspace')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
   });
 }

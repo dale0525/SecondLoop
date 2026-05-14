@@ -14,7 +14,7 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_diagnostics.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
-import 'package:secondloop/features/chat/chat_page.dart';
+import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
 import 'package:secondloop/features/settings/sync_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 

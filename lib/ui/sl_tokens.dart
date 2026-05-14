@@ -45,21 +45,21 @@ class SlTokens extends ThemeExtension<SlTokens> {
       Theme.of(context).extension<SlTokens>() ?? _fallback;
 
   static const _fallback = SlTokens(
-    background: Color(0xFF0B0B0F),
-    surface: Color(0xFF12121A),
-    surface2: Color(0xFF171724),
-    border: Color(0xFF24243A),
-    borderSubtle: Color(0xFF1F1F33),
-    ring: Color(0xFFA78BFA),
-    sidebarBackground: Color(0xCC12121A),
-    sidebarBorder: Color(0x3324243A),
-    sidebarItemHover: Color(0x1A6366F1),
-    sidebarItemActive: Color(0x266366F1),
-    sidebarItemForeground: Color(0xFFB9B9CE),
-    sidebarItemActiveForeground: Color(0xFFE7E7F0),
-    radiusSm: 10,
-    radiusMd: 14,
-    radiusLg: 18,
+    background: Color(0xFFF7F9FC),
+    surface: Color(0xFFFFFFFF),
+    surface2: Color(0xFFF1F5F9),
+    border: Color(0xFFD7DFEA),
+    borderSubtle: Color(0xFFE1E7F0),
+    ring: Color(0xFF0B5CF6),
+    sidebarBackground: Color(0xFFFFFFFF),
+    sidebarBorder: Color(0xFFE1E7F0),
+    sidebarItemHover: Color(0xFFF1F5F9),
+    sidebarItemActive: Color(0xFFEAF1FF),
+    sidebarItemForeground: Color(0xFF63708A),
+    sidebarItemActiveForeground: Color(0xFF101936),
+    radiusSm: 8,
+    radiusMd: 12,
+    radiusLg: 16,
   );
 
   @override

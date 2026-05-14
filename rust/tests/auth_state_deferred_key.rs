@@ -331,13 +331,29 @@ fn reset_rejects_oversized_attachment_probe_without_reporting_invalid_key() {
 #[test]
 fn reset_allows_missing_auth_with_valid_external_attachment_only_deferred_key() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let conn = db::open_external_readonly_db(dir.path()).expect("open external readonly db");
     let key = [7u8; 32];
     let sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     let stored_path = format!("external_readonly/storage/attachments/{sha256}.bin");
     let full_path = dir.path().join(&stored_path);
     fs::create_dir_all(full_path.parent().expect("external attachment parent"))
         .expect("create external attachment dir");
+    let external_db_path = dir
+        .path()
+        .join("external_readonly/external_readonly.sqlite3");
+    let conn = rusqlite::Connection::open(&external_db_path).expect("open external readonly db");
+    conn.execute_batch(
+        r#"
+CREATE TABLE external_attachments (
+  sha256 TEXT PRIMARY KEY,
+  stored_path TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  mime_type TEXT NOT NULL,
+  ref_count INTEGER NOT NULL,
+  created_at_ms INTEGER NOT NULL
+);
+"#,
+    )
+    .expect("create external attachment table");
     let aad = format!("external_attachment.bytes:{sha256}");
     let blob = crypto::encrypt_bytes(&key, b"external attachment", aad.as_bytes())
         .expect("encrypt external attachment");

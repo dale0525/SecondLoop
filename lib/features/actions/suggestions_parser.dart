@@ -39,7 +39,12 @@ class SuggestionsParser {
     final jsonText = text.substring(bodyStart + 1, end).trim();
     if (jsonText.isEmpty) return null;
 
-    final decoded = jsonDecode(jsonText);
+    Object? decoded;
+    try {
+      decoded = jsonDecode(jsonText);
+    } catch (_) {
+      return null;
+    }
     if (decoded is! Map<String, dynamic>) return null;
 
     final version = decoded['version'];

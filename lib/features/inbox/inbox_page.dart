@@ -4,7 +4,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
-import '../chat/chat_page.dart';
+import '../agent_ui/agent_conversation_page.dart';
 import '../chat/chat_route_scope_wrapper.dart';
 
 class InboxPage extends StatefulWidget {
@@ -79,9 +79,9 @@ class _InboxPageState extends State<InboxPage> {
                   MaterialPageRoute(
                     builder: (_) => wrapPushedPageWithInheritedScopes(
                       context,
-                      ChatPage(
+                      AgentConversationPage(
                         conversation: conversation,
-                        showAppBar: false,
+                        isTabActive: true,
                       ),
                     ),
                   ),

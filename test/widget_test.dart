@@ -23,11 +23,19 @@ void main() {
     await tester.pumpWidget(MyApp(backend: backend));
     for (var i = 0; i < 30; i++) {
       await tester.pump(const Duration(milliseconds: 100));
-      if (find.text('Loop').evaluate().isNotEmpty) break;
+      if (find
+          .byKey(const ValueKey('agent_conversation_workspace'))
+          .evaluate()
+          .isNotEmpty) {
+        break;
+      }
     }
 
     expect(find.text('Set master password'), findsNothing);
-    expect(find.text('Loop'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('agent_conversation_workspace')),
+      findsOneWidget,
+    );
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('deferred_session_key_b64_v1'), isNotEmpty);

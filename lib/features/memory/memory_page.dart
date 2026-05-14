@@ -19,7 +19,7 @@ final class MemoryPage extends StatefulWidget {
 }
 
 final class _MemoryPageState extends State<MemoryPage> {
-  late final MemoryDemoData _data = widget.data ?? MemoryDemoData.demo();
+  late final MemoryDemoData _data = widget.data ?? MemoryDemoData.empty();
   AgentMemoryTab _selectedTab = AgentMemoryTab.preferences;
 
   @override
