@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -62,6 +63,8 @@ final class AgentConversationPage extends StatefulWidget {
 final class _AgentConversationPageState extends State<AgentConversationPage> {
   static const _askAiErrorPrefix = '\u001eSL_ERROR\u001e';
   static const _askAiMetaPrefix = '\u001eSL_META\u001e';
+  static const _askAiReasoningPrefix = '\u001eSL_REASONING\u001e';
+  static const _askAiControlPrefix = '\u001eSL_';
   static const _blue = Color(0xFF0B5CF6);
   static const _ink = Color(0xFF101936);
   static const _muted = Color(0xFF63708A);
@@ -78,6 +81,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   List<Message> _messages = const <Message>[];
   String? _pendingUserContent;
   String _streamingAnswer = '';
+  String _streamingReasoning = '';
   String? _askError;
   bool _sending = false;
   bool _thinking = false;
@@ -157,6 +161,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       _thinking = true;
       _pendingUserContent = text;
       _streamingAnswer = '';
+      _streamingReasoning = '';
       _askError = null;
     });
     _controller.clear();
@@ -209,6 +214,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       setState(() {
         _pendingUserContent = null;
         _streamingAnswer = '';
+        _streamingReasoning = '';
         _thinking = false;
       });
       _scrollToLatest();
@@ -238,8 +244,24 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         streamError = delta.substring(_askAiErrorPrefix.length).trim();
         break;
       }
+      if (delta.startsWith(_askAiReasoningPrefix)) {
+        final text = _extractReasoningDeltaText(
+          delta.substring(_askAiReasoningPrefix.length),
+        );
+        if (text.isNotEmpty) {
+          setState(() => _streamingReasoning += text);
+          _scrollToLatest();
+        }
+        continue;
+      }
+      if (delta.startsWith(_askAiControlPrefix)) {
+        continue;
+      }
       sawVisibleDelta = true;
-      setState(() => _streamingAnswer += delta);
+      setState(() {
+        _streamingReasoning = '';
+        _streamingAnswer += delta;
+      });
       _scrollToLatest();
     }
 
@@ -264,6 +286,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       _askError = message ?? context.t.chat.askAiFailedTemporary;
       _thinking = false;
       _streamingAnswer = '';
+      _streamingReasoning = '';
       if (newUserMessageCommitted) {
         _pendingUserContent = null;
       }
@@ -494,6 +517,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                   acceptanceCards: acceptanceCards,
                   pendingUserContent: _pendingUserContent,
                   streamingAnswer: _streamingAnswer,
+                  streamingReasoning: _streamingReasoning,
                   askError: _askError,
                 );
               },
@@ -570,6 +594,7 @@ final class _MessageList extends StatelessWidget {
     required this.acceptanceCards,
     required this.pendingUserContent,
     required this.streamingAnswer,
+    required this.streamingReasoning,
     required this.askError,
   });
 
@@ -579,6 +604,7 @@ final class _MessageList extends StatelessWidget {
   final List<Widget> acceptanceCards;
   final String? pendingUserContent;
   final String streamingAnswer;
+  final String streamingReasoning;
   final String? askError;
 
   @override
@@ -619,7 +645,7 @@ final class _MessageList extends StatelessWidget {
       if (streamingContent.isNotEmpty)
         _AssistantTextMessage(content: streamingContent, time: t.thinking)
       else if (thinking)
-        const _ThinkingMessage(),
+        _ThinkingMessage(reasoning: streamingReasoning),
       if (errorContent != null && errorContent.isNotEmpty)
         _AssistantTextMessage(content: errorContent, time: t.done),
     ];
@@ -698,23 +724,85 @@ final class _UserMessage extends StatelessWidget {
 }
 
 final class _ThinkingMessage extends StatelessWidget {
-  const _ThinkingMessage();
+  const _ThinkingMessage({required this.reasoning});
+
+  final String reasoning;
 
   @override
   Widget build(BuildContext context) {
     final t = context.t.chat.agentConversation;
-    return _MessageFrame(
-      author: context.t.app.title,
-      time: t.thinking,
-      child: Text(
-        t.thinkingBody,
-        style: const TextStyle(
-          color: _AgentConversationPageState._muted,
-          fontWeight: FontWeight.w700,
+    final trimmedReasoning = reasoning.trim();
+    final visibleReasoning = trimmedReasoning.length > 520
+        ? trimmedReasoning.substring(trimmedReasoning.length - 520)
+        : trimmedReasoning;
+
+    return KeyedSubtree(
+      key: const ValueKey('agent_thinking_panel'),
+      child: _MessageFrame(
+        author: context.t.app.title,
+        time: t.thinking,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(AgentDesignTokens.radiusMd),
+            border: Border.all(color: _AgentConversationPageState._line),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AgentDesignTokens.gapLg,
+              vertical: AgentDesignTokens.gapMd,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  t.thinking,
+                  style: const TextStyle(
+                    color: _AgentConversationPageState._ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AgentDesignTokens.gapXs),
+                if (visibleReasoning.isEmpty)
+                  Text(
+                    t.thinkingBody,
+                    style: const TextStyle(
+                      color: _AgentConversationPageState._muted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  )
+                else
+                  Text(
+                    visibleReasoning,
+                    key: const ValueKey('agent_thinking_reasoning_text'),
+                    maxLines: 4,
+                    overflow: TextOverflow.fade,
+                    style: const TextStyle(
+                      color: _AgentConversationPageState._muted,
+                      fontWeight: FontWeight.w700,
+                      height: 1.45,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+String _extractReasoningDeltaText(String rawPayload) {
+  try {
+    final decoded = jsonDecode(rawPayload);
+    if (decoded is Map) {
+      return '${decoded['text'] ?? ''}';
+    }
+  } catch (_) {
+    return '';
+  }
+  return '';
 }
 
 final class _MessageFrame extends StatelessWidget {

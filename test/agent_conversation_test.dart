@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -21,6 +23,7 @@ import 'test_i18n.dart';
 
 const _askAiMetaPrefix = '\u001eSL_META\u001e';
 const _askAiErrorPrefix = '\u001eSL_ERROR\u001e';
+const _askAiReasoningPrefix = '\u001eSL_REASONING\u001e';
 
 void main() {
   setUp(() {
@@ -30,49 +33,13 @@ void main() {
   testWidgets(
     'empty production conversation does not show demo content',
     (tester) async {
-      final previousPlatform = debugDefaultTargetPlatformOverride;
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      await _pumpAgentConversation(tester, TestAppBackend());
 
-      try {
-        await tester.binding.setSurfaceSize(const Size(1012, 701));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
-
-        await tester.pumpWidget(
-          wrapWithI18n(
-            MaterialApp(
-              home: AppBackendScope(
-                backend: TestAppBackend(),
-                child: AppPlatformCapabilityScope(
-                  capabilities: const AppPlatformCapabilities(
-                    supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
-                    supportsAudioRecording: true,
-                    supportsDesktopDrop: true,
-                    supportsDesktopBootSettings: true,
-                    supportsCameraCapture: false,
-                    usesCloudSessionModel: false,
-                  ),
-                  child: SessionScope(
-                    sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                    lock: () {},
-                    child: const AppShell(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        expect(find.text('No messages yet'), findsOneWidget);
-        expect(find.text("Here's your brief for today."), findsNothing);
-        expect(find.text('2 priorities due today'), findsNothing);
-        expect(find.text('passport-scan.pdf'), findsNothing);
-        expect(
-            find.byKey(const ValueKey('approval_preview_card')), findsNothing);
-      } finally {
-        debugDefaultTargetPlatformOverride = previousPlatform;
-      }
+      expect(find.text('No messages yet'), findsOneWidget);
+      expect(find.text("Here's your brief for today."), findsNothing);
+      expect(find.text('2 priorities due today'), findsNothing);
+      expect(find.text('passport-scan.pdf'), findsNothing);
+      expect(find.byKey(const ValueKey('approval_preview_card')), findsNothing);
     },
   );
 
@@ -622,53 +589,99 @@ secondloop://message/history-rich-1
   );
 
   testWidgets(
+    'agent conversation shows reasoning temporarily until answer starts',
+    (tester) async {
+      final backend = _ControlledReasoningBackend();
+      await _pumpAgentConversation(tester, backend);
+      await _sendAgentMessage(tester);
+
+      backend.stream.add(
+        '$_askAiReasoningPrefix{"text":"I should inspect the local context."}',
+      );
+      await tester.pump();
+      expect(
+          find.byKey(const ValueKey('agent_thinking_panel')), findsOneWidget);
+      expect(find.textContaining('I should inspect the local context.'),
+          findsOneWidget);
+
+      backend.stream.add('The next step is to book the appointment.');
+      await tester.pump();
+      expect(find.textContaining('I should inspect the local context.'),
+          findsNothing);
+      expect(find.textContaining('The next step is to book the appointment.'),
+          findsOneWidget);
+      expect(find.textContaining('Final answer'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'agent conversation does not treat reasoning-only stream as answer',
+    (tester) async {
+      final backend = _ControlledReasoningBackend();
+      await _pumpAgentConversation(tester, backend);
+      await _sendAgentMessage(tester);
+
+      backend.stream.add(
+        '$_askAiReasoningPrefix{"text":"I should inspect the local context."}',
+      );
+      await tester.pump();
+      expect(
+          find.byKey(const ValueKey('agent_thinking_panel')), findsOneWidget);
+      expect(find.textContaining('I should inspect the local context.'),
+          findsOneWidget);
+
+      await backend.stream.close();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('I should inspect the local context.'),
+          findsNothing);
+      expect(find.text('Ask AI failed. Please try again.'), findsOneWidget);
+      expect(find.textContaining('Final answer'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'agent conversation ignores unknown stream control chunks',
+    (tester) async {
+      final backend = _ControlledReasoningBackend();
+      await _pumpAgentConversation(tester, backend);
+      await _sendAgentMessage(tester);
+
+      backend.stream.add(
+        '$_askAiReasoningPrefix{"text":"I should inspect the local context."}',
+      );
+      await tester.pump();
+      expect(find.textContaining('I should inspect the local context.'),
+          findsOneWidget);
+
+      backend.stream.add('\u001eSL_UNKNOWN\u001e{"text":"do not render"}');
+      await tester.pump();
+      expect(find.textContaining('SL_UNKNOWN'), findsNothing);
+      expect(find.textContaining('do not render'), findsNothing);
+      expect(find.textContaining('I should inspect the local context.'),
+          findsOneWidget);
+
+      backend.stream.add('The next step is to book the appointment.');
+      await tester.pump();
+      expect(find.textContaining('I should inspect the local context.'),
+          findsNothing);
+      expect(find.textContaining('The next step is to book the appointment.'),
+          findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'self managed conversation uses the same agent workspace',
     (tester) async {
-      final previousPlatform = debugDefaultTargetPlatformOverride;
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      await _pumpAgentConversation(tester, TestAppBackend());
 
-      try {
-        await tester.binding.setSurfaceSize(const Size(1012, 701));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
-
-        await tester.pumpWidget(
-          wrapWithI18n(
-            MaterialApp(
-              home: AppBackendScope(
-                backend: TestAppBackend(),
-                child: AppPlatformCapabilityScope(
-                  capabilities: const AppPlatformCapabilities(
-                    supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
-                    supportsAudioRecording: true,
-                    supportsDesktopDrop: true,
-                    supportsDesktopBootSettings: true,
-                    supportsCameraCapture: false,
-                    usesCloudSessionModel: false,
-                  ),
-                  child: SessionScope(
-                    sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                    lock: () {},
-                    child: const AppShell(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        expect(
-          find.byKey(const ValueKey('agent_conversation_workspace')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const ValueKey('conversation_context_rail')),
-          findsOneWidget,
-        );
-      } finally {
-        debugDefaultTargetPlatformOverride = previousPlatform;
-      }
+      expect(
+        find.byKey(const ValueKey('agent_conversation_workspace')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('conversation_context_rail')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -700,6 +713,52 @@ secondloop://message/history-rich-1
       findsOneWidget,
     );
   });
+}
+
+Future<void> _pumpAgentConversation(
+  WidgetTester tester,
+  TestAppBackend backend,
+) async {
+  await tester.binding.setSurfaceSize(const Size(1012, 701));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(wrapWithI18n(MaterialApp(
+      home: AppBackendScope(
+    backend: backend,
+    child: AppPlatformCapabilityScope(
+      capabilities: const AppPlatformCapabilities(
+        supportsDesktopHotkey: true,
+        supportsBiometricUnlock: false,
+        supportsAudioRecording: true,
+        supportsDesktopDrop: true,
+        supportsDesktopBootSettings: true,
+        supportsCameraCapture: false,
+        usesCloudSessionModel: false,
+      ),
+      child: SessionScope(
+        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        lock: () {},
+        child: SubscriptionScope(
+          controller: _SubscriptionController(SubscriptionStatus.entitled),
+          child: const AppShell(),
+        ),
+      ),
+    ),
+  ))));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _sendAgentMessage(WidgetTester tester) async {
+  await tester.enterText(
+    find.byKey(const ValueKey('chat_input')),
+    'Please help me decide the next step.',
+  );
+  await tester.pump();
+  tester
+      .widget<FilledButton>(
+        find.byKey(const ValueKey('chat_send')),
+      )
+      .onPressed!();
+  await tester.pump();
 }
 
 final class _TrackingBackend extends TestAppBackend {
@@ -779,6 +838,25 @@ final class _TrackingBackend extends TestAppBackend {
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
     );
+  }
+}
+
+final class _ControlledReasoningBackend extends TestAppBackend {
+  final stream = StreamController<String>();
+  int askAiStreamCalls = 0;
+  String? lastAskedQuestion;
+
+  @override
+  Stream<String> askAiStream(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) {
+    askAiStreamCalls += 1;
+    lastAskedQuestion = question;
+    return stream.stream;
   }
 }
 
