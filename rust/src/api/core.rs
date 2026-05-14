@@ -14,8 +14,6 @@ use crate::{llm, rag, semantic_parse};
 use anyhow::{anyhow, Context, Result};
 
 const ASK_AI_ERROR_PREFIX: &str = "\u{001e}SL_ERROR\u{001e}";
-const ASK_AI_META_PREFIX: &str = "\u{001e}SL_META\u{001e}";
-const ASK_AI_META_REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
 const ATTACHMENT_REMOTE_MISSING_ERROR_CODE: &str = "SL_ERR_ATTACHMENT_REMOTE_MISSING";
 
 fn map_attachment_download_error(err: anyhow::Error) -> anyhow::Error {
@@ -23,26 +21,6 @@ fn map_attachment_download_error(err: anyhow::Error) -> anyhow::Error {
         return anyhow!(ATTACHMENT_REMOTE_MISSING_ERROR_CODE);
     }
     err
-}
-
-fn emit_ask_ai_meta_if_any(sink: &StreamSink<String>, role: Option<&str>) -> Result<()> {
-    let Some(role) = role else {
-        return Ok(());
-    };
-    let Some(request_id) = role.strip_prefix(ASK_AI_META_REQUEST_ID_ROLE_PREFIX) else {
-        return Ok(());
-    };
-    if request_id.trim().is_empty() {
-        return Ok(());
-    }
-
-    let payload = format!(
-        "{ASK_AI_META_PREFIX}{{\"type\":\"cloud_request_id\",\"request_id\":\"{request_id}\"}}"
-    );
-    if sink.add(payload).is_err() {
-        return Err(rag::StreamCancelled.into());
-    }
-    Ok(())
 }
 
 fn finish_ask_ai_stream(sink: &StreamSink<String>, result: Result<()>) -> Result<()> {

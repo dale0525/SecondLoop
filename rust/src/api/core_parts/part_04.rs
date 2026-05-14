@@ -183,7 +183,10 @@ pub fn rag_ask_ai_stream(
             focus,
             provider.as_ref(),
             &mut |ev| {
-                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
+                crate::api::ask_ai_stream_controls::emit_control_if_any(
+                    &sink,
+                    ev.role.as_deref(),
+                )?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -279,7 +282,10 @@ pub fn rag_ask_ai_stream_time_window(
             time_end_ms,
             provider.as_ref(),
             &mut |ev| {
-                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
+                crate::api::ask_ai_stream_controls::emit_control_if_any(
+                    &sink,
+                    ev.role.as_deref(),
+                )?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -397,7 +403,10 @@ pub fn rag_ask_ai_stream_with_brok_embeddings(
             focus,
             provider.as_ref(),
             &mut |ev| {
-                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
+                crate::api::ask_ai_stream_controls::emit_control_if_any(
+                    &sink,
+                    ev.role.as_deref(),
+                )?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -494,7 +503,10 @@ pub fn rag_ask_ai_stream_with_brok_embeddings_time_window(
             time_end_ms,
             provider.as_ref(),
             &mut |ev| {
-                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
+                crate::api::ask_ai_stream_controls::emit_control_if_any(
+                    &sink,
+                    ev.role.as_deref(),
+                )?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -598,7 +610,10 @@ pub fn rag_ask_ai_stream_cloud_gateway(
             focus,
             &provider,
             &mut |ev| {
-                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
+                crate::api::ask_ai_stream_controls::emit_control_if_any(
+                    &sink,
+                    ev.role.as_deref(),
+                )?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -678,7 +693,10 @@ pub fn rag_ask_ai_stream_cloud_gateway_time_window(
             time_end_ms,
             &provider,
             &mut |ev| {
-                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
+                crate::api::ask_ai_stream_controls::emit_control_if_any(
+                    &sink,
+                    ev.role.as_deref(),
+                )?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -763,7 +781,10 @@ pub fn rag_ask_ai_stream_cloud_gateway_with_embeddings(
             focus,
             &provider,
             &mut |ev| {
-                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
+                crate::api::ask_ai_stream_controls::emit_control_if_any(
+                    &sink,
+                    ev.role.as_deref(),
+                )?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());
@@ -848,7 +869,10 @@ pub fn rag_ask_ai_stream_cloud_gateway_with_embeddings_time_window(
             time_end_ms,
             &provider,
             &mut |ev| {
-                emit_ask_ai_meta_if_any(&sink, ev.role.as_deref())?;
+                crate::api::ask_ai_stream_controls::emit_control_if_any(
+                    &sink,
+                    ev.role.as_deref(),
+                )?;
                 if ev.done {
                     if sink.add(String::new()).is_err() {
                         return Err(rag::StreamCancelled.into());

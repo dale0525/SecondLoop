@@ -2,6 +2,7 @@
 // Do not put code in `mod.rs`, but put in e.g. `simple.rs`.
 //
 
+pub(crate) mod ask_ai_stream_controls;
 pub mod ask_scope;
 pub mod attachments;
 #[cfg(not(target_family = "wasm"))]

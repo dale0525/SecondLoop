@@ -9,8 +9,6 @@ use crate::message_citations::append_message_citation_if_missing;
 use crate::{llm, rag};
 
 const ASK_AI_ERROR_PREFIX: &str = "\u{001e}SL_ERROR\u{001e}";
-const ASK_AI_META_PREFIX: &str = "\u{001e}SL_META\u{001e}";
-const ASK_AI_META_REQUEST_ID_ROLE_PREFIX: &str = "secondloop_request_id:";
 
 fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     if bytes.len() != 32 {
@@ -30,26 +28,6 @@ fn finish_ask_ai_stream(sink: &StreamSink<String>, result: Result<()>) -> Result
             Ok(())
         }
     }
-}
-
-fn emit_ask_ai_meta_if_any(sink: &StreamSink<String>, role: Option<&str>) -> Result<()> {
-    let Some(role) = role else {
-        return Ok(());
-    };
-    let Some(request_id) = role.strip_prefix(ASK_AI_META_REQUEST_ID_ROLE_PREFIX) else {
-        return Ok(());
-    };
-    if request_id.trim().is_empty() {
-        return Ok(());
-    }
-
-    let payload = format!(
-        "{ASK_AI_META_PREFIX}{{\"type\":\"cloud_request_id\",\"request_id\":\"{request_id}\"}}"
-    );
-    if sink.add(payload).is_err() {
-        return Err(rag::StreamCancelled.into());
-    }
-    Ok(())
 }
 
 fn normalize_tag_ids(raw: &[String]) -> Vec<String> {
@@ -655,8 +633,9 @@ fn stream_scoped_ask_with_provider(
     let mut assistant_text = String::new();
     let result = provider.stream_answer(&prompt, &mut |ev| {
         if emit_meta {
-            emit_ask_ai_meta_if_any(sink, ev.role.as_deref())?;
+            crate::api::ask_ai_stream_controls::emit_request_meta_if_any(sink, ev.role.as_deref())?;
         }
+        crate::api::ask_ai_stream_controls::emit_reasoning_if_any(sink, ev.role.as_deref())?;
 
         if ev.done {
             if sink.add(String::new()).is_err() {
