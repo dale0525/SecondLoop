@@ -261,11 +261,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     required SubscriptionStatus subscriptionStatus,
     required bool hasCloudAccount,
     required bool canUseCloudEmbeddings,
-    required bool canUseSemanticParse,
-    required bool canUseTaskPriorityAi,
     required String cloudEmbeddingsSubtitle,
-    required String semanticParseSubtitle,
-    required String taskPriorityAiSubtitle,
     required Widget? askAiWarning,
     required Widget? embeddingsWarning,
     required Widget? mediaWarning,
@@ -451,9 +447,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     final hasCloudAccount = cloudUid.isNotEmpty;
     final canUseCloudEmbeddings =
         hasCloudAccount && subscriptionStatus == SubscriptionStatus.entitled;
-    final canUseSemanticParse = canUseCloudEmbeddings || _byokConfigured;
-    final canUseTaskPriorityAi = canUseSemanticParse;
-
     final cloudEmbeddingsSubtitle =
         subscriptionStatus == SubscriptionStatus.notEntitled
             ? context.t.settings.cloudEmbeddings.subtitleRequiresPro
@@ -462,22 +455,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                 : (_cloudEmbeddingsEnabled ?? false)
                     ? context.t.settings.cloudEmbeddings.subtitleEnabled
                     : context.t.settings.cloudEmbeddings.subtitleDisabled;
-
-    final semanticParseSubtitle = !canUseSemanticParse
-        ? context.t.settings.semanticParseAutoActions.subtitleRequiresSetup
-        : !_semanticParseConfigured
-            ? context.t.settings.semanticParseAutoActions.subtitleUnset
-            : (_semanticParseEnabled ?? false)
-                ? context.t.settings.semanticParseAutoActions.subtitleEnabled
-                : context.t.settings.semanticParseAutoActions.subtitleDisabled;
-
-    final taskPriorityAiSubtitle = !canUseTaskPriorityAi
-        ? context.t.settings.taskPriorityAiEnhancement.subtitleRequiresSetup
-        : !_taskPriorityAiConfigured
-            ? context.t.settings.taskPriorityAiEnhancement.subtitleUnset
-            : (_taskPriorityAiEnabled ?? true)
-                ? context.t.settings.taskPriorityAiEnhancement.subtitleEnabled
-                : context.t.settings.taskPriorityAiEnhancement.subtitleDisabled;
 
     final askPreferredRoute = _preferredAskAiRoute(_askAiPreference);
     final askAiUnavailable = !_askAiLoading &&
@@ -522,7 +499,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
           )
         : null;
 
-    final canUseSmartOrganization = canUseSemanticParse;
+    final canUseSmartOrganization = canUseCloudEmbeddings || _byokConfigured;
 
     return Scaffold(
       appBar: AppBar(title: Text(t.title)),
@@ -611,11 +588,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
               subscriptionStatus: subscriptionStatus,
               hasCloudAccount: hasCloudAccount,
               canUseCloudEmbeddings: canUseCloudEmbeddings,
-              canUseSemanticParse: canUseSemanticParse,
-              canUseTaskPriorityAi: canUseTaskPriorityAi,
               cloudEmbeddingsSubtitle: cloudEmbeddingsSubtitle,
-              semanticParseSubtitle: semanticParseSubtitle,
-              taskPriorityAiSubtitle: taskPriorityAiSubtitle,
               askAiWarning: askAiWarning,
               embeddingsWarning: embeddingsWarning,
               mediaWarning: mediaWarning,

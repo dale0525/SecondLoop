@@ -180,7 +180,24 @@
     "recentFiles": "最近文件",
     "pendingReview": "待审核",
     "empty": "暂无上下文。",
-    "privacyNote": "隐私说明"
+    "privacyNote": "隐私说明",
+    "defaultPrivacyNote": "这里只显示已同步 vault、工作集和已批准的上下文。"
+  },
+  "agentTasks": {
+    "topPrioritiesCount": "$count 个优先事项",
+    "seeAll": "查看全部任务（$count）",
+    "allTasks": "全部任务",
+    "empty": "没有未完成任务",
+    "created": "任务已创建",
+    "openTask": "打开任务",
+    "status": "状态",
+    "dueLabel": "截止时间",
+    "statusOpen": "未完成",
+    "statusDone": "已完成",
+    "statusInbox": "收件箱",
+    "notScheduled": "没有截止时间",
+    "due": "截止 $value",
+    "itemIndex": "$value"
   },
   "approvalPreview": {
     "title": "任务变更预览",
@@ -457,7 +474,8 @@
       }
     },
     "review": {
-      "empty": "没有需要复核的内容。"
+      "empty": "没有需要复核的内容。",
+      "count": "$count"
     }
   }
 }

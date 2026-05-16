@@ -99,6 +99,7 @@
       "apiBaseUrl": "API base URL",
       "authMode": "Auth mode",
       "manifestVersion": "Manifest version",
+      "manifestVersionValue": "$value",
       "managedSession": "Managed session",
       "selfManagedConnection": "Self-managed connection"
     },
@@ -375,18 +376,6 @@
         "openCloudAccount": "Open Cloud account",
         "openByok": "Open API keys"
       }
-    }
-  },
-  "semanticParseAutoActions": {
-    "title": "Smarter semantic analysis",
-    "subtitleEnabled": "Enhanced mode is on. Local semantic analysis stays on, and Cloud/BYOK improves automation quality.",
-    "subtitleDisabled": "Enhanced mode is off. Local semantic analysis remains active.",
-    "subtitleUnset": "Not set. Enhanced mode is off by default (local semantic analysis remains active).",
-    "subtitleRequiresSetup": "Sign in with SecondLoop Pro or configure an API key (BYOK) to enable enhanced mode.",
-    "dialogTitle": "Enable smarter semantic analysis?",
-    "dialogBody": "Local semantic analysis is always on. When enhanced mode is enabled, SecondLoop may send message text to AI for smarter semantic parsing on top of local analysis.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis may use Cloud quota or your own provider quota.",
-    "dialogActions": {
-      "enable": "Enable"
     }
   },
   "mediaAnnotation": {
@@ -751,6 +740,7 @@
       "used": "Used:",
       "limit": "Limit:",
       "attachments": "Photos & files:",
+      "noAttachments": "No attachments yet",
       "ops": "Sync history:",
       "loadFailed": "Failed to load: $error"
     }
@@ -939,13 +929,6 @@
       }
     }
   },
-  "taskPriorityAiEnhancement": {
-    "title": "Smart task priorities",
-    "subtitleEnabled": "On. SecondLoop uses task context to better decide what to do first and explains why.",
-    "subtitleDisabled": "Off. Tasks still follow rule-based ordering without AI deciding what should come first.",
-    "subtitleUnset": "Not set. Enabled by default. When Cloud/BYOK is available, AI improves task ordering and suggestions.",
-    "subtitleRequiresSetup": "Sign in with SecondLoop Pro or configure an API key (BYOK) to enable smart task priorities."
-  },
   "agentUi": {
     "tabs": {
       "account": "Account",
@@ -986,6 +969,7 @@
     },
     "links": {
       "cloudAccount": "Open Cloud account",
+      "runtimeMode": "Open runtime mode",
       "syncSettings": "Open sync settings",
       "aiSettings": "Open AI settings",
       "diagnostics": "Open diagnostics"

@@ -9,6 +9,7 @@ import '../agent_ui/agent_tab_bar.dart';
 import 'agent_settings_models.dart';
 import 'ai_settings_page.dart';
 import 'cloud_account_page.dart';
+import 'cloud_runtime_mode_page.dart';
 import 'diagnostics_page.dart';
 import 'sync_settings_page.dart';
 
@@ -92,6 +93,7 @@ final class _AgentSettingsPageState extends State<AgentSettingsPage> {
               body: context.t.settings.agentUi.account.securityBody,
             ),
             _SettingsDeepLink(
+              buttonKey: const ValueKey('agent_settings_open_cloud_account'),
               label: context.t.settings.agentUi.links.cloudAccount,
               pageBuilder: (_) => const CloudAccountPage(),
             ),
@@ -108,6 +110,12 @@ final class _AgentSettingsPageState extends State<AgentSettingsPage> {
               body: context.t.settings.agentUi.connection.connectionHealthBody,
             ),
             _SettingsDeepLink(
+              buttonKey: const ValueKey('agent_settings_open_runtime_mode'),
+              label: context.t.settings.agentUi.links.runtimeMode,
+              pageBuilder: (_) => const CloudRuntimeModePage(),
+            ),
+            _SettingsDeepLink(
+              buttonKey: const ValueKey('agent_settings_open_sync_settings'),
               label: context.t.settings.agentUi.links.syncSettings,
               pageBuilder: (_) => const SyncSettingsPage(),
             ),
@@ -120,6 +128,7 @@ final class _AgentSettingsPageState extends State<AgentSettingsPage> {
               body: context.t.settings.agentUi.permissions.allowedActionsBody,
             ),
             _SettingsDeepLink(
+              buttonKey: const ValueKey('agent_settings_open_ai_settings'),
               label: context.t.settings.agentUi.links.aiSettings,
               pageBuilder: (_) => const AiSettingsPage(),
             ),
@@ -144,6 +153,7 @@ final class _AgentSettingsPageState extends State<AgentSettingsPage> {
               body: context.t.settings.agentUi.activity.diagnosticExportBody,
             ),
             _SettingsDeepLink(
+              buttonKey: const ValueKey('agent_settings_open_diagnostics'),
               label: context.t.settings.agentUi.links.diagnostics,
               pageBuilder: (_) => const DiagnosticsPage(),
             ),
@@ -210,10 +220,12 @@ final class _SettingsRow extends StatelessWidget {
 
 final class _SettingsDeepLink extends StatelessWidget {
   const _SettingsDeepLink({
+    required this.buttonKey,
     required this.label,
     required this.pageBuilder,
   });
 
+  final Key buttonKey;
   final String label;
   final WidgetBuilder pageBuilder;
 
@@ -222,6 +234,7 @@ final class _SettingsDeepLink extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: OutlinedButton.icon(
+        key: buttonKey,
         onPressed: () {
           pushPageWithInheritedScopes(
             Navigator.of(context),

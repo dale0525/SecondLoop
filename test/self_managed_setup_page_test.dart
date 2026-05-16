@@ -32,7 +32,7 @@ void main() {
               runtimeMode: CloudRuntimeMode.selfManaged,
               apiBaseUrl: 'https://user-runtime.example/',
               authMode: CloudRuntimeAuthMode.runtimeToken,
-              capabilities: [CloudRuntimeCapability('chat')],
+              capabilities: CloudRuntimeRequiredCapabilities.all,
             ),
             authToken: 'runtime-token-1',
             capabilityManifestId: 'manifest-self-1',

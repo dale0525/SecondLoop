@@ -96,7 +96,9 @@ class _TodoCommandReviewPageState extends State<TodoCommandReviewPage> {
         ..clearSnackBars()
         ..showSnackBar(
           SnackBar(
-              content: Text(context.t.chat.secretary.todoCommand.appliedSnack)),
+            duration: const Duration(seconds: 3),
+            content: Text(context.t.chat.secretary.todoCommand.appliedSnack),
+          ),
         );
       return;
     }
@@ -105,7 +107,9 @@ class _TodoCommandReviewPageState extends State<TodoCommandReviewPage> {
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-            content: Text(context.t.chat.secretary.todoCommand.failedSnack)),
+          duration: const Duration(seconds: 3),
+          content: Text(context.t.chat.secretary.todoCommand.failedSnack),
+        ),
       );
   }
 
@@ -116,7 +120,9 @@ class _TodoCommandReviewPageState extends State<TodoCommandReviewPage> {
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-            content: Text(context.t.chat.secretary.todoCommand.ignoredSnack)),
+          duration: const Duration(seconds: 3),
+          content: Text(context.t.chat.secretary.todoCommand.ignoredSnack),
+        ),
       );
   }
 

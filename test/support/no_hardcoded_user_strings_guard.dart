@@ -557,9 +557,7 @@ class _HardcodedUserFacingStringVisitor extends RecursiveAstVisitor<void> {
       return false;
     }
     if (unwrapped is BinaryExpression && unwrapped.operator.lexeme == '+') {
-      return _containsDisplayTextLiteral(unwrapped.leftOperand.toSource()) ||
-          _containsDisplayTextLiteral(unwrapped.rightOperand.toSource()) ||
-          _isHardcodedUserFacingExpression(unwrapped.leftOperand, context) ||
+      return _isHardcodedUserFacingExpression(unwrapped.leftOperand, context) ||
           _isHardcodedUserFacingExpression(unwrapped.rightOperand, context);
     }
     if (unwrapped is SimpleIdentifier) {

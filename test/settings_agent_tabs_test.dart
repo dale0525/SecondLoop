@@ -49,6 +49,10 @@ void main() {
     expect(find.text('Connection health'), findsOneWidget);
     expect(find.text('Allowed actions'), findsNothing);
     expect(find.text('Activity transparency timeline'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent_settings_open_runtime_mode')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Permissions tab owns allowed actions only', (tester) async {

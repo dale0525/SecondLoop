@@ -13,6 +13,7 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/cloud_usage_client.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/settings/cloud_usage_card.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -23,6 +24,29 @@ Future<void> _pumpUi(WidgetTester tester, {int cycles = 12}) async {
   for (var i = 0; i < cycles; i += 1) {
     await tester.pump(const Duration(milliseconds: 32));
   }
+}
+
+Future<void> _pumpCloudAccountPage(WidgetTester tester) async {
+  await tester.pumpWidget(
+    AppBackendScope(
+      backend: _FakeBackend(),
+      child: CloudAuthScope(
+        controller: _FakeCloudAuthController(idToken: ''),
+        gatewayConfig: const CloudGatewayConfig(
+          baseUrl: 'https://gateway.test',
+          modelName: 'cloud',
+        ),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: CloudAccountPage()),
+          ),
+        ),
+      ),
+    ),
+  );
+  await _pumpUi(tester);
 }
 
 void main() {
@@ -85,29 +109,7 @@ void main() {
   testWidgets('Cloud account page shows Cloud usage card', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
-    await tester.pumpWidget(
-      AppBackendScope(
-        backend: _FakeBackend(),
-        child: CloudAuthScope(
-          controller: _FakeCloudAuthController(idToken: ''),
-          gatewayConfig: const CloudGatewayConfig(
-            baseUrl: 'https://gateway.test',
-            modelName: 'cloud',
-          ),
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: wrapWithI18n(
-              const MaterialApp(home: Scaffold(body: SettingsPage())),
-            ),
-          ),
-        ),
-      ),
-    );
-    await _pumpUi(tester);
-
-    await tester.tap(find.text('Cloud account'));
-    await _pumpUi(tester);
+    await _pumpCloudAccountPage(tester);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('cloud_usage_refresh')),
@@ -121,29 +123,7 @@ void main() {
   testWidgets('Cloud account page shows Vault storage card', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
-    await tester.pumpWidget(
-      AppBackendScope(
-        backend: _FakeBackend(),
-        child: CloudAuthScope(
-          controller: _FakeCloudAuthController(idToken: ''),
-          gatewayConfig: const CloudGatewayConfig(
-            baseUrl: 'https://gateway.test',
-            modelName: 'cloud',
-          ),
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: wrapWithI18n(
-              const MaterialApp(home: Scaffold(body: SettingsPage())),
-            ),
-          ),
-        ),
-      ),
-    );
-    await _pumpUi(tester);
-
-    await tester.tap(find.text('Cloud account'));
-    await _pumpUi(tester);
+    await _pumpCloudAccountPage(tester);
 
     await tester.drag(find.byType(ListView), const Offset(0, -1200));
     await _pumpUi(tester);

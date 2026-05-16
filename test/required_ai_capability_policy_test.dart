@@ -6,7 +6,6 @@ import 'package:secondloop/core/ai/embeddings_source_prefs.dart';
 import 'package:secondloop/core/ai/media_source_prefs.dart';
 import 'package:secondloop/core/ai/required_ai_capability_policy.dart';
 import 'package:secondloop/core/ai/semantic_parse_data_consent_prefs.dart';
-import 'package:secondloop/core/ai/task_priority_ai_enhancement_prefs.dart';
 import 'package:secondloop/core/cloud/runtime_manifest.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -16,22 +15,18 @@ void main() {
     SharedPreferences.setMockInitialValues({
       SemanticParseDataConsentPrefs.prefsKey: false,
       EmbeddingsDataConsentPrefs.prefsKey: false,
-      TaskPriorityAiEnhancementPrefs.prefsKey: false,
     });
 
     final prefs = await SharedPreferences.getInstance();
 
     expect(SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs), isTrue);
     expect(EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs), isTrue);
-    expect(await TaskPriorityAiEnhancementPrefs.read(), isTrue);
 
     await SemanticParseDataConsentPrefs.setEnabled(prefs, false);
     await EmbeddingsDataConsentPrefs.setEnabled(prefs, false);
-    await TaskPriorityAiEnhancementPrefs.write(false);
 
     expect(prefs.getBool(SemanticParseDataConsentPrefs.prefsKey), isTrue);
     expect(prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey), isTrue);
-    expect(prefs.getBool(TaskPriorityAiEnhancementPrefs.prefsKey), isTrue);
   });
 
   test('legacy local source preferences collapse to runtime auto selection',

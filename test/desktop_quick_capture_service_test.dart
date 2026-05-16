@@ -137,7 +137,7 @@ void main() {
     expect(hotkey.registeredHotKeys.last, nextHotKey);
   });
 
-  test('Blur auto-hides when visible', () async {
+  test('Blur restores main window when visible', () async {
     final controller = QuickCaptureController();
     final window = _FakeWindow();
     final hotkey = _FakeHotkey();
@@ -162,7 +162,9 @@ void main() {
     service.onWindowBlur();
     await pumpEventQueue();
     expect(controller.visible, false);
-    expect(window.hideCalls, 1);
+    expect(window.exitQuickCaptureCalls, 1);
+    expect(window.showAndFocusCalls, 2);
+    expect(window.hideCalls, 0);
   });
 }
 

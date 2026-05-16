@@ -180,7 +180,24 @@
     "recentFiles": "Recent files",
     "pendingReview": "Pending review",
     "empty": "No context yet.",
-    "privacyNote": "Privacy note"
+    "privacyNote": "Privacy note",
+    "defaultPrivacyNote": "Only synced vault, working set, and approved context are shown here."
+  },
+  "agentTasks": {
+    "topPrioritiesCount": "$count top priorities",
+    "seeAll": "See all tasks ($count)",
+    "allTasks": "All tasks",
+    "empty": "No open tasks",
+    "created": "Task created",
+    "openTask": "Open task",
+    "status": "Status",
+    "dueLabel": "Due",
+    "statusOpen": "Not completed",
+    "statusDone": "Completed",
+    "statusInbox": "Inbox",
+    "notScheduled": "No due time",
+    "due": "Due $value",
+    "itemIndex": "$value"
   },
   "approvalPreview": {
     "title": "Task change preview",
@@ -457,7 +474,8 @@
       }
     },
     "review": {
-      "empty": "Nothing to review."
+      "empty": "Nothing to review.",
+      "count": "$count"
     }
   }
 }

@@ -87,7 +87,11 @@ class CloudRuntimeModePage extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(connection.profile.apiBaseUrl),
                 Text(connection.profile.authMode.wireValue),
-                Text('${connection.manifest.manifestVersion}'),
+                Text(
+                  context.t.settings.runtimeMode.details.manifestVersionValue(
+                    value: connection.manifest.manifestVersion,
+                  ),
+                ),
               ],
             ],
           );

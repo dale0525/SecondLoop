@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/calendar/event_viewer_page.dart';
-import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/features/chat/message_viewer_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -64,7 +63,7 @@ void main() {
   });
 
   testWidgets(
-      'message viewer secondloop todo link opens todo detail via get-by-id',
+      'message viewer secondloop todo link opens agent task detail via get-by-id',
       (tester) async {
     final backend = _Backend(
       todos: const [
@@ -102,7 +101,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byType(TodoDetailPage), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('agent_task_detail_sheet')), findsOneWidget);
     expect(find.text('Launch checklist'), findsWidgets);
   });
 

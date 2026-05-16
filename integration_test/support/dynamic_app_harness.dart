@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
-import 'package:secondloop/core/ai/task_priority_ai_enhancement_prefs.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
@@ -16,6 +15,7 @@ import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/agent_settings_page.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
@@ -49,7 +49,6 @@ final class DynamicAppHarness {
     SharedPreferences.setMockInitialValues({
       'ask_ai_data_consent_v1': true,
       'welcome_guide_seen_v1': true,
-      TaskPriorityAiEnhancementPrefs.prefsKey: false,
     });
     await tester.binding.setSurfaceSize(surfaceSize);
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -122,10 +121,6 @@ final class DynamicAppHarness {
       find.byKey(const ValueKey('chat_input')),
       description: 'chat input',
     );
-    await harness.waitForBackend(
-      'initial task priority load',
-      () => backend.listTodosCalls > 0,
-    );
     await tester.pump();
     return harness;
   }
@@ -137,26 +132,41 @@ final class DynamicAppHarness {
       await tester.tap(chatSettingsButton);
       await tester.pump();
     } else {
-      final railSettingsButton = find.descendant(
-        of: find.byType(NavigationRail),
-        matching: find.byIcon(Icons.settings_outlined),
-      );
-      await pumpUntilFound(
-        railSettingsButton,
-        description: 'desktop settings tab',
-      );
-      await tester.ensureVisible(railSettingsButton.first);
-      await tester.tap(railSettingsButton.first);
+      final agentSettingsButton =
+          find.byKey(const ValueKey('app_shell_nav_settings'));
+      if (agentSettingsButton.evaluate().isNotEmpty) {
+        await tester.ensureVisible(agentSettingsButton);
+        await tester.tap(agentSettingsButton);
+      } else {
+        final railSettingsButton = find.descendant(
+          of: find.byType(NavigationRail),
+          matching: find.byIcon(Icons.settings_outlined),
+        );
+        await pumpUntilFound(
+          railSettingsButton,
+          description: 'desktop settings tab',
+        );
+        await tester.ensureVisible(railSettingsButton.first);
+        await tester.tap(railSettingsButton.first);
+      }
       await tester.pump();
     }
     await pumpUntilFound(
-      find.byType(SettingsPage),
+      find.byWidgetPredicate(
+        (widget) => widget is SettingsPage || widget is AgentSettingsPage,
+      ),
       description: 'settings page',
     );
   }
 
   Future<void> openAiSettings() async {
-    await tapByKey('settings_ai_source');
+    if (find.byType(AgentSettingsPage).evaluate().isNotEmpty) {
+      await tester.tap(find.text('Permissions'));
+      await tester.pump();
+      await tapByKey('agent_settings_open_ai_settings');
+    } else {
+      await tapByKey('settings_ai_source');
+    }
     await pumpUntilFound(
       find.byType(AiSettingsPage),
       description: 'AI settings page',
@@ -180,7 +190,13 @@ final class DynamicAppHarness {
   }
 
   Future<void> openRuntimeModeSettings() async {
-    await tapByKey('settings_runtime_mode');
+    if (find.byType(AgentSettingsPage).evaluate().isNotEmpty) {
+      await tester.tap(find.text('Connection'));
+      await tester.pump();
+      await tapByKey('agent_settings_open_runtime_mode');
+    } else {
+      await tapByKey('settings_runtime_mode');
+    }
     await pumpUntilFound(
       find.byType(CloudRuntimeModePage),
       description: 'runtime mode page',
@@ -197,7 +213,13 @@ final class DynamicAppHarness {
   }
 
   Future<void> openSyncSettings() async {
-    await tapByKey('settings_sync');
+    if (find.byType(AgentSettingsPage).evaluate().isNotEmpty) {
+      await tester.tap(find.text('Connection'));
+      await tester.pump();
+      await tapByKey('agent_settings_open_sync_settings');
+    } else {
+      await tapByKey('settings_sync');
+    }
     await pumpUntilFound(
       find.byType(SyncSettingsPage),
       description: 'sync settings page',

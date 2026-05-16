@@ -3,14 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:secondloop/core/ai/ai_routing.dart';
+import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
-import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 
 import 'package:secondloop/core/quick_capture/quick_capture_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/quick_capture/quick_capture_overlay.dart';
 import 'test_i18n.dart';
 import 'package:secondloop/core/quick_capture/quick_capture_controller.dart';
@@ -65,11 +62,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.semanticParseEnqueueCount, 0);
-    expect(backend.insertedMessages, hasLength(1));
+    expect(backend.insertedMessages, isEmpty);
+    expect(
+      controller.consumePendingChatSubmission('loop_home')?.content,
+      '明天下午 5 点调研一下当前主流的 llm 模型',
+    );
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
         findsNothing);
-    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
-    expect(controller.consumeOpenChatRequest(), isFalse);
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isTrue);
+    expect(controller.consumeOpenChatRequest(), isTrue);
   });
 
   testWidgets('Quick capture skips semantic parse for todo-relevant input',
@@ -118,80 +119,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.semanticParseEnqueueCount, 0);
-    expect(backend.insertedMessages, hasLength(1));
+    expect(backend.insertedMessages, isEmpty);
+    expect(
+      controller.consumePendingChatSubmission('loop_home')?.content,
+      '调研一下当前主流的 llm 模型',
+    );
     expect(backend.upsertTodoCount, 0);
-    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
-    expect(controller.consumeOpenChatRequest(), isFalse);
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isTrue);
+    expect(controller.consumeOpenChatRequest(), isTrue);
     expect(find.text('Remind me to confirm later'), findsNothing);
-  });
-
-  testWidgets('Quick capture stores capture text when cloud token is missing',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({
-      'welcome_guide_seen_v1': true,
-      'semantic_parse_data_consent_v1': true,
-    });
-    final controller = QuickCaptureController();
-    final backend = _CloudOnlyQuickCaptureBackend();
-    final navigatorKey = GlobalKey<NavigatorState>();
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: CloudAuthScope(
-            controller: _FakeCloudAuthController(idToken: '  '),
-            gatewayConfig: const CloudGatewayConfig(
-              baseUrl: 'https://gateway.test',
-              modelName: 'cloud',
-            ),
-            child: SubscriptionScope(
-              controller: _FakeSubscriptionStatusController(
-                  SubscriptionStatus.entitled),
-              child: SessionScope(
-                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                lock: () {},
-                child: QuickCaptureScope(
-                  controller: controller,
-                  child: MaterialApp(
-                    navigatorKey: navigatorKey,
-                    home: QuickCaptureOverlay(
-                      navigatorKey: navigatorKey,
-                      child: const Scaffold(body: SizedBox.shrink()),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
-
-    controller.show();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
-
-    await tester.enterText(
-      find.byKey(const ValueKey('quick_capture_input')),
-      '明天下午 5 点调研一下当前主流的 llm 模型',
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-
-    expect(backend.semanticParseEnqueueCount, 0);
-    expect(backend.insertedMessages, hasLength(1));
-    expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
-        findsNothing);
-    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
-    expect(controller.consumeOpenChatRequest(), isFalse);
   });
 
   testWidgets('Quick capture inserts into Chat and hides', (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
+      'ask_ai_source_preference_v1': 'byok',
     });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
@@ -207,8 +149,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('quick_capture_input')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick_capture_panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('quick_capture_ring')), findsOneWidget);
-    expect(find.byKey(const ValueKey('quick_capture_submit')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('quick_capture_brand_mark')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('quick_capture_status_dot')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick_capture_submit')), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(
+              find.byKey(const ValueKey('quick_capture_submit')))
+          .onPressed,
+      isNull,
+    );
     expect(
       tester.widgetList(find.byType(BackdropFilter)).length,
       backdropCountBeforeShow,
@@ -224,23 +178,127 @@ void main() {
     await tester.pump();
     await tester.enterText(
         find.byKey(const ValueKey('quick_capture_input')), 'hello');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    expect(
+      tester
+          .widget<IconButton>(
+              find.byKey(const ValueKey('quick_capture_submit')))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.tap(find.byKey(const ValueKey('quick_capture_submit')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(backend.insertedMessages, hasLength(1));
     expect(backend.insertedMessages.single.conversationId, 'loop_home');
     expect(backend.insertedMessages.single.role, 'user');
     expect(backend.insertedMessages.single.content, 'hello');
     expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
-    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isTrue);
     expect(controller.consumeOpenChatRequest(), isFalse);
   });
 
-  testWidgets(
-      'Product intent: Quick capture plain message never requests reopen or open-chat flags',
+  testWidgets('Quick capture fits compact desktop window', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(560, 72);
+
+    final backend = _UnlockedBackend();
+    final controller = QuickCaptureController();
+    final navigatorKey = GlobalKey<NavigatorState>();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: QuickCaptureScope(
+              controller: controller,
+              child: MaterialApp(
+                navigatorKey: navigatorKey,
+                home: QuickCaptureOverlay(
+                  navigatorKey: navigatorKey,
+                  child: const Scaffold(body: SizedBox.shrink()),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    controller.show();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('quick_capture_panel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick_capture_input')), findsOneWidget);
+    expect(find.byKey(const ValueKey('quick_capture_submit')), findsOneWidget);
+
+    final panelRect =
+        tester.getRect(find.byKey(const ValueKey('quick_capture_panel')));
+    expect(panelRect.width, lessThanOrEqualTo(560));
+    expect(panelRect.height, lessThanOrEqualTo(72));
+  });
+
+  testWidgets('Quick capture panel keeps agent light surface in dark theme',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
+    });
+    final backend = _UnlockedBackend();
+    final controller = QuickCaptureController();
+    final navigatorKey = GlobalKey<NavigatorState>();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: QuickCaptureScope(
+              controller: controller,
+              child: MaterialApp(
+                theme: AppTheme.dark(),
+                navigatorKey: navigatorKey,
+                home: QuickCaptureOverlay(
+                  navigatorKey: navigatorKey,
+                  child: const Scaffold(body: SizedBox.shrink()),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    controller.show();
+    await tester.pumpAndSettle();
+
+    final panel = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('quick_capture_panel')),
+    );
+    final decoration = panel.decoration as BoxDecoration;
+    expect(decoration.color, const Color(0xFFFFFFFF));
+  });
+
+  testWidgets(
+      'Quick capture submit restores main window through chat lifecycle',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+      'ask_ai_source_preference_v1': 'byok',
     });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
@@ -257,10 +315,11 @@ void main() {
       'hello',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(backend.insertedMessages, hasLength(1));
-    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isTrue);
     expect(controller.consumeOpenChatRequest(), isFalse);
   });
 
@@ -331,6 +390,7 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
+      'ask_ai_source_preference_v1': 'byok',
     });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
@@ -347,7 +407,8 @@ void main() {
       '明天分析对标账户的直播内容',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(backend.insertedMessages, hasLength(1));
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
@@ -411,19 +472,6 @@ final class _SemanticParseEnabledQuickCaptureBackend extends _UnlockedBackend {
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
     );
-  }
-}
-
-final class _CloudOnlyQuickCaptureBackend extends _UnlockedBackend {
-  var semanticParseEnqueueCount = 0;
-
-  @override
-  Future<void> enqueueSemanticParseJob(
-    Uint8List key, {
-    required String messageId,
-    required int nowMs,
-  }) async {
-    semanticParseEnqueueCount += 1;
   }
 }
 
@@ -561,7 +609,17 @@ final class _UnlockedBackend extends AppBackend {
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[];
+      const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'BYOK',
+          providerType: 'openai-compatible',
+          modelName: 'gpt-4o-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
 
   @override
   Future<LlmProfile> createLlmProfile(
@@ -588,8 +646,15 @@ final class _UnlockedBackend extends AppBackend {
     required String question,
     int topK = 10,
     bool thisThreadOnly = false,
-  }) =>
-      const Stream<String>.empty();
+  }) async* {
+    await insertMessage(
+      key,
+      conversationId,
+      role: 'user',
+      content: question,
+    );
+    yield 'OK';
+  }
 
   @override
   Stream<String> askAiStreamCloudGateway(
@@ -674,53 +739,4 @@ final class _UnlockedBackend extends AppBackend {
     required String remoteRoot,
   }) async =>
       0;
-}
-
-final class _FakeCloudAuthController implements CloudAuthController {
-  _FakeCloudAuthController({this.idToken});
-
-  final String? idToken;
-
-  @override
-  String? get uid => 'uid_1';
-
-  @override
-  String? get email => null;
-
-  @override
-  bool? get emailVerified => null;
-
-  @override
-  Future<String?> getIdToken() async => idToken;
-
-  @override
-  Future<void> refreshUserInfo() async {}
-
-  @override
-  Future<void> sendEmailVerification() async {}
-
-  @override
-  Future<void> signInWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> signUpWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
-  Future<void> signOut() async {}
-}
-
-final class _FakeSubscriptionStatusController extends ChangeNotifier
-    implements SubscriptionStatusController {
-  _FakeSubscriptionStatusController(this._status);
-
-  final SubscriptionStatus _status;
-
-  @override
-  SubscriptionStatus get status => _status;
 }

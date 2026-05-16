@@ -107,8 +107,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 3));
 
-    expect(backend.calls, contains('local'));
-    expect(backend.calls, isNot(contains('cloud')));
+    expect(backend.calls, isEmpty);
     expect(store.loadCalls, 0);
   });
 }

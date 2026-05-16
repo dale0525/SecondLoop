@@ -143,7 +143,9 @@ class _PlanningReviewPageState extends State<PlanningReviewPage> {
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-            content: Text(context.t.chat.secretary.planning.acceptedSnack)),
+          duration: const Duration(seconds: 3),
+          content: Text(context.t.chat.secretary.planning.acceptedSnack),
+        ),
       );
   }
 
@@ -153,7 +155,10 @@ class _PlanningReviewPageState extends State<PlanningReviewPage> {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(
-        SnackBar(content: Text(context.t.chat.secretary.planning.ignoredSnack)),
+        SnackBar(
+          duration: const Duration(seconds: 3),
+          content: Text(context.t.chat.secretary.planning.ignoredSnack),
+        ),
       );
   }
 }

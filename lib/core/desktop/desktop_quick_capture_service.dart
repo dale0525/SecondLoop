@@ -299,7 +299,7 @@ final class DesktopQuickCaptureCoordinator {
 
   void onWindowBlur() {
     if (!controller.visible) return;
-    controller.hide();
+    controller.hide(reopenMainWindow: true);
   }
 
   void _onControllerChanged() {

@@ -99,6 +99,7 @@
       "apiBaseUrl": "API 地址",
       "authMode": "鉴权模式",
       "manifestVersion": "Manifest 版本",
+      "manifestVersionValue": "$value",
       "managedSession": "托管会话",
       "selfManagedConnection": "自管连接"
     },
@@ -375,18 +376,6 @@
         "openCloudAccount": "打开 Cloud 账户",
         "openByok": "打开 API 密钥"
       }
-    }
-  },
-  "semanticParseAutoActions": {
-    "title": "更智能的语义分析",
-    "subtitleEnabled": "已开启增强模式。在本地语义分析基础上，会使用 Cloud/BYOK 提升自动整理准确度。",
-    "subtitleDisabled": "已关闭增强模式。仍会使用本地语义分析。",
-    "subtitleUnset": "尚未设置，默认关闭增强模式（仍会使用本地语义分析）。",
-    "subtitleRequiresSetup": "需先登录 SecondLoop Pro 或配置 API 密钥（BYOK）后，才能开启增强模式。",
-    "dialogTitle": "开启更智能的语义分析？",
-    "dialogBody": "本地语义分析始终开启。开启增强模式后，SecondLoop 会在本地分析基础上，将消息文本发送给 AI 做更智能的语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。",
-    "dialogActions": {
-      "enable": "开启"
     }
   },
   "mediaAnnotation": {
@@ -751,6 +740,7 @@
       "used": "已用：",
       "limit": "上限：",
       "attachments": "照片与文件：",
+      "noAttachments": "暂无附件",
       "ops": "同步记录：",
       "loadFailed": "加载失败：$error"
     }
@@ -939,13 +929,6 @@
       }
     }
   },
-  "taskPriorityAiEnhancement": {
-    "title": "智能任务优先级建议",
-    "subtitleEnabled": "已开启。系统会结合任务内容，更智能地判断哪些任务该先做，并给出推荐理由。",
-    "subtitleDisabled": "已关闭。任务仍会按规则排序，不会使用 AI 帮你判断先做什么。",
-    "subtitleUnset": "尚未设置，默认开启。满足 Cloud/BYOK 条件时，会使用 AI 增强任务排序与建议。",
-    "subtitleRequiresSetup": "需先登录 SecondLoop Pro 或配置 API 密钥（BYOK）后，才能开启智能任务优先级建议。"
-  },
   "agentUi": {
     "tabs": {
       "account": "账号",
@@ -986,6 +969,7 @@
     },
     "links": {
       "cloudAccount": "打开 Cloud 账号",
+      "runtimeMode": "打开运行模式",
       "syncSettings": "打开同步设置",
       "aiSettings": "打开 AI 设置",
       "diagnostics": "打开诊断"

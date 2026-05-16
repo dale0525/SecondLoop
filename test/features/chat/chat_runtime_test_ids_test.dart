@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../integration_test/support/dynamic_app_harness.dart';
@@ -19,7 +20,15 @@ void main() {
     );
     expect(
       find.byKey(TestSemanticsIds.key(TestSemanticsIds.chatComposerSend)),
-      findsNothing,
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(TestSemanticsIds.key(TestSemanticsIds.chatComposerSend)),
+          )
+          .onPressed,
+      isNull,
     );
 
     await tester.enterText(
@@ -31,6 +40,14 @@ void main() {
     expect(
       find.byKey(TestSemanticsIds.key(TestSemanticsIds.chatComposerSend)),
       findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(TestSemanticsIds.key(TestSemanticsIds.chatComposerSend)),
+          )
+          .onPressed,
+      isNotNull,
     );
   });
 }

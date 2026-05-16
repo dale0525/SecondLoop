@@ -27,7 +27,7 @@ void main() {
     );
     expect(
       find.byKey(
-        const ValueKey('ai_settings_smart_organization_recommended_button'),
+        const ValueKey('ai_settings_open_smart_organization_settings'),
       ),
       findsOneWidget,
     );

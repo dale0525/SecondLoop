@@ -33,7 +33,11 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    expect(backend.insertedMessages, ['调研一下当前主流的 llm 模型']);
+    expect(backend.insertedMessages, isEmpty);
+    expect(
+      controller.consumePendingChatSubmission('loop_home')?.content,
+      '调研一下当前主流的 llm 模型',
+    );
     expect(backend.calls, isNot(contains('enqueueSemanticParseJob')));
     expect(backend.calls, isNot(contains('upsertTodo')));
   });
@@ -56,7 +60,11 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    expect(backend.insertedMessages, ['今晚 8 点提醒我提交周报。']);
+    expect(backend.insertedMessages, isEmpty);
+    expect(
+      controller.consumePendingChatSubmission('loop_home')?.content,
+      '今晚 8 点提醒我提交周报。',
+    );
     expect(backend.calls, isNot(contains('upsertTodo')));
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
         findsNothing);
@@ -81,7 +89,11 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    expect(backend.insertedMessages, ['帮我创建一个任务：完成周报。']);
+    expect(backend.insertedMessages, isEmpty);
+    expect(
+      controller.consumePendingChatSubmission('loop_home')?.content,
+      '帮我创建一个任务：完成周报。',
+    );
     expect(backend.calls, isNot(contains('upsertTodo')));
     expect(backend.calls, isNot(contains('enqueueSemanticParseJob')));
   });
@@ -146,6 +158,23 @@ final class _QuickCaptureRuntimeFirstBackend extends TestAppBackend {
     required int nowMs,
   }) async {
     calls.add('enqueueSemanticParseJob');
+  }
+
+  @override
+  Stream<String> askAiStream(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) async* {
+    await insertMessage(
+      key,
+      conversationId,
+      role: 'user',
+      content: question,
+    );
+    yield 'OK';
   }
 
   @override

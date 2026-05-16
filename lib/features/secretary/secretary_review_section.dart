@@ -51,7 +51,7 @@ class SecretaryReviewSection extends StatelessWidget {
                       vertical: 3,
                     ),
                     child: Text(
-                      '$count',
+                      context.t.chat.secretary.review.count(count: count),
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w700,

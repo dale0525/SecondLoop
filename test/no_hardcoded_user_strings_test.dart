@@ -223,6 +223,21 @@ class Demo {
     expect(offenders, isEmpty);
   });
 
+  test('Does not flag numeric expressions inside i18n method arguments', () {
+    final offenders = scanSourceForHardcodedUserFacingStrings(
+      content: r'''
+class Demo {
+  void build(Object context, int index) {
+    Text(context.t.chat.agentTasks.itemIndex(value: index + 1));
+  }
+}
+''',
+      path: 'snippet_i18n_numeric_argument.dart',
+    );
+
+    expect(offenders, isEmpty);
+  });
+
   test('Policy text explicitly warns against bypassing i18n guard', () {
     expect(i18nGuardPolicy, contains('Do not bypass'));
     expect(i18nGuardPolicy, contains('i18n'));

@@ -31,4 +31,21 @@ void main() {
     expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
     expect(controller.consumeOpenChatRequest(), isFalse);
   });
+
+  test('Submitting chat message queues it and requests Chat restore', () {
+    final controller = QuickCaptureController();
+    controller.show();
+
+    controller.submitChatMessage(
+      conversationId: 'loop_home',
+      content: '记住：我下午 6 点后不接工作电话。',
+    );
+
+    expect(controller.visible, isFalse);
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isTrue);
+    expect(controller.consumeOpenChatRequest(), isTrue);
+    final submission = controller.consumePendingChatSubmission('loop_home');
+    expect(submission?.content, '记住：我下午 6 点后不接工作电话。');
+    expect(controller.consumePendingChatSubmission('loop_home'), isNull);
+  });
 }

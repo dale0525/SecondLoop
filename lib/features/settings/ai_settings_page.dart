@@ -10,7 +10,6 @@ import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/embeddings_source_prefs.dart';
 import '../../core/ai/media_capability_wifi_prefs.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';
-import '../../core/ai/task_priority_ai_enhancement_prefs.dart';
 import '../../core/ai/media_source_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -92,9 +91,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   bool? _cloudEmbeddingsEnabled;
   bool _cloudEmbeddingsConfigured = false;
   bool? _semanticParseEnabled;
-  bool _semanticParseConfigured = false;
-  bool? _taskPriorityAiEnabled;
-  bool _taskPriorityAiConfigured = false;
   bool _byokConfigured = false;
   int _automationLoadGeneration = 0;
 
@@ -394,7 +390,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
     final semanticParseEnabled =
         SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
-    final taskPriorityAiEnabled = await TaskPriorityAiEnhancementPrefs.read();
 
     var byokConfigured = false;
     if (backend != null && sessionKey != null) {
@@ -410,9 +405,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       _cloudEmbeddingsEnabled = cloudEmbeddingsEnabled;
       _cloudEmbeddingsConfigured = true;
       _semanticParseEnabled = semanticParseEnabled;
-      _semanticParseConfigured = true;
-      _taskPriorityAiEnabled = taskPriorityAiEnabled;
-      _taskPriorityAiConfigured = true;
       _byokConfigured = byokConfigured;
       _automationLoading = false;
     });

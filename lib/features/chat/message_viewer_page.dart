@@ -14,7 +14,7 @@ import '../actions/assistant_message_actions.dart';
 import '../actions/calendar/event_deeplink.dart';
 import '../actions/calendar/event_viewer_page.dart';
 import '../actions/todo/todo_deeplink.dart';
-import '../actions/todo/todo_detail_page.dart';
+import '../agent_ui/agent_task_summary.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import 'chat_answer_citation_controller.dart';
@@ -126,14 +126,7 @@ class MessageViewerPage extends StatelessWidget {
     }
     if (todo == null || !context.mounted) return false;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => wrapPushedPageWithInheritedScopes(
-          context,
-          TodoDetailPage(initialTodo: todo!),
-        ),
-      ),
-    );
+    await showAgentTaskDetailSheet(context: context, todo: todo);
     return true;
   }
 

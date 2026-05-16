@@ -7,9 +7,9 @@ import '../../core/backend/app_backend.dart';
 import '../../core/quick_capture/quick_capture_controller.dart';
 import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
-import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_focus_ring.dart';
+import '../agent_ui/agent_design_tokens.dart';
 
 class QuickCaptureOverlay extends StatefulWidget {
   const QuickCaptureOverlay({
@@ -114,8 +114,17 @@ final class _QuickCaptureDialog extends StatefulWidget {
 }
 
 class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
+  static const _blue = Color(0xFF0B5CF6);
+  static const _ink = Color(0xFF101936);
+  static const _muted = Color(0xFF63708A);
+  static const _line = Color(0xFFE1E7F0);
+  static const _panel = Color(0xFFFFFFFF);
+  static const _disabledAction = Color(0xFFEAF1FF);
+  static const _danger = Color(0xFFB42318);
+
   final _textController = TextEditingController();
   bool _busy = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -138,33 +147,39 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
-      final syncEngine = SyncEngineScope.maybeOf(context);
       final conversation =
           await backend.getOrCreateLoopHomeConversation(sessionKey);
+      if (!mounted) return;
 
-      await backend.insertMessage(
-        sessionKey,
-        conversation.id,
-        role: 'user',
+      QuickCaptureScope.of(context).submitChatMessage(
+        conversationId: conversation.id,
         content: text,
       );
+    } catch (_) {
       if (!mounted) return;
-      syncEngine?.notifyLocalMutation();
-
-      // Product decision: quick capture should never request reopening
-      // the main window after submission, including plain chat fallback.
-      _dismiss();
+      _showFailure();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
+  void _showFailure() {
+    setState(() => _error = context.t.chat.askAiFailedTemporary);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final conversationText = context.t.chat.agentConversation;
+    final statusText = _error?.trim();
+    final hasError = statusText != null && statusText.isNotEmpty;
+
     return Shortcuts(
       shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.escape): const _DismissIntent(),
@@ -180,40 +195,190 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
           child: Material(
             type: MaterialType.transparency,
             child: SizedBox.expand(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: SlFocusRing(
-                  key: const ValueKey('quick_capture_ring'),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.outline.withOpacity(0.2),
-                      ),
-                    ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxHeight <= 140;
+                  final outerPadding = isCompact
+                      ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+                      : const EdgeInsets.fromLTRB(24, 24, 24, 0);
+
+                  return Align(
+                    alignment:
+                        isCompact ? Alignment.center : Alignment.topCenter,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextField(
-                          key: const ValueKey('quick_capture_input'),
-                          controller: _textController,
-                          autofocus: true,
-                          textInputAction: TextInputAction.done,
-                          decoration: InputDecoration(
-                            hintText: context.t.common.fields.quickCapture,
-                            border: InputBorder.none,
-                            filled: false,
+                      padding: outerPadding,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: isCompact ? constraints.maxWidth : 640.0,
+                        ),
+                        child: SlFocusRing(
+                          key: const ValueKey('quick_capture_ring'),
+                          borderRadius: BorderRadius.circular(
+                            AgentDesignTokens.radiusLg,
                           ),
-                          onSubmitted: (_) => _submit(),
+                          child: DecoratedBox(
+                            key: const ValueKey('quick_capture_panel'),
+                            decoration: BoxDecoration(
+                              color: _panel,
+                              borderRadius: BorderRadius.circular(
+                                  AgentDesignTokens.radiusLg),
+                              border: Border.all(color: _line),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _blue.withOpacity(0.08),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+                              child: Row(
+                                children: [
+                                  const _QuickCaptureBrandMark(
+                                    radius: AgentDesignTokens.radiusMd,
+                                  ),
+                                  const SizedBox(
+                                      width: AgentDesignTokens.gapMd),
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                context.t.common.fields
+                                                    .quickCapture,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: _ink,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w800,
+                                                  letterSpacing: 0,
+                                                  height: 1.1,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(
+                                                width: AgentDesignTokens.gapSm),
+                                            const _QuickCaptureStatusDot(),
+                                            const SizedBox(
+                                                width: AgentDesignTokens.gapXs),
+                                            Flexible(
+                                              child: Text(
+                                                hasError
+                                                    ? statusText
+                                                    : conversationText.ready,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: hasError
+                                                      ? _danger
+                                                      : _muted,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  letterSpacing: 0,
+                                                  height: 1.1,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(
+                                            height: AgentDesignTokens.gapXs),
+                                        TextField(
+                                          key: const ValueKey(
+                                              'quick_capture_input'),
+                                          controller: _textController,
+                                          autofocus: true,
+                                          minLines: 1,
+                                          maxLines: 1,
+                                          textInputAction: TextInputAction.done,
+                                          decoration: InputDecoration(
+                                            hintText:
+                                                conversationText.composerHint,
+                                            border: InputBorder.none,
+                                            enabledBorder: InputBorder.none,
+                                            focusedBorder: InputBorder.none,
+                                            disabledBorder: InputBorder.none,
+                                            filled: false,
+                                            isDense: true,
+                                            contentPadding: EdgeInsets.zero,
+                                            hintStyle: TextStyle(
+                                              color: _muted.withOpacity(0.78),
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          style: const TextStyle(
+                                            color: _ink,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                          onChanged: (_) {
+                                            if (_error == null) return;
+                                            setState(() => _error = null);
+                                          },
+                                          onSubmitted: (_) => _submit(),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                      width: AgentDesignTokens.gapMd),
+                                  ValueListenableBuilder<TextEditingValue>(
+                                    valueListenable: _textController,
+                                    builder: (context, value, child) {
+                                      final enabled = !_busy &&
+                                          value.text.trim().isNotEmpty;
+                                      return IconButton.filled(
+                                        key: const ValueKey(
+                                            'quick_capture_submit'),
+                                        tooltip: _busy
+                                            ? conversationText.working
+                                            : conversationText.send,
+                                        onPressed: enabled ? _submit : null,
+                                        style: IconButton.styleFrom(
+                                          fixedSize: const Size(40, 40),
+                                          backgroundColor: _blue,
+                                          foregroundColor: _panel,
+                                          disabledBackgroundColor:
+                                              _disabledAction,
+                                          disabledForegroundColor:
+                                              _muted.withOpacity(0.56),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              AgentDesignTokens.radiusMd,
+                                            ),
+                                          ),
+                                        ),
+                                        icon: _busy
+                                            ? const SizedBox.square(
+                                                dimension: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: _panel,
+                                                ),
+                                              )
+                                            : const Icon(
+                                                Icons.send_rounded,
+                                                size: 18,
+                                              ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ),
@@ -225,4 +390,48 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
 
 class _DismissIntent extends Intent {
   const _DismissIntent();
+}
+
+final class _QuickCaptureBrandMark extends StatelessWidget {
+  const _QuickCaptureBrandMark({
+    required this.radius,
+  });
+
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      key: const ValueKey('quick_capture_brand_mark'),
+      decoration: BoxDecoration(
+        color: _QuickCaptureDialogState._blue,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: const SizedBox.square(
+        dimension: 32,
+        child: Icon(
+          Icons.all_inclusive_rounded,
+          color: _QuickCaptureDialogState._panel,
+          size: 20,
+        ),
+      ),
+    );
+  }
+}
+
+final class _QuickCaptureStatusDot extends StatelessWidget {
+  const _QuickCaptureStatusDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('quick_capture_status_dot'),
+      width: 7,
+      height: 7,
+      decoration: const BoxDecoration(
+        color: Color(0xFF08A86B),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
 }

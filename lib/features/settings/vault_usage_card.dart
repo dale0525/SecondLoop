@@ -188,7 +188,7 @@ class VaultAttachmentUsageListView extends StatelessWidget {
       ..sort(_compareAttachmentUsage);
 
     if (sorted.isEmpty) {
-      return Text(context.t.actions.todoDetail.noAttachments);
+      return Text(context.t.settings.vaultUsage.labels.noAttachments);
     }
 
     return Column(
