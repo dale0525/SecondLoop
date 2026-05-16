@@ -6,12 +6,14 @@ final class _AssistantTextMessage extends StatelessWidget {
     required this.time,
     this.createdTasks = const <Todo>[],
     this.sourceMessage,
+    this.onTaskViewed,
   });
 
   final String content;
   final String time;
   final List<Todo> createdTasks;
   final Message? sourceMessage;
+  final Future<void> Function(Todo todo)? onTaskViewed;
 
   Future<bool> _openInAppTodo(BuildContext context, String href) async {
     final parsed = parseTodoDeepLink(href);
@@ -31,7 +33,11 @@ final class _AssistantTextMessage extends StatelessWidget {
     }
     if (todo == null || !context.mounted) return false;
 
-    await showAgentTaskDetailSheet(context: context, todo: todo);
+    await showAgentTaskDetailSheet(
+      context: context,
+      todo: todo,
+      onTaskViewed: onTaskViewed,
+    );
     return true;
   }
 
@@ -356,7 +362,11 @@ final class _AssistantTextMessage extends StatelessWidget {
               child: AgentCreatedTaskCard(
                 todo: task,
                 onOpenTask: () => unawaited(
-                  showAgentTaskDetailSheet(context: context, todo: task),
+                  showAgentTaskDetailSheet(
+                    context: context,
+                    todo: task,
+                    onTaskViewed: onTaskViewed,
+                  ),
                 ),
               ),
             ),

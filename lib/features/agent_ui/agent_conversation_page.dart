@@ -670,6 +670,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                               : () => showAgentTasksSheet(
                                     context: context,
                                     todos: _todos,
+                                    onTaskViewed: _recordTaskFocus,
                                   ),
                         ),
                       ),
@@ -722,6 +723,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                   streamingAnswer: _streamingAnswer,
                   streamingReasoning: _streamingReasoning,
                   askError: _askError,
+                  onTaskViewed: _recordTaskFocus,
                 );
               },
             ),
@@ -736,6 +738,36 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _recordTaskFocus(Todo todo) async {
+    final entityId = todo.id.trim();
+    final conversationId = widget.conversation.id.trim();
+    if (entityId.isEmpty || conversationId.isEmpty) return;
+
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
+    if (cloudAuthScope == null || vaultId.isEmpty) return;
+
+    final Object? configuredSender = widget.runtimeConversationSender;
+    final ChatRuntimeEntityFocusSender sender =
+        configuredSender is ChatRuntimeEntityFocusSender
+            ? configuredSender
+            : SecretaryRuntimeConversationSender.hostedManagedPro(
+                apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
+                hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
+              );
+    try {
+      await sender.recordEntityFocus(
+        vaultId: vaultId,
+        conversationId: conversationId,
+        entityType: 'task',
+        entityId: entityId,
+        title: todo.title,
+      );
+    } catch (_) {
+      // Task viewing should never block task inspection.
+    }
   }
 }
 

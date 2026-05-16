@@ -62,6 +62,7 @@ final class _MessageList extends StatelessWidget {
     required this.streamingAnswer,
     required this.streamingReasoning,
     required this.askError,
+    this.onTaskViewed,
   });
 
   final ScrollController controller;
@@ -74,6 +75,7 @@ final class _MessageList extends StatelessWidget {
   final String streamingAnswer;
   final String streamingReasoning;
   final String? askError;
+  final Future<void> Function(Todo todo)? onTaskViewed;
 
   @override
   Widget build(BuildContext context) {
@@ -103,11 +105,19 @@ final class _MessageList extends StatelessWidget {
       if (pendingContent != null && pendingContent.isNotEmpty)
         _UserMessage(content: pendingContent),
       if (streamingContent.isNotEmpty)
-        _AssistantTextMessage(content: streamingContent, time: t.thinking)
+        _AssistantTextMessage(
+          content: streamingContent,
+          time: t.thinking,
+          onTaskViewed: onTaskViewed,
+        )
       else if (thinking)
         _ThinkingMessage(reasoning: streamingReasoning),
       if (errorContent != null && errorContent.isNotEmpty)
-        _AssistantTextMessage(content: errorContent, time: t.done),
+        _AssistantTextMessage(
+          content: errorContent,
+          time: t.done,
+          onTaskViewed: onTaskViewed,
+        ),
       SizedBox(key: bottomKey, height: 1),
     ];
 
@@ -132,6 +142,7 @@ final class _MessageList extends StatelessWidget {
             content: message.content,
             time: context.t.chat.agentConversation.done,
             sourceMessage: message,
+            onTaskViewed: onTaskViewed,
             createdTasks: _createdTasksForAssistantMessage(
               message: message,
               sourceUserMessageId: sourceUserMessageId,

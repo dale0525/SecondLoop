@@ -226,6 +226,24 @@ final class SecretaryRuntimeClient {
     );
   }
 
+  Future<void> recordEntityFocus(
+    String vaultId, {
+    required String conversationId,
+    required String entityType,
+    required String entityId,
+    required String title,
+  }) async {
+    await _apiClient.postJson(
+      '/v1/runtime/vaults/$vaultId/entity-focus',
+      body: <String, Object?>{
+        'conversation_id': conversationId,
+        'entity_type': entityType,
+        'entity_id': entityId,
+        'title': title,
+      },
+    );
+  }
+
   Future<SecretaryRuntimeConversationResult> fetchRun(
     String vaultId, {
     required String runId,

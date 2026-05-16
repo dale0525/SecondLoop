@@ -94,6 +94,43 @@ void main() {
     ]);
   });
 
+  test('records task focus through the runtime client', () async {
+    late http.Request capturedRequest;
+    final client = SecretaryRuntimeClient(
+      apiClient: RuntimeApiClient(
+        connectionStore: RuntimeConnectionStore(),
+        httpClient: MockClient((request) async {
+          capturedRequest = request;
+          return http.Response(
+            jsonEncode({'ok': true}),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      ),
+    );
+
+    await client.recordEntityFocus(
+      'vault-1',
+      conversationId: 'loop_home',
+      entityType: 'task',
+      entityId: 'task-1',
+      title: '完成周报',
+    );
+
+    expect(capturedRequest.method, 'POST');
+    expect(
+      capturedRequest.url.path,
+      '/v1/runtime/vaults/vault-1/entity-focus',
+    );
+    expect(jsonDecode(capturedRequest.body), {
+      'conversation_id': 'loop_home',
+      'entity_type': 'task',
+      'entity_id': 'task-1',
+      'title': '完成周报',
+    });
+  });
+
   test('patches runtime approval item title through the runtime client',
       () async {
     late http.Request capturedRequest;

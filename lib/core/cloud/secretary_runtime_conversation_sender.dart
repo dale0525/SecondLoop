@@ -34,8 +34,21 @@ abstract interface class ChatRuntimeApprovalSender {
   });
 }
 
+abstract interface class ChatRuntimeEntityFocusSender {
+  Future<void> recordEntityFocus({
+    required String vaultId,
+    required String conversationId,
+    required String entityType,
+    required String entityId,
+    required String title,
+  });
+}
+
 final class SecretaryRuntimeConversationSender
-    implements ChatRuntimeConversationSender, ChatRuntimeApprovalSender {
+    implements
+        ChatRuntimeConversationSender,
+        ChatRuntimeApprovalSender,
+        ChatRuntimeEntityFocusSender {
   SecretaryRuntimeConversationSender({
     SecretaryRuntimeClient? client,
   }) : _client = client ?? SecretaryRuntimeClient();
@@ -127,6 +140,23 @@ final class SecretaryRuntimeConversationSender
       approvalId: approvalId,
       baseVersion: baseVersion,
       changes: changes,
+    );
+  }
+
+  @override
+  Future<void> recordEntityFocus({
+    required String vaultId,
+    required String conversationId,
+    required String entityType,
+    required String entityId,
+    required String title,
+  }) {
+    return _client.recordEntityFocus(
+      vaultId,
+      conversationId: conversationId,
+      entityType: entityType,
+      entityId: entityId,
+      title: title,
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
@@ -166,7 +168,11 @@ final class AgentCreatedTaskCard extends StatelessWidget {
 Future<void> showAgentTaskDetailSheet({
   required BuildContext context,
   required Todo todo,
+  Future<void> Function(Todo todo)? onTaskViewed,
 }) {
+  if (onTaskViewed != null) {
+    unawaited(onTaskViewed(todo).catchError((_) {}));
+  }
   return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -289,6 +295,7 @@ final class AgentTasksPage extends StatelessWidget {
 void showAgentTasksSheet({
   required BuildContext context,
   required List<Todo> todos,
+  Future<void> Function(Todo todo)? onTaskViewed,
 }) {
   showModalBottomSheet<void>(
     context: context,
@@ -318,6 +325,7 @@ void showAgentTasksSheet({
                   onOpenTask: (todo) => showAgentTaskDetailSheet(
                     context: context,
                     todo: todo,
+                    onTaskViewed: onTaskViewed,
                   ),
                 ),
               ),
