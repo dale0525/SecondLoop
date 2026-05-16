@@ -60,6 +60,19 @@ final class RuntimeApiClient {
     );
   }
 
+  Future<Map<String, dynamic>?> patchJson(
+    String path, {
+    Map<String, Object?>? body,
+    Map<String, String>? headers,
+  }) {
+    return _sendJson(
+      method: 'PATCH',
+      path: path,
+      body: body,
+      headers: headers,
+    );
+  }
+
   Future<Map<String, dynamic>?> _sendJson({
     required String method,
     required String path,

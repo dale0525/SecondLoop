@@ -15,8 +15,27 @@ abstract interface class ChatRuntimeConversationSender {
   });
 }
 
+abstract interface class ChatRuntimeApprovalSender {
+  Future<List<SecretaryRuntimeApprovalItem>> fetchApprovals({
+    required String vaultId,
+  });
+
+  Future<SecretaryRuntimeConversationResult?> submitApprovalDecision({
+    required String vaultId,
+    required String approvalId,
+    required String decision,
+  });
+
+  Future<SecretaryRuntimeApprovalItem> patchApprovalItem({
+    required String vaultId,
+    required String approvalId,
+    required int baseVersion,
+    required Map<String, Object?> changes,
+  });
+}
+
 final class SecretaryRuntimeConversationSender
-    implements ChatRuntimeConversationSender {
+    implements ChatRuntimeConversationSender, ChatRuntimeApprovalSender {
   SecretaryRuntimeConversationSender({
     SecretaryRuntimeClient? client,
   }) : _client = client ?? SecretaryRuntimeClient();
@@ -73,6 +92,41 @@ final class SecretaryRuntimeConversationSender
       vaultId,
       conversationId: conversationId,
       message: message,
+    );
+  }
+
+  @override
+  Future<List<SecretaryRuntimeApprovalItem>> fetchApprovals({
+    required String vaultId,
+  }) {
+    return _client.fetchApprovals(vaultId);
+  }
+
+  @override
+  Future<SecretaryRuntimeConversationResult?> submitApprovalDecision({
+    required String vaultId,
+    required String approvalId,
+    required String decision,
+  }) {
+    return _client.submitApprovalDecision(
+      vaultId,
+      approvalId: approvalId,
+      decision: decision,
+    );
+  }
+
+  @override
+  Future<SecretaryRuntimeApprovalItem> patchApprovalItem({
+    required String vaultId,
+    required String approvalId,
+    required int baseVersion,
+    required Map<String, Object?> changes,
+  }) {
+    return _client.patchApprovalItem(
+      vaultId,
+      approvalId: approvalId,
+      baseVersion: baseVersion,
+      changes: changes,
     );
   }
 }

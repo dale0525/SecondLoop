@@ -75,6 +75,9 @@ class SecretaryRuntimeApprovalItem {
     this.emailDraftId = '',
     this.calendarEventId = '',
     this.reason = '',
+    this.editableFields = const <String>[],
+    this.version = 1,
+    this.sourceIntentId = '',
     this.record,
   });
 
@@ -86,6 +89,9 @@ class SecretaryRuntimeApprovalItem {
   final String emailDraftId;
   final String calendarEventId;
   final String reason;
+  final List<String> editableFields;
+  final int version;
+  final String sourceIntentId;
   final Map<String, Object?>? record;
 
   factory SecretaryRuntimeApprovalItem.fromJson(Map<String, dynamic> json) {
@@ -98,6 +104,11 @@ class SecretaryRuntimeApprovalItem {
       emailDraftId: (json['email_draft_id'] as String?) ?? '',
       calendarEventId: (json['calendar_event_id'] as String?) ?? '',
       reason: (json['reason'] as String?) ?? '',
+      editableFields: (json['editable_fields'] as List? ?? const [])
+          .map((item) => '$item')
+          .toList(growable: false),
+      version: (json['version'] as num?)?.toInt() ?? 1,
+      sourceIntentId: (json['source_intent_id'] as String?) ?? '',
       record: _parseNullableObjectMap(json['record']),
     );
   }
@@ -169,6 +180,26 @@ final class SecretaryRuntimeClient {
         .toList(growable: false);
   }
 
+  Future<SecretaryRuntimeApprovalItem> patchApprovalItem(
+    String vaultId, {
+    required String approvalId,
+    required int baseVersion,
+    required Map<String, Object?> changes,
+  }) async {
+    final response = await _apiClient.patchJson(
+      '/v1/runtime/vaults/$vaultId/approval-items/$approvalId',
+      body: <String, Object?>{
+        'base_version': baseVersion,
+        'changes': changes,
+      },
+    );
+    return SecretaryRuntimeApprovalItem.fromJson(
+      Map<String, dynamic>.from(
+        response?['approval_item'] as Map? ?? const <String, dynamic>{},
+      ),
+    );
+  }
+
   Future<String> createConversation(String vaultId) async {
     final response = await _apiClient.postJson(
       '/v1/runtime/vaults/$vaultId/conversations',
@@ -206,18 +237,27 @@ final class SecretaryRuntimeClient {
     );
   }
 
-  Future<void> submitApprovalDecision(
+  Future<SecretaryRuntimeConversationResult?> submitApprovalDecision(
     String vaultId, {
     required String approvalId,
     required String decision,
   }) async {
-    await _apiClient.postJson(
+    final response = await _apiClient.postJson(
       '/v1/runtime/vaults/$vaultId/approvals/decision',
       body: <String, Object?>{
         'approval_id': approvalId,
         'decision': decision,
       },
     );
+    if (response == null || response.isEmpty) {
+      return null;
+    }
+    if (!response.containsKey('run_id') &&
+        !response.containsKey('assistant') &&
+        !response.containsKey('metadata')) {
+      return null;
+    }
+    return SecretaryRuntimeConversationResult.fromJson(response);
   }
 
   Future<List<String>> fetchRuntimeCapabilities() async {

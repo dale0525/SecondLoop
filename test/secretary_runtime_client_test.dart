@@ -94,6 +94,64 @@ void main() {
     ]);
   });
 
+  test('patches runtime approval item title through the runtime client',
+      () async {
+    late http.Request capturedRequest;
+    final client = SecretaryRuntimeClient(
+      apiClient: RuntimeApiClient(
+        connectionStore: RuntimeConnectionStore(),
+        httpClient: MockClient((request) async {
+          capturedRequest = request;
+          expect(
+            request.url.path,
+            '/v1/runtime/vaults/vault-1/approval-items/'
+            'approval-recurring-rule-child-birthday-gift',
+          );
+          expect(request.method, 'PATCH');
+          expect(jsonDecode(request.body), {
+            'base_version': 1,
+            'changes': {'title': '给孩子买生日礼物'},
+          });
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({
+              'ok': true,
+              'approval_item': {
+                'id': 'approval-recurring-rule-child-birthday-gift',
+                'task_id': '',
+                'title': '给孩子买生日礼物',
+                'kind': 'recurring_reminder_confirmation',
+                'recurring_rule_id': 'recurring-rule-child-birthday-gift',
+                'editable_fields': ['title'],
+                'version': 2,
+                'source_intent_id': 'intent-child-birthday-gift',
+                'record': {
+                  'id': 'recurring-rule-child-birthday-gift',
+                  'title': '给孩子买生日礼物',
+                },
+              },
+            })),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      ),
+    );
+
+    final result = await client.patchApprovalItem(
+      'vault-1',
+      approvalId: 'approval-recurring-rule-child-birthday-gift',
+      baseVersion: 1,
+      changes: const {'title': '给孩子买生日礼物'},
+    );
+
+    expect(capturedRequest.headers['authorization'], 'Bearer runtime-token-1');
+    expect(result.title, '给孩子买生日礼物');
+    expect(result.version, 2);
+    expect(result.editableFields, ['title']);
+    expect(result.sourceIntentId, 'intent-child-birthday-gift');
+    expect(result.record?['title'], '给孩子买生日礼物');
+  });
+
   test(
       'request plan refresh uses runtime profile routing and not digest semantics',
       () async {

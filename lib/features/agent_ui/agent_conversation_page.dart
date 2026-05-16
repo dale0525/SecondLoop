@@ -1,20 +1,23 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../core/ai/ai_routing.dart';
-import '../../core/ai/ask_ai_source_prefs.dart';
 import '../../core/backend/app_backend.dart';
-import '../../core/cloud/cloud_capability_auth.dart';
+import '../../core/backend/secretary_backend.dart';
+import '../../core/cloud/runtime_secretary_app_service.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/secretary_runtime_client.dart';
+import '../../core/cloud/secretary_runtime_conversation_sender.dart';
+import '../../core/quick_capture/quick_capture_controller.dart';
+import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
-import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../../ui/sl_surface.dart';
+import '../../ui/sl_tokens.dart';
 import '../actions/assistant_message_actions.dart';
 import '../actions/calendar/event_deeplink.dart';
 import '../actions/calendar/event_viewer_page.dart';
@@ -25,7 +28,6 @@ import '../actions/suggestions_card.dart';
 import '../actions/time/date_time_picker_dialog.dart';
 import '../actions/time/time_resolver.dart';
 import '../actions/todo/todo_deeplink.dart';
-import '../actions/todo/todo_detail_page.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../conversation_cards/approval_preview_card.dart';
@@ -42,29 +44,31 @@ import '../chat/chat_markdown_preview.dart';
 import '../chat/message_deeplink.dart';
 import '../chat/message_viewer_page.dart';
 import 'agent_design_tokens.dart';
+import 'agent_conversation_send.dart';
+import 'agent_status_chip.dart';
+import 'agent_task_summary.dart';
 import 'agent_ui_acceptance_driver.dart';
 
 part 'agent_assistant_text_message.dart';
+part 'agent_conversation_widgets.dart';
 
 final class AgentConversationPage extends StatefulWidget {
   const AgentConversationPage({
     required this.conversation,
     required this.isTabActive,
+    this.runtimeConversationSender,
     super.key,
   });
 
   final Conversation conversation;
   final bool isTabActive;
+  final ChatRuntimeConversationSender? runtimeConversationSender;
 
   @override
   State<AgentConversationPage> createState() => _AgentConversationPageState();
 }
 
 final class _AgentConversationPageState extends State<AgentConversationPage> {
-  static const _askAiErrorPrefix = '\u001eSL_ERROR\u001e';
-  static const _askAiMetaPrefix = '\u001eSL_META\u001e';
-  static const _askAiReasoningPrefix = '\u001eSL_REASONING\u001e';
-  static const _askAiControlPrefix = '\u001eSL_';
   static const _blue = Color(0xFF0B5CF6);
   static const _ink = Color(0xFF101936);
   static const _muted = Color(0xFF63708A);
@@ -75,14 +79,23 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   final _scrollController = ScrollController();
+  final _messageListBottomKey = GlobalKey();
   Future<List<Message>>? _messagesFuture;
+  Future<List<Todo>>? _tasksFuture;
+  Future<List<MemoryPageRecord>>? _memoryPagesFuture;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
+  QuickCaptureController? _quickCaptureController;
   List<Message> _messages = const <Message>[];
+  List<Todo> _todos = const <Todo>[];
+  List<MemoryPageRecord> _memoryPages = const <MemoryPageRecord>[];
   String? _pendingUserContent;
   String _streamingAnswer = '';
   String _streamingReasoning = '';
   String? _askError;
+  List<SecretaryRuntimeApprovalItem> _runtimeApprovalItems =
+      const <SecretaryRuntimeApprovalItem>[];
+  final Set<String> _busyApprovalIds = <String>{};
   bool _sending = false;
   bool _thinking = false;
 
@@ -95,7 +108,10 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messagesFuture ??= _loadMessages();
+    _tasksFuture ??= _loadTasks();
+    _memoryPagesFuture ??= _loadMemoryPages();
     _attachSyncEngine();
+    _attachQuickCaptureController();
   }
 
   @override
@@ -105,6 +121,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
     if (oldEngine != null && oldListener != null) {
       oldEngine.changes.removeListener(oldListener);
     }
+    _quickCaptureController?.removeListener(_onQuickCaptureChanged);
     _controller.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
@@ -118,8 +135,48 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         await backend.listMessages(sessionKey, widget.conversation.id);
     if (mounted) {
       setState(() => _messages = messages);
+      _scrollToLatest();
     }
     return messages;
+  }
+
+  Future<List<Todo>> _loadTasks() async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final List<Todo> todos;
+    try {
+      todos = await backend.listTodos(sessionKey);
+    } on UnimplementedError {
+      return const <Todo>[];
+    } on UnsupportedError {
+      return const <Todo>[];
+    }
+    if (mounted) {
+      setState(() => _todos = todos);
+    }
+    return todos;
+  }
+
+  Future<List<MemoryPageRecord>> _loadMemoryPages() async {
+    final backend = AppBackendScope.of(context);
+    if (backend is! SecretaryBackend) return const <MemoryPageRecord>[];
+    final secretaryBackend = backend as SecretaryBackend;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final List<MemoryPageRecord> pages;
+    try {
+      pages = await secretaryBackend.listMemoryPages(
+        sessionKey,
+        state: 'active',
+      );
+    } on UnimplementedError {
+      return const <MemoryPageRecord>[];
+    } on UnsupportedError {
+      return const <MemoryPageRecord>[];
+    }
+    if (mounted) {
+      setState(() => _memoryPages = pages);
+    }
+    return pages;
   }
 
   void _attachSyncEngine() {
@@ -142,6 +199,8 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       if (!mounted) return;
       setState(() {
         _messagesFuture = _loadMessages();
+        _tasksFuture = _loadTasks();
+        _memoryPagesFuture = _loadMemoryPages();
       });
     }
 
@@ -149,12 +208,44 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
     engine.changes.addListener(onSyncChange);
   }
 
+  void _attachQuickCaptureController() {
+    final controller = QuickCaptureScope.maybeOf(context);
+    if (identical(controller, _quickCaptureController)) return;
+
+    _quickCaptureController?.removeListener(_onQuickCaptureChanged);
+    _quickCaptureController = controller;
+    controller?.addListener(_onQuickCaptureChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _onQuickCaptureChanged();
+    });
+  }
+
+  void _onQuickCaptureChanged() {
+    if (_sending || _thinking) return;
+    final submission = _quickCaptureController?.consumePendingChatSubmission(
+      widget.conversation.id,
+    );
+    final text = submission?.content.trim();
+    if (text == null || text.isEmpty) return;
+    unawaited(_sendText(text));
+  }
+
   Future<void> _send() async {
     if (_sending || _thinking) return;
 
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+    _controller.clear();
+    await _sendText(text);
+  }
+
+  Future<void> _sendText(String text) async {
+    if (_sending || _thinking) return;
+
     final existingMessageIds = _messages.map((message) => message.id).toSet();
+    var newUserMessageCommitted = false;
 
     setState(() {
       _sending = true;
@@ -164,29 +255,58 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       _streamingReasoning = '';
       _askError = null;
     });
-    _controller.clear();
     _scrollToLatest();
 
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
-      final route = await _resolveAskAiRoute(
+      final result = await sendAgentConversationMessage(
+        context: context,
         backend: backend,
         sessionKey: sessionKey,
+        conversationId: widget.conversation.id,
+        message: text,
+        runtimeConversationSender: widget.runtimeConversationSender,
+        onReasoningDelta: (delta) {
+          if (!mounted) return;
+          setState(() => _streamingReasoning += delta);
+          _scrollToLatest();
+        },
+        onAnswerDelta: (delta) {
+          if (!mounted) return;
+          setState(() {
+            _streamingReasoning = '';
+            _streamingAnswer += delta;
+          });
+          _scrollToLatest();
+        },
       );
-      final stream = _openAskAiStream(
-        backend: backend,
-        sessionKey: sessionKey,
-        question: text,
-        route: route,
-        topK: 10,
-      );
-
-      final streamResult = await _consumeAskAiStream(stream);
       if (!mounted) return;
+      newUserMessageCommitted = result.userMessageCommitted;
 
-      if (_isEmbeddingsQuotaStreamError(streamResult.streamError)) {
+      if (result.routeKind == AskAiRouteKind.cloudGateway) {
+        syncEngine?.notifyExternalChange();
+        await Future.wait<Object>([
+          _loadMessages(),
+          _loadTasks(),
+          _loadMemoryPages(),
+        ]);
+        if (!mounted) return;
+        setState(() {
+          _runtimeApprovalItems = _validApprovalItems(
+            result.approvalItems,
+          );
+          _pendingUserContent = null;
+          _streamingAnswer = '';
+          _streamingReasoning = '';
+          _thinking = false;
+        });
+        _scrollToLatest();
+        return;
+      }
+
+      if (isAgentEmbeddingsQuotaStreamError(result.streamError)) {
         _showAskFailure(
           message: context.t.chat.askAiRetrievalQuotaUnavailable,
         );
@@ -206,8 +326,8 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
             !existingMessageIds.contains(message.id) &&
             message.content.trim().isNotEmpty,
       );
-      if (streamResult.streamError != null ||
-          (!streamResult.sawVisibleDelta && !hasNewAssistantMessage)) {
+      if (result.streamError != null ||
+          (!result.sawVisibleDelta && !hasNewAssistantMessage)) {
         _showAskFailure(newUserMessageCommitted: hasNewUserMessage);
         return;
       }
@@ -218,64 +338,18 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         _thinking = false;
       });
       _scrollToLatest();
+    } on AgentConversationSendException catch (error) {
+      if (!mounted) return;
+      _showAskFailure(newUserMessageCommitted: error.userMessageCommitted);
     } catch (_) {
       if (!mounted) return;
-      _showAskFailure();
+      _showAskFailure(newUserMessageCommitted: newUserMessageCommitted);
     } finally {
       if (mounted) {
         setState(() => _sending = false);
+        _onQuickCaptureChanged();
       }
     }
-  }
-
-  Future<({bool sawVisibleDelta, String? streamError})> _consumeAskAiStream(
-    Stream<String> stream,
-  ) async {
-    var sawVisibleDelta = false;
-    String? streamError;
-
-    await for (final delta in stream) {
-      if (!mounted) break;
-      if (delta.isEmpty) continue;
-      if (delta.startsWith(_askAiMetaPrefix)) {
-        continue;
-      }
-      if (delta.startsWith(_askAiErrorPrefix)) {
-        streamError = delta.substring(_askAiErrorPrefix.length).trim();
-        break;
-      }
-      if (delta.startsWith(_askAiReasoningPrefix)) {
-        final text = _extractReasoningDeltaText(
-          delta.substring(_askAiReasoningPrefix.length),
-        );
-        if (text.isNotEmpty) {
-          setState(() => _streamingReasoning += text);
-          _scrollToLatest();
-        }
-        continue;
-      }
-      if (delta.startsWith(_askAiControlPrefix)) {
-        continue;
-      }
-      sawVisibleDelta = true;
-      setState(() {
-        _streamingReasoning = '';
-        _streamingAnswer += delta;
-      });
-      _scrollToLatest();
-    }
-
-    return (
-      sawVisibleDelta: sawVisibleDelta,
-      streamError: streamError,
-    );
-  }
-
-  bool _isEmbeddingsQuotaStreamError(String? error) {
-    final normalized = error?.trim() ?? '';
-    if (normalized.isEmpty) return false;
-    return normalized.contains('embeddings_token_quota_exceeded') ||
-        normalized.contains('embeddings_input_token_quota_exceeded');
   }
 
   void _showAskFailure({
@@ -293,106 +367,30 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
     });
   }
 
-  Future<
-      ({
-        AskAiRouteKind route,
-        String? cloudIdToken,
-        CloudGatewayConfig cloudGatewayConfig,
-      })> _resolveAskAiRoute({
-    required AppBackend backend,
-    required Uint8List sessionKey,
-  }) async {
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final cloudGatewayConfig =
-        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-        SubscriptionStatus.unknown;
-    final cloudIdToken = await readCloudCapabilityIdToken(
-      cloudAuthScope?.controller,
-      mode: CloudCapabilityAuthMode.interactive,
-    );
-
-    final defaultRoute = await decideAskAiRoute(
-      backend,
-      sessionKey,
-      cloudIdToken: cloudIdToken,
-      cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
-      subscriptionStatus: subscriptionStatus,
-    );
-
-    AskAiSourcePreference preference;
-    try {
-      preference = await AskAiSourcePrefs.read();
-    } catch (_) {
-      preference = AskAiSourcePreference.auto;
-    }
-
-    var hasByokWhenCloudRoute = false;
-    if (preference == AskAiSourcePreference.byok &&
-        defaultRoute == AskAiRouteKind.cloudGateway) {
-      try {
-        hasByokWhenCloudRoute = await hasActiveLlmProfile(backend, sessionKey);
-      } catch (_) {
-        hasByokWhenCloudRoute = false;
-      }
-    }
-
-    final route = applyAskAiSourcePreference(
-      defaultRoute,
-      preference,
-      hasByokWhenCloudRoute: hasByokWhenCloudRoute,
-    );
-
-    return (
-      route: route,
-      cloudIdToken: cloudIdToken,
-      cloudGatewayConfig: cloudGatewayConfig,
-    );
-  }
-
-  Stream<String> _openAskAiStream({
-    required AppBackend backend,
-    required Uint8List sessionKey,
-    required String question,
-    required int topK,
-    required ({
-      AskAiRouteKind route,
-      String? cloudIdToken,
-      CloudGatewayConfig cloudGatewayConfig,
-    }) route,
-  }) {
-    switch (route.route) {
-      case AskAiRouteKind.cloudGateway:
-        final idToken = route.cloudIdToken?.trim() ?? '';
-        if (idToken.isEmpty) {
-          throw StateError('cloud_id_token_required');
-        }
-        return backend.askAiStreamCloudGateway(
-          sessionKey,
-          widget.conversation.id,
-          question: question,
-          topK: topK,
-          gatewayBaseUrl: route.cloudGatewayConfig.baseUrl,
-          idToken: idToken,
-          modelName: route.cloudGatewayConfig.modelName,
-        );
-      case AskAiRouteKind.byok:
-        return backend.askAiStream(
-          sessionKey,
-          widget.conversation.id,
-          question: question,
-          topK: topK,
-        );
-      case AskAiRouteKind.needsSetup:
-        throw StateError('ask_ai_route_needs_setup');
-    }
-  }
-
   void _scrollToLatest() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-    });
+    void scrollAfterFrame(int remainingAttempts) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        final bottomContext = _messageListBottomKey.currentContext;
+        if (bottomContext != null) {
+          unawaited(
+            Scrollable.ensureVisible(
+              bottomContext,
+              alignment: 1,
+              duration: Duration.zero,
+            ),
+          );
+        } else {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+        if (remainingAttempts > 0) {
+          WidgetsBinding.instance.scheduleFrame();
+          scrollAfterFrame(remainingAttempts - 1);
+        }
+      });
+    }
+
+    scrollAfterFrame(6);
   }
 
   List<Widget> _buildAcceptanceCards(
@@ -427,6 +425,196 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
     ];
   }
 
+  List<Widget> _buildRuntimeApprovalCards(BuildContext context) {
+    if (_runtimeApprovalItems.isEmpty) return const <Widget>[];
+    return [
+      for (final item in _runtimeApprovalItems)
+        _buildRuntimeApprovalCard(context, item),
+    ];
+  }
+
+  Widget _buildRuntimeApprovalCard(
+    BuildContext context,
+    SecretaryRuntimeApprovalItem item,
+  ) {
+    final onApprove = _busyApprovalIds.contains(item.id)
+        ? null
+        : () => unawaited(_resolveRuntimeApproval(item, approve: true));
+    final onReject = _busyApprovalIds.contains(item.id)
+        ? null
+        : () => unawaited(_resolveRuntimeApproval(item, approve: false));
+    if (item.kind == 'task_mutation_confirmation') {
+      return ApprovalPreviewCard(
+        change: _runtimeApprovalPreviewChange(context, item),
+        onApprove: onApprove,
+        onReject: onReject,
+      );
+    }
+    if (item.kind == 'memory_confirmation') {
+      return _RuntimeMemoryCandidateCard(
+        item: item,
+        onApprove: onApprove,
+        onReject: onReject,
+      );
+    }
+    return _RuntimeCandidateApprovalCard(
+      item: item,
+      onApprove: onApprove,
+      onReject: onReject,
+      onEditTitle: _canEditRuntimeApprovalTitle(item) &&
+              !_busyApprovalIds.contains(item.id)
+          ? (title) => unawaited(_patchRuntimeApprovalTitle(item, title))
+          : null,
+    );
+  }
+
+  bool _canEditRuntimeApprovalTitle(SecretaryRuntimeApprovalItem item) {
+    return item.kind == 'recurring_reminder_confirmation' &&
+        item.editableFields.contains('title');
+  }
+
+  ApprovalPreviewChange _runtimeApprovalPreviewChange(
+    BuildContext context,
+    SecretaryRuntimeApprovalItem item,
+  ) {
+    final record = item.record ?? const <String, Object?>{};
+    final todo = _todoById(item.taskId);
+    final dueAfter = _runtimeDueAtMs(record);
+    final reason = item.reason.trim();
+    final sourceSentence = reason.isNotEmpty ? reason : item.title;
+    return ApprovalPreviewChange(
+      sourceSentence: sourceSentence,
+      dueTimeBefore: todo == null
+          ? context.t.chat.agentTasks.notScheduled
+          : agentTaskSubtitle(todo),
+      dueTimeAfter: agentTaskDueLabelFromMs(dueAfter),
+      statusLabel: todo == null
+          ? context.t.chat.agentTasks.statusOpen
+          : agentTaskStatusLabel(todo),
+    );
+  }
+
+  Todo? _todoById(String todoId) {
+    final id = todoId.trim();
+    if (id.isEmpty) return null;
+    for (final todo in _todos) {
+      if (todo.id == id) return todo;
+    }
+    return null;
+  }
+
+  Future<void> _resolveRuntimeApproval(
+    SecretaryRuntimeApprovalItem item, {
+    required bool approve,
+  }) async {
+    if (_busyApprovalIds.contains(item.id)) return;
+    setState(() => _busyApprovalIds.add(item.id));
+
+    try {
+      final cloudAuthScope = CloudAuthScope.maybeOf(context);
+      final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
+      if (cloudAuthScope == null || vaultId.isEmpty) {
+        throw StateError('managed_pro_vault_id_required');
+      }
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final sender = widget.runtimeConversationSender ??
+          SecretaryRuntimeConversationSender.hostedManagedPro(
+            apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
+            hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
+          );
+      final service = RuntimeSecretaryAppService(
+        sender: sender,
+        backend: backend,
+        sessionKey: sessionKey,
+      );
+      if (approve) {
+        await service.approveApprovalItem(
+          item,
+          vaultId: vaultId,
+          conversationId: widget.conversation.id,
+          sourceMessageId: item.id,
+        );
+      } else {
+        await service.rejectApprovalItem(
+          item,
+          vaultId: vaultId,
+          conversationId: widget.conversation.id,
+          sourceMessageId: item.id,
+        );
+      }
+      if (!mounted) return;
+
+      SyncEngineScope.maybeOf(context)?.notifyExternalChange();
+      await Future.wait<Object>([
+        _loadMessages(),
+        _loadTasks(),
+        _loadMemoryPages(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _runtimeApprovalItems = _runtimeApprovalItems
+            .where((candidate) => candidate.id != item.id)
+            .toList(growable: false);
+        _askError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _askError = context.t.chat.askAiFailedTemporary);
+    } finally {
+      if (mounted) {
+        setState(() => _busyApprovalIds.remove(item.id));
+      }
+    }
+  }
+
+  Future<void> _patchRuntimeApprovalTitle(
+    SecretaryRuntimeApprovalItem item,
+    String title,
+  ) async {
+    final nextTitle = title.trim();
+    if (nextTitle.isEmpty || _busyApprovalIds.contains(item.id)) return;
+    setState(() => _busyApprovalIds.add(item.id));
+
+    try {
+      final cloudAuthScope = CloudAuthScope.maybeOf(context);
+      final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
+      if (cloudAuthScope == null || vaultId.isEmpty) {
+        throw StateError('managed_pro_vault_id_required');
+      }
+      final sender = widget.runtimeConversationSender ??
+          SecretaryRuntimeConversationSender.hostedManagedPro(
+            apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
+            hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
+          );
+      final service = RuntimeSecretaryAppService(
+        sender: sender,
+        backend: AppBackendScope.of(context),
+        sessionKey: SessionScope.of(context).sessionKey,
+      );
+      final updated = await service.patchApprovalItem(
+        item,
+        vaultId: vaultId,
+        changes: <String, Object?>{'title': nextTitle},
+      );
+      if (!mounted) return;
+      setState(() {
+        _runtimeApprovalItems = [
+          for (final candidate in _runtimeApprovalItems)
+            candidate.id == updated.id ? updated : candidate,
+        ];
+        _askError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _askError = context.t.chat.askAiFailedTemporary);
+    } finally {
+      if (mounted) {
+        setState(() => _busyApprovalIds.remove(item.id));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = ThemeData(
@@ -438,9 +626,13 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       ),
     );
     final acceptanceController = AgentUiAcceptanceScope.maybeOf(context);
-    final acceptanceCards = _buildAcceptanceCards(acceptanceController);
+    final acceptanceCards = <Widget>[
+      ..._buildAcceptanceCards(acceptanceController),
+      ..._buildRuntimeApprovalCards(context),
+    ];
     final contextSnapshot = acceptanceController?.contextSnapshot ??
-        const ConversationContextSnapshot.empty();
+        agentTaskContextSnapshot(_todos, memories: _memoryPages);
+    final openTasksCount = agentOpenTasks(_todos).length;
 
     return Theme(
       data: theme,
@@ -460,6 +652,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                     child: _buildConversationPane(
                       context,
                       acceptanceCards: acceptanceCards,
+                      todos: _todos,
                     ),
                   ),
                   if (showContext) ...[
@@ -471,6 +664,13 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                         child: ConversationContextRail(
                           snapshot: contextSnapshot,
                           compact: true,
+                          openTasksCount: openTasksCount,
+                          onOpenTasks: openTasksCount == 0
+                              ? null
+                              : () => showAgentTasksSheet(
+                                    context: context,
+                                    todos: _todos,
+                                  ),
                         ),
                       ),
                     ),
@@ -487,6 +687,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   Widget _buildConversationPane(
     BuildContext context, {
     required List<Widget> acceptanceCards,
+    required List<Todo> todos,
   }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 26, 28, 24),
@@ -512,7 +713,9 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                 }
                 return _MessageList(
                   controller: _scrollController,
+                  bottomKey: _messageListBottomKey,
                   messages: _messages,
+                  todos: todos,
                   thinking: _thinking,
                   acceptanceCards: acceptanceCards,
                   pendingUserContent: _pendingUserContent,
@@ -536,450 +739,52 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   }
 }
 
-final class _Header extends StatelessWidget {
-  const _Header();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.t.chat.agentConversation;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            context.t.app.tabs.conversation,
-            style: const TextStyle(
-              color: _AgentConversationPageState._ink,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
-            ),
-          ),
-        ),
-        const _PresenceDot(),
-        const SizedBox(width: 8),
-        Text(
-          t.ready,
-          style: const TextStyle(
-            color: _AgentConversationPageState._ink,
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
+List<SecretaryRuntimeApprovalItem> _validApprovalItems(
+  List<SecretaryRuntimeApprovalItem> items,
+) {
+  return items
+      .where((item) => item.id.trim().isNotEmpty)
+      .toList(growable: false);
 }
 
-final class _PresenceDot extends StatelessWidget {
-  const _PresenceDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 9,
-      height: 9,
-      decoration: const BoxDecoration(
-        color: Color(0xFF08A86B),
-        shape: BoxShape.circle,
-      ),
-    );
-  }
+int? _runtimeDueAtMs(Map<String, Object?> record) {
+  return _runtimeInt(record['due_at_ms']) ??
+      _runtimeInt(record['dueAtMs']) ??
+      _runtimeInt(record['new_due_at_ms']) ??
+      _runtimeInt(record['newDueAtMs']) ??
+      _runtimeIsoDateTimeMs(record['due_local_iso']) ??
+      _runtimeIsoDateTimeMs(record['dueLocalIso']) ??
+      _runtimeTodayTimeMs(record['due_time']) ??
+      _runtimeTodayTimeMs(record['dueTime']) ??
+      _runtimeTodayTimeMs(record['new_due_time']) ??
+      _runtimeTodayTimeMs(record['newDueTime']);
 }
 
-final class _MessageList extends StatelessWidget {
-  const _MessageList({
-    required this.controller,
-    required this.messages,
-    required this.thinking,
-    required this.acceptanceCards,
-    required this.pendingUserContent,
-    required this.streamingAnswer,
-    required this.streamingReasoning,
-    required this.askError,
-  });
-
-  final ScrollController controller;
-  final List<Message> messages;
-  final bool thinking;
-  final List<Widget> acceptanceCards;
-  final String? pendingUserContent;
-  final String streamingAnswer;
-  final String streamingReasoning;
-  final String? askError;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.t.chat.agentConversation;
-    final pendingContent = pendingUserContent?.trim();
-    final streamingContent = streamingAnswer.trim();
-    final errorContent = askError?.trim();
-    final hasConversationContent = messages.isNotEmpty ||
-        acceptanceCards.isNotEmpty ||
-        thinking ||
-        (pendingContent?.isNotEmpty ?? false) ||
-        streamingContent.isNotEmpty ||
-        (errorContent?.isNotEmpty ?? false);
-    final children = <Widget>[
-      if (!hasConversationContent)
-        _EmptyState(
-          title: context.t.chat.noMessagesYet,
-          subtitle: t.composerHint,
-        ),
-      if (acceptanceCards.isNotEmpty)
-        _MessageFrame(
-          author: context.t.app.title,
-          time: t.ready,
-          child: _AcceptanceCardStack(cards: acceptanceCards),
-        ),
-      for (final message in messages)
-        if (message.role == 'assistant')
-          _AssistantTextMessage(
-            content: message.content,
-            time: t.done,
-            sourceMessage: message,
-          )
-        else
-          _UserMessage(content: message.content),
-      if (pendingContent != null && pendingContent.isNotEmpty)
-        _UserMessage(content: pendingContent),
-      if (streamingContent.isNotEmpty)
-        _AssistantTextMessage(content: streamingContent, time: t.thinking)
-      else if (thinking)
-        _ThinkingMessage(reasoning: streamingReasoning),
-      if (errorContent != null && errorContent.isNotEmpty)
-        _AssistantTextMessage(content: errorContent, time: t.done),
-    ];
-
-    return ListView.separated(
-      key: const ValueKey('managed_pro_agent_message_list'),
-      controller: controller,
-      padding: EdgeInsets.zero,
-      itemCount: children.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 18),
-      itemBuilder: (context, index) => children[index],
-    );
-  }
+int? _runtimeIsoDateTimeMs(Object? raw) {
+  if (raw is! String) return null;
+  final value = raw.trim();
+  if (value.isEmpty) return null;
+  return DateTime.tryParse(value)?.millisecondsSinceEpoch;
 }
 
-final class _AcceptanceCardStack extends StatelessWidget {
-  const _AcceptanceCardStack({required this.cards});
-
-  final List<Widget> cards;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var index = 0; index < cards.length; index++) ...[
-          cards[index],
-          if (index < cards.length - 1)
-            const SizedBox(height: AgentDesignTokens.gapMd),
-        ],
-      ],
-    );
-  }
+int? _runtimeTodayTimeMs(Object? raw) {
+  if (raw is! String) return null;
+  final match =
+      RegExp(r'([01]?\d|2[0-3])\s*[:：]\s*([0-5]\d)').firstMatch(raw.trim());
+  if (match == null) return null;
+  final now = DateTime.now();
+  return DateTime(
+    now.year,
+    now.month,
+    now.day,
+    int.parse(match.group(1)!),
+    int.parse(match.group(2)!),
+  ).millisecondsSinceEpoch;
 }
 
-final class _UserMessage extends StatelessWidget {
-  const _UserMessage({required this.content});
-
-  final String content;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.t.chat.agentConversation;
-    return _MessageFrame(
-      author: t.you,
-      time: t.now,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 620),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF1FF),
-              borderRadius: BorderRadius.circular(AgentDesignTokens.radiusMd),
-              border: Border.all(color: const Color(0xFFBFD2FF)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AgentDesignTokens.gapLg,
-                vertical: AgentDesignTokens.gapMd,
-              ),
-              child: Text(
-                content,
-                style: const TextStyle(
-                  color: _AgentConversationPageState._ink,
-                  fontWeight: FontWeight.w700,
-                  height: 1.45,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _ThinkingMessage extends StatelessWidget {
-  const _ThinkingMessage({required this.reasoning});
-
-  final String reasoning;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.t.chat.agentConversation;
-    final trimmedReasoning = reasoning.trim();
-    final visibleReasoning = trimmedReasoning.length > 520
-        ? trimmedReasoning.substring(trimmedReasoning.length - 520)
-        : trimmedReasoning;
-
-    return KeyedSubtree(
-      key: const ValueKey('agent_thinking_panel'),
-      child: _MessageFrame(
-        author: context.t.app.title,
-        time: t.thinking,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF7F9FC),
-            borderRadius: BorderRadius.circular(AgentDesignTokens.radiusMd),
-            border: Border.all(color: _AgentConversationPageState._line),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AgentDesignTokens.gapLg,
-              vertical: AgentDesignTokens.gapMd,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  t.thinking,
-                  style: const TextStyle(
-                    color: _AgentConversationPageState._ink,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: AgentDesignTokens.gapXs),
-                if (visibleReasoning.isEmpty)
-                  Text(
-                    t.thinkingBody,
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._muted,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  )
-                else
-                  Text(
-                    visibleReasoning,
-                    key: const ValueKey('agent_thinking_reasoning_text'),
-                    maxLines: 4,
-                    overflow: TextOverflow.fade,
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._muted,
-                      fontWeight: FontWeight.w700,
-                      height: 1.45,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _extractReasoningDeltaText(String rawPayload) {
-  try {
-    final decoded = jsonDecode(rawPayload);
-    if (decoded is Map) {
-      return '${decoded['text'] ?? ''}';
-    }
-  } catch (_) {
-    return '';
-  }
-  return '';
-}
-
-final class _MessageFrame extends StatelessWidget {
-  const _MessageFrame({
-    required this.author,
-    required this.time,
-    required this.child,
-  });
-
-  final String author;
-  final String time;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _Avatar(),
-        const SizedBox(width: AgentDesignTokens.gapMd),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    author,
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._ink,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(width: AgentDesignTokens.gapMd),
-                  Text(
-                    time,
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._muted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AgentDesignTokens.gapSm),
-              child,
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-final class _Avatar extends StatelessWidget {
-  const _Avatar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: const BoxDecoration(
-        color: _AgentConversationPageState._blue,
-        shape: BoxShape.circle,
-      ),
-      child: const Center(
-        child: Icon(Icons.all_inclusive_rounded, color: Colors.white, size: 19),
-      ),
-    );
-  }
-}
-
-final class _Composer extends StatelessWidget {
-  const _Composer({
-    required this.controller,
-    required this.focusNode,
-    required this.busy,
-    required this.onSend,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool busy;
-  final VoidCallback onSend;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.t.chat.agentConversation;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: _AgentConversationPageState._panel,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _AgentConversationPageState._line),
-        boxShadow: [
-          BoxShadow(
-            color: _AgentConversationPageState._blue.withOpacity(0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                key: const ValueKey('chat_input'),
-                controller: controller,
-                focusNode: focusNode,
-                minLines: 1,
-                maxLines: 5,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(
-                  hintText: t.composerHint,
-                  border: InputBorder.none,
-                  isDense: true,
-                ),
-                style: const TextStyle(
-                  color: _AgentConversationPageState._ink,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: t.attach,
-              onPressed: busy ? null : () {},
-              icon: const Icon(Icons.add_rounded),
-            ),
-            IconButton(
-              tooltip: t.record,
-              onPressed: busy ? null : () {},
-              icon: const Icon(Icons.mic_none_rounded),
-            ),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, child) {
-                final enabled = !busy && value.text.trim().isNotEmpty;
-                return FilledButton.icon(
-                  key: const ValueKey('chat_send'),
-                  onPressed: enabled ? onSend : null,
-                  icon: const Icon(Icons.send_rounded, size: 18),
-                  label: Text(busy ? t.working : t.send),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-final class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: AgentDesignTokens.gapSm),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _AgentConversationPageState._muted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+int? _runtimeInt(Object? raw) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw);
+  return null;
 }

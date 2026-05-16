@@ -12,11 +12,15 @@ final class ConversationContextRail extends StatelessWidget {
   const ConversationContextRail({
     required this.snapshot,
     this.compact = false,
+    this.openTasksCount = 0,
+    this.onOpenTasks,
     super.key,
   });
 
   final ConversationContextSnapshot snapshot;
   final bool compact;
+  final int openTasksCount;
+  final VoidCallback? onOpenTasks;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +38,23 @@ final class ConversationContextRail extends StatelessWidget {
               title: context.t.chat.agentContext.todayAtGlance,
               items: snapshot.todayAtAGlance,
             ),
+            if (onOpenTasks != null && openTasksCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(
+                  bottom: AgentDesignTokens.gapLg,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const ValueKey('agent_context_open_tasks'),
+                    onPressed: onOpenTasks,
+                    icon: const Icon(Icons.checklist_rounded, size: 18),
+                    label: Text(
+                      context.t.chat.agentTasks.seeAll(count: openTasksCount),
+                    ),
+                  ),
+                ),
+              ),
             _ContextSection(
               title: context.t.chat.agentContext.longTermMemory,
               items: snapshot.longTermMemory,

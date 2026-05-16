@@ -4,11 +4,13 @@ final class _AssistantTextMessage extends StatelessWidget {
   const _AssistantTextMessage({
     required this.content,
     required this.time,
+    this.createdTasks = const <Todo>[],
     this.sourceMessage,
   });
 
   final String content;
   final String time;
+  final List<Todo> createdTasks;
   final Message? sourceMessage;
 
   Future<bool> _openInAppTodo(BuildContext context, String href) async {
@@ -29,9 +31,7 @@ final class _AssistantTextMessage extends StatelessWidget {
     }
     if (todo == null || !context.mounted) return false;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => TodoDetailPage(initialTodo: todo!)),
-    );
+    await showAgentTaskDetailSheet(context: context, todo: todo);
     return true;
   }
 
@@ -270,78 +270,98 @@ final class _AssistantTextMessage extends StatelessWidget {
     return _MessageFrame(
       author: context.t.app.title,
       time: time,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: _AgentConversationPageState._panel,
-              borderRadius: BorderRadius.circular(AgentDesignTokens.radiusMd),
-              border: Border.all(color: _AgentConversationPageState._line),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AgentDesignTokens.gapLg,
-                vertical: AgentDesignTokens.gapMd,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (displayText.isNotEmpty)
-                    buildChatMarkdownPreviewBody(
-                      context,
-                      key: message == null
-                          ? null
-                          : ValueKey('agent_assistant_markdown_${message.id}'),
-                      text: displayText,
-                      selectable: true,
-                      bodyStyle: textStyle,
-                      citationLabelResolver:
-                          citationController.chipLabelForHref,
-                      onTapRichLink: (href) => _handleMarkdownHref(
-                        context,
-                        href,
-                        citationController: citationController,
-                      ),
-                      onTapLink: (_, href, __) => unawaited(
-                        _handleMarkdownHref(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _AgentConversationPageState._panel,
+                  borderRadius:
+                      BorderRadius.circular(AgentDesignTokens.radiusMd),
+                  border: Border.all(color: _AgentConversationPageState._line),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AgentDesignTokens.gapLg,
+                    vertical: AgentDesignTokens.gapMd,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (displayText.isNotEmpty)
+                        buildChatMarkdownPreviewBody(
                           context,
-                          href,
-                          citationController: citationController,
+                          key: message == null
+                              ? null
+                              : ValueKey(
+                                  'agent_assistant_markdown_${message.id}'),
+                          text: displayText,
+                          selectable: true,
+                          bodyStyle: textStyle,
+                          citationLabelResolver:
+                              citationController.chipLabelForHref,
+                          onTapRichLink: (href) => _handleMarkdownHref(
+                            context,
+                            href,
+                            citationController: citationController,
+                          ),
+                          onTapLink: (_, href, __) => unawaited(
+                            _handleMarkdownHref(
+                              context,
+                              href,
+                              citationController: citationController,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  if ((evidence != null && evidence.hasEvidence) ||
-                      actionSuggestions.isNotEmpty)
-                    ChatAssistantMessageFooter(
-                      evidence: evidence,
-                      onOpenSources: () => unawaited(
-                        citationController.openEvidence(
-                          context,
-                          canOpenDirectSource: canOpenChatMarkdownHref,
-                          onOpenDirectSource: (href) =>
-                              _openInAppLink(context, href),
+                      if ((evidence != null && evidence.hasEvidence) ||
+                          actionSuggestions.isNotEmpty)
+                        ChatAssistantMessageFooter(
+                          evidence: evidence,
+                          onOpenSources: () => unawaited(
+                            citationController.openEvidence(
+                              context,
+                              canOpenDirectSource: canOpenChatMarkdownHref,
+                              onOpenDirectSource: (href) =>
+                                  _openInAppLink(context, href),
+                            ),
+                          ),
+                          actionSuggestions: actionSuggestions,
+                          onTapActionSuggestion: message == null
+                              ? (_, __) {}
+                              : (suggestion, index) => unawaited(
+                                    _handleAssistantSuggestion(
+                                      context,
+                                      message,
+                                      suggestion,
+                                      index,
+                                    ),
+                                  ),
                         ),
-                      ),
-                      actionSuggestions: actionSuggestions,
-                      onTapActionSuggestion: message == null
-                          ? (_, __) {}
-                          : (suggestion, index) => unawaited(
-                                _handleAssistantSuggestion(
-                                  context,
-                                  message,
-                                  suggestion,
-                                  index,
-                                ),
-                              ),
-                    ),
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+          for (final task in createdTasks) ...[
+            const SizedBox(height: AgentDesignTokens.gapMd),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: AgentCreatedTaskCard(
+                todo: task,
+                onOpenTask: () => unawaited(
+                  showAgentTaskDetailSheet(context: context, todo: task),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
