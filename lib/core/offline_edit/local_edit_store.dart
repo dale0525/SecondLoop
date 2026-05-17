@@ -117,6 +117,19 @@ class LocalEditStore {
     return rows.map(_editFromRow).toList(growable: false);
   }
 
+  Future<List<LocalTextEdit>> listRetryableEdits() async {
+    final rows = _database.select(
+      '''
+      SELECT *
+      FROM local_text_edits
+      WHERE sync_state IN (?, ?)
+      ORDER BY updated_at_ms ASC, local_id ASC
+      ''',
+      [LocalEditSyncState.pending.name, LocalEditSyncState.failed.name],
+    );
+    return rows.map(_editFromRow).toList(growable: false);
+  }
+
   Future<LocalTextEdit?> readByRemoteId(String remoteId) async {
     final rows = _database.select(
       '''
@@ -201,6 +214,27 @@ class LocalEditStore {
         remoteRevision,
         remoteTitle,
         remoteBody,
+        localId,
+      ],
+    );
+  }
+
+  Future<void> markFailed({
+    required String localId,
+    required int nowMs,
+  }) async {
+    _database.execute(
+      '''
+      UPDATE local_text_edits
+      SET dirty = ?,
+          sync_state = ?,
+          updated_at_ms = ?
+      WHERE local_id = ?
+      ''',
+      [
+        1,
+        LocalEditSyncState.failed.name,
+        nowMs,
         localId,
       ],
     );
