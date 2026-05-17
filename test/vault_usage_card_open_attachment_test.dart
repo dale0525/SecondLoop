@@ -1,24 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/backend/attachments_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/vault_attachments_client.dart';
 import 'package:secondloop/core/cloud/vault_usage_client.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
-import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
 import 'package:secondloop/features/settings/vault_usage_card.dart';
-import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
@@ -44,11 +40,22 @@ Future<void> _pumpUntilFound(
 
 void main() {
   testWidgets(
-      'VaultUsageCard opens grouped video attachment details by root sha',
+      'VaultUsageCard opens grouped video attachment preview by root sha',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     const rootSha = 'sha-video-root';
     const leafSha = 'sha-video-segment';
+    final launchedUrls = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'launch') {
+        launchedUrls.add((call.arguments as Map)['url'] as String);
+      }
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
     final httpClient = _MultiResponseHttpClient(
       handlers: <Pattern, _FakeHttpResponse>{
@@ -79,41 +86,36 @@ void main() {
             'total_bytes_used': 4096,
           }),
         ),
+        RegExp(r'/v1/vaults/uid_1/attachments/sha-video-root/preview$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'kind': 'video',
+            'url': 'https://signed.test/video-preview',
+            'thumbnail_url': 'https://signed.test/video-thumb',
+          }),
+        ),
       },
-    );
-
-    final backend = _FakeBackend(
-      attachment: const Attachment(
-        sha256: rootSha,
-        mimeType: 'video/mp4',
-        path: 'attachments/sha-video-root.bin',
-        byteLen: 4096,
-        createdAtMs: 1000,
-      ),
     );
 
     await tester.pumpWidget(
       wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: CloudAuthScope(
-            controller: _FakeCloudAuthController(),
-            gatewayConfig: const CloudGatewayConfig(
-              baseUrl: 'https://gateway.test',
-              modelName: 'cloud',
-            ),
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: MaterialApp(
-                home: Scaffold(
-                  body: VaultUsageCard(
-                    client: VaultUsageClient(httpClient: httpClient),
-                    attachmentsClient:
-                        VaultAttachmentsClient(httpClient: httpClient),
-                    configStore: SyncConfigStore(
-                      managedVaultDefaultBaseUrl: 'https://vault.test',
-                    ),
+        CloudAuthScope(
+          controller: _FakeCloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
+          ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              home: Scaffold(
+                body: VaultUsageCard(
+                  client: VaultUsageClient(httpClient: httpClient),
+                  attachmentsClient:
+                      VaultAttachmentsClient(httpClient: httpClient),
+                  configStore: SyncConfigStore(
+                    managedVaultDefaultBaseUrl: 'https://vault.test',
                   ),
                 ),
               ),
@@ -138,7 +140,12 @@ void main() {
     await tester.pump();
     await _pumpUi(tester);
 
-    expect(find.byType(AttachmentViewerPage), findsOneWidget);
+    expect(
+      httpClient.getUrls,
+      contains('https://vault.test/v1/vaults/uid_1/attachments/$rootSha'
+          '/preview'),
+    );
+    expect(launchedUrls, ['https://signed.test/video-preview']);
   });
 
   testWidgets(
@@ -180,33 +187,22 @@ void main() {
 
     await tester.pumpWidget(
       wrapWithI18n(
-        AppBackendScope(
-          backend: _FakeBackend(
-            attachment: const Attachment(
-              sha256: 'unused-sha',
-              mimeType: 'text/plain',
-              path: 'attachments/unused.bin',
-              byteLen: 0,
-              createdAtMs: 0,
-            ),
+        CloudAuthScope(
+          controller: _FakeCloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
           ),
-          child: CloudAuthScope(
-            controller: _FakeCloudAuthController(),
-            gatewayConfig: const CloudGatewayConfig(
-              baseUrl: 'https://gateway.test',
-              modelName: 'cloud',
-            ),
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: MaterialApp(
-                home: Scaffold(
-                  body: VaultUsageCard(
-                    client: VaultUsageClient(httpClient: httpClient),
-                    attachmentsClient:
-                        VaultAttachmentsClient(httpClient: httpClient),
-                    configStore: store,
-                  ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              home: Scaffold(
+                body: VaultUsageCard(
+                  client: VaultUsageClient(httpClient: httpClient),
+                  attachmentsClient:
+                      VaultAttachmentsClient(httpClient: httpClient),
+                  configStore: store,
                 ),
               ),
             ),
@@ -291,33 +287,22 @@ void main() {
 
     Widget buildWidget() {
       return wrapWithI18n(
-        AppBackendScope(
-          backend: _FakeBackend(
-            attachment: const Attachment(
-              sha256: 'sha-vault-2',
-              mimeType: 'text/plain',
-              path: 'attachments/sha-vault-2.bin',
-              byteLen: 20,
-              createdAtMs: 3000,
-            ),
+        CloudAuthScope(
+          controller: _FakeCloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
           ),
-          child: CloudAuthScope(
-            controller: _FakeCloudAuthController(),
-            gatewayConfig: const CloudGatewayConfig(
-              baseUrl: 'https://gateway.test',
-              modelName: 'cloud',
-            ),
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: MaterialApp(
-                home: Scaffold(
-                  body: VaultUsageCard(
-                    client: VaultUsageClient(httpClient: httpClient),
-                    attachmentsClient:
-                        VaultAttachmentsClient(httpClient: httpClient),
-                    configStore: store,
-                  ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              home: Scaffold(
+                body: VaultUsageCard(
+                  client: VaultUsageClient(httpClient: httpClient),
+                  attachmentsClient:
+                      VaultAttachmentsClient(httpClient: httpClient),
+                  configStore: store,
                 ),
               ),
             ),
@@ -413,33 +398,22 @@ void main() {
 
     Widget buildWidget(SyncConfigStore store) {
       return wrapWithI18n(
-        AppBackendScope(
-          backend: _FakeBackend(
-            attachment: const Attachment(
-              sha256: 'sha-store-2',
-              mimeType: 'text/plain',
-              path: 'attachments/sha-store-2.bin',
-              byteLen: 20,
-              createdAtMs: 3000,
-            ),
+        CloudAuthScope(
+          controller: _FakeCloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
           ),
-          child: CloudAuthScope(
-            controller: _FakeCloudAuthController(),
-            gatewayConfig: const CloudGatewayConfig(
-              baseUrl: 'https://gateway.test',
-              modelName: 'cloud',
-            ),
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: MaterialApp(
-                home: Scaffold(
-                  body: VaultUsageCard(
-                    client: VaultUsageClient(httpClient: httpClient),
-                    attachmentsClient:
-                        VaultAttachmentsClient(httpClient: httpClient),
-                    configStore: store,
-                  ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              home: Scaffold(
+                body: VaultUsageCard(
+                  client: VaultUsageClient(httpClient: httpClient),
+                  attachmentsClient:
+                      VaultAttachmentsClient(httpClient: httpClient),
+                  configStore: store,
                 ),
               ),
             ),
@@ -515,33 +489,22 @@ void main() {
 
     Widget buildWidget() {
       return wrapWithI18n(
-        AppBackendScope(
-          backend: _FakeBackend(
-            attachment: const Attachment(
-              sha256: 'sha-race-2',
-              mimeType: 'text/plain',
-              path: 'attachments/sha-race-2.bin',
-              byteLen: 20,
-              createdAtMs: 3000,
-            ),
+        CloudAuthScope(
+          controller: _FakeCloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
           ),
-          child: CloudAuthScope(
-            controller: _FakeCloudAuthController(),
-            gatewayConfig: const CloudGatewayConfig(
-              baseUrl: 'https://gateway.test',
-              modelName: 'cloud',
-            ),
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: MaterialApp(
-                home: Scaffold(
-                  body: VaultUsageCard(
-                    client: VaultUsageClient(httpClient: httpClient),
-                    attachmentsClient:
-                        VaultAttachmentsClient(httpClient: httpClient),
-                    configStore: store,
-                  ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              home: Scaffold(
+                body: VaultUsageCard(
+                  client: VaultUsageClient(httpClient: httpClient),
+                  attachmentsClient:
+                      VaultAttachmentsClient(httpClient: httpClient),
+                  configStore: store,
                 ),
               ),
             ),
@@ -633,7 +596,6 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     const rootSha = 'sha-video-root';
     const leafSha = 'sha-video-segment';
-    const messageId = 'message_1';
 
     final httpClient = _MultiResponseHttpClient(
       handlers: <Pattern, _FakeHttpResponse>{
@@ -664,6 +626,19 @@ void main() {
             'total_bytes_used': 4096,
           }),
         ),
+        RegExp(r'/v1/vaults/uid_1/attachments/sha-video-root/delete-impact$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'requires_confirmation': true,
+            'linked_entities': [
+              {
+                'kind': 'note',
+                'id': 'note-1',
+                'title': 'Loop',
+              },
+            ],
+          }),
+        ),
         RegExp(r'/v1/vaults/uid_1/attachments/sha-video-root$'):
             _FakeHttpResponse.ok(
           jsonEncode(<String, Object?>{
@@ -674,69 +649,25 @@ void main() {
       },
     );
 
-    final backend = _FakeBackend(
-      attachment: const Attachment(
-        sha256: rootSha,
-        mimeType: 'video/mp4',
-        path: 'attachments/sha-video-root.bin',
-        byteLen: 4096,
-        createdAtMs: 1000,
-      ),
-      conversations: const <Conversation>[
-        Conversation(
-          id: 'conversation_1',
-          title: 'Loop',
-          createdAtMs: 0,
-          updatedAtMs: 0,
-        ),
-      ],
-      messagesByConversationId: const <String, List<Message>>{
-        'conversation_1': <Message>[
-          Message(
-            id: messageId,
-            conversationId: 'conversation_1',
-            role: 'user',
-            content: 'video',
-            createdAtMs: 0,
-            isMemory: false,
-          ),
-        ],
-      },
-      attachmentsByMessageId: const <String, List<Attachment>>{
-        messageId: <Attachment>[
-          Attachment(
-            sha256: rootSha,
-            mimeType: 'video/mp4',
-            path: 'attachments/sha-video-root.bin',
-            byteLen: 4096,
-            createdAtMs: 1000,
-          ),
-        ],
-      },
-    );
-
     await tester.pumpWidget(
       wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: CloudAuthScope(
-            controller: _FakeCloudAuthController(),
-            gatewayConfig: const CloudGatewayConfig(
-              baseUrl: 'https://gateway.test',
-              modelName: 'cloud',
-            ),
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-              lock: () {},
-              child: MaterialApp(
-                home: Scaffold(
-                  body: VaultUsageCard(
-                    client: VaultUsageClient(httpClient: httpClient),
-                    attachmentsClient:
-                        VaultAttachmentsClient(httpClient: httpClient),
-                    configStore: SyncConfigStore(
-                      managedVaultDefaultBaseUrl: 'https://vault.test',
-                    ),
+        CloudAuthScope(
+          controller: _FakeCloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
+          ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              home: Scaffold(
+                body: VaultUsageCard(
+                  client: VaultUsageClient(httpClient: httpClient),
+                  attachmentsClient:
+                      VaultAttachmentsClient(httpClient: httpClient),
+                  configStore: SyncConfigStore(
+                    managedVaultDefaultBaseUrl: 'https://vault.test',
                   ),
                 ),
               ),
@@ -769,62 +700,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(httpClient.deletePaths, ['/v1/vaults/uid_1/attachments/$rootSha']);
-    expect(backend.purgedMessageIds, [messageId]);
+    expect(
+      httpClient.getUrls,
+      contains('https://vault.test/v1/vaults/uid_1/attachments/$rootSha'
+          '/delete-impact'),
+    );
   });
-}
-
-final class _FakeBackend implements AppBackend, AttachmentsBackend {
-  _FakeBackend({
-    required this.attachment,
-    this.conversations = const <Conversation>[],
-    this.messagesByConversationId = const <String, List<Message>>{},
-    this.attachmentsByMessageId = const <String, List<Attachment>>{},
-  });
-
-  final Attachment attachment;
-  final List<Conversation> conversations;
-  final Map<String, List<Message>> messagesByConversationId;
-  final Map<String, List<Attachment>> attachmentsByMessageId;
-  final List<String> purgedMessageIds = <String>[];
-
-  @override
-  Future<List<Conversation>> listConversations(Uint8List key) async =>
-      conversations;
-
-  @override
-  Future<List<Message>> listMessages(Uint8List key, String conversationId) =>
-      Future<List<Message>>.value(
-        messagesByConversationId[conversationId] ?? const <Message>[],
-      );
-
-  @override
-  Future<List<Attachment>> listMessageAttachments(
-    Uint8List key,
-    String messageId,
-  ) async =>
-      attachmentsByMessageId[messageId] ?? const <Attachment>[];
-
-  @override
-  Future<void> purgeMessageAttachments(Uint8List key, String messageId) async {
-    purgedMessageIds.add(messageId);
-  }
-
-  @override
-  Future<Attachment?> readAttachmentBySha256(String attachmentSha256) async {
-    if (attachmentSha256 == attachment.sha256) return attachment;
-    return null;
-  }
-
-  @override
-  Future<Uint8List> readAttachmentBytes(
-    Uint8List key, {
-    required String sha256,
-  }) async {
-    return Uint8List.fromList(const <int>[1, 2, 3]);
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 final class _FakeCloudAuthController implements CloudAuthController {
