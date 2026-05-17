@@ -7,7 +7,7 @@ import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/content_enrichment/docx_ocr.dart';
 import 'package:secondloop/features/attachments/platform_pdf_ocr.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   final sessionKey = Uint8List.fromList(List<int>.filled(32, 7));

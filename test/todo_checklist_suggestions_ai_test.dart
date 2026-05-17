@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/ai/todo_checklist_suggestions_ai.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('checklist prompt uses parser max-item constant', () {

@@ -1,4 +1,4 @@
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import 'ai_routing.dart';
 import 'todo_followup_generation_runner.dart';
 

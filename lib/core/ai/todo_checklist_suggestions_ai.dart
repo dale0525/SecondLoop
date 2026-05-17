@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../backend/app_backend.dart';
 import 'ai_routing.dart';
 

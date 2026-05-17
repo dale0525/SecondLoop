@@ -10,29 +10,35 @@ import '../cloud/http_client_factory_stub.dart'
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../storage/secure_blob_store.dart';
-import '../../src/rust/api/content_extract.dart' as rust_content_extract;
-import '../../src/rust/api/embedding_lifecycle.dart'
+import 'package:secondloop/core/runtime_compat/api/content_extract.dart'
+    as rust_content_extract;
+import 'package:secondloop/core/runtime_compat/api/embedding_lifecycle.dart'
     as rust_embedding_lifecycle;
-import '../../src/rust/api/core.dart' as rust_core;
-import '../../src/rust/api/detached_ask.dart' as rust_detached_ask;
-import '../../src/rust/api/semantic_parse_enhancement.dart'
+import 'package:secondloop/core/runtime_compat/api/core.dart' as rust_core;
+import 'package:secondloop/core/runtime_compat/api/detached_ask.dart'
+    as rust_detached_ask;
+import 'package:secondloop/core/runtime_compat/api/semantic_parse_enhancement.dart'
     as rust_semantic_parse_enhancement;
-import '../../src/rust/api/semantic_parse_jobs.dart'
+import 'package:secondloop/core/runtime_compat/api/semantic_parse_jobs.dart'
     as rust_semantic_parse_jobs;
-import '../../src/rust/api/todo_followup_generation.dart'
+import 'package:secondloop/core/runtime_compat/api/todo_followup_generation.dart'
     as rust_todo_followup_generation;
-import '../../src/rust/api/vault_rollback.dart' as rust_vault_rollback;
-import '../../src/rust/api/attachments.dart' as rust_attachments;
-import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
-import '../../src/rust/api/sync_diagnostics.dart' as rust_sync_diagnostics;
-import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
-import '../../src/rust/db.dart';
-import '../../src/rust/frb_generated.dart';
-import '../../src/rust/semantic_parse.dart';
+import 'package:secondloop/core/runtime_compat/api/vault_rollback.dart'
+    as rust_vault_rollback;
+import 'package:secondloop/core/runtime_compat/api/attachments.dart'
+    as rust_attachments;
+import 'package:secondloop/core/runtime_compat/api/ask_scope.dart'
+    as rust_ask_scope;
+import 'package:secondloop/core/runtime_compat/api/sync_diagnostics.dart'
+    as rust_sync_diagnostics;
+import 'package:secondloop/core/runtime_compat/api/sync_progress.dart'
+    as rust_sync_progress;
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/semantic_parse_models.dart';
 import '../secretary/todo_command_executor.dart';
 import '../secretary/todo_command_models.dart';
 import 'app_backend.dart';
@@ -41,8 +47,6 @@ import 'semantic_parse_attempt_aware_backend.dart';
 import 'semantic_parse_enhancement_backend.dart';
 import 'secretary_backend.dart';
 import '../sync/sync_config_store.dart';
-import 'rust_external_library_resolver.dart';
-import 'serialized_rust_handler.dart';
 
 part 'native_backend_todo_followups.dart';
 part 'native_backend_todos.dart';
@@ -101,7 +105,7 @@ typedef DbReleaseLocalEmbeddingModelIfIdleFn = Future<bool> Function({
   required int maxIdleMs,
 });
 
-typedef RustLibInitFn = Future<void> Function();
+typedef RuntimeCompatInitFn = Future<void> Function();
 
 typedef DbInsertAttachmentFn = Future<Attachment> Function({
   required String appDir,
@@ -393,7 +397,8 @@ class NativeAppBackend extends _NativeAppBackendAccess
     DbCreateSecretaryRunFn? dbCreateSecretaryRun,
     DbCreateSecretaryToolCallFn? dbCreateSecretaryToolCall,
     DbListSecretaryToolCallsForRunFn? dbListSecretaryToolCallsForRun,
-    RustLibInitFn? rustLibInit,
+    RuntimeCompatInitFn? runtimeCompatInit,
+    RuntimeCompatInitFn? rustLibInit,
   })  : _storageScope = _normalizeStorageScope(storageScope),
         _secureBlobStore = SecureBlobStore(
           storage: secureStorage,
@@ -516,11 +521,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
             dbCreateSecretaryToolCall ?? rust_core.dbCreateSecretaryToolCall,
         _dbListSecretaryToolCallsForRun = dbListSecretaryToolCallsForRun ??
             rust_core.dbListSecretaryToolCallsForRun,
-        _rustLibInit = rustLibInit ??
-            (() => RustLib.init(
-                  handler: kIsWeb ? SerializedRustHandler() : null,
-                  externalLibrary: resolveDesktopRustExternalLibrary(),
-                ));
+        _runtimeCompatInit = runtimeCompatInit ?? rustLibInit ?? (() async {});
 
   final SecureBlobStore _secureBlobStore;
   final String? _storageScope;
@@ -638,7 +639,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
   final DbCreateSecretaryToolCallFn _dbCreateSecretaryToolCall;
   @override
   final DbListSecretaryToolCallsForRunFn _dbListSecretaryToolCallsForRun;
-  final RustLibInitFn _rustLibInit;
+  final RuntimeCompatInitFn _runtimeCompatInit;
 
   String? _appDir;
 
@@ -677,7 +678,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
 
   @override
   Future<void> init() async {
-    await _rustLibInit();
+    await _runtimeCompatInit();
     await _getAppDir();
   }
 

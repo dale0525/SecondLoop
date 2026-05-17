@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../backend/secretary_backend.dart';
 
 final class SecretaryInternalTool {

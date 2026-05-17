@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/notifications/review_notification_plan.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('returns null when there are no reminder todos', () {

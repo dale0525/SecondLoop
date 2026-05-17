@@ -15,7 +15,8 @@ import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
 import '../../core/media/ffmpeg_executable_resolver.dart';
-import '../../src/rust/api/audio_transcribe.dart' as rust_audio_transcribe;
+import 'package:secondloop/core/runtime_compat/api/audio_transcribe.dart'
+    as rust_audio_transcribe;
 
 part 'audio_transcribe_runner_clients.dart';
 part 'audio_transcribe_runner_gateway_limits.dart';

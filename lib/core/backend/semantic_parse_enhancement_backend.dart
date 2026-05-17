@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
-import '../../src/rust/semantic_parse.dart';
+import 'package:secondloop/core/models/semantic_parse_models.dart';
 
 abstract interface class SemanticParseEnhancementBackend {
   Future<String> semanticParseMessageActionEnhancement(

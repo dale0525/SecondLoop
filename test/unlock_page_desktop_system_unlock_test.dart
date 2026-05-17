@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/features/lock/unlock_page.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_i18n.dart';
 

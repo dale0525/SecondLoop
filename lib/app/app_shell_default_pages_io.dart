@@ -22,6 +22,16 @@ Widget buildDefaultSettingsTab(
   );
 }
 
+Widget buildDefaultNotesTab(
+  BuildContext context, {
+  required bool isActive,
+}) {
+  return shared_defaults.buildSharedDefaultNotesTab(
+    context,
+    isActive: isActive,
+  );
+}
+
 Widget buildDefaultMemoryTab(
   BuildContext context, {
   required bool isActive,

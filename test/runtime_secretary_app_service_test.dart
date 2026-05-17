@@ -6,8 +6,8 @@ import 'package:secondloop/core/cloud/runtime_secretary_app_service.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_client.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
-import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/src/rust/platform_int.dart';
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 
 import 'test_backend.dart';
 

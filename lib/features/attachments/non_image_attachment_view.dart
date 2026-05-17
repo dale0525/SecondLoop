@@ -8,7 +8,7 @@ import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/content_enrichment/docx_ocr_policy.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
 import '../media_backup/cloud_media_download.dart';
 import 'attachment_detail_workspace.dart';

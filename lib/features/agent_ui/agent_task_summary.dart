@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
-import '../../src/rust/platform_int.dart';
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 import '../conversation_context/conversation_context_rail.dart';
 import 'agent_design_tokens.dart';
 

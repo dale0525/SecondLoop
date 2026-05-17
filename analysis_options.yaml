@@ -13,7 +13,6 @@ analyzer:
   exclude:
     - build/**
     - "**/build/**"
-    - rust_builder/**
     - lib/i18n/strings.g.dart
   errors:
     deprecated_member_use: ignore

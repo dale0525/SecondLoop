@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/main.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   testWidgets('Uses device locale for navigation labels', (tester) async {

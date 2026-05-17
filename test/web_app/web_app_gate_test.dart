@@ -147,7 +147,7 @@ final class _InitRequiredWebBackend extends TestAppBackend {
   @override
   Future<bool> isMasterPasswordSet() async {
     if (!_initialized) {
-      throw StateError('flutter_rust_bridge has not been initialized');
+      throw StateError('backend has not been initialized');
     }
     return false;
   }
@@ -392,7 +392,7 @@ void main() {
     expect(backend.initCalls, 1);
     expect(find.byType(AppShell), findsOneWidget);
     expect(
-      find.textContaining('flutter_rust_bridge has not been initialized'),
+      find.textContaining('backend has not been initialized'),
       findsNothing,
     );
   });

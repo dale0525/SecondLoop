@@ -14,8 +14,6 @@ void main() {
       'test/sync_engine_gate_media_uploads_test.dart',
       'test/sync_settings_page_test_support_part.dart',
       'test/sync_settings_page_managed_vault_support_part.dart',
-      'rust/tests/sync_managed_vault_v2_pull.rs',
-      'rust/tests/sync_managed_vault_v2_push.rs',
     ];
 
     for (final path in targets) {

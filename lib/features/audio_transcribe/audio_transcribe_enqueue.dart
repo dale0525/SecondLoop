@@ -27,7 +27,7 @@ Future<void> maybeEnqueueAudioTranscribe({
     Object? contentConfig;
     try {
       contentConfig =
-          await const RustContentEnrichmentConfigStore().readContentEnrichment(
+          await const DartContentEnrichmentConfigStore().readContentEnrichment(
         sessionKey,
       );
     } catch (_) {

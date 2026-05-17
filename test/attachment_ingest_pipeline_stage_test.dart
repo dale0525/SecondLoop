@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/features/attachments/attachment_ingest_pipeline.dart';
 import 'package:secondloop/features/attachments/attachment_processing_status.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('ingestImageAttachmentBytes emits finalizing stage for images',

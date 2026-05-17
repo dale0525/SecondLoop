@@ -5,7 +5,7 @@ import 'package:secondloop/core/ai/todo_followup_suggestions_ai.dart';
 import 'package:secondloop/core/ai/todo_followup_prompt_envelope.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('followup request envelope preserves generation mode metadata', () {

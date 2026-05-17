@@ -6,6 +6,7 @@ void main() {
   test('agent shell exposes the managed pro primary tabs', () {
     expect(AppTab.values, [
       AppTab.conversation,
+      AppTab.notes,
       AppTab.memory,
       AppTab.review,
       AppTab.settings,

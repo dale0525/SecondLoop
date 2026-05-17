@@ -11,8 +11,7 @@ By contributing to this repository, you agree that your contributions are licens
   - Auto-fix: `pixi run fmt`
 - Run tests:
   - Flutter: `pixi run i18n-refresh` once on a fresh clone, then `pixi run flutter test`
-  - Rust: `pixi run cargo test`
-- Run the full local CI suite (same scope as `pre-push` / CI; Flutter and Rust run in parallel locally): `pixi run ci`
+- Run the full local CI suite (same scope as `pre-push` / CI; Flutter, web, and tooling run in parallel locally): `pixi run ci`
 - Shared verification entrypoints:
   - Check-only local gate (same non-mutating engine as CI, narrower than `verify_full`): `pixi run verify-changed`
   - Tooling-scoped script / Python changes: `pixi run tooling-test`
@@ -23,7 +22,6 @@ By contributing to this repository, you agree that your contributions are licens
 
 ## Common development commands
 
-- Generate Rust bridge code: `pixi run frb-generate`
 - Refresh generated i18n Dart output: `pixi run i18n-refresh`
 - Check missing / outdated / unused translations: `pixi run i18n-analyze`
 - Sync zh-CN translations from English source files: `pixi run i18n-translate`
@@ -39,14 +37,13 @@ By contributing to this repository, you agree that your contributions are licens
   - `pixi run build-android-apk`
   - `pixi run package-windows-msi`
 
-For arbitrary Flutter/Dart/Cargo commands:
+For arbitrary Flutter/Dart commands:
 
 ```bash
 pixi run flutter <command> [command-args]
 # examples with multiple flags:
 pixi run flutter test "--coverage --reporter expanded"
-pixi run dart format "--output=none lib test rust_builder integration_test test_driver --set-exit-if-changed"
-pixi run cargo clippy "--all-targets --all-features -- -D warnings"
+pixi run dart format "--output=none lib test integration_test test_driver --set-exit-if-changed"
 ```
 
 ## I18n workflow
@@ -65,7 +62,7 @@ pixi run flutter pub "run slang outdated settings.about.title"
 
 ## Platform prerequisites
 
-- Android: Android Studio is optional. Pixi tasks provision SDK/NDK and Rust targets into `.tool/`.
+- Android: Android Studio is optional. Pixi tasks provision SDK/NDK into `.tool/`.
 - Windows (dev/build): Visual Studio 2022 + Desktop development with C++ + `C++ ATL for latest v143 build tools (x86 & x64)`.
 - Windows MSI packaging: WiX Toolset v3 (`heat.exe` / `candle.exe` / `light.exe`). Scripts can install a portable WiX v3 bundle into `.tool/wix3`.
 - macOS/iOS: Xcode + Command Line Tools.

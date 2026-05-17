@@ -3,6 +3,7 @@
   "tabs": {
     "conversation": "Conversation",
     "main": "Loop",
+    "notes": "Notes",
     "memory": "Memory",
     "review": "Review",
     "settings": "Settings"

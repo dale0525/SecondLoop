@@ -122,6 +122,76 @@ final class RuntimeNoteClient {
     return _noteFromJson(decoded);
   }
 
+  Future<List<RuntimeNote>> listNotes({
+    required String vaultId,
+    int limit = 100,
+  }) async {
+    final uri = _resolveVaultUri(
+      _managedVaultBaseUrl,
+      '/v1/vaults/${Uri.encodeComponent(vaultId)}/notes?limit=$limit',
+    );
+    final response = await _httpClient.get(
+      uri,
+      headers: <String, String>{
+        'authorization': 'Bearer $_idToken',
+        'accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    }
+
+    final decoded = response.tryDecodeObject();
+    final rawItems = decoded?['items'];
+    if (rawItems is! List) {
+      throw const FormatException('invalid_runtime_note_list_response');
+    }
+    return rawItems.map((raw) {
+      if (raw is! Map) {
+        throw const FormatException('invalid_runtime_note_list_item');
+      }
+      return _noteFromJson(Map<String, Object?>.from(raw));
+    }).toList(growable: false);
+  }
+
+  Future<void> deleteNote({
+    required String vaultId,
+    required String noteId,
+    required String? baseRevision,
+  }) async {
+    final query = baseRevision == null
+        ? ''
+        : '?base_revision=${Uri.encodeQueryComponent(baseRevision)}';
+    final uri = _resolveVaultUri(
+      _managedVaultBaseUrl,
+      '/v1/vaults/${Uri.encodeComponent(vaultId)}/notes/'
+      '${Uri.encodeComponent(noteId)}$query',
+    );
+    final response = await _httpClient.delete(
+      uri,
+      headers: <String, String>{
+        'authorization': 'Bearer $_idToken',
+        'accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 409) {
+      final decoded = response.tryDecodeObject();
+      final remote = decoded?['remote'];
+      if (remote is Map) {
+        throw RuntimeNoteConflictException(
+          remote: _noteFromJson(Map<String, Object?>.from(remote)),
+        );
+      }
+      throw const FormatException('invalid_runtime_note_conflict');
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    }
+  }
+
   void dispose() {
     _httpClient.close();
   }

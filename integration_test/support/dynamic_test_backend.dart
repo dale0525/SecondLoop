@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:secondloop/core/backend/secretary_backend.dart';
-import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/src/rust/platform_int.dart';
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 
 import '../../test/test_backend.dart';
 

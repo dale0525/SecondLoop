@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/attachments/attachment_card.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';

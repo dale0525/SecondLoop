@@ -9,7 +9,7 @@ abstract interface class AttachmentLocalCacheMetadataStore {
     required String url,
   });
 
-  Future<void> clearAttachmentCacheMetadata(String attachmentId);
+  Future<void> clearAttachmentCacheMetadata(VaultAttachmentUsageItem item);
 }
 
 final class InMemoryAttachmentLocalCacheMetadataStore
@@ -27,9 +27,11 @@ final class InMemoryAttachmentLocalCacheMetadataStore
   }
 
   @override
-  Future<void> clearAttachmentCacheMetadata(String attachmentId) async {
-    _lastPreviewUrlByAttachmentId.remove(attachmentId);
-    _clearedAttachmentIds.add(attachmentId);
+  Future<void> clearAttachmentCacheMetadata(
+    VaultAttachmentUsageItem item,
+  ) async {
+    _lastPreviewUrlByAttachmentId.remove(item.attachmentId);
+    _clearedAttachmentIds.add(item.attachmentId);
   }
 }
 
@@ -105,13 +107,12 @@ final class AttachmentStorageController extends ChangeNotifier {
       idToken: _idToken,
       attachmentId: item.attachmentId,
     );
+    await _localCacheMetadataStore.clearAttachmentCacheMetadata(item);
     return impact;
   }
 
   Future<void> clearLocalCache(VaultAttachmentUsageItem item) {
-    return _localCacheMetadataStore.clearAttachmentCacheMetadata(
-      item.attachmentId,
-    );
+    return _localCacheMetadataStore.clearAttachmentCacheMetadata(item);
   }
 }
 

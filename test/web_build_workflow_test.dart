@@ -39,59 +39,8 @@ void main() {
 
     expect(pixi, contains('preview-local-web-app'));
     expect(pixi, contains('scripts/preview_local_web_app.sh'));
-    expect(pixi, contains('sync-web-rust-pkg'));
-  });
-
-  test('frb web build task links wasm for shared imported memory', () {
-    final pixi = File('pixi.toml').readAsStringSync();
-
-    expect(pixi, contains('frb-build-web'));
-    expect(
-      pixi,
-      contains('flutter pub run flutter_rust_bridge build-web'),
-    );
-    expect(pixi, isNot(contains('flutter_rust_bridge_codegen build-web')));
-    expect(
-      pixi,
-      contains(r'CC_wasm32_unknown_unknown=\"$PWD/.tool/bin/clang\"'),
-    );
-    expect(
-      pixi,
-      contains(r'AR_wasm32_unknown_unknown=\"$PWD/.tool/bin/llvm-ar\"'),
-    );
-    expect(
-      pixi,
-      contains(r'RANLIB_wasm32_unknown_unknown=\"$PWD/.tool/bin/llvm-ranlib\"'),
-    );
-    expect(
-      pixi,
-      isNot(
-        contains(r'CC_wasm32_unknown_unknown=\"$CONDA_PREFIX/bin/clang-21\"'),
-      ),
-    );
-    expect(pixi, contains('--shared-memory'));
-    expect(pixi, contains('--import-memory'));
-  });
-
-  test(
-      'preview frb web build task overrides flutter_rust_bridge atomics default',
-      () {
-    final pixi = File('pixi.toml').readAsStringSync();
-
-    expect(pixi, contains('frb-build-web-preview'));
-    expect(
-      pixi,
-      contains('+bulk-memory,+mutable-globals'),
-    );
-    expect(pixi, contains('-Aunstable-features'));
-  });
-
-  test('sqlite wasm C build enables atomics and bulk-memory', () {
-    final buildRs =
-        File('third_party/sqlite-wasm-rs-patched/build.rs').readAsStringSync();
-
-    expect(buildRs, contains('-matomics'));
-    expect(buildRs, contains('-mbulk-memory'));
+    expect(pixi, isNot(contains('sync-web-rust-pkg')));
+    expect(pixi, isNot(contains('frb-build-web')));
   });
 
   test('web build workflow passes flutter build args through pixi command_args',
@@ -131,43 +80,23 @@ void main() {
     );
   });
 
-  test('web build workflow prepares Rust web package before flutter build', () {
-    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
-
-    final buildRustStep = workflow.indexOf('- name: Build Rust Web package');
-    final buildFlutterStep = workflow.indexOf('- name: Build Flutter Web');
-
-    expect(buildRustStep, isNonNegative);
-    expect(workflow, contains('pixi run frb-build-web'));
-    expect(buildFlutterStep, greaterThan(buildRustStep));
-  });
-
-  test('web build workflow syncs the Rust wasm package into build/web', () {
+  test('web build workflow builds Flutter web directly', () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
 
     final buildFlutterStep = workflow.indexOf('- name: Build Flutter Web');
-    final syncPkgStep = workflow.indexOf(
-      '- name: Sync Rust wasm package into build/web',
-    );
+
     final uploadArtifactStep = workflow.indexOf('- name: Upload web artifact');
 
-    expect(syncPkgStep, isNonNegative);
-    expect(workflow, contains('pixi run sync-web-rust-pkg'));
-    expect(syncPkgStep, greaterThan(buildFlutterStep));
-    expect(uploadArtifactStep, greaterThan(syncPkgStep));
+    expect(buildFlutterStep, isNonNegative);
+    expect(uploadArtifactStep, greaterThan(buildFlutterStep));
+    expect(workflow, isNot(contains('frb-build-web')));
+    expect(workflow, isNot(contains('sync-web-rust-pkg')));
   });
 
   test('web build workflow reruns when Dart tool scripts change', () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
 
     expect(workflow, contains('- "tools/**"'));
-  });
-
-  test('web build workflow reruns when Rust web inputs change', () {
-    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
-
-    expect(workflow, contains('- "rust/**"'));
-    expect(workflow, contains('- "scripts/setup_web_rust_toolchain.sh"'));
   });
 
   test('web build workflow quotes step names containing colons', () {
@@ -190,34 +119,26 @@ void main() {
     expect(smokeTests, greaterThan(generateI18n));
   });
 
-  test('local web CI script builds Rust web package before flutter build', () {
+  test('local web CI script builds Flutter web directly', () {
     final script =
         File('scripts/run_flutter_web_ci_local.sh').readAsStringSync();
 
-    final buildRust = script.indexOf(
-      'run_flutter_tool pub run flutter_rust_bridge build-web',
-    );
     final buildFlutter =
         script.indexOf('run_flutter_tool build web --base-href /app/');
-    final syncPkg = script.indexOf('tools/sync_web_build_rust_pkg.dart');
 
-    expect(buildRust, isNonNegative);
-    expect(buildFlutter, greaterThan(buildRust));
-    expect(syncPkg, greaterThan(buildFlutter));
-    expect(script, contains('-o web --release'));
-    expect(script, contains('--shared-memory'));
-    expect(script, contains('--import-memory'));
+    expect(buildFlutter, isNonNegative);
+    expect(script, isNot(contains('sync_web_build_rust_pkg.dart')));
+    expect(script, isNot(contains('build-web')));
   });
 
-  test('local preview script syncs the Rust wasm package after flutter build',
-      () {
+  test('local preview script serves Flutter web build directly', () {
     final script = File('scripts/preview_local_web_app.sh').readAsStringSync();
 
     final buildFlutter = script.indexOf('flutter build web --base-href /app/');
-    final syncPkg = script.indexOf('tools/sync_web_build_rust_pkg.dart');
 
     expect(buildFlutter, isNonNegative);
-    expect(syncPkg, greaterThan(buildFlutter));
+    expect(script, contains('tools/serve_web_build_with_headers.py'));
+    expect(script, isNot(contains('sync_web_build_rust_pkg.dart')));
   });
 
   test('web build workflow publishes site deploy dispatch after release', () {

@@ -8,7 +8,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/web_app/web_local_runtime_recovery_base.dart';
 import 'package:secondloop/web_app/web_initial_sync_gate.dart';
 import 'package:secondloop/web_app/web_native_app_backend.dart';

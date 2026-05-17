@@ -8,7 +8,7 @@ import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
 import 'package:secondloop/features/agent_ui/agent_ui_acceptance_driver.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import '../test_backend.dart';
 import '../test_i18n.dart';

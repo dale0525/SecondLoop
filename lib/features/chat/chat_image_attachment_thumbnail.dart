@@ -15,7 +15,7 @@ import '../attachments/video_keyframe_ocr_worker.dart';
 import '../attachments/web_media_processing_notice.dart';
 import '../media_backup/cloud_media_download.dart';
 import '../media_backup/cloud_media_download_ui.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 

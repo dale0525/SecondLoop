@@ -16,7 +16,7 @@ void main() {
     UpdateBadgePrefs.resetForTests();
   });
 
-  testWidgets('desktop AppShell exposes the four agent destinations',
+  testWidgets('desktop AppShell exposes the five agent destinations',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -27,6 +27,8 @@ void main() {
           home: AppShell(
             conversationTabBuilder: (_, __) =>
                 const SizedBox(key: ValueKey('agent_conversation_tab')),
+            notesTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_notes_tab')),
             memoryTabBuilder: (_, __) =>
                 const SizedBox(key: ValueKey('agent_memory_tab')),
             reviewTabBuilder: (_, __) =>
@@ -42,12 +44,13 @@ void main() {
     expect(find.byKey(const ValueKey('app_shell_sidebar')), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('Conversation'), findsOneWidget);
+    expect(find.text('Notes'), findsOneWidget);
     expect(find.text('Memory'), findsOneWidget);
     expect(find.text('Review'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
   });
 
-  testWidgets('mobile AppShell exposes the four agent destinations',
+  testWidgets('mobile AppShell exposes the five agent destinations',
       (tester) async {
     final previousPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -61,6 +64,8 @@ void main() {
             home: AppShell(
               conversationTabBuilder: (_, __) =>
                   const SizedBox(key: ValueKey('agent_conversation_tab')),
+              notesTabBuilder: (_, __) =>
+                  const SizedBox(key: ValueKey('agent_notes_tab')),
               memoryTabBuilder: (_, __) =>
                   const SizedBox(key: ValueKey('agent_memory_tab')),
               reviewTabBuilder: (_, __) =>
@@ -78,6 +83,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Conversation'), findsOneWidget);
+      expect(find.text('Notes'), findsOneWidget);
       expect(find.text('Memory'), findsOneWidget);
       expect(find.text('Review'), findsOneWidget);
       expect(find.text('Settings'), findsOneWidget);
@@ -103,6 +109,8 @@ void main() {
           home: AppShell(
             conversationTabBuilder: (_, __) =>
                 const SizedBox(key: ValueKey('agent_conversation_tab')),
+            notesTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_notes_tab')),
             memoryTabBuilder: (_, __) =>
                 const SizedBox(key: ValueKey('agent_memory_tab')),
             reviewTabBuilder: (_, __) =>
@@ -146,6 +154,8 @@ void main() {
                 );
               },
             ),
+            notesTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_notes_tab')),
             memoryTabBuilder: (_, __) =>
                 const SizedBox(key: ValueKey('agent_memory_tab')),
             reviewTabBuilder: (_, __) =>

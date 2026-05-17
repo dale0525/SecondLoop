@@ -11,8 +11,8 @@ import '../../core/session/session_scope.dart';
 import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../attachments/attachment_processing_status.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
-import '../../src/rust/platform_int.dart';
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 
 enum _AudioTranscribeFailureHintKind {
   payloadTooLarge,

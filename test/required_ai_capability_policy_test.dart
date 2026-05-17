@@ -1,4 +1,4 @@
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/ai/embeddings_data_consent_prefs.dart';
@@ -7,7 +7,7 @@ import 'package:secondloop/core/ai/media_source_prefs.dart';
 import 'package:secondloop/core/ai/required_ai_capability_policy.dart';
 import 'package:secondloop/core/ai/semantic_parse_data_consent_prefs.dart';
 import 'package:secondloop/core/cloud/runtime_manifest.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('legacy AI opt-out preferences are ignored for required capabilities',

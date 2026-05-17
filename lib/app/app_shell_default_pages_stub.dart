@@ -14,6 +14,13 @@ Widget buildDefaultSettingsTab(
   return const SizedBox.shrink();
 }
 
+Widget buildDefaultNotesTab(
+  BuildContext context, {
+  required bool isActive,
+}) {
+  return const SizedBox.shrink();
+}
+
 Widget buildDefaultMemoryTab(
   BuildContext context, {
   required bool isActive,

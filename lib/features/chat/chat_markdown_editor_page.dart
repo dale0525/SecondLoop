@@ -11,7 +11,6 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:share_plus/share_plus.dart';
-import 'package:super_clipboard/super_clipboard.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../../core/backend/attachments_backend.dart';

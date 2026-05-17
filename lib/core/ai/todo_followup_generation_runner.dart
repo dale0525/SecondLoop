@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import 'todo_followup_suggestions_ai.dart';
 import 'todo_followup_task_classifier.dart';
 

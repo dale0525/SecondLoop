@@ -9,12 +9,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PIXI_TOML = REPO_ROOT / "pixi.toml"
 ANDROID_RUN_SCRIPT = REPO_ROOT / "scripts/run_android_with_auto_emulator.sh"
 RUN_WITH_ANDROID_ENV_SCRIPT = REPO_ROOT / "scripts/run_with_android_env.sh"
-SETUP_RUSTUP_SCRIPT = REPO_ROOT / "scripts/setup_rustup.sh"
 ANDROID_BUILD_GRADLE = REPO_ROOT / "android/app/build.gradle"
 ANDROID_MANIFEST = REPO_ROOT / "android/app/src/main/AndroidManifest.xml"
 FLUTTER_WITH_DEFINES_SCRIPT = REPO_ROOT / "scripts/flutter_with_defines.sh"
 BUILD_ANDROID_RELEASE_APK_SCRIPT = REPO_ROOT / "scripts/build_android_release_apk.sh"
-CARGOKIT_PLUGIN_GRADLE = REPO_ROOT / "rust_builder/cargokit/gradle/plugin.gradle"
 
 
 class PixiAndroidTasksTests(unittest.TestCase):
@@ -122,31 +120,6 @@ class PixiAndroidTasksTests(unittest.TestCase):
         self.assertIn("CMAKE_GENERATOR", script)
         self.assertIn("Ninja", script)
 
-    def test_setup_rustup_prefetches_android_cargo_dependencies(self) -> None:
-        script = SETUP_RUSTUP_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn('cargo fetch --manifest-path "$ROOT_DIR/rust/Cargo.toml"', script)
-        self.assertIn('--target armv7-linux-androideabi', script)
-        self.assertIn('--target aarch64-linux-android', script)
-
-    def test_setup_rustup_patches_whisper_rs_sys_cross_compile_link_logic(self) -> None:
-        script = SETUP_RUSTUP_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn('whisper-rs-sys-0.14*/build.rs', script)
-        self.assertIn('target.contains("apple-darwin")', script)
-        self.assertIn('cfg!(feature = "openblas")', script)
-
-    def test_setup_rustup_patches_cargokit_plugins_for_new_flutter_gradle_plugin(self) -> None:
-        script = SETUP_RUSTUP_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn('${PUB_CACHE:-"$ROOT_DIR/.tool/pub-cache"}', script)
-        self.assertIn(".tool/pub-cache/hosted", script)
-        self.assertIn('${HOME}/.pub-cache/hosted', script)
-        self.assertIn('irondash_engine_context-*/cargokit/gradle/plugin.gradle', script)
-        self.assertIn('super_native_extensions-*/cargokit/gradle/plugin.gradle', script)
-        self.assertIn('candidate.plugins.hasPlugin("dev.flutter.flutter-gradle-plugin")', script)
-        self.assertIn('hostArch.contains("x86_64")', script)
-
     def test_android_gradle_application_id_supports_environment_override(self) -> None:
         gradle_file = ANDROID_BUILD_GRADLE.read_text(encoding="utf-8")
 
@@ -191,20 +164,6 @@ class PixiAndroidTasksTests(unittest.TestCase):
         self.assertIn('SECONDLOOP_ANDROID_TARGET_PLATFORMS', script)
         self.assertIn('android-arm,android-arm64', script)
         self.assertIn('--target-platform "${target_platforms}"', script)
-
-    def test_cargokit_debug_build_does_not_force_android_x86_target(self) -> None:
-        plugin_text = CARGOKIT_PLUGIN_GRADLE.read_text(encoding="utf-8")
-
-        self.assertNotIn('platforms.add("android-x86")', plugin_text)
-
-    def test_cargokit_debug_build_only_adds_android_x64_for_x86_hosts(self) -> None:
-        plugin_text = CARGOKIT_PLUGIN_GRADLE.read_text(encoding="utf-8")
-
-        self.assertIn('System.getProperty("os.arch", "")', plugin_text)
-        self.assertIn('hostArch.contains("x86_64")', plugin_text)
-        self.assertIn('hostArch.contains("amd64")', plugin_text)
-
-
 
 if __name__ == "__main__":
     unittest.main()

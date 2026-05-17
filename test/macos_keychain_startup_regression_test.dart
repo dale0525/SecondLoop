@@ -14,7 +14,7 @@ import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/cloud_subscription_controller.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('startup subscription refresh keeps keychain untouched before unlock',

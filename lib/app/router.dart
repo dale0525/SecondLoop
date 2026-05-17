@@ -31,6 +31,7 @@ final class _AgentShellPalette {
 
 enum AppTab {
   conversation(Icons.chat_bubble_outline, Icons.chat_bubble),
+  notes(Icons.note_alt_outlined, Icons.note_alt),
   memory(Icons.psychology_alt_outlined, Icons.psychology_alt),
   review(Icons.fact_check_outlined, Icons.fact_check),
   settings(Icons.settings_outlined, Icons.settings);
@@ -44,6 +45,7 @@ enum AppTab {
 
   String label(BuildContext context) => switch (this) {
         AppTab.conversation => context.t.app.tabs.conversation,
+        AppTab.notes => context.t.app.tabs.notes,
         AppTab.memory => context.t.app.tabs.memory,
         AppTab.review => context.t.app.tabs.review,
         AppTab.settings => context.t.app.tabs.settings,
@@ -56,6 +58,7 @@ class AppShell extends StatefulWidget {
     this.initialTab = AppTab.conversation,
     this.conversationTabBuilder,
     this.chatTabBuilder,
+    this.notesTabBuilder,
     this.memoryTabBuilder,
     this.reviewTabBuilder,
     this.settingsTabBuilder,
@@ -65,6 +68,7 @@ class AppShell extends StatefulWidget {
   final Widget Function(BuildContext context, bool isActive)?
       conversationTabBuilder;
   final Widget Function(BuildContext context, bool isActive)? chatTabBuilder;
+  final Widget Function(BuildContext context, bool isActive)? notesTabBuilder;
   final Widget Function(BuildContext context, bool isActive)? memoryTabBuilder;
   final Widget Function(BuildContext context, bool isActive)? reviewTabBuilder;
   final Widget Function(BuildContext context, bool isActive)?
@@ -140,6 +144,7 @@ class _AppShellState extends State<AppShell> {
     }
     return switch (tab) {
       AppTab.conversation => _buildConversationTab(context, isActive: isActive),
+      AppTab.notes => _buildNotesTab(context, isActive: isActive),
       AppTab.memory => _buildMemoryTab(context, isActive: isActive),
       AppTab.review => _buildReviewTab(context, isActive: isActive),
       AppTab.settings => _buildSettingsTab(context, isActive: isActive),
@@ -153,6 +158,15 @@ class _AppShellState extends State<AppShell> {
     final builder = widget.conversationTabBuilder ?? widget.chatTabBuilder;
     if (builder != null) return builder(context, isActive);
     return app_shell_defaults.buildDefaultChatTab(
+      context,
+      isActive: isActive,
+    );
+  }
+
+  Widget _buildNotesTab(BuildContext context, {required bool isActive}) {
+    final builder = widget.notesTabBuilder;
+    if (builder != null) return builder(context, isActive);
+    return app_shell_defaults.buildDefaultNotesTab(
       context,
       isActive: isActive,
     );
@@ -215,6 +229,7 @@ class _AppShellState extends State<AppShell> {
                   : switch (AppTab.values[_selectedIndex]) {
                       AppTab.conversation =>
                         _buildConversationTab(context, isActive: true),
+                      AppTab.notes => _buildNotesTab(context, isActive: true),
                       AppTab.memory => _buildMemoryTab(context, isActive: true),
                       AppTab.review => _buildReviewTab(context, isActive: true),
                       AppTab.settings =>

@@ -6,31 +6,13 @@ i18n_temp_repo=""
 i18n_temp_repo_prepared=0
 temp_generated_i18n_strings_path=""
 
-  if (( scope_flutter == 0 && scope_rust == 0 )); then
+  if (( scope_flutter == 0 )); then
     scope_flutter=1
-    scope_rust=1
   fi
 
   if (( scope_flutter )); then
     resolve_dart_bin >/dev/null || die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
     resolve_flutter_bin >/dev/null || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
-  fi
-
-  cargo_bin=""
-  if (( scope_rust )); then
-    if ! resolve_cargo_bin; then
-      cargo_missing_message
-    fi
-
-    if ! resolve_libclang_path; then
-      libclang_missing_message
-    fi
-
-    if ! resolve_vulkan_sdk_root; then
-      vulkan_sdk_missing_message
-    fi
-
-    ensure_windows_short_build_paths
   fi
 
   cleanup_temp_i18n_artifacts() {
@@ -205,11 +187,11 @@ temp_generated_i18n_strings_path=""
       exit 1
     fi
 
-    if ! run_dart_tool format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed; then
+    if ! run_dart_tool format --output=none lib test integration_test test_driver --set-exit-if-changed; then
       echo "" >&2
       echo "pre-commit: Formatting required." >&2
       echo "Fix locally with:" >&2
-      echo "  dart format lib test rust_builder integration_test test_driver" >&2
+      echo "  dart format lib test integration_test test_driver" >&2
       echo "Or (recommended):" >&2
       echo "  pixi run fmt" >&2
       exit 1
@@ -231,37 +213,6 @@ temp_generated_i18n_strings_path=""
       fi
     elif (( ci_mode && skip_tests != 0 )); then
       echo "pre-commit: skipping Flutter tests (--skip-tests)." >&2
-    fi
-  fi
-
-  if (( scope_rust )); then
-    if (( clippy_only == 0 )); then
-      if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
-        echo "" >&2
-        echo "pre-commit: rustfmt failed." >&2
-        echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
-        exit 1
-      fi
-    fi
-
-    if (( ci_mode || clippy_only )); then
-      if ! run_with_periodic_status "rust clippy" "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then
-        echo "" >&2
-        echo "pre-commit: rust clippy failed." >&2
-        echo "Fix locally with: pixi run cargo clippy \"--all-targets --all-features -- -D warnings\"" >&2
-        exit 1
-      fi
-
-      if (( clippy_only != 0 )); then
-        echo "pre-commit: skipping Rust tests (--clippy-only)." >&2
-      elif (( skip_tests != 0 )); then
-        echo "pre-commit: skipping Rust tests (--skip-tests)." >&2
-      elif ! run_with_periodic_status "rust tests" "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
-        echo "" >&2
-        echo "pre-commit: rust tests failed." >&2
-        echo "Fix locally with: pixi run cargo test" >&2
-        exit 1
-      fi
     fi
   fi
 

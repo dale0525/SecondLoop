@@ -18,7 +18,8 @@ import '../../core/sync/sync_diagnostics.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/update/update_event_log.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/api/sync_diagnostics.dart' as rust_sync_diagnostics;
+import 'package:secondloop/core/runtime_compat/api/sync_diagnostics.dart'
+    as rust_sync_diagnostics;
 import '../../web_app/web_formal_settings_scope.dart';
 
 class DiagnosticsPage extends StatefulWidget {

@@ -15,7 +15,6 @@ import '../core/cloud/cloud_auth_access.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/cloud/cloud_auth_scope.dart';
 import '../core/cloud/firebase_identity_toolkit.dart';
-import '../core/media_enrichment/media_enrichment_gate.dart';
 import '../core/subscription/cloud_subscription_controller.dart';
 import '../core/subscription/subscription_scope.dart';
 import '../core/desktop/desktop_background_service.dart';
@@ -37,9 +36,7 @@ import 'theme_palette_prefs.dart';
 import 'theme_mode_prefs.dart';
 import '../features/lock/lock_gate.dart';
 import '../features/quick_capture/quick_capture_overlay.dart';
-import '../features/share/share_ingest_gate.dart';
 import '../features/settings/settings_page.dart';
-import '../features/share/share_intent_listener.dart';
 import '../features/welcome/first_launch_welcome_gate.dart';
 import '../core/sync/cloud_sync_switch_prompt_gate.dart';
 import '../core/sync/sync_key_manager.dart';
@@ -333,55 +330,48 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                           );
                                         },
                                         child: DesktopQuickCaptureService(
-                                          child: ShareIntentListener(
-                                            child: LockGate(
-                                              child: SyncEngineGate(
-                                                child: Builder(
-                                                  builder:
-                                                      (sessionScopedContext) {
-                                                    _sessionScopedCapture =
-                                                        captureInheritedScopes(
-                                                      sessionScopedContext,
-                                                    );
-                                                    return DetachedAskRecoveryGate(
+                                          child: LockGate(
+                                            child: SyncEngineGate(
+                                              child: Builder(
+                                                builder:
+                                                    (sessionScopedContext) {
+                                                  _sessionScopedCapture =
+                                                      captureInheritedScopes(
+                                                    sessionScopedContext,
+                                                  );
+                                                  return DetachedAskRecoveryGate(
+                                                    child:
+                                                        ReviewReminderNotificationsGate(
+                                                      navigatorKey:
+                                                          _navigatorKey,
                                                       child:
-                                                          ReviewReminderNotificationsGate(
-                                                        navigatorKey:
-                                                            _navigatorKey,
+                                                          TodoFollowupGenerationGate(
                                                         child:
-                                                            MediaEnrichmentGate(
+                                                            MessageEmbeddingsIndexGate(
                                                           child:
-                                                              TodoFollowupGenerationGate(
+                                                              EmbeddingsIndexGate(
                                                             child:
-                                                                MessageEmbeddingsIndexGate(
+                                                                CloudSyncSwitchPromptGate(
+                                                              navigatorKey:
+                                                                  _navigatorKey,
                                                               child:
-                                                                  EmbeddingsIndexGate(
+                                                                  QuickCaptureOverlay(
+                                                                navigatorKey:
+                                                                    _navigatorKey,
                                                                 child:
-                                                                    CloudSyncSwitchPromptGate(
-                                                                  navigatorKey:
-                                                                      _navigatorKey,
-                                                                  child:
-                                                                      ShareIngestGate(
-                                                                    child:
-                                                                        QuickCaptureOverlay(
-                                                                      navigatorKey:
-                                                                          _navigatorKey,
-                                                                      child:
-                                                                          FirstLaunchWelcomeGate(
-                                                                        child: child ??
-                                                                            const SizedBox.shrink(),
-                                                                      ),
-                                                                    ),
-                                                                  ),
+                                                                    FirstLaunchWelcomeGate(
+                                                                  child: child ??
+                                                                      const SizedBox
+                                                                          .shrink(),
                                                                 ),
                                                               ),
                                                             ),
                                                           ),
                                                         ),
                                                       ),
-                                                    );
-                                                  },
-                                                ),
+                                                    ),
+                                                  );
+                                                },
                                               ),
                                             ),
                                           ),

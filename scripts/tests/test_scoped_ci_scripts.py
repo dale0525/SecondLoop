@@ -15,7 +15,6 @@ PRE_COMMIT_COMMON = REPO_ROOT / "scripts/pre_commit_common.sh"
 RUN_FLUTTER_CI_LOCAL = REPO_ROOT / "scripts/run_flutter_ci_local.sh"
 RUN_FLUTTER_TEST_SHARD = REPO_ROOT / "scripts/run_flutter_test_shard.sh"
 RUN_I18N_REFRESH = REPO_ROOT / "scripts/run_i18n_refresh.sh"
-RUN_RUST_BUILDER_PACKAGE_TESTS = REPO_ROOT / "scripts/run_rust_builder_package_tests.sh"
 SELECT_FLUTTER_TEST_TARGETS = REPO_ROOT / "scripts/select_flutter_test_targets.sh"
 
 

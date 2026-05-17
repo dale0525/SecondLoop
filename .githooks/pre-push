@@ -65,9 +65,7 @@ is_gate_script_file() {
       scripts/run_flutter_test_shard.sh | \
       scripts/run_flutter_web_ci_local.sh | \
       scripts/run_full_ci_parallel.sh | \
-      scripts/run_full_rust_ci_local.sh | \
       scripts/run_python_tooling_checks.sh | \
-      scripts/run_rust_builder_package_tests.sh | \
       scripts/select_flutter_test_targets.sh | \
       scripts/verify_changed.sh | \
       scripts/verify_full.sh)
@@ -99,10 +97,10 @@ needs_tooling_checks_for_path() {
 requires_full_verification() {
   local path="$1"
   case "${path}" in
-    .fvm/fvm_config.json | .githooks/* | .github/workflows/* | analysis_options.yaml | pubspec.yaml | pubspec.lock | flutter_rust_bridge.yaml | pixi.toml | pixi.lock | slang.yaml)
+    .fvm/fvm_config.json | .githooks/* | .github/workflows/* | analysis_options.yaml | pubspec.yaml | pubspec.lock | pixi.toml | pixi.lock | slang.yaml)
       return 0
       ;;
-    lib/* | test/* | integration_test/* | test_driver/* | rust_builder/* | third_party/* | assets/* | android/* | ios/* | linux/* | macos/* | windows/* | rust/* | web/*)
+    lib/* | test/* | integration_test/* | test_driver/* | third_party/* | assets/* | android/* | ios/* | linux/* | macos/* | windows/* | web/*)
       return 0
       ;;
     scripts/*)

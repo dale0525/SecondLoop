@@ -11,6 +11,7 @@ import '../../core/cloud/vault_attachments_client.dart';
 import '../../core/cloud/vault_usage_client.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../features/attachments/attachment_storage_controller.dart';
+import '../../features/attachments/file_attachment_local_cache_metadata_store.dart';
 import '../../features/attachments/web_media_processing_notice.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_delete_confirm_dialog.dart';
@@ -425,7 +426,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   String? _attachmentTypeFilter;
   var _attachmentSort = VaultAttachmentUsageSort.sizeDesc;
   final AttachmentLocalCacheMetadataStore _localCacheMetadataStore =
-      InMemoryAttachmentLocalCacheMetadataStore();
+      FileAttachmentLocalCacheMetadataStore();
 
   @override
   void initState() {
@@ -755,6 +756,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
         idToken: auth.idToken,
         attachmentId: item.attachmentId,
       );
+      await _localCacheMetadataStore.clearAttachmentCacheMetadata(item);
 
       await _refresh();
       if (!mounted) return;

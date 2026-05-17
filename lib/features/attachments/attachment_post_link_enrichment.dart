@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import '../../core/backend/native_backend.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../audio_transcribe/audio_transcribe_enqueue.dart';
 import 'attachment_draft_send_contract.dart';
 
@@ -27,7 +27,7 @@ Future<void> maybeEnqueueAttachmentAnnotationEnrichment({
   required String attachmentSha256,
   required String lang,
   MediaAnnotationConfigStore mediaAnnotationConfigStore =
-      const RustMediaAnnotationConfigStore(),
+      const DartMediaAnnotationConfigStore(),
   Future<void> Function()? beforeEnqueue,
   int? nowMs,
 }) async {
@@ -60,7 +60,7 @@ Future<void> runDraftAttachmentPostLinkEnrichment({
   required AttachmentDraftPayload draft,
   required String lang,
   MediaAnnotationConfigStore mediaAnnotationConfigStore =
-      const RustMediaAnnotationConfigStore(),
+      const DartMediaAnnotationConfigStore(),
   Future<void> Function()? beforeEnqueueImageAnnotation,
   Future<void> Function()? beforeEnqueueAudioTranscribe,
 }) async {
@@ -83,7 +83,7 @@ Future<void> runAttachmentPostLinkEnrichmentForMimeType({
   required String mimeType,
   required String lang,
   MediaAnnotationConfigStore mediaAnnotationConfigStore =
-      const RustMediaAnnotationConfigStore(),
+      const DartMediaAnnotationConfigStore(),
   Future<void> Function()? beforeEnqueueImageAnnotation,
   Future<void> Function()? beforeEnqueueAudioTranscribe,
 }) async {

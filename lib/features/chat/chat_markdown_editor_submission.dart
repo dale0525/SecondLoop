@@ -1,4 +1,4 @@
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../attachments/attachment_draft_send_contract.dart';
 import 'chat_markdown_editor_attachment_finalize.dart';
 

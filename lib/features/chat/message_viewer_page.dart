@@ -8,7 +8,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_markdown_style.dart';
 import '../actions/assistant_message_actions.dart';
 import '../actions/calendar/event_deeplink.dart';

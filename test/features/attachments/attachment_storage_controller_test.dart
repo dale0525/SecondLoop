@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:secondloop/core/cloud/vault_attachments_client.dart';
 import 'package:secondloop/features/attachments/attachment_storage_controller.dart';
+import 'package:secondloop/features/attachments/file_attachment_local_cache_metadata_store.dart';
 
 void main() {
   test('refresh sorts cloud attachments by size descending', () async {
@@ -83,6 +85,7 @@ void main() {
 
   test('delete loads impact before invoking cloud delete', () async {
     final calls = <String>[];
+    final cache = _FakeLocalCacheMetadataStore();
     final controller = AttachmentStorageController(
       client: VaultAttachmentsClient(
         httpClient: MockClient((request) async {
@@ -101,7 +104,7 @@ void main() {
           return http.Response('', 204);
         }),
       ),
-      localCacheMetadataStore: _FakeLocalCacheMetadataStore(),
+      localCacheMetadataStore: cache,
       managedVaultBaseUrl: 'https://vault.test',
       vaultId: 'vault-1',
       idToken: 'token-1',
@@ -124,9 +127,62 @@ void main() {
       'GET /v1/vaults/vault-1/attachments/att-1/delete-impact',
       'DELETE /v1/vaults/vault-1/attachments/att-1',
     ]);
+    expect(cache.clearedAttachmentIds, ['att-1:sha-1']);
   });
 
-  test('local cache cleanup deletes cache metadata only', () async {
+  test('delete removes cached attachment bytes and variants after cloud delete',
+      () async {
+    final dir =
+        await Directory.systemTemp.createTemp('attachment_delete_test_');
+    addTearDown(() => dir.delete(recursive: true));
+    final attachmentsDir = Directory('${dir.path}/attachments');
+    final variantsDir = Directory('${attachmentsDir.path}/variants/sha-1');
+    await variantsDir.create(recursive: true);
+    final primary = File('${attachmentsDir.path}/sha-1.bin');
+    final variant = File('${variantsDir.path}/preview.webp');
+    await primary.writeAsString('primary');
+    await variant.writeAsString('variant');
+
+    final controller = AttachmentStorageController(
+      client: VaultAttachmentsClient(
+        httpClient: MockClient((request) async {
+          if (request.url.path.endsWith('/delete-impact')) {
+            return http.Response(
+              jsonEncode({
+                'requires_confirmation': false,
+                'linked_entities': <Object?>[],
+              }),
+              200,
+            );
+          }
+          return http.Response('', 204);
+        }),
+      ),
+      localCacheMetadataStore: FileAttachmentLocalCacheMetadataStore(
+        appSupportDirectoryProvider: () async => dir,
+      ),
+      managedVaultBaseUrl: 'https://vault.test',
+      vaultId: 'vault-1',
+      idToken: 'token-1',
+    );
+
+    await controller.deleteAttachment(
+      const VaultAttachmentUsageItem(
+        id: 'att-1',
+        sha256: 'sha-1',
+        mimeType: 'application/pdf',
+        byteLen: 128,
+        createdAtMs: 1000,
+        uploadedAtMs: 2000,
+      ),
+    );
+
+    expect(await primary.exists(), false);
+    expect(await variantsDir.exists(), false);
+  });
+
+  test('local cache cleanup deletes local metadata only and avoids cloud calls',
+      () async {
     var cloudCalls = 0;
     final cache = _FakeLocalCacheMetadataStore();
     final controller = AttachmentStorageController(
@@ -153,8 +209,42 @@ void main() {
       ),
     );
 
-    expect(cache.clearedAttachmentIds, ['att-1']);
+    expect(cache.clearedAttachmentIds, ['att-1:sha-1']);
     expect(cloudCalls, 0);
+  });
+
+  test('file cache cleanup removes primary attachment bytes and variants only',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('attachment_cache_test_');
+    addTearDown(() => dir.delete(recursive: true));
+    final attachmentsDir = Directory('${dir.path}/attachments');
+    final variantsDir = Directory('${attachmentsDir.path}/variants/sha-1');
+    await variantsDir.create(recursive: true);
+    final primary = File('${attachmentsDir.path}/sha-1.bin');
+    final variant = File('${variantsDir.path}/preview.webp');
+    final unrelated = File('${attachmentsDir.path}/sha-2.bin');
+    await primary.writeAsString('primary');
+    await variant.writeAsString('variant');
+    await unrelated.writeAsString('unrelated');
+
+    final store = FileAttachmentLocalCacheMetadataStore(
+      appSupportDirectoryProvider: () async => dir,
+    );
+
+    await store.clearAttachmentCacheMetadata(
+      const VaultAttachmentUsageItem(
+        id: 'att-1',
+        sha256: 'sha-1',
+        mimeType: 'application/pdf',
+        byteLen: 128,
+        createdAtMs: 1000,
+        uploadedAtMs: 2000,
+      ),
+    );
+
+    expect(await primary.exists(), false);
+    expect(await variantsDir.exists(), false);
+    expect(await unrelated.exists(), true);
   });
 }
 
@@ -189,7 +279,9 @@ final class _FakeLocalCacheMetadataStore
   }
 
   @override
-  Future<void> clearAttachmentCacheMetadata(String attachmentId) async {
-    clearedAttachmentIds.add(attachmentId);
+  Future<void> clearAttachmentCacheMetadata(
+    VaultAttachmentUsageItem item,
+  ) async {
+    clearedAttachmentIds.add('${item.attachmentId}:${item.primarySha256}');
   }
 }

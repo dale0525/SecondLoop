@@ -3,7 +3,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../i18n/strings.g.dart';
-import '../../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 class EventViewerPage extends StatelessWidget {
   const EventViewerPage({required this.event, super.key});

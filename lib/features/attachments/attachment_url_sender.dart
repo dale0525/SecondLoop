@@ -30,7 +30,7 @@ Future<bool> trySendUrlManifestAttachment({
   required NativeAppBackend backend,
   required Uint8List sessionKey,
   required LinkCreatedUrlAttachment linkCreatedAttachment,
-  AttachmentMetadataStore metadataStore = const RustAttachmentMetadataStore(),
+  AttachmentMetadataStore metadataStore = const DartAttachmentMetadataStore(),
 }) async {
   final trimmed = text.trim();
   if (!looksLikeHttpUrlText(trimmed)) return false;

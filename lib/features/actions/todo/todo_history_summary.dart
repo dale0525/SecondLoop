@@ -1,4 +1,4 @@
-import '../../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 class WeekWindow {
   const WeekWindow({

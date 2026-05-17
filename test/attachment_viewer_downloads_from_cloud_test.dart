@@ -12,7 +12,7 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
 import 'package:secondloop/features/media_backup/cloud_media_backup_runner.dart';
 import 'package:secondloop/features/media_backup/cloud_media_download.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_i18n.dart';
 

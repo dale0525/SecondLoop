@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 
-import '../../src/rust/api/desktop_media.dart' as rust_desktop_media;
+import 'package:secondloop/core/runtime_compat/api/desktop_media.dart'
+    as rust_desktop_media;
 import 'attachment_ocr_text_normalizer.dart';
 
 const kDesktopRuntimeRenderLongImageHint =

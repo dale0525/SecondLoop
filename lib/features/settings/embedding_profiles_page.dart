@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
 
 enum EmbeddingProfilesFocusTarget {

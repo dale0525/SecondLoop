@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/notifications/review_notification_plan.dart';
 import 'package:secondloop/core/notifications/review_reminder_notification_coordinator.dart';
 import 'package:secondloop/core/notifications/review_reminder_notification_scheduler.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('schedules reminder for pending review todos', () async {

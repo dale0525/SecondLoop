@@ -19,7 +19,8 @@
 执行状态：
 
 - client Dart HTTP runtime 计划已落地 note HTTP contract、离线纯文本 note draft/outbox、附件 cloud inventory/preview/delete/cache cleanup、runtime-first product navigation guard、新 runtime-client 路径的 Rust dependency guard，以及旧 sync settings automation harness 的退役。
-- 完整物理删除主客户端 Rust 仍需单独拆分后续计划：当前 backend、chat/settings/legacy attachments、`pubspec.yaml`、platform plugin 和 web build 链仍依赖 FRB/Rust。后续删除必须先把这些路径迁到 Dart/runtime interface，再从主 App dependency graph 移除 Rust；self-managed deploy helper 可保留自己的独立 Rust 实现。
+- 主客户端 Rust/FRB 物理删除已完成：`pubspec.yaml`、platform plugin registrants、CI/web build/release entrypoints、`lib/src/rust`、`rust/`、FRB builder 脚本和 Rust third-party patches 不再属于 App dependency graph。
+- 正常 App shell 不再挂载本地 media enrichment、share ingest 或 share intent drain gate；默认 AI media settings 也不会探测本地 desktop OCR/Whisper runtime。遗留 `runtime_compat` Dart stub 和本地 media/helper 代码只能作为隔离的 legacy/helper 表面存在，不能进入 managed-pro 正常 chat/capture/note/attachment 请求路径；self-managed deploy helper 可保留自己的独立 Rust 实现。
 
 历史计划处理：
 

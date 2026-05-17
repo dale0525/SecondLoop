@@ -6,7 +6,7 @@ import 'package:secondloop/core/attachments/attachment_metadata_store.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/features/attachments/attachment_ingest_pipeline.dart';
 import 'package:secondloop/features/attachments/attachment_url_sender.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('trySendUrlManifestAttachment inserts manifest and upserts metadata',

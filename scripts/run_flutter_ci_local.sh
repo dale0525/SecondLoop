@@ -9,13 +9,6 @@ fi
 cd "${repo_root}"
 source "${repo_root}/scripts/pre_commit_common.sh"
 
-if is_windows_env; then
-  resolve_cargo_bin || cargo_missing_message
-  export SECONDLOOP_CARGO_BIN="${cargo_bin}"
-  resolve_libclang_path || libclang_missing_message
-  resolve_vulkan_sdk_root || vulkan_sdk_missing_message
-fi
-
 dart_bin="$(resolve_dart_bin)" || die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
 flutter_bin="$(resolve_flutter_bin)" || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
 

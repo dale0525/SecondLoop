@@ -1,4 +1,4 @@
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import 'attachment_draft_send_contract.dart';
 
 typedef CreateUserMessage = Future<Message> Function(String content);

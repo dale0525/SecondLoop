@@ -8,7 +8,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/lock/lock_gate.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/main.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_i18n.dart';
 

@@ -7,8 +7,9 @@ import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/backend/native_app_dir.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/api/content_extract.dart' as rust_content_extract;
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/runtime_compat/api/content_extract.dart'
+    as rust_content_extract;
+import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import 'attachment_processing_status.dart';
@@ -193,7 +194,7 @@ Future<_AttachmentCardData> _loadAttachmentCardData(
   required String attachmentSha256,
   required String mimeType,
 }) async {
-  final metadataFuture = const RustAttachmentMetadataStore()
+  final metadataFuture = const DartAttachmentMetadataStore()
       .read(sessionKey, attachmentSha256: attachmentSha256)
       .catchError((_) => null);
   final summaryFuture = _readPayloadSummaryFromPayload(

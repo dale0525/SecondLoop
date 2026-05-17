@@ -15,7 +15,7 @@ import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import '../actions/assistant_message_actions.dart';

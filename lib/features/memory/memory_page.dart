@@ -4,7 +4,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/backend/secretary_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../agent_ui/agent_design_tokens.dart';
 import '../agent_ui/agent_tab_bar.dart';
 import 'memory_models.dart';

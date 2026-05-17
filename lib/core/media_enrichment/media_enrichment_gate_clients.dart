@@ -187,7 +187,7 @@ final class _BackendUrlEnrichmentStore implements UrlEnrichmentStore {
     required Uint8List sessionKey,
     AttachmentMetadataStore? metadataStore,
   })  : _sessionKey = Uint8List.fromList(sessionKey),
-        _metadataStore = metadataStore ?? const RustAttachmentMetadataStore();
+        _metadataStore = metadataStore ?? const DartAttachmentMetadataStore();
 
   final NativeAppBackend backend;
   final Uint8List _sessionKey;

@@ -9,7 +9,7 @@ import 'package:secondloop/core/quick_capture/quick_capture_controller.dart';
 import 'package:secondloop/core/quick_capture/quick_capture_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/quick_capture/quick_capture_overlay.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';

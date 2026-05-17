@@ -8,7 +8,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/attachments/attachment_draft_send_contract.dart';
 import 'package:secondloop/features/chat/chat_markdown_attachment_image.dart';
 import 'package:secondloop/features/chat/chat_markdown_preview.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';

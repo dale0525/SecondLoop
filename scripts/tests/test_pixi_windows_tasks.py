@@ -11,17 +11,13 @@ import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PIXI_TOML = REPO_ROOT / "pixi.toml"
-RUST_CARGO_TOML = REPO_ROOT / "rust/Cargo.toml"
 WINDOWS_BOOTSTRAP_SCRIPT = REPO_ROOT / "scripts/bootstrap_shared_worktree_env.ps1"
 WINDOWS_VELOPACK_SCRIPT = REPO_ROOT / "scripts/package_windows_velopack.ps1"
 WINDOWS_MSI_SCRIPT = REPO_ROOT / "scripts/package_windows_msi.ps1"
-WINDOWS_LIBCLANG_SETUP_SCRIPT = REPO_ROOT / "scripts/setup_windows_libclang.ps1"
-WINDOWS_VULKAN_SETUP_SCRIPT = REPO_ROOT / "scripts/setup_windows_vulkan_sdk.ps1"
 WINDOWS_FVM_TOOL_RUNNER_SCRIPT = REPO_ROOT / "scripts/run_fvm_tool.ps1"
 WINDOWS_UNINSTALL_MSI_SCRIPT = REPO_ROOT / "scripts/uninstall_windows_msi.ps1"
 WINDOWS_SETUP_FLUTTER_SCRIPT = REPO_ROOT / "scripts/setup_flutter_windows.ps1"
 WINDOWS_SHORT_WORKSPACE_SCRIPT = REPO_ROOT / "scripts/use_windows_short_workspace.ps1"
-WINDOWS_CARGOKIT_BUILD_TOOL = REPO_ROOT / "rust_builder/cargokit/run_build_tool.cmd"
 
 
 class PixiWindowsTasksTests(unittest.TestCase):
@@ -41,10 +37,6 @@ class PixiWindowsTasksTests(unittest.TestCase):
         pixi_config = self._load_pixi_config()
 
         return pixi_config["target"]["win-64"].get("dependencies", {})
-
-    def _load_rust_cargo_config(self) -> dict[str, object]:
-        with RUST_CARGO_TOML.open("rb") as fh:
-            return tomllib.load(fh)
 
     def test_windows_bootstrap_task_uses_powershell_script(self) -> None:
         win_tasks = self._load_win_tasks()
@@ -125,93 +117,6 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("Link-DirectoryToShared -LocalPath (Join-Path $repoRoot '.tool')", script)
         self.assertIn("Link-DirectoryToShared -LocalPath (Join-Path $repoRoot '.pixi/envs')", script)
 
-    def test_windows_dependencies_keep_libclang_without_vulkan_header_overrides(self) -> None:
-        dependencies = self._load_win_dependencies()
-
-        self.assertIn("libclang", dependencies)
-        self.assertIn("dotnet-sdk", dependencies)
-        self.assertIn("dotnet-aspnetcore", dependencies)
-        self.assertNotIn("vulkan-headers", dependencies)
-        self.assertNotIn("libvulkan-loader", dependencies)
-        self.assertNotIn("shaderc", dependencies)
-
-    def test_windows_velopack_script_prepares_libclang_for_bindgen(self) -> None:
-        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn("setup_windows_libclang.ps1", script)
-
-    def test_windows_velopack_skip_build_does_not_require_libclang_setup(self) -> None:
-        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
-
-        skip_build_guard = script.find("if (-not $SkipBuild)")
-        setup_idx = script.find("setup_windows_libclang.ps1")
-
-        self.assertNotEqual(-1, skip_build_guard)
-        self.assertNotEqual(-1, setup_idx)
-        self.assertGreater(setup_idx, skip_build_guard)
-
-    def test_windows_msi_script_prepares_libclang_for_bindgen(self) -> None:
-        script = WINDOWS_MSI_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn("setup_windows_libclang.ps1", script)
-
-    def test_run_windows_script_prunes_stale_rust_artifacts_before_flutter_run(self) -> None:
-        script = (REPO_ROOT / "scripts/run_windows.ps1").read_text(encoding="utf-8")
-
-        self.assertIn("Get-LatestRustSourceWriteTimeUtc", script)
-        self.assertIn("Remove-StaleWindowsRustArtifacts", script)
-        self.assertIn("Stale Rust artifacts detected", script)
-        self.assertIn("before flutter run", script)
-
-    def test_run_windows_script_sets_frb_native_lib_dir_to_debug_runner(self) -> None:
-        script = (REPO_ROOT / "scripts/run_windows.ps1").read_text(encoding="utf-8")
-
-        self.assertIn("FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR", script)
-        self.assertIn("build/windows/x64/runner/Debug", script)
-
-    def test_windows_libclang_setup_script_handles_versioned_libclang_dll(self) -> None:
-        script = WINDOWS_LIBCLANG_SETUP_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn("libclang-*.dll", script)
-        self.assertIn("LIBCLANG_PATH", script)
-        self.assertIn("VULKAN_SDK", script)
-        self.assertIn("SECONDLOOP_WINDOWS_VULKAN_SDK_ROOT", script)
-        self.assertIn("1.4.309.0", script)
-        self.assertIn("VkPhysicalDeviceCooperativeMatrixFeaturesKHR", script)
-        self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
-        self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
-        self.assertIn("CMAKE_GENERATOR", script)
-        self.assertIn("setup_windows_vulkan_sdk.ps1", script)
-        self.assertIn("whisper-rs-sys", script)
-        self.assertIn("CMakeCache.txt", script)
-
-    def test_windows_vulkan_setup_script_installs_ci_compatible_sdk_to_project_tools(self) -> None:
-        self.assertTrue(WINDOWS_VULKAN_SETUP_SCRIPT.exists())
-
-        script = WINDOWS_VULKAN_SETUP_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn("VulkanSDK-$Version-Installer.exe", script)
-        self.assertIn("1.4.309.0", script)
-        self.assertIn("Join-Path (Join-Path (Join-Path $repoRootPath '.tool') 'vulkan-sdk') $Version", script)
-        self.assertNotIn(".tools", script)
-        self.assertIn("7z", script)
-        self.assertIn("VkPhysicalDeviceCooperativeMatrixFeaturesKHR", script)
-        self.assertIn('${installerFileName}?Human=true', script)
-
-    def test_platform_whisper_dependency_configuration(self) -> None:
-        cargo_config = self._load_rust_cargo_config()
-        target_config = cargo_config["target"]
-
-        windows_deps = target_config['cfg(target_os = "windows")']["dependencies"]
-        windows_whisper_dep = windows_deps["whisper-rs"]
-
-        self.assertNotIn("features", windows_whisper_dep)
-
-        linux_deps = target_config['cfg(target_os = "linux")']["dependencies"]
-        linux_whisper_dep = linux_deps["whisper-rs"]
-
-        self.assertEqual(linux_whisper_dep.get("features"), ["vulkan"])
-
     def test_windows_flutter_task_uses_direct_fvm_tool_runner(self) -> None:
         win_tasks = self._load_win_tasks()
 
@@ -254,12 +159,6 @@ class PixiWindowsTasksTests(unittest.TestCase):
             script.index("Resolve-Path $ToolPath"),
         )
 
-    def test_windows_cargokit_build_tool_prepares_dart_tool_in_temp_workspace(self) -> None:
-        script = WINDOWS_CARGOKIT_BUILD_TOOL.read_text(encoding="utf-8")
-
-        self.assertIn("if not exist .dart_tool (", script)
-        self.assertIn("mkdir .dart_tool", script)
-
     def test_windows_velopack_script_uses_short_workspace_helper_and_full_project_dir(self) -> None:
         self.assertTrue(WINDOWS_SHORT_WORKSPACE_SCRIPT.exists())
 
@@ -296,10 +195,6 @@ class PixiWindowsTasksTests(unittest.TestCase):
 
         self.assertIn("DOTNET_ROOT", script)
         self.assertIn("FLUTTER_ROOT", script)
-        self.assertIn("LIBCLANG_PATH", script)
-        self.assertIn("VULKAN_SDK", script)
-        self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
-        self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
         self.assertIn("run_fvm_tool.ps1", script)
 
     def test_windows_velopack_script_propagates_app_identity_to_dart_defines(self) -> None:
@@ -316,13 +211,6 @@ class PixiWindowsTasksTests(unittest.TestCase):
 
         self.assertIn("SECONDLOOP_ALLOW_HTTP_UPDATE_URIS", script)
         self.assertIn("--dart-define=SECONDLOOP_ALLOW_HTTP_UPDATE_URIS=", script)
-
-    def test_windows_velopack_script_adds_project_cargo_bin_to_path(self) -> None:
-        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn(".pixi/envs/default/Library/bin", script)
-        self.assertIn("cargo.exe", script)
-        self.assertIn("rustup.exe", script)
 
     def test_windows_velopack_script_prefers_project_dotnet_sdk(self) -> None:
         script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")

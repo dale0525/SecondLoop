@@ -61,6 +61,26 @@ void main() {
     expect(source, isNot(contains('syncLocaldirPush')));
   });
 
+  test('app shell does not mount local attachment or media processing gates',
+      () {
+    final source = File('lib/app/app.dart').readAsStringSync();
+
+    for (final token in [
+      'MediaEnrichmentGate',
+      'ShareIngestGate',
+      'ShareIntentListener',
+      'media_enrichment_gate.dart',
+      'share_ingest_gate.dart',
+      'share_intent_listener.dart',
+    ]) {
+      expect(
+        source,
+        isNot(contains(token)),
+        reason: 'normal app shell must not mount $token',
+      );
+    }
+  });
+
   test('chat notes and attachment storage do not instantiate SyncEngine', () {
     final files = [
       ...Directory('lib/features/chat')

@@ -255,7 +255,6 @@ void main() {
       'lib/features/notes/note_editor_controller.dart',
     ).readAsStringSync();
 
-    expect(source, isNot(contains('lib/src/rust')));
     expect(source, isNot(contains('NativeAppBackend')));
     expect(source, isNot(contains('SyncEngine')));
   });

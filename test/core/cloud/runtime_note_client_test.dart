@@ -236,4 +236,74 @@ void main() {
     expect(note.body, 'Remote body');
     expect(note.revision, 'rev-3');
   });
+
+  test('listNotes sends GET bearer request and parses ordered notes', () async {
+    final httpClient = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(
+        request.url.toString(),
+        'https://vault.test/v1/vaults/vault-1/notes?limit=50',
+      );
+      expect(request.headers['authorization'], 'Bearer token-1');
+      return http.Response(
+        jsonEncode({
+          'items': [
+            {
+              'id': 'note-2',
+              'title': 'Newer',
+              'body': 'Newer body',
+              'revision': 'rev-2',
+              'updated_at_ms': 1770000000200,
+            },
+            {
+              'id': 'note-1',
+              'title': 'Older',
+              'body': 'Older body',
+              'revision': 'rev-1',
+              'updated_at_ms': 1770000000100,
+            },
+          ],
+          'next_cursor': null,
+        }),
+        200,
+      );
+    });
+
+    final client = RuntimeNoteClient(
+      managedVaultBaseUrl: 'https://vault.test',
+      idToken: 'token-1',
+      httpClient: httpClient,
+    );
+
+    final notes = await client.listNotes(vaultId: 'vault-1', limit: 50);
+
+    expect(notes.map((note) => note.id), ['note-2', 'note-1']);
+    expect(notes.first.title, 'Newer');
+    expect(notes.first.revision, 'rev-2');
+  });
+
+  test('deleteNote sends DELETE with encoded base revision', () async {
+    final httpClient = MockClient((request) async {
+      expect(request.method, 'DELETE');
+      expect(
+        request.url.toString(),
+        'https://vault.test/v1/vaults/vault-1/notes/note-1'
+        '?base_revision=rev%2F1',
+      );
+      expect(request.headers['authorization'], 'Bearer token-1');
+      return http.Response('', 204);
+    });
+
+    final client = RuntimeNoteClient(
+      managedVaultBaseUrl: 'https://vault.test',
+      idToken: 'token-1',
+      httpClient: httpClient,
+    );
+
+    await client.deleteNote(
+      vaultId: 'vault-1',
+      noteId: 'note-1',
+      baseRevision: 'rev/1',
+    );
+  });
 }

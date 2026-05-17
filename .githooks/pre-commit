@@ -4,31 +4,25 @@ set -euo pipefail
 check_mode=0
 i18n_generated_now=0
 scope_flutter=0
-scope_rust=0
 ci_mode=0
 skip_tests=0
-clippy_only=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check) check_mode=1 ;;
     --flutter) scope_flutter=1 ;;
-    --rust) scope_rust=1 ;;
     --ci) ci_mode=1 ;;
     --skip-tests) skip_tests=1 ;;
-    --clippy-only) clippy_only=1 ;;
     -h | --help)
       cat <<'EOF'
-Usage: .githooks/pre-commit [--check] [--flutter] [--rust] [--ci] [--skip-tests] [--clippy-only]
+Usage: .githooks/pre-commit [--check] [--flutter] [--ci] [--skip-tests]
 
-Default (no flags): git pre-commit hook mode (format staged files + analyze, plus rustfmt).
+Default (no flags): git pre-commit hook mode (format staged Dart files + analyze).
 
 --check    CI-friendly mode: verify formatting/analyze without modifying files.
 --flutter  Limit --check to Dart format + flutter analyze.
---rust     Limit --check to rustfmt.
---ci       In --check mode, also run full tests/clippy to match CI and pre-push.
+--ci       In --check mode, also run full Flutter tests to match CI and pre-push.
 --skip-tests  In --check mode, skip test execution while keeping other checks.
---clippy-only  In --check --rust mode, run clippy without repeating rustfmt or tests.
 EOF
       exit 0
       ;;

@@ -8,7 +8,6 @@ if [[ ${#staged_files[@]} -eq 0 ]]; then
 fi
 
 dart_files=()
-run_rust_fmt=0
 run_flutter_checks=0
 run_i18n_refresh_needed=0
 for file in "${staged_files[@]}"; do
@@ -30,13 +29,9 @@ for file in "${staged_files[@]}"; do
     run_flutter_checks=1
     run_i18n_refresh_needed=1
   fi
-
-  case "${file}" in
-    rust/*) run_rust_fmt=1 ;;
-  esac
 done
 
-if [[ ${#dart_files[@]} -eq 0 && ${run_flutter_checks} -eq 0 && ${run_rust_fmt} -eq 0 && ${run_i18n_refresh_needed} -eq 0 ]]; then
+if [[ ${#dart_files[@]} -eq 0 && ${run_flutter_checks} -eq 0 && ${run_i18n_refresh_needed} -eq 0 ]]; then
   exit 0
 fi
 
@@ -46,23 +41,6 @@ fi
 
 if [[ ${run_flutter_checks} -ne 0 ]]; then
   resolve_flutter_bin >/dev/null || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
-fi
-
-cargo_bin=""
-if [[ ${run_rust_fmt} -ne 0 ]]; then
-  if ! resolve_cargo_bin; then
-    cargo_missing_message
-  fi
-
-  if ! resolve_libclang_path; then
-    libclang_missing_message
-  fi
-
-  if ! resolve_vulkan_sdk_root; then
-    vulkan_sdk_missing_message
-  fi
-
-  ensure_windows_short_build_paths
 fi
 
 stashed=0
@@ -105,16 +83,6 @@ fi
 if [[ ${#dart_files[@]} -ne 0 ]]; then
   run_dart_tool format "${dart_files[@]}"
   git add -- "${dart_files[@]}"
-fi
-
-if [[ ${run_rust_fmt} -ne 0 ]]; then
-  if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all; then
-    echo "" >&2
-    echo "pre-commit: rustfmt failed." >&2
-    echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
-    exit 1
-  fi
-  git add -u -- rust
 fi
 
 if [[ ${run_flutter_checks} -ne 0 ]]; then

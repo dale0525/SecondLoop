@@ -6,7 +6,7 @@ import 'package:secondloop/core/content_enrichment/content_enrichment_config_sto
 import 'package:secondloop/features/attachments/attachment_ingest_options_resolver.dart';
 import 'package:secondloop/features/attachments/attachment_ingest_pipeline.dart';
 import 'package:secondloop/features/media_backup/audio_transcode_policy.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   group('resolveFileAttachmentIngestOptions', () {

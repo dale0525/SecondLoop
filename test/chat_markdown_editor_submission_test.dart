@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/features/attachments/attachment_draft_send_contract.dart';
 import 'package:secondloop/features/chat/chat_markdown_editor_submission.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('send flow creates message with rewritten markdown and links refs',

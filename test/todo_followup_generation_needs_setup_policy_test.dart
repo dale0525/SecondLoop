@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/ai/todo_followup_generation_gate.dart';
 import 'package:secondloop/core/ai/todo_followup_generation_runner.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test(

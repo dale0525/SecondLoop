@@ -7,8 +7,9 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/semantic_parse_attempt_aware_backend.dart';
 import 'package:secondloop/core/backend/semantic_parse_enhancement_backend.dart';
 import 'package:secondloop/core/secretary/todo_command_models.dart';
-import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/src/rust/semantic_parse.dart' as rust_semantic;
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/semantic_parse_models.dart'
+    as rust_semantic;
 
 import 'test_backend.dart';
 

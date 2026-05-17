@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/features/actions/todo/todo_history_summary.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('computes natural week windows (Mon-Sun, end exclusive)', () {

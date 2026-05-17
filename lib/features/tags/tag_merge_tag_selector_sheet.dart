@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import 'tag_localization.dart';
 
 Future<Tag?> showTagMergeTagSelectorSheet({

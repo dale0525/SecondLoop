@@ -452,7 +452,7 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       const dpi = 180;
       final languageHints = _effectiveDocumentOcrLanguageHints;
       final bytes = await (_bytesFuture ??= _loadBytes());
-      final mediaConfig = await const RustMediaAnnotationConfigStore()
+      final mediaConfig = await const DartMediaAnnotationConfigStore()
           .read(sessionKey)
           .catchError(
             (_) => const MediaAnnotationConfig(

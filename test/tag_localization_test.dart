@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/tags/system_domain_tags.dart';
 import 'package:secondloop/features/tags/tag_localization.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 Tag _tag({
   required String id,

@@ -1,4 +1,4 @@
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import 'review_notification_plan.dart';
 import 'review_reminder_notification_scheduler.dart';
 

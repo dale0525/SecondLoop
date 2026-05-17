@@ -15,12 +15,6 @@ dart_paths=(
   "lib/core/content_enrichment"
 )
 
-# Rust runtime paths.
-rust_paths=(
-  "rust/src/desktop_media"
-  "rust/src/api"
-)
-
 search_matches() {
   local pattern="$1"
   shift
@@ -42,13 +36,6 @@ if search_matches \
   "Process\\.(run|start)\\([^\\)]*pythonExecutable" \
   "${dart_paths[@]}"; then
   echo "[error] pythonExecutable-based Process invocation found in Dart runtime paths" >&2
-  fail=1
-fi
-
-if search_matches \
-  "Command::new\\(\\s*['\\\"]\\s*(python|python3|pip|pip3)\\b" \
-  "${rust_paths[@]}"; then
-  echo "[error] direct python/pip command invocation found in Rust runtime paths" >&2
   fail=1
 fi
 

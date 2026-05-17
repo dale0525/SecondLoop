@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import '../../features/attachments/platform_pdf_ocr.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../ai/ai_routing.dart';
 import '../backend/native_backend.dart';
 import 'docx_ocr_policy.dart';

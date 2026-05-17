@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../../core/backend/native_backend.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 enum MediaEnrichmentNetwork {
   offline,

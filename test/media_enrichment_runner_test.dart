@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/media_enrichment/media_enrichment_runner.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 final class _MemStore implements MediaEnrichmentStore {
   _MemStore({

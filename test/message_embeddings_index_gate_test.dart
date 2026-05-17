@@ -8,7 +8,7 @@ import 'package:secondloop/core/ai/message_embeddings_index_gate.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   testWidgets(

@@ -3,11 +3,16 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('local whisper uses automatic language prompt policy', () {
-    final content = File('rust/src/api/audio_transcribe.rs').readAsStringSync();
+  test('local whisper runtime path no longer points at Rust sources', () {
+    final content = File(
+      'lib/core/runtime_compat/api/audio_transcribe.dart',
+    ).readAsStringSync();
 
+    expect(content, contains('audioTranscribeLocalWhisper'));
     expect(
-        content, isNot(contains('fn local_whisper_initial_prompt_for_lang(')));
-    expect(content, isNot(contains('params.set_initial_prompt(')));
+      content,
+      contains('UnsupportedError(\'rust_runtime_removed:'),
+    );
+    expect(content, isNot(contains('set_initial_prompt')));
   });
 }

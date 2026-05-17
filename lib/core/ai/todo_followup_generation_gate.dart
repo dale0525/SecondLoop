@@ -12,7 +12,7 @@ import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
 import '../update/update_restart_activity.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import 'ai_routing.dart';
 import 'semantic_parse_data_consent_prefs.dart';
 import 'foreground_ai_route_preflight.dart';

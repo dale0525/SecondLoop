@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/offline_edit/local_edit_models.dart';
 import 'package:secondloop/core/offline_edit/local_edit_store.dart';
@@ -225,5 +227,38 @@ void main() {
     expect(edited.updatedAtMs, 3000);
     expect(edited.lastSyncedAtMs, 2000);
     expect(await store.listPendingEdits(), hasLength(1));
+  });
+
+  test('persistent store keeps offline drafts after reopen', () async {
+    await store.close();
+    final dir = await Directory.systemTemp.createTemp('local_edit_store_test_');
+    addTearDown(() => dir.delete(recursive: true));
+    final dbPath = '${dir.path}/notes.sqlite';
+
+    store = LocalEditStore.persistent(dbPath);
+    final draft = await store.saveDraft(
+      remoteId: 'note-1',
+      title: 'Persistent title',
+      body: 'Persistent body',
+      baseRevision: 'rev-1',
+      nowMs: 1000,
+    );
+    await store.markConflict(
+      localId: draft.localId,
+      remoteRevision: 'rev-remote',
+      remoteTitle: 'Remote title',
+      remoteBody: 'Remote body',
+      nowMs: 2000,
+    );
+    await store.close();
+
+    store = LocalEditStore.persistent(dbPath);
+    final reopened = await store.readByRemoteId('note-1');
+
+    expect(reopened, isNotNull);
+    expect(reopened!.title, 'Persistent title');
+    expect(reopened.body, 'Persistent body');
+    expect(reopened.syncState, LocalEditSyncState.conflict);
+    expect(reopened.conflictRemoteRevision, 'rev-remote');
   });
 }

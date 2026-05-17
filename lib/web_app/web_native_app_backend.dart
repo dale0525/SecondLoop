@@ -5,7 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/backend/native_backend.dart';
-import '../src/rust/api/web_sync.dart' as rust_web_sync;
+import 'package:secondloop/core/runtime_compat/api/web_sync.dart'
+    as rust_web_sync;
 import 'web_app_service.dart';
 import 'web_formal_settings_adapters.dart';
 

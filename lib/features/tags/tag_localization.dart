@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import 'system_domain_tags.dart';
 
 const Map<String, String> _systemTagLabelsEn = <String, String>{

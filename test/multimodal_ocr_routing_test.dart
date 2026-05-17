@@ -6,7 +6,7 @@ import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/content_enrichment/multimodal_ocr.dart';
 import 'package:secondloop/features/attachments/platform_pdf_ocr.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   test('Pro cloud mode prefers multimodal OCR even when local mode stored', () {

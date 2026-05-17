@@ -35,7 +35,7 @@ import '../audio_transcribe/audio_transcribe_enqueue.dart';
 import '../media_backup/cloud_media_download.dart';
 import '../media_backup/cloud_media_download_ui.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
 import 'audio_attachment_player.dart';
 import 'attachment_detail_workspace.dart';
@@ -561,7 +561,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     if (backend is! NativeAppBackend) return null;
     final sessionKey = SessionScope.of(context).sessionKey;
     try {
-      return await const RustAttachmentMetadataStore().read(
+      return await const DartAttachmentMetadataStore().read(
         sessionKey,
         attachmentSha256: widget.attachment.sha256,
       );
@@ -683,7 +683,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
     ContentEnrichmentConfig? contentConfig;
     try {
-      contentConfig = await const RustContentEnrichmentConfigStore()
+      contentConfig = await const DartContentEnrichmentConfigStore()
           .readContentEnrichment(Uint8List.fromList(sessionKey));
     } catch (_) {
       contentConfig = null;
@@ -697,7 +697,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     MediaAnnotationConfig? mediaConfig;
     try {
       mediaConfig =
-          await const RustMediaAnnotationConfigStore().read(sessionKey);
+          await const DartMediaAnnotationConfigStore().read(sessionKey);
     } catch (_) {
       mediaConfig = null;
     }
@@ -789,7 +789,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   ) async {
     final normalized = normalizeAttachmentOcrLanguageHint(languageHint);
     try {
-      const store = RustContentEnrichmentConfigStore();
+      const store = DartContentEnrichmentConfigStore();
       final current = await store.readContentEnrichment(sessionKey);
       if (normalizeAttachmentOcrLanguageHint(current.ocrLanguageHints) ==
           normalized) {

@@ -9,7 +9,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 import 'package:secondloop/features/settings/embedding_profiles_page.dart';
 import 'package:secondloop/features/settings/llm_profiles_page.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_i18n.dart';
 import 'ai_settings_test_helpers.dart';

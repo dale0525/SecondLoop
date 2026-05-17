@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 class TestAppBackend extends AppBackend {
   TestAppBackend({List<Message>? initialMessages})

@@ -4,8 +4,8 @@ import 'package:flutter/widgets.dart';
 
 import '../ai/todo_followup_task_classifier.dart';
 import '../../features/actions/todo/todo_thread_match.dart';
-import '../../src/rust/db.dart';
-import '../../src/rust/semantic_parse.dart';
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/semantic_parse_models.dart';
 import '../ai/todo_followup_prompt_envelope.dart';
 
 part 'app_backend_prompt_ai.dart';

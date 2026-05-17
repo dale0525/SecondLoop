@@ -9,7 +9,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/share/share_ingest.dart';
 import 'package:secondloop/features/share/share_ingest_gate.dart';
 import 'package:secondloop/features/share/share_intent_listener.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';

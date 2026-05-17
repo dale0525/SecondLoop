@@ -8,7 +8,7 @@ import 'package:secondloop/core/sync/cloud_sync_switch_prefs.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/features/media_backup/cloud_media_backup_runner.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_backend.dart';
 

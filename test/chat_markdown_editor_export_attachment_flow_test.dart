@@ -1,10 +1,7 @@
-// ignore_for_file: depend_on_referenced_packages
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:irondash_message_channel/irondash_message_channel.dart';
-import 'package:super_native_extensions/src/native/context.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/attachments_backend.dart';
@@ -12,13 +9,31 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_markdown_editor_page.dart';
 import 'package:secondloop/features/attachments/attachment_draft_send_contract.dart';
 import 'package:secondloop/features/chat/chat_markdown_export_image_sources.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  String? clipboardText;
+
+  setUp(() {
+    clipboardText = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        final arguments = call.arguments as Map<Object?, Object?>?;
+        clipboardText = arguments?['text'] as String?;
+      }
+      return null;
+    });
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
+  });
 
   test(
     'inline markdown export trims angle-bracket wrapped attachment refs',
@@ -123,29 +138,10 @@ void main() {
   );
 
   testWidgets(
-    'editor export menu copy action resolves persisted attachment images',
+    'editor export menu copy action copies plain markdown without native clipboard packages',
     (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       final backend = _ExportAttachmentBackend();
-      final mockContext =
-          superNativeExtensionsContext as MockMessageChannelContext;
-      var nextProviderId = 1;
-      mockContext.registerMockMethodCallHandler('DataProviderManager', (call) {
-        switch (call.method) {
-          case 'registerDataProvider':
-            return nextProviderId++;
-          case 'unregisterDataProvider':
-            return null;
-          default:
-            return null;
-        }
-      });
-      mockContext.registerMockMethodCallHandler('ClipboardWriter', (call) {
-        if (call.method == 'writeToClipboard') {
-          return null;
-        }
-        return null;
-      });
 
       try {
         await tester.pumpWidget(_buildEditorApp(
@@ -167,8 +163,8 @@ void main() {
         );
 
         expect(find.text('Copied to clipboard'), findsOneWidget);
-        expect(backend.readAttachmentBySha256Calls, contains('sha_copy'));
-        expect(backend.readAttachmentBytesCalls, contains('sha_copy'));
+        expect(clipboardText, '![saved](secondloop://attachment/sha_copy)');
+        expect(backend.readAttachmentBySha256Calls, isEmpty);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -176,29 +172,10 @@ void main() {
   );
 
   testWidgets(
-    'editor export menu copy action shows the underlying error message',
+    'editor export menu copy action does not fail when persisted image bytes are unavailable',
     (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       final backend = _ThrowingExportAttachmentBackend();
-      final mockContext =
-          superNativeExtensionsContext as MockMessageChannelContext;
-      var nextProviderId = 1;
-      mockContext.registerMockMethodCallHandler('DataProviderManager', (call) {
-        switch (call.method) {
-          case 'registerDataProvider':
-            return nextProviderId++;
-          case 'unregisterDataProvider':
-            return null;
-          default:
-            return null;
-        }
-      });
-      mockContext.registerMockMethodCallHandler('ClipboardWriter', (call) {
-        if (call.method == 'writeToClipboard') {
-          return null;
-        }
-        return null;
-      });
 
       try {
         await tester.pumpWidget(_buildEditorApp(
@@ -216,10 +193,11 @@ void main() {
         await _triggerExportAction(tester, 'copyToClipboard');
         await _pumpUntil(
           tester,
-          () => find.textContaining('boom sha_broken').evaluate().isNotEmpty,
+          () => find.text('Copied to clipboard').evaluate().isNotEmpty,
         );
 
-        expect(find.textContaining('boom sha_broken'), findsOneWidget);
+        expect(find.text('Copied to clipboard'), findsOneWidget);
+        expect(clipboardText, '![saved](secondloop://attachment/sha_broken)');
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

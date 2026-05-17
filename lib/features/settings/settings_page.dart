@@ -30,7 +30,8 @@ import '../../core/desktop/system_hotkey_conflicts.dart';
 import '../../core/desktop/system_hotkey_recorder.dart';
 import '../../core/update/update_badge_prefs.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
-import '../../src/rust/api/oplog_maintenance.dart' as rust_oplog_maintenance;
+import 'package:secondloop/core/runtime_compat/api/oplog_maintenance.dart'
+    as rust_oplog_maintenance;
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';

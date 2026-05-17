@@ -1,6 +1,6 @@
 import 'embeddings_source_prefs.dart';
 import 'media_source_prefs.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 final class RequiredAiCapabilityPolicy {
   const RequiredAiCapabilityPolicy._();

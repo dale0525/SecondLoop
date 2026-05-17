@@ -221,53 +221,11 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
     setState(() => _exporting = true);
 
     try {
-      final previewTheme =
-          resolveChatMarkdownTheme(_themePreset, Theme.of(context));
       final plainText = buildChatMarkdownClipboardPlainText(
         _controller.text,
         emptyFallback: context.t.chat.markdownEditor.emptyPreview,
       );
-      final backend = AppBackendScope.maybeOf(context);
-      final AttachmentsBackend? attachmentsBackend =
-          backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
-      final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
-      final html = await buildChatMarkdownClipboardHtml(
-        markdown: _controller.text,
-        theme: previewTheme,
-        emptyFallback: context.t.chat.markdownEditor.emptyPreview,
-        draftAttachments: _draftAttachments,
-        readPersistedAttachment:
-            attachmentsBackend == null || sessionKey == null || backend == null
-                ? null
-                : (attachmentSha256) async {
-                    final attachment = await backend.readAttachmentBySha256(
-                      attachmentSha256,
-                    );
-                    if (attachment == null) return null;
-                    final bytes = await attachmentsBackend.readAttachmentBytes(
-                      sessionKey,
-                      sha256: attachmentSha256,
-                    );
-                    return ChatMarkdownExportImageData(
-                      bytes: bytes,
-                      mimeType: attachment.mimeType,
-                    );
-                  },
-      );
-
-      try {
-        final clipboard = SystemClipboard.instance;
-        if (clipboard != null) {
-          final item = DataWriterItem();
-          item.add(Formats.htmlText(html));
-          item.add(Formats.plainText(plainText));
-          await clipboard.write(<DataWriterItem>[item]);
-        } else {
-          await Clipboard.setData(ClipboardData(text: plainText));
-        }
-      } catch (_) {
-        await Clipboard.setData(ClipboardData(text: plainText));
-      }
+      await Clipboard.setData(ClipboardData(text: plainText));
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

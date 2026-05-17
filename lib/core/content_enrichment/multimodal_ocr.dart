@@ -4,8 +4,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../../features/attachments/platform_pdf_ocr.dart';
-import '../../src/rust/api/media_annotation.dart' as rust_media_annotation;
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/runtime_compat/api/media_annotation.dart'
+    as rust_media_annotation;
+import 'package:secondloop/core/models/app_models.dart';
 import '../ai/ai_routing.dart';
 import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';

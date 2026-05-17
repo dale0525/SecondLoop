@@ -12,7 +12,7 @@ import 'package:secondloop/features/quick_capture/quick_capture_overlay.dart';
 import 'test_i18n.dart';
 import 'package:secondloop/core/quick_capture/quick_capture_controller.dart';
 import 'package:secondloop/main.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
   testWidgets(

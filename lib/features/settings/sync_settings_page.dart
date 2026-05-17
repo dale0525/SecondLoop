@@ -25,7 +25,7 @@ import '../../core/sync/sync_switch_direction_dialog.dart';
 import '../../core/sync/vault_reset_error.dart';
 import '../../core/sync/vault_replace_local_guard.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
 import '../../web_app/web_formal_settings_scope.dart';
 import '../media_backup/cloud_media_backup_runner.dart';

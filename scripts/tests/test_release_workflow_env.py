@@ -6,7 +6,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 import unittest
 
 
@@ -157,10 +156,6 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
     def _macos_dmg_script_text(self) -> str:
         script_path = Path(__file__).resolve().parents[2] / "scripts/package_macos_dmg.sh"
         return script_path.read_text(encoding="utf-8")
-
-    def _cargokit_cmake_text(self) -> str:
-        cmake_path = Path(__file__).resolve().parents[2] / "rust_builder/cargokit/cmake/cargokit.cmake"
-        return cmake_path.read_text(encoding="utf-8")
 
     def _publish_homebrew_script_text(self) -> str:
         script_path = Path(__file__).resolve().parents[2] / "scripts/publish_homebrew_cask.sh"
@@ -328,19 +323,6 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
             )
             self.assertNotIn("\\`", rendered_notes)
 
-    def test_release_workflow_installs_vulkan_sdk_for_linux_and_windows(self) -> None:
-        workflow_text = self._workflow_text()
-
-        self.assertIn("windows:\n    needs: preflight", workflow_text)
-        self.assertIn("linux:\n    needs: preflight", workflow_text)
-        self.assertGreaterEqual(workflow_text.count("humbletim/install-vulkan-sdk@v1.2"), 2)
-        self.assertIn("version: 1.4.309.0", workflow_text)
-
-    def test_release_workflow_installs_linux_vulkan_linker_package(self) -> None:
-        workflow_text = self._workflow_text()
-
-        self.assertIn("libvulkan-dev", workflow_text)
-
     def test_release_workflow_exposes_github_token_for_desktop_runtime_download(self) -> None:
         workflow_text = self._workflow_text()
 
@@ -402,34 +384,6 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         workflow_text = self._workflow_text()
 
         self.assertNotIn('rm -f dist/releases.win.json', workflow_text)
-
-    def test_release_workflow_sets_bindgen_clang_args_for_android_targets(self) -> None:
-        workflow_text = self._workflow_text()
-
-        self.assertIn('ndk_sysroot="${SECONDLOOP_ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/sysroot"', workflow_text)
-        self.assertIn('export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${ndk_sysroot}"', workflow_text)
-        self.assertIn('export BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--sysroot=${ndk_sysroot} --target=armv7a-linux-androideabi23"', workflow_text)
-        self.assertIn('export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=${ndk_sysroot} --target=aarch64-linux-android23"', workflow_text)
-
-    def test_release_workflow_runs_android_rustup_setup_before_build(self) -> None:
-        workflow_text = self._workflow_text()
-
-        setup_idx = workflow_text.find('bash scripts/setup_rustup.sh')
-        build_idx = workflow_text.find('bash scripts/build_android_release_apk.sh')
-
-        self.assertNotEqual(-1, setup_idx)
-        self.assertNotEqual(-1, build_idx)
-        self.assertLess(setup_idx, build_idx)
-
-    def test_release_workflow_runs_flutter_pub_get_before_android_rustup_patch_step(self) -> None:
-        workflow_text = self._workflow_text()
-
-        pub_get_idx = workflow_text.find("      - run: flutter pub get")
-        setup_idx = workflow_text.find("      - name: Setup Rustup for Android build")
-
-        self.assertNotEqual(-1, pub_get_idx)
-        self.assertNotEqual(-1, setup_idx)
-        self.assertLess(pub_get_idx, setup_idx)
 
     def test_workflow_job_text_matches_exact_job_headers(self) -> None:
         workflow_text = """jobs:
@@ -496,23 +450,6 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotIn('Push-Location "W:\\"', workflow_text)
         self.assertIn("subst W: /d", workflow_text)
 
-    def test_windows_build_sets_short_cargokit_temp_paths(self) -> None:
-        workflow_text = self._workflow_text()
-
-        self.assertIn("$Env:CARGOKIT_TARGET_TEMP_DIR = 'W:\\ck'", workflow_text)
-        self.assertIn("$Env:CARGOKIT_TOOL_TEMP_DIR = 'W:\\ck\\tool'", workflow_text)
-
-    def test_cargokit_cmake_allows_temp_dir_env_overrides(self) -> None:
-        cmake_text = self._cargokit_cmake_text()
-
-        self.assertIn('$ENV{CARGOKIT_TARGET_TEMP_DIR}', cmake_text)
-        self.assertIn('$ENV{CARGOKIT_TOOL_TEMP_DIR}', cmake_text)
-        self.assertIn('string(REPLACE', cmake_text)
-        self.assertIn('CARGOKIT_TEMP_DIR "${CARGOKIT_TEMP_DIR}")', cmake_text)
-        self.assertIn('CARGOKIT_TOOL_TEMP_DIR "${CARGOKIT_TOOL_TEMP_DIR}")', cmake_text)
-        self.assertNotIn('file(TO_CMAKE_PATH', cmake_text)
-        self.assertIn('CARGOKIT_TOOL_TEMP_DIR=${CARGOKIT_TOOL_TEMP_DIR}', cmake_text)
-
     def test_android_ndk_install_handles_yes_pipefail(self) -> None:
         workflow_text = self._workflow_text()
 
@@ -524,23 +461,6 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertIn('if ($LASTEXITCODE -ne 0)', workflow_text)
         self.assertIn('throw "flutter build windows failed with exit code $LASTEXITCODE"', workflow_text)
-
-    def test_only_linux_whisper_dependency_enables_vulkan_backend(self) -> None:
-        cargo_path = Path(__file__).resolve().parents[2] / "rust/Cargo.toml"
-        with cargo_path.open("rb") as fh:
-            cargo_config = tomllib.load(fh)
-
-        target_config = cargo_config["target"]
-        windows_dep = target_config['cfg(target_os = "windows")']["dependencies"]["whisper-rs"]
-        linux_dep = target_config['cfg(target_os = "linux")']["dependencies"]["whisper-rs"]
-
-        self.assertNotIn("features", windows_dep)
-        self.assertEqual(linux_dep.get("features"), ["vulkan"])
-
-    def test_windows_build_sets_ninja_generator_for_rust_cmake(self) -> None:
-        workflow_text = self._workflow_text()
-
-        self.assertIn('$Env:CMAKE_GENERATOR = "Ninja"', workflow_text)
 
     def test_windows_build_enables_verbose_flutter_output(self) -> None:
         workflow_text = self._workflow_text()

@@ -5,8 +5,8 @@ import 'package:secondloop/core/backend/secretary_backend.dart';
 import 'package:secondloop/core/secretary/internal_tool_registry.dart';
 import 'package:secondloop/core/secretary/rule_based_planning_engine.dart';
 import 'package:secondloop/core/secretary/secretary_controller.dart';
-import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/src/rust/platform_int.dart';
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 
 void main() {
   test('records a secretary run with auditable tool calls', () async {

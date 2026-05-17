@@ -159,7 +159,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       )? onUpsertAttachmentMetadata;
       if (backend is NativeAppBackend) {
         final candidateMimeTypeBySha = <String, String>{};
-        const metadataStore = RustAttachmentMetadataStore();
+        const metadataStore = DartAttachmentMetadataStore();
         onUpsertAttachmentMetadata = (sha256, metadata) async {
           try {
             await metadataStore.upsert(

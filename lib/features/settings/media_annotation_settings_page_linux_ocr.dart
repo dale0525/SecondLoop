@@ -121,6 +121,10 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
   }
 
   Widget? _buildDesktopRuntimeHealthTile(BuildContext context) {
+    if (widget.linuxOcrModelStore == null) {
+      return null;
+    }
+
     final platform = Theme.of(context).platform;
     if (platform == TargetPlatform.android || platform == TargetPlatform.iOS) {
       return null;

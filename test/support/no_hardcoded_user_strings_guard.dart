@@ -19,9 +19,6 @@ final List<RegExp> _directDisallowedPatterns = <RegExp>[
 
 const Set<String> _excludedPaths = <String>{
   'lib/i18n/strings.g.dart',
-  'lib/src/rust/frb_generated.dart',
-  'lib/src/rust/frb_generated.io.dart',
-  'lib/src/rust/frb_generated.web.dart',
 };
 
 const Set<String> _userFacingNamedParameters = <String>{

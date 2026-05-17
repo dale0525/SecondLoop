@@ -4,10 +4,11 @@ import '../core/backend/app_backend.dart';
 import '../core/session/session_scope.dart';
 import '../features/agent_ui/agent_conversation_page.dart';
 import '../features/memory/memory_page.dart';
+import '../features/notes/notes_home_page.dart';
 import '../features/review/review_page.dart';
 import '../features/settings/agent_settings_page.dart';
 import '../i18n/strings.g.dart';
-import '../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 Widget buildSharedDefaultChatTab(
   BuildContext context, {
@@ -21,6 +22,13 @@ Widget buildSharedDefaultSettingsTab(
   required bool isActive,
 }) {
   return const AgentSettingsPage();
+}
+
+Widget buildSharedDefaultNotesTab(
+  BuildContext context, {
+  required bool isActive,
+}) {
+  return const NotesHomePage();
 }
 
 Widget buildSharedDefaultMemoryTab(

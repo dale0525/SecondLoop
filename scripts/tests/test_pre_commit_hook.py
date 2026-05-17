@@ -133,45 +133,6 @@ class PreCommitHookTests(unittest.TestCase):
 
         return filtered_lines
 
-    def test_pre_commit_hook_supports_pixi_windows_cargo_path(self) -> None:
-        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn(".pixi/envs/default/Library/bin/cargo.exe", script)
-        self.assertIn(".pixi/envs/default/bin/cargo", script)
-
-    def test_pre_commit_hook_resolves_windows_libclang_path(self) -> None:
-        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn(".pixi/envs/default/Library/bin", script)
-        self.assertIn("libclang-*.dll", script)
-        self.assertIn(".tool/libclang", script)
-        self.assertIn("LIBCLANG_PATH", script)
-
-    def test_pre_commit_hook_resolves_windows_vulkan_sdk_path(self) -> None:
-        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn('resolve_precommit_temp_root()', script)
-        self.assertIn('make_precommit_temp_dir()', script)
-        self.assertIn(".tool/vulkan-sdk", script)
-        self.assertIn("1.4.309.0", script)
-        self.assertIn("VULKAN_SDK", script)
-        self.assertIn("vulkan-1.lib", script)
-        self.assertIn("git rev-parse --git-common-dir", script)
-        self.assertIn("secondloop-precommit-tmp", script)
-        self.assertIn("CARGO_TARGET_DIR", script)
-        self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
-        self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
-        self.assertIn('temp_root="$(resolve_precommit_temp_root)"', script)
-        self.assertIn("make_precommit_short_path_dir()", script)
-        self.assertIn('short_temp_root="$(make_precommit_short_path_dir sl-t)"', script)
-        self.assertIn('export CARGO_TARGET_DIR="$(make_precommit_short_path_dir sl-ct)"', script)
-        self.assertIn('export CARGOKIT_TARGET_TEMP_DIR="$(make_precommit_short_path_dir sl-ck)"', script)
-        self.assertIn('export TMPDIR="${short_temp_root}"', script)
-        self.assertIn('export TMP="${short_temp_root}"', script)
-        self.assertIn('export TEMP="${short_temp_root}"', script)
-        self.assertIn("CMAKE_GENERATOR", script)
-        self.assertIn("Ninja", script)
-
     def test_pre_commit_hook_refreshes_i18n_when_locale_sources_change(self) -> None:
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
@@ -244,12 +205,6 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('printf \'%s\\n\' "__FULL_SUITE__"', script)
         self.assertNotIn('run_flutter_tool test --concurrency=1', script)
 
-    def test_pre_commit_hook_no_longer_runs_rust_clippy_in_normal_commit_flow(self) -> None:
-        normal_commit_flow = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertNotIn('if ! "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then', normal_commit_flow)
-        self.assertNotIn('if ! "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then', normal_commit_flow)
-
     def test_pre_commit_hook_no_longer_runs_flutter_tests_in_normal_commit_flow(self) -> None:
         normal_commit_flow = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
@@ -291,11 +246,6 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn('--skip-tests', script)
 
-    def test_pre_commit_hook_supports_clippy_only_in_check_mode(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
-
-        self.assertIn('--clippy-only', script)
-
     def test_pre_commit_common_exposes_periodic_progress_helper(self) -> None:
         common = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
@@ -308,14 +258,6 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn(
             'run_with_periodic_status "flutter test" run_flutter_tool test --concurrency=1',
-            check_mode,
-        )
-        self.assertIn(
-            'run_with_periodic_status "rust clippy" "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings',
-            check_mode,
-        )
-        self.assertIn(
-            'run_with_periodic_status "rust tests" "${cargo_bin}" test --manifest-path rust/Cargo.toml --all',
             check_mode,
         )
 
@@ -396,14 +338,6 @@ class PreCommitHookTests(unittest.TestCase):
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
         self.assertIn('if [[ ! -f "${file}" ]]; then', script)
         self.assertIn('printf \'%s\\n\' "__FULL_SUITE__"', script)
-
-    def test_pre_commit_hook_quotes_pixi_cargo_fmt_suggestion(self) -> None:
-        script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_CHECK_MODE_SCRIPT.read_text(encoding="utf-8")
-
-        self.assertIn(
-            r'echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2',
-            script,
-        )
 
     def test_pre_commit_hook_supports_windows_local_fvm_batch_wrappers(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")

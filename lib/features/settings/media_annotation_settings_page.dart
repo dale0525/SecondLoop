@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/audio_transcribe_whisper_model_prefs.dart';
@@ -22,7 +22,7 @@ import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
 import 'llm_profiles_page.dart';
 import 'media_annotation_settings_sections.dart';
@@ -150,9 +150,9 @@ class _MediaAnnotationSettingsPageState
   Timer? _clearLocalCapabilityCardHighlightTimer;
 
   MediaAnnotationConfigStore get _store =>
-      widget.configStore ?? const RustMediaAnnotationConfigStore();
+      widget.configStore ?? const DartMediaAnnotationConfigStore();
   ContentEnrichmentConfigStore get _contentStore =>
-      widget.contentConfigStore ?? const RustContentEnrichmentConfigStore();
+      widget.contentConfigStore ?? const DartContentEnrichmentConfigStore();
   LinuxOcrModelStore get _linuxOcrModelStore =>
       widget.linuxOcrModelStore ?? createLinuxOcrModelStore();
   AudioTranscribeWhisperModelStore get _audioWhisperModelStore =>
@@ -354,22 +354,24 @@ class _MediaAnnotationSettingsPageState
         contentConfig = null;
         contentLoadError = e;
       }
-      try {
-        linuxOcrModelStatus = await _linuxOcrModelStore.readStatus();
-      } catch (_) {
-        linuxOcrModelStatus = const LinuxOcrModelStatus(
-          supported: false,
-          installed: false,
-          modelDirPath: null,
-          modelCount: 0,
-          totalBytes: 0,
-          source: LinuxOcrModelSource.none,
-        );
+      if (widget.linuxOcrModelStore != null) {
+        try {
+          linuxOcrModelStatus = await _linuxOcrModelStore.readStatus();
+        } catch (_) {
+          linuxOcrModelStatus = const LinuxOcrModelStatus(
+            supported: false,
+            installed: false,
+            modelDirPath: null,
+            modelCount: 0,
+            totalBytes: 0,
+            source: LinuxOcrModelSource.none,
+          );
+        }
       }
       var audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
       bool audioWhisperRuntimeInstalled = false;
       Object? audioWhisperRuntimeStatusError;
-      final store = _audioWhisperModelStore;
+      final store = widget.audioWhisperModelStore;
       List<LlmProfile>? profiles;
       if (backend != null) {
         try {
@@ -418,7 +420,7 @@ class _MediaAnnotationSettingsPageState
         urlSourcePreference = MediaSourcePreference.auto;
         audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
       }
-      if (store.supportsRuntimeDownload) {
+      if (store != null && store.supportsRuntimeDownload) {
         try {
           audioWhisperRuntimeInstalled =
               await store.isModelAvailable(model: audioWhisperModel);
@@ -610,7 +612,8 @@ class _MediaAnnotationSettingsPageState
 
     final messenger = ScaffoldMessenger.of(context);
     final store = _audioWhisperModelStore;
-    final shouldDownload = store.supportsRuntimeDownload &&
+    final shouldDownload = widget.audioWhisperModelStore != null &&
+        store.supportsRuntimeDownload &&
         _supportsDesktopWhisperModelRuntimeDownload();
 
     setState(() {

@@ -261,42 +261,6 @@ function Ensure-DotnetRoot {
   Add-ToPathIfMissing -Directory $env:DOTNET_TOOLS
 }
 
-function Resolve-RustToolchainBinDirectory {
-  $candidates = @(
-    (Join-Path $repoRootPath '.pixi/envs/default/Library/bin'),
-    (Join-Path $repoRootPath '.pixi/envs/default/bin'),
-    (Join-Path (Join-Path (Join-Path $repoRootPath '.tool') 'cargo') 'bin')
-  )
-
-  if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
-    $candidates += (Join-Path (Join-Path $env:USERPROFILE '.cargo') 'bin')
-  }
-
-  foreach ($candidate in $candidates) {
-    if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
-      continue
-    }
-
-    $cargoPath = Join-Path $candidate 'cargo.exe'
-    $rustupPath = Join-Path $candidate 'rustup.exe'
-    if ((Test-Path -LiteralPath $cargoPath -PathType Leaf) -or
-        (Test-Path -LiteralPath $rustupPath -PathType Leaf)) {
-      return $candidate
-    }
-  }
-
-  return $null
-}
-
-function Ensure-RustToolchainPath {
-  $rustBinDirectory = Resolve-RustToolchainBinDirectory
-  if ([string]::IsNullOrWhiteSpace($rustBinDirectory)) {
-    throw 'Rust toolchain is required for Windows desktop builds. Install it in the project environment with `pixi install`.'
-  }
-
-  Add-ToPathIfMissing -Directory $rustBinDirectory
-}
-
 function Resolve-FlutterRoot {
   if (-not [string]::IsNullOrWhiteSpace($env:FLUTTER_ROOT)) {
     if (Test-Path -LiteralPath $env:FLUTTER_ROOT -PathType Container) {
@@ -317,16 +281,11 @@ function Ensure-WindowsBuildEnvironment {
   Set-Item -Path Env:FLUTTER_ROOT -Value $flutterRoot
   Add-ToPathIfMissing -Directory (Join-Path $flutterRoot 'bin')
   Ensure-DotnetRoot
-  Ensure-RustToolchainPath
 
   foreach ($variableName in @(
     'PROJECT_DIR',
     'DOTNET_ROOT',
-    'FLUTTER_ROOT',
-    'LIBCLANG_PATH',
-    'VULKAN_SDK',
-    'CARGOKIT_TARGET_TEMP_DIR',
-    'CARGOKIT_TOOL_TEMP_DIR'
+    'FLUTTER_ROOT'
   )) {
     $entry = Get-Item -Path "Env:$variableName" -ErrorAction SilentlyContinue
     if ($null -ne $entry -and -not [string]::IsNullOrWhiteSpace($entry.Value)) {
@@ -382,7 +341,6 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
   }
 
   if (-not $SkipBuild) {
-    & (Join-Path $PSScriptRoot 'setup_windows_libclang.ps1')
     Ensure-WindowsBuildEnvironment
 
     Write-Host 'Running: flutter pub get'

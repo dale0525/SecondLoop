@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/ai/todo_followup_generation_runner.dart';
 import 'package:secondloop/core/ai/todo_followup_suggestions_ai.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 part 'todo_followup_generation_runner_test_fakes.dart';
 

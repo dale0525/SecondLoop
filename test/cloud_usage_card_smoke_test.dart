@@ -16,7 +16,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/settings/cloud_usage_card.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
-import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_i18n.dart';
 

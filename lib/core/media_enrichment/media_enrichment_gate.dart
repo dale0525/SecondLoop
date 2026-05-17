@@ -34,8 +34,9 @@ import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine_gate.dart';
 import '../update/update_restart_activity.dart';
 import 'media_enrichment_availability.dart';
-import '../../src/rust/api/media_annotation.dart' as rust_media_annotation;
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/runtime_compat/api/media_annotation.dart'
+    as rust_media_annotation;
+import 'package:secondloop/core/models/app_models.dart';
 import '../../i18n/strings.g.dart';
 
 part 'media_enrichment_gate_clients.dart';
@@ -256,7 +257,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         gatewayBaseUrl: gatewayConfig.baseUrl,
       );
 
-      const configStore = RustMediaAnnotationConfigStore();
+      const configStore = DartMediaAnnotationConfigStore();
       final mediaAnnotationConfig = await configStore
           .read(Uint8List.fromList(sessionKey))
           .catchError((_) {
@@ -295,7 +296,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
       ContentEnrichmentConfig? contentConfig;
       try {
-        contentConfig = await const RustContentEnrichmentConfigStore()
+        contentConfig = await const DartContentEnrichmentConfigStore()
             .readContentEnrichment(Uint8List.fromList(sessionKey));
       } catch (_) {
         contentConfig = null;

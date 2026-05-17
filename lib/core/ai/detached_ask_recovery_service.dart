@@ -6,7 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../backend/app_backend.dart';
 import '../backend/native_app_dir.dart';
-import '../../src/rust/api/detached_ask.dart' as rust_detached_ask;
+import 'package:secondloop/core/runtime_compat/api/detached_ask.dart'
+    as rust_detached_ask;
 import 'detached_ask_recovery_policy.dart';
 
 const kAskAiDetachedJobPrefsKey = 'ask_ai_detached_job_v1';

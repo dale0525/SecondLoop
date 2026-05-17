@@ -697,7 +697,6 @@ void main() {
       ),
     );
     await _pumpUi(tester);
-    await tester.pumpAndSettle();
 
     expect(httpClient.deletePaths, ['/v1/vaults/uid_1/attachments/$rootSha']);
     expect(

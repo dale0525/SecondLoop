@@ -1,4 +1,4 @@
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 const kReviewReminderMinimumLeadTimeMs = 5 * 1000;
 const kReviewReminderMaxItems = 32;

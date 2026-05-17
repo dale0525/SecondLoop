@@ -8,14 +8,12 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   flutter_secure_storage_windows
   hotkey_manager_windows
-  irondash_engine_context
   just_audio_windows
   local_auth_windows
   record_windows
   screen_retriever
   share_plus
   sqlite3_flutter_libs
-  super_native_extensions
   tray_manager
   url_launcher_windows
   window_manager
@@ -23,7 +21,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
   flutter_local_notifications_windows
-  secondloop_rust
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

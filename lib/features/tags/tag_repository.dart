@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/backend/native_app_dir.dart';
-import '../../src/rust/api/tags.dart' as rust_tags;
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/runtime_compat/api/tags.dart' as rust_tags;
+import 'package:secondloop/core/models/app_models.dart';
 
 enum TagMergeFeedbackAction {
   accept,

@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import '../../src/rust/db.dart';
-import '../../src/rust/platform_int.dart';
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 import '../backend/app_backend.dart';
 import 'todo_command_models.dart';
 import 'todo_command_risk_policy.dart';

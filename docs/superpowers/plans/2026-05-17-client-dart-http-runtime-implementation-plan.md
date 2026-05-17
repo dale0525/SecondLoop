@@ -36,11 +36,17 @@ Implemented and verified:
 - Dart offline text note store, note HTTP client, sync outbox, note editor UI, attachment inventory client/controller/UI, runtime-first sync removal, and QA/runbook updates are implemented in the App branch.
 - Legacy `SyncEngineGate` media upload tests and the automation harness sync-settings entry were retired from the runtime-first product path. The replacement tests assert that `SyncEngineGate` no longer creates local-first sync engines and that the harness no longer opens legacy sync settings.
 - Runtime-client Rust guard coverage is implemented for the migrated Dart/HTTP surfaces.
+- Main App Rust/FRB physical removal is complete: `flutter_rust_bridge`, `secondloop_rust`, generated bindings, local Rust sources, FRB builder scripts, Rust third-party patches, and FRB web build tasks are removed from the App dependency graph.
+- Attachment/media settings infrastructure is Dart-only for the main App path: attachment metadata, content enrichment config, and media annotation config now use Dart persistence instead of Rust-backed stores, with tests covering persistence and session scoping.
+- Remaining App toolchain residue from the Rust web build path is removed: `tools/sync_web_build_rust_pkg.dart` and `rust-toolchain.toml` are absent, and guard tests cover both paths.
+- Notes productization is complete for the planned scope: list/open/delete use the runtime note HTTP client, remote revisions are preserved for edits/deletes, and offline plain-text edits remain in the Dart local edit store.
+- Attachment storage cleanup is complete for the planned scope: the cloud attachment inventory supports list/preview/delete-impact/delete, and local cached bytes/variants are cleared after cloud deletion or explicit local cleanup.
+- Runtime-first shell cleanup is complete for the planned scope: the normal App shell no longer mounts `MediaEnrichmentGate`, `ShareIngestGate`, or `ShareIntentListener`, so managed-pro chat/capture/note/attachment navigation no longer auto-starts local media processing or local attachment ingest drain paths.
+- Default AI media settings no longer probes local desktop OCR/Whisper runtime unless a test/helper explicitly injects the local runtime stores; local runtime cards remain isolated to helper/test/self-managed style surfaces.
+- The task checkboxes below are reconciled to the completed implementation state. Command blocks remain the original plan recipe; current App-side work is left in the worktree for handoff unless a separate commit is requested.
 
-Not complete in this pass:
+Deferred / outside this pass:
 
-- Full physical Rust deletion is deferred. The main App still has live `flutter_rust_bridge`, `secondloop_rust`, `lib/src/rust`, `NativeAppBackend`, platform plugin, and web FRB build references in default App/backend/chat/attachment/settings/web paths. Deleting them now would break the build.
-- The next Rust deletion pass must first ensure the AppBackend contract uses Dart domain DTOs, then ship a NativeAppBackend replacement for normal App requests, then remove FRB packages, generated bindings, platform plugin references, and web build tasks no longer run FRB.
 - Managed-pro live acceptance should run after staging has deployed the pushed Server commit and the App-side branch is available to the acceptance runner.
 
 ## Repositories
@@ -182,7 +188,7 @@ Attachment list item:
 - Modify: `workers/vault-service/src/index.js`
 - Create: `workers/vault-service/test/note_routes.test.js`
 
-- [ ] **Step 1: Write failing route tests**
+- [x] **Step 1: Write failing route tests**
 
 Test cases:
 
@@ -201,7 +207,7 @@ npm test -- test/note_routes.test.js
 
 Expected: FAIL because routes do not exist.
 
-- [ ] **Step 2: Implement `note_routes.js`**
+- [x] **Step 2: Implement `note_routes.js`**
 
 Export:
 
@@ -218,7 +224,7 @@ Implementation requirements:
 - Return `409` with the remote note when `base_revision` does not match the stored revision.
 - Return JSON with `content-type: application/json`.
 
-- [ ] **Step 3: Mount route**
+- [x] **Step 3: Mount route**
 
 Modify `workers/vault-service/src/index.js`:
 
@@ -226,7 +232,7 @@ Modify `workers/vault-service/src/index.js`:
 - Call it before existing working-set/blob routes.
 - Return its response when it is non-null.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 cd /Users/logictan/Documents/Git/SecondLoopFolder/SecondLoopServer/workers/vault-service
@@ -245,7 +251,7 @@ Expected: tests pass and commit succeeds.
 - Modify: `workers/vault-service/src/index.js`
 - Create: `workers/vault-service/test/attachment_inventory_routes.test.js`
 
-- [ ] **Step 1: Write failing route tests**
+- [x] **Step 1: Write failing route tests**
 
 Test cases:
 
@@ -264,7 +270,7 @@ npm test -- test/attachment_inventory_routes.test.js
 
 Expected: FAIL because routes do not exist.
 
-- [ ] **Step 2: Implement `attachment_inventory_routes.js`**
+- [x] **Step 2: Implement `attachment_inventory_routes.js`**
 
 Export:
 
@@ -280,7 +286,7 @@ Implementation requirements:
 - Build preview kind from MIME type: `image`, `pdf`, `audio`, `video`, or `download`.
 - Do not run OCR, ASR, embedding, or media annotation in this route.
 
-- [ ] **Step 3: Mount route**
+- [x] **Step 3: Mount route**
 
 Modify `workers/vault-service/src/index.js`:
 
@@ -288,7 +294,7 @@ Modify `workers/vault-service/src/index.js`:
 - Call it before blob routes.
 - Return its response when it is non-null.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 cd /Users/logictan/Documents/Git/SecondLoopFolder/SecondLoopServer/workers/vault-service
@@ -308,7 +314,7 @@ Expected: tests pass and commit succeeds.
 - Create: `lib/core/offline_edit/local_edit_store.dart`
 - Create: `test/core/offline_edit/local_edit_store_test.dart`
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 ```bash
 cd /Users/logictan/.t3/worktrees/SecondLoop/t3code-f5fd1b79
@@ -317,7 +323,7 @@ pixi run flutter pub add sqlite3 sqlite3_flutter_libs
 
 Expected: `pubspec.yaml` and `pubspec.lock` include both packages.
 
-- [ ] **Step 2: Write failing store tests**
+- [x] **Step 2: Write failing store tests**
 
 Required test cases in `test/core/offline_edit/local_edit_store_test.dart`:
 
@@ -334,7 +340,7 @@ pixi run flutter test test/core/offline_edit/local_edit_store_test.dart
 
 Expected: FAIL until the store exists.
 
-- [ ] **Step 3: Implement models**
+- [x] **Step 3: Implement models**
 
 Create `lib/core/offline_edit/local_edit_models.dart` with:
 
@@ -342,7 +348,7 @@ Create `lib/core/offline_edit/local_edit_models.dart` with:
 - `class LocalTextEdit`
 - fields: `localId`, `remoteId`, `title`, `body`, `baseRevision`, `dirty`, `syncState`, `updatedAtMs`, `lastSyncedAtMs`, `conflictRemoteRevision`, `conflictRemoteTitle`, `conflictRemoteBody`.
 
-- [ ] **Step 4: Implement store**
+- [x] **Step 4: Implement store**
 
 Create `lib/core/offline_edit/local_edit_store.dart`.
 
@@ -378,7 +384,7 @@ CREATE TABLE IF NOT EXISTS local_text_edits (
 );
 ```
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 pixi run flutter test test/core/offline_edit/local_edit_store_test.dart
@@ -396,7 +402,7 @@ Expected: tests pass and commit succeeds.
 - Create: `lib/core/offline_edit/local_edit_sync_service.dart`
 - Create: `test/core/offline_edit/local_edit_sync_service_test.dart`
 
-- [ ] **Step 1: Write failing client tests**
+- [x] **Step 1: Write failing client tests**
 
 Required test cases:
 
@@ -412,7 +418,7 @@ pixi run flutter test test/core/cloud/runtime_note_client_test.dart
 
 Expected: FAIL until client exists.
 
-- [ ] **Step 2: Implement `RuntimeNoteClient`**
+- [x] **Step 2: Implement `RuntimeNoteClient`**
 
 Required public types:
 
@@ -434,7 +440,7 @@ Future<RuntimeNote> saveNote({
 });
 ```
 
-- [ ] **Step 3: Write failing sync service tests**
+- [x] **Step 3: Write failing sync service tests**
 
 Required test cases:
 
@@ -442,7 +448,7 @@ Required test cases:
 - `flushPending()` catches `RuntimeNoteConflictException` and calls `markConflict`.
 - Non-conflict failures leave the edit retryable as `failed`.
 
-- [ ] **Step 4: Implement `LocalEditSyncService`**
+- [x] **Step 4: Implement `LocalEditSyncService`**
 
 Required constructor dependencies:
 
@@ -452,7 +458,7 @@ Required constructor dependencies:
 
 No dependency on `SyncEngine`, `NativeAppBackend`, `SecretaryBackend`, or Rust APIs.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 pixi run flutter test test/core/cloud/runtime_note_client_test.dart test/core/offline_edit/local_edit_sync_service_test.dart
@@ -471,7 +477,7 @@ Expected: tests pass and commit succeeds.
 - Create: `test/features/notes/note_editor_controller_test.dart`
 - Create: `test/features/notes/note_editor_page_test.dart`
 
-- [ ] **Step 1: Write failing controller tests**
+- [x] **Step 1: Write failing controller tests**
 
 Required test cases:
 
@@ -480,7 +486,7 @@ Required test cases:
 - Conflict state exposes local text and remote text.
 - Controller imports do not reference `lib/src/rust`, `NativeAppBackend`, or `SyncEngine`.
 
-- [ ] **Step 2: Implement `NoteEditorController`**
+- [x] **Step 2: Implement `NoteEditorController`**
 
 Required responsibilities:
 
@@ -489,7 +495,7 @@ Required responsibilities:
 - Flush when online.
 - Expose states: `clean`, `pending`, `saving`, `conflict`, `failed`.
 
-- [ ] **Step 3: Write failing widget tests**
+- [x] **Step 3: Write failing widget tests**
 
 Required test cases:
 
@@ -498,7 +504,7 @@ Required test cases:
 - Conflict panel shows local and remote content.
 - Body field handles at least 10,000 characters without overflow.
 
-- [ ] **Step 4: Implement note pages**
+- [x] **Step 4: Implement note pages**
 
 Create:
 
@@ -507,7 +513,7 @@ Create:
 
 Do not include AI semantic controls in the note editor.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 pixi run flutter test test/features/notes/note_editor_controller_test.dart test/features/notes/note_editor_page_test.dart
@@ -528,7 +534,7 @@ Expected: tests pass and commit succeeds.
 - Modify: `lib/features/settings/vault_usage_card.dart`
 - Modify: `test/vault_attachment_usage_list_view_test.dart`
 
-- [ ] **Step 1: Extend HTTP client tests**
+- [x] **Step 1: Extend HTTP client tests**
 
 Required test cases:
 
@@ -537,7 +543,7 @@ Required test cases:
 - `fetchDeleteImpact(...)` calls `/delete-impact`.
 - `deleteVaultAttachment(...)` accepts attachment id and keeps sha fallback compatibility.
 
-- [ ] **Step 2: Extend `VaultAttachmentsClient`**
+- [x] **Step 2: Extend `VaultAttachmentsClient`**
 
 Add value types:
 
@@ -547,7 +553,7 @@ Add value types:
 
 Keep existing fields and tests working for grouped video and sha-only responses.
 
-- [ ] **Step 3: Write failing controller tests**
+- [x] **Step 3: Write failing controller tests**
 
 Required test cases:
 
@@ -556,7 +562,7 @@ Required test cases:
 - Delete loads impact before invoking delete.
 - Local cache cleanup deletes cache metadata only and does not call cloud delete.
 
-- [ ] **Step 4: Implement `AttachmentStorageController`**
+- [x] **Step 4: Implement `AttachmentStorageController`**
 
 Dependencies:
 
@@ -569,7 +575,7 @@ Forbidden dependencies:
 - `SyncEngine`
 - Rust attachment APIs
 
-- [ ] **Step 5: Update storage UI**
+- [x] **Step 5: Update storage UI**
 
 Modify `VaultUsageCard` and `VaultAttachmentUsageListView`:
 
@@ -580,7 +586,7 @@ Modify `VaultUsageCard` and `VaultAttachmentUsageListView`:
 - Add delete impact confirmation before cloud delete.
 - Add separate local cache cleanup action.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 ```bash
 pixi run flutter test test/core/cloud/vault_attachments_client_test.dart test/features/attachments/attachment_storage_controller_test.dart test/vault_attachment_usage_list_view_test.dart
@@ -598,7 +604,7 @@ Expected: tests pass and commit succeeds.
 - Modify: `lib/core/sync/sync_engine_gate.dart`
 - Create: `test/runtime_first_removes_local_sync_modes_test.dart`
 
-- [ ] **Step 1: Write product-path guard test**
+- [x] **Step 1: Write product-path guard test**
 
 Required assertions:
 
@@ -606,11 +612,11 @@ Required assertions:
 - WebDAV and local directory sync are not reachable from runtime-first settings.
 - Chat, notes, and attachment storage pages do not instantiate `SyncEngine`.
 
-- [ ] **Step 2: Remove old sync settings from visible product path**
+- [x] **Step 2: Remove old sync settings from visible product path**
 
 Keep reset/dev helpers available for test scripts where still needed, but remove WebDAV/localDir/managed-vault sync as user-facing product modes.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 ```bash
 pixi run flutter test test/runtime_first_removes_local_sync_modes_test.dart test/features/settings/runtime_mode_page_test_ids_test.dart test/cloud_runtime_mode_page_test.dart
@@ -622,24 +628,19 @@ Expected: tests pass and commit succeeds.
 
 ## Task 8: Main App Rust Dependency Guard and Removal
 
-2026-05-17 execution note: only the runtime-client guard subset is in scope for this pass. Full physical Rust deletion is deferred because the current main backend, chat/settings/legacy attachment paths, `pubspec.yaml`, platform plugin registration, and web build tasks still depend on FRB/Rust. The next deletion plan must first replace those paths with Dart/runtime interfaces, then remove Rust from the main App dependency graph while keeping any self-managed helper Rust in an isolated helper scope.
-
-2026-05-17 close-out note: do not physically delete Rust/FRB from the main App until the following replacement chain is complete:
-
-1. AppBackend contract uses Dart domain DTOs instead of generated Rust model types.
-2. NativeAppBackend replacement covers normal App startup, chat/capture, task/memory/message reads and writes, attachment metadata/viewer flows, LLM/profile settings, diagnostics, and web `/app` runtime behavior through Dart/runtime HTTP clients.
-3. Tests and fixtures no longer require `NativeAppBackend`, generated Rust models, or FRB initialization except for explicitly isolated legacy/self-managed helper coverage.
-4. `pubspec.yaml`, platform plugin files, `flutter_rust_bridge.yaml`, `lib/src/rust`, `rust/`, `rust_builder/`, `third_party/flutter-rust-bridge-patched/`, and web build tasks no longer run FRB.
+2026-05-17 close-out note: physical Rust/FRB deletion is complete for the main App. Any future self-managed deployment helper that needs Rust must live outside the normal App runtime dependency graph.
 
 **Files:**
 - Create: `test/no_rust_dependency_for_runtime_client_test.dart`
 - Modify: `pubspec.yaml`
-- Delete after replacements pass: `lib/src/rust/`
-- Delete after replacements pass: `rust/`
-- Delete after replacements pass: `rust_builder/`
-- Delete after replacements pass: `third_party/flutter-rust-bridge-patched/`
+- Delete: `flutter_rust_bridge.yaml`
+- Delete: `lib/src/rust/`
+- Delete: `rust/`
+- Delete: `rust_builder/`
+- Delete: `third_party/flutter-rust-bridge-patched/`
+- Delete: unreferenced Rust third-party patches under `third_party/*-rs-patched` and `third_party/rusqlite-patched`
 
-- [ ] **Step 1: Write Rust dependency guard test**
+- [x] **Step 1: Write Rust dependency guard test**
 
 The test must scan:
 
@@ -658,13 +659,13 @@ It must fail on:
 - `rust_attachments.`
 - `NativeAppBackend`
 
-- [ ] **Step 2: Remove Rust imports from runtime-first paths**
+- [x] **Step 2: Remove Rust imports from runtime-first paths**
 
 Replace failing imports with Dart HTTP clients, `LocalEditStore`, and attachment storage controller APIs from earlier tasks.
 
-For this pass, scan only the migrated runtime-client surfaces: `lib/core/cloud`, `lib/core/offline_edit`, `lib/features/notes`, the new cloud attachment preview/storage controller files, runtime mode settings page, and vault usage card. Do not include legacy `chat`, old attachment DB flows, or self-managed helper internals until their runtime interfaces exist.
+The guard now also checks the main App dependency graph, generated plugin registrants, Dart sources, and App build/release entrypoints.
 
-- [ ] **Step 3: Remove main App Rust packages**
+- [x] **Step 3: Remove main App Rust packages**
 
 Remove from `pubspec.yaml`:
 
@@ -675,7 +676,7 @@ secondloop_rust:
 
 Remove platform build references to `rust_builder` and generated FRB bindings.
 
-- [ ] **Step 4: Delete Rust main App source**
+- [x] **Step 4: Delete Rust main App source**
 
 ```bash
 rm -rf lib/src/rust rust rust_builder third_party/flutter-rust-bridge-patched
@@ -683,7 +684,7 @@ rm -rf lib/src/rust rust rust_builder third_party/flutter-rust-bridge-patched
 
 If the self-managed helper still needs Rust, create or keep it in a separate helper package outside these App runtime dependencies before deleting shared Rust code.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify**
 
 ```bash
 pixi run flutter test test/no_rust_dependency_for_runtime_client_test.dart

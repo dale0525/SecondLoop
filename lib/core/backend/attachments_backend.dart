@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import '../../src/rust/db.dart';
+import 'package:secondloop/core/models/app_models.dart';
 
 abstract class AttachmentsBackend {
   Future<AttachmentExifMetadata?> readAttachmentExifMetadata(

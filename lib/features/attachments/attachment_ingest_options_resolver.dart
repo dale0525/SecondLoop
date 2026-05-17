@@ -10,7 +10,7 @@ Future<FileAttachmentIngestOptions> resolveFileAttachmentIngestOptions({
   required String mimeType,
   required SubscriptionStatus subscriptionStatus,
   ContentEnrichmentConfigStore contentConfigStore =
-      const RustContentEnrichmentConfigStore(),
+      const DartContentEnrichmentConfigStore(),
 }) async {
   final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
     subscriptionStatus: subscriptionStatus,
