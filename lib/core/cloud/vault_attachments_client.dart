@@ -11,19 +11,37 @@ class VaultAttachmentUsageItem {
     required this.byteLen,
     required this.createdAtMs,
     required this.uploadedAtMs,
+    this.id,
+    this.displayName,
+    this.linkedEntities = const <VaultAttachmentLinkedEntity>[],
+    this.preview,
+    this.processingStatus,
+    this.canDelete = true,
     this.rootSha256,
     this.groupType,
     this.leafCount,
   });
 
+  final String? id;
   final String sha256;
+  final String? displayName;
   final String mimeType;
   final int byteLen;
   final int? createdAtMs;
   final int? uploadedAtMs;
+  final List<VaultAttachmentLinkedEntity> linkedEntities;
+  final VaultAttachmentPreview? preview;
+  final String? processingStatus;
+  final bool canDelete;
   final String? rootSha256;
   final String? groupType;
   final int? leafCount;
+
+  String get attachmentId {
+    final normalizedId = id?.trim() ?? '';
+    if (normalizedId.isNotEmpty) return normalizedId;
+    return primarySha256;
+  }
 
   String get primarySha256 {
     final normalizedRoot = rootSha256?.trim() ?? '';
@@ -32,6 +50,43 @@ class VaultAttachmentUsageItem {
   }
 
   bool get isGroupedVideo => groupType?.trim() == 'video';
+}
+
+@immutable
+class VaultAttachmentPreview {
+  const VaultAttachmentPreview({
+    required this.kind,
+    required this.url,
+    this.thumbnailUrl,
+  });
+
+  final String kind;
+  final String url;
+  final String? thumbnailUrl;
+}
+
+@immutable
+class VaultAttachmentLinkedEntity {
+  const VaultAttachmentLinkedEntity({
+    required this.kind,
+    required this.id,
+    this.title,
+  });
+
+  final String kind;
+  final String id;
+  final String? title;
+}
+
+@immutable
+class VaultAttachmentDeleteImpact {
+  const VaultAttachmentDeleteImpact({
+    required this.requiresConfirmation,
+    required this.linkedEntities,
+  });
+
+  final bool requiresConfirmation;
+  final List<VaultAttachmentLinkedEntity> linkedEntities;
 }
 
 @immutable
@@ -102,6 +157,12 @@ final class VaultAttachmentsClient {
       final rootSha256 = '${map['root_sha256'] ?? ''}'.trim();
       final groupType = '${map['group_type'] ?? ''}'.trim();
       final leafCount = _parseInt(map['leaf_count']);
+      final id = '${map['id'] ?? ''}'.trim();
+      final displayName = '${map['display_name'] ?? ''}'.trim();
+      final processingStatus = '${map['processing_status'] ?? ''}'.trim();
+      final linkedEntities = _parseLinkedEntities(map['linked_entities']);
+      final preview = _parsePreview(map['preview']);
+      final canDelete = _parseBool(map['can_delete']) ?? true;
 
       if (sha256.isEmpty || byteLen == null) {
         throw const FormatException('invalid_vault_attachment_item_fields');
@@ -109,11 +170,17 @@ final class VaultAttachmentsClient {
 
       items.add(
         VaultAttachmentUsageItem(
+          id: id.isEmpty ? null : id,
           sha256: sha256,
+          displayName: displayName.isEmpty ? null : displayName,
           mimeType: mimeType,
           byteLen: byteLen,
           createdAtMs: createdAtMs,
           uploadedAtMs: uploadedAtMs,
+          linkedEntities: linkedEntities,
+          preview: preview,
+          processingStatus: processingStatus.isEmpty ? null : processingStatus,
+          canDelete: canDelete,
           rootSha256: rootSha256.isEmpty ? null : rootSha256,
           groupType: groupType.isEmpty ? null : groupType,
           leafCount: leafCount,
@@ -128,15 +195,86 @@ final class VaultAttachmentsClient {
     );
   }
 
+  Future<VaultAttachmentPreview> fetchAttachmentPreview({
+    required String managedVaultBaseUrl,
+    required String vaultId,
+    required String idToken,
+    required String attachmentId,
+  }) async {
+    final uri = _resolveVaultUri(
+      managedVaultBaseUrl,
+      '/v1/vaults/$vaultId/attachments/$attachmentId/preview',
+    );
+    final response = await _httpClient.get(
+      uri,
+      headers: <String, String>{
+        'authorization': 'Bearer $idToken',
+        'accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    }
+
+    final decoded = response.tryDecodeObject();
+    final preview = _parsePreview(decoded);
+    if (preview == null) {
+      throw const FormatException('invalid_vault_attachment_preview');
+    }
+    return preview;
+  }
+
+  Future<VaultAttachmentDeleteImpact> fetchDeleteImpact({
+    required String managedVaultBaseUrl,
+    required String vaultId,
+    required String idToken,
+    required String attachmentId,
+  }) async {
+    final uri = _resolveVaultUri(
+      managedVaultBaseUrl,
+      '/v1/vaults/$vaultId/attachments/$attachmentId/delete-impact',
+    );
+    final response = await _httpClient.get(
+      uri,
+      headers: <String, String>{
+        'authorization': 'Bearer $idToken',
+        'accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    }
+
+    final decoded = response.tryDecodeObject();
+    if (decoded == null) {
+      throw const FormatException('invalid_vault_attachment_delete_impact');
+    }
+
+    return VaultAttachmentDeleteImpact(
+      requiresConfirmation:
+          _parseBool(decoded['requires_confirmation']) ?? false,
+      linkedEntities: _parseLinkedEntities(decoded['linked_entities']),
+    );
+  }
+
   Future<void> deleteVaultAttachment({
     required String managedVaultBaseUrl,
     required String vaultId,
     required String idToken,
-    required String attachmentSha256,
+    String? attachmentId,
+    String? attachmentSha256,
   }) async {
+    final target = (attachmentId?.trim().isNotEmpty ?? false)
+        ? attachmentId!.trim()
+        : attachmentSha256?.trim() ?? '';
+    if (target.isEmpty) {
+      throw ArgumentError.value(target, 'attachmentId', 'must not be empty');
+    }
     final uri = _resolveVaultUri(
       managedVaultBaseUrl,
-      '/v1/vaults/$vaultId/attachments/$attachmentSha256',
+      '/v1/vaults/$vaultId/attachments/$target',
     );
     final response = await _httpClient.delete(
       uri,
@@ -169,4 +307,45 @@ int? _parseInt(Object? value) {
   if (value is double) return value.isFinite ? value.toInt() : null;
   if (value is String) return int.tryParse(value);
   return null;
+}
+
+bool? _parseBool(Object? value) {
+  if (value is bool) return value;
+  if (value is String) return bool.tryParse(value);
+  return null;
+}
+
+VaultAttachmentPreview? _parsePreview(Object? value) {
+  if (value is! Map) return null;
+  final map = Map<String, Object?>.from(value);
+  final kind = '${map['kind'] ?? ''}'.trim();
+  final url = '${map['url'] ?? ''}'.trim();
+  final thumbnailUrl = '${map['thumbnail_url'] ?? ''}'.trim();
+  if (kind.isEmpty || url.isEmpty) return null;
+  return VaultAttachmentPreview(
+    kind: kind,
+    url: url,
+    thumbnailUrl: thumbnailUrl.isEmpty ? null : thumbnailUrl,
+  );
+}
+
+List<VaultAttachmentLinkedEntity> _parseLinkedEntities(Object? value) {
+  if (value is! List) return const <VaultAttachmentLinkedEntity>[];
+  final entities = <VaultAttachmentLinkedEntity>[];
+  for (final raw in value) {
+    if (raw is! Map) continue;
+    final map = Map<String, Object?>.from(raw);
+    final kind = '${map['kind'] ?? ''}'.trim();
+    final id = '${map['id'] ?? ''}'.trim();
+    final title = '${map['title'] ?? ''}'.trim();
+    if (kind.isEmpty || id.isEmpty) continue;
+    entities.add(
+      VaultAttachmentLinkedEntity(
+        kind: kind,
+        id: id,
+        title: title.isEmpty ? null : title,
+      ),
+    );
+  }
+  return List<VaultAttachmentLinkedEntity>.unmodifiable(entities);
 }

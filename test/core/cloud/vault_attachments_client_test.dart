@@ -47,6 +47,120 @@ void main() {
     expect(list.items.single.isGroupedVideo, true);
   });
 
+  test('VaultAttachmentsClient parses cloud attachment inventory fields',
+      () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      return http.Response(
+        jsonEncode({
+          'items': [
+            {
+              'id': 'att-1',
+              'sha256': 'sha-1',
+              'display_name': 'receipt.pdf',
+              'mime_type': 'application/pdf',
+              'byte_len': 102400,
+              'created_at_ms': 1000,
+              'uploaded_at_ms': 2000,
+              'linked_entities': [
+                {'kind': 'note', 'id': 'note-1', 'title': 'Trip'}
+              ],
+              'preview': {
+                'kind': 'pdf',
+                'url': 'https://signed.test/preview',
+                'thumbnail_url': 'https://signed.test/thumb',
+              },
+              'processing_status': 'ready',
+              'can_delete': true,
+            }
+          ],
+          'total_count': 1,
+          'total_bytes_used': 102400,
+        }),
+        200,
+      );
+    });
+
+    final attachmentsClient = VaultAttachmentsClient(httpClient: client);
+    final list = await attachmentsClient.fetchVaultAttachmentUsageList(
+      managedVaultBaseUrl: 'https://vault.test',
+      vaultId: 'vault-1',
+      idToken: 'token-1',
+    );
+
+    final item = list.items.single;
+    expect(item.id, 'att-1');
+    expect(item.displayName, 'receipt.pdf');
+    expect(item.linkedEntities.single.kind, 'note');
+    expect(item.linkedEntities.single.id, 'note-1');
+    expect(item.linkedEntities.single.title, 'Trip');
+    expect(item.preview?.kind, 'pdf');
+    expect(item.preview?.url, 'https://signed.test/preview');
+    expect(item.preview?.thumbnailUrl, 'https://signed.test/thumb');
+    expect(item.processingStatus, 'ready');
+    expect(item.canDelete, true);
+  });
+
+  test('VaultAttachmentsClient fetches attachment preview', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(
+        request.url.toString(),
+        'https://vault.test/v1/vaults/vault-1/attachments/att-1/preview',
+      );
+      return http.Response(
+        jsonEncode({
+          'kind': 'image',
+          'url': 'https://signed.test/preview',
+          'thumbnail_url': 'https://signed.test/thumb',
+        }),
+        200,
+      );
+    });
+
+    final attachmentsClient = VaultAttachmentsClient(httpClient: client);
+    final preview = await attachmentsClient.fetchAttachmentPreview(
+      managedVaultBaseUrl: 'https://vault.test',
+      vaultId: 'vault-1',
+      idToken: 'token-1',
+      attachmentId: 'att-1',
+    );
+
+    expect(preview.kind, 'image');
+    expect(preview.url, 'https://signed.test/preview');
+    expect(preview.thumbnailUrl, 'https://signed.test/thumb');
+  });
+
+  test('VaultAttachmentsClient fetches delete impact', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(
+        request.url.toString(),
+        'https://vault.test/v1/vaults/vault-1/attachments/att-1/delete-impact',
+      );
+      return http.Response(
+        jsonEncode({
+          'requires_confirmation': true,
+          'linked_entities': [
+            {'kind': 'note', 'id': 'note-1', 'title': 'Trip'}
+          ],
+        }),
+        200,
+      );
+    });
+
+    final attachmentsClient = VaultAttachmentsClient(httpClient: client);
+    final impact = await attachmentsClient.fetchDeleteImpact(
+      managedVaultBaseUrl: 'https://vault.test',
+      vaultId: 'vault-1',
+      idToken: 'token-1',
+      attachmentId: 'att-1',
+    );
+
+    expect(impact.requiresConfirmation, true);
+    expect(impact.linkedEntities.single.id, 'note-1');
+  });
+
   test('VaultAttachmentsClient deletes attachment with delete request',
       () async {
     final client = MockClient((request) async {
@@ -65,6 +179,25 @@ void main() {
       vaultId: 'vault-1',
       idToken: 'token-1',
       attachmentSha256: 'sha-1',
+    );
+  });
+
+  test('VaultAttachmentsClient deletes attachment by id', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'DELETE');
+      expect(
+        request.url.toString(),
+        'https://vault.test/v1/vaults/vault-1/attachments/att-1',
+      );
+      return http.Response('', 204);
+    });
+
+    final attachmentsClient = VaultAttachmentsClient(httpClient: client);
+    await attachmentsClient.deleteVaultAttachment(
+      managedVaultBaseUrl: 'https://vault.test',
+      vaultId: 'vault-1',
+      idToken: 'token-1',
+      attachmentId: 'att-1',
     );
   });
 }

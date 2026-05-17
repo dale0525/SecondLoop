@@ -2,22 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ai/ai_routing.dart';
-import '../../core/backend/app_backend.dart';
-import '../../core/backend/attachments_backend.dart';
 import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/vault_attachments_client.dart';
 import '../../core/cloud/vault_usage_client.dart';
-import '../../core/navigation/inherited_scope_page_wrapper.dart';
-import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
-import '../../core/sync/sync_engine_gate.dart';
-import '../../features/attachments/attachment_viewer_page.dart';
+import '../../features/attachments/attachment_storage_controller.dart';
 import '../../features/attachments/web_media_processing_notice.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
 import '../../ui/sl_delete_confirm_dialog.dart';
 import '../../ui/sl_surface.dart';
 
@@ -49,6 +44,8 @@ String _attachmentUsageTitle(
   BuildContext context,
   VaultAttachmentUsageItem item,
 ) {
+  final displayName = item.displayName?.trim() ?? '';
+  if (displayName.isNotEmpty) return displayName;
   if (item.isGroupedVideo) {
     return context.t.attachments.workspace.types.video;
   }
@@ -59,11 +56,23 @@ String _attachmentUsageSubtitle(
   BuildContext context,
   VaultAttachmentUsageItem item,
 ) {
+  final linkedEntities = item.linkedEntities
+      .map((entity) {
+        final title = entity.title?.trim() ?? '';
+        if (title.isNotEmpty) return title;
+        return '${entity.kind}:${entity.id}';
+      })
+      .where((label) => label.trim().isNotEmpty)
+      .join(', ');
   final parts = <String>[
+    if (item.mimeType.isNotEmpty) item.mimeType,
     _formatBytes(item.byteLen),
     if (item.isGroupedVideo && (item.leafCount ?? 0) > 0) '${item.leafCount}×',
     _shortSha(item.primarySha256),
     _formatTimestamp(context, item.uploadedAtMs ?? item.createdAtMs),
+    if (linkedEntities.isNotEmpty) linkedEntities,
+    if ((item.processingStatus ?? '').trim().isNotEmpty)
+      item.processingStatus!.trim(),
   ];
   return parts.join(' • ');
 }
@@ -96,20 +105,40 @@ String _attachmentUsageTileKey(VaultAttachmentUsageItem item) {
   return 'vault_usage_attachment_${item.primarySha256}';
 }
 
+String _attachmentActionId(VaultAttachmentUsageItem item) {
+  return item.attachmentId;
+}
+
 IconData _attachmentUsageIcon(VaultAttachmentUsageItem item) {
   if (item.isGroupedVideo) return Icons.video_file_rounded;
   return Icons.attach_file_rounded;
 }
 
+enum VaultAttachmentUsageSort { sizeDesc, uploadedDesc }
+
 int _compareAttachmentUsage(
   VaultAttachmentUsageItem a,
   VaultAttachmentUsageItem b,
+  VaultAttachmentUsageSort sort,
 ) {
-  final byBytes = b.byteLen - a.byteLen;
-  if (byBytes != 0) return byBytes;
-  final byCreated = (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0);
-  if (byCreated != 0) return byCreated;
+  if (sort == VaultAttachmentUsageSort.sizeDesc) {
+    final byBytes = b.byteLen - a.byteLen;
+    if (byBytes != 0) return byBytes;
+  }
+  final aUploadedAt = a.uploadedAtMs ?? a.createdAtMs ?? 0;
+  final bUploadedAt = b.uploadedAtMs ?? b.createdAtMs ?? 0;
+  final byUploaded = bUploadedAt - aUploadedAt;
+  if (byUploaded != 0) return byUploaded;
   return a.sha256.compareTo(b.sha256);
+}
+
+String _attachmentTypeKey(VaultAttachmentUsageItem item) {
+  final mime = item.mimeType.trim().toLowerCase();
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/') || item.isGroupedVideo) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  if (mime == 'application/pdf') return 'pdf';
+  return 'other';
 }
 
 Widget _usageRow(String label, String value) {
@@ -172,20 +201,38 @@ class VaultAttachmentUsageListView extends StatelessWidget {
     required this.items,
     required this.deletingSha,
     this.isWebOverride,
+    this.typeFilter,
+    this.sort = VaultAttachmentUsageSort.sizeDesc,
+    this.onTypeFilterChanged,
+    this.onSortChanged,
     required this.onOpen,
     required this.onDelete,
+    this.onPreview,
+    this.onClearLocalCache,
   });
 
   final List<VaultAttachmentUsageItem> items;
   final String? deletingSha;
   final bool? isWebOverride;
+  final String? typeFilter;
+  final VaultAttachmentUsageSort sort;
+  final ValueChanged<String?>? onTypeFilterChanged;
+  final ValueChanged<VaultAttachmentUsageSort>? onSortChanged;
   final ValueChanged<VaultAttachmentUsageItem> onOpen;
   final ValueChanged<VaultAttachmentUsageItem>? onDelete;
+  final ValueChanged<VaultAttachmentUsageItem>? onPreview;
+  final ValueChanged<VaultAttachmentUsageItem>? onClearLocalCache;
 
   @override
   Widget build(BuildContext context) {
-    final sorted = List<VaultAttachmentUsageItem>.from(items)
-      ..sort(_compareAttachmentUsage);
+    final filtered = items
+        .where(
+          (item) =>
+              typeFilter == null || _attachmentTypeKey(item) == typeFilter,
+        )
+        .toList();
+    final sorted = List<VaultAttachmentUsageItem>.from(filtered)
+      ..sort((a, b) => _compareAttachmentUsage(a, b, sort));
 
     if (sorted.isEmpty) {
       return Text(context.t.settings.vaultUsage.labels.noAttachments);
@@ -193,6 +240,46 @@ class VaultAttachmentUsageListView extends StatelessWidget {
 
     return Column(
       children: [
+        if (onTypeFilterChanged != null || onSortChanged != null) ...[
+          Row(
+            children: [
+              if (onTypeFilterChanged != null)
+                DropdownButton<String?>(
+                  key: const ValueKey('vault_usage_type_filter'),
+                  value: typeFilter,
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All types')),
+                    DropdownMenuItem(value: 'image', child: Text('Images')),
+                    DropdownMenuItem(value: 'video', child: Text('Videos')),
+                    DropdownMenuItem(value: 'audio', child: Text('Audio')),
+                    DropdownMenuItem(value: 'pdf', child: Text('PDF')),
+                    DropdownMenuItem(value: 'other', child: Text('Other')),
+                  ],
+                  onChanged: onTypeFilterChanged,
+                ),
+              const SizedBox(width: 12),
+              if (onSortChanged != null)
+                DropdownButton<VaultAttachmentUsageSort>(
+                  key: const ValueKey('vault_usage_sort_filter'),
+                  value: sort,
+                  items: const [
+                    DropdownMenuItem(
+                      value: VaultAttachmentUsageSort.sizeDesc,
+                      child: Text('Size'),
+                    ),
+                    DropdownMenuItem(
+                      value: VaultAttachmentUsageSort.uploadedDesc,
+                      child: Text('Upload time'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) onSortChanged!(value);
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
         for (final item in sorted)
           ListTile(
             key: ValueKey(_attachmentUsageTileKey(item)),
@@ -215,7 +302,8 @@ class VaultAttachmentUsageListView extends StatelessWidget {
               final needsAppProcessing = showWebOnlyHint &&
                   (item.isGroupedVideo ||
                       needsAppProcessingInWeb(item.mimeType));
-              final deleteAction = deletingSha == item.primarySha256
+              final actionId = _attachmentActionId(item);
+              final deleteAction = deletingSha == actionId
                   ? const SizedBox(
                       width: 18,
                       height: 18,
@@ -223,15 +311,36 @@ class VaultAttachmentUsageListView extends StatelessWidget {
                     )
                   : IconButton(
                       key: ValueKey(
-                        'vault_usage_attachment_delete_${item.primarySha256}',
+                        'vault_usage_attachment_delete_$actionId',
                       ),
                       tooltip: context.t.common.actions.delete,
                       icon: const Icon(Icons.delete_outline_rounded),
-                      onPressed: deletingSha != null || onDelete == null
+                      onPressed: deletingSha != null ||
+                              onDelete == null ||
+                              !item.canDelete
                           ? null
                           : () => onDelete!(item),
                     );
-              if (!needsAppProcessing) return deleteAction;
+              final actions = <Widget>[
+                IconButton(
+                  key: ValueKey('vault_usage_attachment_preview_$actionId'),
+                  tooltip: 'Preview',
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  onPressed: onPreview == null ? null : () => onPreview!(item),
+                ),
+                IconButton(
+                  key: ValueKey('vault_usage_attachment_clear_cache_$actionId'),
+                  tooltip: 'Delete local cache',
+                  icon: const Icon(Icons.cleaning_services_outlined),
+                  onPressed: onClearLocalCache == null
+                      ? null
+                      : () => onClearLocalCache!(item),
+                ),
+                deleteAction,
+              ];
+              if (!needsAppProcessing) {
+                return Row(mainAxisSize: MainAxisSize.min, children: actions);
+              }
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -242,7 +351,7 @@ class VaultAttachmentUsageListView extends StatelessWidget {
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
                   ),
-                  deleteAction,
+                  ...actions,
                 ],
               );
             }(),
@@ -290,10 +399,10 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
 
   String? _uid;
   String? _deletingAttachmentSha;
-
-  bool _buildingAttachmentReferenceIndex = false;
-  Map<String, Attachment> _localAttachmentBySha = <String, Attachment>{};
-  Map<String, String> _localMessageIdByAttachmentSha = <String, String>{};
+  String? _attachmentTypeFilter;
+  var _attachmentSort = VaultAttachmentUsageSort.sizeDesc;
+  final AttachmentLocalCacheMetadataStore _localCacheMetadataStore =
+      InMemoryAttachmentLocalCacheMetadataStore();
 
   @override
   void initState() {
@@ -442,97 +551,6 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     });
   }
 
-  Future<void> _rebuildAttachmentReferenceIndex() async {
-    if (_buildingAttachmentReferenceIndex) return;
-
-    final backend = AppBackendScope.of(context);
-    if (backend is! AttachmentsBackend) return;
-    final attachmentsBackend = backend as AttachmentsBackend;
-    final sessionKey = SessionScope.of(context).sessionKey;
-
-    _buildingAttachmentReferenceIndex = true;
-    try {
-      final nextAttachmentBySha = <String, Attachment>{};
-      final nextMessageIdByAttachmentSha = <String, String>{};
-      final conversations = await backend.listConversations(sessionKey);
-
-      for (final conversation in conversations) {
-        final messages =
-            await backend.listMessages(sessionKey, conversation.id);
-        for (final message in messages) {
-          List<Attachment> attachments;
-          try {
-            attachments = await attachmentsBackend.listMessageAttachments(
-              sessionKey,
-              message.id,
-            );
-          } catch (_) {
-            continue;
-          }
-          for (final attachment in attachments) {
-            nextAttachmentBySha.putIfAbsent(
-              attachment.sha256,
-              () => attachment,
-            );
-            nextMessageIdByAttachmentSha.putIfAbsent(
-              attachment.sha256,
-              () => message.id,
-            );
-          }
-        }
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _localAttachmentBySha = nextAttachmentBySha;
-        _localMessageIdByAttachmentSha = nextMessageIdByAttachmentSha;
-      });
-    } catch (_) {
-      // Best-effort only.
-    } finally {
-      _buildingAttachmentReferenceIndex = false;
-    }
-  }
-
-  Future<Attachment?> _resolveLocalAttachmentBySha(String sha256) async {
-    final normalizedSha = sha256.trim();
-    if (normalizedSha.isEmpty) return null;
-
-    try {
-      final backend = AppBackendScope.of(context);
-      final attachment = await backend.readAttachmentBySha256(normalizedSha);
-      if (attachment != null) return attachment;
-    } on UnimplementedError {
-      // Fall back to the message-linked attachment index below.
-    } catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'secondloop.vault_usage',
-          context: ErrorDescription('while reading local attachment by sha256'),
-          informationCollector: () sync* {
-            yield DiagnosticsProperty<String>('sha256', normalizedSha);
-          },
-        ),
-      );
-    }
-
-    if (!mounted) return null;
-
-    final cached = _localAttachmentBySha[normalizedSha];
-    if (cached != null) return cached;
-    await _rebuildAttachmentReferenceIndex();
-    return _localAttachmentBySha[normalizedSha];
-  }
-
-  Future<String?> _resolveMessageIdByAttachmentSha(String sha256) async {
-    final cached = _localMessageIdByAttachmentSha[sha256];
-    if (cached != null) return cached;
-    await _rebuildAttachmentReferenceIndex();
-    return _localMessageIdByAttachmentSha[sha256];
-  }
-
   Future<void> _refresh() async {
     final auth = await _resolveManagedVaultAuth();
     if (auth == null) return;
@@ -561,7 +579,9 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
         idToken: auth.idToken,
       );
       final sortedItems = List<VaultAttachmentUsageItem>.from(usage.items)
-        ..sort(_compareAttachmentUsage);
+        ..sort(
+          (a, b) => _compareAttachmentUsage(a, b, _attachmentSort),
+        );
       nextAttachmentUsage = VaultAttachmentUsageList(
         items: sortedItems,
         totalCount: usage.totalCount,
@@ -582,84 +602,134 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     }
 
     _markRefreshFinished(refreshEpoch);
+  }
 
-    if (shouldApply &&
-        nextAttachmentUsage != null &&
-        nextAttachmentUsage.items.isNotEmpty) {
-      unawaited(_rebuildAttachmentReferenceIndex());
+  AttachmentStorageController _createAttachmentStorageController(
+    _ManagedVaultAuth auth,
+  ) {
+    return AttachmentStorageController(
+      client: _attachmentsClient,
+      localCacheMetadataStore: _localCacheMetadataStore,
+      managedVaultBaseUrl: auth.baseUrl,
+      vaultId: auth.vaultId,
+      idToken: auth.idToken,
+    );
+  }
+
+  Future<void> _previewAttachment(VaultAttachmentUsageItem item) async {
+    final auth = await _resolveManagedVaultAuth();
+    if (auth == null || !mounted) return;
+
+    try {
+      final controller = _createAttachmentStorageController(auth);
+      final descriptor = await controller.previewAttachment(item);
+      final launched = await launchUrl(
+        Uri.parse(descriptor.url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Preview could not be opened'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_formatVaultUsageError(context, e)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
-  Future<void> _openAttachmentDetails(VaultAttachmentUsageItem item) async {
-    final attachment = await _resolveLocalAttachmentBySha(item.primarySha256);
-    if (!mounted) return;
+  Future<void> _clearLocalAttachmentCache(VaultAttachmentUsageItem item) async {
+    final auth = await _resolveManagedVaultAuth();
+    if (auth == null || !mounted) return;
 
-    if (attachment == null) {
+    try {
+      final controller = _createAttachmentStorageController(auth);
+      await controller.clearLocalCache(item);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Deleted local cache'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            context.t.errors.attachmentNotFoundLocally,
-          ),
+          content: Text(_formatVaultUsageError(context, e)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteAttachment(VaultAttachmentUsageItem item) async {
+    if (_deletingAttachmentSha != null) return;
+
+    final currentContext = context;
+    final actionId = _attachmentActionId(item);
+    final itemTitle = _attachmentUsageTitle(currentContext, item);
+    final deleteTitle = currentContext.t.common.actions.delete;
+    final auth = await _resolveManagedVaultAuth();
+    if (auth == null || !mounted) return;
+
+    VaultAttachmentDeleteImpact impact;
+    try {
+      impact = await _attachmentsClient.fetchDeleteImpact(
+        managedVaultBaseUrl: auth.baseUrl,
+        vaultId: auth.vaultId,
+        idToken: auth.idToken,
+        attachmentId: item.attachmentId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$e'),
           duration: const Duration(seconds: 3),
         ),
       );
       return;
     }
 
-    await pushPageWithInheritedScopes(
-      Navigator.of(context),
-      context,
-      AttachmentViewerPage(attachment: attachment),
-    );
-  }
-
-  Future<void> _deleteAttachment(VaultAttachmentUsageItem item) async {
-    if (_deletingAttachmentSha != null) return;
-
-    final primarySha = item.primarySha256;
-    final itemTitle = _attachmentUsageTitle(context, item);
+    final linkedEntities = impact.linkedEntities
+        .map((entity) => entity.title ?? '${entity.kind}:${entity.id}')
+        .join(', ');
     final itemDetails = <String>[
       itemTitle,
       _formatBytes(item.byteLen),
-      primarySha,
+      item.attachmentId,
+      if (linkedEntities.isNotEmpty) 'Linked: $linkedEntities',
     ].join('\n');
+    if (!currentContext.mounted) return;
     final confirmed = await showSlDeleteConfirmDialog(
-      context,
-      title: context.t.common.actions.delete,
+      currentContext,
+      title: deleteTitle,
       message: itemDetails,
       confirmButtonKey:
-          ValueKey('vault_usage_attachment_delete_confirm_$primarySha'),
+          ValueKey('vault_usage_attachment_delete_confirm_$actionId'),
     );
     if (!confirmed) return;
 
-    final auth = await _resolveManagedVaultAuth();
-    if (auth == null || !mounted) return;
-
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-
-    setState(() => _deletingAttachmentSha = primarySha);
+    setState(() => _deletingAttachmentSha = actionId);
     try {
-      final messageId = await _resolveMessageIdByAttachmentSha(primarySha);
-      if (messageId != null) {
-        await backend.purgeMessageAttachments(sessionKey, messageId);
-        if (!mounted) return;
-        SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
-      }
-
       await _attachmentsClient.deleteVaultAttachment(
         managedVaultBaseUrl: auth.baseUrl,
         vaultId: auth.vaultId,
         idToken: auth.idToken,
-        attachmentSha256: primarySha,
+        attachmentId: item.attachmentId,
       );
-
-      _localAttachmentBySha.remove(primarySha);
-      _localMessageIdByAttachmentSha.remove(primarySha);
 
       await _refresh();
       if (!mounted) return;
-      unawaited(_rebuildAttachmentReferenceIndex());
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -696,8 +766,6 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     if (uid != _uid) {
       _uid = uid;
       _resetLoadedState(invalidateRefreshes: true);
-      _localAttachmentBySha = <String, Attachment>{};
-      _localMessageIdByAttachmentSha = <String, String>{};
       if (uid != null && (_resolvedVaultBaseUrl?.trim().isNotEmpty ?? false)) {
         unawaited(_refresh());
       }
@@ -757,7 +825,18 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
                 items: _attachmentUsage!.items,
                 deletingSha: _deletingAttachmentSha,
                 isWebOverride: widget.isWebOverride,
-                onOpen: (item) => unawaited(_openAttachmentDetails(item)),
+                typeFilter: _attachmentTypeFilter,
+                sort: _attachmentSort,
+                onTypeFilterChanged: (value) {
+                  setState(() => _attachmentTypeFilter = value);
+                },
+                onSortChanged: (value) {
+                  setState(() => _attachmentSort = value);
+                },
+                onOpen: (item) => unawaited(_previewAttachment(item)),
+                onPreview: (item) => unawaited(_previewAttachment(item)),
+                onClearLocalCache: (item) =>
+                    unawaited(_clearLocalAttachmentCache(item)),
                 onDelete: (item) => unawaited(_deleteAttachment(item)),
               )
             else
