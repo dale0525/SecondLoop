@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import '../backend/app_backend.dart';
 import '../backend/secretary_backend.dart';
-import '../../src/rust/platform_int.dart';
 import 'secretary_runtime_client.dart';
 import 'secretary_runtime_conversation_models.dart';
 import 'secretary_runtime_conversation_sender.dart';
@@ -420,17 +419,31 @@ Future<void> _upsertExistingTaskPatch(
     title: title,
     dueAtMs: clearDueAtMs
         ? null
-        : dueAtMs ?? platformIntToNullableInt(current?.dueAtMs),
+        : dueAtMs ?? _platformIntToNullableInt(current?.dueAtMs),
     status: status ?? current?.status ?? 'open',
     sourceEntryId: current?.sourceEntryId ?? sourceMessageId,
-    reviewStage: platformIntToNullableInt(current?.reviewStage),
-    nextReviewAtMs: platformIntToNullableInt(current?.nextReviewAtMs),
-    lastReviewAtMs: platformIntToNullableInt(current?.lastReviewAtMs),
+    reviewStage: _platformIntToNullableInt(current?.reviewStage),
+    nextReviewAtMs: _platformIntToNullableInt(current?.nextReviewAtMs),
+    lastReviewAtMs: _platformIntToNullableInt(current?.lastReviewAtMs),
     manualImportanceNudgeScore:
-        platformIntToNullableInt(current?.manualImportanceNudgeScore),
+        _platformIntToNullableInt(current?.manualImportanceNudgeScore),
     manualUrgencyNudgeScore:
-        platformIntToNullableInt(current?.manualUrgencyNudgeScore),
+        _platformIntToNullableInt(current?.manualUrgencyNudgeScore),
   );
+}
+
+int? _platformIntToNullableInt(Object? value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  try {
+    final converted = (value as dynamic).toInt();
+    if (converted is int) return converted;
+    if (converted is num) return converted.toInt();
+  } catch (_) {
+    return null;
+  }
+  return null;
 }
 
 String runtimeTodoStatus(Object? raw) {
