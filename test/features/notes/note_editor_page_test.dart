@@ -6,6 +6,8 @@ import 'package:secondloop/core/offline_edit/local_edit_sync_service.dart';
 import 'package:secondloop/features/notes/note_editor_controller.dart';
 import 'package:secondloop/features/notes/note_editor_page.dart';
 
+import '../../test_i18n.dart';
+
 void main() {
   late LocalEditStore store;
 
@@ -152,9 +154,11 @@ void main() {
 }
 
 Widget _app(NoteEditorController controller) {
-  return MaterialApp(
-    home: Scaffold(
-      body: NoteEditorPage(controller: controller),
+  return wrapWithI18n(
+    MaterialApp(
+      home: Scaffold(
+        body: NoteEditorPage(controller: controller),
+      ),
     ),
   );
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../i18n/strings.g.dart';
 import 'note_editor_controller.dart';
 
 class NoteEditorPage extends StatefulWidget {
@@ -68,7 +69,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                               body: _bodyController.text,
                             ),
                     icon: const Icon(Icons.save_outlined),
-                    label: const Text('Save'),
+                    label: Text(context.t.common.actions.save),
                   ),
                 ],
               ),
@@ -76,9 +77,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               TextField(
                 key: const ValueKey('note_editor_title_field'),
                 controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.t.notes.fields.title,
+                  border: const OutlineInputBorder(),
                 ),
                 textInputAction: TextInputAction.next,
               ),
@@ -91,10 +92,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 child: TextField(
                   key: const ValueKey('note_editor_body_field'),
                   controller: _bodyController,
-                  decoration: const InputDecoration(
-                    labelText: 'Body',
+                  decoration: InputDecoration(
+                    labelText: context.t.notes.fields.body,
                     alignLabelWithHint: true,
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                   ),
                   expands: true,
                   maxLines: null,
@@ -132,16 +133,16 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(label: Text(_label));
+    return Chip(label: Text(_label(context)));
   }
 
-  String get _label {
+  String _label(BuildContext context) {
     return switch (status) {
-      NoteEditorStatus.clean => 'Saved',
-      NoteEditorStatus.pending => 'Pending',
-      NoteEditorStatus.saving => 'Saving',
-      NoteEditorStatus.conflict => 'Conflict',
-      NoteEditorStatus.failed => 'Failed',
+      NoteEditorStatus.clean => context.t.notes.status.saved,
+      NoteEditorStatus.pending => context.t.notes.status.pending,
+      NoteEditorStatus.saving => context.t.notes.status.saving,
+      NoteEditorStatus.conflict => context.t.notes.status.conflict,
+      NoteEditorStatus.failed => context.t.notes.status.failed,
     };
   }
 }
@@ -169,10 +170,16 @@ class _ConflictPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Local', style: theme.textTheme.labelLarge),
+                Text(
+                  context.t.notes.labels.local,
+                  style: theme.textTheme.labelLarge,
+                ),
                 Text(controller.body),
                 const SizedBox(height: 8),
-                Text('Remote', style: theme.textTheme.labelLarge),
+                Text(
+                  context.t.notes.labels.remote,
+                  style: theme.textTheme.labelLarge,
+                ),
                 Text(controller.conflictRemoteBody ?? ''),
               ],
             ),

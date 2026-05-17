@@ -34,11 +34,20 @@ void main() {
     ).readAsStringSync();
     final welcome =
         File('lib/features/welcome/welcome_page.dart').readAsStringSync();
+    final dynamicHarness = File(
+      'integration_test/support/dynamic_app_harness.dart',
+    ).readAsStringSync();
 
-    for (final source in [settingsBuild, agentSettings, welcome]) {
+    for (final source in [
+      settingsBuild,
+      agentSettings,
+      welcome,
+      dynamicHarness
+    ]) {
       expect(source, isNot(contains('SyncSettingsPage')));
       expect(source, isNot(contains('settings_sync')));
       expect(source, isNot(contains('agent_settings_open_sync_settings')));
+      expect(source, isNot(contains('openSyncSettings')));
       expect(source, isNot(contains('welcome_guide_card_sync_open')));
     }
   });

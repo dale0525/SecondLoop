@@ -28,6 +28,21 @@
 5. Attachments remain user-visible in the App through cloud inventory, preview, deletion, and local cache cleanup.
 6. Existing dirty worktree changes must be preserved. Do not revert unrelated files while executing this plan.
 
+## Execution Status - 2026-05-17
+
+Implemented and verified:
+
+- Server note HTTP contract and attachment inventory API are implemented in `SecondLoopServer` and pushed to `origin/main` at `f852ca7`, which triggers the staging deployment workflow.
+- Dart offline text note store, note HTTP client, sync outbox, note editor UI, attachment inventory client/controller/UI, runtime-first sync removal, and QA/runbook updates are implemented in the App branch.
+- Legacy `SyncEngineGate` media upload tests and the automation harness sync-settings entry were retired from the runtime-first product path. The replacement tests assert that `SyncEngineGate` no longer creates local-first sync engines and that the harness no longer opens legacy sync settings.
+- Runtime-client Rust guard coverage is implemented for the migrated Dart/HTTP surfaces.
+
+Not complete in this pass:
+
+- Full physical Rust deletion is deferred. The main App still has live `flutter_rust_bridge`, `secondloop_rust`, `lib/src/rust`, `NativeAppBackend`, platform plugin, and web FRB build references in default App/backend/chat/attachment/settings/web paths. Deleting them now would break the build.
+- The next Rust deletion pass must first ensure the AppBackend contract uses Dart domain DTOs, then ship a NativeAppBackend replacement for normal App requests, then remove FRB packages, generated bindings, platform plugin references, and web build tasks no longer run FRB.
+- Managed-pro live acceptance should run after staging has deployed the pushed Server commit and the App-side branch is available to the acceptance runner.
+
 ## Repositories
 
 - App repository: `/Users/logictan/.t3/worktrees/SecondLoop/t3code-f5fd1b79`
@@ -608,6 +623,13 @@ Expected: tests pass and commit succeeds.
 ## Task 8: Main App Rust Dependency Guard and Removal
 
 2026-05-17 execution note: only the runtime-client guard subset is in scope for this pass. Full physical Rust deletion is deferred because the current main backend, chat/settings/legacy attachment paths, `pubspec.yaml`, platform plugin registration, and web build tasks still depend on FRB/Rust. The next deletion plan must first replace those paths with Dart/runtime interfaces, then remove Rust from the main App dependency graph while keeping any self-managed helper Rust in an isolated helper scope.
+
+2026-05-17 close-out note: do not physically delete Rust/FRB from the main App until the following replacement chain is complete:
+
+1. AppBackend contract uses Dart domain DTOs instead of generated Rust model types.
+2. NativeAppBackend replacement covers normal App startup, chat/capture, task/memory/message reads and writes, attachment metadata/viewer flows, LLM/profile settings, diagnostics, and web `/app` runtime behavior through Dart/runtime HTTP clients.
+3. Tests and fixtures no longer require `NativeAppBackend`, generated Rust models, or FRB initialization except for explicitly isolated legacy/self-managed helper coverage.
+4. `pubspec.yaml`, platform plugin files, `flutter_rust_bridge.yaml`, `lib/src/rust`, `rust/`, `rust_builder/`, `third_party/flutter-rust-bridge-patched/`, and web build tasks no longer run FRB.
 
 **Files:**
 - Create: `test/no_rust_dependency_for_runtime_client_test.dart`

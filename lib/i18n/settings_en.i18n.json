@@ -732,7 +732,9 @@
     "title": "Vault storage",
     "subtitle": "Storage used by your synced data",
     "actions": {
-      "refresh": "Refresh"
+      "refresh": "Refresh",
+      "preview": "Preview",
+      "clearLocalCache": "Delete local cache"
     },
     "labels": {
       "notConfigured": "Vault storage isn't available in this build.",
@@ -742,7 +744,18 @@
       "attachments": "Photos & files:",
       "noAttachments": "No attachments yet",
       "ops": "Sync history:",
-      "loadFailed": "Failed to load: $error"
+      "loadFailed": "Failed to load: $error",
+      "allTypes": "All types",
+      "images": "Images",
+      "videos": "Videos",
+      "audio": "Audio",
+      "pdf": "PDF",
+      "other": "Other",
+      "sortBySize": "Size",
+      "sortByUploadTime": "Upload time",
+      "previewOpenFailed": "Preview could not be opened",
+      "localCacheDeleted": "Deleted local cache",
+      "linkedEntities": "Linked: $value"
     }
   },
   "about": {

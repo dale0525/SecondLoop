@@ -247,13 +247,32 @@ class VaultAttachmentUsageListView extends StatelessWidget {
                 DropdownButton<String?>(
                   key: const ValueKey('vault_usage_type_filter'),
                   value: typeFilter,
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('All types')),
-                    DropdownMenuItem(value: 'image', child: Text('Images')),
-                    DropdownMenuItem(value: 'video', child: Text('Videos')),
-                    DropdownMenuItem(value: 'audio', child: Text('Audio')),
-                    DropdownMenuItem(value: 'pdf', child: Text('PDF')),
-                    DropdownMenuItem(value: 'other', child: Text('Other')),
+                  items: [
+                    DropdownMenuItem<String?>(
+                      value: null,
+                      child:
+                          Text(context.t.settings.vaultUsage.labels.allTypes),
+                    ),
+                    DropdownMenuItem<String?>(
+                      value: 'image',
+                      child: Text(context.t.settings.vaultUsage.labels.images),
+                    ),
+                    DropdownMenuItem<String?>(
+                      value: 'video',
+                      child: Text(context.t.settings.vaultUsage.labels.videos),
+                    ),
+                    DropdownMenuItem<String?>(
+                      value: 'audio',
+                      child: Text(context.t.settings.vaultUsage.labels.audio),
+                    ),
+                    DropdownMenuItem<String?>(
+                      value: 'pdf',
+                      child: Text(context.t.settings.vaultUsage.labels.pdf),
+                    ),
+                    DropdownMenuItem<String?>(
+                      value: 'other',
+                      child: Text(context.t.settings.vaultUsage.labels.other),
+                    ),
                   ],
                   onChanged: onTypeFilterChanged,
                 ),
@@ -262,14 +281,17 @@ class VaultAttachmentUsageListView extends StatelessWidget {
                 DropdownButton<VaultAttachmentUsageSort>(
                   key: const ValueKey('vault_usage_sort_filter'),
                   value: sort,
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                       value: VaultAttachmentUsageSort.sizeDesc,
-                      child: Text('Size'),
+                      child:
+                          Text(context.t.settings.vaultUsage.labels.sortBySize),
                     ),
                     DropdownMenuItem(
                       value: VaultAttachmentUsageSort.uploadedDesc,
-                      child: Text('Upload time'),
+                      child: Text(
+                        context.t.settings.vaultUsage.labels.sortByUploadTime,
+                      ),
                     ),
                   ],
                   onChanged: (value) {
@@ -324,13 +346,14 @@ class VaultAttachmentUsageListView extends StatelessWidget {
               final actions = <Widget>[
                 IconButton(
                   key: ValueKey('vault_usage_attachment_preview_$actionId'),
-                  tooltip: 'Preview',
+                  tooltip: context.t.settings.vaultUsage.actions.preview,
                   icon: const Icon(Icons.open_in_new_rounded),
                   onPressed: onPreview == null ? null : () => onPreview!(item),
                 ),
                 IconButton(
                   key: ValueKey('vault_usage_attachment_clear_cache_$actionId'),
-                  tooltip: 'Delete local cache',
+                  tooltip:
+                      context.t.settings.vaultUsage.actions.clearLocalCache,
                   icon: const Icon(Icons.cleaning_services_outlined),
                   onPressed: onClearLocalCache == null
                       ? null
@@ -629,9 +652,10 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       );
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Preview could not be opened'),
-            duration: Duration(seconds: 3),
+          SnackBar(
+            content:
+                Text(context.t.settings.vaultUsage.labels.previewOpenFailed),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -655,9 +679,9 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       await controller.clearLocalCache(item);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Deleted local cache'),
-          duration: Duration(seconds: 3),
+        SnackBar(
+          content: Text(context.t.settings.vaultUsage.labels.localCacheDeleted),
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (e) {
@@ -678,6 +702,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     final actionId = _attachmentActionId(item);
     final itemTitle = _attachmentUsageTitle(currentContext, item);
     final deleteTitle = currentContext.t.common.actions.delete;
+    final vaultUsageLabels = currentContext.t.settings.vaultUsage.labels;
     final auth = await _resolveManagedVaultAuth();
     if (auth == null || !mounted) return;
 
@@ -693,7 +718,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$e'),
+          content: Text(_formatVaultUsageError(context, e)),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -707,7 +732,10 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       itemTitle,
       _formatBytes(item.byteLen),
       item.attachmentId,
-      if (linkedEntities.isNotEmpty) 'Linked: $linkedEntities',
+      if (linkedEntities.isNotEmpty)
+        vaultUsageLabels.linkedEntities(
+          value: linkedEntities,
+        ),
     ].join('\n');
     if (!currentContext.mounted) return;
     final confirmed = await showSlDeleteConfirmDialog(

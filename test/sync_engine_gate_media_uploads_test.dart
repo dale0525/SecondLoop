@@ -1,32 +1,84 @@
-import 'dart:async';
+import 'dart:io';
 
-import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:secondloop/core/ai/ai_routing.dart';
-import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
-import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
-import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/core/subscription/subscription_scope.dart';
-import 'package:secondloop/core/sync/sync_config_store.dart';
-import 'package:secondloop/core/sync/sync_diagnostics.dart';
-import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
-import 'package:secondloop/src/rust/db.dart';
-
-import 'test_backend.dart';
-
-part 'sync_engine_gate_media_uploads_test_helpers.dart';
-part 'sync_engine_gate_media_uploads_test_webdav.dart';
-part 'sync_engine_gate_media_uploads_test_managed_vault.dart';
-part 'sync_engine_gate_media_uploads_test_gate_state.dart';
 
 void main() {
-  registerSyncEngineGateMediaUploadWebdavTests();
-  registerSyncEngineGateMediaUploadManagedVaultTests();
-  registerSyncEngineGateMediaUploadGateStateTests();
+  testWidgets('SyncEngineGate does not create a local-first sync engine',
+      (tester) async {
+    SyncEngineScope? scope;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SyncEngineGate(
+          child: Builder(
+            builder: (context) {
+              scope =
+                  context.dependOnInheritedWidgetOfExactType<SyncEngineScope>();
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(scope, isNotNull);
+    expect(scope!.engine, isNull);
+  });
+
+  test('SyncEngineGate source stays out of legacy sync orchestration', () {
+    final source =
+        File('lib/core/sync/sync_engine_gate.dart').readAsStringSync();
+
+    for (final token in [
+      'SyncEngine(',
+      'ConnectivityPlatform',
+      'SyncConfigStore',
+      'syncWebdavPush',
+      'syncLocaldirPush',
+      'syncManagedVaultPush',
+      'managedVaultUploadAttachment',
+      'cloudMediaBackup',
+    ]) {
+      expect(source, isNot(contains(token)), reason: token);
+    }
+  });
+
+  test('legacy media-upload gate test parts are retired', () {
+    for (final path in [
+      'test/sync_engine_gate_media_uploads_test_helpers.dart',
+      'test/sync_engine_gate_media_uploads_test_webdav.dart',
+      'test/sync_engine_gate_media_uploads_test_managed_vault.dart',
+      'test/sync_engine_gate_media_uploads_test_gate_state.dart',
+    ]) {
+      expect(File(path).existsSync(), isFalse, reason: path);
+    }
+  });
+
+  test('write gate scope helper keeps deterministic comparison semantics', () {
+    expect(
+      shouldApplySyncEngineGateWriteGateRehydration(
+        requestVersion: 1,
+        latestVersion: 1,
+        expectedBackendType: null,
+        activeBackendType: null,
+        expectedScopeId: 'runtime-profile',
+        activeScopeId: 'runtime-profile',
+      ),
+      isTrue,
+    );
+
+    expect(
+      shouldApplySyncEngineGateWriteGateRehydration(
+        requestVersion: 1,
+        latestVersion: 2,
+        expectedBackendType: null,
+        activeBackendType: null,
+        expectedScopeId: 'runtime-profile',
+        activeScopeId: 'runtime-profile',
+      ),
+      isFalse,
+    );
+  });
 }

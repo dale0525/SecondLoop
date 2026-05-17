@@ -27,6 +27,26 @@ void main() {
       }
     }
   });
+
+  test('main app Rust removal stays explicitly deferred while deps remain', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final plan = File(
+      'docs/superpowers/plans/'
+      '2026-05-17-client-dart-http-runtime-implementation-plan.md',
+    ).readAsStringSync();
+
+    if (pubspec.contains('flutter_rust_bridge') ||
+        pubspec.contains('secondloop_rust:')) {
+      for (final requiredText in [
+        'Full physical Rust deletion is deferred',
+        'AppBackend contract uses Dart domain DTOs',
+        'NativeAppBackend replacement',
+        'web build tasks no longer run FRB',
+      ]) {
+        expect(plan, contains(requiredText), reason: requiredText);
+      }
+    }
+  });
 }
 
 List<File> _runtimeClientFiles() {

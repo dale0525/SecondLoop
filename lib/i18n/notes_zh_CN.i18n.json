@@ -1,0 +1,20 @@
+{
+  "title": "笔记",
+  "fields": {
+    "search": "搜索",
+    "title": "标题",
+    "body": "正文"
+  },
+  "labels": {
+    "untitled": "未命名",
+    "local": "本地",
+    "remote": "远端"
+  },
+  "status": {
+    "saved": "已保存",
+    "pending": "待同步",
+    "saving": "保存中",
+    "conflict": "冲突",
+    "failed": "失败"
+  }
+}

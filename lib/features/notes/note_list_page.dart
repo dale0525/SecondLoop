@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/offline_edit/local_edit_models.dart';
+import '../../i18n/strings.g.dart';
 
 class NoteListEntry {
   const NoteListEntry({
@@ -59,7 +60,7 @@ class _NoteListPageState extends State<NoteListPage> {
       });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Notes')),
+      appBar: AppBar(title: Text(context.t.notes.title)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -69,10 +70,10 @@ class _NoteListPageState extends State<NoteListPage> {
                 child: TextField(
                   key: const ValueKey('note_list_search_field'),
                   controller: _searchController,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    labelText: 'Search',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    labelText: context.t.notes.fields.search,
+                    border: const OutlineInputBorder(),
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
@@ -100,7 +101,11 @@ class _NoteListPageState extends State<NoteListPage> {
           for (final entry in entries)
             ListTile(
               key: ValueKey('note_list_item_${entry.id}'),
-              title: Text(entry.title.isEmpty ? 'Untitled' : entry.title),
+              title: Text(
+                entry.title.isEmpty
+                    ? context.t.notes.labels.untitled
+                    : entry.title,
+              ),
               subtitle: Text(entry.bodyPreview),
               trailing: _NoteSyncBadge(state: entry.syncState),
               onTap: widget.onOpenNote == null
@@ -122,10 +127,10 @@ class _NoteSyncBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = switch (state) {
       LocalEditSyncState.clean => '',
-      LocalEditSyncState.pending => 'Pending',
-      LocalEditSyncState.syncing => 'Saving',
-      LocalEditSyncState.conflict => 'Conflict',
-      LocalEditSyncState.failed => 'Failed',
+      LocalEditSyncState.pending => context.t.notes.status.pending,
+      LocalEditSyncState.syncing => context.t.notes.status.saving,
+      LocalEditSyncState.conflict => context.t.notes.status.conflict,
+      LocalEditSyncState.failed => context.t.notes.status.failed,
     };
     if (label.isEmpty) return const SizedBox.shrink();
     return Chip(label: Text(label));

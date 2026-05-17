@@ -1,0 +1,20 @@
+{
+  "title": "Notes",
+  "fields": {
+    "search": "Search",
+    "title": "Title",
+    "body": "Body"
+  },
+  "labels": {
+    "untitled": "Untitled",
+    "local": "Local",
+    "remote": "Remote"
+  },
+  "status": {
+    "saved": "Saved",
+    "pending": "Pending",
+    "saving": "Saving",
+    "conflict": "Conflict",
+    "failed": "Failed"
+  }
+}

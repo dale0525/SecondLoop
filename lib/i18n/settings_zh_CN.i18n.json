@@ -732,7 +732,9 @@
     "title": "云端存储",
     "subtitle": "你的同步数据占用的云端存储",
     "actions": {
-      "refresh": "刷新"
+      "refresh": "刷新",
+      "preview": "预览",
+      "clearLocalCache": "删除本地缓存"
     },
     "labels": {
       "notConfigured": "当前版本暂不支持查看云端存储用量。",
@@ -742,7 +744,18 @@
       "attachments": "照片与文件：",
       "noAttachments": "暂无附件",
       "ops": "同步记录：",
-      "loadFailed": "加载失败：$error"
+      "loadFailed": "加载失败：$error",
+      "allTypes": "全部类型",
+      "images": "图片",
+      "videos": "视频",
+      "audio": "音频",
+      "pdf": "PDF",
+      "other": "其他",
+      "sortBySize": "大小",
+      "sortByUploadTime": "上传时间",
+      "previewOpenFailed": "无法打开预览",
+      "localCacheDeleted": "已删除本地缓存",
+      "linkedEntities": "关联：$value"
     }
   },
   "about": {

@@ -14,11 +14,11 @@
 当前可执行计划：
 
 - `docs/superpowers/plans/2026-05-17-skill-runtime-phase-1-implementation-plan.md`：实现 skill manifest/catalog、`web-research` skill package、runtime tool request enforcement、managed pro 部署绑定和 QA-CHAT-05 验证。
-- `docs/superpowers/plans/2026-05-17-client-dart-http-runtime-implementation-plan.md`：把主客户端收敛为 Flutter/Dart + HTTP runtime client，保留离线纯文本笔记编辑、附件列表/预览/清理，并移除主 App Rust runtime 依赖。
+- `docs/superpowers/plans/2026-05-17-client-dart-http-runtime-implementation-plan.md`：把主客户端收敛为 Flutter/Dart + HTTP runtime client，保留离线纯文本笔记编辑、附件列表/预览/清理，并把移除主 App Rust runtime 依赖列为最终目标。
 
 执行状态：
 
-- client Dart HTTP runtime 计划已落地 note HTTP contract、离线纯文本 note draft/outbox、附件 cloud inventory/preview/delete/cache cleanup、runtime-first product navigation guard，以及新 runtime-client 路径的 Rust dependency guard。
+- client Dart HTTP runtime 计划已落地 note HTTP contract、离线纯文本 note draft/outbox、附件 cloud inventory/preview/delete/cache cleanup、runtime-first product navigation guard、新 runtime-client 路径的 Rust dependency guard，以及旧 sync settings automation harness 的退役。
 - 完整物理删除主客户端 Rust 仍需单独拆分后续计划：当前 backend、chat/settings/legacy attachments、`pubspec.yaml`、platform plugin 和 web build 链仍依赖 FRB/Rust。后续删除必须先把这些路径迁到 Dart/runtime interface，再从主 App dependency graph 移除 Rust；self-managed deploy helper 可保留自己的独立 Rust 实现。
 
 历史计划处理：

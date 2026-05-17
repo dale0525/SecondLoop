@@ -43,7 +43,8 @@ void main() {
     expect(backend.loadSavedSessionKeyCalls, 0);
   });
 
-  testWidgets('Settings shows Sync entry', (WidgetTester tester) async {
+  testWidgets('Settings shows runtime entry instead of Sync entry',
+      (WidgetTester tester) async {
     await tester.pumpWidget(
       AppBackendScope(
         backend: FakeBackend(),
@@ -57,14 +58,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final syncFinder = find.text('Sync');
-    await tester.scrollUntilVisible(
-      syncFinder,
-      200,
-      scrollable: find.byType(Scrollable),
-    );
-    await tester.pumpAndSettle();
-    expect(syncFinder, findsOneWidget);
+    expect(find.byKey(const ValueKey('settings_runtime_mode')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings_sync')), findsNothing);
   });
 }
 

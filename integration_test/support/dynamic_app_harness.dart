@@ -20,7 +20,6 @@ import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/features/settings/self_managed_setup_page.dart';
-import 'package:secondloop/features/settings/sync_settings_page.dart';
 
 import '../../test/test_i18n.dart';
 import 'dynamic_test_backend.dart';
@@ -209,20 +208,6 @@ final class DynamicAppHarness {
     await pumpUntilFound(
       find.byType(SelfManagedSetupPage),
       description: 'self-managed setup page',
-    );
-  }
-
-  Future<void> openSyncSettings() async {
-    if (find.byType(AgentSettingsPage).evaluate().isNotEmpty) {
-      await tester.tap(find.text('Connection'));
-      await tester.pump();
-      await tapByKey('agent_settings_open_sync_settings');
-    } else {
-      await tapByKey('settings_sync');
-    }
-    await pumpUntilFound(
-      find.byType(SyncSettingsPage),
-      description: 'sync settings page',
     );
   }
 
