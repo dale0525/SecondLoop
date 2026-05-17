@@ -31,6 +31,12 @@ void main() {
     expect(events, isNotEmpty);
     final manifest = output['manifest'] as Map<String, Object?>;
     expect(manifest['runtime_mode'], 'self_managed');
+    final skills = manifest['skills'] as List<Object?>;
+    expect(skills.single, <String, Object?>{
+      'id': 'web-research',
+      'status': 'ready',
+      'provider': 'configured',
+    });
     expect(output['auth_token'], 'runtime-token-openai');
     final verification = output['verification'] as Map<String, Object?>;
     expect(verification['ok'], isTrue);

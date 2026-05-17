@@ -8,6 +8,7 @@ CloudRuntimeManifest buildSelfManagedRuntimeManifest({
     CloudRuntimeCapability('deployment_test_api'),
     CloudRuntimeCapability('runtime_test_api'),
   ],
+  List<CloudRuntimeSkillAvailability> skills = CloudRuntimeKnownSkills.all,
 }) {
   return CloudRuntimeManifest(
     manifestVersion: 1,
@@ -15,5 +16,6 @@ CloudRuntimeManifest buildSelfManagedRuntimeManifest({
     apiBaseUrl: apiBaseUrl,
     authMode: CloudRuntimeAuthMode.runtimeToken,
     capabilities: capabilities,
+    skills: skills,
   );
 }

@@ -33,6 +33,8 @@ void main() {
       SelfManagedSetupStep.verifying,
     ]);
     expect(result.manifest.apiBaseUrl, 'https://acct-1.runtime.example/');
+    expect(result.manifest.skills.single.id, 'web-research');
+    expect(result.manifest.skills.single.status, 'ready');
     expect(result.verification?.ok, isTrue);
   });
 

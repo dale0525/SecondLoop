@@ -85,6 +85,7 @@ final class SecretaryRuntimeConversationSender
                 apiBaseUrl: normalizedBaseUrl,
                 authMode: CloudRuntimeAuthMode.hostedSession,
                 capabilities: CloudRuntimeRequiredCapabilities.all,
+                skills: CloudRuntimeKnownSkills.all,
               ),
             );
           },

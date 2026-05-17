@@ -51,6 +51,13 @@ void main() {
                 'conversation_seed': 'conversation-vault-1-seed',
                 'manifest': {
                   'runtime_mode': 'self_managed',
+                  'skills': [
+                    {
+                      'id': 'web-research',
+                      'status': 'ready',
+                      'provider': 'configured',
+                    },
+                  ],
                 },
               }),
               200,
@@ -291,6 +298,13 @@ void main() {
     );
 
     expect(bootstrap.vaultId, 'vault-1');
+    expect(bootstrap.manifest['skills'], [
+      {
+        'id': 'web-research',
+        'status': 'ready',
+        'provider': 'configured',
+      },
+    ]);
     expect(conversation.conversationId, 'conversation-1');
     expect(run.metadata['response_type'], 'reminder_candidate');
     expect(approvals.single.id, 'approval-1');
