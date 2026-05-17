@@ -29,18 +29,15 @@ class LocalEditSyncService {
     required int Function() nowMs,
     RuntimeNoteClient? noteClient,
     RuntimeNoteSaveCallback? saveNote,
-    String Function(LocalTextEdit edit)? noteIdForEdit,
   })  : _store = store,
         _vaultId = vaultId,
         _nowMs = nowMs,
-        _saveNote = saveNote ?? noteClient!.saveNote,
-        _noteIdForEdit = noteIdForEdit ?? _defaultNoteIdForEdit;
+        _saveNote = saveNote ?? noteClient!.saveNote;
 
   final LocalEditStore _store;
   final String _vaultId;
   final int Function() _nowMs;
   final RuntimeNoteSaveCallback _saveNote;
-  final String Function(LocalTextEdit edit) _noteIdForEdit;
 
   Future<LocalEditSyncResult> flushPending() async {
     final edits = await _store.listRetryableEdits();
@@ -86,7 +83,7 @@ class LocalEditSyncService {
     );
   }
 
-  static String _defaultNoteIdForEdit(LocalTextEdit edit) {
+  static String _noteIdForEdit(LocalTextEdit edit) {
     return edit.remoteId ?? edit.localId;
   }
 }
