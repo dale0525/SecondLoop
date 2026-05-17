@@ -33,6 +33,30 @@ void main() {
     expect(draft.lastSyncedAtMs, isNull);
   });
 
+  test('local ids are unique across stores for same timestamp', () async {
+    final otherStore = LocalEditStore.inMemory();
+    addTearDown(otherStore.close);
+
+    final first = await store.saveDraft(
+      remoteId: null,
+      title: 'Local note',
+      body: 'First body',
+      baseRevision: null,
+      nowMs: 1000,
+    );
+    final second = await otherStore.saveDraft(
+      remoteId: null,
+      title: 'Local note',
+      body: 'Second body',
+      baseRevision: null,
+      nowMs: 1000,
+    );
+
+    expect(first.localId, startsWith('local-1000-'));
+    expect(second.localId, startsWith('local-1000-'));
+    expect(first.localId, isNot(second.localId));
+  });
+
   test('listPendingEdits returns pending edits in updated-time order',
       () async {
     final first = await store.saveDraft(

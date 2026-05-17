@@ -54,6 +54,74 @@ void main() {
     expect(note.updatedAtMs, 1770000000000);
   });
 
+  test('saveNote URL-encodes vault and note path segments', () async {
+    final httpClient = MockClient((request) async {
+      expect(
+        request.url.toString(),
+        'https://vault.test/v1/vaults/vault%2Fwith%20space/notes/'
+        'note%2Fwith%20space',
+      );
+      return http.Response(
+        jsonEncode({
+          'id': 'note/with space',
+          'title': 'Title',
+          'body': 'Body',
+          'revision': 'rev-1',
+          'updated_at_ms': 1770000000000,
+        }),
+        200,
+      );
+    });
+
+    final client = RuntimeNoteClient(
+      managedVaultBaseUrl: 'https://vault.test',
+      idToken: 'token-1',
+      httpClient: httpClient,
+    );
+
+    final note = await client.saveNote(
+      vaultId: 'vault/with space',
+      noteId: 'note/with space',
+      title: 'Title',
+      body: 'Body',
+      baseRevision: null,
+    );
+
+    expect(note.id, 'note/with space');
+  });
+
+  test('saveNote rejects malformed success note fields', () async {
+    final httpClient = MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'id': 'note-1',
+          'title': ['not a string'],
+          'body': 'Body',
+          'revision': 'rev-1',
+          'updated_at_ms': 1.5,
+        }),
+        200,
+      );
+    });
+
+    final client = RuntimeNoteClient(
+      managedVaultBaseUrl: 'https://vault.test',
+      idToken: 'token-1',
+      httpClient: httpClient,
+    );
+
+    await expectLater(
+      client.saveNote(
+        vaultId: 'vault-1',
+        noteId: 'note-1',
+        title: 'Title',
+        body: 'Body',
+        baseRevision: null,
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('saveNote throws conflict exception with remote note', () async {
     final httpClient = MockClient((request) async {
       return http.Response(

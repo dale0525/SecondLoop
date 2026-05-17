@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:sqlite3/sqlite3.dart';
 
 import 'local_edit_models.dart';
@@ -12,6 +14,7 @@ class LocalEditStore {
   }
 
   final Database _database;
+  final Random _random = Random.secure();
   var _localIdSequence = 0;
 
   Future<LocalTextEdit> saveDraft({
@@ -246,7 +249,15 @@ class LocalEditStore {
 
   String _createLocalId(int nowMs) {
     final sequence = _localIdSequence++;
-    return 'local-$nowMs-$sequence';
+    return 'local-$nowMs-${_randomHex()}-$sequence';
+  }
+
+  String _randomHex() {
+    final buffer = StringBuffer();
+    for (var i = 0; i < 16; i += 1) {
+      buffer.write(_random.nextInt(256).toRadixString(16).padLeft(2, '0'));
+    }
+    return buffer.toString();
   }
 
   static LocalTextEdit _editFromRow(Row row) {
