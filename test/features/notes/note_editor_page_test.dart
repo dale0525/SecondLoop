@@ -109,6 +109,46 @@ void main() {
     expect(
         find.byKey(const ValueKey('note_editor_body_field')), findsOneWidget);
   });
+
+  testWidgets('conflict panel scrolls long local and remote content',
+      (tester) async {
+    final longBody = List.filled(10000, 'conflict').join(' ');
+    final controller = _controller(
+      store: store,
+      isOnline: true,
+      saveNote: ({
+        required vaultId,
+        required noteId,
+        required title,
+        required body,
+        required baseRevision,
+      }) async {
+        throw RuntimeNoteConflictException(
+          remote: RuntimeNote(
+            id: 'note-1',
+            title: 'Remote title',
+            body: longBody,
+            revision: 'rev-remote',
+            updatedAtMs: 2000,
+          ),
+        );
+      },
+    );
+
+    await tester.pumpWidget(_app(controller));
+    await tester.enterText(
+      find.byKey(const ValueKey('note_editor_body_field')),
+      longBody,
+    );
+    await tester.tap(find.byKey(const ValueKey('note_editor_save_button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('note_editor_conflict_scroll')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Widget _app(NoteEditorController controller) {

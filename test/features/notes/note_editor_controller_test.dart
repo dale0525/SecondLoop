@@ -133,6 +133,123 @@ void main() {
     expect(controller.baseRevision, 'rev-2');
   });
 
+  test('load keeps pending local edit when online', () async {
+    await store.saveDraft(
+      remoteId: 'note-1',
+      title: 'Pending local title',
+      body: 'Pending local body',
+      baseRevision: 'rev-local',
+      nowMs: clock += 100,
+    );
+    var loadCalls = 0;
+    final controller = _controller(
+      store: store,
+      remoteId: 'note-1',
+      isOnline: true,
+      saveNote: _successfulSave,
+      loadNote: (noteId) async {
+        loadCalls += 1;
+        return const RuntimeNote(
+          id: 'note-1',
+          title: 'Remote title',
+          body: 'Remote body',
+          revision: 'rev-remote',
+          updatedAtMs: 2000,
+        );
+      },
+      nowMs: () => clock += 100,
+    );
+
+    await controller.load();
+
+    expect(loadCalls, 0);
+    expect(controller.status, NoteEditorStatus.pending);
+    expect(controller.title, 'Pending local title');
+    expect(controller.body, 'Pending local body');
+    expect(controller.baseRevision, 'rev-local');
+  });
+
+  test('load keeps failed local edit when online', () async {
+    final draft = await store.saveDraft(
+      remoteId: 'note-1',
+      title: 'Failed local title',
+      body: 'Failed local body',
+      baseRevision: 'rev-local',
+      nowMs: clock += 100,
+    );
+    await store.markFailed(localId: draft.localId, nowMs: clock += 100);
+    var loadCalls = 0;
+    final controller = _controller(
+      store: store,
+      remoteId: 'note-1',
+      isOnline: true,
+      saveNote: _successfulSave,
+      loadNote: (noteId) async {
+        loadCalls += 1;
+        return const RuntimeNote(
+          id: 'note-1',
+          title: 'Remote title',
+          body: 'Remote body',
+          revision: 'rev-remote',
+          updatedAtMs: 2000,
+        );
+      },
+      nowMs: () => clock += 100,
+    );
+
+    await controller.load();
+
+    expect(loadCalls, 0);
+    expect(controller.status, NoteEditorStatus.failed);
+    expect(controller.title, 'Failed local title');
+    expect(controller.body, 'Failed local body');
+  });
+
+  test('load keeps conflict local and remote text when online', () async {
+    final draft = await store.saveDraft(
+      remoteId: 'note-1',
+      title: 'Conflict local title',
+      body: 'Conflict local body',
+      baseRevision: 'rev-local',
+      nowMs: clock += 100,
+    );
+    await store.markConflict(
+      localId: draft.localId,
+      remoteRevision: 'rev-conflict',
+      remoteTitle: 'Conflict remote title',
+      remoteBody: 'Conflict remote body',
+      nowMs: clock += 100,
+    );
+    var loadCalls = 0;
+    final controller = _controller(
+      store: store,
+      remoteId: 'note-1',
+      isOnline: true,
+      saveNote: _successfulSave,
+      loadNote: (noteId) async {
+        loadCalls += 1;
+        return const RuntimeNote(
+          id: 'note-1',
+          title: 'Remote title',
+          body: 'Remote body',
+          revision: 'rev-remote',
+          updatedAtMs: 2000,
+        );
+      },
+      nowMs: () => clock += 100,
+    );
+
+    await controller.load();
+
+    expect(loadCalls, 0);
+    expect(controller.status, NoteEditorStatus.conflict);
+    expect(controller.title, 'Conflict local title');
+    expect(controller.body, 'Conflict local body');
+    expect(controller.conflictRemoteTitle, 'Conflict remote title');
+    expect(controller.conflictRemoteBody, 'Conflict remote body');
+    expect(controller.conflictRemoteRevision, 'rev-conflict');
+  });
+
   test('controller imports stay out of legacy runtime paths', () {
     final source = File(
       'lib/features/notes/note_editor_controller.dart',

@@ -78,6 +78,10 @@ class NoteEditorController extends ChangeNotifier {
     final local = await _store.readByRemoteId(remoteId);
     if (local != null) {
       _applyLocalEdit(local);
+      if (local.syncState != LocalEditSyncState.clean) {
+        notifyListeners();
+        return;
+      }
     }
 
     final loader = _loadNote;

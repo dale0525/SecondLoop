@@ -161,15 +161,23 @@ class _ConflictPanel extends StatelessWidget {
         border: Border.all(color: theme.colorScheme.error),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Local', style: theme.textTheme.labelLarge),
-          Text(controller.body),
-          const SizedBox(height: 8),
-          Text('Remote', style: theme.textTheme.labelLarge),
-          Text(controller.conflictRemoteBody ?? ''),
-        ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 220),
+        child: Scrollbar(
+          child: SingleChildScrollView(
+            key: const ValueKey('note_editor_conflict_scroll'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Local', style: theme.textTheme.labelLarge),
+                Text(controller.body),
+                const SizedBox(height: 8),
+                Text('Remote', style: theme.textTheme.labelLarge),
+                Text(controller.conflictRemoteBody ?? ''),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
