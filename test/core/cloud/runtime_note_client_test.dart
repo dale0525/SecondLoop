@@ -122,6 +122,40 @@ void main() {
     );
   });
 
+  test('saveNote rejects non-int updated timestamp fields', () async {
+    for (final malformedTimestamp in <Object>['1770000000000', 1.5]) {
+      final httpClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'id': 'note-1',
+            'title': 'Title',
+            'body': 'Body',
+            'revision': 'rev-1',
+            'updated_at_ms': malformedTimestamp,
+          }),
+          200,
+        );
+      });
+
+      final client = RuntimeNoteClient(
+        managedVaultBaseUrl: 'https://vault.test',
+        idToken: 'token-1',
+        httpClient: httpClient,
+      );
+
+      await expectLater(
+        client.saveNote(
+          vaultId: 'vault-1',
+          noteId: 'note-1',
+          title: 'Title',
+          body: 'Body',
+          baseRevision: null,
+        ),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('saveNote throws conflict exception with remote note', () async {
     final httpClient = MockClient((request) async {
       return http.Response(
@@ -168,5 +202,38 @@ void main() {
             ),
       ),
     );
+  });
+
+  test('fetchNote sends GET bearer request and parses note', () async {
+    final httpClient = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(
+        request.url.toString(),
+        'https://vault.test/v1/vaults/vault-1/notes/note-1',
+      );
+      expect(request.headers['authorization'], 'Bearer token-1');
+      return http.Response(
+        jsonEncode({
+          'id': 'note-1',
+          'title': 'Remote title',
+          'body': 'Remote body',
+          'revision': 'rev-3',
+          'updated_at_ms': 1770000000000,
+        }),
+        200,
+      );
+    });
+
+    final client = RuntimeNoteClient(
+      managedVaultBaseUrl: 'https://vault.test',
+      idToken: 'token-1',
+      httpClient: httpClient,
+    );
+
+    final note = await client.fetchNote(vaultId: 'vault-1', noteId: 'note-1');
+
+    expect(note.title, 'Remote title');
+    expect(note.body, 'Remote body');
+    expect(note.revision, 'rev-3');
   });
 }

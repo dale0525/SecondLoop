@@ -94,6 +94,34 @@ final class RuntimeNoteClient {
     return _noteFromJson(decoded);
   }
 
+  Future<RuntimeNote> fetchNote({
+    required String vaultId,
+    required String noteId,
+  }) async {
+    final uri = _resolveVaultUri(
+      _managedVaultBaseUrl,
+      '/v1/vaults/${Uri.encodeComponent(vaultId)}/notes/'
+      '${Uri.encodeComponent(noteId)}',
+    );
+    final response = await _httpClient.get(
+      uri,
+      headers: <String, String>{
+        'authorization': 'Bearer $_idToken',
+        'accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    }
+
+    final decoded = response.tryDecodeObject();
+    if (decoded == null) {
+      throw const FormatException('invalid_runtime_note_response');
+    }
+    return _noteFromJson(decoded);
+  }
+
   void dispose() {
     _httpClient.close();
   }
@@ -134,8 +162,5 @@ String _requiredString(Map<String, Object?> json, String key) {
 int _requiredInt(Map<String, Object?> json, String key) {
   final value = json[key];
   if (value is int) return value;
-  if (value is String && RegExp(r'^\d+$').hasMatch(value)) {
-    return int.parse(value);
-  }
   throw const FormatException('invalid_runtime_note_fields');
 }
