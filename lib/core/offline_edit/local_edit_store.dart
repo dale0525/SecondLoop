@@ -21,38 +21,53 @@ class LocalEditStore {
     required String? baseRevision,
     required int nowMs,
   }) async {
+    final localId = _createLocalId(nowMs);
     if (remoteId != null) {
-      final existing = await readByRemoteId(remoteId);
-      if (existing != null) {
-        _database.execute(
-          '''
-          UPDATE local_text_edits
-          SET title = ?,
-              body = ?,
-              base_revision = ?,
-              dirty = ?,
-              sync_state = ?,
-              updated_at_ms = ?,
-              conflict_remote_revision = NULL,
-              conflict_remote_title = NULL,
-              conflict_remote_body = NULL
-          WHERE local_id = ?
-          ''',
-          [
-            title,
-            body,
-            baseRevision,
-            1,
-            LocalEditSyncState.pending.name,
-            nowMs,
-            existing.localId,
-          ],
-        );
-        return (await readByLocalId(existing.localId))!;
-      }
+      _database.execute(
+        '''
+        INSERT INTO local_text_edits (
+          local_id,
+          remote_id,
+          title,
+          body,
+          base_revision,
+          dirty,
+          sync_state,
+          updated_at_ms,
+          last_synced_at_ms,
+          conflict_remote_revision,
+          conflict_remote_title,
+          conflict_remote_body
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(remote_id) WHERE remote_id IS NOT NULL DO UPDATE SET
+          title = excluded.title,
+          body = excluded.body,
+          base_revision = excluded.base_revision,
+          dirty = excluded.dirty,
+          sync_state = excluded.sync_state,
+          updated_at_ms = excluded.updated_at_ms,
+          conflict_remote_revision = NULL,
+          conflict_remote_title = NULL,
+          conflict_remote_body = NULL
+        ''',
+        [
+          localId,
+          remoteId,
+          title,
+          body,
+          baseRevision,
+          1,
+          LocalEditSyncState.pending.name,
+          nowMs,
+          null,
+          null,
+          null,
+          null,
+        ],
+      );
+      return (await readByRemoteId(remoteId))!;
     }
 
-    final localId = _createLocalId(nowMs);
     _database.execute(
       '''
       INSERT INTO local_text_edits (
@@ -238,5 +253,24 @@ CREATE TABLE IF NOT EXISTS local_text_edits (
   conflict_remote_title TEXT,
   conflict_remote_body TEXT
 );
+
+DELETE FROM local_text_edits
+WHERE remote_id IS NOT NULL
+  AND EXISTS (
+    SELECT 1
+    FROM local_text_edits newer
+    WHERE newer.remote_id = local_text_edits.remote_id
+      AND (
+        newer.updated_at_ms > local_text_edits.updated_at_ms
+        OR (
+          newer.updated_at_ms = local_text_edits.updated_at_ms
+          AND newer.local_id > local_text_edits.local_id
+        )
+      )
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_local_text_edits_remote_id_unique
+ON local_text_edits(remote_id)
+WHERE remote_id IS NOT NULL;
 ''';
 }

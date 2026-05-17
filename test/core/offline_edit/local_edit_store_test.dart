@@ -169,4 +169,37 @@ void main() {
     expect(saved.conflictRemoteTitle, isNull);
     expect(saved.conflictRemoteBody, isNull);
   });
+
+  test('saveDraft preserves last synced timestamp for remote edit', () async {
+    final draft = await store.saveDraft(
+      remoteId: 'note-1',
+      title: 'Clean title',
+      body: 'Clean body',
+      baseRevision: 'rev-1',
+      nowMs: 1000,
+    );
+
+    await store.markSynced(
+      localId: draft.localId,
+      remoteId: 'note-1',
+      revision: 'rev-2',
+      nowMs: 2000,
+    );
+
+    final edited = await store.saveDraft(
+      remoteId: 'note-1',
+      title: 'Edited title',
+      body: 'Edited body',
+      baseRevision: 'rev-2',
+      nowMs: 3000,
+    );
+
+    expect(edited.localId, draft.localId);
+    expect(edited.baseRevision, 'rev-2');
+    expect(edited.dirty, true);
+    expect(edited.syncState, LocalEditSyncState.pending);
+    expect(edited.updatedAtMs, 3000);
+    expect(edited.lastSyncedAtMs, 2000);
+    expect(await store.listPendingEdits(), hasLength(1));
+  });
 }
