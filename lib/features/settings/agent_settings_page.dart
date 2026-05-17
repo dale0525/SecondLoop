@@ -11,7 +11,6 @@ import 'ai_settings_page.dart';
 import 'cloud_account_page.dart';
 import 'cloud_runtime_mode_page.dart';
 import 'diagnostics_page.dart';
-import 'sync_settings_page.dart';
 
 final class AgentSettingsPage extends StatefulWidget {
   const AgentSettingsPage({super.key});
@@ -113,11 +112,6 @@ final class _AgentSettingsPageState extends State<AgentSettingsPage> {
               buttonKey: const ValueKey('agent_settings_open_runtime_mode'),
               label: context.t.settings.agentUi.links.runtimeMode,
               pageBuilder: (_) => const CloudRuntimeModePage(),
-            ),
-            _SettingsDeepLink(
-              buttonKey: const ValueKey('agent_settings_open_sync_settings'),
-              label: context.t.settings.agentUi.links.syncSettings,
-              pageBuilder: (_) => const SyncSettingsPage(),
             ),
           ],
         ),

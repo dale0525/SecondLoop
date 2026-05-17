@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/features/settings/ai_settings_page.dart';
-import 'package:secondloop/features/settings/sync_settings_page.dart';
+import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
 import 'package:secondloop/features/welcome/first_launch_welcome_gate.dart';
 import 'package:secondloop/features/welcome/welcome_page.dart';
 
@@ -78,7 +78,7 @@ void main() {
     expect(find.text('app shell child'), findsOneWidget);
   });
 
-  testWidgets('welcome in app builder can open AI and sync settings',
+  testWidgets('welcome in app builder can open AI and runtime settings',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -104,9 +104,10 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester
-        .tap(find.byKey(const ValueKey('welcome_guide_card_sync_open')));
+    await tester.tap(
+      find.byKey(const ValueKey('welcome_guide_card_runtime_open')),
+    );
     await tester.pumpAndSettle();
-    expect(find.byType(SyncSettingsPage), findsOneWidget);
+    expect(find.byType(CloudRuntimeModePage), findsOneWidget);
   });
 }

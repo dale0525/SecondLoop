@@ -191,20 +191,6 @@ extension _SettingsPageBuild on _SettingsPageState {
                     );
                   },
           ),
-          ListTile(
-            key: const ValueKey('settings_sync'),
-            title: Text(context.t.settings.sync.title),
-            subtitle: Text(context.t.settings.sync.subtitle),
-            onTap: _busy
-                ? null
-                : () {
-                    pushPageWithInheritedScopes(
-                      Navigator.of(context),
-                      context,
-                      const SyncSettingsPage(),
-                    );
-                  },
-          ),
           if (supportsDesktopBootSettings)
             SwitchListTile(
               key: const ValueKey('settings_start_with_system_switch'),

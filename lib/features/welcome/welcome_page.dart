@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../features/settings/ai_settings_page.dart';
-import '../../features/settings/sync_settings_page.dart';
+import '../../features/settings/cloud_runtime_mode_page.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import 'welcome_status.dart';
@@ -98,10 +98,10 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
     await _reloadStatus();
   }
 
-  Future<void> _openSyncSettings() async {
+  Future<void> _openRuntimeModeSettings() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const SyncSettingsPage(),
+        builder: (_) => const CloudRuntimeModePage(),
       ),
     );
     if (!mounted) return;
@@ -512,9 +512,10 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
                             ? 'welcome_guide_sync_status_ready'
                             : 'welcome_guide_sync_status_not_set',
                       ),
-                      actionKey: const ValueKey('welcome_guide_card_sync_open'),
+                      actionKey:
+                          const ValueKey('welcome_guide_card_runtime_open'),
                       actionLabel: t.sync.open,
-                      onActionTap: () => unawaited(_openSyncSettings()),
+                      onActionTap: () => unawaited(_openRuntimeModeSettings()),
                     ),
                     const SizedBox(height: 12),
                     SlSurface(

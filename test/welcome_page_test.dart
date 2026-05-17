@@ -9,7 +9,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
-import 'package:secondloop/features/settings/sync_settings_page.dart';
+import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
 import 'package:secondloop/features/welcome/welcome_page.dart';
 import 'package:secondloop/features/welcome/welcome_status.dart';
 
@@ -176,7 +176,7 @@ void main() {
     expect(find.byType(AiSettingsPage), findsOneWidget);
   });
 
-  testWidgets('opens sync settings from sync card', (tester) async {
+  testWidgets('opens runtime mode from sync card', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     await pumpWelcomePage(
@@ -191,11 +191,12 @@ void main() {
       ),
     );
 
-    await tester
-        .tap(find.byKey(const ValueKey('welcome_guide_card_sync_open')));
+    await tester.tap(
+      find.byKey(const ValueKey('welcome_guide_card_runtime_open')),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.byType(SyncSettingsPage), findsOneWidget);
+    expect(find.byType(CloudRuntimeModePage), findsOneWidget);
   });
 
   testWidgets('permissions section renders entries and taps launcher',
