@@ -4,7 +4,8 @@ import 'dart:typed_data';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/models/app_models.dart';
 
-class TestAppBackend extends AppBackend {
+class TestAppBackend extends AppBackend
+    implements AssistantCitationWriteBackend {
   TestAppBackend({List<Message>? initialMessages})
       : _messagesByConversation = <String, List<Message>>{
           'loop_home': List<Message>.from(initialMessages ?? const <Message>[])
@@ -90,6 +91,34 @@ class TestAppBackend extends AppBackend {
     required String role,
     required String content,
   }) async {
+    return _insertStoredMessage(
+      conversationId,
+      role: role,
+      content: content,
+    );
+  }
+
+  @override
+  Future<Message> insertAssistantMessageWithCitations(
+    Uint8List key,
+    String conversationId, {
+    required String content,
+    String? citationsJson,
+  }) async {
+    return _insertStoredMessage(
+      conversationId,
+      role: 'assistant',
+      content: content,
+      citationsJson: citationsJson,
+    );
+  }
+
+  Message _insertStoredMessage(
+    String conversationId, {
+    required String role,
+    required String content,
+    String? citationsJson,
+  }) {
     final list = _messagesByConversation.putIfAbsent(conversationId, () => []);
     final id = 'm${list.length + 1}';
     final message = Message(
@@ -99,6 +128,7 @@ class TestAppBackend extends AppBackend {
       content: content,
       createdAtMs: list.length + 1,
       isMemory: true,
+      citationsJson: citationsJson,
     );
     list.add(message);
     return message;
@@ -119,6 +149,7 @@ class TestAppBackend extends AppBackend {
           content: content,
           createdAtMs: msg.createdAtMs,
           isMemory: msg.isMemory,
+          citationsJson: msg.citationsJson,
         );
         return;
       }

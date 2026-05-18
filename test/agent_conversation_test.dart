@@ -734,6 +734,115 @@ secondloop://message/history-rich-1
   );
 
   testWidgets(
+    'managed pro conversation renders runtime web research citations',
+    (tester) async {
+      final backend = _RuntimeTaskCreationBackend();
+      final sender = _FakeRuntimeConversationSender(
+        result: SecretaryRuntimeConversationResult.fromJson(const {
+          'run_id': 'run-qa-chat-05',
+          'conversation_id': 'loop_home',
+          'assistant': {
+            'content':
+                'Apple 发布了 iPhone 17。[Apple Newsroom](https://www.apple.com/newsroom/)',
+          },
+          'metadata': {
+            'run_id': 'run-qa-chat-05',
+            'turn_id': 'turn-qa-chat-05',
+            'conversation_id': 'loop_home',
+            'vault_id': 'uid_1',
+            'response_type': 'assistant_message',
+            'run_status': 'completed',
+            'approval_required': false,
+            'web_research_drafts': [
+              {
+                'query': 'Apple 今天的发布会发布了哪些产品？',
+                'summary': 'Apple 发布了 iPhone 17。',
+                'citations': [
+                  {
+                    'title': 'Apple Newsroom',
+                    'url': 'https://www.apple.com/newsroom/',
+                    'domain': 'www.apple.com',
+                    'fetched_at_ms': 1700000000000,
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1012, 701));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: AppPlatformCapabilityScope(
+                capabilities: const AppPlatformCapabilities(
+                  supportsDesktopHotkey: true,
+                  supportsBiometricUnlock: false,
+                  supportsAudioRecording: true,
+                  supportsDesktopDrop: true,
+                  supportsDesktopBootSettings: true,
+                  supportsCameraCapture: false,
+                  usesCloudSessionModel: false,
+                ),
+                child: CloudAuthScope(
+                  controller: _CloudAuthController(),
+                  gatewayConfig: const CloudGatewayConfig(
+                    baseUrl: 'https://gateway.example.test',
+                    modelName: 'cloud',
+                  ),
+                  child: SessionScope(
+                    sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                    lock: () {},
+                    child: SubscriptionScope(
+                      controller: _SubscriptionController(
+                        SubscriptionStatus.entitled,
+                      ),
+                      child: AgentConversationPage(
+                        conversation: const Conversation(
+                          id: 'loop_home',
+                          title: 'Loop',
+                          createdAtMs: 0,
+                          updatedAtMs: 0,
+                        ),
+                        isTabActive: true,
+                        runtimeConversationSender: sender,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('chat_input')),
+        '查一下最近 Apple 发布会有哪些新产品，给我带来源。',
+      );
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('chat_send')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+
+      expect(sender.sentMessages, ['查一下最近 Apple 发布会有哪些新产品，给我带来源。']);
+      expect(
+        find.byKey(const ValueKey('assistant_message_footer_evidence')),
+        findsOneWidget,
+      );
+      expect(find.text('1 sources'), findsOneWidget);
+      expect(find.text('[1]', findRichText: true), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'agent conversation shows reasoning temporarily until answer starts',
     (tester) async {
       final backend = _ControlledReasoningBackend();

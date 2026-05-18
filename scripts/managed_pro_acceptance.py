@@ -146,15 +146,13 @@ def build_suite() -> AcceptanceSuite:
             "app_runtime_first_semantics",
             "Run app chat and quick-capture runtime-first regression tests.",
             (
-                "bash",
-                "-lc",
-                "dart pub global run fvm:main flutter test "
-                "test/chat_runtime_first_semantics_test.dart "
+                "pixi",
+                "run",
+                "flutter",
+                "test",
                 "test/quick_capture_runtime_first_semantics_test.dart "
-                "test/chat_semantic_parse_auto_create_uses_separate_consent_test.dart "
-                "test/chat_auto_todo_review_queue_test.dart "
-                "test/chat_todo_semantic_remote_first_test.dart "
-                "test/quick_capture_test.dart",
+                "test/quick_capture_test.dart "
+                "test/agent_conversation_test.dart",
             ),
         ),
         EvidenceCommand(
@@ -207,31 +205,6 @@ def build_suite() -> AcceptanceSuite:
             ("Remote staging reset is guarded by --include-staging-reset.",),
         ),
         AcceptanceCase(
-            "QA-SETUP-01",
-            "Prepare development machine, managed pro account, and QA assets",
-            (
-                "qa_assets_check",
-                "app_cloud_runtime_automation_smoke",
-            ),
-        ),
-        AcceptanceCase(
-            "QA-SETUP-02",
-            "Runtime mode entries are reachable and constrained",
-            (
-                "app_cloud_runtime_automation",
-                "app_cloud_runtime_automation_smoke",
-            ),
-        ),
-        AcceptanceCase(
-            "QA-SETUP-03",
-            "Managed pro connects and chat can send messages",
-            (
-                "app_cloud_runtime_automation_smoke",
-                "app_runtime_first_semantics",
-                "server_cloud_runtime_automation",
-            ),
-        ),
-        AcceptanceCase(
             "QA-CHAT-01",
             "Create an ordinary task",
             (
@@ -260,12 +233,62 @@ def build_suite() -> AcceptanceSuite:
             ),
         ),
         AcceptanceCase(
-            "QA-CHAT-04",
-            "Quick Capture avoids local reminder and semantic fallback",
+            "QA-CHAT-05A",
+            "Search skill automated precheck",
             (
+                "app_live_managed_pro_chat_acceptance",
+                "app_cloud_runtime_scenarios",
+                "app_cloud_runtime_integration_scenarios",
                 "app_runtime_first_semantics",
                 "server_cloud_runtime_automation",
             ),
+            (
+                "Runtime/model-gateway logs must show web research tool use and "
+                "LLM skill_result_response postprocess before the final reply.",
+            ),
+        ),
+        AcceptanceCase(
+            "QA-CHAT-05B",
+            "Real app first-turn web research with citations",
+            (
+                "app_live_managed_pro_chat_acceptance",
+                "app_cloud_runtime_scenarios",
+                "app_cloud_runtime_integration_scenarios",
+                "server_cloud_runtime_automation",
+            ),
+        ),
+        AcceptanceCase(
+            "QA-CHAT-05C",
+            "Follow-up keeps the searched Apple launch context",
+            (
+                "app_live_managed_pro_chat_acceptance",
+                "server_cloud_runtime_automation",
+            ),
+            (
+                "Continuity evidence must include recent-turn context, not only "
+                "the first search response.",
+            ),
+        ),
+        AcceptanceCase(
+            "QA-CHAT-05D",
+            "Search skill acceptance evidence is captured",
+            (
+                "app_live_managed_pro_chat_acceptance",
+                "server_export_cloud_runtime_artifacts",
+                "acceptance_report",
+            ),
+        ),
+        AcceptanceCase(
+            "QA-CHAT-05",
+            "Current fact search and follow-up acceptance",
+            (
+                "app_live_managed_pro_chat_acceptance",
+                "app_cloud_runtime_scenarios",
+                "server_cloud_runtime_automation",
+                "server_export_cloud_runtime_artifacts",
+                "acceptance_report",
+            ),
+            ("Do not pass this umbrella case unless QA-CHAT-05A-D pass.",),
         ),
         AcceptanceCase(
             "QA-REM-01",
@@ -288,6 +311,23 @@ def build_suite() -> AcceptanceSuite:
             "Approved recurring reminder is enabled with next fire date",
             (
                 "app_cloud_runtime_scenarios",
+                "server_cloud_runtime_automation",
+            ),
+        ),
+        AcceptanceCase(
+            "QA-TASK-REL-01",
+            "Relative task reference mutates the latest task",
+            (
+                "app_live_managed_pro_chat_acceptance",
+                "app_runtime_first_semantics",
+                "server_cloud_runtime_automation",
+            ),
+        ),
+        AcceptanceCase(
+            "QA-TASK-REL-02",
+            "Ambiguous relative task reference asks for clarification",
+            (
+                "app_runtime_first_semantics",
                 "server_cloud_runtime_automation",
             ),
         ),
@@ -319,7 +359,7 @@ def build_suite() -> AcceptanceSuite:
             ("External calendar inspection is replaced by approval/tool-call protocol evidence.",),
         ),
         AcceptanceCase(
-            "QA-MEDIA-01",
+            "QA-FILE-01",
             "Image OCR and summary",
             (
                 "qa_assets_check",
@@ -328,7 +368,7 @@ def build_suite() -> AcceptanceSuite:
             ),
         ),
         AcceptanceCase(
-            "QA-MEDIA-02",
+            "QA-FILE-02",
             "PDF OCR and expiry date extraction",
             (
                 "qa_assets_check",
@@ -337,35 +377,10 @@ def build_suite() -> AcceptanceSuite:
             ),
         ),
         AcceptanceCase(
-            "QA-MEDIA-03",
+            "QA-FILE-03",
             "Audio transcript and action items",
             (
                 "qa_assets_check",
-                "app_cloud_runtime_scenarios",
-                "server_cloud_runtime_automation",
-            ),
-        ),
-        AcceptanceCase(
-            "QA-MEDIA-04",
-            "High-cost media work requires confirmation",
-            (
-                "qa_assets_check",
-                "app_cloud_runtime_scenarios",
-                "server_cloud_runtime_automation",
-            ),
-        ),
-        AcceptanceCase(
-            "QA-WEB-01",
-            "Light web research creates cited draft",
-            (
-                "app_cloud_runtime_scenarios",
-                "server_cloud_runtime_automation",
-            ),
-        ),
-        AcceptanceCase(
-            "QA-WEB-02",
-            "Oversized web research requires cost confirmation",
-            (
                 "app_cloud_runtime_scenarios",
                 "server_cloud_runtime_automation",
             ),
@@ -384,14 +399,6 @@ def build_suite() -> AcceptanceSuite:
             (
                 "app_cloud_runtime_scenarios",
                 "server_cloud_runtime_automation",
-            ),
-        ),
-        AcceptanceCase(
-            "QA-EVIDENCE-01",
-            "Final acceptance evidence is recorded",
-            (
-                "server_export_cloud_runtime_artifacts",
-                "acceptance_report",
             ),
         ),
     )

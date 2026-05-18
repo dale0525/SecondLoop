@@ -46,12 +46,24 @@ final class RuntimeSecretaryAppService {
   }) async {
     final content = result.assistantContent.trim();
     if (content.isNotEmpty) {
-      await _backend.insertMessage(
-        _sessionKey,
-        conversationId,
-        role: 'assistant',
-        content: content,
-      );
+      final citationsJson = _webResearchCitationsJson(result);
+      final backend = _backend;
+      if (citationsJson != null && backend is AssistantCitationWriteBackend) {
+        await (backend as AssistantCitationWriteBackend)
+            .insertAssistantMessageWithCitations(
+          _sessionKey,
+          conversationId,
+          content: content,
+          citationsJson: citationsJson,
+        );
+      } else {
+        await backend.insertMessage(
+          _sessionKey,
+          conversationId,
+          role: 'assistant',
+          content: content,
+        );
+      }
     }
     await applyRuntimeTaskMutations(
       result,
@@ -857,10 +869,90 @@ String? _runtimeMemorySourceRefsJson(
   return refs.isEmpty ? null : jsonEncode(refs);
 }
 
+String? _webResearchCitationsJson(
+  SecretaryRuntimeConversationResult result,
+) {
+  final sources = <Map<String, Object?>>[];
+  final seenHrefs = <String>{};
+
+  for (final draft in result.metadata.webResearchDrafts) {
+    final rawCitations = draft['citations'];
+    if (rawCitations is! List) continue;
+    for (final rawCitation in rawCitations) {
+      final citation = _runtimeMap(rawCitation);
+      final href = _firstRuntimeString([
+        citation['href'],
+        citation['url'],
+        citation['source_url'],
+        citation['sourceUrl'],
+      ]);
+      if (href == null || !_isHttpUrl(href)) continue;
+      if (!seenHrefs.add(href)) continue;
+
+      final title = _firstRuntimeString([
+        citation['title'],
+        citation['name'],
+        citation['domain'],
+        draft['query'],
+      ]);
+      final snippet = _firstRuntimeString([
+            citation['snippet'],
+            citation['summary'],
+            citation['description'],
+            draft['summary'],
+          ]) ??
+          '';
+      final fetchedAtMs = _firstRuntimeInt([
+        citation['fetched_at_ms'],
+        citation['fetchedAtMs'],
+        citation['created_at_ms'],
+        citation['createdAtMs'],
+        draft['fetched_at_ms'],
+        draft['created_at_ms'],
+      ]);
+      final domain = _firstRuntimeString([
+        citation['domain'],
+        citation['site_name'],
+        citation['siteName'],
+      ]);
+
+      sources.add(<String, Object?>{
+        'id': 'web_research:${sources.length + 1}',
+        'href': href,
+        'source_type': 'web_research',
+        'label': domain ?? 'Web',
+        'source_type_label': 'Web research',
+        'scope_label': 'Runtime web research',
+        'confidence_label': 'Cited source',
+        if (title != null) 'title': title,
+        'snippet': snippet,
+        if (fetchedAtMs != null) 'created_at_ms': fetchedAtMs,
+        if (fetchedAtMs != null) 'updated_at_ms': fetchedAtMs,
+      });
+    }
+  }
+
+  if (sources.isEmpty) return null;
+  return jsonEncode(<String, Object?>{'direct_sources': sources});
+}
+
+bool _isHttpUrl(String value) {
+  final uri = Uri.tryParse(value);
+  return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+}
+
 String? _firstRuntimeString(Iterable<Object?> values) {
   for (final value in values) {
     final text = _runtimeString(value);
     if (text != null) return text;
+  }
+  return null;
+}
+
+int? _firstRuntimeInt(Iterable<Object?> values) {
+  for (final value in values) {
+    final integer = _runtimeInt(value);
+    if (integer != null) return integer;
   }
   return null;
 }

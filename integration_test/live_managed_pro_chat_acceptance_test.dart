@@ -130,6 +130,126 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 3)),
   );
+
+  testWidgets(
+    'live managed pro chat uses web research citations and carries follow-up context',
+    (tester) async {
+      final config = _LiveManagedProConfig.fromEnvironment();
+      config.validate();
+
+      final appDir = await Directory.systemTemp.createTemp(
+        'secondloop-live-managed-pro-chat-search-',
+      );
+      addTearDown(() async {
+        if (await appDir.exists()) {
+          await appDir.delete(recursive: true);
+        }
+      });
+
+      final backend = NativeAppBackend(
+        appDirProvider: () async => appDir.path,
+        storageScope:
+            'live-managed-pro-chat-search-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      await backend.init();
+      final sessionKey =
+          await backend.initMasterPassword('live-managed-pro-acceptance');
+      final conversation = await backend.getOrCreateLoopHomeConversation(
+        sessionKey,
+      );
+
+      final authController = CloudAuthControllerImpl(
+        identityToolkit: FirebaseIdentityToolkitHttp(
+          webApiKey: config.firebaseWebApiKey,
+        ),
+        store: _MemoryCloudAuthStore(),
+      );
+      await authController.signInWithEmailPassword(
+        email: config.email,
+        password: config.password,
+      );
+      final resolvedVaultId = authController.uid?.trim();
+      expect(resolvedVaultId, isNotNull);
+      expect(resolvedVaultId, isNotEmpty);
+
+      final sender = SecretaryRuntimeConversationSender.hostedManagedPro(
+        apiBaseUrl: config.cloudGatewayBaseUrl,
+        hostedSessionTokenGetter: authController.getIdToken,
+      );
+      final service = RuntimeSecretaryAppService(
+        sender: sender,
+        backend: backend,
+        sessionKey: sessionKey,
+      );
+
+      final searchUserMessage = await backend.insertMessage(
+        sessionKey,
+        conversation.id,
+        role: 'user',
+        content: '查一下最近 Apple 发布会有哪些新产品，给我带来源。',
+      );
+      final searchResult = await service.sendAndApply(
+        vaultId: resolvedVaultId!,
+        conversationId: conversation.id,
+        message: searchUserMessage.content,
+        sourceMessageId: searchUserMessage.id,
+      );
+      expect(
+        searchResult.metadata.webResearchDrafts,
+        isNotEmpty,
+        reason:
+            'QA-CHAT-05B must prove the runtime returned cited web research metadata. '
+            'Runtime result: ${_runtimeResultSnapshot(searchResult)}',
+      );
+      expect(
+        _webResearchCitationUrls(searchResult),
+        isNotEmpty,
+        reason:
+            'QA-CHAT-05B must include traceable citations, not only assistant text. '
+            'Runtime result: ${_runtimeResultSnapshot(searchResult)}',
+      );
+
+      final firstAssistantMessage = (await backend.listMessages(
+        sessionKey,
+        conversation.id,
+      ))
+          .where((message) => message.role == 'assistant')
+          .last;
+      expect(
+        firstAssistantMessage.citationsJson,
+        isNotNull,
+        reason:
+            'App must persist runtime web research citations into assistant message evidence.',
+      );
+      expect(firstAssistantMessage.citationsJson, contains('direct_sources'));
+
+      final followUpUserMessage = await backend.insertMessage(
+        sessionKey,
+        conversation.id,
+        role: 'user',
+        content: '介绍一下新的手机产品参数。',
+      );
+      final followUpResult = await service.sendAndApply(
+        vaultId: resolvedVaultId,
+        conversationId: conversation.id,
+        message: followUpUserMessage.content,
+        sourceMessageId: followUpUserMessage.id,
+      );
+
+      expect(
+        followUpResult.assistantContent,
+        contains(RegExp(r'iPhone|手机')),
+        reason:
+            'QA-CHAT-05C must carry the Apple launch phone context into the follow-up. '
+            'Runtime result: ${_runtimeResultSnapshot(followUpResult)}',
+      );
+      expect(
+        followUpResult.assistantContent,
+        isNot(contains(RegExp(r'重新说明|再说明|哪.*手机'))),
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 5)),
+  );
 }
 
 String _runtimeResultSnapshot(SecretaryRuntimeConversationResult result) {
@@ -140,6 +260,8 @@ String _runtimeResultSnapshot(SecretaryRuntimeConversationResult result) {
     'approval_required': result.metadata.approvalRequired,
     'proposed_mutations': result.metadata.proposedMutations,
     'applied_mutations': result.metadata.appliedMutations,
+    'web_research_drafts': result.metadata.webResearchDrafts,
+    'tool_trace_ids': result.metadata.toolTraceIds,
     'approval_items': result.metadata.approvalItems
         .map(
           (item) => <String, Object?>{
@@ -153,6 +275,22 @@ String _runtimeResultSnapshot(SecretaryRuntimeConversationResult result) {
         )
         .toList(growable: false),
   });
+}
+
+List<String> _webResearchCitationUrls(
+    SecretaryRuntimeConversationResult result) {
+  final urls = <String>[];
+  for (final draft in result.metadata.webResearchDrafts) {
+    final rawCitations = draft['citations'];
+    if (rawCitations is! List) continue;
+    for (final citation in rawCitations.whereType<Map>()) {
+      final url = citation['url'];
+      if (url is String && url.trim().isNotEmpty) {
+        urls.add(url.trim());
+      }
+    }
+  }
+  return urls;
 }
 
 Todo _singleTodoByTitle(List<Todo> todos, String title) {

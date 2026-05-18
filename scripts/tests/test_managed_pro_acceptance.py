@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import tempfile
 import unittest
 from pathlib import Path
@@ -78,28 +79,27 @@ class ManagedProAcceptanceTests(unittest.TestCase):
     def test_runbook_managed_pro_cases_are_fully_mapped(self):
         expected_case_ids = {
             "QA-SETUP-00",
-            "QA-SETUP-01",
-            "QA-SETUP-02",
-            "QA-SETUP-03",
             "QA-CHAT-01",
             "QA-CHAT-02",
             "QA-CHAT-03",
-            "QA-CHAT-04",
+            "QA-CHAT-05A",
+            "QA-CHAT-05B",
+            "QA-CHAT-05C",
+            "QA-CHAT-05D",
+            "QA-CHAT-05",
             "QA-REM-01",
             "QA-REM-02",
             "QA-REM-03",
+            "QA-TASK-REL-01",
+            "QA-TASK-REL-02",
+            "QA-FILE-01",
+            "QA-FILE-02",
+            "QA-FILE-03",
             "QA-EXT-01",
             "QA-EXT-02",
             "QA-EXT-03",
-            "QA-MEDIA-01",
-            "QA-MEDIA-02",
-            "QA-MEDIA-03",
-            "QA-MEDIA-04",
-            "QA-WEB-01",
-            "QA-WEB-02",
             "QA-SAFE-01",
             "QA-SAFE-02",
-            "QA-EVIDENCE-01",
         }
 
         suite = managed_pro_acceptance.build_suite()
@@ -114,6 +114,31 @@ class ManagedProAcceptanceTests(unittest.TestCase):
                 0,
                 f"{case.case_id} must have at least one evidence command",
             )
+
+    def test_acceptance_runner_references_existing_app_tests(self):
+        app_root = Path(__file__).resolve().parents[2]
+        suite = managed_pro_acceptance.build_suite()
+        command = next(
+            item
+            for item in suite.commands
+            if item.command_id == "app_runtime_first_semantics"
+        )
+        command_tokens = [
+            token
+            for argument in command.argv
+            for token in shlex.split(argument)
+        ]
+        test_paths = [
+            token
+            for token in command_tokens
+            if token.startswith("test/") and token.endswith("_test.dart")
+        ]
+
+        self.assertGreater(len(test_paths), 0)
+        self.assertEqual(
+            [path for path in test_paths if not (app_root / path).is_file()],
+            [],
+        )
 
     def test_chat_cases_require_live_managed_pro_account_evidence(self):
         suite = managed_pro_acceptance.build_suite()
@@ -179,7 +204,7 @@ class ManagedProAcceptanceTests(unittest.TestCase):
             self.assertEqual(payload["mode"], "managed_pro")
             self.assertEqual(payload["overall_status"], "PASS")
             self.assertIn("QA-CHAT-01", payload["cases"])
-            self.assertIn("QA-EVIDENCE-01", payload["cases"])
+            self.assertIn("QA-CHAT-05D", payload["cases"])
             self.assertIn("server_cloud_runtime_automation", payload["commands"])
 
     def test_overall_status_fails_when_any_case_fails(self):

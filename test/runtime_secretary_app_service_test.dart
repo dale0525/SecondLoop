@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/secretary_backend.dart';
 import 'package:secondloop/core/cloud/runtime_secretary_app_service.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_client.dart';
@@ -76,6 +78,67 @@ void main() {
     expect(todos.single.title, '完成周报');
     expect(todos.single.status, 'open');
     expect(todos.single.sourceEntryId, 'm-user-1');
+  });
+
+  test(
+      'runtime secretary app service stores web research citations as evidence',
+      () async {
+    final backend = _CitationRecordingBackend();
+    final sender = _FakeRuntimeSender(
+      result: SecretaryRuntimeConversationResult.fromJson(const {
+        'run_id': 'run-web-research',
+        'conversation_id': 'loop_home',
+        'assistant': {
+          'content':
+              'Apple 发布了 iPhone 17。[Apple Newsroom](https://www.apple.com/newsroom/)',
+        },
+        'metadata': {
+          'run_id': 'run-web-research',
+          'turn_id': 'turn-web-research',
+          'conversation_id': 'loop_home',
+          'vault_id': 'managed-user-1',
+          'response_type': 'assistant_message',
+          'run_status': 'completed',
+          'approval_required': false,
+          'web_research_drafts': [
+            {
+              'query': 'Apple 今天的发布会发布了哪些产品？',
+              'summary': 'Apple 发布了 iPhone 17。',
+              'citations': [
+                {
+                  'title': 'Apple Newsroom',
+                  'url': 'https://www.apple.com/newsroom/',
+                  'domain': 'www.apple.com',
+                  'fetched_at_ms': 1700000000000,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    final service = RuntimeSecretaryAppService(
+      sender: sender,
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+
+    await service.sendAndApply(
+      vaultId: 'managed-user-1',
+      conversationId: 'loop_home',
+      message: '查一下最近 Apple 发布会有哪些新产品，给我带来源。',
+      sourceMessageId: 'm-user-search',
+    );
+
+    expect(backend.assistantCitationWrites, hasLength(1));
+    final decoded = jsonDecode(backend.assistantCitationWrites.single)
+        as Map<String, dynamic>;
+    final sources = decoded['direct_sources'] as List<dynamic>;
+    expect(sources, hasLength(1));
+    expect(sources.single,
+        containsPair('href', 'https://www.apple.com/newsroom/'));
+    expect(sources.single, containsPair('title', 'Apple Newsroom'));
+    expect(sources.single, containsPair('source_type', 'web_research'));
   });
 
   test('runtime secretary app service ignores pending task mutations',
@@ -699,6 +762,27 @@ final class _TodoRecordingBackend extends TestAppBackend {
     required String ruleJson,
   }) async {
     recurrenceRules[todoId] = ruleJson;
+  }
+}
+
+final class _CitationRecordingBackend extends _TodoRecordingBackend
+    implements AssistantCitationWriteBackend {
+  final List<String> assistantCitationWrites = <String>[];
+
+  @override
+  Future<Message> insertAssistantMessageWithCitations(
+    Uint8List key,
+    String conversationId, {
+    required String content,
+    String? citationsJson,
+  }) async {
+    assistantCitationWrites.add(citationsJson ?? '');
+    return insertMessage(
+      key,
+      conversationId,
+      role: 'assistant',
+      content: content,
+    );
   }
 }
 
