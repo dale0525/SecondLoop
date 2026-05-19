@@ -15,7 +15,6 @@ import '../ai/media_capability_source_prefs.dart';
 import '../ai/media_capability_wifi_prefs.dart';
 import '../ai/media_source_prefs.dart';
 import '../backend/app_backend.dart';
-import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';
 import '../attachments/attachment_metadata_store.dart';
 import '../cloud/cloud_capability_auth.dart';
@@ -34,8 +33,6 @@ import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine_gate.dart';
 import '../update/update_restart_activity.dart';
 import 'media_enrichment_availability.dart';
-import 'package:secondloop/core/runtime_compat/api/media_annotation.dart'
-    as rust_media_annotation;
 import 'package:secondloop/core/models/app_models.dart';
 import '../../i18n/strings.g.dart';
 
@@ -171,14 +168,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       _nextRunAt = null;
       unawaited(_runOnce());
     });
-  }
-
-  static String _formatLocalDayKey(DateTime value) {
-    final dt = value.toLocal();
-    final y = dt.year.toString().padLeft(4, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
   }
 
   static int _asInt(Object? raw) {
@@ -463,10 +452,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
           final profile = effectiveOpenAiProfile();
           if (profile != null) {
             annotationPrimaryClient = _ByokMediaEnrichmentClient(
-              sessionKey: Uint8List.fromList(sessionKey),
               profileId: profile.id,
               modelName: profile.modelName,
-              appDirProvider: getNativeAppDir,
             );
           }
         }
@@ -537,7 +524,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             preference: urlPreference,
             cloudAvailable: cloudAvailable,
             byokProfile: effectiveOpenAiProfile(),
-            sessionKey: Uint8List.fromList(sessionKey),
             gatewayBaseUrl: gatewayConfig.baseUrl,
             cloudIdToken: idToken?.trim() ?? '',
             cloudModelName: gatewayConfig.modelName,

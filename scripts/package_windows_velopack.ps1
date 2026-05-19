@@ -349,18 +349,6 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
       exit $LASTEXITCODE
     }
 
-    Write-Host 'Running: prepare_desktop_runtime.dart --platform windows --arch x64'
-    & $runFvmToolScript dart run tools/prepare_desktop_runtime.dart --platform=windows --arch=x64
-    if ($LASTEXITCODE -ne 0) {
-      exit $LASTEXITCODE
-    }
-
-    Write-Host 'Running: sync_desktop_runtime_to_appdir.dart --platform windows'
-    & $runFvmToolScript dart run tools/sync_desktop_runtime_to_appdir.dart --platform=windows
-    if ($LASTEXITCODE -ne 0) {
-      exit $LASTEXITCODE
-    }
-
     $buildArgs = @('build', 'windows', '--release')
     $buildArgs += Build-DartDefines
     Write-Host ('Running: flutter ' + ($buildArgs -join ' '))

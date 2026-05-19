@@ -22,7 +22,7 @@ Future<List<String>> requestTodoChecklistSuggestions({
   int? dueAtMs,
   Duration timeout = const Duration(seconds: 20),
 }) async {
-  if (route == AskAiRouteKind.needsSetup) {
+  if (route != AskAiRouteKind.cloudGateway) {
     return const <String>[];
   }
 
@@ -34,22 +34,15 @@ Future<List<String>> requestTodoChecklistSuggestions({
     dueAtMs: dueAtMs,
   );
 
-  final response = route == AskAiRouteKind.cloudGateway
-      ? await backend
-          .runAiPromptCloudGateway(
-            sessionKey,
-            prompt: prompt,
-            gatewayBaseUrl: gatewayBaseUrl,
-            idToken: idToken,
-            modelName: modelName,
-          )
-          .timeout(timeout)
-      : await backend
-          .runAiPrompt(
-            sessionKey,
-            prompt: prompt,
-          )
-          .timeout(timeout);
+  final response = await backend
+      .runAiPromptCloudGateway(
+        sessionKey,
+        prompt: prompt,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+      )
+      .timeout(timeout);
 
   return parseTodoChecklistSuggestionsJson(response);
 }

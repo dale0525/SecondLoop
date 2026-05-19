@@ -152,13 +152,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String messageId,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbEnqueueSemanticParseJob(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    throw _retiredNativeRuntimeFeature('dbEnqueueSemanticParseJob');
   }
 
   @override
@@ -167,13 +161,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required int nowMs,
     int limit = 5,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbListDueSemanticParseJobs(
-      appDir: appDir,
-      key: key,
-      nowMs: PlatformInt64Util.from(nowMs),
-      limit: limit,
-    );
+    throw _retiredNativeRuntimeFeature('dbListDueSemanticParseJobs');
   }
 
   @override
@@ -181,12 +169,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     Uint8List key, {
     required List<String> messageIds,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbListSemanticParseJobsByMessageIds(
-      appDir: appDir,
-      key: key,
-      messageIds: messageIds,
-    );
+    throw _retiredNativeRuntimeFeature('dbListSemanticParseJobsByMessageIds');
   }
 
   @override
@@ -195,13 +178,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String messageId,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbMarkSemanticParseJobRunning(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    throw _retiredNativeRuntimeFeature('dbMarkSemanticParseJobRunning');
   }
 
   @override
@@ -210,14 +187,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String messageId,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    final attemptId = await rust_core.dbClaimSemanticParseJobRunning(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
-    return attemptId.toInt();
+    throw _retiredNativeRuntimeFeature('dbClaimSemanticParseJobRunning');
   }
 
   @override
@@ -229,16 +199,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String lastError,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbMarkSemanticParseJobFailed(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      attempts: PlatformInt64Util.from(attempts),
-      nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
-      lastError: lastError,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    throw _retiredNativeRuntimeFeature('dbMarkSemanticParseJobFailed');
   }
 
   @override
@@ -251,16 +212,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String lastError,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbMarkSemanticParseJobFailedIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      attempts: PlatformInt64Util.from(attempts),
-      nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
-      lastError: lastError,
-      nowMs: PlatformInt64Util.from(nowMs),
+    throw _retiredNativeRuntimeFeature(
+      'dbMarkSemanticParseJobFailedIfCurrentAttempt',
     );
   }
 
@@ -270,13 +223,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String messageId,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbMarkSemanticParseJobRetry(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    throw _retiredNativeRuntimeFeature('dbMarkSemanticParseJobRetry');
   }
 
   @override
@@ -293,21 +240,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     List<String>? appliedTagIds,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbMarkSemanticParseJobSucceeded(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      appliedActionKind: appliedActionKind,
-      appliedTodoId: appliedTodoId,
-      appliedTodoTitle: appliedTodoTitle,
-      appliedPrevTodoStatus: appliedPrevTodoStatus,
-      suggestedTags: suggestedTags,
-      suggestedTagConfidence: suggestedTagConfidence,
-      tagSuggestionState: tagSuggestionState,
-      appliedTagIds: appliedTagIds,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    throw _retiredNativeRuntimeFeature('dbMarkSemanticParseJobSucceeded');
   }
 
   @override
@@ -325,21 +258,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     List<String>? appliedTagIds,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbMarkSemanticParseJobSucceededIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      appliedActionKind: appliedActionKind,
-      appliedTodoId: appliedTodoId,
-      appliedTodoTitle: appliedTodoTitle,
-      appliedPrevTodoStatus: appliedPrevTodoStatus,
-      suggestedTags: suggestedTags,
-      suggestedTagConfidence: suggestedTagConfidence,
-      tagSuggestionState: tagSuggestionState,
-      appliedTagIds: appliedTagIds,
-      nowMs: PlatformInt64Util.from(nowMs),
+    throw _retiredNativeRuntimeFeature(
+      'dbMarkSemanticParseJobSucceededIfCurrentAttempt',
     );
   }
 
@@ -349,13 +269,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String messageId,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbMarkSemanticParseJobCanceled(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    throw _retiredNativeRuntimeFeature('dbMarkSemanticParseJobCanceled');
   }
 
   @override
@@ -363,13 +277,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     Uint8List key, {
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    final count = await rust_core.dbRequeueRunningSemanticParseJobs(
-      appDir: appDir,
-      key: key,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
-    return count.toInt();
+    throw _retiredNativeRuntimeFeature('dbRequeueRunningSemanticParseJobs');
   }
 
   @override
@@ -379,13 +287,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required int expectedAttemptId,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbMarkSemanticParseJobCanceledIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      nowMs: PlatformInt64Util.from(nowMs),
+    throw _retiredNativeRuntimeFeature(
+      'dbMarkSemanticParseJobCanceledIfCurrentAttempt',
     );
   }
 
@@ -399,16 +302,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     double? suggestedTagConfidence,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbCompleteSemanticParseNoActionIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      pendingSuggestedTags: pendingSuggestedTags,
-      autoApplySuggestedTags: autoApplySuggestedTags,
-      suggestedTagConfidence: suggestedTagConfidence,
-      nowMs: PlatformInt64Util.from(nowMs),
+    throw _retiredNativeRuntimeFeature(
+      'dbCompleteSemanticParseNoActionIfCurrentAttempt',
     );
   }
 
@@ -434,33 +329,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     double? suggestedTagConfidence,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbCompleteSemanticParseCreateIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      todoId: todoId,
-      title: title,
-      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
-      status: status,
-      reviewStage:
-          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
-      nextReviewAtMs: nextReviewAtMs == null
-          ? null
-          : PlatformInt64Util.from(nextReviewAtMs),
-      lastReviewAtMs: lastReviewAtMs == null
-          ? null
-          : PlatformInt64Util.from(lastReviewAtMs),
-      taskTypeHint: followupTaskTypeHint,
-      recurrenceRuleJson: recurrenceRuleJson,
-      checklistSuggestions: checklistSuggestions,
-      checklistSource: checklistSource,
-      checklistGenerationKey: checklistGenerationKey,
-      pendingSuggestedTags: pendingSuggestedTags,
-      autoApplySuggestedTags: autoApplySuggestedTags,
-      suggestedTagConfidence: suggestedTagConfidence,
-      nowMs: PlatformInt64Util.from(nowMs),
+    throw _retiredNativeRuntimeFeature(
+      'dbCompleteSemanticParseCreateIfCurrentAttempt',
     );
   }
 
@@ -478,21 +348,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     double? suggestedTagConfidence,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_semantic_parse_jobs
-        .dbCompleteSemanticParseFollowupIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      todoId: todoId,
-      todoTitle: todoTitle,
-      newStatus: newStatus,
-      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
-      pendingSuggestedTags: pendingSuggestedTags,
-      autoApplySuggestedTags: autoApplySuggestedTags,
-      suggestedTagConfidence: suggestedTagConfidence,
-      nowMs: PlatformInt64Util.from(nowMs),
+    throw _retiredNativeRuntimeFeature(
+      'dbCompleteSemanticParseFollowupIfCurrentAttempt',
     );
   }
 
@@ -507,33 +364,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     double? suggestedTagConfidence,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbCompleteSemanticParseTodoCommandIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      todoId: command.targetTodoId ?? '',
-      todoTitle: command.targetTitle,
-      appliedActionKind:
-          'todo_command:${todoCommandKindWireValue(command.kind)}',
-      newTitle: command.newTitle,
-      newStatus: command.kind == SecretaryTodoCommandKind.dismiss
-          ? 'dismissed'
-          : command.newStatus,
-      dueAtMs: command.dueAtMs == null
-          ? null
-          : PlatformInt64Util.from(command.dueAtMs!),
-      manualImportanceNudgeScore: command.manualImportanceNudgeScore == null
-          ? null
-          : PlatformInt64Util.from(command.manualImportanceNudgeScore!),
-      manualUrgencyNudgeScore: command.manualUrgencyNudgeScore == null
-          ? null
-          : PlatformInt64Util.from(command.manualUrgencyNudgeScore!),
-      pendingSuggestedTags: pendingSuggestedTags,
-      autoApplySuggestedTags: autoApplySuggestedTags,
-      suggestedTagConfidence: suggestedTagConfidence,
-      nowMs: PlatformInt64Util.from(nowMs),
+    throw _retiredNativeRuntimeFeature(
+      'dbCompleteSemanticParseTodoCommandIfCurrentAttempt',
     );
   }
 
@@ -544,14 +376,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required int expectedAttemptId,
     required List<String> suggestedTags,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbApplySemanticParseTagsIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      suggestedTags: suggestedTags,
-    );
+    throw _retiredNativeRuntimeFeature(
+        'dbApplySemanticParseTagsIfCurrentAttempt');
   }
 
   @override
@@ -570,27 +396,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     String? recurrenceRuleJson,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbUpsertTodoFromSemanticParseIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      todoId: todoId,
-      title: title,
-      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
-      status: status,
-      reviewStage:
-          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
-      nextReviewAtMs: nextReviewAtMs == null
-          ? null
-          : PlatformInt64Util.from(nextReviewAtMs),
-      lastReviewAtMs: lastReviewAtMs == null
-          ? null
-          : PlatformInt64Util.from(lastReviewAtMs),
-      taskTypeHint: taskTypeHint,
-      recurrenceRuleJson: recurrenceRuleJson,
-      nowMs: PlatformInt64Util.from(nowMs),
+    throw _retiredNativeRuntimeFeature(
+      'dbUpsertTodoFromSemanticParseIfCurrentAttempt',
     );
   }
 
@@ -604,16 +411,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String source,
     String? generationKey,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbUpsertGeneratedTodoChecklistSuggestionsIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      todoId: todoId,
-      suggestions: suggestions,
-      source: source,
-      generationKey: generationKey,
+    throw _retiredNativeRuntimeFeature(
+      'dbUpsertGeneratedTodoChecklistSuggestionsIfCurrentAttempt',
     );
   }
 
@@ -625,14 +424,8 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String todoId,
     required String newStatus,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbSetTodoStatusFromSemanticParseIfCurrentAttempt(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
-      todoId: todoId,
-      newStatus: newStatus,
+    throw _retiredNativeRuntimeFeature(
+      'dbSetTodoStatusFromSemanticParseIfCurrentAttempt',
     );
   }
 
@@ -642,12 +435,6 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required String messageId,
     required int nowMs,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.dbMarkSemanticParseJobUndone(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    throw _retiredNativeRuntimeFeature('dbMarkSemanticParseJobUndone');
   }
 }

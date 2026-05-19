@@ -323,7 +323,7 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
             )
             self.assertNotIn("\\`", rendered_notes)
 
-    def test_release_workflow_exposes_github_token_for_desktop_runtime_download(self) -> None:
+    def test_release_workflow_exposes_github_token_for_release_publication(self) -> None:
         workflow_text = self._workflow_text()
 
         self.assertGreaterEqual(workflow_text.count("GH_TOKEN: ${{ github.token }}"), 4)
@@ -467,44 +467,31 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertIn('flutter build windows --release -v @buildArgs @defines', workflow_text)
 
-    def test_windows_release_uses_repo_setup_ffmpeg_script(self) -> None:
+    def test_release_workflow_does_not_prepare_local_media_runtime(self) -> None:
         workflow_text = self._workflow_text()
 
-        self.assertIn('powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_ffmpeg_windows.ps1', workflow_text)
-        self.assertIn('dart run tools/prepare_bundled_ffmpeg.dart --platform=windows', workflow_text)
+        self.assertNotIn('prepare_desktop_runtime.dart', workflow_text)
+        self.assertNotIn('sync_desktop_runtime_to_appdir.dart', workflow_text)
+        self.assertNotIn('setup_ffmpeg_windows.ps1', workflow_text)
+        self.assertNotIn('setup_ffmpeg_macos.sh', workflow_text)
+        self.assertNotIn('prepare_bundled_ffmpeg.dart', workflow_text)
+        self.assertNotIn('brew install ffmpeg', workflow_text)
+        self.assertNotIn('assets/bin/ffmpeg', workflow_text)
+        self.assertNotIn('SECONDLOOP_DESKTOP_RUNTIME_TAG', workflow_text)
         self.assertNotIn('choco install ffmpeg --yes --no-progress', workflow_text)
         self.assertNotIn('--source-bin "C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe"', workflow_text)
 
-    def test_desktop_release_prunes_non_target_ffmpeg_assets_before_build(self) -> None:
+    def test_desktop_release_skips_local_ffmpeg_asset_pruning(self) -> None:
         workflow_text = self._workflow_text()
 
-        self.assertIn("name: Prune non-target FFmpeg assets (windows)", workflow_text)
-        self.assertIn("name: Prune non-target FFmpeg assets (macos)", workflow_text)
-        self.assertIn("name: Prune non-target FFmpeg assets (linux)", workflow_text)
-
-        self.assertIn("$removeDirs = @('macos', 'linux')", workflow_text)
-        self.assertIn("$targetFfmpeg = Join-Path $ffmpegRoot 'windows/ffmpeg.zip'", workflow_text)
+        self.assertNotIn("name: Prune non-target FFmpeg assets (windows)", workflow_text)
+        self.assertNotIn("name: Prune non-target FFmpeg assets (macos)", workflow_text)
+        self.assertNotIn("name: Prune non-target FFmpeg assets (linux)", workflow_text)
+        self.assertNotIn("$removeDirs = @('macos', 'linux')", workflow_text)
+        self.assertNotIn("$targetFfmpeg = Join-Path $ffmpegRoot 'windows/ffmpeg.zip'", workflow_text)
         self.assertNotIn("windows/ffmpeg.exe", workflow_text)
-        self.assertIn('rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/linux', workflow_text)
-        self.assertIn('rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/macos', workflow_text)
-
-        windows_prune_idx = workflow_text.find("name: Prune non-target FFmpeg assets (windows)")
-        windows_build_idx = workflow_text.find("flutter build windows --release -v @buildArgs @defines")
-        self.assertNotEqual(-1, windows_prune_idx)
-        self.assertNotEqual(-1, windows_build_idx)
-        self.assertLess(windows_prune_idx, windows_build_idx)
-
-        macos_prune_idx = workflow_text.find("name: Prune non-target FFmpeg assets (macos)")
-        macos_build_idx = workflow_text.find("flutter build macos --release --config-only")
-        self.assertNotEqual(-1, macos_prune_idx)
-        self.assertNotEqual(-1, macos_build_idx)
-        self.assertLess(macos_prune_idx, macos_build_idx)
-
-        linux_prune_idx = workflow_text.find("name: Prune non-target FFmpeg assets (linux)")
-        linux_build_idx = workflow_text.find("flutter build linux --release")
-        self.assertNotEqual(-1, linux_prune_idx)
-        self.assertNotEqual(-1, linux_build_idx)
-        self.assertLess(linux_prune_idx, linux_build_idx)
+        self.assertNotIn('rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/linux', workflow_text)
+        self.assertNotIn('rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/macos', workflow_text)
 
     def test_windows_release_packages_and_uploads_msi_and_velopack_artifacts(self) -> None:
         workflow_text = self._workflow_text()

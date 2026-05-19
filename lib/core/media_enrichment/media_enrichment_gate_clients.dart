@@ -35,16 +35,12 @@ final class _CompositeMediaEnrichmentClient implements MediaEnrichmentClient {
 
 final class _ByokMediaEnrichmentClient implements MediaEnrichmentClient {
   const _ByokMediaEnrichmentClient({
-    required Uint8List sessionKey,
     required this.profileId,
     required this.modelName,
-    required this.appDirProvider,
-  }) : _sessionKey = sessionKey;
+  });
 
-  final Uint8List _sessionKey;
   final String profileId;
   final String modelName;
-  final Future<String> Function() appDirProvider;
 
   @override
   String get annotationModelName => modelName;
@@ -64,16 +60,7 @@ final class _ByokMediaEnrichmentClient implements MediaEnrichmentClient {
     required String mimeType,
     required Uint8List imageBytes,
   }) async {
-    final appDir = await appDirProvider();
-    return rust_media_annotation.mediaAnnotationByokProfile(
-      appDir: appDir,
-      key: _sessionKey,
-      profileId: profileId,
-      localDay: _MediaEnrichmentGateState._formatLocalDayKey(DateTime.now()),
-      lang: lang,
-      mimeType: mimeType,
-      imageBytes: imageBytes,
-    );
+    throw StateError('media_annotation_byok_runtime_removed');
   }
 }
 

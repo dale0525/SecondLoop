@@ -23,7 +23,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
     required int createdAtMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbUpsertAttachmentDerivation(
+    await _dartDbUpsertAttachmentDerivation(
       appDir: appDir,
       key: key,
       rootSha256: rootSha256,
@@ -39,7 +39,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
     int limit = 50,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListRecentAttachments(
+    return _dartDbListRecentAttachments(
       appDir: appDir,
       key: key,
       limit: limit,
@@ -53,7 +53,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
     required String attachmentSha256,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbLinkAttachmentToMessage(
+    await _dartDbLinkAttachmentToMessage(
       appDir: appDir,
       key: key,
       messageId: messageId,
@@ -65,7 +65,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
   Future<List<Attachment>> listMessageAttachments(
       Uint8List key, String messageId) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListMessageAttachments(
+    return _dartDbListMessageAttachments(
       appDir: appDir,
       key: key,
       messageId: messageId,
@@ -78,7 +78,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
     required String sha256,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbReadAttachmentBytes(
+    return _dartDbReadAttachmentBytes(
       appDir: appDir,
       key: key,
       sha256: sha256,
@@ -93,7 +93,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
     double? longitude,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbUpsertAttachmentExifMetadata(
+    await _dartDbUpsertAttachmentExifMetadata(
       appDir: appDir,
       key: key,
       attachmentSha256: sha256,
@@ -110,7 +110,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
     required String sha256,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbReadAttachmentExifMetadata(
+    return _dartDbReadAttachmentExifMetadata(
       appDir: appDir,
       key: key,
       attachmentSha256: sha256,
@@ -123,7 +123,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
     required String sha256,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbReadAttachmentPlaceDisplayName(
+    return _dartDbReadAttachmentPlaceDisplayName(
       appDir: appDir,
       key: key,
       attachmentSha256: sha256,
@@ -136,7 +136,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
     required String sha256,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbReadAttachmentAnnotationCaptionLong(
+    return _dartDbReadAttachmentAnnotationCaptionLong(
       appDir: appDir,
       key: key,
       attachmentSha256: sha256,
@@ -148,7 +148,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
     required String sha256,
   }) async {
     final appDir = await _getAppDir();
-    return rust_content_extract.dbReadAttachmentAnnotationPayloadJson(
+    return _dartDbReadAttachmentAnnotationPayloadJson(
       appDir: appDir,
       key: key,
       attachmentSha256: sha256,
@@ -159,7 +159,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
   Future<void> editMessage(
       Uint8List key, String messageId, String content) async {
     final appDir = await _getAppDir();
-    await rust_core.dbEditMessage(
+    await _dartDbEditMessage(
       appDir: appDir,
       key: key,
       messageId: messageId,
@@ -171,7 +171,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
   Future<void> setMessageDeleted(
       Uint8List key, String messageId, bool isDeleted) async {
     final appDir = await _getAppDir();
-    await rust_core.dbSetMessageDeleted(
+    await _dartDbSetMessageDeleted(
       appDir: appDir,
       key: key,
       messageId: messageId,
@@ -182,7 +182,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
   @override
   Future<void> purgeMessageAttachments(Uint8List key, String messageId) async {
     final appDir = await _getAppDir();
-    await rust_core.dbPurgeMessageAttachments(
+    await _dartDbPurgeMessageAttachments(
       appDir: appDir,
       key: key,
       messageId: messageId,
@@ -192,7 +192,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
     final appDir = await _getAppDir();
-    await rust_core.dbResetVaultDataPreservingLlmProfiles(
+    await _dartDbResetVaultDataPreservingLlmProfiles(
       appDir: appDir,
       key: key,
     );
@@ -201,7 +201,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
   @override
   Future<void> clearLocalAttachmentCache(Uint8List key) async {
     final appDir = await _getAppDir();
-    await rust_core.dbClearLocalAttachmentCache(
+    await _dartDbClearLocalAttachmentCache(
       appDir: appDir,
       key: key,
     );
@@ -210,7 +210,7 @@ mixin _NativeAppBackendAttachmentIo on _NativeAppBackendAccess {
   @override
   Future<Attachment?> readAttachmentBySha256(String attachmentSha256) async {
     final appDir = await _getAppDir();
-    return rust_attachments.dbReadAttachmentBySha256(
+    return _dartDbReadAttachmentBySha256(
       appDir: appDir,
       attachmentSha256: attachmentSha256,
     );

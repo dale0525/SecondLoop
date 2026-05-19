@@ -5,7 +5,6 @@ import '../backend/app_backend.dart';
 
 enum AskAiRouteKind {
   cloudGateway,
-  byok,
   needsSetup,
 }
 
@@ -15,16 +14,6 @@ enum SubscriptionStatus {
   notEntitled,
 }
 
-Future<bool> hasActiveLlmProfile(
-  AppBackend backend,
-  Uint8List sessionKey,
-) async {
-  final profiles = await backend.listLlmProfiles(sessionKey);
-  return profiles.any(
-    (p) => p.isActive && p.providerType == 'openai-compatible',
-  );
-}
-
 Future<AskAiRouteKind> decideAskAiRoute(
   AppBackend backend,
   Uint8List sessionKey, {
@@ -32,14 +21,12 @@ Future<AskAiRouteKind> decideAskAiRoute(
   required String cloudGatewayBaseUrl,
   SubscriptionStatus subscriptionStatus = SubscriptionStatus.unknown,
 }) async {
-  final hasByok = await hasActiveLlmProfile(backend, sessionKey);
   final hasCloud = cloudIdToken != null &&
       cloudIdToken.trim().isNotEmpty &&
       cloudGatewayBaseUrl.trim().isNotEmpty;
 
   final allowCloud = subscriptionStatus != SubscriptionStatus.notEntitled;
   if (hasCloud && allowCloud) return AskAiRouteKind.cloudGateway;
-  if (hasByok) return AskAiRouteKind.byok;
   return AskAiRouteKind.needsSetup;
 }
 
@@ -47,8 +34,7 @@ Future<AskAiRouteKind> decideAskAiRoute(
 /// should **not** probe Cloud when entitlement is unknown.
 ///
 /// This supports the product policy:
-/// - Free users do not use LLM automatically.
-/// - BYOK works when configured.
+/// - App automation only uses the shared runtime when explicitly entitled.
 /// - Cloud is only used when explicitly entitled.
 Future<AskAiRouteKind> decideAiAutomationRoute(
   AppBackend backend,
@@ -57,14 +43,12 @@ Future<AskAiRouteKind> decideAiAutomationRoute(
   required String cloudGatewayBaseUrl,
   SubscriptionStatus subscriptionStatus = SubscriptionStatus.unknown,
 }) async {
-  final hasByok = await hasActiveLlmProfile(backend, sessionKey);
   final hasCloud = cloudIdToken != null &&
       cloudIdToken.trim().isNotEmpty &&
       cloudGatewayBaseUrl.trim().isNotEmpty;
 
   final allowCloud = subscriptionStatus == SubscriptionStatus.entitled;
   if (hasCloud && allowCloud) return AskAiRouteKind.cloudGateway;
-  if (hasByok) return AskAiRouteKind.byok;
   return AskAiRouteKind.needsSetup;
 }
 

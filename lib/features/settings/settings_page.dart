@@ -4,14 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/theme_palette_prefs.dart';
 import '../../app/theme_mode_prefs.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
-import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/notifications/review_reminder_in_app_fallback_prefs.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -19,8 +17,6 @@ import '../../core/platform/app_platform_capabilities.dart';
 import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/session/session_scope.dart';
-import '../../core/sync/background_sync.dart';
-import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/vault_reset_error.dart';
@@ -30,18 +26,14 @@ import '../../core/desktop/system_hotkey_conflicts.dart';
 import '../../core/desktop/system_hotkey_recorder.dart';
 import '../../core/update/update_badge_prefs.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
-import 'package:secondloop/core/runtime_compat/api/oplog_maintenance.dart'
-    as rust_oplog_maintenance;
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
-import '../../web_app/web_formal_settings_scope.dart';
 import '../actions/settings/actions_settings_store.dart';
 import 'cloud_runtime_mode_page.dart';
 import 'ai_settings_page.dart';
 import 'diagnostics_page.dart';
 import 'about_page.dart';
-import 'oplog_maintenance_scope.dart';
 import '../welcome/welcome_page.dart';
 
 part 'settings_page_build.dart';
@@ -64,8 +56,6 @@ bool debugShowsAppearancePreferences(
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool? _appLockEnabled;
-  bool? _biometricUnlockEnabled;
   AppLocale? _localeOverride;
   ActionsSettings? _actionsSettings;
   bool? _reviewReminderInAppFallbackEnabled;
@@ -85,11 +75,6 @@ class _SettingsPageState extends State<SettingsPage> {
       fn();
     }
   }
-
-  static const _kAppLockEnabledPrefsKey = 'app_lock_enabled_v1';
-  static const _kBiometricUnlockEnabledPrefsKey = 'biometric_unlock_enabled_v1';
-  static const _kMasterPasswordSetupRequiredPrefsKey =
-      'master_password_setup_required_v1';
 
   HotKey _defaultQuickCaptureHotKey(TargetPlatform platform) => HotKey(
         identifier: DesktopQuickCaptureHotkeyPrefs.hotKeyIdentifier,
@@ -185,91 +170,8 @@ class _SettingsPageState extends State<SettingsPage> {
     return null;
   }
 
-  bool _defaultSystemUnlockEnabled() {
-    if (!AppPlatformCapabilityScope.of(context).supportsBiometricUnlock) {
-      return false;
-    }
-    return defaultTargetPlatform == TargetPlatform.windows;
-  }
-
   bool _isDesktopPlatform() {
     return AppPlatformCapabilityScope.of(context).supportsDesktopBootSettings;
-  }
-
-  String _normalizeAppLockWording(String text) {
-    return text
-        .replaceAll('master password', 'app lock password')
-        .replaceAll('Master password', 'App lock password')
-        .replaceAll('主密码', '应用锁密码');
-  }
-
-  rust_oplog_maintenance.OplogMaintenanceBackend _maintenanceBackendFor(
-    SyncBackendType backendType,
-  ) {
-    return switch (backendType) {
-      SyncBackendType.webdav =>
-        rust_oplog_maintenance.OplogMaintenanceBackend.webDav,
-      SyncBackendType.localDir =>
-        rust_oplog_maintenance.OplogMaintenanceBackend.localDir,
-      SyncBackendType.managedVault =>
-        rust_oplog_maintenance.OplogMaintenanceBackend.managedVault,
-    };
-  }
-
-  Future<void> _runOplogMaintenanceDebug() async {
-    if (_busy) return;
-
-    final messenger = ScaffoldMessenger.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final store = _syncConfigStore(context);
-
-    setState(() => _busy = true);
-    try {
-      final sync = await store.loadConfiguredSync();
-      if (sync == null) {
-        throw StateError('sync_not_configured');
-      }
-
-      final scopeId = computeOplogMaintenanceScopeId(
-        OplogMaintenanceScopeInput.fromSyncConfig(sync),
-      );
-      final appDir = (await getApplicationSupportDirectory()).path;
-      final stats = await rust_oplog_maintenance.dbRunOplogMaintenance(
-        appDir: appDir,
-        key: sessionKey,
-        backend: _maintenanceBackendFor(sync.backendType),
-        scopeId: scopeId,
-      );
-
-      if (!mounted) return;
-      final before = stats.beforeCount.toString();
-      final after = stats.afterCount.toString();
-      final pruned = stats.prunedCount.toString();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            context.t.settings.debugOplogMaintenance.completed(
-              pruned: pruned,
-              before: before,
-              after: after,
-            ),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            context.t.settings.debugOplogMaintenance.failed(error: '$e'),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   @override
@@ -281,9 +183,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final enabled = prefs.getBool(_kAppLockEnabledPrefsKey) ?? false;
-    final biometricEnabled = prefs.getBool(_kBiometricUnlockEnabledPrefsKey) ??
-        _defaultSystemUnlockEnabled();
     await ReviewReminderInAppFallbackPrefs.load();
     final reviewReminderInAppFallbackEnabled =
         ReviewReminderInAppFallbackPrefs.value.value;
@@ -308,8 +207,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (!mounted) return;
     setState(() {
-      _appLockEnabled = enabled;
-      _biometricUnlockEnabled = biometricEnabled;
       _reviewReminderInAppFallbackEnabled = reviewReminderInAppFallbackEnabled;
       _localeOverride = localeOverride;
       _actionsSettings = actionsSettings;
@@ -406,87 +303,6 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted || selected == _localeOverride) return;
     setState(() => _localeOverride = selected);
     await setLocaleOverride(selected);
-  }
-
-  Future<void> _setAppLock(bool enabled) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-
-    try {
-      final backend = AppBackendScope.of(context);
-      final sessionScope = SessionScope.of(context);
-      final sessionKey = sessionScope.sessionKey;
-      final lock = sessionScope.lock;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kAppLockEnabledPrefsKey, enabled);
-      if (!enabled) {
-        await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
-      }
-
-      final isMasterPasswordSet = await backend.isMasterPasswordSet();
-      if (enabled && !isMasterPasswordSet) {
-        await prefs.setBool(_kMasterPasswordSetupRequiredPrefsKey, true);
-        await BackgroundSync.refreshSchedule(backend: backend);
-        if (mounted) {
-          setState(() => _appLockEnabled = true);
-        }
-        lock();
-        return;
-      }
-
-      final biometricEnabled =
-          _biometricUnlockEnabled ?? _defaultSystemUnlockEnabled();
-      final isMacNoKeychain =
-          !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
-      final shouldPersist = !isMacNoKeychain && (!enabled || biometricEnabled);
-      if (shouldPersist) {
-        await backend.saveSessionKey(sessionKey);
-      } else {
-        await backend.clearSavedSessionKey();
-      }
-      await prefs.remove(_kMasterPasswordSetupRequiredPrefsKey);
-      await BackgroundSync.refreshSchedule(backend: backend);
-      if (mounted) setState(() => _appLockEnabled = enabled);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _lockNow() async {
-    if (_busy) return;
-
-    final backend = AppBackendScope.of(context);
-    final prefs = await SharedPreferences.getInstance();
-    final isMasterPasswordSet = await backend.isMasterPasswordSet();
-    if (!isMasterPasswordSet) {
-      await prefs.setBool(_kMasterPasswordSetupRequiredPrefsKey, true);
-    }
-
-    if (!mounted) return;
-    SessionScope.of(context).lock();
-  }
-
-  Future<void> _setBiometricUnlock(bool enabled) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-
-    try {
-      final backend = AppBackendScope.of(context);
-      final sessionKey = SessionScope.of(context).sessionKey;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kBiometricUnlockEnabledPrefsKey, enabled);
-
-      if (enabled) {
-        await backend.saveSessionKey(sessionKey);
-      } else {
-        await backend.clearSavedSessionKey();
-      }
-
-      await BackgroundSync.refreshSchedule(backend: backend);
-      if (mounted) setState(() => _biometricUnlockEnabled = enabled);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   Future<void> _setReviewReminderInAppFallback(bool enabled) async {
@@ -621,8 +437,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _lastCloudUid = cloudAuthController?.uid;
     }
 
-    _appLockEnabled ??= false;
-    _biometricUnlockEnabled ??= _defaultSystemUnlockEnabled();
     _load();
     unawaited(_maybeDisableCloudEmbeddingsIfNotAllowed());
 

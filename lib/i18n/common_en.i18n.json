@@ -29,11 +29,9 @@
     "processPending": "Process pending",
     "rebuildEmbeddings": "Rebuild embeddings",
     "push": "Upload",
-    "pull": "Download",
-    "lockNow": "Lock now"
+    "pull": "Download"
   },
   "fields": {
-    "masterPassword": "App lock password",
     "confirm": "Confirm",
     "message": "Message",
     "quickCapture": "Quick capture",

@@ -194,13 +194,6 @@ class _FakeBackend extends AppBackend {
 
   @override
   Future<Uint8List?> loadSavedSessionKey() async => null;
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async => true;
-
   @override
   Future<void> clearSavedSessionKey() async {}
 

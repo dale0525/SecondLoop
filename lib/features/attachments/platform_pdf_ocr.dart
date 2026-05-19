@@ -2,8 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 
-import 'package:secondloop/core/runtime_compat/api/desktop_media.dart'
-    as rust_desktop_media;
 import 'attachment_ocr_text_normalizer.dart';
 
 const kDesktopRuntimeRenderLongImageHint =
@@ -178,15 +176,8 @@ final class PlatformPdfRender {
     required int dpi,
     required int startPage,
     required String languageHints,
-  }) {
-    return rust_desktop_media.desktopOcrPdf(
-      bytes: bytes,
-      maxPages: maxPages,
-      dpi: dpi,
-      startPage: startPage,
-      languageHints: languageHints,
-    );
-  }
+  }) async =>
+      null;
 
   static Future<dynamic> _invokeSafely(
     Future<dynamic> Function() run,
@@ -626,25 +617,14 @@ final class PlatformPdfOcr {
     required int maxPages,
     required int dpi,
     required String languageHints,
-  }) {
-    return rust_desktop_media.desktopOcrPdf(
-      bytes: bytes,
-      maxPages: maxPages,
-      dpi: dpi,
-      startPage: 1,
-      languageHints: languageHints,
-    );
-  }
+  }) async =>
+      null;
 
   static Future<dynamic> _invokeDesktopOcrImage(
     Uint8List bytes, {
     required String languageHints,
-  }) {
-    return rust_desktop_media.desktopOcrImage(
-      bytes: bytes,
-      languageHints: languageHints,
-    );
-  }
+  }) async =>
+      null;
 
   static Future<dynamic> _invokeNativeOcrPdf(
     Uint8List bytes, {

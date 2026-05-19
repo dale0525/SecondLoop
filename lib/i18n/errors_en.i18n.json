@@ -3,7 +3,6 @@
   "loadFailed": "Load failed: $error",
   "saveFailed": "Save failed: $error",
   "signInRequired": "Sign in again to continue.",
-  "lockGateError": "LockGate error: $error",
   "missingLoopHomeConversation": "Missing Loop conversation",
   "attachmentNotFoundLocally": "Attachment is not available locally.",
   "attachmentBytesUnavailable": "Attachment bytes are unavailable.",

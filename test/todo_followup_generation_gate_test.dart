@@ -758,23 +758,10 @@ void main() {
           updatedAtMs: 0,
         ),
       },
-      llmProfileOutcomes: const <Object>[
-        <LlmProfile>[
-          LlmProfile(
-            id: 'llm_1',
-            name: 'BYOK',
-            providerType: 'openai-compatible',
-            baseUrl: 'https://example.com',
-            modelName: 'gpt-test',
-            isActive: true,
-            createdAtMs: 0,
-            updatedAtMs: 0,
-          ),
-        ],
+      cloudPromptOutcomes: const <Object>[
+        '{"content":"Checked with current sources.","mode":"web_search","citations":[{"title":"Example","url":"https://example.com","domain":"example.com"}]}',
         _AiPromptFailure('boom'),
       ],
-      aiPromptResponse:
-          '{"content":"Not verified online. Summary collected from model knowledge.","mode":"model_knowledge","citations":[]}',
     );
     final engine = SyncEngine(
       syncRunner: _NoopSyncRunner(),
@@ -795,10 +782,22 @@ void main() {
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
-            child: SyncEngineScope(
-              engine: engine,
-              child: const TodoFollowupGenerationGate(
-                child: SizedBox.shrink(),
+            child: SubscriptionScope(
+              controller: _FixedSubscriptionStatusController(
+                SubscriptionStatus.entitled,
+              ),
+              child: CloudAuthScope(
+                controller: const _FixedCloudAuthController('token_1'),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://example.com',
+                  modelName: 'cloud',
+                ),
+                child: SyncEngineScope(
+                  engine: engine,
+                  child: TodoFollowupGenerationGate(
+                    child: SizedBox.shrink(),
+                  ),
+                ),
               ),
             ),
           ),
@@ -876,8 +875,8 @@ void main() {
           updatedAtMs: 0,
         ),
       ],
-      aiPromptResponse:
-          '{"content":"Not verified online. Summary collected from model knowledge.","mode":"model_knowledge","citations":[]}',
+      aiPromptCloudResponse:
+          '{"content":"Checked with current sources.","mode":"web_search","citations":[{"title":"Example","url":"https://example.com","domain":"example.com"}]}',
     );
     final engine = SyncEngine(
       syncRunner: _NoopSyncRunner(),
@@ -898,10 +897,22 @@ void main() {
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
-            child: SyncEngineScope(
-              engine: engine,
-              child: const TodoFollowupGenerationGate(
-                child: SizedBox.shrink(),
+            child: SubscriptionScope(
+              controller: _FixedSubscriptionStatusController(
+                SubscriptionStatus.entitled,
+              ),
+              child: CloudAuthScope(
+                controller: const _FixedCloudAuthController('token_1'),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://example.com',
+                  modelName: 'cloud',
+                ),
+                child: SyncEngineScope(
+                  engine: engine,
+                  child: const TodoFollowupGenerationGate(
+                    child: SizedBox.shrink(),
+                  ),
+                ),
               ),
             ),
           ),
@@ -917,7 +928,8 @@ void main() {
     expect(changeCount, 1);
   });
 
-  testWidgets('byok pass does not require a cloud token', (tester) async {
+  testWidgets('automatic pass ignores app BYOK profile and uses runtime token',
+      (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
     });
@@ -925,7 +937,7 @@ void main() {
     final backend = _FakeTodoFollowupGenerationGateBackend(
       dueJobs: const <TodoFollowupGenerationJob>[
         TodoFollowupGenerationJob(
-          todoId: 'todo_byok',
+          todoId: 'todo_runtime',
           triggerKind: 'auto_create',
           status: 'pending',
           attempts: 0,
@@ -939,8 +951,8 @@ void main() {
         ),
       ],
       todosById: const <String, Todo>{
-        'todo_byok': Todo(
-          id: 'todo_byok',
+        'todo_runtime': Todo(
+          id: 'todo_runtime',
           title: '调研一下当前主流的 llm 模型',
           status: 'open',
           createdAtMs: 0,
@@ -959,8 +971,8 @@ void main() {
           updatedAtMs: 0,
         ),
       ],
-      aiPromptResponse:
-          '{"content":"Not verified online. Summary collected from model knowledge.","mode":"model_knowledge","citations":[]}',
+      aiPromptCloudResponse:
+          '{"content":"Checked with current sources.","mode":"web_search","citations":[{"title":"Example","url":"https://example.com","domain":"example.com"}]}',
     );
 
     await tester.pumpWidget(
@@ -970,8 +982,20 @@ void main() {
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
             lock: () {},
-            child: const TodoFollowupGenerationGate(
-              child: SizedBox.shrink(),
+            child: SubscriptionScope(
+              controller: _FixedSubscriptionStatusController(
+                SubscriptionStatus.entitled,
+              ),
+              child: const CloudAuthScope(
+                controller: _FixedCloudAuthController('token_1'),
+                gatewayConfig: CloudGatewayConfig(
+                  baseUrl: 'https://example.com',
+                  modelName: 'cloud',
+                ),
+                child: TodoFollowupGenerationGate(
+                  child: SizedBox.shrink(),
+                ),
+              ),
             ),
           ),
         ),
@@ -981,8 +1005,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 3));
 
-    expect(backend.succeededTodoIds, contains('todo_byok'));
-    expect(backend.generatedSuggestionTodoIds, contains('todo_byok'));
+    expect(backend.cloudPromptCalls, 1);
+    expect(backend.localPromptCalls, 0);
+    expect(backend.succeededTodoIds, contains('todo_runtime'));
+    expect(backend.generatedSuggestionTodoIds, contains('todo_runtime'));
     expect(backend.failedTodoIds, isEmpty);
     expect(backend.canceledTodoIds, isEmpty);
   });
@@ -1282,8 +1308,10 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     this.aiPromptResponse,
     this.aiPromptCloudResponse,
     List<Object> aiPromptOutcomes = const <Object>[],
+    List<Object> cloudPromptOutcomes = const <Object>[],
     List<Object> llmProfileOutcomes = const <Object>[],
   })  : _aiPromptOutcomes = List<Object>.from(aiPromptOutcomes),
+        _cloudPromptOutcomes = List<Object>.from(cloudPromptOutcomes),
         _llmProfileOutcomes = List<Object>.from(llmProfileOutcomes),
         _jobsByTodoId = {
           for (final job in dueJobs) job.todoId: job,
@@ -1296,6 +1324,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   final String? aiPromptResponse;
   final String? aiPromptCloudResponse;
   final List<Object> _aiPromptOutcomes;
+  final List<Object> _cloudPromptOutcomes;
   final List<Object> _llmProfileOutcomes;
   final Map<String, TodoFollowupGenerationJob> _jobsByTodoId;
   final Map<String, List<TodoFollowupSuggestion>> _suggestionsByTodoId =
@@ -1508,6 +1537,12 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     required String modelName,
   }) async {
     cloudPromptCalls += 1;
+    if (_cloudPromptOutcomes.isNotEmpty) {
+      final outcome = _cloudPromptOutcomes.removeAt(0);
+      if (outcome is Exception) throw outcome;
+      if (outcome is Error) throw outcome;
+      return '$outcome';
+    }
     final response = aiPromptCloudResponse;
     if (response == null) {
       throw StateError('aiPromptCloudResponse not configured');

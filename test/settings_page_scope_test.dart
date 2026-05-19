@@ -9,7 +9,6 @@ import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
-import 'package:secondloop/features/settings/media_annotation_settings_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 import 'package:secondloop/features/settings/sync_settings_page.dart';
 
@@ -124,15 +123,7 @@ Future<void> _expectAiMediaSectionAvailable(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
 
-  final embeddedRoot = find.byKey(MediaAnnotationSettingsPage.embeddedRootKey);
-  await tester.dragUntilVisible(
-    embeddedRoot,
-    listView,
-    const Offset(0, -260),
-  );
-  await tester.pumpAndSettle();
-
-  expect(embeddedRoot, findsOneWidget);
+  expect(mediaSection, findsOneWidget);
 }
 
 void main() {

@@ -8,13 +8,7 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbEnqueueAttachmentPlace(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      lang: lang,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
   }
 
   Future<void> enqueueAttachmentAnnotation(
@@ -24,13 +18,7 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbEnqueueAttachmentAnnotation(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      lang: lang,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
   }
 
   Future<List<AttachmentPlaceJob>> listDueAttachmentPlaces(
@@ -39,12 +27,8 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     int limit = 5,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListDueAttachmentPlaces(
-      appDir: appDir,
-      key: key,
-      nowMs: PlatformInt64Util.from(nowMs),
-      limit: limit,
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
+    return const <AttachmentPlaceJob>[];
   }
 
   Future<List<AttachmentAnnotationJob>> listDueAttachmentAnnotations(
@@ -53,12 +37,8 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     int limit = 5,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListDueAttachmentAnnotations(
-      appDir: appDir,
-      key: key,
-      nowMs: PlatformInt64Util.from(nowMs),
-      limit: limit,
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
+    return const <AttachmentAnnotationJob>[];
   }
 
   Future<List<AttachmentAnnotationJob>> listDueImageAttachmentAnnotations(
@@ -67,12 +47,8 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     int limit = 5,
   }) async {
     final appDir = await _getAppDir();
-    return rust_content_extract.dbListDueImageAttachmentAnnotations(
-      appDir: appDir,
-      key: key,
-      nowMs: PlatformInt64Util.from(nowMs),
-      limit: limit,
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
+    return const <AttachmentAnnotationJob>[];
   }
 
   Future<List<AttachmentAnnotationJob>> listDueUrlManifestAttachmentAnnotations(
@@ -81,12 +57,8 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     int limit = 5,
   }) async {
     final appDir = await _getAppDir();
-    return rust_content_extract.dbListDueUrlManifestAttachmentAnnotations(
-      appDir: appDir,
-      key: key,
-      nowMs: PlatformInt64Util.from(nowMs),
-      limit: limit,
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
+    return const <AttachmentAnnotationJob>[];
   }
 
   Future<int> processPendingDocumentExtractions(
@@ -94,11 +66,8 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     int limit = 5,
   }) async {
     final appDir = await _getAppDir();
-    return rust_content_extract.dbProcessPendingDocumentExtractions(
-      appDir: appDir,
-      key: key,
-      limit: limit,
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
+    return 0;
   }
 
   Future<void> markAttachmentPlaceFailed(
@@ -110,15 +79,7 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbMarkAttachmentPlaceFailed(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      attempts: PlatformInt64Util.from(attempts),
-      nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
-      lastError: lastError,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
   }
 
   Future<void> markAttachmentAnnotationFailed(
@@ -130,15 +91,7 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbMarkAttachmentAnnotationFailed(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      attempts: PlatformInt64Util.from(attempts),
-      nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
-      lastError: lastError,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
   }
 
   Future<void> markAttachmentPlaceOkJson(
@@ -149,14 +102,7 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbMarkAttachmentPlaceOkJson(
-      appDir: appDir,
-      key: key,
-      attachmentSha256: attachmentSha256,
-      lang: lang,
-      payloadJson: payloadJson,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
+    _dartRuntimeValidateKey(_dartNativeRuntimeStateFor(appDir), key);
   }
 
   @override
@@ -169,7 +115,7 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbMarkAttachmentAnnotationOkJson(
+    await _dartDbMarkAttachmentAnnotationOkJson(
       appDir: appDir,
       key: key,
       attachmentSha256: attachmentSha256,
@@ -187,13 +133,7 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     required double lon,
     required String lang,
   }) async {
-    return rust_core.geoReverseCloudGateway(
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      lat: lat,
-      lon: lon,
-      lang: lang,
-    );
+    throw _retiredNativeRuntimeFeature('geoReverseCloudGateway');
   }
 
   Future<String> mediaAnnotationCloudGateway({
@@ -204,13 +144,6 @@ mixin _NativeAppBackendAttachmentAnnotationJobs on _NativeAppBackendAccess {
     required String mimeType,
     required Uint8List imageBytes,
   }) async {
-    return rust_core.mediaAnnotationCloudGateway(
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-      lang: lang,
-      mimeType: mimeType,
-      imageBytes: imageBytes,
-    );
+    throw _retiredNativeRuntimeFeature('mediaAnnotationCloudGateway');
   }
 }

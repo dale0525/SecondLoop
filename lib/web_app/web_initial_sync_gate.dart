@@ -4,11 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../core/backend/app_backend.dart';
-import '../core/cloud/cloud_auth_access.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/session/session_scope.dart';
-import '../core/sync/sync_config_store.dart';
-import '../core/sync/sync_key_manager.dart';
 import '../i18n/strings.g.dart';
 import 'web_local_runtime_recovery.dart';
 import 'web_local_runtime_recovery_base.dart';
@@ -21,18 +18,11 @@ typedef WebInitialSyncRunner = Future<void> Function(
   Uint8List sessionKey,
 );
 
-String? _syncConfigScopeForUid(String? uid) {
-  final normalizedUid = uid?.trim();
-  if (normalizedUid == null || normalizedUid.isEmpty) return null;
-  return 'web-native:$normalizedUid';
-}
-
 class WebInitialSyncGate extends StatefulWidget {
   const WebInitialSyncGate({
     required this.authController,
     required this.managedVaultBaseUrl,
     required this.child,
-    this.syncConfigStore,
     this.syncRunner,
     this.appDirResolver,
     this.localRuntimeRecovery,
@@ -43,7 +33,6 @@ class WebInitialSyncGate extends StatefulWidget {
   final ObservableCloudAuthController authController;
   final String managedVaultBaseUrl;
   final Widget child;
-  final SyncConfigStore? syncConfigStore;
   final WebInitialSyncRunner? syncRunner;
   final WebPersistentAppDirResolver? appDirResolver;
   final WebLocalRuntimeRecovery? localRuntimeRecovery;
@@ -114,11 +103,13 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
     });
 
     try {
-      final runner = widget.syncRunner ?? _defaultSyncRunner;
-      final backend = AppBackendScope.of(context);
-      final sessionKey = SessionScope.of(context).sessionKey;
-      await runner(context, backend, sessionKey);
-      await _maybeRecoverLocalRuntime(backend, sessionKey);
+      final runner = widget.syncRunner;
+      if (runner != null) {
+        final backend = AppBackendScope.of(context);
+        final sessionKey = SessionScope.of(context).sessionKey;
+        await runner(context, backend, sessionKey);
+        await _maybeRecoverLocalRuntime(backend, sessionKey);
+      }
       if (!mounted) return;
       _blockingTimeoutTimer?.cancel();
       setState(() {
@@ -136,41 +127,6 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
         _bootstrapError = error;
       });
     }
-  }
-
-  Future<void> _defaultSyncRunner(
-    BuildContext context,
-    AppBackend backend,
-    Uint8List sessionKey,
-  ) async {
-    final uid = widget.authController.uid?.trim() ?? '';
-    final baseUrl = widget.managedVaultBaseUrl.trim();
-    if (uid.isEmpty || baseUrl.isEmpty) return;
-    final syncConfigStore = widget.syncConfigStore ??
-        SyncConfigStore(scopeKey: _syncConfigScopeForUid(uid));
-
-    final idToken = await readCloudAuthIdToken(
-      widget.authController,
-      mode: CloudAuthAccessMode.interactive,
-    );
-    if (idToken == null || idToken.trim().isEmpty) {
-      throw const _WebInitialSyncAuthTokenUnavailable();
-    }
-
-    final syncKey = await syncConfigStore.readSyncKey() ??
-        await SyncKeyManager.deriveManagedVaultSyncKey(
-          vaultId: uid,
-          deriveSyncKey: backend.deriveSyncKey,
-        );
-    await syncConfigStore.writeSyncKey(syncKey);
-
-    await backend.syncManagedVaultPull(
-      sessionKey,
-      syncKey,
-      baseUrl: baseUrl,
-      vaultId: uid,
-      idToken: idToken,
-    );
   }
 
   Future<void> _maybeRecoverLocalRuntime(
@@ -220,9 +176,7 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
       );
     }
     if (error != null && !_allowPassThrough) {
-      final message = error is _WebInitialSyncAuthTokenUnavailable
-          ? context.t.errors.signInRequired
-          : context.t.errors.loadFailed(error: '$error');
+      final message = context.t.errors.loadFailed(error: '$error');
       return Scaffold(
         body: Center(
           child: Text(
@@ -240,13 +194,4 @@ class _WebInitialSyncGateState extends State<WebInitialSyncGate> {
 
 final class _WebInitialSyncReloadRequested implements Exception {
   const _WebInitialSyncReloadRequested();
-}
-
-final class _WebInitialSyncAuthTokenUnavailable implements Exception {
-  const _WebInitialSyncAuthTokenUnavailable();
-
-  @override
-  String toString() {
-    return 'cloud_auth_token_unavailable';
-  }
 }

@@ -346,8 +346,8 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
 
         self.assertIn("run_fvm_tool.ps1", script)
         self.assertIn("-Tool flutter -Command pub get", script)
-        self.assertIn("-Tool dart -Command run tools/prepare_desktop_runtime.dart", script)
-        self.assertIn("-Tool dart -Command run tools/sync_desktop_runtime_to_appdir.dart", script)
+        self.assertNotIn("-Tool dart -Command run tools/prepare_desktop_runtime.dart", script)
+        self.assertNotIn("-Tool dart -Command run tools/sync_desktop_runtime_to_appdir.dart", script)
         self.assertIn("-Tool flutter -Command run -d windows", script)
         self.assertNotIn("dart pub global run fvm:main flutter run -d windows", script)
 
@@ -356,8 +356,8 @@ class WindowsMsiInstallFlowTests(unittest.TestCase):
 
         self.assertIn("run_fvm_tool.ps1", script)
         self.assertIn("-Tool flutter -Command pub get", script)
-        self.assertIn("-Tool dart -Command run tools/prepare_desktop_runtime.dart", script)
-        self.assertIn("-Tool dart -Command run tools/sync_desktop_runtime_to_appdir.dart", script)
+        self.assertNotIn("-Tool dart -Command run tools/prepare_desktop_runtime.dart", script)
+        self.assertNotIn("-Tool dart -Command run tools/sync_desktop_runtime_to_appdir.dart", script)
         self.assertIn("-Tool flutter -Command build windows --release", script)
         self.assertNotIn("dart pub global run fvm:main flutter pub get", script)
 

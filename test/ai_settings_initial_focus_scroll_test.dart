@@ -1,21 +1,11 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 
-import 'test_backend.dart';
 import 'test_i18n.dart';
 
-Future<double> _pumpPageAndReadOffset(
-  WidgetTester tester, {
-  AiSettingsSection? focusSection,
-  bool focusMediaLocalCapabilityCard = false,
-  bool includeBackendScopes = false,
-}) async {
+Future<double> _pumpPageAndReadOffset(WidgetTester tester) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = const Size(320, 480);
   addTearDown(() {
@@ -23,29 +13,14 @@ Future<double> _pumpPageAndReadOffset(
     tester.view.resetDevicePixelRatio();
   });
 
-  Widget page = MediaQuery(
-    data: const MediaQueryData(disableAnimations: true),
-    child: AiSettingsPage(
-      focusSection: focusSection,
-      highlightFocus: true,
-      focusMediaLocalCapabilityCard: focusMediaLocalCapabilityCard,
-    ),
+  const page = MediaQuery(
+    data: MediaQueryData(disableAnimations: true),
+    child: AiSettingsPage(highlightFocus: true),
   );
-
-  if (includeBackendScopes) {
-    page = AppBackendScope(
-      backend: TestAppBackend(),
-      child: SessionScope(
-        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-        lock: () {},
-        child: page,
-      ),
-    );
-  }
 
   await tester.pumpWidget(
     wrapWithI18n(
-      MaterialApp(
+      const MaterialApp(
         home: page,
       ),
     ),
@@ -66,18 +41,4 @@ void main() {
     final offset = await _pumpPageAndReadOffset(tester);
     expect(offset, 0);
   });
-
-  testWidgets(
-    'AI settings scrolls to media local capability entry when deep focus is requested',
-    (tester) async {
-      final offset = await _pumpPageAndReadOffset(
-        tester,
-        focusSection: AiSettingsSection.mediaUnderstanding,
-        focusMediaLocalCapabilityCard: true,
-        includeBackendScopes: true,
-      );
-
-      expect(offset, greaterThan(0));
-    },
-  );
 }

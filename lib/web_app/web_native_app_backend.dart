@@ -5,8 +5,6 @@ import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/backend/native_backend.dart';
-import 'package:secondloop/core/runtime_compat/api/web_sync.dart'
-    as rust_web_sync;
 import 'web_app_service.dart';
 import 'web_formal_settings_adapters.dart';
 
@@ -68,6 +66,10 @@ class ManagedVaultV2PushApplyResult {
   final int accepted;
   final String generationId;
   final int remoteLatestGlobalSeq;
+}
+
+UnsupportedError _retiredWebNativeRuntimeFeature(String feature) {
+  return UnsupportedError('runtime_first_native_runtime_removed:$feature');
 }
 
 class WebNativeAppBackend extends NativeAppBackend
@@ -164,35 +166,9 @@ class WebNativeAppBackend extends NativeAppBackend
     required String baseUrl,
     required String vaultId,
   }) async {
-    final decoded = jsonDecode(
-      await rust_web_sync.syncManagedVaultReadWebPullState(
-        appDir: appDir,
-        baseUrl: baseUrl,
-        vaultId: vaultId,
-      ),
+    throw _retiredWebNativeRuntimeFeature(
+      'syncManagedVaultReadWebPullState',
     );
-    if (decoded is! Map) {
-      throw const FormatException('invalid_managed_vault_pull_state');
-    }
-    return ManagedVaultV2PullState(
-      generationId: '${decoded['generation_id'] ?? ''}'.trim().isEmpty
-          ? null
-          : '${decoded['generation_id']}',
-      lastAppliedGlobalSeq:
-          (decoded['last_applied_global_seq'] as num?)?.toInt() ?? 0,
-    );
-  }
-
-  @override
-  Map<String, Object?> _decodeObjectMap(
-    Object? value,
-    String errorName,
-  ) {
-    if (value is Map<String, Object?>) return value;
-    if (value is Map) {
-      return value.map((key, value) => MapEntry('$key', value));
-    }
-    throw FormatException(errorName);
   }
 
   Future<ManagedVaultV2PullApplyResult> applyManagedVaultV2PullPage(
@@ -203,47 +179,8 @@ class WebNativeAppBackend extends NativeAppBackend
     required String vaultId,
     required WebManagedVaultPullPage page,
   }) async {
-    final decoded = jsonDecode(
-      await rust_web_sync.syncManagedVaultApplyWebPullPage(
-        appDir: appDir,
-        key: key,
-        syncKey: syncKey,
-        baseUrl: baseUrl,
-        vaultId: vaultId,
-        responseJson: jsonEncode(<String, Object?>{
-          'generation_id': page.generationId,
-          'remote_latest_global_seq': page.remoteLatestGlobalSeq,
-          'has_more': page.hasMore,
-          'ops': page.ops
-              .map((item) => <String, Object?>{
-                    'global_seq': item.globalSeq,
-                    'device_id': item.deviceId,
-                    'seq': item.seq,
-                    'op_id': item.opId,
-                    'client_op_id': item.clientOpId,
-                    'ciphertext_b64': item.ciphertextB64,
-                  })
-              .toList(growable: false),
-        }),
-      ),
-    );
-    if (decoded is! Map) {
-      throw const FormatException('invalid_managed_vault_pull_apply_result');
-    }
-    return ManagedVaultV2PullApplyResult(
-      generationId: '${decoded['generation_id'] ?? ''}'.trim().isEmpty
-          ? null
-          : '${decoded['generation_id']}',
-      lastAppliedGlobalSeq:
-          (decoded['last_applied_global_seq'] as num?)?.toInt() ?? 0,
-      appliedCount: (decoded['applied_count'] as num?)?.toInt() ?? 0,
-      remoteLatestGlobalSeq:
-          (decoded['remote_latest_global_seq'] as num?)?.toInt() ?? 0,
-      hasMore: decoded['has_more'] == true,
-      retryRequired: decoded['retry_required'] == true,
-      recoveryReason: '${decoded['recovery_reason'] ?? ''}'.trim().isEmpty
-          ? null
-          : '${decoded['recovery_reason']}',
+    throw _retiredWebNativeRuntimeFeature(
+      'syncManagedVaultApplyWebPullPage',
     );
   }
 
@@ -253,23 +190,8 @@ class WebNativeAppBackend extends NativeAppBackend
     required String baseUrl,
     required String vaultId,
   }) async {
-    final decoded = jsonDecode(
-      await rust_web_sync.syncManagedVaultRecoverWebPullState(
-        appDir: appDir,
-        key: key,
-        baseUrl: baseUrl,
-        vaultId: vaultId,
-      ),
-    );
-    if (decoded is! Map) {
-      throw const FormatException('invalid_managed_vault_recovered_pull_state');
-    }
-    return ManagedVaultV2PullState(
-      generationId: '${decoded['generation_id'] ?? ''}'.trim().isEmpty
-          ? null
-          : '${decoded['generation_id']}',
-      lastAppliedGlobalSeq:
-          (decoded['last_applied_global_seq'] as num?)?.toInt() ?? 0,
+    throw _retiredWebNativeRuntimeFeature(
+      'syncManagedVaultRecoverWebPullState',
     );
   }
 
@@ -282,14 +204,8 @@ class WebNativeAppBackend extends NativeAppBackend
     required String idToken,
     required int appliedOps,
   }) async {
-    await rust_web_sync.syncManagedVaultFinalizeWebPull(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      baseUrl: baseUrl,
-      vaultId: vaultId,
-      firebaseIdToken: idToken,
-      appliedOps: BigInt.from(appliedOps),
+    throw _retiredWebNativeRuntimeFeature(
+      'syncManagedVaultFinalizeWebPull',
     );
   }
 

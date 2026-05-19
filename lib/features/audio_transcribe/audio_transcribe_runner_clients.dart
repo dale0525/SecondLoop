@@ -244,8 +244,8 @@ final class ByokWhisperAudioTranscribeClient implements AudioTranscribeClient {
     this.appDirProvider = getNativeAppDir,
     AudioTranscribeByokRequest? requestByokTranscribe,
   })  : _sessionKey = Uint8List.fromList(sessionKey),
-        _requestByokTranscribe = requestByokTranscribe ??
-            rust_audio_transcribe.audioTranscribeByokProfile;
+        _requestByokTranscribe =
+            requestByokTranscribe ?? _audioTranscribeByokRuntimeRemoved;
 
   final Uint8List _sessionKey;
   final String profileId;
@@ -431,7 +431,7 @@ final class ByokMultimodalAudioTranscribeClient
     AudioTranscribeByokMultimodalRequest? requestByokMultimodalTranscribe,
   })  : _sessionKey = Uint8List.fromList(sessionKey),
         _requestByokMultimodalTranscribe = requestByokMultimodalTranscribe ??
-            rust_audio_transcribe.audioTranscribeByokProfileMultimodal;
+            _audioTranscribeByokMultimodalRuntimeRemoved;
 
   final Uint8List _sessionKey;
   final String profileId;
@@ -498,7 +498,7 @@ final class LocalRuntimeAudioTranscribeClient implements AudioTranscribeClient {
               decodeAudioToWav:
                   decodeAudioToWav ?? _decodeAudioToWavForLocalRuntimeDefault,
               requestLocalWhisperTranscribe: requestLocalWhisperTranscribe ??
-                  rust_audio_transcribe.audioTranscribeLocalWhisper,
+                  _audioTranscribeLocalWhisperRuntimeRemoved,
               ensureLocalWhisperModelAvailable:
                   ensureLocalWhisperModelAvailable ??
                       _ensureLocalWhisperModelAvailableDefault,

@@ -14,7 +14,7 @@ import 'package:secondloop/core/models/platform_int.dart';
 import 'test_backend.dart';
 
 void main() {
-  test('no BYOK or Cloud keeps local planning without AI calls', () async {
+  test('no runtime route keeps local planning without AI calls', () async {
     final now = DateTime(2026, 4, 29, 9);
     final promptClient = _PromptClient();
     final controller = SecretaryController(
@@ -37,11 +37,10 @@ void main() {
 
     expect(plan.route, 'local_rules');
     expect(plan.itemCount, 1);
-    expect(promptClient.byokCalls, 0);
     expect(promptClient.cloudCalls, 0);
   });
 
-  test('BYOK route can enhance a memory proposal without writing memory',
+  test('Cloud route can enhance a memory proposal without writing memory',
       () async {
     final promptClient = _PromptClient(
       responseJson: jsonEncode({
@@ -67,14 +66,17 @@ void main() {
         confidence: 0.8,
         createdAtMs: 100,
       ),
-      routeConfig: const SecretaryAiRouteConfig.byok(),
+      routeConfig: const SecretaryAiRouteConfig.cloudGateway(
+        cloudGatewayBaseUrl: 'https://gateway.example',
+        cloudIdToken: 'token',
+        cloudModelName: 'cloud',
+      ),
     );
 
     expect(result.title, 'Morning meeting preference');
     expect(result.body, 'The user prefers meetings in the morning.');
     expect(result.supersedesCandidateIds, ['memory-old']);
-    expect(promptClient.byokCalls, 1);
-    expect(promptClient.cloudCalls, 0);
+    expect(promptClient.cloudCalls, 1);
     expect(promptClient.lastPrompt, contains('"purpose":"secretary"'));
   });
 
@@ -119,23 +121,12 @@ final class _PromptClient implements SecretaryAiPromptClient {
   _PromptClient({this.responseJson = '{}'});
 
   final String responseJson;
-  int byokCalls = 0;
   int cloudCalls = 0;
   String? lastPrompt;
   String? lastCloudGatewayBaseUrl;
   String? lastCloudIdToken;
   String? lastCloudModelName;
   String? lastCloudPurpose;
-
-  @override
-  Future<String> runByokSecretaryPrompt(
-    Uint8List key, {
-    required String prompt,
-  }) async {
-    byokCalls += 1;
-    lastPrompt = prompt;
-    return responseJson;
-  }
 
   @override
   Future<String> runCloudSecretaryPrompt(

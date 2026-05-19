@@ -215,10 +215,10 @@ void main() {
             '{"content":"Found online results.","mode":"web_search","citations":[{"title":"Example","url":"https://example.com","domain":"example.com"}]}',
       ),
       sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-      route: AskAiRouteKind.byok,
-      gatewayBaseUrl: '',
-      idToken: '',
-      modelName: 'local',
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://example.com',
+      idToken: 'token',
+      modelName: 'cloud',
       taskTitle: '调研一下当前主流的 llm 模型',
       taskContext: '已有笔记：关注价格、上下文、多模态。',
       localeTag: 'en-US',
@@ -236,10 +236,10 @@ void main() {
         response: 'Summary only without JSON.',
       ),
       sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-      route: AskAiRouteKind.byok,
-      gatewayBaseUrl: '',
-      idToken: '',
-      modelName: 'local',
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://example.com',
+      idToken: 'token',
+      modelName: 'cloud',
       taskTitle: '调研一下当前主流的 llm 模型',
       taskContext: '已有笔记：关注价格、上下文、多模态。',
       localeTag: 'en-US',
@@ -268,9 +268,12 @@ final class _PromptBackend extends AppBackend {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 
   @override
-  Future<String> taskPriorityRerankAi(
+  Future<String> todoFollowupRerankAiCloudGateway(
     Uint8List key, {
     required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
   }) async =>
       response;
 }

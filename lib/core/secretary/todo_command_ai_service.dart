@@ -4,7 +4,6 @@ import 'todo_command_ai_prompts.dart';
 import 'todo_command_models.dart';
 
 enum TodoCommandAiRoute {
-  byok,
   cloud,
 }
 
@@ -103,7 +102,6 @@ final class TodoCommandAiService {
       id: 'todo-command-ai-$sourceMessageId',
       kind: kind,
       route: switch (route) {
-        TodoCommandAiRoute.byok => SecretaryTodoCommandRoute.byok,
         TodoCommandAiRoute.cloud => SecretaryTodoCommandRoute.cloud,
       },
       confidence: _doubleValue(json['confidence']) ?? 0,

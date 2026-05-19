@@ -5,9 +5,6 @@ import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../backend/app_backend.dart';
-import '../backend/native_app_dir.dart';
-import 'package:secondloop/core/runtime_compat/api/detached_ask.dart'
-    as rust_detached_ask;
 import 'detached_ask_recovery_policy.dart';
 
 const kAskAiDetachedJobPrefsKey = 'ask_ai_detached_job_v1';
@@ -346,28 +343,15 @@ final class DetachedAskRecoveryService {
       return false;
     }
 
-    try {
-      final appDir = await getNativeAppDir();
-      return await rust_detached_ask.dbApplyDetachedAskCompletionOnce(
-        appDir: appDir,
-        key: sessionKey,
-        requestId: rid,
-        conversationId: cid,
-        question: q,
-        answer: a,
-        citationsJson: citationsJson,
-      );
-    } catch (_) {
-      return _applyCompletionViaBackendRecovery(
-        backend: backend,
-        sessionKey: sessionKey,
-        requestId: rid,
-        conversationId: cid,
-        question: q,
-        answer: a,
-        citationsJson: citationsJson,
-      );
-    }
+    return _applyCompletionViaBackendRecovery(
+      backend: backend,
+      sessionKey: sessionKey,
+      requestId: rid,
+      conversationId: cid,
+      question: q,
+      answer: a,
+      citationsJson: citationsJson,
+    );
   }
 
   static Future<bool> _applyCompletionViaBackendRecovery({

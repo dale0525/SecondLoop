@@ -102,23 +102,23 @@
   },
   "askAiSetup": {
     "title": "Ask AI setup required",
-    "body": "To use Ask AI, add your own API key (AI profile) or subscribe to SecondLoop Cloud.",
+    "body": "To use Ask AI, choose managed pro or connect a self-managed runtime in Runtime mode.",
     "actions": {
       "subscribe": "Subscribe",
-      "configureByok": "Add API key"
+      "configureByok": "Open Runtime mode"
     }
   },
   "cloudGateway": {
-    "emailNotVerified": "Email not verified. Verify your email to use SecondLoop Cloud Ask AI.",
+    "emailNotVerified": "Email not verified. Verify your email to use the managed runtime.",
     "fallback": {
-      "auth": "Cloud sign-in required. Using your API key for this request.",
-      "entitlement": "Cloud subscription required. Using your API key for this request.",
-      "rateLimited": "Cloud is busy. Using your API key for this request.",
-      "generic": "Cloud request failed. Using your API key for this request."
+      "auth": "Cloud sign-in required. Open Runtime mode and sign in again.",
+      "entitlement": "Managed pro subscription required. Open Runtime mode to continue.",
+      "rateLimited": "Managed runtime is busy. Please try again later.",
+      "generic": "Managed runtime request failed. Please try again later."
     },
     "errors": {
       "auth": "Cloud sign-in required. Open Cloud account and sign in again.",
-      "entitlement": "Cloud subscription required. Add an API key or try again later.",
+      "entitlement": "Managed pro subscription required. Open Runtime mode to continue.",
       "rateLimited": "Cloud is rate limited. Please try again later.",
       "generic": "Cloud request failed."
     }
@@ -127,7 +127,7 @@
   "askAiRetrievalQuotaUnavailable": "AI could not retrieve context because cloud quota is unavailable. Please retry after quota is reset.",
   "askAiConsent": {
     "title": "Before we use AI",
-    "body": "SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your app lock password or your full history.",
+    "body": "SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your full history.",
     "dontShowAgain": "Don't show again"
   },
   "embeddingsConsent": {

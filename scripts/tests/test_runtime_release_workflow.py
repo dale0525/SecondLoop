@@ -7,19 +7,25 @@ import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DESKTOP_RUNTIME_WORKFLOW = REPO_ROOT / ".github/workflows/desktop-runtime-release.yml"
+DESKTOP_PACKAGE_WORKFLOW = REPO_ROOT / ".github/workflows/desktop-package.yml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github/workflows/release.yml"
 RELEASE_RUNTIME_SCRIPT = REPO_ROOT / "scripts/release_runtime_tag.sh"
+DESKTOP_RUNTIME_SCRIPTS = [
+    REPO_ROOT / "scripts/assemble_desktop_runtime.sh",
+    REPO_ROOT / "scripts/build_desktop_runtime.sh",
+    REPO_ROOT / "scripts/prepare_desktop_runtime_payload.sh",
+    REPO_ROOT / "scripts/prepare_mobile_runtime_payload.sh",
+]
+DESKTOP_RUNTIME_TOOLS = [
+    REPO_ROOT / "tools/prepare_desktop_runtime.dart",
+    REPO_ROOT / "tools/prepare_desktop_runtime_hash_lib.dart",
+    REPO_ROOT / "tools/sync_desktop_runtime_to_appdir.dart",
+]
 
 
 class RuntimeReleaseWorkflowTests(unittest.TestCase):
-    def _desktop_runtime_workflow_text(self) -> str:
-        return DESKTOP_RUNTIME_WORKFLOW.read_text(encoding="utf-8")
-
     def _release_workflow_text(self) -> str:
         return RELEASE_WORKFLOW.read_text(encoding="utf-8")
-
-    def _release_runtime_script_text(self) -> str:
-        return RELEASE_RUNTIME_SCRIPT.read_text(encoding="utf-8")
 
     def _extract_release_publish_step(self, workflow_text: str) -> str:
         publish_step_start = "- name: Publish GitHub Release"
@@ -31,17 +37,24 @@ class RuntimeReleaseWorkflowTests(unittest.TestCase):
         self.assertIn(publish_step_end, publish_step)
         return publish_step.split(publish_step_end, maxsplit=1)[0]
 
-    def test_runtime_release_workflow_includes_mobile_runtime_job(self) -> None:
-        workflow_text = self._desktop_runtime_workflow_text()
+    def test_desktop_runtime_release_workflow_is_removed(self) -> None:
+        self.assertFalse(DESKTOP_RUNTIME_WORKFLOW.exists())
 
-        self.assertIn("build-mobile-runtime-tag:", workflow_text)
-        self.assertIn("scripts/prepare_mobile_runtime_payload.sh", workflow_text)
-        self.assertIn("mobile-runtime-whisper-${runtime_version}.tar.gz", workflow_text)
+    def test_desktop_package_workflow_is_removed(self) -> None:
+        self.assertFalse(DESKTOP_PACKAGE_WORKFLOW.exists())
 
-    def test_release_runtime_usage_mentions_desktop_and_mobile_resources(self) -> None:
-        script_text = self._release_runtime_script_text()
+    def test_runtime_tag_helper_is_removed(self) -> None:
+        self.assertFalse(RELEASE_RUNTIME_SCRIPT.exists())
 
-        self.assertIn("desktop + mobile runtime", script_text)
+    def test_desktop_runtime_payload_scripts_are_removed(self) -> None:
+        for script in DESKTOP_RUNTIME_SCRIPTS:
+            with self.subTest(script=script.relative_to(REPO_ROOT)):
+                self.assertFalse(script.exists())
+
+    def test_desktop_runtime_tools_are_removed(self) -> None:
+        for tool in DESKTOP_RUNTIME_TOOLS:
+            with self.subTest(tool=tool.relative_to(REPO_ROOT)):
+                self.assertFalse(tool.exists())
 
     def test_release_workflow_has_no_ios_publish_job(self) -> None:
         workflow_text = self._release_workflow_text()

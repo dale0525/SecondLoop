@@ -335,7 +335,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
             gatewayBaseUrl: gatewayConfig.baseUrl,
             idToken: idToken,
             modelName: gatewayConfig.modelName,
-            source: route == AskAiRouteKind.cloudGateway ? 'cloud' : 'byok',
+            source: 'cloud',
           ),
           settings: const TodoFollowupGenerationRunnerSettings(
             hardTimeout: _kHardTimeout,

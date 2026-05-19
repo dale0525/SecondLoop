@@ -8,7 +8,6 @@ void main() {
       debugShowsAppearancePreferences(
         const AppPlatformCapabilities(
           supportsDesktopHotkey: false,
-          supportsBiometricUnlock: false,
           supportsAudioRecording: false,
           supportsDesktopDrop: false,
           supportsDesktopBootSettings: false,

@@ -4,17 +4,13 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
   @override
   Future<List<Event>> listEvents(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListEvents(appDir: appDir, key: key);
+    return _dartDbListEvents(appDir: appDir, key: key);
   }
 
   @override
   Future<Event?> getEventById(Uint8List key, String eventId) async {
     final appDir = await _getAppDir();
-    return rust_core.dbGetEventById(
-      appDir: appDir,
-      key: key,
-      eventId: eventId,
-    );
+    return _dartDbGetEventById(appDir: appDir, key: key, eventId: eventId);
   }
 
   @override
@@ -28,7 +24,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     String? sourceEntryId,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbUpsertEvent(
+    return _dartDbUpsertEvent(
       appDir: appDir,
       key: key,
       id: id,
@@ -73,12 +69,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     int activityLimit = 64,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbProcessPendingTodoThreadEmbeddings(
-      appDir: appDir,
-      key: key,
-      todoLimit: todoLimit,
-      activityLimit: activityLimit,
-    );
+    return _dartDbNoopEmbeddingBatch(appDir: appDir, key: key);
   }
 
   @override
@@ -91,15 +82,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     required String modelName,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbProcessPendingTodoThreadEmbeddingsCloudGateway(
-      appDir: appDir,
-      key: key,
-      todoLimit: todoLimit,
-      activityLimit: activityLimit,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-    );
+    return _dartDbNoopEmbeddingBatch(appDir: appDir, key: key);
   }
 
   @override
@@ -109,12 +92,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     int activityLimit = 64,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbProcessPendingTodoThreadEmbeddingsBrok(
-      appDir: appDir,
-      key: key,
-      todoLimit: todoLimit,
-      activityLimit: activityLimit,
-    );
+    return _dartDbNoopEmbeddingBatch(appDir: appDir, key: key);
   }
 
   @override
@@ -124,12 +102,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     int topK = 10,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbSearchSimilarMessages(
-      appDir: appDir,
-      key: key,
-      query: query,
-      topK: topK,
-    );
+    return _dartDbSearchSimilarMessages(appDir: appDir, key: key);
   }
 
   @override
@@ -142,15 +115,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     required String modelName,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbSearchSimilarMessagesCloudGateway(
-      appDir: appDir,
-      key: key,
-      query: query,
-      topK: topK,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-    );
+    return _dartDbSearchSimilarMessages(appDir: appDir, key: key);
   }
 
   @override
@@ -160,12 +125,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     int topK = 10,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbSearchSimilarMessagesBrok(
-      appDir: appDir,
-      key: key,
-      query: query,
-      topK: topK,
-    );
+    return _dartDbSearchSimilarMessages(appDir: appDir, key: key);
   }
 
   @override
@@ -175,20 +135,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     int topK = 10,
   }) async {
     final appDir = await _getAppDir();
-    final matches = await rust_core.dbSearchSimilarTodoThreads(
-      appDir: appDir,
-      key: key,
-      query: query,
-      topK: topK,
-    );
-    return matches
-        .map(
-          (m) => TodoThreadMatch(
-            todoId: m.todoId,
-            distance: m.distance,
-          ),
-        )
-        .toList(growable: false);
+    return _dartDbSearchSimilarTodoThreads(appDir: appDir, key: key);
   }
 
   @override
@@ -201,23 +148,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     required String modelName,
   }) async {
     final appDir = await _getAppDir();
-    final matches = await rust_core.dbSearchSimilarTodoThreadsCloudGateway(
-      appDir: appDir,
-      key: key,
-      query: query,
-      topK: topK,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-    );
-    return matches
-        .map(
-          (m) => TodoThreadMatch(
-            todoId: m.todoId,
-            distance: m.distance,
-          ),
-        )
-        .toList(growable: false);
+    return _dartDbSearchSimilarTodoThreads(appDir: appDir, key: key);
   }
 
   @override
@@ -227,20 +158,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     int topK = 10,
   }) async {
     final appDir = await _getAppDir();
-    final matches = await rust_core.dbSearchSimilarTodoThreadsBrok(
-      appDir: appDir,
-      key: key,
-      query: query,
-      topK: topK,
-    );
-    return matches
-        .map(
-          (m) => TodoThreadMatch(
-            todoId: m.todoId,
-            distance: m.distance,
-          ),
-        )
-        .toList(growable: false);
+    return _dartDbSearchSimilarTodoThreads(appDir: appDir, key: key);
   }
 
   @override
@@ -249,23 +167,19 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     int batchLimit = 256,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbRebuildMessageEmbeddings(
-      appDir: appDir,
-      key: key,
-      batchLimit: batchLimit,
-    );
+    return _dartDbNoopEmbeddingBatch(appDir: appDir, key: key);
   }
 
   @override
   Future<List<String>> listEmbeddingModelNames(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListEmbeddingModelNames(appDir: appDir, key: key);
+    return _dartDbListEmbeddingModelNames(appDir: appDir, key: key);
   }
 
   @override
   Future<String> getActiveEmbeddingModelName(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbGetActiveEmbeddingModelName(appDir: appDir, key: key);
+    return _dartDbGetActiveEmbeddingModelName(appDir: appDir, key: key);
   }
 
   @override
@@ -274,7 +188,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     String modelName,
   ) async {
     final appDir = await _getAppDir();
-    return rust_core.dbSetActiveEmbeddingModelName(
+    return _dartDbSetActiveEmbeddingModelName(
       appDir: appDir,
       key: key,
       modelName: modelName,
@@ -284,7 +198,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
   @override
   Future<List<EmbeddingProfile>> listEmbeddingProfiles(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListEmbeddingProfiles(appDir: appDir, key: key);
+    return _dartDbListEmbeddingProfiles(appDir: appDir, key: key);
   }
 
   @override
@@ -298,7 +212,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     bool setActive = true,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbCreateEmbeddingProfile(
+    return _dartDbCreateEmbeddingProfile(
       appDir: appDir,
       key: key,
       name: name,
@@ -314,7 +228,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
   Future<void> setActiveEmbeddingProfile(
       Uint8List key, String profileId) async {
     final appDir = await _getAppDir();
-    return rust_core.dbSetActiveEmbeddingProfile(
+    return _dartDbSetActiveEmbeddingProfile(
       appDir: appDir,
       key: key,
       profileId: profileId,
@@ -324,7 +238,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
   @override
   Future<void> deleteEmbeddingProfile(Uint8List key, String profileId) async {
     final appDir = await _getAppDir();
-    return rust_core.dbDeleteEmbeddingProfile(
+    return _dartDbDeleteEmbeddingProfile(
       appDir: appDir,
       key: key,
       profileId: profileId,
@@ -334,7 +248,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListLlmProfiles(appDir: appDir, key: key);
+    return _dartDbListLlmProfiles(appDir: appDir, key: key);
   }
 
   @override
@@ -348,7 +262,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     bool setActive = true,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbCreateLlmProfile(
+    return _dartDbCreateLlmProfile(
       appDir: appDir,
       key: key,
       name: name,
@@ -363,7 +277,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
   @override
   Future<void> setActiveLlmProfile(Uint8List key, String profileId) async {
     final appDir = await _getAppDir();
-    return rust_core.dbSetActiveLlmProfile(
+    return _dartDbSetActiveLlmProfile(
       appDir: appDir,
       key: key,
       profileId: profileId,
@@ -373,7 +287,7 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
   @override
   Future<void> deleteLlmProfile(Uint8List key, String profileId) async {
     final appDir = await _getAppDir();
-    return rust_core.dbDeleteLlmProfile(
+    return _dartDbDeleteLlmProfile(
       appDir: appDir,
       key: key,
       profileId: profileId,
@@ -391,12 +305,6 @@ mixin _NativeAppBackendEmbeddings on _NativeAppBackendAccess {
     required String endDay,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbSumLlmUsageDailyByPurpose(
-      appDir: appDir,
-      key: key,
-      profileId: profileId,
-      startDay: startDay,
-      endDay: endDay,
-    );
+    return _dartDbSumLlmUsageDailyByPurpose(appDir: appDir, key: key);
   }
 }

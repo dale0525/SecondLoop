@@ -129,29 +129,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     );
   }
 
-  Widget _buildAskAiPreferenceTile(
-    BuildContext context, {
-    required AskAiSourcePreference value,
-    required String title,
-    required String subtitle,
-    required Key key,
-  }) {
-    return RadioListTile<AskAiSourcePreference>(
-      key: key,
-      value: value,
-      groupValue: _askAiPreference,
-      onChanged: _askAiPreferenceSaving
-          ? null
-          : (next) {
-              if (next == null) return;
-              unawaited(_setAskAiPreference(next));
-            },
-      title: Text(title),
-      subtitle: Text(subtitle),
-      controlAffinity: ListTileControlAffinity.leading,
-    );
-  }
-
   Widget _buildEmbeddingsPreferenceTile(
     BuildContext context, {
     required EmbeddingsSourcePreference value,
@@ -267,7 +244,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     required Widget? mediaWarning,
   }) {
     final t = context.t.settings.aiSelection;
-    final askAiPreferenceLabels = t.askAi.preference;
     final embeddingsPreferenceLabels = t.embeddings.preference;
     final mediaPreferenceLabels = t.mediaUnderstanding.preference;
 
@@ -282,36 +258,15 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
         statusLabel: _askAiStatusLabel(context),
         warning: askAiWarning,
         actions: [
-          _buildAskAiPreferenceTile(
-            context,
-            key: const ValueKey('ai_settings_ask_ai_mode_auto'),
-            value: AskAiSourcePreference.auto,
-            title: askAiPreferenceLabels.auto.title,
-            subtitle: askAiPreferenceLabels.auto.description,
-          ),
-          _buildAskAiPreferenceTile(
-            context,
-            key: const ValueKey('ai_settings_ask_ai_mode_cloud'),
-            value: AskAiSourcePreference.cloud,
-            title: askAiPreferenceLabels.cloud.title,
-            subtitle: askAiPreferenceLabels.cloud.description,
-          ),
-          _buildAskAiPreferenceTile(
-            context,
-            key: const ValueKey('ai_settings_ask_ai_mode_byok'),
-            value: AskAiSourcePreference.byok,
-            title: askAiPreferenceLabels.byok.title,
-            subtitle: askAiPreferenceLabels.byok.description,
-          ),
           ListTile(
-            key: const ValueKey('ai_settings_open_llm_profiles_advanced'),
-            title: Text(t.askAi.actions.openByok),
+            key: const ValueKey('ai_settings_open_ask_ai_settings_advanced'),
+            title: Text(t.askAi.actions.openSettings),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               pushPageWithInheritedScopes(
                 Navigator.of(context),
                 context,
-                const LlmProfilesPage(),
+                const AiAskAiSettingsPage(),
               );
             },
           ),
@@ -423,17 +378,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
           ),
         ],
       ),
-      if (AppBackendScope.maybeOf(context) != null &&
-          SessionScope.maybeOf(context) != null) ...[
-        const SizedBox(height: 12),
-        KeyedSubtree(
-          key: _mediaLocalCapabilityEntryAnchorKey,
-          child: MediaAnnotationSettingsPage(
-            embedded: true,
-            focusLocalCapabilityCard: widget.focusMediaLocalCapabilityCard,
-          ),
-        ),
-      ],
     ];
   }
 
@@ -456,11 +400,8 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                     ? context.t.settings.cloudEmbeddings.subtitleEnabled
                     : context.t.settings.cloudEmbeddings.subtitleDisabled;
 
-    final askPreferredRoute = _preferredAskAiRoute(_askAiPreference);
-    final askAiUnavailable = !_askAiLoading &&
-        ((askPreferredRoute == null &&
-                _askAiRoute == AskAiRouteKind.needsSetup) ||
-            (askPreferredRoute != null && askPreferredRoute != _askAiRoute));
+    final askAiUnavailable =
+        !_askAiLoading && _askAiRoute == AskAiRouteKind.needsSetup;
 
     final embeddingsPreferredRoute =
         _preferredEmbeddingsRoute(_embeddingsPreference);
@@ -476,9 +417,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     final askAiWarning = askAiUnavailable
         ? _buildWarningBanner(
             context,
-            _askAiPreference == AskAiSourcePreference.auto
-                ? t.askAi.setupHint
-                : t.askAi.preferenceUnavailableHint,
+            t.askAi.setupHint,
             key: const ValueKey('ai_settings_ask_ai_setup_hint'),
           )
         : null;
@@ -499,7 +438,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
           )
         : null;
 
-    final canUseSmartOrganization = canUseCloudEmbeddings || _byokConfigured;
+    final canUseSmartOrganization = canUseCloudEmbeddings;
 
     return Scaffold(
       appBar: AppBar(title: Text(t.title)),

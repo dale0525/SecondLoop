@@ -7,9 +7,9 @@ import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
+import 'package:secondloop/core/session/session_bootstrap.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
-import 'package:secondloop/features/lock/lock_gate.dart';
 import 'package:secondloop/features/settings/cloud_account_panel.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 import 'package:secondloop/web_app/web_entry_intent.dart';
@@ -350,7 +350,7 @@ void main() {
     expect(find.text('Files'), findsNothing);
   });
 
-  testWidgets('entitled web app boots through lock and initial sync gates',
+  testWidgets('entitled web app boots through session and initial sync gates',
       (tester) async {
     await tester.pumpWidget(
       _buildApp(
@@ -365,11 +365,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(LockGate), findsOneWidget);
+    expect(find.byType(SessionBootstrap), findsOneWidget);
     expect(find.byType(WebInitialSyncGate), findsOneWidget);
   });
 
-  testWidgets('entitled web app initializes backend before lock gate',
+  testWidgets('entitled web app initializes backend before session gate',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _InitRequiredWebBackend();

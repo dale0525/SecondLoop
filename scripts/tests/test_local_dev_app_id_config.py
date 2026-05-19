@@ -8,17 +8,19 @@ import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PIXI_TOML = REPO_ROOT / "pixi.toml"
+PUBSPEC = REPO_ROOT / "pubspec.yaml"
 FLUTTER_WITH_DEFINES_SCRIPT = REPO_ROOT / "scripts/flutter_with_defines.sh"
 IOS_INFO_PLIST = REPO_ROOT / "ios/Runner/Info.plist"
 IOS_APP_DELEGATE = REPO_ROOT / "ios/Runner/AppDelegate.swift"
 IOS_PROJECT = REPO_ROOT / "ios/Runner.xcodeproj/project.pbxproj"
 MACOS_APP_INFO = REPO_ROOT / "macos/Runner/Configs/AppInfo.xcconfig"
+MACOS_PODFILE = REPO_ROOT / "macos/Podfile"
+MACOS_PODFILE_LOCK = REPO_ROOT / "macos/Podfile.lock"
 LINUX_CMAKE = REPO_ROOT / "linux/CMakeLists.txt"
 BACKGROUND_SYNC_DART = REPO_ROOT / "lib/core/sync/background_sync.dart"
 NOTIFICATION_SCHEDULER_DART = (
     REPO_ROOT / "lib/core/notifications/review_reminder_notification_scheduler.dart"
 )
-SYNC_DESKTOP_RUNTIME_TOOL = REPO_ROOT / "tools/sync_desktop_runtime_to_appdir.dart"
 RESET_LOCAL_DEV_DATA_SCRIPT = REPO_ROOT / "scripts/reset_local_dev_data.py"
 RUN_WINDOWS_SCRIPT = REPO_ROOT / "scripts/run_windows.ps1"
 WINDOWS_CMAKE = REPO_ROOT / "windows/runner/CMakeLists.txt"
@@ -46,6 +48,14 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
         command = run_macos.get("cmd", "")
 
         self.assertIn("SECONDLOOP_APP_NAME='SecondLoop Dev'", command)
+
+    def test_macos_target_includes_ruby_native_extension_toolchain(self) -> None:
+        pixi_config = self._load_pixi_config()
+
+        dependencies = pixi_config["target"]["osx-arm64"]["dependencies"]
+
+        self.assertIn("c-compiler", dependencies)
+        self.assertIn("cxx-compiler", dependencies)
 
     def test_run_linux_task_exports_dev_app_id(self) -> None:
         pixi_config = self._load_pixi_config()
@@ -145,6 +155,30 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
             app_info,
         )
 
+    def test_macos_podfile_parses_xcconfig_values_with_base64_padding(self) -> None:
+        podfile = MACOS_PODFILE.read_text(encoding="utf-8")
+
+        self.assertIn("def flutter_parse_xcconfig_file(file)", podfile)
+        self.assertIn("line.split('=', 2)", podfile)
+
+    def test_macos_podfile_suppresses_vendored_sqlite_warnings(self) -> None:
+        podfile = MACOS_PODFILE.read_text(encoding="utf-8")
+
+        self.assertIn("target.name == 'sqlite3'", podfile)
+        self.assertIn("GCC_WARN_64_TO_32_BIT_CONVERSION", podfile)
+        self.assertIn("CLANG_WARN_AMBIGUOUS_MACRO", podfile)
+        self.assertIn("-Wno-ambiguous-macro", podfile)
+        self.assertIn("-Wno-shorten-64-to-32", podfile)
+        self.assertIn("-Wno-comma", podfile)
+        self.assertIn("-Wno-unreachable-code", podfile)
+
+    def test_app_lock_biometric_plugin_is_not_registered_for_macos(self) -> None:
+        pubspec = PUBSPEC.read_text(encoding="utf-8")
+        podfile_lock = MACOS_PODFILE_LOCK.read_text(encoding="utf-8")
+
+        self.assertNotIn("local_auth", pubspec)
+        self.assertNotIn("local_auth_darwin", podfile_lock)
+
     def test_linux_application_id_supports_secondloop_app_id_override(self) -> None:
         cmake_file = LINUX_CMAKE.read_text(encoding="utf-8")
 
@@ -200,16 +234,6 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
             runner_rc,
         )
         self.assertIn('VALUE "ProductName", SECONDLOOP_PRODUCT_NAME "\\0"', runner_rc)
-
-    def test_sync_desktop_runtime_tool_reads_secondloop_app_id_from_env(self) -> None:
-        tool = SYNC_DESKTOP_RUNTIME_TOOL.read_text(encoding="utf-8")
-
-        self.assertIn("Platform.environment['SECONDLOOP_APP_ID']", tool)
-
-    def test_sync_desktop_runtime_tool_reads_secondloop_app_name_from_env(self) -> None:
-        tool = SYNC_DESKTOP_RUNTIME_TOOL.read_text(encoding="utf-8")
-
-        self.assertIn("Platform.environment['SECONDLOOP_APP_NAME']", tool)
 
     def test_reset_local_dev_data_task_uses_dedicated_script(self) -> None:
         pixi_config = self._load_pixi_config()

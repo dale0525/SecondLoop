@@ -15,7 +15,11 @@ void main() {
     final controller = SecretaryController(
       backend: backend,
       aiService: SecretaryAiService(promptClient: _ThrowingPromptClient()),
-      aiRouteConfig: const SecretaryAiRouteConfig.byok(),
+      aiRouteConfig: const SecretaryAiRouteConfig.cloudGateway(
+        cloudGatewayBaseUrl: 'https://gateway.example',
+        cloudIdToken: 'token',
+        cloudModelName: 'cloud',
+      ),
       planningEngine: RuleBasedPlanningEngine(nowLocal: () => now),
     );
 
@@ -44,14 +48,6 @@ void main() {
 }
 
 final class _ThrowingPromptClient implements SecretaryAiPromptClient {
-  @override
-  Future<String> runByokSecretaryPrompt(
-    Uint8List key, {
-    required String prompt,
-  }) async {
-    throw StateError('AI unavailable');
-  }
-
   @override
   Future<String> runCloudSecretaryPrompt(
     Uint8List key, {

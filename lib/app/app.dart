@@ -5,10 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/app_bootstrap.dart';
-import '../core/ai/embeddings_index_gate.dart';
-import '../core/ai/message_embeddings_index_gate.dart';
-import '../core/ai/todo_followup_generation_gate.dart';
-import '../core/ai/detached_ask_recovery_gate.dart';
 import '../core/backend/app_backend.dart';
 import '../core/backend/native_backend.dart';
 import '../core/cloud/cloud_auth_access.dart';
@@ -30,17 +26,14 @@ import '../i18n/locale_prefs.dart';
 import '../i18n/strings.g.dart';
 import '../ui/sl_background.dart';
 import '../core/navigation/inherited_scope_page_wrapper.dart';
+import '../core/session/session_bootstrap.dart';
 import 'router.dart';
 import 'theme.dart';
 import 'theme_palette_prefs.dart';
 import 'theme_mode_prefs.dart';
-import '../features/lock/lock_gate.dart';
 import '../features/quick_capture/quick_capture_overlay.dart';
 import '../features/settings/settings_page.dart';
 import '../features/welcome/first_launch_welcome_gate.dart';
-import '../core/sync/cloud_sync_switch_prompt_gate.dart';
-import '../core/sync/sync_key_manager.dart';
-import '../core/sync/sync_engine_gate.dart';
 import '../core/notifications/review_reminder_notifications_gate.dart';
 import '../core/platform/app_platform_capabilities.dart';
 import '../core/platform/app_platform_capability_scope.dart';
@@ -330,49 +323,26 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                           );
                                         },
                                         child: DesktopQuickCaptureService(
-                                          child: LockGate(
-                                            child: SyncEngineGate(
-                                              child: Builder(
-                                                builder:
-                                                    (sessionScopedContext) {
-                                                  _sessionScopedCapture =
-                                                      captureInheritedScopes(
-                                                    sessionScopedContext,
-                                                  );
-                                                  return DetachedAskRecoveryGate(
+                                          child: SessionBootstrap(
+                                            child: Builder(
+                                              builder: (sessionScopedContext) {
+                                                _sessionScopedCapture =
+                                                    captureInheritedScopes(
+                                                  sessionScopedContext,
+                                                );
+                                                return ReviewReminderNotificationsGate(
+                                                  navigatorKey: _navigatorKey,
+                                                  child: QuickCaptureOverlay(
+                                                    navigatorKey: _navigatorKey,
                                                     child:
-                                                        ReviewReminderNotificationsGate(
-                                                      navigatorKey:
-                                                          _navigatorKey,
-                                                      child:
-                                                          TodoFollowupGenerationGate(
-                                                        child:
-                                                            MessageEmbeddingsIndexGate(
-                                                          child:
-                                                              EmbeddingsIndexGate(
-                                                            child:
-                                                                CloudSyncSwitchPromptGate(
-                                                              navigatorKey:
-                                                                  _navigatorKey,
-                                                              child:
-                                                                  QuickCaptureOverlay(
-                                                                navigatorKey:
-                                                                    _navigatorKey,
-                                                                child:
-                                                                    FirstLaunchWelcomeGate(
-                                                                  child: child ??
-                                                                      const SizedBox
-                                                                          .shrink(),
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
+                                                        FirstLaunchWelcomeGate(
+                                                      child: child ??
+                                                          const SizedBox
+                                                              .shrink(),
                                                     ),
-                                                  );
-                                                },
-                                              ),
+                                                  ),
+                                                );
+                                              },
                                             ),
                                           ),
                                         ),
@@ -403,11 +373,5 @@ InheritedScopeCapture? resolveRootSettingsInheritedScopes(
   if (capturedScopes == null || capturedScopes.isEmpty) {
     return null;
   }
-
-  final sessionKey = capturedScopes.sessionKey;
-  if (sessionKey != null && !SyncKeyManager.matchesSessionKey(sessionKey)) {
-    return null;
-  }
-
   return capturedScopes;
 }

@@ -38,7 +38,6 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.6
   flutter_secure_storage: ^9.2.2
-  local_auth: ^2.2.0
   path_provider: ^2.1.2
   package_info_plus: ^8.0.2
   share_plus: ^10.0.0
@@ -117,15 +116,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/bin/ffmpeg/
-    - assets/bin/ffmpeg/windows/
-    - assets/bin/ffmpeg/macos/
-    - assets/bin/ffmpeg/linux/
-    - assets/ocr/
-    - assets/ocr/desktop_runtime/
-    - assets/ocr/desktop_runtime/models/
-    - assets/ocr/desktop_runtime/onnxruntime/
-    - assets/ocr/desktop_runtime/whisper/
     - assets/third_party/katex/
     - assets/third_party/katex/fonts/
     - assets/icon/tray_icon.png
@@ -164,8 +154,6 @@ icons_launcher:
       favicon_path: "assets/icon/app_icon.png"
     linux:
       enable: true
-
-
 
 
 

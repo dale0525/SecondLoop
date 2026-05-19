@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,60 @@ import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/models/platform_int.dart';
 
 void main() {
+  test('native backend stores secretary memories without runtime bindings',
+      () async {
+    final appDir = await Directory.systemTemp.createTemp(
+      'secondloop-secretary-memory-fallback-',
+    );
+    addTearDown(() async {
+      if (await appDir.exists()) {
+        await appDir.delete(recursive: true);
+      }
+    });
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => appDir.path,
+      storageScope: 'secretary-memory-fallback-${appDir.path.hashCode}',
+    );
+    final key = Uint8List(32);
+    final proposal = await backend.createSecretaryMemoryProposal(
+      key,
+      sourceMessageId: 'approval-memory-meeting',
+      kind: 'preference',
+      title: '我上午 9 点前不开会',
+      body: '我上午 9 点前不开会',
+      confidence: 0.9,
+      actionHint: 'runtime_memory_confirmation',
+      nowMs: 1000,
+    );
+
+    expect(proposal.id, isNotEmpty);
+    expect(proposal.state, 'pending');
+    expect(
+      (await backend.listSecretaryMemoryProposals(key, state: 'pending'))
+          .map((item) => item.title),
+      ['我上午 9 点前不开会'],
+    );
+
+    final page = await backend.acceptSecretaryMemoryProposal(
+      key,
+      proposalId: proposal.id,
+      nowMs: 2000,
+    );
+
+    expect(page.title, '我上午 9 点前不开会');
+    expect(page.state, 'active');
+    expect(
+      (await backend.listMemoryPages(key, state: 'active'))
+          .map((item) => item.title),
+      ['我上午 9 点前不开会'],
+    );
+    expect(
+      await backend.listSecretaryMemoryProposals(key, state: 'pending'),
+      isEmpty,
+    );
+  });
+
   test('native backend forwards secretary proposal and planning calls',
       () async {
     const appDir = '/tmp/secondloop-secretary-backend-test';

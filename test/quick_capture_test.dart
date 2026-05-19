@@ -130,10 +130,10 @@ void main() {
     expect(find.text('Remind me to confirm later'), findsNothing);
   });
 
-  testWidgets('Quick capture inserts into Chat and hides', (tester) async {
+  testWidgets('Quick capture queues Agent chat submission and hides',
+      (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
-      'ask_ai_source_preference_v1': 'byok',
     });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
@@ -190,10 +190,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(backend.insertedMessages, hasLength(1));
-    expect(backend.insertedMessages.single.conversationId, 'loop_home');
-    expect(backend.insertedMessages.single.role, 'user');
-    expect(backend.insertedMessages.single.content, 'hello');
+    expect(backend.insertedMessages, isEmpty);
     expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
     expect(controller.consumeReopenMainWindowOnHideRequest(), isTrue);
     expect(controller.consumeOpenChatRequest(), isFalse);
@@ -298,7 +295,6 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
-      'ask_ai_source_preference_v1': 'byok',
     });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
@@ -318,7 +314,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(backend.insertedMessages, hasLength(1));
+    expect(backend.insertedMessages, isEmpty);
     expect(controller.consumeReopenMainWindowOnHideRequest(), isTrue);
     expect(controller.consumeOpenChatRequest(), isFalse);
   });
@@ -390,7 +386,6 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
-      'ask_ai_source_preference_v1': 'byok',
     });
     final backend = _UnlockedBackend();
     final controller = QuickCaptureController();
@@ -410,7 +405,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(backend.insertedMessages, hasLength(1));
+    expect(backend.insertedMessages, isEmpty);
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
         findsNothing);
     expect(find.byKey(const ValueKey('capture_todo_option_pick_custom')),
@@ -494,13 +489,6 @@ final class _UnlockedBackend extends AppBackend {
 
   @override
   Future<bool> isMasterPasswordSet() async => true;
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async => true;
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
-
   @override
   Future<Uint8List?> loadSavedSessionKey() async => _key;
 

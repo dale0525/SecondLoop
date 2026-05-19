@@ -36,14 +36,15 @@ abstract class AppBackend with _AppBackendSemanticAndSyncMixin {
 
   Future<bool> isMasterPasswordSet();
 
-  Future<bool> readAutoUnlockEnabled();
-  Future<void> persistAutoUnlockEnabled({required bool enabled});
-
   Future<Uint8List?> loadSavedSessionKey();
   Future<void> saveSessionKey(Uint8List key);
   Future<void> clearSavedSessionKey();
 
   Future<void> validateKey(Uint8List key);
+
+  Future<Uint8List> ensureSessionKey() {
+    return initMasterPassword('secondloop-internal-session-v1');
+  }
 
   Future<Uint8List> initMasterPassword(String password);
   Future<Uint8List> unlockWithPassword(String password);

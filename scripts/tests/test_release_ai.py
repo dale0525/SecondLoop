@@ -34,7 +34,7 @@ class SemVerTests(unittest.TestCase):
         self.assertIsNone(parse_semver_tag("v1.2.3.4"))
 
     def test_find_latest_semver_tag(self) -> None:
-        tags = ["v0.1.9", "desktop-runtime-v1.2.3", "v1.2.0", "v1.1.99"]
+        tags = ["v0.1.9", "runtime-v1.2.3", "v1.2.0", "v1.1.99"]
         self.assertEqual(find_latest_semver_tag(tags), "v1.2.0")
 
     def test_bump_semver(self) -> None:
@@ -173,7 +173,7 @@ class PublishedReleaseBaseTests(unittest.TestCase):
             {"tag_name": "v0.4.0", "draft": False, "prerelease": False},
             {"tag_name": "v0.3.9", "draft": False, "prerelease": True},
             {"tag_name": "v0.3.8", "draft": True, "prerelease": False},
-            {"tag_name": "desktop-runtime-v0.1.0", "draft": False, "prerelease": False},
+            {"tag_name": "runtime-v0.1.0", "draft": False, "prerelease": False},
         ]
 
         self.assertEqual(

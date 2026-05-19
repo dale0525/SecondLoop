@@ -18,7 +18,7 @@ void main() {
     final source = File('lib/web_app/web_app_gate.dart').readAsStringSync();
 
     expect(source, contains('child = AppBootstrap('));
-    expect(source, contains('child: LockGate('));
+    expect(source, contains('child: SessionBootstrap('));
     expect(source, contains('child: WebInitialSyncGate('));
     expect(source, contains('child: AppShell('));
     expect(

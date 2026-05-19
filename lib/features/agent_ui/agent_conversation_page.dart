@@ -143,14 +143,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   Future<List<Todo>> _loadTasks() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    final List<Todo> todos;
-    try {
-      todos = await backend.listTodos(sessionKey);
-    } on UnimplementedError {
-      return const <Todo>[];
-    } on UnsupportedError {
-      return const <Todo>[];
-    }
+    final todos = await backend.listTodos(sessionKey);
     if (mounted) {
       setState(() => _todos = todos);
     }
@@ -162,17 +155,10 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
     if (backend is! SecretaryBackend) return const <MemoryPageRecord>[];
     final secretaryBackend = backend as SecretaryBackend;
     final sessionKey = SessionScope.of(context).sessionKey;
-    final List<MemoryPageRecord> pages;
-    try {
-      pages = await secretaryBackend.listMemoryPages(
-        sessionKey,
-        state: 'active',
-      );
-    } on UnimplementedError {
-      return const <MemoryPageRecord>[];
-    } on UnsupportedError {
-      return const <MemoryPageRecord>[];
-    }
+    final pages = await secretaryBackend.listMemoryPages(
+      sessionKey,
+      state: 'active',
+    );
     if (mounted) {
       setState(() => _memoryPages = pages);
     }
@@ -244,7 +230,6 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   Future<void> _sendText(String text) async {
     if (_sending || _thinking) return;
 
-    final existingMessageIds = _messages.map((message) => message.id).toSet();
     var newUserMessageCommitted = false;
 
     setState(() {
@@ -268,19 +253,6 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         conversationId: widget.conversation.id,
         message: text,
         runtimeConversationSender: widget.runtimeConversationSender,
-        onReasoningDelta: (delta) {
-          if (!mounted) return;
-          setState(() => _streamingReasoning += delta);
-          _scrollToLatest();
-        },
-        onAnswerDelta: (delta) {
-          if (!mounted) return;
-          setState(() {
-            _streamingReasoning = '';
-            _streamingAnswer += delta;
-          });
-          _scrollToLatest();
-        },
       );
       if (!mounted) return;
       newUserMessageCommitted = result.userMessageCommitted;
@@ -306,38 +278,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         return;
       }
 
-      if (isAgentEmbeddingsQuotaStreamError(result.streamError)) {
-        _showAskFailure(
-          message: context.t.chat.askAiRetrievalQuotaUnavailable,
-        );
-        return;
-      }
-
-      syncEngine?.notifyExternalChange();
-      final latestMessages = await _loadMessages();
-      if (!mounted) return;
-      final hasNewUserMessage = latestMessages.any(
-        (message) =>
-            message.role == 'user' && !existingMessageIds.contains(message.id),
-      );
-      final hasNewAssistantMessage = latestMessages.any(
-        (message) =>
-            message.role == 'assistant' &&
-            !existingMessageIds.contains(message.id) &&
-            message.content.trim().isNotEmpty,
-      );
-      if (result.streamError != null ||
-          (!result.sawVisibleDelta && !hasNewAssistantMessage)) {
-        _showAskFailure(newUserMessageCommitted: hasNewUserMessage);
-        return;
-      }
-      setState(() {
-        _pendingUserContent = null;
-        _streamingAnswer = '';
-        _streamingReasoning = '';
-        _thinking = false;
-      });
-      _scrollToLatest();
+      _showAskFailure(newUserMessageCommitted: newUserMessageCommitted);
     } on AgentConversationSendException catch (error) {
       if (!mounted) return;
       _showAskFailure(newUserMessageCommitted: error.userMessageCommitted);

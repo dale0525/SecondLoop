@@ -4,11 +4,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../../features/attachments/platform_pdf_ocr.dart';
-import 'package:secondloop/core/runtime_compat/api/media_annotation.dart'
-    as rust_media_annotation;
 import 'package:secondloop/core/models/app_models.dart';
 import '../ai/ai_routing.dart';
-import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';
 import 'multimodal_pdf_chunked_ocr.dart';
 
@@ -135,28 +132,7 @@ Future<PlatformPdfOcrResult?> tryMultimodalOcrViaByok({
   int pageCountHint = 1,
 }) async {
   if (mediaBytes.isEmpty) return null;
-  final appDir = await getNativeAppDir();
-  final payloadJson = await rust_media_annotation.mediaAnnotationByokProfile(
-    appDir: appDir,
-    key: sessionKey,
-    profileId: profileId,
-    localDay: _formatLocalDayKey(DateTime.now()),
-    lang: _buildOcrLang(languageHints),
-    mimeType: mimeType,
-    imageBytes: mediaBytes,
-  );
-  final markdown = extractOcrMarkdownFromMediaAnnotationPayload(payloadJson);
-  if (markdown == null || markdown.isEmpty) return null;
-
-  final pages = pageCountHint < 1 ? 1 : pageCountHint;
-  return PlatformPdfOcrResult(
-    fullText: markdown,
-    excerpt: _buildExcerpt(markdown),
-    engine: 'multimodal_byok_ocr_markdown:$modelName',
-    isTruncated: false,
-    pageCount: pages,
-    processedPages: pages,
-  );
+  return null;
 }
 
 Future<PlatformPdfOcrResult?> tryMultimodalOcrViaCloud({
@@ -328,20 +304,7 @@ Future<MultimodalVideoInsight?> tryMultimodalVideoInsightViaByok({
   required Uint8List mediaBytes,
 }) async {
   if (mediaBytes.isEmpty) return null;
-  final appDir = await getNativeAppDir();
-  final payloadJson = await rust_media_annotation.mediaAnnotationByokProfile(
-    appDir: appDir,
-    key: sessionKey,
-    profileId: profileId,
-    localDay: _formatLocalDayKey(DateTime.now()),
-    lang: _buildVideoExtractLang(languageHints),
-    mimeType: mimeType,
-    imageBytes: mediaBytes,
-  );
-  return extractMultimodalVideoInsight(
-    payloadJson,
-    defaultEngine: 'multimodal_byok_video_extract:$modelName',
-  );
+  return null;
 }
 
 Future<MultimodalVideoInsight?> tryMultimodalVideoInsightViaCloud({
@@ -917,12 +880,4 @@ String _buildExcerpt(String fullText, {int maxChars = 1200}) {
   final trimmed = fullText.trim();
   if (trimmed.length <= maxChars) return trimmed;
   return '${trimmed.substring(0, maxChars).trimRight()}…';
-}
-
-String _formatLocalDayKey(DateTime value) {
-  final dt = value.toLocal();
-  final y = dt.year.toString().padLeft(4, '0');
-  final m = dt.month.toString().padLeft(2, '0');
-  final d = dt.day.toString().padLeft(2, '0');
-  return '$y-$m-$d';
 }

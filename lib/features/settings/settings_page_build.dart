@@ -3,30 +3,16 @@ part of 'settings_page.dart';
 extension _SettingsPageBuild on _SettingsPageState {
   Widget _buildSettingsPage(BuildContext context) {
     final capabilities = AppPlatformCapabilityScope.of(context);
-    final enabled = _appLockEnabled;
-    final biometricEnabled = _biometricUnlockEnabled;
-    final isMobile = capabilities.supportsBiometricUnlock &&
-        (defaultTargetPlatform == TargetPlatform.iOS ||
-            defaultTargetPlatform == TargetPlatform.android);
     final supportsDesktopHotkey = capabilities.supportsDesktopHotkey;
     final supportsDesktopBootSettings =
         capabilities.supportsDesktopBootSettings;
-    final supportsBiometricUnlock = capabilities.supportsBiometricUnlock;
     final showsAppearancePreferences =
         debugShowsAppearancePreferences(capabilities);
-    final showsSecurityPreferences = !capabilities.usesCloudSessionModel;
-    final isDesktop = supportsBiometricUnlock && !isMobile;
     final isZh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
         .startsWith('zh');
     final featureSettingsTitle = isZh ? '功能设置' : 'Feature settings';
-    final systemUnlockSubtitleMobile = isZh
-        ? '使用生物识别代替应用锁密码'
-        : 'Unlock with biometrics instead of app lock password';
-    final systemUnlockSubtitleDesktop = isZh
-        ? '使用 Touch ID / Windows Hello 代替应用锁密码'
-        : 'Unlock with Touch ID / Windows Hello instead of app lock password';
 
     Widget sectionCard(List<Widget> children) {
       return SlSurface(
@@ -111,49 +97,6 @@ extension _SettingsPageBuild on _SettingsPageState {
           ),
         ]),
         const SizedBox(height: 16),
-        if (showsSecurityPreferences) ...[
-          Text(
-            context.t.settings.sections.security,
-            style: Theme.of(context)
-                .textTheme
-                .titleSmall
-                ?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          sectionCard([
-            SwitchListTile(
-              title: Text(context.t.settings.autoLock.title),
-              subtitle: Text(context.t.settings.autoLock.subtitle),
-              value: enabled ?? false,
-              onChanged: (_busy || enabled == null) ? null : _setAppLock,
-            ),
-            if ((enabled ?? false) &&
-                supportsBiometricUnlock &&
-                (isMobile || isDesktop))
-              SwitchListTile(
-                title: Text(
-                  isMobile
-                      ? context.t.settings.systemUnlock.titleMobile
-                      : context.t.settings.systemUnlock.titleDesktop,
-                ),
-                subtitle: Text(
-                  isMobile
-                      ? systemUnlockSubtitleMobile
-                      : systemUnlockSubtitleDesktop,
-                ),
-                value: biometricEnabled ?? false,
-                onChanged: (_busy || biometricEnabled == null)
-                    ? null
-                    : _setBiometricUnlock,
-              ),
-            ListTile(
-              title: Text(context.t.settings.lockNow.title),
-              subtitle: Text(context.t.settings.lockNow.subtitle),
-              onTap: _busy ? null : _lockNow,
-            ),
-          ]),
-          const SizedBox(height: 16),
-        ],
         Text(
           featureSettingsTitle,
           style: Theme.of(context)
@@ -390,24 +333,21 @@ extension _SettingsPageBuild on _SettingsPageState {
                   .t.settingsReset.debugResetLocalDataThisDeviceOnly.subtitle),
               onTap: _busy
                   ? null
-                  : () => _resetLocalData(clearAllRemoteData: false),
+                  : () => _resetLocalData(
+                        variant: _ResetLocalDataVariant.thisDeviceOnly,
+                      ),
             ),
             ListTile(
-              title: Text(
-                  context.t.settingsReset.debugResetLocalDataAllDevices.title),
-              subtitle: Text(context
-                  .t.settingsReset.debugResetLocalDataAllDevices.subtitle),
+              title: Text(context.t.settingsReset
+                  .debugResetLocalDataRuntimeHostedDataUnchanged.title),
+              subtitle: Text(context.t.settingsReset
+                  .debugResetLocalDataRuntimeHostedDataUnchanged.subtitle),
               onTap: _busy
                   ? null
-                  : () => _resetLocalData(clearAllRemoteData: true),
-            ),
-            ListTile(
-              key: const ValueKey('settings_debug_run_oplog_maintenance'),
-              title: Text(context.t.settings.debugOplogMaintenance.title),
-              subtitle: Text(
-                context.t.settings.debugOplogMaintenance.subtitle,
-              ),
-              onTap: _busy ? null : _runOplogMaintenanceDebug,
+                  : () => _resetLocalData(
+                        variant:
+                            _ResetLocalDataVariant.runtimeHostedDataUnchanged,
+                      ),
             ),
           ]),
         ],

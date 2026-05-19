@@ -25,7 +25,6 @@ void main() {
           home: AppPlatformCapabilityScope(
             capabilities: const AppPlatformCapabilities(
               supportsDesktopHotkey: true,
-              supportsBiometricUnlock: false,
               supportsAudioRecording: false,
               supportsDesktopDrop: true,
               supportsDesktopBootSettings: true,

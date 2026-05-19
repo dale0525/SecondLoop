@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -14,39 +15,14 @@ import 'package:secondloop/core/models/platform_int.dart';
 
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../storage/secure_blob_store.dart';
-import 'package:secondloop/core/runtime_compat/api/content_extract.dart'
-    as rust_content_extract;
-import 'package:secondloop/core/runtime_compat/api/embedding_lifecycle.dart'
-    as rust_embedding_lifecycle;
-import 'package:secondloop/core/runtime_compat/api/core.dart' as rust_core;
-import 'package:secondloop/core/runtime_compat/api/detached_ask.dart'
-    as rust_detached_ask;
-import 'package:secondloop/core/runtime_compat/api/semantic_parse_enhancement.dart'
-    as rust_semantic_parse_enhancement;
-import 'package:secondloop/core/runtime_compat/api/semantic_parse_jobs.dart'
-    as rust_semantic_parse_jobs;
-import 'package:secondloop/core/runtime_compat/api/todo_followup_generation.dart'
-    as rust_todo_followup_generation;
-import 'package:secondloop/core/runtime_compat/api/vault_rollback.dart'
-    as rust_vault_rollback;
-import 'package:secondloop/core/runtime_compat/api/attachments.dart'
-    as rust_attachments;
-import 'package:secondloop/core/runtime_compat/api/ask_scope.dart'
-    as rust_ask_scope;
-import 'package:secondloop/core/runtime_compat/api/sync_diagnostics.dart'
-    as rust_sync_diagnostics;
-import 'package:secondloop/core/runtime_compat/api/sync_progress.dart'
-    as rust_sync_progress;
 import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/models/semantic_parse_models.dart';
-import '../secretary/todo_command_executor.dart';
 import '../secretary/todo_command_models.dart';
 import 'app_backend.dart';
 import 'attachments_backend.dart';
 import 'semantic_parse_attempt_aware_backend.dart';
 import 'semantic_parse_enhancement_backend.dart';
 import 'secretary_backend.dart';
-import '../sync/sync_config_store.dart';
 
 part 'native_backend_todo_followups.dart';
 part 'native_backend_todos.dart';
@@ -60,27 +36,12 @@ part 'native_backend_sync_core.dart';
 part 'native_backend_sync_webdav.dart';
 part 'native_backend_sync_localdir.dart';
 part 'native_backend_sync_managed_vault.dart';
+part 'native_backend_runtime_first_store.dart';
+part 'native_backend_runtime_first_todo_store.dart';
+part 'native_backend_runtime_first_followup_store.dart';
 part 'native_backend_secretary.dart';
+part 'native_backend_secretary_memory_store.dart';
 part 'native_backend_vault_rollback.dart';
-
-Future<bool> _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimBridge({
-  required String appDir,
-  required List<int> key,
-  required String todoId,
-  required int jobStartedAtMs,
-  required List<TodoFollowupSuggestionDraftInput> suggestions,
-  required String source,
-  String? generationKey,
-}) =>
-    rust_core.dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
-      appDir: appDir,
-      key: key,
-      todoId: todoId,
-      jobStartedAtMs: PlatformInt64Util.from(jobStartedAtMs),
-      suggestions: suggestions,
-      source: source,
-      generationKey: generationKey,
-    );
 
 typedef AppDirProvider = Future<String> Function();
 
@@ -106,6 +67,10 @@ typedef DbReleaseLocalEmbeddingModelIfIdleFn = Future<bool> Function({
 });
 
 typedef RuntimeCompatInitFn = Future<void> Function();
+
+UnsupportedError _retiredNativeRuntimeFeature(String feature) {
+  return UnsupportedError('runtime_first_native_runtime_removed:$feature');
+}
 
 typedef DbInsertAttachmentFn = Future<Attachment> Function({
   required String appDir,
@@ -248,21 +213,8 @@ Stream<String> _ragAskAiStreamScopedCompat({
   required String localeLanguage,
   required String localDay,
 }) {
-  return rust_ask_scope.ragAskAiStreamScoped(
-    appDir: appDir,
-    key: key,
-    conversationId: conversationId,
-    question: question,
-    topK: topK,
-    thisThreadOnly: thisThreadOnly,
-    timeStartMs:
-        timeStartMs == null ? null : PlatformInt64Util.from(timeStartMs),
-    timeEndMs: timeEndMs == null ? null : PlatformInt64Util.from(timeEndMs),
-    includeTagIds: includeTagIds,
-    excludeTagIds: excludeTagIds,
-    strictMode: strictMode,
-    localeLanguage: localeLanguage,
-    localDay: localDay,
+  return Stream<String>.error(
+    _retiredNativeRuntimeFeature('ragAskAiStreamScoped'),
   );
 }
 
@@ -283,23 +235,8 @@ Stream<String> _ragAskAiStreamCloudGatewayScopedCompat({
   required String firebaseIdToken,
   required String modelName,
 }) {
-  return rust_ask_scope.ragAskAiStreamCloudGatewayScoped(
-    appDir: appDir,
-    key: key,
-    conversationId: conversationId,
-    question: question,
-    topK: topK,
-    thisThreadOnly: thisThreadOnly,
-    timeStartMs:
-        timeStartMs == null ? null : PlatformInt64Util.from(timeStartMs),
-    timeEndMs: timeEndMs == null ? null : PlatformInt64Util.from(timeEndMs),
-    includeTagIds: includeTagIds,
-    excludeTagIds: excludeTagIds,
-    strictMode: strictMode,
-    localeLanguage: localeLanguage,
-    gatewayBaseUrl: gatewayBaseUrl,
-    firebaseIdToken: firebaseIdToken,
-    modelName: modelName,
+  return Stream<String>.error(
+    _retiredNativeRuntimeFeature('ragAskAiStreamCloudGatewayScoped'),
   );
 }
 
@@ -405,8 +342,8 @@ class NativeAppBackend extends _NativeAppBackendAccess
           scopeKey: _normalizeStorageScope(storageScope),
         ),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
-        _dbListTodos = dbListTodos ?? rust_core.dbListTodos,
-        _dbGetTodoById = dbGetTodoById ?? rust_core.dbGetTodoById,
+        _dbListTodos = dbListTodos ?? _dartDbListTodos,
+        _dbGetTodoById = dbGetTodoById ?? _dartDbGetTodoById,
         _dbUpsertTodoWithAutoFollowupJob =
             _resolveDbUpsertTodoWithAutoFollowupJob(
           dbUpsertTodoWithAutoFollowupJob: dbUpsertTodoWithAutoFollowupJob,
@@ -414,115 +351,107 @@ class NativeAppBackend extends _NativeAppBackendAccess
           dbEnqueueTodoFollowupGenerationJob:
               dbEnqueueTodoFollowupGenerationJob,
         ),
-        _dbInsertMessage = dbInsertMessage ?? rust_core.dbInsertMessage,
-        _dbInsertAttachment =
-            dbInsertAttachment ?? rust_core.dbInsertAttachment,
+        _dbInsertMessage = dbInsertMessage ?? _dartDbInsertMessage,
+        _dbInsertAttachment = dbInsertAttachment ?? _dartDbInsertAttachment,
         _dbProcessPendingMessageEmbeddings =
             dbProcessPendingMessageEmbeddings ??
-                rust_core.dbProcessPendingMessageEmbeddings,
+                _dartDbProcessPendingMessageEmbeddings,
         _dbReleaseLocalEmbeddingModelIfIdle =
             dbReleaseLocalEmbeddingModelIfIdle ??
-                rust_embedding_lifecycle.dbReleaseLocalEmbeddingModelIfIdle,
+                _dartDbReleaseLocalEmbeddingModelIfIdle,
         _askAiStreamScoped = askAiStreamScopedFn ?? _ragAskAiStreamScopedCompat,
         _askAiStreamCloudGatewayScoped = askAiStreamCloudGatewayScopedFn ??
             _ragAskAiStreamCloudGatewayScopedCompat,
         _dbCreateTodoChecklistItem =
-            dbCreateTodoChecklistItem ?? rust_core.dbCreateTodoChecklistItem,
+            dbCreateTodoChecklistItem ?? _dartDbCreateTodoChecklistItem,
         _dbListTodoChecklistItems =
-            dbListTodoChecklistItems ?? rust_core.dbListTodoChecklistItems,
+            dbListTodoChecklistItems ?? _dartDbListTodoChecklistItems,
         _dbUpdateTodoChecklistItemContent = dbUpdateTodoChecklistItemContent ??
-            rust_core.dbUpdateTodoChecklistItemContent,
+            _dartDbUpdateTodoChecklistItemContent,
         _dbSetTodoChecklistItemDone =
-            dbSetTodoChecklistItemDone ?? rust_core.dbSetTodoChecklistItemDone,
+            dbSetTodoChecklistItemDone ?? _dartDbSetTodoChecklistItemDone,
         _dbDeleteTodoChecklistItem =
-            dbDeleteTodoChecklistItem ?? rust_core.dbDeleteTodoChecklistItem,
-        _dbReorderTodoChecklistItems = dbReorderTodoChecklistItems ??
-            rust_core.dbReorderTodoChecklistItems,
-        _dbListTodoChecklistProgress = dbListTodoChecklistProgress ??
-            rust_core.dbListTodoChecklistProgress,
+            dbDeleteTodoChecklistItem ?? _dartDbDeleteTodoChecklistItem,
+        _dbReorderTodoChecklistItems =
+            dbReorderTodoChecklistItems ?? _dartDbReorderTodoChecklistItems,
+        _dbListTodoChecklistProgress =
+            dbListTodoChecklistProgress ?? _dartDbListTodoChecklistProgress,
         _dbListTodoChecklistSuggestions = dbListTodoChecklistSuggestions ??
-            rust_core.dbListTodoChecklistSuggestions,
+            _dartDbListTodoChecklistSuggestions,
         _dbUpsertGeneratedTodoChecklistSuggestions =
             dbUpsertGeneratedTodoChecklistSuggestions ??
-                rust_core.dbUpsertGeneratedTodoChecklistSuggestions,
+                _dartDbUpsertGeneratedTodoChecklistSuggestions,
         _dbApplyTodoChecklistSuggestions = dbApplyTodoChecklistSuggestions ??
-            rust_core.dbApplyTodoChecklistSuggestions,
+            _dartDbApplyTodoChecklistSuggestions,
         _dbDismissTodoChecklistSuggestions =
             dbDismissTodoChecklistSuggestions ??
-                rust_core.dbDismissTodoChecklistSuggestions,
+                _dartDbDismissTodoChecklistSuggestions,
         _dbDismissAllTodoChecklistSuggestions =
             dbDismissAllTodoChecklistSuggestions ??
-                rust_core.dbDismissAllTodoChecklistSuggestions,
-        _dbListTodoFollowupSuggestions = dbListTodoFollowupSuggestions ??
-            rust_core.dbListTodoFollowupSuggestions,
+                _dartDbDismissAllTodoChecklistSuggestions,
+        _dbListTodoFollowupSuggestions =
+            dbListTodoFollowupSuggestions ?? _dartDbListTodoFollowupSuggestions,
         _dbUpsertGeneratedTodoFollowupSuggestions =
             dbUpsertGeneratedTodoFollowupSuggestions ??
-                rust_core.dbUpsertGeneratedTodoFollowupSuggestions,
+                _dartDbUpsertGeneratedTodoFollowupSuggestions,
         _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim =
             dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim ??
-                _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimBridge,
+                _dartDbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim,
         _dbApplyTodoFollowupSuggestions = dbApplyTodoFollowupSuggestions ??
-            rust_core.dbApplyTodoFollowupSuggestions,
+            _dartDbApplyTodoFollowupSuggestions,
         _dbDismissTodoFollowupSuggestions = dbDismissTodoFollowupSuggestions ??
-            rust_core.dbDismissTodoFollowupSuggestions,
+            _dartDbDismissTodoFollowupSuggestions,
         _dbDismissAllTodoFollowupSuggestions =
             dbDismissAllTodoFollowupSuggestions ??
-                rust_core.dbDismissAllTodoFollowupSuggestions,
+                _dartDbDismissAllTodoFollowupSuggestions,
         _dbEnqueueTodoFollowupGenerationJob =
             dbEnqueueTodoFollowupGenerationJob ??
-                rust_core.dbEnqueueTodoFollowupGenerationJob,
+                _dartDbEnqueueTodoFollowupGenerationJob,
         _dbListDueTodoFollowupGenerationJobs =
             dbListDueTodoFollowupGenerationJobs ??
-                rust_core.dbListDueTodoFollowupGenerationJobs,
+                _dartDbListDueTodoFollowupGenerationJobs,
         _dbListDueAutoTodoFollowupGenerationJobs =
             dbListDueAutoTodoFollowupGenerationJobs ??
-                rust_todo_followup_generation
-                    .dbListDueAutoTodoFollowupGenerationJobs,
+                _dartDbListDueAutoTodoFollowupGenerationJobs,
         _dbGetTodoFollowupGenerationJob = dbGetTodoFollowupGenerationJob ??
-            rust_core.dbGetTodoFollowupGenerationJob,
+            _dartDbGetTodoFollowupGenerationJob,
         _dbMarkTodoFollowupGenerationJobRunning =
             dbMarkTodoFollowupGenerationJobRunning ??
-                rust_core.dbMarkTodoFollowupGenerationJobRunning,
+                _dartDbMarkTodoFollowupGenerationJobRunning,
         _dbMarkTodoFollowupGenerationJobFailed =
             dbMarkTodoFollowupGenerationJobFailed ??
-                rust_core.dbMarkTodoFollowupGenerationJobFailed,
+                _dartDbMarkTodoFollowupGenerationJobFailed,
         _dbMarkTodoFollowupGenerationJobSucceeded =
             dbMarkTodoFollowupGenerationJobSucceeded ??
-                rust_core.dbMarkTodoFollowupGenerationJobSucceeded,
+                _dartDbMarkTodoFollowupGenerationJobSucceeded,
         _dbMarkTodoFollowupGenerationJobSkipped =
             dbMarkTodoFollowupGenerationJobSkipped ??
-                rust_core.dbMarkTodoFollowupGenerationJobSkipped,
+                _dartDbMarkTodoFollowupGenerationJobSkipped,
         _dbMarkTodoFollowupGenerationJobCanceled =
             dbMarkTodoFollowupGenerationJobCanceled ??
-                rust_core.dbMarkTodoFollowupGenerationJobCanceled,
-        _dbCreateSecretaryMemoryProposal = dbCreateSecretaryMemoryProposal ??
-            rust_core.dbCreateSecretaryMemoryProposal,
-        _dbListSecretaryMemoryProposals = dbListSecretaryMemoryProposals ??
-            rust_core.dbListSecretaryMemoryProposals,
-        _dbAcceptSecretaryMemoryProposal = dbAcceptSecretaryMemoryProposal ??
-            rust_core.dbAcceptSecretaryMemoryProposal,
-        _dbDismissSecretaryMemoryProposal = dbDismissSecretaryMemoryProposal ??
-            rust_core.dbDismissSecretaryMemoryProposal,
-        _dbListMemoryPages = dbListMemoryPages ?? rust_core.dbListMemoryPages,
-        _dbGetMemoryPage = dbGetMemoryPage ?? rust_core.dbGetMemoryPage,
-        _dbCorrectMemoryPage =
-            dbCorrectMemoryPage ?? rust_core.dbCorrectMemoryPage,
-        _dbArchiveMemoryPage =
-            dbArchiveMemoryPage ?? rust_core.dbArchiveMemoryPage,
-        _dbRestoreMemoryPage =
-            dbRestoreMemoryPage ?? rust_core.dbRestoreMemoryPage,
+                _dartDbMarkTodoFollowupGenerationJobCanceled,
+        _dbCreateSecretaryMemoryProposal = dbCreateSecretaryMemoryProposal,
+        _dbListSecretaryMemoryProposals = dbListSecretaryMemoryProposals,
+        _dbAcceptSecretaryMemoryProposal = dbAcceptSecretaryMemoryProposal,
+        _dbDismissSecretaryMemoryProposal = dbDismissSecretaryMemoryProposal,
+        _dbListMemoryPages = dbListMemoryPages,
+        _dbGetMemoryPage = dbGetMemoryPage,
+        _dbCorrectMemoryPage = dbCorrectMemoryPage,
+        _dbArchiveMemoryPage = dbArchiveMemoryPage,
+        _dbRestoreMemoryPage = dbRestoreMemoryPage,
         _dbUpsertPlanningOutput =
-            dbUpsertPlanningOutput ?? rust_core.dbUpsertPlanningOutput,
+            dbUpsertPlanningOutput ?? _dartDbUpsertPlanningOutput,
         _dbListPlanningOutputs =
-            dbListPlanningOutputs ?? rust_core.dbListPlanningOutputs,
+            dbListPlanningOutputs ?? _dartDbListPlanningOutputs,
         _dbCreateSecretaryRun =
-            dbCreateSecretaryRun ?? rust_core.dbCreateSecretaryRun,
+            dbCreateSecretaryRun ?? _dartDbCreateSecretaryRun,
         _dbCreateSecretaryToolCall =
-            dbCreateSecretaryToolCall ?? rust_core.dbCreateSecretaryToolCall,
+            dbCreateSecretaryToolCall ?? _dartDbCreateSecretaryToolCall,
         _dbListSecretaryToolCallsForRun = dbListSecretaryToolCallsForRun ??
-            rust_core.dbListSecretaryToolCallsForRun,
+            _dartDbListSecretaryToolCallsForRun,
         _runtimeCompatInit = runtimeCompatInit ?? rustLibInit ?? (() async {});
 
+  @override
   final SecureBlobStore _secureBlobStore;
   final String? _storageScope;
   final AppDirProvider _appDirProvider;
@@ -612,23 +541,23 @@ class NativeAppBackend extends _NativeAppBackendAccess
   final DbMarkTodoFollowupGenerationJobCanceledFn
       _dbMarkTodoFollowupGenerationJobCanceled;
   @override
-  final DbCreateSecretaryMemoryProposalFn _dbCreateSecretaryMemoryProposal;
+  final DbCreateSecretaryMemoryProposalFn? _dbCreateSecretaryMemoryProposal;
   @override
-  final DbListSecretaryMemoryProposalsFn _dbListSecretaryMemoryProposals;
+  final DbListSecretaryMemoryProposalsFn? _dbListSecretaryMemoryProposals;
   @override
-  final DbAcceptSecretaryMemoryProposalFn _dbAcceptSecretaryMemoryProposal;
+  final DbAcceptSecretaryMemoryProposalFn? _dbAcceptSecretaryMemoryProposal;
   @override
-  final DbDismissSecretaryMemoryProposalFn _dbDismissSecretaryMemoryProposal;
+  final DbDismissSecretaryMemoryProposalFn? _dbDismissSecretaryMemoryProposal;
   @override
-  final DbListMemoryPagesFn _dbListMemoryPages;
+  final DbListMemoryPagesFn? _dbListMemoryPages;
   @override
-  final DbGetMemoryPageFn _dbGetMemoryPage;
+  final DbGetMemoryPageFn? _dbGetMemoryPage;
   @override
-  final DbCorrectMemoryPageFn _dbCorrectMemoryPage;
+  final DbCorrectMemoryPageFn? _dbCorrectMemoryPage;
   @override
-  final DbSetMemoryPageStateFn _dbArchiveMemoryPage;
+  final DbSetMemoryPageStateFn? _dbArchiveMemoryPage;
   @override
-  final DbSetMemoryPageStateFn _dbRestoreMemoryPage;
+  final DbSetMemoryPageStateFn? _dbRestoreMemoryPage;
   @override
   final DbUpsertPlanningOutputFn _dbUpsertPlanningOutput;
   @override
@@ -643,18 +572,11 @@ class NativeAppBackend extends _NativeAppBackendAccess
 
   String? _appDir;
 
-  static String _formatLocalDayKey(DateTime value) {
-    final dt = value.toLocal();
-    final y = dt.year.toString().padLeft(4, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
-  }
-
-  static const _kAutoUnlockEnabled = 'auto_unlock_enabled';
   static const _kSessionKeyB64 = 'session_key_b64';
 
+  static const _kDefaultSessionKeyB64PrefsKey = 'default_session_key_b64_v1';
   static const _kDeferredSessionKeyB64PrefsKey = 'deferred_session_key_b64_v1';
+  static const _kInternalSessionPassword = 'secondloop-internal-session-v1';
 
   bool get _isMacNoKeychain =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
@@ -685,35 +607,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
   @override
   Future<bool> isMasterPasswordSet() async {
     final appDir = await _getAppDir();
-    return rust_core.authIsInitialized(appDir: appDir);
-  }
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async {
-    if (_isMacNoKeychain) return false;
-
-    final value = await _secureBlobStore.readValue(_kAutoUnlockEnabled);
-    if (value != null) return value == '1';
-
-    final legacy = await _secureBlobStore.readKey(_kAutoUnlockEnabled);
-    if (legacy == null || legacy.isEmpty) return true;
-
-    await _secureBlobStore.update({_kAutoUnlockEnabled: legacy});
-    await _secureBlobStore.deleteKey(_kAutoUnlockEnabled);
-    return legacy == '1';
-  }
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {
-    if (_isMacNoKeychain) return;
-
-    final updates = <String, String?>{
-      _kAutoUnlockEnabled: enabled ? '1' : '0',
-    };
-    if (!enabled) {
-      updates[_kSessionKeyB64] = null;
-    }
-    await _secureBlobStore.update(updates);
+    return _dartAuthIsInitialized(appDir: appDir);
   }
 
   @override
@@ -746,7 +640,6 @@ class NativeAppBackend extends _NativeAppBackendAccess
 
     await _secureBlobStore.update({
       _kSessionKeyB64: base64Encode(key),
-      _kAutoUnlockEnabled: '1',
     });
   }
 
@@ -760,7 +653,52 @@ class NativeAppBackend extends _NativeAppBackendAccess
   @override
   Future<void> validateKey(Uint8List key) async {
     final appDir = await _getAppDir();
-    await rust_core.authValidateKey(appDir: appDir, key: key);
+    await _dartAuthValidateKey(appDir: appDir, key: key);
+  }
+
+  Uint8List _createSessionKey() {
+    final random = Random.secure();
+    return Uint8List.fromList(
+      List<int>.generate(32, (_) => random.nextInt(256)),
+    );
+  }
+
+  Uint8List? _decodeSessionKeyB64(String? value) {
+    if (value == null || value.isEmpty) return null;
+    try {
+      final bytes = base64Decode(value);
+      if (bytes.length != 32) return null;
+      return Uint8List.fromList(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List> _loadOrCreateDefaultSessionKey(
+    SharedPreferences prefs,
+  ) async {
+    final defaultPrefsKey = _scopedPrefsKey(_kDefaultSessionKeyB64PrefsKey);
+    final existing = _decodeSessionKeyB64(prefs.getString(defaultPrefsKey));
+    if (existing != null) return existing;
+
+    final deferredPrefsKey = _scopedPrefsKey(_kDeferredSessionKeyB64PrefsKey);
+    final deferred = _decodeSessionKeyB64(prefs.getString(deferredPrefsKey));
+    final key = deferred ?? _createSessionKey();
+    await prefs.setString(defaultPrefsKey, base64Encode(key));
+    await prefs.remove(deferredPrefsKey);
+    return Uint8List.fromList(key);
+  }
+
+  @override
+  Future<Uint8List> ensureSessionKey() async {
+    final appDir = await _getAppDir();
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _loadOrCreateDefaultSessionKey(prefs);
+    return _dartAuthInitMasterPasswordWithExistingKey(
+      appDir: appDir,
+      password: _kInternalSessionPassword,
+      key: key,
+    );
   }
 
   @override
@@ -768,41 +706,17 @@ class NativeAppBackend extends _NativeAppBackendAccess
     final appDir = await _getAppDir();
     final prefs = await SharedPreferences.getInstance();
     final deferredPrefsKey = _scopedPrefsKey(_kDeferredSessionKeyB64PrefsKey);
-    final deferredB64 = prefs.getString(deferredPrefsKey);
-
-    Future<Uint8List> init() async {
-      if (deferredB64 == null || deferredB64.isEmpty) {
-        return rust_core.authInitMasterPassword(
-          appDir: appDir,
-          password: password,
-        );
-      }
-
-      try {
-        final deferred = base64Decode(deferredB64);
-        if (deferred.length != 32) {
-          await prefs.remove(deferredPrefsKey);
-          return rust_core.authInitMasterPassword(
+    final deferred = _decodeSessionKeyB64(prefs.getString(deferredPrefsKey));
+    final key = deferred == null
+        ? await _dartAuthInitMasterPassword(
             appDir: appDir,
             password: password,
+          )
+        : await _dartAuthInitMasterPasswordWithExistingKey(
+            appDir: appDir,
+            password: password,
+            key: deferred,
           );
-        }
-
-        return rust_core.authInitMasterPasswordWithExistingKey(
-          appDir: appDir,
-          password: password,
-          key: deferred,
-        );
-      } catch (_) {
-        await prefs.remove(deferredPrefsKey);
-        return rust_core.authInitMasterPassword(
-          appDir: appDir,
-          password: password,
-        );
-      }
-    }
-
-    final key = await init();
     await prefs.remove(deferredPrefsKey);
     return key;
   }
@@ -822,34 +736,36 @@ class NativeAppBackend extends _NativeAppBackendAccess
   @override
   Future<Uint8List> unlockWithPassword(String password) async {
     final appDir = await _getAppDir();
-    return rust_core.authUnlockWithPassword(appDir: appDir, password: password);
+    return _dartAuthUnlockWithPassword(appDir: appDir, password: password);
   }
 
   @override
   Future<List<Conversation>> listConversations(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListConversations(appDir: appDir, key: key);
+    return _dartDbListConversations(appDir: appDir, key: key);
   }
 
   @override
   Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbGetOrCreateLoopHomeConversation(
-        appDir: appDir, key: key);
+    return _dartDbGetOrCreateLoopHomeConversation(appDir: appDir, key: key);
   }
 
   @override
   Future<Conversation> createConversation(Uint8List key, String title) async {
     final appDir = await _getAppDir();
-    return rust_core.dbCreateConversation(
-        appDir: appDir, key: key, title: title);
+    return _dartDbCreateConversation(
+      appDir: appDir,
+      key: key,
+      title: title,
+    );
   }
 
   @override
   Future<List<Message>> listMessages(
       Uint8List key, String conversationId) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListMessages(
+    return _dartDbListMessages(
       appDir: appDir,
       key: key,
       conversationId: conversationId,
@@ -859,7 +775,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
   @override
   Future<Message?> getMessageById(Uint8List key, String messageId) async {
     final appDir = await _getAppDir();
-    return rust_core.dbGetMessageById(
+    return _dartDbGetMessageById(
       appDir: appDir,
       key: key,
       messageId: messageId,
@@ -875,7 +791,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
     int limit = 60,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListMessagesPage(
+    return _dartDbListMessagesPage(
       appDir: appDir,
       key: key,
       conversationId: conversationId,
@@ -934,14 +850,27 @@ class NativeAppBackend extends _NativeAppBackendAccess
     String? citationsJson,
   }) async {
     final appDir = await _getAppDir();
-    return rust_detached_ask.dbApplyDetachedAskCompletionOnce(
+    final state = _dartNativeRuntimeStateFor(appDir);
+    _dartRuntimeValidateKey(state, key);
+    if (state.detachedAskCompletionRequestIds.contains(requestId)) {
+      return false;
+    }
+    state.detachedAskCompletionRequestIds.add(requestId);
+    await _dartDbInsertMessage(
       appDir: appDir,
       key: key,
-      requestId: requestId,
       conversationId: conversationId,
-      question: question,
-      answer: answer,
+      role: 'user',
+      content: question,
+    );
+    await _dartDbInsertMessage(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      role: 'assistant',
+      content: answer,
       citationsJson: citationsJson,
     );
+    return true;
   }
 }

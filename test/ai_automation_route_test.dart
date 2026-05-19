@@ -7,8 +7,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
-  test('automation route: does not use cloud when subscription unknown',
-      () async {
+  test('automation route: needs setup when subscription unknown', () async {
     final backend = _Backend(hasByok: true);
     final key = Uint8List.fromList(List<int>.filled(32, 1));
 
@@ -20,7 +19,7 @@ void main() {
       subscriptionStatus: SubscriptionStatus.unknown,
     );
 
-    expect(route, AskAiRouteKind.byok);
+    expect(route, AskAiRouteKind.needsSetup);
   });
 
   test('automation route: uses cloud when entitled and token exists', () async {
@@ -38,7 +37,8 @@ void main() {
     expect(route, AskAiRouteKind.cloudGateway);
   });
 
-  test('automation route: needs setup when unknown and no BYOK', () async {
+  test('automation route: needs setup when unknown and no runtime route',
+      () async {
     final backend = _Backend(hasByok: false);
     final key = Uint8List.fromList(List<int>.filled(32, 1));
 
@@ -51,6 +51,16 @@ void main() {
     );
 
     expect(route, AskAiRouteKind.needsSetup);
+  });
+
+  test('ask ai app route surface has no local BYOK branch', () {
+    expect(
+      AskAiRouteKind.values.map((value) => value.name),
+      orderedEquals(<String>[
+        'cloudGateway',
+        'needsSetup',
+      ]),
+    );
   });
 
   test('automation route: ignores unsupported active LLM profiles', () async {
@@ -86,13 +96,6 @@ final class _Backend extends AppBackend {
 
   @override
   Future<bool> isMasterPasswordSet() async => true;
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async => true;
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
-
   @override
   Future<Uint8List?> loadSavedSessionKey() async => null;
 

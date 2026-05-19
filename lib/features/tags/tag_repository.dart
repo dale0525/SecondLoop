@@ -1,8 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
-import '../../core/backend/native_app_dir.dart';
-import 'package:secondloop/core/runtime_compat/api/tags.dart' as rust_tags;
 import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/models/platform_int.dart';
 
 enum TagMergeFeedbackAction {
   accept,
@@ -21,42 +22,21 @@ extension TagMergeFeedbackActionWire on TagMergeFeedbackAction {
 class TagRepository {
   const TagRepository();
 
-  Future<String?> _resolveAppDirOrNull() async {
-    if (kIsWeb) return null;
-    try {
-      return await getNativeAppDir();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<String> _requireAppDir() async {
-    final appDir = await _resolveAppDirOrNull();
-    if (appDir == null || appDir.isEmpty) {
-      throw StateError('native_app_dir_not_available');
-    }
-    return appDir;
+  _DartTagState _stateFor(Uint8List key) {
+    final id = kIsWeb ? 'web' : base64UrlEncode(key);
+    return _dartTagStates.putIfAbsent(id, _DartTagState.new);
   }
 
   Future<List<Tag>> listTags(Uint8List key) async {
-    final appDir = await _resolveAppDirOrNull();
-    if (appDir == null) return const <Tag>[];
-    return rust_tags.dbListTags(appDir: appDir, key: key);
+    return _stateFor(key).sortedTags();
   }
 
   Future<Tag> upsertTag(Uint8List key, String name) async {
-    final appDir = await _requireAppDir();
-    return rust_tags.dbUpsertTag(appDir: appDir, key: key, name: name);
+    return _stateFor(key).upsertTag(name);
   }
 
   Future<List<Tag>> listMessageTags(Uint8List key, String messageId) async {
-    final appDir = await _resolveAppDirOrNull();
-    if (appDir == null) return const <Tag>[];
-    return rust_tags.dbListMessageTags(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-    );
+    return _stateFor(key).messageTags(messageId);
   }
 
   Future<List<Tag>> setMessageTags(
@@ -64,69 +44,35 @@ class TagRepository {
     String messageId,
     List<String> tagIds,
   ) async {
-    final appDir = await _requireAppDir();
-    return rust_tags.dbSetMessageTags(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      tagIds: tagIds,
-    );
+    return _stateFor(key).setMessageTags(messageId, tagIds);
   }
 
   Future<List<String>> listMessageSuggestedTags(
     Uint8List key,
     String messageId,
   ) async {
-    final appDir = await _resolveAppDirOrNull();
-    if (appDir == null) return const <String>[];
-    return rust_tags.dbListMessageSuggestedTags(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-    );
+    return const <String>[];
   }
 
   Future<List<String>> listManualMessageTagNames(
     Uint8List key,
     String messageId,
   ) async {
-    final appDir = await _resolveAppDirOrNull();
-    if (appDir == null) return const <String>[];
-    return rust_tags.dbListManualMessageTagNames(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-    );
+    return _stateFor(key).manualMessageTagNames(messageId);
   }
 
   Future<List<TagMergeSuggestion>> listTagMergeSuggestions(
     Uint8List key, {
     int limit = 10,
   }) async {
-    final appDir = await _resolveAppDirOrNull();
-    if (appDir == null) return const <TagMergeSuggestion>[];
-
-    final clampedLimit = limit <= 0 ? 10 : (limit > 50 ? 50 : limit);
-    return rust_tags.dbListTagMergeSuggestions(
-      appDir: appDir,
-      key: key,
-      limit: clampedLimit,
-    );
+    return const <TagMergeSuggestion>[];
   }
 
   Future<List<TagMergeSuggestion>> listHiddenTagMergeSuggestions(
     Uint8List key, {
     int limit = 10,
   }) async {
-    final appDir = await _resolveAppDirOrNull();
-    if (appDir == null) return const <TagMergeSuggestion>[];
-
-    final clampedLimit = limit <= 0 ? 10 : (limit > 50 ? 50 : limit);
-    return rust_tags.dbListHiddenTagMergeSuggestions(
-      appDir: appDir,
-      key: key,
-      limit: clampedLimit,
-    );
+    return const <TagMergeSuggestion>[];
   }
 
   Future<int> mergeTags(
@@ -134,18 +80,14 @@ class TagRepository {
     required String sourceTagId,
     required String targetTagId,
   }) async {
-    final appDir = await _requireAppDir();
-    return rust_tags.dbMergeTags(
-      appDir: appDir,
-      key: key,
+    return _stateFor(key).mergeTags(
       sourceTagId: sourceTagId,
       targetTagId: targetTagId,
     );
   }
 
   Future<void> deleteTag(Uint8List key, String tagId) async {
-    final appDir = await _requireAppDir();
-    await rust_tags.dbDeleteTag(appDir: appDir, key: key, tagId: tagId);
+    _stateFor(key).deleteTag(tagId);
   }
 
   Future<void> recordTagMergeFeedback(
@@ -155,15 +97,7 @@ class TagRepository {
     required String reason,
     required TagMergeFeedbackAction action,
   }) async {
-    final appDir = await _requireAppDir();
-    await rust_tags.dbRecordTagMergeFeedback(
-      appDir: appDir,
-      key: key,
-      sourceTagId: sourceTagId,
-      targetTagId: targetTagId,
-      reason: reason,
-      action: action.wireValue,
-    );
+    _stateFor(key).recordFeedback(sourceTagId, targetTagId, action);
   }
 
   Future<void> clearTagMergeFeedback(
@@ -171,13 +105,7 @@ class TagRepository {
     required String sourceTagId,
     required String targetTagId,
   }) async {
-    final appDir = await _requireAppDir();
-    await rust_tags.dbClearTagMergeFeedback(
-      appDir: appDir,
-      key: key,
-      sourceTagId: sourceTagId,
-      targetTagId: targetTagId,
-    );
+    _stateFor(key).clearFeedback(sourceTagId, targetTagId);
   }
 
   Future<List<String>> listMessageIdsByTagIds(
@@ -186,14 +114,123 @@ class TagRepository {
     List<String> tagIds,
   ) async {
     if (tagIds.isEmpty) return const <String>[];
+    return _stateFor(key).messageIdsByTagIds(tagIds);
+  }
+}
 
-    final appDir = await _resolveAppDirOrNull();
-    if (appDir == null) return const <String>[];
-    return rust_tags.dbListMessageIdsByTagIds(
-      appDir: appDir,
-      key: key,
-      conversationId: conversationId,
-      tagIds: tagIds,
+final Map<String, _DartTagState> _dartTagStates = <String, _DartTagState>{};
+
+final class _DartTagState {
+  int _nextTagSeq = 1;
+  final Map<String, Tag> _tags = <String, Tag>{};
+  final Map<String, Set<String>> _messageTagIds = <String, Set<String>>{};
+  final Set<String> _hiddenMergeFeedback = <String>{};
+
+  List<Tag> sortedTags() {
+    final tags = _tags.values.toList(growable: false);
+    tags.sort((left, right) {
+      final bySystem =
+          (right.isSystem ? 1 : 0).compareTo(left.isSystem ? 1 : 0);
+      if (bySystem != 0) return bySystem;
+      final byName =
+          left.name.toLowerCase().compareTo(right.name.toLowerCase());
+      if (byName != 0) return byName;
+      return left.id.compareTo(right.id);
+    });
+    return tags;
+  }
+
+  Tag upsertTag(String name) {
+    final normalized = name.trim();
+    if (normalized.isEmpty) {
+      throw StateError('tag_name_empty');
+    }
+    final existing = _tags.values.cast<Tag?>().firstWhere(
+          (tag) =>
+              tag != null &&
+              (tag.name.trim().toLowerCase() == normalized.toLowerCase() ||
+                  tag.systemKey?.trim().toLowerCase() ==
+                      normalized.toLowerCase()),
+          orElse: () => null,
+        );
+    if (existing != null) return existing;
+
+    final now = PlatformInt64Util.from(DateTime.now().millisecondsSinceEpoch);
+    final tag = Tag(
+      id: 'tag_${_nextTagSeq++}',
+      name: normalized,
+      isSystem: false,
+      color: null,
+      createdAtMs: now,
+      updatedAtMs: now,
     );
+    _tags[tag.id] = tag;
+    return tag;
+  }
+
+  List<Tag> messageTags(String messageId) {
+    final ids = _messageTagIds[messageId] ?? const <String>{};
+    return sortedTags().where((tag) => ids.contains(tag.id)).toList();
+  }
+
+  List<Tag> setMessageTags(String messageId, List<String> tagIds) {
+    final ids = tagIds.where(_tags.containsKey).toSet();
+    _messageTagIds[messageId] = ids;
+    return messageTags(messageId);
+  }
+
+  List<String> manualMessageTagNames(String messageId) {
+    return messageTags(messageId)
+        .where((tag) => !tag.isSystem)
+        .map((tag) => tag.name)
+        .toList(growable: false);
+  }
+
+  int mergeTags({
+    required String sourceTagId,
+    required String targetTagId,
+  }) {
+    if (sourceTagId == targetTagId) return 0;
+    if (!_tags.containsKey(sourceTagId) || !_tags.containsKey(targetTagId)) {
+      return 0;
+    }
+    var affected = 0;
+    for (final ids in _messageTagIds.values) {
+      if (ids.remove(sourceTagId)) {
+        ids.add(targetTagId);
+        affected += 1;
+      }
+    }
+    _tags.remove(sourceTagId);
+    return affected;
+  }
+
+  void deleteTag(String tagId) {
+    _tags.remove(tagId);
+    for (final ids in _messageTagIds.values) {
+      ids.remove(tagId);
+    }
+  }
+
+  void recordFeedback(
+    String sourceTagId,
+    String targetTagId,
+    TagMergeFeedbackAction action,
+  ) {
+    if (action == TagMergeFeedbackAction.dismiss) {
+      _hiddenMergeFeedback.add('$sourceTagId->$targetTagId');
+    }
+  }
+
+  void clearFeedback(String sourceTagId, String targetTagId) {
+    _hiddenMergeFeedback.remove('$sourceTagId->$targetTagId');
+  }
+
+  List<String> messageIdsByTagIds(List<String> tagIds) {
+    final requiredIds = tagIds.toSet();
+    return _messageTagIds.entries
+        .where((entry) => requiredIds.every(entry.value.contains))
+        .map((entry) => entry.key)
+        .toList(growable: false);
   }
 }

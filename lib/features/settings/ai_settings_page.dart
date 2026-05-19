@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
-import '../../core/ai/ask_ai_source_prefs.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/embeddings_source_prefs.dart';
 import '../../core/ai/media_capability_wifi_prefs.dart';
@@ -14,6 +13,7 @@ import '../../core/ai/media_source_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_capability_auth.dart';
+import '../../core/models/app_models.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
@@ -21,7 +21,6 @@ import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import 'embedding_profiles_page.dart';
 import 'llm_profiles_page.dart';
-import 'media_annotation_settings_page.dart';
 import 'ai_ask_ai_settings_page.dart';
 import 'ai_smart_organization_settings_page.dart';
 
@@ -38,14 +37,12 @@ class AiSettingsPage extends StatefulWidget {
   const AiSettingsPage({
     this.focusSection,
     this.highlightFocus = false,
-    this.focusMediaLocalCapabilityCard = false,
     this.expandAdvancedOnOpen = false,
     super.key,
   });
 
   final AiSettingsSection? focusSection;
   final bool highlightFocus;
-  final bool focusMediaLocalCapabilityCard;
   final bool expandAdvancedOnOpen;
 
   @override
@@ -59,16 +56,13 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   final GlobalKey _smartOrganizationSectionAnchorKey = GlobalKey();
   final GlobalKey _embeddingsSectionAnchorKey = GlobalKey();
   final GlobalKey _mediaSectionAnchorKey = GlobalKey();
-  final GlobalKey _mediaLocalCapabilityEntryAnchorKey = GlobalKey();
 
   bool _didRunInitialFocus = false;
   bool _advancedSettingsExpanded = false;
   AiSettingsSection? _highlightedSection;
 
   AskAiRouteKind _askAiRoute = AskAiRouteKind.needsSetup;
-  AskAiSourcePreference _askAiPreference = AskAiSourcePreference.auto;
   bool _askAiLoading = true;
-  bool _askAiPreferenceSaving = false;
   int _askAiLoadGeneration = 0;
 
   EmbeddingsSourceRouteKind _embeddingsRoute =
@@ -91,7 +85,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   bool? _cloudEmbeddingsEnabled;
   bool _cloudEmbeddingsConfigured = false;
   bool? _semanticParseEnabled;
-  bool _byokConfigured = false;
   int _automationLoadGeneration = 0;
 
   Timer? _clearHighlightTimer;
@@ -124,46 +117,10 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     };
   }
 
-  bool _shouldFocusMediaLocalCapabilityEntry(AiSettingsSection section) {
-    if (section != AiSettingsSection.mediaUnderstanding) return false;
-    if (!widget.focusMediaLocalCapabilityCard) return false;
-    return AppBackendScope.maybeOf(context) != null &&
-        SessionScope.maybeOf(context) != null;
-  }
-
-  GlobalKey _focusAnchorKeyOf(AiSettingsSection section) {
-    if (_shouldFocusMediaLocalCapabilityEntry(section)) {
-      return _mediaLocalCapabilityEntryAnchorKey;
-    }
-    return _sectionAnchorKeyOf(section);
-  }
-
   bool _focusSectionRequiresAdvancedExpansion(AiSettingsSection section) {
     return section == AiSettingsSection.askAi ||
         section == AiSettingsSection.embeddings ||
         section == AiSettingsSection.mediaUnderstanding;
-  }
-
-  Future<void> _nudgeTowardsMediaLocalCapabilityEntry({
-    required bool disableAnimations,
-  }) async {
-    if (!_scrollController.hasClients) return;
-    final position = _scrollController.position;
-    final nextOffset = (position.pixels + position.viewportDimension * 0.9)
-        .clamp(0.0, position.maxScrollExtent)
-        .toDouble();
-    if ((nextOffset - position.pixels).abs() < 0.5) return;
-
-    if (disableAnimations) {
-      position.jumpTo(nextOffset);
-      return;
-    }
-
-    await _scrollController.animateTo(
-      nextOffset,
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-    );
   }
 
   Future<(bool cloudAvailable, String gatewayBaseUrl, String idToken)>
@@ -187,9 +144,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     return (cloudAvailable, baseUrl, token);
   }
 
-  Future<AskAiRouteKind> _resolveAskAiRouteWithPreference(
-    AskAiSourcePreference preference,
-  ) async {
+  Future<AskAiRouteKind> _resolveAskAiRoute() async {
     final backend = AppBackendScope.maybeOf(context);
     if (backend == null) {
       return AskAiRouteKind.needsSetup;
@@ -220,21 +175,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       return AskAiRouteKind.needsSetup;
     }
 
-    var hasByokWhenCloudRoute = false;
-    if (preference == AskAiSourcePreference.byok &&
-        defaultRoute == AskAiRouteKind.cloudGateway) {
-      try {
-        hasByokWhenCloudRoute = await hasActiveLlmProfile(backend, sessionKey);
-      } catch (_) {
-        hasByokWhenCloudRoute = false;
-      }
-    }
-
-    return applyAskAiSourcePreference(
-      defaultRoute,
-      preference,
-      hasByokWhenCloudRoute: hasByokWhenCloudRoute,
-    );
+    return defaultRoute;
   }
 
   Future<EmbeddingsSourceRouteKind> _resolveEmbeddingsRouteWithPreference(
@@ -282,9 +223,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     var hasByokProfile = false;
     try {
       final profiles = await backend.listLlmProfiles(sessionKey);
-      hasByokProfile = profiles.any(
-        (p) => p.isActive && p.providerType == 'openai-compatible',
-      );
+      hasByokProfile = profiles.any(_isActiveOpenAiCompatibleProfile);
     } catch (_) {
       hasByokProfile = false;
     }
@@ -302,18 +241,10 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       setState(() => _askAiLoading = true);
     }
 
-    AskAiSourcePreference preference;
-    try {
-      preference = await AskAiSourcePrefs.read();
-    } catch (_) {
-      preference = AskAiSourcePreference.auto;
-    }
-
-    final route = await _resolveAskAiRouteWithPreference(preference);
+    final route = await _resolveAskAiRoute();
 
     if (!mounted || generation != _askAiLoadGeneration) return;
     setState(() {
-      _askAiPreference = preference;
       _askAiRoute = route;
       _askAiLoading = false;
     });
@@ -381,31 +312,17 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       setState(() => _automationLoading = true);
     }
 
-    final backend = AppBackendScope.maybeOf(context);
-    final sessionKey =
-        backend == null ? null : SessionScope.of(context).sessionKey;
-
     final prefs = await SharedPreferences.getInstance();
     final cloudEmbeddingsEnabled =
         EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
     final semanticParseEnabled =
         SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
 
-    var byokConfigured = false;
-    if (backend != null && sessionKey != null) {
-      try {
-        byokConfigured = await hasActiveLlmProfile(backend, sessionKey);
-      } catch (_) {
-        byokConfigured = false;
-      }
-    }
-
     if (!mounted || generation != _automationLoadGeneration) return;
     setState(() {
       _cloudEmbeddingsEnabled = cloudEmbeddingsEnabled;
       _cloudEmbeddingsConfigured = true;
       _semanticParseEnabled = semanticParseEnabled;
-      _byokConfigured = byokConfigured;
       _automationLoading = false;
     });
   }
@@ -418,26 +335,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   void _setAdvancedSettingsExpanded(bool expanded) {
     if (_advancedSettingsExpanded == expanded) return;
     setState(() => _advancedSettingsExpanded = expanded);
-  }
-
-  Future<void> _setAskAiPreference(AskAiSourcePreference next) async {
-    if (_askAiPreferenceSaving || _askAiPreference == next) return;
-    setState(() => _askAiPreferenceSaving = true);
-
-    try {
-      await AskAiSourcePrefs.write(next);
-      if (!mounted) return;
-      setState(() => _askAiPreference = next);
-      await _reloadAskAiState(forceLoading: false);
-      if (next == AskAiSourcePreference.byok &&
-          _askAiRoute != AskAiRouteKind.byok) {
-        await _openLlmProfilesForByokSetupAndRefreshRoutes();
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _askAiPreferenceSaving = false);
-      }
-    }
   }
 
   Future<void> _setEmbeddingsPreference(EmbeddingsSourcePreference next) async {
@@ -557,29 +454,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations ??
         WidgetsBinding.instance.platformDispatcher.accessibilityFeatures
             .disableAnimations;
-    final focusMediaLocalCapability =
-        _shouldFocusMediaLocalCapabilityEntry(section);
-
-    final targetContext = _focusAnchorKeyOf(section).currentContext;
+    final targetContext = _sectionAnchorKeyOf(section).currentContext;
     if (targetContext == null) {
-      if (focusMediaLocalCapability) {
-        final fallbackContext = _sectionAnchorKeyOf(section).currentContext;
-        if (fallbackContext != null) {
-          await Scrollable.ensureVisible(
-            fallbackContext,
-            alignment: 0.08,
-            duration: disableAnimations
-                ? Duration.zero
-                : const Duration(milliseconds: 380),
-            curve: Curves.easeOutCubic,
-          );
-        }
-        if (!mounted) return;
-        await _nudgeTowardsMediaLocalCapabilityEntry(
-          disableAnimations: disableAnimations,
-        );
-      }
-
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         unawaited(_scrollToAndHighlight(section));
@@ -604,14 +480,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       if (!mounted || _highlightedSection != section) return;
       setState(() => _highlightedSection = null);
     });
-  }
-
-  AskAiRouteKind? _preferredAskAiRoute(AskAiSourcePreference preference) {
-    return switch (preference) {
-      AskAiSourcePreference.auto => null,
-      AskAiSourcePreference.cloud => AskAiRouteKind.cloudGateway,
-      AskAiSourcePreference.byok => AskAiRouteKind.byok,
-    };
   }
 
   EmbeddingsSourceRouteKind? _preferredEmbeddingsRoute(
@@ -643,7 +511,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     final status = context.t.settings.aiSelection.askAi.status;
     return switch (_askAiRoute) {
       AskAiRouteKind.cloudGateway => status.cloud,
-      AskAiRouteKind.byok => status.byok,
       AskAiRouteKind.needsSetup => status.notConfigured,
     };
   }
@@ -697,6 +564,9 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         ? '媒体 BYOK 仅支持 OpenAI-compatible 配置。请在“API Key（AI 对话）”里新增或激活 OpenAI-compatible profile。'
         : 'Media BYOK only supports OpenAI-compatible profiles. Add or activate an OpenAI-compatible profile in API Keys (Ask AI).';
   }
+
+  bool _isActiveOpenAiCompatibleProfile(LlmProfile profile) =>
+      profile.isActive && profile.providerType == 'openai-compatible';
 
   @override
   Widget build(BuildContext context) => _buildPage(context);

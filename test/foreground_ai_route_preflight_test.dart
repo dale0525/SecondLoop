@@ -12,15 +12,15 @@ import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
-  test('prepared foreground route requires token only for cloud', () {
+  test('prepared foreground route requires runtime cloud token', () {
     expect(
       canRunPreparedForegroundAiRoute(
         const ForegroundAiPreparedRoute(
-          route: AskAiRouteKind.byok,
+          route: AskAiRouteKind.needsSetup,
           idToken: null,
         ),
       ),
-      isTrue,
+      isFalse,
     );
 
     expect(
@@ -44,15 +44,15 @@ void main() {
     );
   });
 
-  test('prepared followup route requires token only for cloud', () {
+  test('prepared followup route requires runtime cloud token', () {
     expect(
       canRunPreparedTodoFollowupGenerationRoute(
         const TodoFollowupGenerationPreparedRoute(
-          route: AskAiRouteKind.byok,
+          route: AskAiRouteKind.needsSetup,
           idToken: null,
         ),
       ),
-      isTrue,
+      isFalse,
     );
 
     expect(
@@ -181,52 +181,44 @@ void main() {
     expect(prepared.idToken, isNull);
   });
 
-  test(
-      'interactive automation preflight rethrows non-setup route errors even when fallback requested',
+  test('interactive automation preflight ignores local profile route errors',
       () async {
-    await expectLater(
-      () => prepareForegroundAiRoute(
-        _ThrowingRouteBackend(),
-        _sessionKey,
-        routePolicy: ForegroundAiRoutePolicy.automation,
-        cloudAuthController: null,
-        gatewayConfig: const CloudGatewayConfig(
-          baseUrl: 'https://example.com',
-          modelName: 'cloud',
-        ),
-        subscriptionStatus: SubscriptionStatus.entitled,
-        warmupPolicy: ForegroundAiWarmupPolicy.always,
-        fallbackToNeedsSetupOnRouteError: true,
+    final prepared = await prepareForegroundAiRoute(
+      _ThrowingRouteBackend(),
+      _sessionKey,
+      routePolicy: ForegroundAiRoutePolicy.automation,
+      cloudAuthController: null,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
       ),
-      throwsA(isA<StateError>()),
+      subscriptionStatus: SubscriptionStatus.entitled,
+      warmupPolicy: ForegroundAiWarmupPolicy.always,
+      fallbackToNeedsSetupOnRouteError: true,
     );
+
+    expect(prepared.route, AskAiRouteKind.needsSetup);
+    expect(prepared.idToken, isNull);
   });
 
-  test(
-      'interactive automation preflight rethrows payment-required route errors',
+  test('interactive automation preflight ignores local payment route errors',
       () async {
-    await expectLater(
-      () => prepareForegroundAiRoute(
-        _PaymentRequiredRouteBackend(),
-        _sessionKey,
-        routePolicy: ForegroundAiRoutePolicy.automation,
-        cloudAuthController: null,
-        gatewayConfig: const CloudGatewayConfig(
-          baseUrl: 'https://example.com',
-          modelName: 'cloud',
-        ),
-        subscriptionStatus: SubscriptionStatus.entitled,
-        warmupPolicy: ForegroundAiWarmupPolicy.always,
-        fallbackToNeedsSetupOnRouteError: true,
+    final prepared = await prepareForegroundAiRoute(
+      _PaymentRequiredRouteBackend(),
+      _sessionKey,
+      routePolicy: ForegroundAiRoutePolicy.automation,
+      cloudAuthController: null,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
       ),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('payment_required'),
-        ),
-      ),
+      subscriptionStatus: SubscriptionStatus.entitled,
+      warmupPolicy: ForegroundAiWarmupPolicy.always,
+      fallbackToNeedsSetupOnRouteError: true,
     );
+
+    expect(prepared.route, AskAiRouteKind.needsSetup);
+    expect(prepared.idToken, isNull);
   });
 
   test('shared followup preflight reuses background auth + manual route',
@@ -277,48 +269,41 @@ void main() {
     expect(prepared.idToken, isNull);
   });
 
-  test(
-      'followup preflight rethrows non-setup route errors even when fallback requested',
-      () async {
-    await expectLater(
-      () => prepareTodoFollowupGenerationRoute(
-        _ThrowingRouteBackend(),
-        _sessionKey,
-        hasManualRegenerateDueJob: true,
-        cloudAuthController: null,
-        gatewayConfig: const CloudGatewayConfig(
-          baseUrl: 'https://example.com',
-          modelName: 'cloud',
-        ),
-        subscriptionStatus: SubscriptionStatus.entitled,
-        fallbackToNeedsSetupOnRouteError: true,
+  test('followup preflight ignores local profile route errors', () async {
+    final prepared = await prepareTodoFollowupGenerationRoute(
+      _ThrowingRouteBackend(),
+      _sessionKey,
+      hasManualRegenerateDueJob: true,
+      cloudAuthController: null,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
       ),
-      throwsA(isA<StateError>()),
+      subscriptionStatus: SubscriptionStatus.entitled,
+      fallbackToNeedsSetupOnRouteError: true,
     );
+
+    expect(prepared.route, AskAiRouteKind.needsSetup);
+    expect(prepared.idToken, isNull);
   });
 
-  test('followup preflight rethrows email-verification route errors', () async {
-    await expectLater(
-      () => prepareTodoFollowupGenerationRoute(
-        _EmailNotVerifiedRouteBackend(),
-        _sessionKey,
-        hasManualRegenerateDueJob: true,
-        cloudAuthController: null,
-        gatewayConfig: const CloudGatewayConfig(
-          baseUrl: 'https://example.com',
-          modelName: 'cloud',
-        ),
-        subscriptionStatus: SubscriptionStatus.entitled,
-        fallbackToNeedsSetupOnRouteError: true,
+  test('followup preflight ignores local email-verification route errors',
+      () async {
+    final prepared = await prepareTodoFollowupGenerationRoute(
+      _EmailNotVerifiedRouteBackend(),
+      _sessionKey,
+      hasManualRegenerateDueJob: true,
+      cloudAuthController: null,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
       ),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('email_not_verified'),
-        ),
-      ),
+      subscriptionStatus: SubscriptionStatus.entitled,
+      fallbackToNeedsSetupOnRouteError: true,
     );
+
+    expect(prepared.route, AskAiRouteKind.needsSetup);
+    expect(prepared.idToken, isNull);
   });
 
   test('interactive preflight warms before first token read when needed',
@@ -340,7 +325,7 @@ void main() {
     expect(prepared.idToken, 'token_after_warm');
   });
 
-  test('followup preflight keeps auto byok local without reading cloud token',
+  test('followup preflight ignores app BYOK profiles and reads cloud token',
       () async {
     final controller = _CountingCloudAuthController();
 
@@ -356,12 +341,12 @@ void main() {
       subscriptionStatus: SubscriptionStatus.entitled,
     );
 
-    expect(prepared.route, AskAiRouteKind.byok);
-    expect(prepared.idToken, isNull);
-    expect(controller.readCount, 0);
+    expect(prepared.route, AskAiRouteKind.cloudGateway);
+    expect(prepared.idToken, 'token_1');
+    expect(controller.readCount, 2);
   });
 
-  test('automation preflight keeps byok local without reading cloud token',
+  test('automation preflight ignores app BYOK profiles and reads cloud token',
       () async {
     final controller = _CountingCloudAuthController();
 
@@ -378,9 +363,9 @@ void main() {
       warmupPolicy: ForegroundAiWarmupPolicy.never,
     );
 
-    expect(prepared.route, AskAiRouteKind.byok);
-    expect(prepared.idToken, isNull);
-    expect(controller.readCount, 0);
+    expect(prepared.route, AskAiRouteKind.cloudGateway);
+    expect(prepared.idToken, 'token_1');
+    expect(controller.readCount, 1);
   });
 }
 
@@ -411,7 +396,7 @@ final class _SetupLikeRouteBackend extends AppBackend {
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
-    throw UnsupportedError('master password setup required');
+    throw UnsupportedError('setup required');
   }
 }
 

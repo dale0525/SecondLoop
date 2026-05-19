@@ -43,22 +43,6 @@ build/
 # Local logs
 logs/
 
-# Local generated Windows FFmpeg bundle payload
-assets/bin/ffmpeg/windows/ffmpeg.zip
-
-# Local desktop runtime payload cache (downloaded from GitHub Releases)
-# Keep directory skeleton tracked to avoid analyzer warnings on clean clones.
-assets/ocr/desktop_runtime/**
-assets/ocr/desktop_runtime.tmp-*/
-!assets/ocr/desktop_runtime/
-!assets/ocr/desktop_runtime/models/
-!assets/ocr/desktop_runtime/onnxruntime/
-!assets/ocr/desktop_runtime/whisper/
-!assets/ocr/desktop_runtime/.gitkeep
-!assets/ocr/desktop_runtime/models/.gitkeep
-!assets/ocr/desktop_runtime/onnxruntime/.gitkeep
-!assets/ocr/desktop_runtime/whisper/.gitkeep
-
 # Git worktrees
 .worktrees/
 dist/

@@ -73,44 +73,33 @@ void main() {
     'agent conversation sends through AI instead of local review demo',
     (tester) async {
       final backend = _TrackingBackend();
+      final sender = _FakeRuntimeConversationSender(
+        result: SecretaryRuntimeConversationResult.fromJson(const {
+          'run_id': 'run-send-1',
+          'conversation_id': 'loop_home',
+          'assistant': {
+            'content': 'AI 已收到，我会先检查现有信息，再给出可确认的下一步。',
+          },
+          'metadata': {
+            'run_id': 'run-send-1',
+            'turn_id': 'turn-send-1',
+            'conversation_id': 'loop_home',
+            'vault_id': 'uid_1',
+            'response_type': 'assistant_message',
+            'run_status': 'completed',
+            'approval_required': false,
+          },
+        }),
+      );
       final previousPlatform = debugDefaultTargetPlatformOverride;
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
 
       try {
-        await tester.binding.setSurfaceSize(const Size(1012, 701));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
-
-        await tester.pumpWidget(
-          wrapWithI18n(
-            MaterialApp(
-              home: AppBackendScope(
-                backend: backend,
-                child: AppPlatformCapabilityScope(
-                  capabilities: const AppPlatformCapabilities(
-                    supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
-                    supportsAudioRecording: true,
-                    supportsDesktopDrop: true,
-                    supportsDesktopBootSettings: true,
-                    supportsCameraCapture: false,
-                    usesCloudSessionModel: false,
-                  ),
-                  child: SessionScope(
-                    sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                    lock: () {},
-                    child: SubscriptionScope(
-                      controller: _SubscriptionController(
-                        SubscriptionStatus.entitled,
-                      ),
-                      child: const AppShell(),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+        await _pumpManagedProAgentConversation(
+          tester,
+          backend,
+          sender,
         );
-        await tester.pumpAndSettle();
 
         expect(
           find.byKey(const ValueKey('conversation_context_rail')),
@@ -137,8 +126,8 @@ void main() {
         sendButton.onPressed!();
         await tester.pumpAndSettle();
 
-        expect(backend.askAiStreamCalls, 1);
-        expect(backend.lastAskedQuestion, '我今晚 8 点要处理护照续期，请先帮我判断下一步');
+        expect(backend.askAiStreamCalls, 0);
+        expect(sender.sentMessages, ['我今晚 8 点要处理护照续期，请先帮我判断下一步']);
         expect(
             find.byKey(const ValueKey('approval_preview_card')), findsNothing);
         expect(find.textContaining('AI 已收到'), findsOneWidget);
@@ -154,45 +143,44 @@ void main() {
   testWidgets(
     'agent conversation renders assistant action blocks as user-facing markdown',
     (tester) async {
-      final backend = _ActionBlockBackend();
+      final backend = _TrackingBackend();
+      final sender = _FakeRuntimeConversationSender(
+        result: SecretaryRuntimeConversationResult.fromJson(const {
+          'run_id': 'run-action-1',
+          'conversation_id': 'loop_home',
+          'assistant': {
+            'content': '''
+好的，我已经为您准备好了护照续期的提醒预览：
+
+**提醒预览：**
+* **事项名称**：处理护照续期
+* **提醒时间**：今晚 20:00
+
+```secondloop_actions
+{"version":1,"suggestions":[{"type":"todo","title":"处理护照续期","when":"今晚 8 点"}]}
+```
+''',
+          },
+          'metadata': {
+            'run_id': 'run-action-1',
+            'turn_id': 'turn-action-1',
+            'conversation_id': 'loop_home',
+            'vault_id': 'uid_1',
+            'response_type': 'assistant_message',
+            'run_status': 'completed',
+            'approval_required': false,
+          },
+        }),
+      );
       final previousPlatform = debugDefaultTargetPlatformOverride;
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
 
       try {
-        await tester.binding.setSurfaceSize(const Size(1012, 701));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
-
-        await tester.pumpWidget(
-          wrapWithI18n(
-            MaterialApp(
-              home: AppBackendScope(
-                backend: backend,
-                child: AppPlatformCapabilityScope(
-                  capabilities: const AppPlatformCapabilities(
-                    supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
-                    supportsAudioRecording: true,
-                    supportsDesktopDrop: true,
-                    supportsDesktopBootSettings: true,
-                    supportsCameraCapture: false,
-                    usesCloudSessionModel: false,
-                  ),
-                  child: SessionScope(
-                    sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-                    lock: () {},
-                    child: SubscriptionScope(
-                      controller: _SubscriptionController(
-                        SubscriptionStatus.entitled,
-                      ),
-                      child: const AppShell(),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+        await _pumpManagedProAgentConversation(
+          tester,
+          backend,
+          sender,
         );
-        await tester.pumpAndSettle();
 
         await tester.enterText(
           find.byKey(const ValueKey('chat_input')),
@@ -209,6 +197,7 @@ void main() {
         expect(find.text('提醒预览：'), findsOneWidget);
         expect(find.textContaining('secondloop_actions'), findsNothing);
         expect(find.textContaining('"suggestions"'), findsNothing);
+        expect(backend.askAiStreamCalls, 0);
         expect(backend.upsertTodoCalls, 0);
       } finally {
         debugDefaultTargetPlatformOverride = previousPlatform;
@@ -251,7 +240,6 @@ void main() {
                 child: AppPlatformCapabilityScope(
                   capabilities: const AppPlatformCapabilities(
                     supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
                     supportsAudioRecording: true,
                     supportsDesktopDrop: true,
                     supportsDesktopBootSettings: true,
@@ -314,7 +302,6 @@ void main() {
                 child: AppPlatformCapabilityScope(
                   capabilities: const AppPlatformCapabilities(
                     supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
                     supportsAudioRecording: true,
                     supportsDesktopDrop: true,
                     supportsDesktopBootSettings: true,
@@ -388,7 +375,6 @@ secondloop://message/history-rich-1
                 child: AppPlatformCapabilityScope(
                   capabilities: const AppPlatformCapabilities(
                     supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
                     supportsAudioRecording: true,
                     supportsDesktopDrop: true,
                     supportsDesktopBootSettings: true,
@@ -418,7 +404,7 @@ secondloop://message/history-rich-1
   );
 
   testWidgets(
-    'agent conversation hides stream metadata and reports empty AI response',
+    'agent conversation setup failure does not read local stream metadata',
     (tester) async {
       final backend = _MetaOnlyBackend();
       final previousPlatform = debugDefaultTargetPlatformOverride;
@@ -436,7 +422,6 @@ secondloop://message/history-rich-1
                 child: AppPlatformCapabilityScope(
                   capabilities: const AppPlatformCapabilities(
                     supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
                     supportsAudioRecording: true,
                     supportsDesktopDrop: true,
                     supportsDesktopBootSettings: true,
@@ -471,7 +456,7 @@ secondloop://message/history-rich-1
         expect(find.textContaining('req_staging_1'), findsNothing);
         expect(find.text('Ask AI failed. Please try again.'), findsOneWidget);
         expect(find.textContaining('护照续期'), findsOneWidget);
-        expect(backend.askAiStreamCalls, 1);
+        expect(backend.askAiStreamCalls, 0);
       } finally {
         debugDefaultTargetPlatformOverride = previousPlatform;
       }
@@ -479,7 +464,7 @@ secondloop://message/history-rich-1
   );
 
   testWidgets(
-    'agent conversation turns stream error sentinel into user visible failure',
+    'agent conversation setup failure does not read local stream errors',
     (tester) async {
       final backend = _StreamErrorBackend();
       final previousPlatform = debugDefaultTargetPlatformOverride;
@@ -497,7 +482,6 @@ secondloop://message/history-rich-1
                 child: AppPlatformCapabilityScope(
                   capabilities: const AppPlatformCapabilities(
                     supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
                     supportsAudioRecording: true,
                     supportsDesktopDrop: true,
                     supportsDesktopBootSettings: true,
@@ -530,7 +514,7 @@ secondloop://message/history-rich-1
         expect(find.textContaining('SL_ERROR'), findsNothing);
         expect(find.textContaining('HTTP 500'), findsNothing);
         expect(find.text('Ask AI failed. Please try again.'), findsOneWidget);
-        expect(backend.askAiStreamCalls, 1);
+        expect(backend.askAiStreamCalls, 0);
       } finally {
         debugDefaultTargetPlatformOverride = previousPlatform;
       }
@@ -559,7 +543,6 @@ secondloop://message/history-rich-1
                 child: AppPlatformCapabilityScope(
                   capabilities: const AppPlatformCapabilities(
                     supportsDesktopHotkey: true,
-                    supportsBiometricUnlock: false,
                     supportsAudioRecording: true,
                     supportsDesktopDrop: true,
                     supportsDesktopBootSettings: true,
@@ -668,7 +651,6 @@ secondloop://message/history-rich-1
               child: AppPlatformCapabilityScope(
                 capabilities: const AppPlatformCapabilities(
                   supportsDesktopHotkey: true,
-                  supportsBiometricUnlock: false,
                   supportsAudioRecording: true,
                   supportsDesktopDrop: true,
                   supportsDesktopBootSettings: true,
@@ -782,7 +764,6 @@ secondloop://message/history-rich-1
               child: AppPlatformCapabilityScope(
                 capabilities: const AppPlatformCapabilities(
                   supportsDesktopHotkey: true,
-                  supportsBiometricUnlock: false,
                   supportsAudioRecording: true,
                   supportsDesktopDrop: true,
                   supportsDesktopBootSettings: true,
@@ -843,7 +824,7 @@ secondloop://message/history-rich-1
   );
 
   testWidgets(
-    'agent conversation shows reasoning temporarily until answer starts',
+    'agent conversation setup failure does not read local reasoning stream',
     (tester) async {
       final backend = _ControlledReasoningBackend();
       await _pumpAgentConversation(tester, backend);
@@ -852,24 +833,17 @@ secondloop://message/history-rich-1
       backend.stream.add(
         '$_askAiReasoningPrefix{"text":"I should inspect the local context."}',
       );
-      await tester.pump();
-      expect(
-          find.byKey(const ValueKey('agent_thinking_panel')), findsOneWidget);
-      expect(find.textContaining('I should inspect the local context.'),
-          findsOneWidget);
-
-      backend.stream.add('The next step is to book the appointment.');
-      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('agent_thinking_panel')), findsNothing);
       expect(find.textContaining('I should inspect the local context.'),
           findsNothing);
-      expect(find.textContaining('The next step is to book the appointment.'),
-          findsOneWidget);
-      expect(find.textContaining('Final answer'), findsNothing);
+      expect(find.text('Ask AI failed. Please try again.'), findsOneWidget);
+      expect(backend.askAiStreamCalls, 0);
     },
   );
 
   testWidgets(
-    'agent conversation does not treat reasoning-only stream as answer',
+    'agent conversation setup failure does not treat local reasoning as answer',
     (tester) async {
       final backend = _ControlledReasoningBackend();
       await _pumpAgentConversation(tester, backend);
@@ -878,23 +852,21 @@ secondloop://message/history-rich-1
       backend.stream.add(
         '$_askAiReasoningPrefix{"text":"I should inspect the local context."}',
       );
-      await tester.pump();
-      expect(
-          find.byKey(const ValueKey('agent_thinking_panel')), findsOneWidget);
-      expect(find.textContaining('I should inspect the local context.'),
-          findsOneWidget);
-
-      await backend.stream.close();
       await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('agent_thinking_panel')), findsNothing);
+      expect(find.textContaining('I should inspect the local context.'),
+          findsNothing);
+
       expect(find.textContaining('I should inspect the local context.'),
           findsNothing);
       expect(find.text('Ask AI failed. Please try again.'), findsOneWidget);
       expect(find.textContaining('Final answer'), findsNothing);
+      expect(backend.askAiStreamCalls, 0);
     },
   );
 
   testWidgets(
-    'agent conversation ignores unknown stream control chunks',
+    'agent conversation setup failure ignores local stream control chunks',
     (tester) async {
       final backend = _ControlledReasoningBackend();
       await _pumpAgentConversation(tester, backend);
@@ -903,23 +875,17 @@ secondloop://message/history-rich-1
       backend.stream.add(
         '$_askAiReasoningPrefix{"text":"I should inspect the local context."}',
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.textContaining('I should inspect the local context.'),
-          findsOneWidget);
+          findsNothing);
 
       backend.stream.add('\u001eSL_UNKNOWN\u001e{"text":"do not render"}');
       await tester.pump();
       expect(find.textContaining('SL_UNKNOWN'), findsNothing);
       expect(find.textContaining('do not render'), findsNothing);
       expect(find.textContaining('I should inspect the local context.'),
-          findsOneWidget);
-
-      backend.stream.add('The next step is to book the appointment.');
-      await tester.pump();
-      expect(find.textContaining('I should inspect the local context.'),
           findsNothing);
-      expect(find.textContaining('The next step is to book the appointment.'),
-          findsOneWidget);
+      expect(backend.askAiStreamCalls, 0);
     },
   );
 
@@ -981,7 +947,6 @@ Future<void> _pumpAgentConversation(
     child: AppPlatformCapabilityScope(
       capabilities: const AppPlatformCapabilities(
         supportsDesktopHotkey: true,
-        supportsBiometricUnlock: false,
         supportsAudioRecording: true,
         supportsDesktopDrop: true,
         supportsDesktopBootSettings: true,
@@ -998,6 +963,61 @@ Future<void> _pumpAgentConversation(
       ),
     ),
   ))));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pumpManagedProAgentConversation(
+  WidgetTester tester,
+  TestAppBackend backend,
+  ChatRuntimeConversationSender sender,
+) async {
+  await tester.binding.setSurfaceSize(const Size(1012, 701));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(
+    wrapWithI18n(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: AppPlatformCapabilityScope(
+            capabilities: const AppPlatformCapabilities(
+              supportsDesktopHotkey: true,
+              supportsAudioRecording: true,
+              supportsDesktopDrop: true,
+              supportsDesktopBootSettings: true,
+              supportsCameraCapture: false,
+              usesCloudSessionModel: false,
+            ),
+            child: CloudAuthScope(
+              controller: _CloudAuthController(),
+              gatewayConfig: const CloudGatewayConfig(
+                baseUrl: 'https://gateway.example.test',
+                modelName: 'cloud',
+              ),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: SubscriptionScope(
+                  controller: _SubscriptionController(
+                    SubscriptionStatus.entitled,
+                  ),
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeConversationSender: sender,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
   await tester.pumpAndSettle();
 }
 

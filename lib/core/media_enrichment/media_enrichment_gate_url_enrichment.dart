@@ -2,7 +2,7 @@ part of 'media_enrichment_gate.dart';
 
 @visibleForTesting
 UrlEnrichmentEnhancerResult? parseUrlEnrichmentPayloadForTest(String raw) {
-  return _RustUrlEnrichmentEnhancer.parsePayload(raw);
+  return _RuntimeUrlEnrichmentEnhancer.parsePayload(raw);
 }
 
 extension _MediaEnrichmentGateUrlEnrichmentExtension
@@ -11,7 +11,6 @@ extension _MediaEnrichmentGateUrlEnrichmentExtension
     required MediaSourcePreference preference,
     required bool cloudAvailable,
     required LlmProfile? byokProfile,
-    required Uint8List sessionKey,
     required String gatewayBaseUrl,
     required String cloudIdToken,
     required String cloudModelName,
@@ -32,10 +31,7 @@ extension _MediaEnrichmentGateUrlEnrichmentExtension
             continue;
           }
           enrichers.add(
-            _RustUrlEnrichmentEnhancer.cloud(
-              sessionKey: sessionKey,
-              gatewayBaseUrl: normalizedGatewayBaseUrl,
-              cloudIdToken: normalizedCloudIdToken,
+            _RuntimeUrlEnrichmentEnhancer.cloud(
               modelName: normalizedCloudModelName,
             ),
           );
@@ -43,9 +39,7 @@ extension _MediaEnrichmentGateUrlEnrichmentExtension
         case MediaSourceRouteKind.byok:
           if (byokProfile == null) continue;
           enrichers.add(
-            _RustUrlEnrichmentEnhancer.byok(
-              sessionKey: sessionKey,
-              profileId: byokProfile.id,
+            _RuntimeUrlEnrichmentEnhancer.byok(
               modelName: byokProfile.modelName,
             ),
           );
@@ -61,62 +55,44 @@ extension _MediaEnrichmentGateUrlEnrichmentExtension
   }
 }
 
-enum _RustUrlEnrichmentRouteKind {
+enum _RuntimeUrlEnrichmentRouteKind {
   cloud,
   byok,
 }
 
-final class _RustUrlEnrichmentEnhancer implements UrlEnrichmentEnhancer {
-  _RustUrlEnrichmentEnhancer._({
-    required Uint8List sessionKey,
+final class _RuntimeUrlEnrichmentEnhancer implements UrlEnrichmentEnhancer {
+  _RuntimeUrlEnrichmentEnhancer._({
     required this.route,
     required this.modelName,
-    this.profileId,
-    this.gatewayBaseUrl,
-    this.cloudIdToken,
-  }) : _sessionKey = Uint8List.fromList(sessionKey);
+  });
 
-  factory _RustUrlEnrichmentEnhancer.cloud({
-    required Uint8List sessionKey,
-    required String gatewayBaseUrl,
-    required String cloudIdToken,
+  factory _RuntimeUrlEnrichmentEnhancer.cloud({
     required String modelName,
   }) {
-    return _RustUrlEnrichmentEnhancer._(
-      sessionKey: sessionKey,
-      route: _RustUrlEnrichmentRouteKind.cloud,
+    return _RuntimeUrlEnrichmentEnhancer._(
+      route: _RuntimeUrlEnrichmentRouteKind.cloud,
       modelName: modelName,
-      gatewayBaseUrl: gatewayBaseUrl,
-      cloudIdToken: cloudIdToken,
     );
   }
 
-  factory _RustUrlEnrichmentEnhancer.byok({
-    required Uint8List sessionKey,
-    required String profileId,
+  factory _RuntimeUrlEnrichmentEnhancer.byok({
     required String modelName,
   }) {
-    return _RustUrlEnrichmentEnhancer._(
-      sessionKey: sessionKey,
-      route: _RustUrlEnrichmentRouteKind.byok,
+    return _RuntimeUrlEnrichmentEnhancer._(
+      route: _RuntimeUrlEnrichmentRouteKind.byok,
       modelName: modelName,
-      profileId: profileId,
     );
   }
 
-  final Uint8List _sessionKey;
-  final _RustUrlEnrichmentRouteKind route;
-  final String? profileId;
-  final String? gatewayBaseUrl;
-  final String? cloudIdToken;
+  final _RuntimeUrlEnrichmentRouteKind route;
 
   @override
   final String modelName;
 
   @override
   String get source => switch (route) {
-        _RustUrlEnrichmentRouteKind.cloud => 'cloud',
-        _RustUrlEnrichmentRouteKind.byok => 'byok',
+        _RuntimeUrlEnrichmentRouteKind.cloud => 'cloud',
+        _RuntimeUrlEnrichmentRouteKind.byok => 'byok',
       };
 
   @override
@@ -129,46 +105,7 @@ final class _RustUrlEnrichmentEnhancer implements UrlEnrichmentEnhancer {
     required String readableTextExcerpt,
     required String readableTextFull,
   }) async {
-    final appDir = await getNativeAppDir();
-    final normalizedTitle = _normalizeOptionalTitle(title);
-    final payloadJson = switch (route) {
-      _RustUrlEnrichmentRouteKind.cloud =>
-        await rust_media_annotation.urlEnrichmentCloudGateway(
-          appDir: appDir,
-          key: _sessionKey,
-          gatewayBaseUrl: gatewayBaseUrl ?? '',
-          firebaseIdToken: cloudIdToken ?? '',
-          modelName: modelName,
-          lang: lang,
-          originalUrl: originalUrl,
-          finalUrl: finalUrl,
-          site: site,
-          title: normalizedTitle,
-          readableTextExcerpt: readableTextExcerpt,
-          readableTextFull: readableTextFull,
-        ),
-      _RustUrlEnrichmentRouteKind.byok =>
-        await rust_media_annotation.urlEnrichmentByokProfile(
-          appDir: appDir,
-          key: _sessionKey,
-          profileId: profileId ?? '',
-          lang: lang,
-          originalUrl: originalUrl,
-          finalUrl: finalUrl,
-          site: site,
-          title: normalizedTitle,
-          readableTextExcerpt: readableTextExcerpt,
-          readableTextFull: readableTextFull,
-        ),
-    };
-
-    return parsePayload(payloadJson);
-  }
-
-  static String? _normalizeOptionalTitle(String? raw) {
-    final trimmed = raw?.trim() ?? '';
-    if (trimmed.isEmpty) return null;
-    return trimmed;
+    return null;
   }
 
   static UrlEnrichmentEnhancerResult? parsePayload(String raw) {

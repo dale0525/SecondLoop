@@ -8,12 +8,7 @@ mixin _NativeAppBackendSyncWebdav on _NativeAppBackendAccess {
     String? password,
     required String remoteRoot,
   }) async {
-    await rust_core.syncWebdavTestConnection(
-      baseUrl: baseUrl,
-      username: username,
-      password: password,
-      remoteRoot: remoteRoot,
-    );
+    throw _retiredNativeRuntimeFeature('syncWebdavTestConnection');
   }
 
   @override
@@ -23,12 +18,7 @@ mixin _NativeAppBackendSyncWebdav on _NativeAppBackendAccess {
     String? password,
     required String remoteRoot,
   }) async {
-    await rust_core.syncWebdavClearRemoteRoot(
-      baseUrl: baseUrl,
-      username: username,
-      password: password,
-      remoteRoot: remoteRoot,
-    );
+    throw _retiredNativeRuntimeFeature('syncWebdavClearRemoteRoot');
   }
 
   @override
@@ -40,17 +30,7 @@ mixin _NativeAppBackendSyncWebdav on _NativeAppBackendAccess {
     String? password,
     required String remoteRoot,
   }) async {
-    final appDir = await _getAppDir();
-    final pushed = await rust_core.syncWebdavPush(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      baseUrl: baseUrl,
-      username: username,
-      password: password,
-      remoteRoot: remoteRoot,
-    );
-    return pushed.toInt();
+    throw _retiredNativeRuntimeFeature('syncWebdavPush');
   }
 
   @override
@@ -62,17 +42,7 @@ mixin _NativeAppBackendSyncWebdav on _NativeAppBackendAccess {
     String? password,
     required String remoteRoot,
   }) async {
-    final appDir = await _getAppDir();
-    final pushed = await rust_core.syncWebdavPushOpsOnly(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      baseUrl: baseUrl,
-      username: username,
-      password: password,
-      remoteRoot: remoteRoot,
-    );
-    return pushed.toInt();
+    throw _retiredNativeRuntimeFeature('syncWebdavPushOpsOnly');
   }
 
   @override
@@ -83,16 +53,9 @@ mixin _NativeAppBackendSyncWebdav on _NativeAppBackendAccess {
     String? username,
     String? password,
     required String remoteRoot,
-  }) async* {
-    final appDir = await _getAppDir();
-    yield* rust_sync_progress.syncWebdavPushOpsOnlyProgress(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      baseUrl: baseUrl,
-      username: username,
-      password: password,
-      remoteRoot: remoteRoot,
+  }) {
+    return Stream<String>.error(
+      _retiredNativeRuntimeFeature('syncWebdavPushOpsOnlyProgress'),
     );
   }
 
@@ -105,17 +68,7 @@ mixin _NativeAppBackendSyncWebdav on _NativeAppBackendAccess {
     String? password,
     required String remoteRoot,
   }) async {
-    final appDir = await _getAppDir();
-    final pulled = await rust_core.syncWebdavPull(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      baseUrl: baseUrl,
-      username: username,
-      password: password,
-      remoteRoot: remoteRoot,
-    );
-    return pulled.toInt();
+    throw _retiredNativeRuntimeFeature('syncWebdavPull');
   }
 
   @override
@@ -126,16 +79,9 @@ mixin _NativeAppBackendSyncWebdav on _NativeAppBackendAccess {
     String? username,
     String? password,
     required String remoteRoot,
-  }) async* {
-    final appDir = await _getAppDir();
-    yield* rust_sync_progress.syncWebdavPullProgress(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      baseUrl: baseUrl,
-      username: username,
-      password: password,
-      remoteRoot: remoteRoot,
+  }) {
+    return Stream<String>.error(
+      _retiredNativeRuntimeFeature('syncWebdavPullProgress'),
     );
   }
 
@@ -149,17 +95,7 @@ mixin _NativeAppBackendSyncWebdav on _NativeAppBackendAccess {
     required String remoteRoot,
     required String sha256,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.syncWebdavDownloadAttachmentBytes(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      baseUrl: baseUrl,
-      username: username,
-      password: password,
-      remoteRoot: remoteRoot,
-      sha256: sha256,
-    );
+    throw _retiredNativeRuntimeFeature('syncWebdavDownloadAttachmentBytes');
   }
 
   @override
@@ -172,16 +108,6 @@ mixin _NativeAppBackendSyncWebdav on _NativeAppBackendAccess {
     required String remoteRoot,
     required String sha256,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.syncWebdavUploadAttachmentBytes(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      baseUrl: baseUrl,
-      username: username,
-      password: password,
-      remoteRoot: remoteRoot,
-      sha256: sha256,
-    );
+    throw _retiredNativeRuntimeFeature('syncWebdavUploadAttachmentBytes');
   }
 }

@@ -70,9 +70,6 @@ bool _canRunPreparedAiRoute(
   if (prepared.route == AskAiRouteKind.needsSetup) {
     return false;
   }
-  if (prepared.route != AskAiRouteKind.cloudGateway) {
-    return true;
-  }
   return prepared.idToken?.trim().isNotEmpty ?? false;
 }
 
@@ -101,9 +98,7 @@ Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
     gatewayConfig: gatewayConfig,
     subscriptionStatus: subscriptionStatus,
   );
-  if (!canAttemptCloud ||
-      (routePolicy == ForegroundAiRoutePolicy.automation &&
-          preliminaryRoute == AskAiRouteKind.byok)) {
+  if (!canAttemptCloud) {
     return ForegroundAiPreparedRoute(
       route: preliminaryRoute,
       idToken: null,
@@ -296,8 +291,7 @@ Future<TodoFollowupGenerationPreparedRoute> prepareTodoFollowupGenerationRoute(
     gatewayConfig: gatewayConfig,
     subscriptionStatus: subscriptionStatus,
   );
-  if (!canAttemptCloud ||
-      (!hasManualRegenerateDueJob && preliminaryRoute == AskAiRouteKind.byok)) {
+  if (!canAttemptCloud) {
     return TodoFollowupGenerationPreparedRoute(
       route: preliminaryRoute,
       idToken: null,
@@ -375,9 +369,6 @@ bool _shouldFallbackToNeedsSetupOnRouteError(Object error) {
       message.contains('missing_id_token') ||
       message.contains('missing_refresh_token') ||
       message.contains('missing_local_id')) {
-    return true;
-  }
-  if (message.contains('master password') && message.contains('setup')) {
     return true;
   }
   if (message.contains('setup required') ||

@@ -12,19 +12,12 @@ const String secretaryAiPurpose = 'secretary';
 
 enum SecretaryAiRouteKind {
   localOnly,
-  byok,
   cloudGateway,
 }
 
 final class SecretaryAiRouteConfig {
   const SecretaryAiRouteConfig.localOnly()
       : kind = SecretaryAiRouteKind.localOnly,
-        cloudGatewayBaseUrl = null,
-        cloudIdToken = null,
-        cloudModelName = null;
-
-  const SecretaryAiRouteConfig.byok()
-      : kind = SecretaryAiRouteKind.byok,
         cloudGatewayBaseUrl = null,
         cloudIdToken = null,
         cloudModelName = null;
@@ -44,17 +37,11 @@ final class SecretaryAiRouteConfig {
 
   String get wireRoute => switch (kind) {
         SecretaryAiRouteKind.localOnly => 'local_rules',
-        SecretaryAiRouteKind.byok => 'byok',
         SecretaryAiRouteKind.cloudGateway => 'cloud_gateway',
       };
 }
 
 abstract interface class SecretaryAiPromptClient {
-  Future<String> runByokSecretaryPrompt(
-    Uint8List key, {
-    required String prompt,
-  });
-
   Future<String> runCloudSecretaryPrompt(
     Uint8List key, {
     required String prompt,
@@ -67,21 +54,10 @@ abstract interface class SecretaryAiPromptClient {
 
 final class BackendSecretaryAiPromptClient implements SecretaryAiPromptClient {
   BackendSecretaryAiPromptClient({
-    required AppBackend backend,
     http.Client Function()? httpClientFactory,
-  })  : _backend = backend,
-        _httpClientFactory = httpClientFactory ?? http.Client.new;
+  }) : _httpClientFactory = httpClientFactory ?? http.Client.new;
 
-  final AppBackend _backend;
   final http.Client Function() _httpClientFactory;
-
-  @override
-  Future<String> runByokSecretaryPrompt(
-    Uint8List key, {
-    required String prompt,
-  }) {
-    return _backend.runAiPrompt(key, prompt: prompt);
-  }
 
   @override
   Future<String> runCloudSecretaryPrompt(
@@ -169,7 +145,6 @@ final class SecretaryAiService {
           cloudIdToken: cloudIdToken ?? '',
           cloudModelName: cloudModelName,
         ),
-      AskAiRouteKind.byok => const SecretaryAiRouteConfig.byok(),
       AskAiRouteKind.needsSetup => const SecretaryAiRouteConfig.localOnly(),
     };
   }
@@ -273,10 +248,6 @@ final class SecretaryAiService {
     required SecretaryAiRouteConfig routeConfig,
   }) {
     return switch (routeConfig.kind) {
-      SecretaryAiRouteKind.byok => _promptClient.runByokSecretaryPrompt(
-          key,
-          prompt: prompt,
-        ),
       SecretaryAiRouteKind.cloudGateway =>
         _promptClient.runCloudSecretaryPrompt(
           key,

@@ -188,13 +188,6 @@ final class _AutoUnlockedBackend extends AppBackend {
 
   @override
   Future<bool> isMasterPasswordSet() async => true;
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async => true;
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
-
   @override
   Future<Uint8List?> loadSavedSessionKey() async => _savedKey;
 

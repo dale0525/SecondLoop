@@ -29,7 +29,7 @@ void main() {
             status: 'open',
           ),
         ],
-        route: TodoCommandAiRoute.byok,
+        route: TodoCommandAiRoute.cloud,
         sourceMessageId: 'message-1',
       );
 

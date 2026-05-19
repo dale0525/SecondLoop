@@ -14,10 +14,10 @@ import '../core/cloud/vault_attachments_client.dart';
 import '../core/cloud/vault_usage_client.dart';
 import '../core/platform/app_platform_capabilities.dart';
 import '../core/platform/app_platform_capability_scope.dart';
+import '../core/session/session_bootstrap.dart';
 import '../core/session/session_scope.dart';
 import '../core/sync/sync_config_store.dart';
 import '../core/sync/sync_engine.dart';
-import '../features/lock/lock_gate.dart';
 import 'web_entry_intent.dart';
 import 'web_public_entry_scaffold.dart';
 import 'web_app_service.dart';
@@ -334,14 +334,13 @@ class _WebAppGateState extends State<WebAppGate> {
       );
     } else {
       child = AppBootstrap(
-        child: LockGate(
+        child: SessionBootstrap(
           child: WebInitialSyncGate(
             key: ValueKey<String>(
               'web-initial-sync-$uid-${widget.managedVaultBaseUrl.trim()}',
             ),
             authController: widget.authController,
             managedVaultBaseUrl: widget.managedVaultBaseUrl,
-            syncConfigStore: _vaultConfigStore,
             child: AppShell(
               key: ValueKey<String>('web-main-shell-$uid'),
               initialTab: widget.entryIntent == WebEntryIntent.manage

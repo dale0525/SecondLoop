@@ -163,13 +163,10 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
   DbUpsertTodoFn? dbUpsertTodo,
   DbEnqueueTodoFollowupGenerationJobFn? dbEnqueueTodoFollowupGenerationJob,
 }) {
-  final resolvedUpsertTodo = dbUpsertTodo ?? rust_core.dbUpsertTodo;
-  final resolvedUpsertTodoWithAutoFollowupJob =
-      dbUpsertTodoWithAutoFollowupJob ??
-          rust_core.dbUpsertTodoWithAutoFollowupJob;
+  final resolvedUpsertTodo = dbUpsertTodo ?? _dartDbUpsertTodo;
+  final resolvedUpsertTodoWithAutoFollowupJob = dbUpsertTodoWithAutoFollowupJob;
   final resolvedEnqueueTodoFollowupGenerationJob =
-      dbEnqueueTodoFollowupGenerationJob ??
-          rust_core.dbEnqueueTodoFollowupGenerationJob;
+      dbEnqueueTodoFollowupGenerationJob;
   return ({
     required String appDir,
     required List<int> key,
@@ -205,8 +202,7 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
       );
     }
 
-    if (dbUpsertTodoWithAutoFollowupJob != null ||
-        (dbUpsertTodo == null && dbEnqueueTodoFollowupGenerationJob == null)) {
+    if (resolvedUpsertTodoWithAutoFollowupJob != null) {
       return resolvedUpsertTodoWithAutoFollowupJob(
         appDir: appDir,
         key: key,
@@ -240,6 +236,9 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
     );
     final wasCreated = todo.createdAtMs == todo.updatedAtMs;
     if (!wasCreated) {
+      return todo;
+    }
+    if (resolvedEnqueueTodoFollowupGenerationJob == null) {
       return todo;
     }
     try {

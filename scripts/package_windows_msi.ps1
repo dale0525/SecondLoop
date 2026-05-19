@@ -117,18 +117,6 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-Write-Host 'Running: prepare_desktop_runtime.dart --platform windows --arch x64'
-& (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool dart -Command run tools/prepare_desktop_runtime.dart --platform=windows --arch=x64
-if ($LASTEXITCODE -ne 0) {
-  exit $LASTEXITCODE
-}
-
-Write-Host 'Running: sync_desktop_runtime_to_appdir.dart --platform windows'
-& (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool dart -Command run tools/sync_desktop_runtime_to_appdir.dart --platform=windows
-if ($LASTEXITCODE -ne 0) {
-  exit $LASTEXITCODE
-}
-
 if (-not $SkipBuild) {
   $buildArgs = @('build', 'windows', '--release')
   $buildArgs += Build-DartDefines

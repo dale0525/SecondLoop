@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
 import 'package:secondloop/features/settings/embedding_profiles_page.dart';
 import 'package:secondloop/features/settings/llm_profiles_page.dart';
 import 'package:secondloop/core/models/app_models.dart';
@@ -16,7 +17,7 @@ import 'ai_settings_test_helpers.dart';
 
 void main() {
   testWidgets(
-      'Selecting Ask AI BYOK routes user directly to LLM profiles setup',
+      'Ask AI advanced settings no longer expose app BYOK and open runtime mode',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -41,20 +42,29 @@ void main() {
 
     await openAiAdvancedSettings(tester);
 
-    final askAiByok =
-        find.byKey(const ValueKey('ai_settings_ask_ai_mode_byok'));
+    expect(
+      find.byKey(const ValueKey('ai_settings_ask_ai_mode_byok')),
+      findsNothing,
+    );
+
+    final askAiSettings =
+        find.byKey(const ValueKey('ai_settings_open_ask_ai_settings_advanced'));
     await tester.dragUntilVisible(
-      askAiByok,
+      askAiSettings,
       find.byType(ListView).first,
       const Offset(0, -220),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(askAiByok);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 800));
+    await tester.tap(askAiSettings);
+    await tester.pumpAndSettle();
 
-    expect(find.byType(LlmProfilesPage), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('ask_ai_settings_open_runtime_mode')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CloudRuntimeModePage), findsOneWidget);
   });
 
   testWidgets(
@@ -141,13 +151,6 @@ final class _NoLlmProfileBackend extends AppBackend {
 
   @override
   Future<bool> isMasterPasswordSet() async => true;
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async => true;
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
-
   @override
   Future<Uint8List?> loadSavedSessionKey() async => null;
 

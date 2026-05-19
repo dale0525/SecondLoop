@@ -17,7 +17,6 @@ void main() {
     final legacyValue = base64Encode(key);
     SharedPreferences.setMockInitialValues({
       'session_key_b64_v1': legacyValue,
-      'auto_unlock_enabled_v1': true,
     });
 
     final storage = _InMemorySecureStorage({});

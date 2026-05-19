@@ -57,26 +57,17 @@ void main() {
     );
   });
 
-  test('web build workflow prunes desktop ffmpeg assets before upload', () {
+  test('web build workflow does not need desktop ffmpeg pruning', () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
 
     expect(
       workflow,
-      contains('- name: Prune desktop ffmpeg assets from web build artifact'),
+      isNot(contains(
+          '- name: Prune desktop ffmpeg assets from web build artifact')),
     );
     expect(
       workflow,
-      contains('pixi run flutter pub "run tools/prune_web_build_ffmpeg.dart"'),
-    );
-    expect(
-      workflow,
-      isNot(contains('rm -rf build/web/assets/assets/bin/ffmpeg')),
-    );
-    expect(
-      workflow.indexOf(
-        '- name: Prune desktop ffmpeg assets from web build artifact',
-      ),
-      lessThan(workflow.indexOf('- name: Upload web artifact')),
+      isNot(contains('tools/prune_web_build_ffmpeg.dart')),
     );
   });
 
@@ -139,6 +130,7 @@ void main() {
     expect(buildFlutter, isNonNegative);
     expect(script, contains('tools/serve_web_build_with_headers.py'));
     expect(script, isNot(contains('sync_web_build_rust_pkg.dart')));
+    expect(script, isNot(contains('tools/prune_web_build_ffmpeg.dart')));
   });
 
   test('web build workflow publishes site deploy dispatch after release', () {

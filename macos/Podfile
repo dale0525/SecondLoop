@@ -26,6 +26,28 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 
 flutter_macos_podfile_setup
 
+# Flutter 3.22's podhelper splits xcconfig lines on every "=", which makes
+# base64-padded DART_DEFINES noisy during macOS pod install/build.
+def flutter_parse_xcconfig_file(file)
+  file_abs_path = File.expand_path(file)
+  return {} unless File.exist?(file_abs_path)
+
+  entries = {}
+  skip_line_start_symbols = ['#', '/']
+  File.foreach(file_abs_path) do |line|
+    next if line.strip.empty?
+    next if skip_line_start_symbols.any? { |symbol| line =~ /^\s*#{symbol}/ }
+
+    key_value_pair = line.split('=', 2)
+    if key_value_pair.length == 2
+      entries[key_value_pair[0].strip] = key_value_pair[1].strip
+    else
+      puts "Invalid key/value pair: #{line}"
+    end
+  end
+  entries
+end
+
 target 'Runner' do
   use_frameworks!
   use_modular_headers!
@@ -43,6 +65,27 @@ post_install do |installer|
     if target.name == 'audio_session'
       target.build_configurations.each do |config|
         config.build_settings['GCC_WARN_UNUSED_VALUE'] = 'NO'
+      end
+    end
+
+    if target.name == 'sqlite3'
+      target.build_configurations.each do |config|
+        # sqlite3 is vendored third-party C code; keep app builds focused on
+        # actionable warnings from our own code and plugin integration.
+        config.build_settings['GCC_WARN_64_TO_32_BIT_CONVERSION'] = 'NO'
+        config.build_settings['CLANG_WARN_AMBIGUOUS_MACRO'] = 'NO'
+        other_cflags = config.build_settings['OTHER_CFLAGS']
+        cflags = other_cflags.is_a?(Array) ? other_cflags.dup : other_cflags.to_s.split(/\s+/)
+        cflags << '$(inherited)' if cflags.empty?
+        [
+          '-Wno-ambiguous-macro',
+          '-Wno-shorten-64-to-32',
+          '-Wno-comma',
+          '-Wno-unreachable-code',
+        ].each do |flag|
+          cflags << flag unless cflags.include?(flag)
+        end
+        config.build_settings['OTHER_CFLAGS'] = cflags
       end
     end
   end

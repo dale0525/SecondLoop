@@ -10,8 +10,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import 'ai_settings_page.dart';
-import 'cloud_account_page.dart';
-import 'llm_profiles_page.dart';
+import 'cloud_runtime_mode_page.dart';
 
 class AiAskAiSettingsPage extends StatefulWidget {
   const AiAskAiSettingsPage({super.key});
@@ -80,7 +79,6 @@ class _AiAskAiSettingsPageState extends State<AiAskAiSettingsPage> {
     final status = context.t.settings.aiSelection.askAi.status;
     return switch (_route) {
       AskAiRouteKind.cloudGateway => status.cloud,
-      AskAiRouteKind.byok => status.byok,
       AskAiRouteKind.needsSetup => status.notConfigured,
     };
   }
@@ -124,27 +122,14 @@ class _AiAskAiSettingsPageState extends State<AiAskAiSettingsPage> {
             child: Column(
               children: [
                 ListTile(
-                  key: const ValueKey('ask_ai_settings_open_cloud_account'),
-                  title: Text(t.actions.openCloud),
+                  key: const ValueKey('ask_ai_settings_open_runtime_mode'),
+                  title: Text(context.t.settings.runtimeMode.title),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     pushPageWithInheritedScopes(
                       Navigator.of(context),
                       context,
-                      const CloudAccountPage(),
-                    );
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  key: const ValueKey('ask_ai_settings_open_llm_profiles'),
-                  title: Text(t.actions.openByok),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    pushPageWithInheritedScopes(
-                      Navigator.of(context),
-                      context,
-                      const LlmProfilesPage(),
+                      const CloudRuntimeModePage(),
                     );
                   },
                 ),

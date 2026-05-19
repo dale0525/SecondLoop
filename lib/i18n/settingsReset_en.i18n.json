@@ -1,22 +1,22 @@
 {
   "resetLocalDataThisDeviceOnly": {
     "dialogTitle": "Reset local data?",
-    "dialogBody": "This will delete local messages and clear synced remote data for this device only. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.",
+    "dialogBody": "This will delete local messages on this device. It will not delete your AI or runtime settings.",
     "failed": "Reset failed: $error",
     "cleanupFailedAfterCommit": "Data was reset, but some local files could not be cleaned up: $error"
   },
-  "resetLocalDataAllDevices": {
+  "resetLocalDataRuntimeHostedDataUnchanged": {
     "dialogTitle": "Reset local data?",
-    "dialogBody": "This will delete local messages and clear all synced remote data. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.",
+    "dialogBody": "This will delete local messages on this device. Runtime-hosted data is not cleared from here.",
     "failed": "Reset failed: $error",
     "cleanupFailedAfterCommit": "Data was reset, but some local files could not be cleaned up: $error"
   },
   "debugResetLocalDataThisDeviceOnly": {
     "title": "Debug: Reset local data (this device)",
-    "subtitle": "Delete local messages + clear remote data for this device only"
+    "subtitle": "Delete local messages on this device"
   },
-  "debugResetLocalDataAllDevices": {
-    "title": "Debug: Reset local data (all devices)",
-    "subtitle": "Delete local messages + clear all remote data"
+  "debugResetLocalDataRuntimeHostedDataUnchanged": {
+    "title": "Debug: Reset local data",
+    "subtitle": "Delete local messages; runtime-hosted data is unchanged"
   }
 }

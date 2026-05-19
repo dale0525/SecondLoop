@@ -10,17 +10,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     int topK = 10,
     bool thisThreadOnly = false,
   }) async* {
-    final appDir = await _getAppDir();
-    final localDay = NativeAppBackend._formatLocalDayKey(DateTime.now());
-    yield* rust_core.ragAskAiStream(
-      appDir: appDir,
-      key: key,
-      conversationId: conversationId,
-      question: question,
-      topK: topK,
-      thisThreadOnly: thisThreadOnly,
-      localDay: localDay,
-    );
+    throw _retiredNativeRuntimeFeature('ragAskAiStream');
   }
 
   @override
@@ -33,19 +23,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     int topK = 10,
     bool thisThreadOnly = false,
   }) async* {
-    final appDir = await _getAppDir();
-    final localDay = NativeAppBackend._formatLocalDayKey(DateTime.now());
-    yield* rust_core.ragAskAiStreamTimeWindow(
-      appDir: appDir,
-      key: key,
-      conversationId: conversationId,
-      question: question,
-      topK: topK,
-      thisThreadOnly: thisThreadOnly,
-      timeStartMs: PlatformInt64Util.from(timeStartMs),
-      timeEndMs: PlatformInt64Util.from(timeEndMs),
-      localDay: localDay,
-    );
+    throw _retiredNativeRuntimeFeature('ragAskAiStreamTimeWindow');
   }
 
   @override
@@ -56,17 +34,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     int topK = 10,
     bool thisThreadOnly = false,
   }) async* {
-    final appDir = await _getAppDir();
-    final localDay = NativeAppBackend._formatLocalDayKey(DateTime.now());
-    yield* rust_core.ragAskAiStreamWithBrokEmbeddings(
-      appDir: appDir,
-      key: key,
-      conversationId: conversationId,
-      question: question,
-      topK: topK,
-      thisThreadOnly: thisThreadOnly,
-      localDay: localDay,
-    );
+    throw _retiredNativeRuntimeFeature('ragAskAiStreamWithBrokEmbeddings');
   }
 
   @override
@@ -79,18 +47,8 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     int topK = 10,
     bool thisThreadOnly = false,
   }) async* {
-    final appDir = await _getAppDir();
-    final localDay = NativeAppBackend._formatLocalDayKey(DateTime.now());
-    yield* rust_core.ragAskAiStreamWithBrokEmbeddingsTimeWindow(
-      appDir: appDir,
-      key: key,
-      conversationId: conversationId,
-      question: question,
-      topK: topK,
-      thisThreadOnly: thisThreadOnly,
-      timeStartMs: PlatformInt64Util.from(timeStartMs),
-      timeEndMs: PlatformInt64Util.from(timeEndMs),
-      localDay: localDay,
+    throw _retiredNativeRuntimeFeature(
+      'ragAskAiStreamWithBrokEmbeddingsTimeWindow',
     );
   }
 
@@ -105,18 +63,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required String idToken,
     required String modelName,
   }) async* {
-    final appDir = await _getAppDir();
-    yield* rust_core.ragAskAiStreamCloudGateway(
-      appDir: appDir,
-      key: key,
-      conversationId: conversationId,
-      question: question,
-      topK: topK,
-      thisThreadOnly: thisThreadOnly,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-    );
+    throw _retiredNativeRuntimeFeature('ragAskAiStreamCloudGateway');
   }
 
   @override
@@ -132,20 +79,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required String idToken,
     required String modelName,
   }) async* {
-    final appDir = await _getAppDir();
-    yield* rust_core.ragAskAiStreamCloudGatewayTimeWindow(
-      appDir: appDir,
-      key: key,
-      conversationId: conversationId,
-      question: question,
-      topK: topK,
-      thisThreadOnly: thisThreadOnly,
-      timeStartMs: PlatformInt64Util.from(timeStartMs),
-      timeEndMs: PlatformInt64Util.from(timeEndMs),
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-    );
+    throw _retiredNativeRuntimeFeature('ragAskAiStreamCloudGatewayTimeWindow');
   }
 
   @override
@@ -160,18 +94,8 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required String modelName,
     required String embeddingsModelName,
   }) async* {
-    final appDir = await _getAppDir();
-    yield* rust_core.ragAskAiStreamCloudGatewayWithEmbeddings(
-      appDir: appDir,
-      key: key,
-      conversationId: conversationId,
-      question: question,
-      topK: topK,
-      thisThreadOnly: thisThreadOnly,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-      embeddingsModelName: embeddingsModelName,
+    throw _retiredNativeRuntimeFeature(
+      'ragAskAiStreamCloudGatewayWithEmbeddings',
     );
   }
 
@@ -189,20 +113,8 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required String modelName,
     required String embeddingsModelName,
   }) async* {
-    final appDir = await _getAppDir();
-    yield* rust_core.ragAskAiStreamCloudGatewayWithEmbeddingsTimeWindow(
-      appDir: appDir,
-      key: key,
-      conversationId: conversationId,
-      question: question,
-      topK: topK,
-      thisThreadOnly: thisThreadOnly,
-      timeStartMs: PlatformInt64Util.from(timeStartMs),
-      timeEndMs: PlatformInt64Util.from(timeEndMs),
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-      embeddingsModelName: embeddingsModelName,
+    throw _retiredNativeRuntimeFeature(
+      'ragAskAiStreamCloudGatewayWithEmbeddingsTimeWindow',
     );
   }
 
@@ -281,14 +193,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     Uint8List key, {
     required String prompt,
   }) async {
-    final appDir = await _getAppDir();
-    final localDay = NativeAppBackend._formatLocalDayKey(DateTime.now());
-    return rust_core.aiTaskPriorityRerank(
-      appDir: appDir,
-      key: key,
-      prompt: prompt,
-      localDay: localDay,
-    );
+    throw _retiredNativeRuntimeFeature('aiTaskPriorityRerank');
   }
 
   @override
@@ -299,15 +204,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required String idToken,
     required String modelName,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.aiTaskPriorityRerankCloudGateway(
-      appDir: appDir,
-      key: key,
-      prompt: prompt,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-    );
+    throw _retiredNativeRuntimeFeature('aiTaskPriorityRerankCloudGateway');
   }
 
   Uri _taskPriorityAssessmentsUri(String gatewayBaseUrl, String cacheScopeKey) {
@@ -385,15 +282,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required String idToken,
     required String modelName,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.aiTodoFollowupRerankCloudGateway(
-      appDir: appDir,
-      key: key,
-      prompt: prompt,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
-    );
+    throw _retiredNativeRuntimeFeature('aiTodoFollowupRerankCloudGateway');
   }
 
   @override
@@ -405,18 +294,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required int dayEndMinutes,
     required List<TodoCandidate> candidates,
   }) async {
-    final appDir = await _getAppDir();
-    final localDay = NativeAppBackend._formatLocalDayKey(DateTime.now());
-    return rust_core.aiSemanticParseMessageAction(
-      appDir: appDir,
-      key: key,
-      text: text,
-      nowLocalIso: nowLocalIso,
-      locale: locale.toLanguageTag(),
-      dayEndMinutes: dayEndMinutes,
-      candidates: candidates,
-      localDay: localDay,
-    );
+    throw _retiredNativeRuntimeFeature('aiSemanticParseMessageAction');
   }
 
   @override
@@ -431,18 +309,8 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required String idToken,
     required String modelName,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.aiSemanticParseMessageActionCloudGateway(
-      appDir: appDir,
-      key: key,
-      text: text,
-      nowLocalIso: nowLocalIso,
-      locale: locale.toLanguageTag(),
-      dayEndMinutes: dayEndMinutes,
-      candidates: candidates,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
+    throw _retiredNativeRuntimeFeature(
+      'aiSemanticParseMessageActionCloudGateway',
     );
   }
 
@@ -457,20 +325,8 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required List<String> unresolvedFields,
     required List<TodoCandidate> candidates,
   }) async {
-    final appDir = await _getAppDir();
-    final localDay = NativeAppBackend._formatLocalDayKey(DateTime.now());
-    return rust_semantic_parse_enhancement
-        .aiSemanticParseMessageActionEnhancement(
-      appDir: appDir,
-      key: key,
-      text: text,
-      nowLocalIso: nowLocalIso,
-      locale: locale.toLanguageTag(),
-      dayEndMinutes: dayEndMinutes,
-      localResultJson: localResultJson,
-      unresolvedFields: unresolvedFields,
-      candidates: candidates,
-      localDay: localDay,
+    throw _retiredNativeRuntimeFeature(
+      'aiSemanticParseMessageActionEnhancement',
     );
   }
 
@@ -488,21 +344,8 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required String idToken,
     required String modelName,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_semantic_parse_enhancement
-        .aiSemanticParseMessageActionEnhancementCloudGateway(
-      appDir: appDir,
-      key: key,
-      text: text,
-      nowLocalIso: nowLocalIso,
-      locale: locale.toLanguageTag(),
-      dayEndMinutes: dayEndMinutes,
-      localResultJson: localResultJson,
-      unresolvedFields: unresolvedFields,
-      candidates: candidates,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
+    throw _retiredNativeRuntimeFeature(
+      'aiSemanticParseMessageActionEnhancementCloudGateway',
     );
   }
 
@@ -514,17 +357,7 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required Locale locale,
     required int firstDayOfWeekIndex,
   }) async {
-    final appDir = await _getAppDir();
-    final localDay = NativeAppBackend._formatLocalDayKey(DateTime.now());
-    return rust_core.aiSemanticParseAskAiTimeWindow(
-      appDir: appDir,
-      key: key,
-      question: question,
-      nowLocalIso: nowLocalIso,
-      locale: locale.toLanguageTag(),
-      firstDayOfWeekIndex: firstDayOfWeekIndex,
-      localDay: localDay,
-    );
+    throw _retiredNativeRuntimeFeature('aiSemanticParseAskAiTimeWindow');
   }
 
   @override
@@ -538,17 +371,8 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess
     required String idToken,
     required String modelName,
   }) async {
-    final appDir = await _getAppDir();
-    return rust_core.aiSemanticParseAskAiTimeWindowCloudGateway(
-      appDir: appDir,
-      key: key,
-      question: question,
-      nowLocalIso: nowLocalIso,
-      locale: locale.toLanguageTag(),
-      firstDayOfWeekIndex: firstDayOfWeekIndex,
-      gatewayBaseUrl: gatewayBaseUrl,
-      firebaseIdToken: idToken,
-      modelName: modelName,
+    throw _retiredNativeRuntimeFeature(
+      'aiSemanticParseAskAiTimeWindowCloudGateway',
     );
   }
 }

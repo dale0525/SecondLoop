@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 class AppPlatformCapabilities {
   const AppPlatformCapabilities({
     required this.supportsDesktopHotkey,
-    required this.supportsBiometricUnlock,
     required this.supportsAudioRecording,
     required this.supportsDesktopDrop,
     required this.supportsDesktopBootSettings,
@@ -22,10 +21,6 @@ class AppPlatformCapabilities {
             defaultTargetPlatform == TargetPlatform.iOS);
     return AppPlatformCapabilities(
       supportsDesktopHotkey: isDesktop,
-      supportsBiometricUnlock: !kIsWeb &&
-          (isMobile ||
-              defaultTargetPlatform == TargetPlatform.macOS ||
-              defaultTargetPlatform == TargetPlatform.windows),
       supportsAudioRecording: !kIsWeb &&
           (isMobile ||
               defaultTargetPlatform == TargetPlatform.macOS ||
@@ -40,7 +35,6 @@ class AppPlatformCapabilities {
   factory AppPlatformCapabilities.webCloud() {
     return const AppPlatformCapabilities(
       supportsDesktopHotkey: false,
-      supportsBiometricUnlock: false,
       supportsAudioRecording: false,
       supportsDesktopDrop: false,
       supportsDesktopBootSettings: false,
@@ -52,7 +46,6 @@ class AppPlatformCapabilities {
   factory AppPlatformCapabilities.webNative() {
     return const AppPlatformCapabilities(
       supportsDesktopHotkey: false,
-      supportsBiometricUnlock: false,
       supportsAudioRecording: false,
       supportsDesktopDrop: false,
       supportsDesktopBootSettings: false,
@@ -62,7 +55,6 @@ class AppPlatformCapabilities {
   }
 
   final bool supportsDesktopHotkey;
-  final bool supportsBiometricUnlock;
   final bool supportsAudioRecording;
   final bool supportsDesktopDrop;
   final bool supportsDesktopBootSettings;
@@ -74,7 +66,6 @@ class AppPlatformCapabilities {
     if (identical(this, other)) return true;
     return other is AppPlatformCapabilities &&
         other.supportsDesktopHotkey == supportsDesktopHotkey &&
-        other.supportsBiometricUnlock == supportsBiometricUnlock &&
         other.supportsAudioRecording == supportsAudioRecording &&
         other.supportsDesktopDrop == supportsDesktopDrop &&
         other.supportsDesktopBootSettings == supportsDesktopBootSettings &&
@@ -85,7 +76,6 @@ class AppPlatformCapabilities {
   @override
   int get hashCode => Object.hash(
         supportsDesktopHotkey,
-        supportsBiometricUnlock,
         supportsAudioRecording,
         supportsDesktopDrop,
         supportsDesktopBootSettings,

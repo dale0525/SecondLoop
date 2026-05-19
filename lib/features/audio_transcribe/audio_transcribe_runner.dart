@@ -15,8 +15,6 @@ import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/backend/native_app_dir.dart';
 import '../../core/backend/native_backend.dart';
 import '../../core/media/ffmpeg_executable_resolver.dart';
-import 'package:secondloop/core/runtime_compat/api/audio_transcribe.dart'
-    as rust_audio_transcribe;
 
 part 'audio_transcribe_runner_clients.dart';
 part 'audio_transcribe_runner_gateway_limits.dart';
@@ -217,6 +215,40 @@ typedef AudioTranscribeWindowsNativeSttRequest = Future<String> Function({
   required String mimeType,
   required Uint8List audioBytes,
 });
+
+Future<String> _audioTranscribeByokRuntimeRemoved({
+  required String appDir,
+  required List<int> key,
+  required String profileId,
+  required String localDay,
+  required String lang,
+  required String mimeType,
+  required List<int> audioBytes,
+}) {
+  throw StateError('audio_transcribe_byok_runtime_removed');
+}
+
+Future<String> _audioTranscribeByokMultimodalRuntimeRemoved({
+  required String appDir,
+  required List<int> key,
+  required String profileId,
+  required String localDay,
+  required String lang,
+  required String mimeType,
+  required List<int> audioBytes,
+}) {
+  throw StateError('audio_transcribe_byok_multimodal_runtime_removed');
+}
+
+Future<String> _audioTranscribeLocalWhisperRuntimeRemoved({
+  required String appDir,
+  required String modelName,
+  required String lang,
+  required List<int> wavBytes,
+}) {
+  throw StateError('audio_transcribe_local_runtime_removed');
+}
+
 typedef AudioTranscribeLocalRuntimeAudioDecode = Future<Uint8List> Function({
   required String mimeType,
   required Uint8List audioBytes,

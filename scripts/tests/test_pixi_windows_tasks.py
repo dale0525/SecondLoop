@@ -414,20 +414,13 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertEqual(recorded["FOUR"], "windows")
         self.assertEqual(recorded["FIVE"], "--concurrency")
 
-    def test_prepare_ffmpeg_windows_script_uses_direct_fvm_dart_runner(self) -> None:
-        script = (REPO_ROOT / "scripts/prepare_ffmpeg_windows.ps1").read_text(encoding="utf-8")
+    def test_prepare_ffmpeg_windows_script_is_removed(self) -> None:
+        self.assertFalse((REPO_ROOT / "scripts/prepare_ffmpeg_windows.ps1").exists())
 
-        self.assertIn("run_fvm_tool.ps1", script)
-        self.assertIn("-Tool dart", script)
-        self.assertIn("-Command run", script)
-        self.assertNotIn("dart pub global run fvm:main dart run", script)
-
-
-
-    def test_gitignore_ignores_generated_windows_ffmpeg_zip(self) -> None:
+    def test_gitignore_does_not_keep_generated_windows_ffmpeg_zip_exception(self) -> None:
         gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
 
-        self.assertIn("assets/bin/ffmpeg/windows/ffmpeg.zip", gitignore)
+        self.assertNotIn("assets/bin/ffmpeg/windows/ffmpeg.zip", gitignore)
 
 if __name__ == "__main__":
     unittest.main()

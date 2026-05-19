@@ -53,6 +53,133 @@ void main() {
     }
   });
 
+  test('runtime-first app shell does not mount local AI processing gates', () {
+    final appShell = File('lib/app/app.dart').readAsStringSync();
+
+    const forbidden = [
+      'DetachedAskRecoveryGate',
+      'TodoFollowupGenerationGate',
+      'MessageEmbeddingsIndexGate',
+      'EmbeddingsIndexGate',
+      'detached_ask_recovery_gate.dart',
+      'todo_followup_generation_gate.dart',
+      'message_embeddings_index_gate.dart',
+      'embeddings_index_gate.dart',
+    ];
+
+    for (final token in forbidden) {
+      expect(
+        appShell,
+        isNot(contains(token)),
+        reason: 'lib/app/app.dart must not mount local AI runtime token $token',
+      );
+    }
+  });
+
+  test('runtime-first app shell does not mount legacy sync gates', () {
+    final appShell = File('lib/app/app.dart').readAsStringSync();
+
+    const forbidden = [
+      'SyncEngineGate',
+      'CloudSyncSwitchPromptGate',
+      'SyncKeyManager',
+      'sync_engine_gate.dart',
+      'cloud_sync_switch_prompt_gate.dart',
+      'sync_key_manager.dart',
+    ];
+
+    for (final token in forbidden) {
+      expect(
+        appShell,
+        isNot(contains(token)),
+        reason: 'lib/app/app.dart must not mount local sync token $token',
+      );
+    }
+  });
+
+  test(
+      'runtime-first settings and attachment display do not import runtime APIs',
+      () {
+    final files = [
+      File('lib/features/settings/settings_page.dart'),
+      File('lib/features/settings/diagnostics_page.dart'),
+      File('lib/features/attachments/attachment_card.dart'),
+    ];
+
+    const forbidden = [
+      'runtime_compat/api',
+      'rust_',
+      'getNativeAppDir',
+    ];
+
+    for (final file in files) {
+      final source = file.readAsStringSync();
+      for (final token in forbidden) {
+        expect(
+          source,
+          isNot(contains(token)),
+          reason: '${file.path} must not depend on local runtime token $token',
+        );
+      }
+    }
+  });
+
+  test('AI settings does not expose retired local media runtime settings', () {
+    final files = [
+      File('lib/features/settings/ai_settings_page.dart'),
+      File('lib/features/settings/ai_settings_page_ui.dart'),
+    ];
+
+    const forbidden = [
+      'media_annotation_settings_page.dart',
+      'MediaAnnotationSettingsPage',
+      'focusMediaLocalCapabilityCard',
+      'mediaLocalCapability',
+    ];
+
+    for (final file in files) {
+      final source = file.readAsStringSync();
+      for (final token in forbidden) {
+        expect(
+          source,
+          isNot(contains(token)),
+          reason: '${file.path} must not expose retired local media runtime '
+              'settings in the runtime-first AI settings flow',
+        );
+      }
+    }
+  });
+
+  test('runtime-first backend shims do not import runtime compat APIs', () {
+    final files = [
+      ...Directory('lib/core/backend')
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.dart')),
+      File('lib/web_app/web_native_app_backend.dart'),
+      File('lib/web_app/web_native_app_backend_managed_vault_push.dart'),
+    ];
+
+    const forbidden = [
+      'runtime_compat/api',
+      'rust_core.',
+      'rust_attachments.',
+      'rust_web_sync.',
+    ];
+
+    for (final file in files) {
+      final source = file.readAsStringSync();
+      for (final token in forbidden) {
+        expect(
+          source,
+          isNot(contains(token)),
+          reason: '${file.path} must not depend on retired runtime token '
+              '$token',
+        );
+      }
+    }
+  });
+
   test('main app dependency graph does not include Rust or FRB', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
     final pubspecLock = File('pubspec.lock').readAsStringSync();
@@ -169,6 +296,61 @@ void main() {
           reason: '${file.path} must not contain $token',
         );
       }
+    }
+  });
+
+  test('app run and release entrypoints do not prepare local media runtimes',
+      () {
+    final files = [
+      File('pixi.toml'),
+      File('.github/workflows/release.yml'),
+      File('.github/workflows/web-build.yml'),
+      File('scripts/run_windows.ps1'),
+      File('scripts/package_windows_msi.ps1'),
+      File('scripts/package_windows_velopack.ps1'),
+    ].where((file) => file.existsSync());
+
+    const forbidden = [
+      'prepare_desktop_runtime.dart',
+      'sync_desktop_runtime_to_appdir.dart',
+      'prepare_bundled_ffmpeg.dart',
+      'setup_ffmpeg_macos.sh',
+      'setup_ffmpeg_windows.ps1',
+      'brew install ffmpeg',
+      'assets/bin/ffmpeg',
+      'SECONDLOOP_DESKTOP_RUNTIME_TAG',
+    ];
+
+    for (final file in files) {
+      final source = file.readAsStringSync();
+      for (final token in forbidden) {
+        expect(
+          source,
+          isNot(contains(token)),
+          reason: '${file.path} must not prepare local media runtime token '
+              '$token in normal app run/release paths',
+        );
+      }
+    }
+  });
+
+  test('pubspec does not bundle local ffmpeg or desktop runtime assets', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+
+    const forbidden = [
+      'assets/bin/ffmpeg',
+      'assets/ocr/desktop_runtime',
+      'assets/ocr/desktop_runtime/models',
+      'assets/ocr/desktop_runtime/onnxruntime',
+      'assets/ocr/desktop_runtime/whisper',
+    ];
+
+    for (final token in forbidden) {
+      expect(
+        pubspec,
+        isNot(contains(token)),
+        reason: 'pubspec.yaml must not bundle $token',
+      );
     }
   });
 }

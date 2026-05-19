@@ -102,23 +102,23 @@
   },
   "askAiSetup": {
     "title": "AI 对话需要先配置",
-    "body": "要使用「AI 对话」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。",
+    "body": "要使用「AI 对话」，请在运行时模式中选择 managed pro，或连接 self-managed runtime。",
     "actions": {
       "subscribe": "订阅",
-      "configureByok": "添加 API Key"
+      "configureByok": "打开运行时模式"
     }
   },
   "cloudGateway": {
-    "emailNotVerified": "邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。",
+    "emailNotVerified": "邮箱未验证。验证邮箱后才能使用托管运行时。",
     "fallback": {
-      "auth": "Cloud 登录已失效。本次将使用你的 API Key。",
-      "entitlement": "需要订阅 SecondLoop Cloud。本次将使用你的 API Key。",
-      "rateLimited": "Cloud 正忙。本次将使用你的 API Key。",
-      "generic": "Cloud 请求失败。本次将使用你的 API Key。"
+      "auth": "Cloud 登录已失效，请打开运行时模式重新登录。",
+      "entitlement": "需要 managed pro 订阅，请打开运行时模式继续。",
+      "rateLimited": "托管运行时正忙，请稍后重试。",
+      "generic": "托管运行时请求失败，请稍后重试。"
     },
     "errors": {
       "auth": "Cloud 登录已失效，请在 Cloud 账号页重新登录。",
-      "entitlement": "需要订阅 SecondLoop Cloud。请添加 API Key 或稍后再试。",
+      "entitlement": "需要 managed pro 订阅，请打开运行时模式继续。",
       "rateLimited": "Cloud 触发限速，请稍后再试。",
       "generic": "Cloud 请求失败。"
     }
@@ -127,7 +127,7 @@
   "askAiRetrievalQuotaUnavailable": "AI 无法检索上下文，因为云端额度不可用。请在额度重置后重试。",
   "askAiConsent": {
     "title": "使用 AI 前确认",
-    "body": "SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的应用锁密码或完整历史。",
+    "body": "SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的完整历史。",
     "dontShowAgain": "不再提示"
   },
   "embeddingsConsent": {

@@ -100,7 +100,6 @@ final class DynamicAppHarness {
           home: AppPlatformCapabilityScope(
             capabilities: const AppPlatformCapabilities(
               supportsDesktopHotkey: false,
-              supportsBiometricUnlock: false,
               supportsAudioRecording: false,
               supportsDesktopDrop: true,
               supportsDesktopBootSettings: false,

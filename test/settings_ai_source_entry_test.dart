@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
-import 'package:secondloop/features/settings/media_annotation_settings_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 
 import 'test_backend.dart';
@@ -104,19 +103,6 @@ void main() {
 
     expect(mediaSection, findsOneWidget);
 
-    final embeddedRoot =
-        find.byKey(MediaAnnotationSettingsPage.embeddedRootKey);
-    await tester.dragUntilVisible(
-      embeddedRoot,
-      listView,
-      const Offset(0, -260),
-    );
-    await tester.pumpAndSettle();
-
-    expect(embeddedRoot, findsOneWidget);
-    expect(
-      find.descendant(of: mediaSection, matching: embeddedRoot),
-      findsNothing,
-    );
+    expect(mediaSection, findsOneWidget);
   });
 }

@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/web_app/web_local_runtime_recovery_base.dart';
 import 'package:secondloop/web_app/web_initial_sync_gate.dart';
@@ -227,56 +226,10 @@ final class _UnexpectedFailureWebNativeBackend extends WebNativeAppBackend {
 
 void main() {
   testWidgets(
-      'first entitled launch triggers managed-vault pull before chat loads',
+      'first entitled launch enters runtime-first shell without local managed-vault pull',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _FakeWebNativeBackend();
-    final store = SyncConfigStore();
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AppBackendScope(
-            backend: backend,
-            child: SessionScope(
-              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
-              lock: () {},
-              child: WebInitialSyncGate(
-                authController: _FakeCloudAuthController(
-                  initialUid: 'uid-1',
-                  initialEmail: 'user@example.com',
-                  initialEmailVerified: true,
-                ),
-                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
-                syncConfigStore: store,
-                child: const Placeholder(),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    expect(backend.syncManagedVaultPullCalls, 1);
-    expect(backend.deriveSyncKeyCalls, 1);
-    expect(
-      backend.lastDerivedPassphrase,
-      'managed-vault-sync-v1::uid-1',
-    );
-    expect(backend.lastSyncKey, Uint8List.fromList(List<int>.filled(32, 3)));
-    expect(
-        await store.readSyncKey(), Uint8List.fromList(List<int>.filled(32, 3)));
-  });
-
-  testWidgets(
-      'web initial sync gate keeps bootstrap sync config scoped by uid when no store is injected',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final backend = _FakeWebNativeBackend();
-    final leakedUnscopedStore = SyncConfigStore();
-    await leakedUnscopedStore.writeSyncKey(
-      Uint8List.fromList(List<int>.filled(32, 9)),
-    );
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -301,13 +254,55 @@ void main() {
       ),
     );
 
-    expect(backend.syncManagedVaultPullCalls, 1);
-    expect(backend.deriveSyncKeyCalls, 1);
-    expect(backend.lastSyncKey, Uint8List.fromList(List<int>.filled(32, 3)));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(Placeholder), findsOneWidget);
+    expect(backend.syncManagedVaultPullCalls, 0);
+    expect(backend.deriveSyncKeyCalls, 0);
+    expect(backend.lastDerivedPassphrase, isNull);
+    expect(backend.lastSyncKey, isNull);
   });
 
   testWidgets(
-      'web initial sync gate surfaces missing auth token instead of silently skipping bootstrap sync',
+      'web initial sync gate does not block runtime-first shell when no runner is injected',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _FakeWebNativeBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+              lock: () {},
+              child: WebInitialSyncGate(
+                authController: _FakeCloudAuthController(
+                  initialUid: 'uid-1',
+                  initialEmail: 'user@example.com',
+                  initialEmailVerified: true,
+                ),
+                managedVaultBaseUrl: 'https://service-vault.secondloop.app',
+                child: const Placeholder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(Placeholder), findsOneWidget);
+    expect(backend.syncManagedVaultPullCalls, 0);
+    expect(backend.deriveSyncKeyCalls, 0);
+  });
+
+  testWidgets(
+      'web initial sync gate ignores missing auth token when no bootstrap runner is configured',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -337,8 +332,8 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.byType(Placeholder), findsNothing);
-    expect(find.text('Sign in again to continue.'), findsOneWidget);
+    expect(find.byType(Placeholder), findsOneWidget);
+    expect(find.text('Sign in again to continue.'), findsNothing);
   });
 
   testWidgets(

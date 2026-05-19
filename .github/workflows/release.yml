@@ -12,8 +12,6 @@ permissions:
 jobs:
   preflight:
     runs-on: ubuntu-latest
-    outputs:
-      runtime_tag: ${{ steps.runtime_preflight.outputs.runtime_tag }}
     env:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
@@ -36,18 +34,10 @@ jobs:
           : "${SECONDLOOP_UPDATE_PUBLIC_KEY:?Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY}"
           : "${SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY:?Missing secret SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY}"
       - name: Release preflight
-        id: runtime_preflight
         shell: bash
         run: |
           set -euo pipefail
-          log_file="$(mktemp)"
-          bash scripts/release_preflight.sh --repo "${GITHUB_REPOSITORY}" | tee "${log_file}"
-          runtime_tag="$(sed -n 's/^release-preflight: resolved_runtime_tag=//p' "${log_file}" | tail -n1)"
-          if [[ -z "${runtime_tag}" ]]; then
-            echo "Failed to resolve runtime tag from release preflight output"
-            exit 1
-          fi
-          echo "runtime_tag=${runtime_tag}" >> "${GITHUB_OUTPUT}"
+          bash scripts/release_preflight.sh --repo "${GITHUB_REPOSITORY}"
 
   android:
     needs: preflight
@@ -237,7 +227,6 @@ jobs:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
-      SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ needs.preflight.outputs.runtime_tag }}
       SECONDLOOP_UPDATE_PUBLIC_KEY: ${{ secrets.SECONDLOOP_UPDATE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
@@ -252,8 +241,6 @@ jobs:
           if (-not $Env:SECONDLOOP_FIREBASE_WEB_API_KEY) { throw "Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD" }
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD) { throw "Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD" }
-          if (-not $Env:SECONDLOOP_DESKTOP_RUNTIME_TAG) { throw "Missing runtime tag resolved by preflight" }
-          if ($Env:SECONDLOOP_DESKTOP_RUNTIME_TAG -notmatch '^desktop-runtime-v\d+\.\d+\.\d+(\.\d+)?$') { throw "Invalid SECONDLOOP_DESKTOP_RUNTIME_TAG: $Env:SECONDLOOP_DESKTOP_RUNTIME_TAG" }
           if (-not $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD.StartsWith("https://")) { throw "Prod gateway URL must start with https://" }
           if ($Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging gateway URL." }
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD.StartsWith("https://")) { throw "Prod managed vault URL must start with https://" }
@@ -263,41 +250,6 @@ jobs:
       - name: Refresh i18n generated files
         shell: pwsh
         run: bash scripts/run_i18n_refresh.sh
-      - name: Prepare desktop runtime assets
-        shell: pwsh
-        run: |
-          $runtimeArch = if ($Env:PROCESSOR_ARCHITECTURE -match 'ARM64') { 'arm64' } else { 'x64' }
-          dart run tools/prepare_desktop_runtime.dart `
-            --platform=windows `
-            --arch=$runtimeArch `
-            --runtime-tag=$Env:SECONDLOOP_DESKTOP_RUNTIME_TAG `
-            --require-runtime-tag `
-            --repo=$Env:GITHUB_REPOSITORY
-      - name: Setup FFmpeg
-        shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_ffmpeg_windows.ps1
-      - name: Prepare bundled FFmpeg
-        shell: pwsh
-        run: dart run tools/prepare_bundled_ffmpeg.dart --platform=windows
-      - name: Prune non-target FFmpeg assets (windows)
-        shell: pwsh
-        run: |
-          $ffmpegRoot = Join-Path $Env:GITHUB_WORKSPACE 'assets/bin/ffmpeg'
-          $targetFfmpeg = Join-Path $ffmpegRoot 'windows/ffmpeg.zip'
-          if (-not (Test-Path -LiteralPath $targetFfmpeg)) {
-            throw "Expected bundled windows ffmpeg not found: $targetFfmpeg"
-          }
-
-          $removeDirs = @('macos', 'linux')
-          foreach ($name in $removeDirs) {
-            $dir = Join-Path $ffmpegRoot $name
-            if (Test-Path -LiteralPath $dir) {
-              Remove-Item -LiteralPath $dir -Recurse -Force
-            }
-            New-Item -ItemType Directory -Path $dir -Force | Out-Null
-            New-Item -ItemType File -Path (Join-Path $dir '.gitkeep') -Force | Out-Null
-            Write-Host "Pruned non-target ffmpeg directory: $dir"
-          }
       - name: Ensure Ninja is available
         shell: pwsh
         run: |
@@ -436,7 +388,6 @@ jobs:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
-      SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ needs.preflight.outputs.runtime_tag }}
       SECONDLOOP_UPDATE_PUBLIC_KEY: ${{ secrets.SECONDLOOP_UPDATE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
@@ -457,11 +408,6 @@ jobs:
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           : "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD:?Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
-          : "${SECONDLOOP_DESKTOP_RUNTIME_TAG:?Missing runtime tag resolved by preflight}"
-          if [[ ! "${SECONDLOOP_DESKTOP_RUNTIME_TAG}" =~ ^desktop-runtime-v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "Invalid SECONDLOOP_DESKTOP_RUNTIME_TAG: ${SECONDLOOP_DESKTOP_RUNTIME_TAG}"
-            exit 1
-          fi
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
             echo "Prod gateway URL must start with https://"
             exit 1
@@ -482,36 +428,6 @@ jobs:
       - name: Refresh i18n generated files
         shell: bash
         run: bash scripts/run_i18n_refresh.sh
-      - name: Prepare desktop runtime assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          runtime_arch='x64'
-          host_arch="$(uname -m)"
-          case "${host_arch}" in
-            arm64|aarch64) runtime_arch='arm64' ;;
-            x86_64|amd64) runtime_arch='x64' ;;
-          esac
-          dart run tools/prepare_desktop_runtime.dart \
-            --platform=macos \
-            --arch="${runtime_arch}" \
-            --runtime-tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG}" \
-            --require-runtime-tag \
-            --repo="${GITHUB_REPOSITORY}"
-      - name: Install FFmpeg
-        shell: bash
-        run: brew install ffmpeg
-      - name: Prepare bundled FFmpeg
-        shell: bash
-        run: dart run tools/prepare_bundled_ffmpeg.dart --platform=macos
-      - name: Prune non-target FFmpeg assets (macos)
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f assets/bin/ffmpeg/macos/ffmpeg
-          rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/linux
-          mkdir -p assets/bin/ffmpeg/windows assets/bin/ffmpeg/linux
-          touch assets/bin/ffmpeg/windows/.gitkeep assets/bin/ffmpeg/linux/.gitkeep
       - name: Build (prod)
         shell: bash
         run: |
@@ -537,11 +453,6 @@ jobs:
             "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN="
             "--dart-define=SECONDLOOP_UPDATE_PUBLIC_KEY=${SECONDLOOP_UPDATE_PUBLIC_KEY}"
           )
-          # whisper-rs currently enables i8mm code paths under certain Apple/Clang combinations
-          # that are not always safe on hosted runners. Undefine the macro so ggml falls back.
-          export CFLAGS="${CFLAGS-} -U__ARM_FEATURE_MATMUL_INT8"
-          export CXXFLAGS="${CXXFLAGS-} -U__ARM_FEATURE_MATMUL_INT8"
-
           # flutter build macos defaults to code signing and fails on CI without Apple certs.
           # Use config-only to generate build settings (build name/number + dart-defines),
           # then build with xcodebuild while explicitly disabling code signing.
@@ -602,7 +513,6 @@ jobs:
       SECONDLOOP_FIREBASE_WEB_API_KEY: ${{ secrets.SECONDLOOP_FIREBASE_WEB_API_KEY }}
       SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD: ${{ secrets.SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD }}
       SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD: ${{ secrets.SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD }}
-      SECONDLOOP_DESKTOP_RUNTIME_TAG: ${{ needs.preflight.outputs.runtime_tag }}
       SECONDLOOP_UPDATE_PUBLIC_KEY: ${{ secrets.SECONDLOOP_UPDATE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
@@ -622,7 +532,6 @@ jobs:
           sudo apt-get install -y \
             clang \
             cmake \
-            ffmpeg \
             libgtk-3-dev \
             "${indicator_pkg}" \
             libkeybinder-3.0-dev \
@@ -638,11 +547,6 @@ jobs:
           : "${SECONDLOOP_FIREBASE_WEB_API_KEY:?Missing secret SECONDLOOP_FIREBASE_WEB_API_KEY}"
           : "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD:?Missing secret SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}"
           : "${SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD:?Missing secret SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD}"
-          : "${SECONDLOOP_DESKTOP_RUNTIME_TAG:?Missing runtime tag resolved by preflight}"
-          if [[ ! "${SECONDLOOP_DESKTOP_RUNTIME_TAG}" =~ ^desktop-runtime-v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "Invalid SECONDLOOP_DESKTOP_RUNTIME_TAG: ${SECONDLOOP_DESKTOP_RUNTIME_TAG}"
-            exit 1
-          fi
           if [[ "${SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD}" != https://* ]]; then
             echo "Prod gateway URL must start with https://"
             exit 1
@@ -663,27 +567,6 @@ jobs:
       - name: Refresh i18n generated files
         shell: bash
         run: bash scripts/run_i18n_refresh.sh
-      - name: Prepare desktop runtime assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          dart run tools/prepare_desktop_runtime.dart \
-            --platform=linux \
-            --arch=x64 \
-            --runtime-tag="${SECONDLOOP_DESKTOP_RUNTIME_TAG}" \
-            --require-runtime-tag \
-            --repo="${GITHUB_REPOSITORY}"
-      - name: Prepare bundled FFmpeg
-        shell: bash
-        run: dart run tools/prepare_bundled_ffmpeg.dart --platform=linux
-      - name: Prune non-target FFmpeg assets (linux)
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f assets/bin/ffmpeg/linux/ffmpeg
-          rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/macos
-          mkdir -p assets/bin/ffmpeg/windows assets/bin/ffmpeg/macos
-          touch assets/bin/ffmpeg/windows/.gitkeep assets/bin/ffmpeg/macos/.gitkeep
       - name: Build (prod)
         shell: bash
         run: |

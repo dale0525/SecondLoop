@@ -3,7 +3,7 @@ part of 'native_backend.dart';
 mixin _NativeAppBackendSyncCore on _NativeAppBackendAccess {
   @override
   Future<Uint8List> deriveSyncKey(String passphrase) async {
-    return rust_core.syncDeriveKey(passphrase: passphrase);
+    throw _retiredNativeRuntimeFeature('syncDeriveKey');
   }
 
   @override
@@ -11,10 +11,7 @@ mixin _NativeAppBackendSyncCore on _NativeAppBackendAccess {
     Uint8List syncKey,
     String passphrase,
   ) async {
-    return rust_core.syncCreateRecoveryEnvelope(
-      syncKey: syncKey,
-      passphrase: passphrase,
-    );
+    throw _retiredNativeRuntimeFeature('syncCreateRecoveryEnvelope');
   }
 
   @override
@@ -22,9 +19,6 @@ mixin _NativeAppBackendSyncCore on _NativeAppBackendAccess {
     String envelopeJson,
     String passphrase,
   ) async {
-    return rust_core.syncRecoverSyncKeyFromEnvelope(
-      envelopeJson: envelopeJson,
-      passphrase: passphrase,
-    );
+    throw _retiredNativeRuntimeFeature('syncRecoverSyncKeyFromEnvelope');
   }
 }

@@ -123,7 +123,6 @@ Widget _wrapPage(_PatchableRuntimeSender sender) {
         child: AppPlatformCapabilityScope(
           capabilities: const AppPlatformCapabilities(
             supportsDesktopHotkey: true,
-            supportsBiometricUnlock: false,
             supportsAudioRecording: true,
             supportsDesktopDrop: true,
             supportsDesktopBootSettings: true,

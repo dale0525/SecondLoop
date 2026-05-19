@@ -31,7 +31,7 @@ void main() {
     expect(shouldUse, isFalse);
   });
 
-  test('local audio transcode stays enabled on desktop', () {
+  test('local audio transcode is disabled on desktop', () {
     final previous = debugDefaultTargetPlatformOverride;
     addTearDown(() {
       debugDefaultTargetPlatformOverride = previous;
@@ -41,6 +41,6 @@ void main() {
     final shouldUse = shouldUseLocalAudioTranscode(
       subscriptionStatus: SubscriptionStatus.unknown,
     );
-    expect(shouldUse, isTrue);
+    expect(shouldUse, isFalse);
   });
 }

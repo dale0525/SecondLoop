@@ -4,10 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';
 import '../../core/ai/ai_routing.dart';
-import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
-import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
@@ -26,7 +24,6 @@ class _AiSmartOrganizationSettingsPageState
   bool _loading = true;
   bool? _cloudEmbeddingsEnabled;
   bool? _semanticParseEnabled;
-  bool _byokConfigured = false;
   int _generation = 0;
 
   bool get _enabled {
@@ -46,18 +43,7 @@ class _AiSmartOrganizationSettingsPageState
       setState(() => _loading = true);
     }
 
-    final backend = AppBackendScope.maybeOf(context);
-    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
     final prefs = await SharedPreferences.getInstance();
-
-    var byokConfigured = false;
-    if (backend != null && sessionKey != null) {
-      try {
-        byokConfigured = await hasActiveLlmProfile(backend, sessionKey);
-      } catch (_) {
-        byokConfigured = false;
-      }
-    }
 
     if (!mounted || generation != _generation) return;
     setState(() {
@@ -65,7 +51,6 @@ class _AiSmartOrganizationSettingsPageState
           EmbeddingsDataConsentPrefs.readEffectiveEnabled(prefs);
       _semanticParseEnabled =
           SemanticParseDataConsentPrefs.readEffectiveEnabled(prefs);
-      _byokConfigured = byokConfigured;
       _loading = false;
     });
   }
@@ -82,9 +67,7 @@ class _AiSmartOrganizationSettingsPageState
             .isNotEmpty;
     final canUseCloudEmbeddings =
         hasCloudAccount && subscriptionStatus == SubscriptionStatus.entitled;
-    final canUseSmartOrganization = canUseCloudEmbeddings || _byokConfigured;
-
-    if (!canUseSmartOrganization) return status.requiresSetup;
+    if (!canUseCloudEmbeddings) return status.requiresSetup;
     return _enabled ? status.enabled : status.disabled;
   }
 

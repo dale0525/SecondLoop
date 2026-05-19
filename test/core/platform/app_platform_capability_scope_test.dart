@@ -20,7 +20,6 @@ void main() {
     );
 
     expect(resolved.supportsDesktopHotkey, isFalse);
-    expect(resolved.supportsBiometricUnlock, isFalse);
     expect(resolved.supportsAudioRecording, isFalse);
     expect(resolved.supportsDesktopDrop, isFalse);
     expect(resolved.usesCloudSessionModel, isTrue);
@@ -58,7 +57,6 @@ void main() {
     );
 
     expect(resolved.supportsDesktopHotkey, isFalse);
-    expect(resolved.supportsBiometricUnlock, isFalse);
     expect(resolved.supportsDesktopDrop, isFalse);
     expect(resolved.usesCloudSessionModel, isFalse);
   });
@@ -67,7 +65,6 @@ void main() {
     final usesCloudSessionModel = <bool>[true].single;
     final left = AppPlatformCapabilities(
       supportsDesktopHotkey: false,
-      supportsBiometricUnlock: false,
       supportsAudioRecording: false,
       supportsDesktopDrop: false,
       supportsDesktopBootSettings: false,
@@ -76,7 +73,6 @@ void main() {
     );
     final right = AppPlatformCapabilities(
       supportsDesktopHotkey: false,
-      supportsBiometricUnlock: false,
       supportsAudioRecording: false,
       supportsDesktopDrop: false,
       supportsDesktopBootSettings: false,

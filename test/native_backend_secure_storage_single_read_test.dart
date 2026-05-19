@@ -15,10 +15,8 @@ void main() {
     final b64 = base64Encode(keyBytes);
 
     final storage = _CountingSecureStorage({
-      'auto_unlock_enabled': '1',
       'session_key_b64': b64,
       'sync_config_blob_json_v1': jsonEncode({
-        'auto_unlock_enabled': '1',
         'session_key_b64': b64,
       }),
     });

@@ -104,7 +104,6 @@ void main() {
               child: AppPlatformCapabilityScope(
                 capabilities: const AppPlatformCapabilities(
                   supportsDesktopHotkey: true,
-                  supportsBiometricUnlock: false,
                   supportsAudioRecording: true,
                   supportsDesktopDrop: true,
                   supportsDesktopBootSettings: true,
@@ -225,7 +224,6 @@ void main() {
               child: AppPlatformCapabilityScope(
                 capabilities: const AppPlatformCapabilities(
                   supportsDesktopHotkey: true,
-                  supportsBiometricUnlock: false,
                   supportsAudioRecording: true,
                   supportsDesktopDrop: true,
                   supportsDesktopBootSettings: true,
@@ -372,7 +370,6 @@ void main() {
               child: AppPlatformCapabilityScope(
                 capabilities: const AppPlatformCapabilities(
                   supportsDesktopHotkey: true,
-                  supportsBiometricUnlock: false,
                   supportsAudioRecording: true,
                   supportsDesktopDrop: true,
                   supportsDesktopBootSettings: true,
@@ -486,7 +483,6 @@ void main() {
               child: AppPlatformCapabilityScope(
                 capabilities: const AppPlatformCapabilities(
                   supportsDesktopHotkey: true,
-                  supportsBiometricUnlock: false,
                   supportsAudioRecording: true,
                   supportsDesktopDrop: true,
                   supportsDesktopBootSettings: true,

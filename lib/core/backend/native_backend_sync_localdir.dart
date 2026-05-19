@@ -6,10 +6,7 @@ mixin _NativeAppBackendSyncLocaldir on _NativeAppBackendAccess {
     required String localDir,
     required String remoteRoot,
   }) async {
-    await rust_core.syncLocaldirTestConnection(
-      localDir: localDir,
-      remoteRoot: remoteRoot,
-    );
+    throw _retiredNativeRuntimeFeature('syncLocaldirTestConnection');
   }
 
   @override
@@ -17,10 +14,7 @@ mixin _NativeAppBackendSyncLocaldir on _NativeAppBackendAccess {
     required String localDir,
     required String remoteRoot,
   }) async {
-    await rust_core.syncLocaldirClearRemoteRoot(
-      localDir: localDir,
-      remoteRoot: remoteRoot,
-    );
+    throw _retiredNativeRuntimeFeature('syncLocaldirClearRemoteRoot');
   }
 
   @override
@@ -30,15 +24,7 @@ mixin _NativeAppBackendSyncLocaldir on _NativeAppBackendAccess {
     required String localDir,
     required String remoteRoot,
   }) async {
-    final appDir = await _getAppDir();
-    final pushed = await rust_core.syncLocaldirPush(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      localDir: localDir,
-      remoteRoot: remoteRoot,
-    );
-    return pushed.toInt();
+    throw _retiredNativeRuntimeFeature('syncLocaldirPush');
   }
 
   @override
@@ -47,14 +33,9 @@ mixin _NativeAppBackendSyncLocaldir on _NativeAppBackendAccess {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
-  }) async* {
-    final appDir = await _getAppDir();
-    yield* rust_sync_progress.syncLocaldirPushProgress(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      localDir: localDir,
-      remoteRoot: remoteRoot,
+  }) {
+    return Stream<String>.error(
+      _retiredNativeRuntimeFeature('syncLocaldirPushProgress'),
     );
   }
 
@@ -65,15 +46,7 @@ mixin _NativeAppBackendSyncLocaldir on _NativeAppBackendAccess {
     required String localDir,
     required String remoteRoot,
   }) async {
-    final appDir = await _getAppDir();
-    final pulled = await rust_core.syncLocaldirPull(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      localDir: localDir,
-      remoteRoot: remoteRoot,
-    );
-    return pulled.toInt();
+    throw _retiredNativeRuntimeFeature('syncLocaldirPull');
   }
 
   @override
@@ -82,14 +55,9 @@ mixin _NativeAppBackendSyncLocaldir on _NativeAppBackendAccess {
     Uint8List syncKey, {
     required String localDir,
     required String remoteRoot,
-  }) async* {
-    final appDir = await _getAppDir();
-    yield* rust_sync_progress.syncLocaldirPullProgress(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      localDir: localDir,
-      remoteRoot: remoteRoot,
+  }) {
+    return Stream<String>.error(
+      _retiredNativeRuntimeFeature('syncLocaldirPullProgress'),
     );
   }
 
@@ -101,14 +69,6 @@ mixin _NativeAppBackendSyncLocaldir on _NativeAppBackendAccess {
     required String remoteRoot,
     required String sha256,
   }) async {
-    final appDir = await _getAppDir();
-    await rust_core.syncLocaldirDownloadAttachmentBytes(
-      appDir: appDir,
-      key: key,
-      syncKey: syncKey,
-      localDir: localDir,
-      remoteRoot: remoteRoot,
-      sha256: sha256,
-    );
+    throw _retiredNativeRuntimeFeature('syncLocaldirDownloadAttachmentBytes');
   }
 }

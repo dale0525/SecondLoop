@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
@@ -5,10 +6,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/main.dart';
 import 'package:secondloop/core/models/app_models.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   testWidgets('Boots directly into Loop with saved session key',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -19,12 +23,42 @@ void main() {
     await tester.pumpWidget(MyApp(backend: backend));
     await tester.pumpAndSettle();
 
-    expect(find.text('Set master password'), findsNothing);
+    expect(find.byKey(const ValueKey('setup_password')), findsNothing);
     expect(
       find.byKey(const ValueKey('agent_conversation_workspace')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
+  });
+
+  test('First launch initializes internal session before Loop', () async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
+    final appDir = await Directory.systemTemp.createTemp(
+      'secondloop-first-launch-',
+    );
+    addTearDown(() async {
+      if (await appDir.exists()) {
+        await appDir.delete(recursive: true);
+      }
+    });
+    final backend = NativeAppBackend(appDirProvider: () async => appDir.path);
+
+    final key = await backend
+        .ensureSessionKey()
+        .timeout(const Duration(seconds: 2), onTimeout: () {
+      throw StateError('ensure_session_key_timeout');
+    });
+    final conversation = await backend
+        .getOrCreateLoopHomeConversation(key)
+        .timeout(const Duration(seconds: 2), onTimeout: () {
+      throw StateError('loop_home_timeout');
+    });
+
+    expect(conversation.id, 'loop_home');
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('default_session_key_b64_v1'), isNotEmpty);
   });
 }
 
@@ -45,13 +79,6 @@ final class _AutoUnlockedBackend extends AppBackend {
 
   @override
   Future<bool> isMasterPasswordSet() async => true;
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async => true;
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
-
   @override
   Future<Uint8List?> loadSavedSessionKey() async => _savedKey;
 

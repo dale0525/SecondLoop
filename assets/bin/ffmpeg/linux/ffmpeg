@@ -1,3 +1,0 @@
-#!/bin/sh
-echo "Bundled ffmpeg placeholder. Replace with real ffmpeg binary." >&2
-exit 1

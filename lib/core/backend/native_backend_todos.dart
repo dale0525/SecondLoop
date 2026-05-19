@@ -10,6 +10,8 @@ abstract class _NativeAppBackendAccess
         SecretaryBackend {
   Future<String> _getAppDir();
 
+  SecureBlobStore get _secureBlobStore;
+
   DbListTodosFn get _dbListTodos;
   DbGetTodoByIdFn get _dbGetTodoById;
   DbUpsertTodoWithAutoFollowupJobFn get _dbUpsertTodoWithAutoFollowupJob;
@@ -57,15 +59,15 @@ abstract class _NativeAppBackendAccess
       get _dbMarkTodoFollowupGenerationJobSkipped;
   DbMarkTodoFollowupGenerationJobCanceledFn
       get _dbMarkTodoFollowupGenerationJobCanceled;
-  DbCreateSecretaryMemoryProposalFn get _dbCreateSecretaryMemoryProposal;
-  DbListSecretaryMemoryProposalsFn get _dbListSecretaryMemoryProposals;
-  DbAcceptSecretaryMemoryProposalFn get _dbAcceptSecretaryMemoryProposal;
-  DbDismissSecretaryMemoryProposalFn get _dbDismissSecretaryMemoryProposal;
-  DbListMemoryPagesFn get _dbListMemoryPages;
-  DbGetMemoryPageFn get _dbGetMemoryPage;
-  DbCorrectMemoryPageFn get _dbCorrectMemoryPage;
-  DbSetMemoryPageStateFn get _dbArchiveMemoryPage;
-  DbSetMemoryPageStateFn get _dbRestoreMemoryPage;
+  DbCreateSecretaryMemoryProposalFn? get _dbCreateSecretaryMemoryProposal;
+  DbListSecretaryMemoryProposalsFn? get _dbListSecretaryMemoryProposals;
+  DbAcceptSecretaryMemoryProposalFn? get _dbAcceptSecretaryMemoryProposal;
+  DbDismissSecretaryMemoryProposalFn? get _dbDismissSecretaryMemoryProposal;
+  DbListMemoryPagesFn? get _dbListMemoryPages;
+  DbGetMemoryPageFn? get _dbGetMemoryPage;
+  DbCorrectMemoryPageFn? get _dbCorrectMemoryPage;
+  DbSetMemoryPageStateFn? get _dbArchiveMemoryPage;
+  DbSetMemoryPageStateFn? get _dbRestoreMemoryPage;
   DbUpsertPlanningOutputFn get _dbUpsertPlanningOutput;
   DbListPlanningOutputsFn get _dbListPlanningOutputs;
   DbCreateSecretaryRunFn get _dbCreateSecretaryRun;
@@ -93,7 +95,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required int endAtMsExclusive,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListTodosCreatedInRange(
+    return _dartDbListTodosCreatedInRange(
       appDir: appDir,
       key: key,
       startAtMsInclusive: PlatformInt64Util.from(startAtMsInclusive),
@@ -201,7 +203,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     String? sourceMessageId,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbSetTodoStatus(
+    return _dartDbSetTodoStatus(
       appDir: appDir,
       key: key,
       todoId: todoId,
@@ -230,7 +232,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     String? sourceMessageId,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbTransitionTodo(
+    return _dartDbTransitionTodo(
       appDir: appDir,
       key: key,
       todoId: todoId,
@@ -269,7 +271,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required TodoRecurrenceEditScope scope,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbUpdateTodoStatusWithScope(
+    return _dartDbUpdateTodoStatusWithScope(
       appDir: appDir,
       key: key,
       todoId: todoId,
@@ -287,7 +289,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required TodoRecurrenceEditScope scope,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbUpdateTodoDueWithScope(
+    return _dartDbUpdateTodoDueWithScope(
       appDir: appDir,
       key: key,
       todoId: todoId,
@@ -304,7 +306,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required String ruleJson,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbUpsertTodoRecurrence(
+    await _dartDbUpsertTodoRecurrence(
       appDir: appDir,
       key: key,
       todoId: todoId,
@@ -319,8 +321,9 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required String todoId,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbGetTodoRecurrenceRuleJson(
+    return _dartDbGetTodoRecurrenceRuleJson(
       appDir: appDir,
+      key: key,
       todoId: todoId,
     );
   }
@@ -333,7 +336,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required TodoRecurrenceEditScope scope,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbUpdateTodoRecurrenceRuleWithScope(
+    await _dartDbUpdateTodoRecurrenceRuleWithScope(
       appDir: appDir,
       key: key,
       todoId: todoId,
@@ -348,7 +351,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required String todoId,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbDeleteTodoAndAssociatedMessages(
+    await _dartDbDeleteTodoAndAssociatedMessages(
       appDir: appDir,
       key: key,
       todoId: todoId,
@@ -363,7 +366,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     String? sourceMessageId,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbAppendTodoNote(
+    return _dartDbAppendTodoNote(
       appDir: appDir,
       key: key,
       todoId: todoId,
@@ -379,7 +382,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required String toTodoId,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbMoveTodoActivity(
+    return _dartDbMoveTodoActivity(
       appDir: appDir,
       key: key,
       activityId: activityId,
@@ -658,8 +661,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     String todoId,
   ) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListTodoActivities(
-        appDir: appDir, key: key, todoId: todoId);
+    return _dartDbListTodoActivities(appDir: appDir, key: key, todoId: todoId);
   }
 
   @override
@@ -669,7 +671,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required int endAtMsExclusive,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListTodoActivitiesInRange(
+    return _dartDbListTodoActivitiesInRange(
       appDir: appDir,
       key: key,
       startAtMsInclusive: PlatformInt64Util.from(startAtMsInclusive),
@@ -684,7 +686,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     required String attachmentSha256,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbLinkAttachmentToTodoActivity(
+    await _dartDbLinkAttachmentToTodoActivity(
       appDir: appDir,
       key: key,
       activityId: activityId,
@@ -698,7 +700,7 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     String activityId,
   ) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListTodoActivityAttachments(
+    return _dartDbListTodoActivityAttachments(
       appDir: appDir,
       key: key,
       activityId: activityId,

@@ -91,10 +91,10 @@ class I18nWindowsSupportTests(unittest.TestCase):
             ),
         )
 
-    def test_gitignore_excludes_temporary_desktop_runtime_directories(self) -> None:
+    def test_gitignore_does_not_keep_desktop_runtime_payload_exceptions(self) -> None:
         gitignore = GITIGNORE_FILE.read_text(encoding="utf-8")
 
-        self.assertIn("assets/ocr/desktop_runtime.tmp-*/", gitignore)
+        self.assertNotIn("assets/ocr/desktop_runtime", gitignore)
 
 
 if __name__ == "__main__":

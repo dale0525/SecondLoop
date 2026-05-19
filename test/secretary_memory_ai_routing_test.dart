@@ -10,14 +10,13 @@ import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/models/platform_int.dart';
 
 void main() {
-  test('high-confidence local preference does not call BYOK or Cloud',
-      () async {
+  test('high-confidence local preference does not call runtime AI', () async {
     final backend = _MemoryBackend();
     final promptClient = _PromptClient();
     final controller = _controller(
       backend: backend,
       promptClient: promptClient,
-      routeConfig: const SecretaryAiRouteConfig.byok(),
+      routeConfig: _cloudRouteConfig,
     );
 
     final proposal = await controller.persistMemoryProposalForMessage(
@@ -35,12 +34,11 @@ void main() {
 
     expect(proposal, isNotNull);
     expect(proposal!.body, contains('important work in the morning'));
-    expect(promptClient.byokCalls, 0);
     expect(promptClient.cloudCalls, 0);
     expect(backend.createdProposalCount, 1);
   });
 
-  test('weak preference hint uses BYOK enhancement when route is available',
+  test('weak preference hint uses cloud enhancement when route is available',
       () async {
     final backend = _MemoryBackend();
     final promptClient = _PromptClient(
@@ -56,7 +54,7 @@ void main() {
     final controller = _controller(
       backend: backend,
       promptClient: promptClient,
-      routeConfig: const SecretaryAiRouteConfig.byok(),
+      routeConfig: _cloudRouteConfig,
     );
 
     final proposal = await controller.persistMemoryProposalForMessage(
@@ -76,18 +74,18 @@ void main() {
     expect(proposal!.title, 'Afternoon meeting energy');
     expect(proposal.body,
         'The user has low energy for meetings in the afternoon.');
-    expect(promptClient.byokCalls, 1);
+    expect(promptClient.cloudCalls, 1);
     expect(backend.createdProposalCount, 1);
     expect(backend.acceptedProposalIds, isEmpty);
   });
 
   test('AI failure keeps a local medium-confidence proposal', () async {
     final backend = _MemoryBackend();
-    final promptClient = _PromptClient(throwByok: true);
+    final promptClient = _PromptClient(throwCloud: true);
     final controller = _controller(
       backend: backend,
       promptClient: promptClient,
-      routeConfig: const SecretaryAiRouteConfig.byok(),
+      routeConfig: _cloudRouteConfig,
     );
 
     final proposal = await controller.persistMemoryProposalForMessage(
@@ -103,7 +101,7 @@ void main() {
       nowMs: 310,
     );
 
-    expect(promptClient.byokCalls, 1);
+    expect(promptClient.cloudCalls, 1);
     expect(proposal, isNotNull);
     expect(proposal!.body, contains('no longer work with Alice'));
     expect(backend.createdProposalCount, 1);
@@ -111,11 +109,11 @@ void main() {
 
   test('weak local hint stays quiet when AI enhancement fails', () async {
     final backend = _MemoryBackend();
-    final promptClient = _PromptClient(throwByok: true);
+    final promptClient = _PromptClient(throwCloud: true);
     final controller = _controller(
       backend: backend,
       promptClient: promptClient,
-      routeConfig: const SecretaryAiRouteConfig.byok(),
+      routeConfig: _cloudRouteConfig,
     );
 
     final proposal = await controller.persistMemoryProposalForMessage(
@@ -131,7 +129,7 @@ void main() {
       nowMs: 410,
     );
 
-    expect(promptClient.byokCalls, 1);
+    expect(promptClient.cloudCalls, 1);
     expect(proposal, isNull);
     expect(backend.createdProposalCount, 0);
   });
@@ -153,23 +151,12 @@ SecretaryController _controller({
 final class _PromptClient implements SecretaryAiPromptClient {
   _PromptClient({
     this.responseJson = '{}',
-    this.throwByok = false,
+    this.throwCloud = false,
   });
 
   final String responseJson;
-  final bool throwByok;
-  int byokCalls = 0;
+  final bool throwCloud;
   int cloudCalls = 0;
-
-  @override
-  Future<String> runByokSecretaryPrompt(
-    Uint8List key, {
-    required String prompt,
-  }) async {
-    byokCalls += 1;
-    if (throwByok) throw StateError('BYOK unavailable');
-    return responseJson;
-  }
 
   @override
   Future<String> runCloudSecretaryPrompt(
@@ -181,9 +168,16 @@ final class _PromptClient implements SecretaryAiPromptClient {
     required String purpose,
   }) async {
     cloudCalls += 1;
+    if (throwCloud) throw StateError('Cloud unavailable');
     return responseJson;
   }
 }
+
+const _cloudRouteConfig = SecretaryAiRouteConfig.cloudGateway(
+  cloudGatewayBaseUrl: 'https://gateway.example',
+  cloudIdToken: 'token',
+  cloudModelName: 'cloud',
+);
 
 final class _MemoryBackend implements SecretaryBackend {
   final Map<String, SecretaryMemoryProposalRecord> _proposals =

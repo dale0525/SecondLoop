@@ -224,20 +224,6 @@
       "monochrome": "黑白调"
     }
   },
-  "autoLock": {
-    "title": "自动锁定",
-    "subtitle": "需要解锁才能访问应用"
-  },
-  "systemUnlock": {
-    "titleMobile": "使用生物识别",
-    "titleDesktop": "使用系统解锁",
-    "subtitleMobile": "使用生物识别解锁，而不是应用锁密码",
-    "subtitleDesktop": "使用 Touch ID / Windows Hello 解锁，而不是应用锁密码"
-  },
-  "lockNow": {
-    "title": "立即锁定",
-    "subtitle": "返回解锁页面"
-  },
   "llmProfiles": {
     "title": "API Key（AI 对话）",
     "subtitle": "高级：使用你自己的服务商与 Key"
@@ -258,33 +244,15 @@
     "askAi": {
       "title": "AI 对话",
       "description": "在你主动需要帮助时使用 AI，对消息、记忆和草稿进行辅助。",
-      "setupHint": "还没完成“AI 对话”设置，请先登录 Cloud 或添加 API 密钥。",
-      "preferenceUnavailableHint": "你选择的“AI 对话”来源暂时不可用，请先完成 Cloud 或 API 密钥设置。",
+      "setupHint": "还没完成“AI 对话”设置，请先在运行模式中选择 managed pro 或 self-managed。",
       "status": {
         "loading": "正在检查当前使用来源...",
         "cloud": "当前使用：SecondLoop Cloud",
-        "byok": "当前使用：API 密钥（BYOK）",
         "notConfigured": "当前使用：未完成设置"
       },
-      "preference": {
-        "auto": {
-          "title": "自动",
-          "description": "自动选择可用服务：优先 Cloud，不可用时改用 API 密钥（BYOK）。"
-        },
-        "cloud": {
-          "title": "SecondLoop Cloud",
-          "description": "固定使用 Cloud。Cloud 不可用时，“AI 对话”会暂时不可用。"
-        },
-        "byok": {
-          "title": "API 密钥（BYOK）",
-          "description": "固定使用你自己的 API 密钥（BYOK）。没有可用配置时，“AI 对话”会暂时不可用。"
-        }
-      },
       "actions": {
-        "openCloud": "打开 Cloud 账户",
-        "openByok": "打开 API 密钥",
         "openSettings": "打开 AI 对话设置",
-        "reviewAdvanced": "查看高级来源设置"
+        "reviewAdvanced": "查看运行模式与高级设置"
       }
     },
     "smartOrganization": {
@@ -295,7 +263,7 @@
         "loading": "正在检查当前设置...",
         "enabled": "已开启增强整理",
         "disabled": "已关闭增强整理",
-        "requiresSetup": "需先登录 SecondLoop Pro 或配置 API 密钥后，才能启用更智能的整理能力。"
+        "requiresSetup": "需先选择 managed pro 或 self-managed runtime，才能启用更智能的整理能力。"
       },
       "actions": {
         "openSettings": "打开智能整理设置",
@@ -958,11 +926,11 @@
       "billing": "账单",
       "billingBody": "管理付款和发票。",
       "security": "安全",
-      "securityBody": "账号安全和应用锁归属。"
+      "securityBody": "账号安全和会话归属。"
     },
     "connection": {
       "runtimeMode": "运行模式",
-      "runtimeModeBody": "本地、托管云或 Web runtime 设置。",
+      "runtimeModeBody": "托管 Pro 或自托管 runtime 设置。",
       "connectionHealth": "连接健康度",
       "connectionHealthBody": "同步、鉴权和 vault 可达性。"
     },

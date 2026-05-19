@@ -29,11 +29,9 @@
     "processPending": "处理待处理",
     "rebuildEmbeddings": "重建向量索引",
     "push": "上传",
-    "pull": "下载",
-    "lockNow": "立即锁定"
+    "pull": "下载"
   },
   "fields": {
-    "masterPassword": "应用锁密码",
     "confirm": "确认",
     "message": "消息",
     "quickCapture": "快速记录",

@@ -68,11 +68,11 @@ Future<TodoFollowupSuggestionDraft?> requestTodoFollowupSuggestion({
   int? dueAtMs,
   Duration timeout = const Duration(seconds: 20),
 }) async {
-  if (route == AskAiRouteKind.needsSetup) {
+  if (route != AskAiRouteKind.cloudGateway) {
     return null;
   }
 
-  if (route == AskAiRouteKind.cloudGateway && idToken.trim().isEmpty) {
+  if (idToken.trim().isEmpty) {
     throw StateError('Cloud follow-up requests require a non-empty ID token');
   }
 
@@ -86,24 +86,16 @@ Future<TodoFollowupSuggestionDraft?> requestTodoFollowupSuggestion({
     dueAtMs: dueAtMs,
   );
 
-  final response = route == AskAiRouteKind.cloudGateway
-      ? await backend
-          .runTodoFollowupPromptCloudGateway(
-            sessionKey,
-            prompt: prompt,
-            gatewayBaseUrl: gatewayBaseUrl,
-            idToken: idToken,
-            modelName: modelName,
-            generationModeWireValue: generationMode.wireValue,
-          )
-          .timeout(timeout)
-      : await backend
-          .runTodoFollowupPrompt(
-            sessionKey,
-            prompt: prompt,
-            generationModeWireValue: generationMode.wireValue,
-          )
-          .timeout(timeout);
+  final response = await backend
+      .runTodoFollowupPromptCloudGateway(
+        sessionKey,
+        prompt: prompt,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+        generationModeWireValue: generationMode.wireValue,
+      )
+      .timeout(timeout);
 
   final parsed = parseTodoFollowupSuggestionJson(
     response,

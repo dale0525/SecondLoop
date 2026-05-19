@@ -1,14 +1,10 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../core/attachments/attachment_metadata_store.dart';
-import '../../core/backend/native_app_dir.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import 'package:secondloop/core/runtime_compat/api/content_extract.dart'
-    as rust_content_extract;
 import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
@@ -277,10 +273,6 @@ String attachmentCardAutoOcrStatusFromPayload(Map<String, Object?> payload) {
   return attachmentProcessingAutoOcrStatusFromPayload(payload);
 }
 
-bool _isAttachmentOcrRunning(Map<String, Object?> payload) {
-  return attachmentCardOcrInProgressFromPayload(payload);
-}
-
 bool attachmentCardOcrInProgressFromPayload(Map<String, Object?> payload) {
   return attachmentProcessingOcrInProgressFromPayload(payload);
 }
@@ -290,67 +282,13 @@ Future<_AttachmentCardPayloadSummary> _readPayloadSummaryFromPayload(
   required String attachmentSha256,
   required String mimeType,
 }) async {
-  try {
-    final appDir = await getNativeAppDir();
-    final payloadJson =
-        await rust_content_extract.dbReadAttachmentAnnotationPayloadJson(
-      appDir: appDir,
-      key: sessionKey,
-      attachmentSha256: attachmentSha256,
-    );
-    final raw = payloadJson?.trim();
-    if (raw == null || raw.isEmpty) {
-      return const _AttachmentCardPayloadSummary(
-        summary: null,
-        ocrRunning: false,
-        autoOcrStatus: '',
-        hasAnnotationPayload: false,
-        payload: null,
-      );
-    }
-
-    Object? decoded;
-    try {
-      decoded = jsonDecode(raw);
-    } catch (_) {
-      return const _AttachmentCardPayloadSummary(
-        summary: null,
-        ocrRunning: false,
-        autoOcrStatus: '',
-        hasAnnotationPayload: true,
-        payload: null,
-      );
-    }
-    if (decoded is! Map) {
-      return const _AttachmentCardPayloadSummary(
-        summary: null,
-        ocrRunning: false,
-        autoOcrStatus: '',
-        hasAnnotationPayload: true,
-        payload: null,
-      );
-    }
-    final payload = Map<String, Object?>.from(decoded);
-    final summary = extractAttachmentCardSummaryFromPayload(
-      payload,
-      mimeTypeHint: mimeType,
-    );
-    return _AttachmentCardPayloadSummary(
-      summary: summary,
-      ocrRunning: _isAttachmentOcrRunning(payload),
-      autoOcrStatus: attachmentCardAutoOcrStatusFromPayload(payload),
-      hasAnnotationPayload: true,
-      payload: payload,
-    );
-  } catch (_) {
-    return const _AttachmentCardPayloadSummary(
-      summary: null,
-      ocrRunning: false,
-      autoOcrStatus: '',
-      hasAnnotationPayload: false,
-      payload: null,
-    );
-  }
+  return const _AttachmentCardPayloadSummary(
+    summary: null,
+    ocrRunning: false,
+    autoOcrStatus: '',
+    hasAnnotationPayload: false,
+    payload: null,
+  );
 }
 
 String _normalizedTextSnippet(String? raw) {

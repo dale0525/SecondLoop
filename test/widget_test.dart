@@ -31,14 +31,14 @@ void main() {
       }
     }
 
-    expect(find.text('Set master password'), findsNothing);
+    expect(find.byKey(const ValueKey('setup_password')), findsNothing);
     expect(
       find.byKey(const ValueKey('agent_conversation_workspace')),
       findsOneWidget,
     );
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('deferred_session_key_b64_v1'), isNotEmpty);
+    expect(prefs.getString('deferred_session_key_b64_v1'), isNull);
     expect(backend.saveSessionKeyCalls, 0);
     expect(backend.loadSavedSessionKeyCalls, 0);
   });
@@ -77,12 +77,6 @@ class FakeBackend extends AppBackend {
     loadSavedSessionKeyCalls += 1;
     return null;
   }
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async => true;
 
   @override
   Future<void> clearSavedSessionKey() async {}

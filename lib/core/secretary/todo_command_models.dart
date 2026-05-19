@@ -11,7 +11,6 @@ enum SecretaryTodoCommandKind {
 
 enum SecretaryTodoCommandRoute {
   local,
-  byok,
   cloud,
 }
 
@@ -200,14 +199,12 @@ SecretaryTodoCommandKind _kindFromWire(String? value) {
 String _routeToWire(SecretaryTodoCommandRoute route) {
   return switch (route) {
     SecretaryTodoCommandRoute.local => 'local',
-    SecretaryTodoCommandRoute.byok => 'byok',
     SecretaryTodoCommandRoute.cloud => 'cloud',
   };
 }
 
 SecretaryTodoCommandRoute _routeFromWire(String? value) {
   return switch ((value ?? '').trim()) {
-    'byok' => SecretaryTodoCommandRoute.byok,
     'cloud' || 'cloud_gateway' => SecretaryTodoCommandRoute.cloud,
     _ => SecretaryTodoCommandRoute.local,
   };

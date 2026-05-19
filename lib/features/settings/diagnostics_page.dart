@@ -4,13 +4,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/backend/app_backend.dart';
-import '../../core/backend/native_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
-import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
@@ -18,8 +15,6 @@ import '../../core/sync/sync_diagnostics.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/update/update_event_log.dart';
 import '../../i18n/strings.g.dart';
-import 'package:secondloop/core/runtime_compat/api/sync_diagnostics.dart'
-    as rust_sync_diagnostics;
 import '../../web_app/web_formal_settings_scope.dart';
 
 class DiagnosticsPage extends StatefulWidget {
@@ -116,20 +111,9 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     };
   }
 
-  Map<String, Object?> _toStringKeyMap(Map<Object?, Object?> raw) {
-    final out = <String, Object?>{};
-    raw.forEach((key, value) {
-      out['$key'] = value;
-    });
-    return out;
-  }
-
   Future<Map<String, Object?>> _buildManagedVaultCursorRemoteDiagnostics({
-    required AppBackend backend,
     required SyncConfig? syncConfig,
-    required CloudAuthScope? cloudScope,
   }) async {
-    if (backend is! NativeAppBackend) return const <String, Object?>{};
     if (syncConfig?.backendType != SyncBackendType.managedVault) {
       return const <String, Object?>{};
     }
@@ -144,38 +128,10 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       };
     }
 
-    final idToken = await readCloudCapabilityIdToken(
-      cloudScope?.controller,
-      mode: CloudCapabilityAuthMode.interactive,
-    );
-
-    final token = idToken?.trim();
-    final appDir = (await getApplicationSupportDirectory()).path;
-    final payload =
-        await rust_sync_diagnostics.syncManagedVaultCursorDiagnostics(
-      appDir: appDir,
-      baseUrl: baseUrl,
-      vaultId: vaultId,
-      firebaseIdToken: (token == null || token.isEmpty) ? null : token,
-    );
-    final decoded = jsonDecode(payload);
-
-    if (decoded is Map<String, dynamic>) {
-      return <String, Object?>{
-        'managed_vault_cursor_remote_diagnostics':
-            Map<String, Object?>.from(decoded),
-      };
-    }
-    if (decoded is Map<Object?, Object?>) {
-      return <String, Object?>{
-        'managed_vault_cursor_remote_diagnostics': _toStringKeyMap(decoded),
-      };
-    }
-
     return const <String, Object?>{
       'managed_vault_cursor_remote_diagnostics': null,
       'managed_vault_cursor_remote_diagnostics_error':
-          'invalid_managed_vault_cursor_payload',
+          'runtime_first_remote_cursor_diagnostics_unavailable',
     };
   }
 
@@ -247,9 +203,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     try {
       managedVaultCursorRemoteDiagnostics =
           await _buildManagedVaultCursorRemoteDiagnostics(
-        backend: backend,
         syncConfig: syncConfig,
-        cloudScope: cloudScope,
       );
     } catch (e) {
       managedVaultCursorRemoteDiagnostics = <String, Object?>{

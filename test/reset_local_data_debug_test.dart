@@ -15,8 +15,16 @@ import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_i18n.dart';
 
+Future<void> _waitForResetCall(_FakeBackend backend) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 2));
+  while (
+      backend.resetVaultDataCalls == 0 && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 void main() {
-  testWidgets('Debug section exposes oplog maintenance action', (tester) async {
+  testWidgets('Debug section exposes local reset action', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     final backend = _FakeBackend(deviceId: 'deviceA');
@@ -37,15 +45,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    const tileKey = ValueKey('settings_debug_run_oplog_maintenance');
-    await tester.scrollUntilVisible(find.byKey(tileKey), 200);
+    await tester.scrollUntilVisible(
+      find.text('Debug: Reset local data'),
+      200,
+    );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(tileKey), findsOneWidget);
+    expect(find.text('Debug: Reset local data'), findsOneWidget);
   });
 
   testWidgets(
-      'Debug reset (all devices) clears local+remote synced data but preserves master password and local config',
+      'Debug reset clears local data but leaves runtime-hosted data and local config',
       (tester) async {
     Future<void> pumpAndSettleShort() async {
       await tester.pumpAndSettle(
@@ -122,37 +132,30 @@ void main() {
     await pumpAndSettleShort();
 
     await tester.scrollUntilVisible(
-      find.text('Debug: Reset local data (all devices)'),
+      find.text('Debug: Reset local data'),
       200,
     );
     await pumpAndSettleShort();
-    await tester
-        .ensureVisible(find.text('Debug: Reset local data (all devices)'));
+    await tester.ensureVisible(find.text('Debug: Reset local data'));
     await pumpAndSettleShort();
     await tester.runAsync(() async {
-      await tester.tap(find.text('Debug: Reset local data (all devices)'));
+      await tester.tap(find.text('Debug: Reset local data'));
     });
     await pumpAndSettleShort();
     expect(find.text('Reset local data?'), findsOneWidget);
     expect(
-      find.textContaining('app lock password'),
-      findsOneWidget,
+      find.textContaining('lock password'),
+      findsNothing,
     );
 
     await tester.runAsync(() async {
       await tester.tap(find.text('Reset'));
+      await _waitForResetCall(backend);
     });
     await pumpAndSettleShort();
     expect(find.textContaining('Reset failed:'), findsNothing);
 
-    await tester.runAsync(() async {
-      final deadline = DateTime.now().add(const Duration(seconds: 2));
-      while (!locked && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
-
-    expect(locked, isTrue);
+    expect(locked, isFalse);
     expect(authFile.existsSync(), isTrue);
     expect(dbFile.existsSync(), isTrue);
 
@@ -165,12 +168,12 @@ void main() {
     expect(
       Directory('${tempRemote.path}${Platform.pathSeparator}$remoteRoot')
           .existsSync(),
-      isFalse,
+      isTrue,
     );
   });
 
   testWidgets(
-      'Debug reset (all devices) continues local reset when remote clear times out',
+      'Debug reset ignores retired remote clear paths and still resets local data',
       (tester) async {
     Future<void> pumpAndSettleShort() async {
       await tester.pumpAndSettle(
@@ -250,34 +253,27 @@ void main() {
     await pumpAndSettleShort();
 
     await tester.scrollUntilVisible(
-      find.text('Debug: Reset local data (all devices)'),
+      find.text('Debug: Reset local data'),
       200,
     );
     await pumpAndSettleShort();
-    await tester
-        .ensureVisible(find.text('Debug: Reset local data (all devices)'));
+    await tester.ensureVisible(find.text('Debug: Reset local data'));
     await pumpAndSettleShort();
     await tester.runAsync(() async {
-      await tester.tap(find.text('Debug: Reset local data (all devices)'));
+      await tester.tap(find.text('Debug: Reset local data'));
     });
     await pumpAndSettleShort();
     expect(find.text('Reset local data?'), findsOneWidget);
 
     await tester.runAsync(() async {
       await tester.tap(find.text('Reset'));
+      await _waitForResetCall(backend);
     });
     await pumpAndSettleShort();
 
-    await tester.runAsync(() async {
-      final deadline = DateTime.now().add(const Duration(seconds: 2));
-      while (!locked && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
-
     expect(find.textContaining('Reset failed:'), findsNothing);
     expect(backend.resetVaultDataCalls, 1);
-    expect(locked, isTrue);
+    expect(locked, isFalse);
     expect(authFile.existsSync(), isTrue);
     expect(dbFile.existsSync(), isTrue);
   });
@@ -324,41 +320,35 @@ void main() {
     await pumpAndSettleShort();
 
     await tester.scrollUntilVisible(
-      find.text('Debug: Reset local data (all devices)'),
+      find.text('Debug: Reset local data'),
       200,
     );
     await pumpAndSettleShort();
-    await tester
-        .ensureVisible(find.text('Debug: Reset local data (all devices)'));
+    await tester.ensureVisible(find.text('Debug: Reset local data'));
     await pumpAndSettleShort();
     await tester.runAsync(() async {
-      await tester.tap(find.text('Debug: Reset local data (all devices)'));
+      await tester.tap(find.text('Debug: Reset local data'));
     });
     await pumpAndSettleShort();
     expect(find.text('Reset local data?'), findsOneWidget);
 
     await tester.runAsync(() async {
       await tester.tap(find.text('Reset'));
+      await _waitForResetCall(backend);
     });
     await pumpAndSettleShort();
-
-    await tester.runAsync(() async {
-      final deadline = DateTime.now().add(const Duration(seconds: 2));
-      while (!locked && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
 
     final prefs = await SharedPreferences.getInstance();
     expect(find.textContaining('Reset failed:'), findsNothing);
     expect(backend.resetVaultDataCalls, 1);
-    expect(backend.clearSavedSessionKeyCalls, 1);
+    expect(backend.clearSavedSessionKeyCalls, 0);
     expect(prefs.getBool('app_lock_enabled_v1'), isNull);
     expect(prefs.getBool('biometric_unlock_enabled_v1'), isNull);
-    expect(locked, isTrue);
+    expect(locked, isFalse);
   });
 
-  testWidgets('Debug reset (this device) clears only this device remote dir',
+  testWidgets(
+      'Debug reset (this device) leaves legacy remote directories alone',
       (tester) async {
     Future<void> pumpAndSettleShort() async {
       await tester.pumpAndSettle(
@@ -460,18 +450,12 @@ void main() {
 
     await tester.runAsync(() async {
       await tester.tap(find.text('Reset'));
+      await _waitForResetCall(backend);
     });
     await pumpAndSettleShort();
     expect(find.textContaining('Reset failed:'), findsNothing);
 
-    await tester.runAsync(() async {
-      final deadline = DateTime.now().add(const Duration(seconds: 2));
-      while (!locked && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
-
-    expect(locked, isTrue);
+    expect(locked, isFalse);
     expect(authFile.existsSync(), isTrue);
     expect(dbFile.existsSync(), isTrue);
 
@@ -479,7 +463,7 @@ void main() {
       Directory(
               '${tempRemote.path}${Platform.pathSeparator}$remoteRoot${Platform.pathSeparator}$deviceA')
           .existsSync(),
-      isFalse,
+      isTrue,
     );
     expect(
       Directory(
@@ -517,13 +501,6 @@ final class _FakeBackend extends AppBackend {
 
   @override
   Future<bool> isMasterPasswordSet() async => true;
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async => true;
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
-
   @override
   Future<Uint8List?> loadSavedSessionKey() async => null;
 

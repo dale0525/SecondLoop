@@ -35,10 +35,8 @@ bootstrap-shared-worktree-env = "bash scripts/bootstrap_shared_worktree_env.sh"
 
 # Release helpers (maintainers).
 # - release / release-app: auto-compute app tag with LLM and publish (triggers app release workflow)
-# - release-runtime: publish desktop runtime tag (triggers desktop + mobile runtime workflow)
 release = { cmd = "bash scripts/release_tag.sh", depends-on = ["bootstrap-shared-worktree-env"] }
 release-app = { cmd = "bash scripts/release_tag.sh", depends-on = ["bootstrap-shared-worktree-env"] }
-release-runtime = { cmd = "bash scripts/release_runtime_tag.sh", depends-on = ["bootstrap-shared-worktree-env"] }
 release-preflight = { cmd = "bash scripts/release_preflight.sh", depends-on = ["bootstrap-shared-worktree-env"] }
 
 # Cache cleanup (use when disk usage grows during long dev cycles).
@@ -72,15 +70,9 @@ run-android-cn = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondloopdev 
 build-android-apk-cn = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondloopdev SECONDLOOP_APP_NAME='SecondLoop Dev' && env SECONDLOOP_USE_CN_MIRRORS=1 FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn PUB_HOSTED_URL=https://pub.flutter-io.cn bash scripts/run_with_android_env.sh bash scripts/setup_android_sdk.sh && env SECONDLOOP_USE_CN_MIRRORS=1 FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn PUB_HOSTED_URL=https://pub.flutter-io.cn bash scripts/run_with_android_env.sh bash scripts/stop_gradle_daemons.sh && env SECONDLOOP_USE_CN_MIRRORS=1 FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn PUB_HOSTED_URL=https://pub.flutter-io.cn bash scripts/run_with_android_env.sh bash scripts/build_android_release_apk.sh", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }
 
 # Code/resource generation helpers.
-# - prepare-desktop-runtime-payload: materialize OCR models for runtime release packaging
-# - prepare-desktop-runtime: fetch + install desktop OCR runtime assets from release
-# - sync-desktop-runtime-to-appdir: mirror prepared desktop runtime into app support dir and stamp standard manifest
 # - i18n-sync: translate and refresh strings.g.dart
 # - icons-update: regenerate app icons (including macOS round-corner pre-processing)
 preview-local-web-app = { cmd = "bash scripts/preview_local_web_app.sh", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }
-prepare-desktop-runtime-payload = "bash scripts/prepare_desktop_runtime_payload.sh --output-dir assets/ocr/desktop_runtime"
-prepare-desktop-runtime = "dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart"
-sync-desktop-runtime-to-appdir = "dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart"
 i18n-normalize = "dart pub global run fvm:main flutter pub run slang normalize"
 i18n-gen = "dart pub global run fvm:main flutter pub run slang && dart pub global run fvm:main dart format lib/i18n/strings.g.dart"
 i18n-analyze = "bash scripts/run_i18n_analyze.sh"
@@ -90,7 +82,6 @@ i18n-sync = { depends-on = ["i18n-translate", "i18n-refresh"] }
 icons-macos-round = "python tools/round_icon.py --in assets/icon/app_icon.png --out assets/icon/app_icon_macos.png"
 icons-macos-check = "python tools/check_icon_corners.py --path assets/icon/app_icon_macos.png"
 icons-update = { cmd = "dart pub global run fvm:main dart run icons_launcher:create", depends-on = ["icons-macos-round", "icons-macos-check"] }
-prepare-ffmpeg = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart"
 
 [dependencies]
 python = "3.11.*"
@@ -102,18 +93,18 @@ openjdk = "17.*"
 
 [target.osx-arm64.dependencies]
 ruby = ">=3.4.8,<4"
+c-compiler = "*"
+cxx-compiler = "*"
 
 [target.osx-arm64.tasks]
-prepare-ffmpeg-macos = "bash scripts/setup_ffmpeg_macos.sh && dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=macos"
-run-macos = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondloopdev SECONDLOOP_APP_NAME='SecondLoop Dev' && gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1.16.2 && dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart --platform=macos && dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart --platform=macos && env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh run -d macos", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-macos"] }
+run-macos = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondloopdev SECONDLOOP_APP_NAME='SecondLoop Dev' && gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1.16.2 && env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh run -d macos", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }
 managed-pro-agent-ui-acceptance = { cmd = "bash scripts/run_managed_pro_agent_ui_acceptance.sh", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }
 
 [target.linux-64.dependencies]
 poppler = "*"
 tesseract = "*"
 [target.linux-64.tasks]
-prepare-ffmpeg-linux = "dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=linux"
-run-linux = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondloopdev SECONDLOOP_APP_NAME='SecondLoop Dev' && dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart --platform=linux --arch=x64 && dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart --platform=linux && bash scripts/flutter_with_defines.sh run -d linux", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-linux"] }
+run-linux = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondloopdev SECONDLOOP_APP_NAME='SecondLoop Dev' && bash scripts/flutter_with_defines.sh run -d linux", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }
 
 [target.win-64.dependencies]
 dotnet-sdk = "8.0.*"
@@ -137,8 +128,7 @@ init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env
 setup-flutter = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_flutter_windows.ps1"
 flutter = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_fvm_tool.ps1 -Tool flutter -Command {{ command }} {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
 dart = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_fvm_tool.ps1 -Tool dart -Command {{ command }} {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
-prepare-ffmpeg-windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare_ffmpeg_windows.ps1"
-run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1 -UseFlutterRun", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
-msi-dev = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
+run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1 -UseFlutterRun", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }
+msi-dev = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }
 uninstall-dev-msi = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall_windows_msi.ps1 -ProductName 'SecondLoop Dev' -InstallDirName 'SecondLoop Dev' -Quiet" }
-package-windows-velopack = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_velopack.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
+package-windows-velopack = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_velopack.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }

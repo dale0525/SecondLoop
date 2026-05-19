@@ -13,7 +13,7 @@ class Demo {
     Text(_title());
   }
 
-  String _title() => _isZh ? '设置应用锁密码' : 'Set app lock password';
+  String _title() => _isZh ? '设置备份密码' : 'Set backup password';
 
   bool get _isZh => true;
 }

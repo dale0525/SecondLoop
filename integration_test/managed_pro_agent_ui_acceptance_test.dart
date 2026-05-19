@@ -346,7 +346,6 @@ final class _ManagedProAcceptanceApp extends StatelessWidget {
                   child: AppPlatformCapabilityScope(
                     capabilities: const AppPlatformCapabilities(
                       supportsDesktopHotkey: true,
-                      supportsBiometricUnlock: false,
                       supportsAudioRecording: false,
                       supportsDesktopDrop: true,
                       supportsDesktopBootSettings: true,
