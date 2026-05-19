@@ -21,13 +21,15 @@ class CloudGatewayConfig {
   );
 }
 
-class CloudAuthScope extends InheritedWidget {
+class CloudAuthScope extends InheritedNotifier<Listenable> {
   const CloudAuthScope({
     required this.controller,
     required super.child,
     this.gatewayConfig = CloudGatewayConfig.defaultConfig,
     super.key,
-  });
+  }) : super(
+          notifier: controller is Listenable ? controller as Listenable : null,
+        );
 
   final CloudAuthController controller;
   final CloudGatewayConfig gatewayConfig;
@@ -44,6 +46,7 @@ class CloudAuthScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(CloudAuthScope oldWidget) =>
+      super.updateShouldNotify(oldWidget) ||
       controller != oldWidget.controller ||
       gatewayConfig.baseUrl != oldWidget.gatewayConfig.baseUrl ||
       gatewayConfig.modelName != oldWidget.gatewayConfig.modelName;

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'runtime_agent_state_models.dart';
 import 'runtime_api_client.dart';
 import 'secretary_runtime_conversation_models.dart';
 
@@ -222,6 +223,22 @@ final class SecretaryRuntimeClient {
       },
     );
     return SecretaryRuntimeConversationResult.fromJson(
+      Map<String, dynamic>.from(response ?? const <String, dynamic>{}),
+    );
+  }
+
+  Future<RuntimeAgentState> fetchAgentState(
+    String vaultId, {
+    required String conversationId,
+  }) async {
+    final query = Uri(queryParameters: <String, String>{
+      if (conversationId.trim().isNotEmpty)
+        'conversation_id': conversationId.trim(),
+    }).query;
+    final response = await _apiClient.getJson(
+      '/v1/runtime/vaults/$vaultId/agent-state${query.isEmpty ? '' : '?$query'}',
+    );
+    return RuntimeAgentState.fromJson(
       Map<String, dynamic>.from(response ?? const <String, dynamic>{}),
     );
   }

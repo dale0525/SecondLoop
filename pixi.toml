@@ -42,6 +42,7 @@ release-preflight = { cmd = "bash scripts/release_preflight.sh", depends-on = ["
 # Cache cleanup (use when disk usage grows during long dev cycles).
 clean-unused-cache = "bash scripts/clean_unused_cache.sh"
 reset-local-dev-data = "python scripts/reset_local_dev_data.py"
+verify-empty-local-dev-data = "python scripts/reset_local_dev_data.py --verify-empty"
 
 # Quality gates (before sharing or opening a PR).
 # - fmt: auto-fix formatting

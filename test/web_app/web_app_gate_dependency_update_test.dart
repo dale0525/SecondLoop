@@ -44,7 +44,7 @@ void main() {
   });
 
   testWidgets(
-      'WebAppGate reruns initial sync when managed vault base url changes',
+      'WebAppGate does not run legacy managed vault pull when base url changes',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final controller = _FakeObservableCloudAuthController(uid: 'uid-2');
@@ -63,11 +63,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(backend.syncManagedVaultPullCalls, 1);
-    expect(
-      backend.lastManagedVaultBaseUrl,
-      'https://vault-a.secondloop.example',
-    );
+    expect(backend.syncManagedVaultPullCalls, 0);
+    expect(backend.lastManagedVaultBaseUrl, isNull);
 
     await tester.pumpWidget(
       _buildApp(
@@ -79,11 +76,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(backend.syncManagedVaultPullCalls, 2);
-    expect(
-      backend.lastManagedVaultBaseUrl,
-      'https://vault-b.secondloop.example',
-    );
+    expect(backend.syncManagedVaultPullCalls, 0);
+    expect(backend.lastManagedVaultBaseUrl, isNull);
   });
 }
 

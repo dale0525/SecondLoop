@@ -26,7 +26,8 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Debug reset clears remote data using web formal scoped config',
+  testWidgets(
+      'Debug reset leaves remote data unchanged when clearing local data',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final defaultRemote = Directory.systemTemp.createTempSync('sl_default_');
@@ -51,27 +52,23 @@ void main() {
     final defaultSentinel = _writeRemoteSentinel(defaultRemote, 'DefaultRoot');
     final scopedSentinel = _writeRemoteSentinel(scopedRemote, 'ScopedRoot');
     final backend = _ResetDebugBackend(deviceId: 'deviceA');
-    var locked = false;
 
     await _pumpSettings(
       tester,
       backend: backend,
-      lock: () => locked = true,
+      lock: () {},
       webStore: scopedStore,
     );
 
     await _tapDebugReset(tester, allDevices: true);
-    await _waitUntil(tester, () => locked);
 
-    expect(backend.clearLocalDirCalls, hasLength(1));
-    expect(backend.clearLocalDirCalls.single.localDir, scopedRemote.path);
-    expect(backend.clearLocalDirCalls.single.remoteRoot, 'ScopedRoot');
-    expect(scopedSentinel.existsSync(), isFalse);
+    expect(backend.clearLocalDirCalls, isEmpty);
+    expect(backend.resetVaultDataCalls, 1);
+    expect(scopedSentinel.existsSync(), isTrue);
     expect(defaultSentinel.existsSync(), isTrue);
   });
 
-  testWidgets(
-      'Debug reset waits for in-flight sync before clearing remote data',
+  testWidgets('Debug reset waits for in-flight sync before clearing local data',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final remote = Directory.systemTemp.createTempSync('sl_remote_');
@@ -112,16 +109,15 @@ void main() {
     var remoteClearStartedBeforePushCompleted = false;
     final backend = _ResetDebugBackend(
       deviceId: 'deviceA',
-      onBeforeClearRemoteRoot: () {
+      onBeforeResetVaultData: () {
         remoteClearStartedBeforePushCompleted = !pushCompleted;
       },
     );
-    var locked = false;
 
     await _pumpSettings(
       tester,
       backend: backend,
-      lock: () => locked = true,
+      lock: () {},
       engine: engine,
     );
 
@@ -133,17 +129,16 @@ void main() {
     );
 
     expect(backend.clearLocalDirCalls, isEmpty);
-    expect(locked, isFalse);
+    expect(backend.resetVaultDataCalls, 0);
 
     releasePush.complete();
-    await _waitUntil(tester, () => locked);
+    await _waitUntil(tester, () => backend.resetVaultDataCalls == 1);
 
-    expect(backend.clearLocalDirCalls, hasLength(1));
+    expect(backend.clearLocalDirCalls, isEmpty);
     expect(remoteClearStartedBeforePushCompleted, isFalse);
   });
 
-  testWidgets(
-      'Debug reset disables auto sync when local reset fails after remote clear',
+  testWidgets('Debug reset restarts auto sync when local reset fails',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final remote = Directory.systemTemp.createTempSync('sl_remote_');
@@ -170,27 +165,28 @@ void main() {
       deviceId: 'deviceA',
       resetVaultDataError: StateError('local reset failed'),
     );
-    var locked = false;
 
     await _pumpSettings(
       tester,
       backend: backend,
-      lock: () => locked = true,
+      lock: () {},
       engine: engine,
     );
 
     await _tapDebugReset(tester, allDevices: true);
     await tester.pumpAndSettle();
 
-    expect(backend.clearLocalDirCalls, hasLength(1));
+    expect(backend.clearLocalDirCalls, isEmpty);
     expect(backend.resetVaultDataCalls, 1);
-    expect(await store.readAutoEnabled(), isFalse);
-    expect(engine.isRunning, isFalse);
+    expect(await store.readAutoEnabled(), isTrue);
+    expect(engine.isRunning, isTrue);
     expect(backend.clearSavedSessionKeyCalls, 0);
-    expect(locked, isFalse);
+    engine.stopImmediately();
+    await tester.pump();
   });
 
-  testWidgets('Debug reset restarts sync engine when remote clear fails first',
+  testWidgets(
+      'Debug reset keeps sync engine stopped after successful local reset',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final remote = Directory.systemTemp.createTempSync('sl_remote_');
@@ -213,27 +209,22 @@ void main() {
     )..start();
     addTearDown(engine.stopImmediately);
 
-    final backend = _ResetDebugBackend(
-      deviceId: 'deviceA',
-      clearRemoteRootError: StateError('remote clear failed'),
-    );
-    var locked = false;
+    final backend = _ResetDebugBackend(deviceId: 'deviceA');
 
     await _pumpSettings(
       tester,
       backend: backend,
-      lock: () => locked = true,
+      lock: () {},
       engine: engine,
     );
 
     await _tapDebugReset(tester, allDevices: true);
     await tester.pumpAndSettle();
 
-    expect(backend.clearLocalDirCalls, hasLength(1));
-    expect(backend.resetVaultDataCalls, 0);
+    expect(backend.clearLocalDirCalls, isEmpty);
+    expect(backend.resetVaultDataCalls, 1);
     expect(await store.readAutoEnabled(), isTrue);
-    expect(engine.isRunning, isTrue);
-    expect(locked, isFalse);
+    expect(engine.isRunning, isFalse);
     engine.stopImmediately();
     await tester.pump();
   });
@@ -311,7 +302,11 @@ Future<void> _tapDebugReset(
 }) async {
   await _openDebugResetDialog(tester, allDevices: allDevices);
   await tester.tap(find.text('Reset'));
-  await tester.pump();
+  await tester.pumpAndSettle(
+    const Duration(milliseconds: 100),
+    EnginePhase.sendSemanticsUpdate,
+    const Duration(seconds: 2),
+  );
 }
 
 Future<void> _openDebugResetDialog(
@@ -319,7 +314,7 @@ Future<void> _openDebugResetDialog(
   required bool allDevices,
 }) async {
   final label = allDevices
-      ? 'Debug: Reset local data (all devices)'
+      ? 'Debug: Reset local data'
       : 'Debug: Reset local data (this device)';
   await tester.scrollUntilVisible(find.text(label), 200);
   await tester.pumpAndSettle(
@@ -369,14 +364,12 @@ WebFormalSettingsDependencies _webFormalDependencies(SyncConfigStore store) {
 final class _ResetDebugBackend extends TestAppBackend {
   _ResetDebugBackend({
     required this.deviceId,
-    this.onBeforeClearRemoteRoot,
-    this.clearRemoteRootError,
+    this.onBeforeResetVaultData,
     this.resetVaultDataError,
   });
 
   final String deviceId;
-  final VoidCallback? onBeforeClearRemoteRoot;
-  final Object? clearRemoteRootError;
+  final VoidCallback? onBeforeResetVaultData;
   final Object? resetVaultDataError;
   final List<({String localDir, String remoteRoot})> clearLocalDirCalls = [];
   int resetVaultDataCalls = 0;
@@ -390,12 +383,7 @@ final class _ResetDebugBackend extends TestAppBackend {
     required String localDir,
     required String remoteRoot,
   }) async {
-    onBeforeClearRemoteRoot?.call();
     clearLocalDirCalls.add((localDir: localDir, remoteRoot: remoteRoot));
-    final clearRemoteRootError = this.clearRemoteRootError;
-    if (clearRemoteRootError != null) {
-      throw clearRemoteRootError;
-    }
     final dir = Directory('$localDir${Platform.pathSeparator}$remoteRoot');
     if (dir.existsSync()) {
       dir.deleteSync(recursive: true);
@@ -404,6 +392,7 @@ final class _ResetDebugBackend extends TestAppBackend {
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
+    onBeforeResetVaultData?.call();
     resetVaultDataCalls += 1;
     final resetVaultDataError = this.resetVaultDataError;
     if (resetVaultDataError != null) {

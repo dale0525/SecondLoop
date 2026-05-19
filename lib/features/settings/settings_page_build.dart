@@ -327,6 +327,9 @@ extension _SettingsPageBuild on _SettingsPageState {
           const SizedBox(height: 8),
           sectionCard([
             ListTile(
+              key: const ValueKey(
+                'settings_debug_reset_local_data_this_device',
+              ),
               title: Text(context
                   .t.settingsReset.debugResetLocalDataThisDeviceOnly.title),
               subtitle: Text(context
@@ -338,6 +341,9 @@ extension _SettingsPageBuild on _SettingsPageState {
                       ),
             ),
             ListTile(
+              key: const ValueKey(
+                'settings_debug_reset_local_data_runtime_hosted_data_unchanged',
+              ),
               title: Text(context.t.settingsReset
                   .debugResetLocalDataRuntimeHostedDataUnchanged.title),
               subtitle: Text(context.t.settingsReset

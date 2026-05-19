@@ -1,0 +1,526 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/secretary_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/cloud/runtime_agent_state_models.dart';
+import 'package:secondloop/core/cloud/runtime_agent_state_repository.dart';
+import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
+
+import 'test_backend.dart';
+import 'test_i18n.dart';
+
+void main() {
+  testWidgets(
+    'managed pro conversation reads right rail tasks and memories from runtime state',
+    (tester) async {
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [
+            {
+              'turn_id': 'turn-1',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'assistant',
+              'content': 'Runtime state loaded.',
+              'created_at_ms': 1700000000000,
+            }
+          ],
+          'working_set_records': [],
+          'tasks': [
+            {
+              'id': 'task-weekly',
+              'kind': 'task',
+              'title': '完成周报',
+              'status': 'open',
+            }
+          ],
+          'memory_records': [
+            {
+              'id': 'memory-language',
+              'kind': 'memory',
+              'text': '任务回复请使用中文',
+            }
+          ],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [],
+          'latest_context_snapshot': null,
+          'audit_refs': [],
+        }),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1012, 701));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: _ThrowingLocalStoreBackend(),
+              child: CloudAuthScope(
+                controller: _CloudAuthController(),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.example.test',
+                  modelName: 'cloud',
+                ),
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeAgentStateRepository: repository,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.requests, [('uid_1', 'loop_home')]);
+      expect(find.text('Runtime state loaded.'), findsOneWidget);
+      expect(find.textContaining('完成周报'), findsWidgets);
+      expect(find.textContaining('任务回复请使用中文'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'managed pro conversation right rail merges runtime memory when context snapshot is stale',
+    (tester) async {
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [
+            {
+              'turn_id': 'turn-1',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'assistant',
+              'content': 'Runtime state loaded.',
+              'created_at_ms': 1700000000000,
+            }
+          ],
+          'working_set_records': [],
+          'tasks': [],
+          'memory_records': [
+            {
+              'id': 'memory-birthday',
+              'kind': 'memory',
+              'text': '孩子生日是 2018 年 6 月 1 日',
+              'state': 'active',
+            }
+          ],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [],
+          'latest_context_snapshot': {
+            'id': 'context-snapshot-stale',
+            'generated_at_ms': 1700000000000,
+            'packet': {
+              'conversation_id': 'loop_home',
+              'working_set': {'records': []},
+              'memory_records': [],
+            },
+          },
+          'audit_refs': [],
+        }),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1012, 701));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: _ThrowingLocalStoreBackend(),
+              child: CloudAuthScope(
+                controller: _CloudAuthController(),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.example.test',
+                  modelName: 'cloud',
+                ),
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeAgentStateRepository: repository,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.requests, [('uid_1', 'loop_home')]);
+      expect(find.textContaining('孩子生日是 2018 年 6 月 1 日'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'managed pro conversation right rail prefers current runtime task title over stale context snapshot',
+    (tester) async {
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [
+            {
+              'turn_id': 'turn-1',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'assistant',
+              'content': 'Runtime state loaded.',
+              'created_at_ms': 1700000000000,
+            }
+          ],
+          'working_set_records': [],
+          'tasks': [
+            {
+              'id': 'task-expense',
+              'kind': 'task',
+              'title': '提交报销',
+              'status': 'open',
+            }
+          ],
+          'memory_records': [],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [],
+          'latest_context_snapshot': {
+            'id': 'context-snapshot-stale-task',
+            'generated_at_ms': 1700000000000,
+            'packet': {
+              'conversation_id': 'loop_home',
+              'working_set': {
+                'records': [
+                  {
+                    'id': 'task-expense',
+                    'kind': 'task',
+                    'title': '整理报销材料',
+                    'status': 'open',
+                  }
+                ],
+              },
+            },
+          },
+          'audit_refs': [],
+        }),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1012, 701));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: _ThrowingLocalStoreBackend(),
+              child: CloudAuthScope(
+                controller: _CloudAuthController(),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.example.test',
+                  modelName: 'cloud',
+                ),
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeAgentStateRepository: repository,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.requests, [('uid_1', 'loop_home')]);
+      expect(find.textContaining('提交报销'), findsWidgets);
+      expect(find.textContaining('整理报销材料'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'managed pro conversation loads runtime state after cloud auth warms',
+    (tester) async {
+      final controller = _MutableCloudAuthController();
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [
+            {
+              'turn_id': 'turn-restored',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'assistant',
+              'content': '重启后从 runtime 恢复的聊天记录。',
+              'created_at_ms': 1700000000000,
+            }
+          ],
+          'working_set_records': [],
+          'tasks': [],
+          'memory_records': [],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [],
+          'latest_context_snapshot': null,
+          'audit_refs': [],
+        }),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1012, 701));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: TestAppBackend(),
+              child: CloudAuthScope(
+                controller: controller,
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.example.test',
+                  modelName: 'cloud',
+                ),
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeAgentStateRepository: repository,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.requests, isEmpty);
+      expect(find.text('重启后从 runtime 恢复的聊天记录。'), findsNothing);
+
+      controller.setUid('uid_1');
+      await tester.pumpAndSettle();
+
+      expect(repository.requests, [('uid_1', 'loop_home')]);
+      expect(find.text('重启后从 runtime 恢复的聊天记录。'), findsOneWidget);
+    },
+  );
+}
+
+final class _FakeRuntimeAgentStateRepository
+    implements RuntimeAgentStateRepository {
+  _FakeRuntimeAgentStateRepository(this.state);
+
+  final RuntimeAgentState state;
+  final List<(String, String)> requests = <(String, String)>[];
+
+  @override
+  Future<RuntimeAgentState> fetchAgentState({
+    required String vaultId,
+    required String conversationId,
+  }) async {
+    requests.add((vaultId, conversationId));
+    return state;
+  }
+}
+
+final class _ThrowingLocalStoreBackend extends TestAppBackend
+    implements SecretaryBackend {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<Todo>> listTodos(Uint8List key) async {
+    throw StateError('listTodos should not be used');
+  }
+
+  @override
+  Future<List<MemoryPageRecord>> listMemoryPages(
+    Uint8List key, {
+    String? state,
+  }) async {
+    throw StateError('listMemoryPages should not be used');
+  }
+
+  @override
+  Future<SecretaryMemoryProposalRecord> createSecretaryMemoryProposal(
+    Uint8List key, {
+    String? sourceMessageId,
+    required String kind,
+    required String title,
+    required String body,
+    required double confidence,
+    String? sourceRefsJson,
+    String? actionHint,
+    required int nowMs,
+  }) async {
+    throw StateError('createSecretaryMemoryProposal should not be used');
+  }
+
+  @override
+  Future<List<SecretaryMemoryProposalRecord>> listSecretaryMemoryProposals(
+    Uint8List key, {
+    String? state,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MemoryPageRecord> acceptSecretaryMemoryProposal(
+    Uint8List key, {
+    required String proposalId,
+    required int nowMs,
+  }) async {
+    throw StateError('acceptSecretaryMemoryProposal should not be used');
+  }
+
+  @override
+  Future<SecretaryMemoryProposalRecord> dismissSecretaryMemoryProposal(
+    Uint8List key, {
+    required String proposalId,
+    required int nowMs,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MemoryPageRecord> getMemoryPage(
+    Uint8List key, {
+    required String pageId,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MemoryPageRecord> correctMemoryPage(
+    Uint8List key, {
+    required String pageId,
+    required String title,
+    required String summary,
+    required String body,
+    String? reason,
+    required int nowMs,
+  }) async {
+    throw UnimplementedError();
+  }
+}
+
+final class _CloudAuthController implements CloudAuthController {
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  String? get email => 'qa@example.com';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  Future<String?> getIdToken() async => 'id-token';
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}
+
+final class _MutableCloudAuthController extends ChangeNotifier
+    implements CloudAuthController {
+  String? _uid;
+
+  void setUid(String? value) {
+    _uid = value;
+    notifyListeners();
+  }
+
+  @override
+  String? get uid => _uid;
+
+  @override
+  String? get email => 'qa@example.com';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  Future<String?> getIdToken() async => 'id-token';
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async => setUid(null);
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}

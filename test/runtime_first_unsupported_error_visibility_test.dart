@@ -38,7 +38,7 @@ void main() {
     }
   });
 
-  test('runtime memory dedupe exposes unsupported backend capability',
+  test('runtime memory mutations do not call unsupported local memory backend',
       () async {
     final backend = _UnsupportedMemoryBackend();
     final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
@@ -78,13 +78,7 @@ void main() {
         sessionKey: sessionKey,
         sourceMessageId: 'm-user-memory',
       ),
-      throwsA(
-        isA<UnsupportedError>().having(
-          (error) => error.message,
-          'message',
-          contains('rust_runtime_removed:dbListMemoryPages'),
-        ),
-      ),
+      completes,
     );
     expect(backend.createProposalCalls, 0);
   });

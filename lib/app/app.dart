@@ -89,11 +89,18 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
     unawaited(AppThemePalettePrefs.ensureInitialized());
     unawaited(UpdateBadgePrefs.ensureInitialized());
     _cloudAuthController.addListener(_onCloudAuthChanged);
+    unawaited(_warmCloudAuthOnStartup());
     unawaited(_subscriptionController.refresh());
   }
 
   void _onCloudAuthChanged() {
     unawaited(_subscriptionController.refresh());
+  }
+
+  Future<void> _warmCloudAuthOnStartup() async {
+    await bestEffortWarmCloudAuth(_cloudAuthController);
+    if (!mounted) return;
+    await _subscriptionController.refresh();
   }
 
   @override
@@ -370,8 +377,5 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
 InheritedScopeCapture? resolveRootSettingsInheritedScopes(
   InheritedScopeCapture? capturedScopes,
 ) {
-  if (capturedScopes == null || capturedScopes.isEmpty) {
-    return null;
-  }
-  return capturedScopes;
+  return filterCapturedScopesForActiveSession(capturedScopes);
 }

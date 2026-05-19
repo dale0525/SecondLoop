@@ -78,7 +78,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('settings_debug_run_oplog_maintenance')),
+      find.byKey(const ValueKey(
+        'settings_debug_reset_local_data_this_device',
+      )),
       200,
       scrollable: find.byType(Scrollable),
     );

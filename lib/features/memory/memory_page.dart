@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/secretary_backend.dart';
+import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/runtime_agent_state_repository.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import '../agent_ui/agent_design_tokens.dart';
+import '../agent_ui/agent_task_summary.dart';
 import '../agent_ui/agent_tab_bar.dart';
 import 'memory_models.dart';
 import 'memory_widgets.dart';
@@ -13,10 +16,14 @@ import 'memory_widgets.dart';
 final class MemoryPage extends StatefulWidget {
   const MemoryPage({
     this.data,
+    this.runtimeAgentStateRepository,
+    this.conversationId = 'loop_home',
     super.key,
   });
 
   final MemoryDemoData? data;
+  final RuntimeAgentStateRepository? runtimeAgentStateRepository;
+  final String conversationId;
 
   @override
   State<MemoryPage> createState() => _MemoryPageState();
@@ -43,6 +50,25 @@ final class _MemoryPageState extends State<MemoryPage> {
   }
 
   Future<MemoryDemoData> _loadData() async {
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
+    final repository = widget.runtimeAgentStateRepository ??
+        (cloudAuthScope == null || vaultId.isEmpty
+            ? null
+            : SecretaryRuntimeAgentStateRepository.hostedManagedPro(
+                apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
+                hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
+              ));
+    if (repository != null && vaultId.isNotEmpty) {
+      final state = await repository.fetchAgentState(
+        vaultId: vaultId,
+        conversationId: widget.conversationId,
+      );
+      return _memoryDataFromPages(
+        agentMemoryPagesFromRuntimeRecords(state.memoryRecords),
+      );
+    }
+
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
     if (backend is! SecretaryBackend || session == null) {

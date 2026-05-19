@@ -94,6 +94,12 @@ def build_suite() -> AcceptanceSuite:
             requires_staging_reset=True,
         ),
         EvidenceCommand(
+            "verify_empty_local_dev_data",
+            "Verify local SecondLoop Dev app data, preferences, and secure blob are empty.",
+            ("pixi", "run", "verify-empty-local-dev-data"),
+            requires_staging_reset=True,
+        ),
+        EvidenceCommand(
             "reset_cloud_runtime_local",
             "Reset local Cloudflare runtime test resources.",
             ("pixi", "run", "reset-cloud-runtime-local"),
@@ -111,6 +117,13 @@ def build_suite() -> AcceptanceSuite:
             "managed_vault_wipe_staging",
             "Wipe staging managed vault data.",
             ("pixi", "run", "managed-vault-wipe-staging"),
+            cwd="server",
+            requires_staging_reset=True,
+        ),
+        EvidenceCommand(
+            "verify_empty_cloud_runtime_staging",
+            "Verify staging runtime and vault snapshots are empty after reset.",
+            ("pixi", "run", "verify-empty-cloud-runtime-staging"),
             cwd="server",
             requires_staging_reset=True,
         ),
@@ -152,7 +165,11 @@ def build_suite() -> AcceptanceSuite:
                 "test",
                 "test/quick_capture_runtime_first_semantics_test.dart "
                 "test/quick_capture_test.dart "
-                "test/agent_conversation_test.dart",
+                "test/agent_conversation_test.dart "
+                "test/agent_conversation_runtime_state_source_test.dart "
+                "test/agent_task_runtime_state_source_test.dart "
+                "test/memory_page_runtime_state_source_test.dart "
+                "test/runtime_secretary_app_service_authority_test.dart",
             ),
         ),
         EvidenceCommand(
@@ -201,6 +218,8 @@ def build_suite() -> AcceptanceSuite:
                 "reset_cloud_runtime_local",
                 "reset_cloud_runtime_staging",
                 "managed_vault_wipe_staging",
+                "verify_empty_cloud_runtime_staging",
+                "verify_empty_local_dev_data",
             ),
             ("Remote staging reset is guarded by --include-staging-reset.",),
         ),

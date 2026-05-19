@@ -11,6 +11,7 @@ import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
+import '../sync/sync_key_manager.dart';
 import '../../web_app/web_formal_settings_scope.dart';
 
 const double _kWebFormalSettingsRouteMaxWidth = 1120;
@@ -75,6 +76,19 @@ InheritedScopeCapture? maybeCaptureInheritedScopes(BuildContext? context) {
   }
   final captured = captureInheritedScopes(context);
   return captured.isEmpty ? null : captured;
+}
+
+InheritedScopeCapture? filterCapturedScopesForActiveSession(
+  InheritedScopeCapture? capturedScopes,
+) {
+  if (capturedScopes == null || capturedScopes.isEmpty) {
+    return null;
+  }
+  final sessionKey = capturedScopes.sessionKey;
+  if (sessionKey != null && !SyncKeyManager.matchesSessionKey(sessionKey)) {
+    return null;
+  }
+  return capturedScopes;
 }
 
 Widget wrapPushedPageWithInheritedScopeCapture(

@@ -532,6 +532,9 @@ final class _UnlockedBackend extends AppBackend {
       const [];
 
   @override
+  Future<List<Todo>> listTodos(Uint8List key) async => const <Todo>[];
+
+  @override
   Future<Message> insertMessage(
     Uint8List key,
     String conversationId, {

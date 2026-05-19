@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/secretary_backend.dart';
+import '../../core/cloud/runtime_agent_state_models.dart';
+import '../../core/cloud/runtime_agent_state_repository.dart';
 import '../../core/cloud/runtime_secretary_app_service.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/secretary_runtime_client.dart';
@@ -57,12 +59,14 @@ final class AgentConversationPage extends StatefulWidget {
     required this.conversation,
     required this.isTabActive,
     this.runtimeConversationSender,
+    this.runtimeAgentStateRepository,
     super.key,
   });
 
   final Conversation conversation;
   final bool isTabActive;
   final ChatRuntimeConversationSender? runtimeConversationSender;
+  final RuntimeAgentStateRepository? runtimeAgentStateRepository;
 
   @override
   State<AgentConversationPage> createState() => _AgentConversationPageState();
@@ -83,12 +87,14 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   Future<List<Message>>? _messagesFuture;
   Future<List<Todo>>? _tasksFuture;
   Future<List<MemoryPageRecord>>? _memoryPagesFuture;
+  Future<RuntimeAgentState>? _runtimeAgentStateFuture;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
   QuickCaptureController? _quickCaptureController;
   List<Message> _messages = const <Message>[];
   List<Todo> _todos = const <Todo>[];
   List<MemoryPageRecord> _memoryPages = const <MemoryPageRecord>[];
+  RuntimeAgentState? _runtimeAgentState;
   String? _pendingUserContent;
   String _streamingAnswer = '';
   String _streamingReasoning = '';
@@ -107,9 +113,15 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _messagesFuture ??= _loadMessages();
-    _tasksFuture ??= _loadTasks();
-    _memoryPagesFuture ??= _loadMemoryPages();
+    if (_usesRuntimeAgentState) {
+      _runtimeAgentStateFuture ??= _loadRuntimeAgentState();
+      _messagesFuture =
+          _runtimeAgentStateFuture!.then((_) => List<Message>.from(_messages));
+    } else {
+      _messagesFuture ??= _loadMessages();
+      _tasksFuture ??= _loadTasks();
+      _memoryPagesFuture ??= _loadMemoryPages();
+    }
     _attachSyncEngine();
     _attachQuickCaptureController();
   }
@@ -138,6 +150,92 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       _scrollToLatest();
     }
     return messages;
+  }
+
+  bool get _usesRuntimeAgentState {
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
+    return cloudAuthScope != null &&
+        vaultId.isNotEmpty &&
+        (widget.runtimeAgentStateRepository != null ||
+            widget.runtimeConversationSender == null);
+  }
+
+  RuntimeAgentStateRepository? _runtimeStateRepository() {
+    final configured = widget.runtimeAgentStateRepository;
+    if (configured != null) return configured;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    if (cloudAuthScope == null) return null;
+    return SecretaryRuntimeAgentStateRepository.hostedManagedPro(
+      apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
+      hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
+    );
+  }
+
+  Future<RuntimeAgentState> _loadRuntimeAgentState() async {
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
+    final repository = _runtimeStateRepository();
+    if (repository == null || vaultId.isEmpty) {
+      return RuntimeAgentState.empty(
+        vaultId: vaultId,
+        conversationId: widget.conversation.id,
+      );
+    }
+    final state = await repository.fetchAgentState(
+      vaultId: vaultId,
+      conversationId: widget.conversation.id,
+    );
+    if (mounted) {
+      setState(() {
+        _runtimeAgentState = state;
+        _messages = _messagesFromRuntimeTurns(state.conversationTurns);
+        _todos = agentTodosFromRuntimeState(state);
+        _memoryPages = agentMemoryPagesFromRuntimeRecords(state.memoryRecords);
+        _runtimeApprovalItems = _validApprovalItems(
+          state.approvalItems
+              .map(
+                (item) => SecretaryRuntimeApprovalItem.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList(growable: false),
+        );
+      });
+      _scrollToLatest();
+    }
+    return state;
+  }
+
+  List<Message> _messagesFromRuntimeTurns(
+    List<RuntimeConversationTurn> turns,
+  ) {
+    return turns.map((turn) {
+      return Message(
+        id: turn.turnId,
+        conversationId: turn.conversationId,
+        role: turn.role,
+        content: turn.content,
+        createdAtMs: turn.createdAtMs,
+        isMemory: true,
+        citationsJson: turn.citationsJson,
+      );
+    }).toList(growable: false);
+  }
+
+  Future<void> _refreshVisibleState() async {
+    if (_usesRuntimeAgentState) {
+      final future = _loadRuntimeAgentState();
+      _runtimeAgentStateFuture = future;
+      _messagesFuture = future.then((_) => List<Message>.from(_messages));
+      await future;
+      return;
+    }
+    await Future.wait<Object>([
+      _loadMessages(),
+      _loadTasks(),
+      _loadMemoryPages(),
+    ]);
   }
 
   Future<List<Todo>> _loadTasks() async {
@@ -184,9 +282,15 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
     void onSyncChange() {
       if (!mounted) return;
       setState(() {
-        _messagesFuture = _loadMessages();
-        _tasksFuture = _loadTasks();
-        _memoryPagesFuture = _loadMemoryPages();
+        if (_usesRuntimeAgentState) {
+          _runtimeAgentStateFuture = _loadRuntimeAgentState();
+          _messagesFuture = _runtimeAgentStateFuture!
+              .then((_) => List<Message>.from(_messages));
+        } else {
+          _messagesFuture = _loadMessages();
+          _tasksFuture = _loadTasks();
+          _memoryPagesFuture = _loadMemoryPages();
+        }
       });
     }
 
@@ -259,15 +363,13 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
 
       if (result.routeKind == AskAiRouteKind.cloudGateway) {
         syncEngine?.notifyExternalChange();
-        await Future.wait<Object>([
-          _loadMessages(),
-          _loadTasks(),
-          _loadMemoryPages(),
-        ]);
+        await _refreshVisibleState();
         if (!mounted) return;
         setState(() {
           _runtimeApprovalItems = _validApprovalItems(
-            result.approvalItems,
+            _runtimeApprovalItems.isEmpty
+                ? result.approvalItems
+                : _runtimeApprovalItems,
           );
           _pendingUserContent = null;
           _streamingAnswer = '';
@@ -487,11 +589,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       if (!mounted) return;
 
       SyncEngineScope.maybeOf(context)?.notifyExternalChange();
-      await Future.wait<Object>([
-        _loadMessages(),
-        _loadTasks(),
-        _loadMemoryPages(),
-      ]);
+      await _refreshVisibleState();
       if (!mounted) return;
       setState(() {
         _runtimeApprovalItems = _runtimeApprovalItems
@@ -571,8 +669,11 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       ..._buildAcceptanceCards(acceptanceController),
       ..._buildRuntimeApprovalCards(context),
     ];
+    final runtimeAgentState = _runtimeAgentState;
     final contextSnapshot = acceptanceController?.contextSnapshot ??
-        agentTaskContextSnapshot(_todos, memories: _memoryPages);
+        (runtimeAgentState == null
+            ? agentTaskContextSnapshot(_todos, memories: _memoryPages)
+            : agentRuntimeContextSnapshot(runtimeAgentState));
     final openTasksCount = agentOpenTasks(_todos).length;
 
     return Theme(

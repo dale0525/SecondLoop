@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/backend/secretary_backend.dart';
 import 'package:secondloop/core/cloud/runtime_secretary_app_service.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_client.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart';
@@ -14,7 +12,7 @@ import 'package:secondloop/core/models/platform_int.dart';
 import 'test_backend.dart';
 
 void main() {
-  test('runtime secretary app service persists applied task creations',
+  test('runtime secretary app service does not persist assistant or task state',
       () async {
     final backend = _TodoRecordingBackend();
     final sender = _FakeRuntimeSender(
@@ -66,22 +64,17 @@ void main() {
         Uint8List.fromList(List<int>.filled(32, 1)),
         'loop_home',
       ))
-          .where((message) => message.role == 'assistant')
-          .single
-          .content,
-      '好的，已为您创建任务：完成周报。',
+          .where((message) => message.role == 'assistant'),
+      isEmpty,
     );
     final todos = await backend.listTodos(
       Uint8List.fromList(List<int>.filled(32, 1)),
     );
-    expect(todos.single.id, 'task-1');
-    expect(todos.single.title, '完成周报');
-    expect(todos.single.status, 'open');
-    expect(todos.single.sourceEntryId, 'm-user-1');
+    expect(todos, isEmpty);
   });
 
   test(
-      'runtime secretary app service stores web research citations as evidence',
+      'runtime secretary app service does not cache web research citations locally',
       () async {
     final backend = _CitationRecordingBackend();
     final sender = _FakeRuntimeSender(
@@ -130,15 +123,14 @@ void main() {
       sourceMessageId: 'm-user-search',
     );
 
-    expect(backend.assistantCitationWrites, hasLength(1));
-    final decoded = jsonDecode(backend.assistantCitationWrites.single)
-        as Map<String, dynamic>;
-    final sources = decoded['direct_sources'] as List<dynamic>;
-    expect(sources, hasLength(1));
-    expect(sources.single,
-        containsPair('href', 'https://www.apple.com/newsroom/'));
-    expect(sources.single, containsPair('title', 'Apple Newsroom'));
-    expect(sources.single, containsPair('source_type', 'web_research'));
+    expect(backend.assistantCitationWrites, isEmpty);
+    expect(
+      await backend.listMessages(
+        Uint8List.fromList(List<int>.filled(32, 1)),
+        'loop_home',
+      ),
+      isEmpty,
+    );
   });
 
   test('runtime secretary app service ignores pending task mutations',
@@ -199,210 +191,6 @@ void main() {
     expect(todo.status, 'open');
   });
 
-  test('runtime secretary app service applies approved task mutation records',
-      () async {
-    final backend = _TodoRecordingBackend(
-      initialTodos: [
-        _TodoRecordingBackend.todo(id: 'task-1', title: '完成周报'),
-      ],
-    );
-    final sender = _FakeRuntimeSender(
-      result: SecretaryRuntimeConversationResult.fromJson(const {
-        'run_id': 'run-2',
-        'conversation_id': 'loop_home',
-        'assistant': {'content': '需要确认后再修改。'},
-        'metadata': {
-          'run_id': 'run-2',
-          'turn_id': 'turn-2',
-          'conversation_id': 'loop_home',
-          'vault_id': 'managed-user-1',
-          'response_type': 'formal_mutation_pending',
-          'run_status': 'waiting_for_approval',
-          'approval_required': true,
-          'applied_mutations': [],
-        },
-      }),
-    );
-    final service = RuntimeSecretaryAppService(
-      sender: sender,
-      backend: backend,
-      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-    );
-
-    await service.applyApprovedTaskMutation(
-      const SecretaryRuntimeApprovalItem(
-        id: 'approval-task-1',
-        taskId: 'task-1',
-        title: '完成周报',
-        kind: 'task_mutation_confirmation',
-        record: {
-          'id': 'task-1',
-          'title': '完成周报',
-          'due_at_ms': 1765454400000,
-          'status': 'todo',
-        },
-      ),
-      sourceMessageId: 'approval-task-1',
-    );
-
-    final todo = (await backend.listTodos(
-      Uint8List.fromList(List<int>.filled(32, 1)),
-    ))
-        .single;
-    expect(todo.title, '完成周报');
-    expect(platformIntToNullableInt(todo.dueAtMs), 1765454400000);
-    expect(todo.status, 'open');
-  });
-
-  test('runtime secretary app service resolves approved due time records',
-      () async {
-    final backend = _TodoRecordingBackend(
-      initialTodos: [
-        _TodoRecordingBackend.todo(id: 'task-1', title: '完成周报'),
-      ],
-    );
-    final sender = _FakeRuntimeSender(
-      result: SecretaryRuntimeConversationResult.fromJson(const {
-        'run_id': 'run-2',
-        'conversation_id': 'loop_home',
-        'assistant': {'content': '需要确认后再修改。'},
-        'metadata': {
-          'run_id': 'run-2',
-          'turn_id': 'turn-2',
-          'conversation_id': 'loop_home',
-          'vault_id': 'managed-user-1',
-          'response_type': 'formal_mutation_pending',
-          'run_status': 'waiting_for_approval',
-          'approval_required': true,
-          'applied_mutations': [],
-        },
-      }),
-    );
-    final service = RuntimeSecretaryAppService(
-      sender: sender,
-      backend: backend,
-      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-    );
-    final now = DateTime.now();
-
-    await service.applyApprovedTaskMutation(
-      const SecretaryRuntimeApprovalItem(
-        id: 'approval-task-1',
-        taskId: 'task-1',
-        title: '完成周报',
-        kind: 'task_mutation_confirmation',
-        record: {
-          'id': 'task-1',
-          'title': '完成周报',
-          'due_time': '20:00',
-          'status': 'open',
-        },
-      ),
-      sourceMessageId: 'approval-task-1',
-    );
-
-    final todo = (await backend.listTodos(
-      Uint8List.fromList(List<int>.filled(32, 1)),
-    ))
-        .single;
-    final dueAt = DateTime.fromMillisecondsSinceEpoch(
-      platformIntToNullableInt(todo.dueAtMs)!,
-    );
-    expect(dueAt.year, now.year);
-    expect(dueAt.month, now.month);
-    expect(dueAt.day, now.day);
-    expect(dueAt.hour, 20);
-    expect(dueAt.minute, 0);
-    expect(todo.status, 'open');
-  });
-
-  test('runtime secretary app service stores approved memory confirmations',
-      () async {
-    final backend = _MemoryRecordingBackend();
-    final sender = _FakeApprovalRuntimeSender(approvedResult: null);
-    final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
-    final service = RuntimeSecretaryAppService(
-      sender: sender,
-      backend: backend,
-      sessionKey: sessionKey,
-    );
-
-    await service.approveApprovalItem(
-      const SecretaryRuntimeApprovalItem(
-        id: 'approval-memory-meeting',
-        taskId: '',
-        title: '我上午 9 点前不开会',
-        kind: 'memory_confirmation',
-        record: {
-          'id': 'memory-meeting',
-          'text': '我上午 9 点前不开会',
-        },
-      ),
-      vaultId: 'managed-user-1',
-      conversationId: 'loop_home',
-      sourceMessageId: 'm-user-3',
-    );
-
-    expect(sender.approvalDecisions, ['approval-memory-meeting:approve']);
-    final pages = await backend.listMemoryPages(sessionKey, state: 'active');
-    expect(pages, hasLength(1));
-    expect(pages.single.title, '我上午 9 点前不开会');
-    expect(pages.single.summary, '我上午 9 点前不开会');
-    expect(pages.single.body, '我上午 9 点前不开会');
-    expect(pages.single.state, 'active');
-  });
-
-  test('runtime secretary app service stores approved recurring reminders',
-      () async {
-    final backend = _TodoRecordingBackend();
-    final sender = _FakeApprovalRuntimeSender(approvedResult: null);
-    final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
-    final service = RuntimeSecretaryAppService(
-      sender: sender,
-      backend: backend,
-      sessionKey: sessionKey,
-    );
-
-    await service.approveApprovalItem(
-      const SecretaryRuntimeApprovalItem(
-        id: 'approval-recurring-rule-child-birthday-gift',
-        taskId: '',
-        title: '提醒买礼物',
-        kind: 'recurring_reminder_confirmation',
-        recurringRuleId: 'recurring-rule-child-birthday-gift',
-        record: {
-          'kind': 'recurring_reminder_rule',
-          'id': 'recurring-rule-child-birthday-gift',
-          'title': '提醒买礼物',
-          'next_fire_at_ms': 1780156800000,
-          'schedule': {
-            'type': 'yearly_relative_date',
-            'source_memory_id': 'memory-child-birthday',
-            'offset_days': -1,
-          },
-        },
-      ),
-      vaultId: 'managed-user-1',
-      conversationId: 'loop_home',
-      sourceMessageId: 'm-user-birthday',
-    );
-
-    expect(sender.approvalDecisions, [
-      'approval-recurring-rule-child-birthday-gift:approve',
-    ]);
-    final todos = await backend.listTodos(sessionKey);
-    expect(todos, hasLength(1));
-    expect(todos.single.id, 'todo:recurring-rule-child-birthday-gift');
-    expect(todos.single.title, '提醒买礼物');
-    expect(platformIntToNullableInt(todos.single.dueAtMs), 1780156800000);
-    expect(todos.single.status, 'open');
-    expect(todos.single.sourceEntryId, 'm-user-birthday');
-    expect(
-      backend.recurrenceRules['todo:recurring-rule-child-birthday-gift'],
-      '{"freq":"yearly","interval":1}',
-    );
-  });
-
   test('runtime secretary app service patches approval item titles', () async {
     final backend = _TodoRecordingBackend();
     final sender = _FakeApprovalRuntimeSender(approvedResult: null);
@@ -439,7 +227,8 @@ void main() {
     expect(updated.record?['title'], '给孩子买生日礼物');
   });
 
-  test('runtime secretary app service persists applied recurring reminders',
+  test(
+      'runtime secretary app service does not persist applied recurring reminders',
       () async {
     final backend = _TodoRecordingBackend();
     final sender = _FakeRuntimeSender(
@@ -492,66 +281,8 @@ void main() {
     );
 
     final todos = await backend.listTodos(sessionKey);
-    expect(todos, hasLength(1));
-    expect(todos.single.title, '提醒买礼物');
-    expect(platformIntToNullableInt(todos.single.dueAtMs), 1780156800000);
-    expect(
-      backend.recurrenceRules['todo:recurring-rule-child-birthday-gift'],
-      '{"freq":"yearly","interval":1}',
-    );
-  });
-
-  test('runtime secretary app service persists applied memory pages', () async {
-    final backend = _MemoryRecordingBackend();
-    final sender = _FakeRuntimeSender(
-      result: SecretaryRuntimeConversationResult.fromJson(const {
-        'run_id': 'run-memory-applied',
-        'conversation_id': 'loop_home',
-        'assistant': {'content': '已记住：我下午 6 点后不接工作电话。'},
-        'metadata': {
-          'run_id': 'run-memory-applied',
-          'turn_id': 'turn-memory-applied',
-          'conversation_id': 'loop_home',
-          'vault_id': 'managed-user-1',
-          'response_type': 'assistant_message',
-          'run_status': 'completed',
-          'approval_required': false,
-          'applied_mutations': [
-            {
-              'entity_type': 'memory_page',
-              'mutation_type': 'create',
-              'status': 'applied',
-              'record_id': 'memory-after-hours',
-              'record': {
-                'id': 'memory-after-hours',
-                'title': '我下午 6 点后不接工作电话',
-                'body': '我下午 6 点后不接工作电话。',
-                'kind': 'preference',
-              },
-            },
-          ],
-        },
-      }),
-    );
-    final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
-    final service = RuntimeSecretaryAppService(
-      sender: sender,
-      backend: backend,
-      sessionKey: sessionKey,
-    );
-
-    await service.sendAndApply(
-      vaultId: 'managed-user-1',
-      conversationId: 'loop_home',
-      message: '记住：我下午 6 点后不接工作电话。',
-      sourceMessageId: 'm-user-4',
-    );
-
-    final pages = await backend.listMemoryPages(sessionKey, state: 'active');
-    expect(pages, hasLength(1));
-    expect(pages.single.title, '我下午 6 点后不接工作电话');
-    expect(pages.single.body, '我下午 6 点后不接工作电话。');
-    expect(pages.single.sourceCount, platformIntFromInt(1));
+    expect(todos, isEmpty);
+    expect(backend.recurrenceRules, isEmpty);
   });
 }
 
@@ -783,224 +514,5 @@ final class _CitationRecordingBackend extends _TodoRecordingBackend
       role: 'assistant',
       content: content,
     );
-  }
-}
-
-final class _MemoryRecordingBackend extends _TodoRecordingBackend
-    implements SecretaryBackend {
-  final Map<String, SecretaryMemoryProposalRecord> _proposals =
-      <String, SecretaryMemoryProposalRecord>{};
-  final Map<String, MemoryPageRecord> _pages = <String, MemoryPageRecord>{};
-
-  @override
-  Future<SecretaryMemoryProposalRecord> createSecretaryMemoryProposal(
-    Uint8List key, {
-    String? sourceMessageId,
-    required String kind,
-    required String title,
-    required String body,
-    required double confidence,
-    String? sourceRefsJson,
-    String? actionHint,
-    required int nowMs,
-  }) async {
-    final id = 'proposal-${_proposals.length + 1}';
-    final proposal = SecretaryMemoryProposalRecord(
-      id: id,
-      sourceMessageId: sourceMessageId,
-      kind: kind,
-      title: title,
-      body: body,
-      confidence: confidence,
-      state: 'pending',
-      sourceRefsJson: sourceRefsJson,
-      actionHint: actionHint,
-      createdAtMs: platformIntFromInt(nowMs),
-      updatedAtMs: platformIntFromInt(nowMs),
-    );
-    _proposals[id] = proposal;
-    return proposal;
-  }
-
-  @override
-  Future<MemoryPageRecord> acceptSecretaryMemoryProposal(
-    Uint8List key, {
-    required String proposalId,
-    required int nowMs,
-  }) async {
-    final proposal = _proposals[proposalId];
-    if (proposal == null) {
-      throw StateError('Missing proposal $proposalId');
-    }
-    final accepted = SecretaryMemoryProposalRecord(
-      id: proposal.id,
-      sourceMessageId: proposal.sourceMessageId,
-      kind: proposal.kind,
-      title: proposal.title,
-      body: proposal.body,
-      confidence: proposal.confidence,
-      state: 'accepted',
-      sourceRefsJson: proposal.sourceRefsJson,
-      actionHint: proposal.actionHint,
-      createdAtMs: proposal.createdAtMs,
-      updatedAtMs: platformIntFromInt(nowMs),
-      acceptedAtMs: platformIntFromInt(nowMs),
-    );
-    _proposals[proposalId] = accepted;
-    final page = MemoryPageRecord(
-      pageId: 'page-${_pages.length + 1}',
-      pageType: 'memory',
-      state: 'active',
-      sourceCount: platformIntFromInt(
-        proposal.sourceMessageId == null ? 0 : 1,
-      ),
-      title: proposal.title,
-      summary: proposal.body,
-      body: proposal.body,
-      primaryEvidenceJson: proposal.sourceRefsJson ?? '[]',
-      sourceDocumentIdsJson: proposal.sourceMessageId == null
-          ? '[]'
-          : '["${proposal.sourceMessageId}"]',
-      confidenceLevel: proposal.confidence,
-      humanCorrected: false,
-      createdAtMs: platformIntFromInt(nowMs),
-      updatedAtMs: platformIntFromInt(nowMs),
-    );
-    _pages[page.pageId] = page;
-    return page;
-  }
-
-  @override
-  Future<List<MemoryPageRecord>> listMemoryPages(
-    Uint8List key, {
-    String? state,
-  }) async {
-    return _pages.values
-        .where((page) => state == null || page.state == state)
-        .toList(growable: false);
-  }
-
-  @override
-  Future<List<SecretaryMemoryProposalRecord>> listSecretaryMemoryProposals(
-    Uint8List key, {
-    String? state,
-  }) async {
-    return _proposals.values
-        .where((proposal) => state == null || proposal.state == state)
-        .toList(growable: false);
-  }
-
-  @override
-  Future<SecretaryMemoryProposalRecord> dismissSecretaryMemoryProposal(
-    Uint8List key, {
-    required String proposalId,
-    required int nowMs,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<MemoryPageRecord> getMemoryPage(
-    Uint8List key, {
-    required String pageId,
-  }) async {
-    final page = _pages[pageId];
-    if (page == null) throw StateError('Missing memory page $pageId');
-    return page;
-  }
-
-  @override
-  Future<MemoryPageRecord> correctMemoryPage(
-    Uint8List key, {
-    required String pageId,
-    required String title,
-    required String summary,
-    required String body,
-    String? reason,
-    required int nowMs,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<MemoryPageRecord> archiveMemoryPage(
-    Uint8List key, {
-    required String pageId,
-    required int nowMs,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<MemoryPageRecord> restoreMemoryPage(
-    Uint8List key, {
-    required String pageId,
-    required int nowMs,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<PlanningOutputRecord> upsertPlanningOutput(
-    Uint8List key, {
-    required String id,
-    required String kind,
-    required String title,
-    required String body,
-    required String itemsJson,
-    String? sourceRefsJson,
-    required String route,
-    required String state,
-    required int createdAtMs,
-    required int updatedAtMs,
-    int? expiresAtMs,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<PlanningOutputRecord>> listPlanningOutputs(
-    Uint8List key, {
-    String? kind,
-    required int nowMs,
-    bool includeExpired = false,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<SecretaryRunRecord> createSecretaryRun(
-    Uint8List key, {
-    required String triggerKind,
-    required String route,
-    required String status,
-    String? inputSummary,
-    String? outputSummary,
-    String? error,
-    required int nowMs,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<SecretaryToolCallRecord> createSecretaryToolCall(
-    Uint8List key, {
-    required String runId,
-    required String toolName,
-    required String status,
-    required bool requiresConfirmation,
-    String? inputJson,
-    String? outputJson,
-    required int nowMs,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<SecretaryToolCallRecord>> listSecretaryToolCallsForRun(
-    Uint8List key, {
-    required String runId,
-  }) async {
-    throw UnimplementedError();
   }
 }

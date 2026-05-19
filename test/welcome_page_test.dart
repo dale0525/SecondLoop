@@ -4,8 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
@@ -36,6 +40,9 @@ void main() {
     required VoidCallback onFinish,
     WelcomeGuideStatusLoader? statusLoader,
     WelcomeGuideUriLauncher? uriLauncher,
+    CloudAuthController? cloudAuthController,
+    CloudGatewayConfig cloudGatewayConfig = CloudGatewayConfig.defaultConfig,
+    SubscriptionStatusController? subscriptionController,
   }) async {
     Widget app = wrapWithI18n(
       MaterialApp(
@@ -51,6 +58,21 @@ void main() {
     if (backend != null) {
       app = AppBackendScope(
         backend: backend,
+        child: app,
+      );
+    }
+
+    if (cloudAuthController != null) {
+      app = CloudAuthScope(
+        controller: cloudAuthController,
+        gatewayConfig: cloudGatewayConfig,
+        child: app,
+      );
+    }
+
+    if (subscriptionController != null) {
+      app = SubscriptionScope(
+        controller: subscriptionController,
         child: app,
       );
     }
@@ -128,6 +150,12 @@ void main() {
       tester,
       backend: TestAppBackend(),
       sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+      cloudAuthController: _FakeCloudAuthController(),
+      cloudGatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://gateway.example.test',
+        modelName: 'cloud',
+      ),
+      subscriptionController: _FakeSubscriptionController(),
       onSkip: () {},
       onFinish: () {},
     );
@@ -383,4 +411,45 @@ void main() {
       debugDefaultTargetPlatformOverride = originalPlatformOverride;
     }
   });
+}
+
+final class _FakeCloudAuthController implements CloudAuthController {
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  String? get email => 'qa@example.test';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  Future<String?> getIdToken() async => 'id-token';
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}
+
+final class _FakeSubscriptionController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  @override
+  SubscriptionStatus get status => SubscriptionStatus.entitled;
 }

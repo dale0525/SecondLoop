@@ -131,6 +131,62 @@ void main() {
     });
   });
 
+  test('fetches runtime agent state through a single view endpoint', () async {
+    late http.Request capturedRequest;
+    final client = SecretaryRuntimeClient(
+      apiClient: RuntimeApiClient(
+        connectionStore: RuntimeConnectionStore(),
+        httpClient: MockClient((request) async {
+          capturedRequest = request;
+          return http.Response(
+            jsonEncode({
+              'vault_id': 'vault-1',
+              'conversation_id': 'loop_home',
+              'conversation_turns': [],
+              'working_set_records': [],
+              'tasks': [
+                {
+                  'id': 'task-1',
+                  'kind': 'task',
+                  'title': '完成周报',
+                  'status': 'open',
+                }
+              ],
+              'memory_records': [
+                {
+                  'id': 'memory-1',
+                  'kind': 'memory',
+                  'text': '任务回复请使用中文',
+                }
+              ],
+              'recurring_reminder_rules': [],
+              'approval_items': [],
+              'recent_entity_refs': [],
+              'latest_context_snapshot': null,
+              'audit_refs': [],
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      ),
+    );
+
+    final state = await client.fetchAgentState(
+      'vault-1',
+      conversationId: 'loop_home',
+    );
+
+    expect(capturedRequest.method, 'GET');
+    expect(
+      capturedRequest.url.path,
+      '/v1/runtime/vaults/vault-1/agent-state',
+    );
+    expect(capturedRequest.url.queryParameters['conversation_id'], 'loop_home');
+    expect(state.tasks.single.title, '完成周报');
+    expect(state.memoryRecords.single.title, '任务回复请使用中文');
+  });
+
   test('patches runtime approval item title through the runtime client',
       () async {
     late http.Request capturedRequest;

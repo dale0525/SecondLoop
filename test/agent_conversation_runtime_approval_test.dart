@@ -28,7 +28,7 @@ void main() {
   });
 
   testWidgets(
-    'managed pro approval card applies approved task reschedule locally',
+    'managed pro approval card submits task approval without local task writes',
     (tester) async {
       final backend = _RuntimeApprovalBackend(
         initialTodos: [
@@ -163,9 +163,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(sender.approvalDecisions, ['approval-task-1:approve']);
-      expect(backend.transitionTodoCalls, 1);
+      expect(backend.transitionTodoCalls, 0);
       todo = (await backend.listTodos(Uint8List(32))).single;
-      expect(platformIntToNullableInt(todo.dueAtMs), 1765454400000);
+      expect(platformIntToNullableInt(todo.dueAtMs), isNull);
       expect(todo.status, 'open');
       expect(find.byKey(const ValueKey('approval_preview_card')), findsNothing);
     },
@@ -280,20 +280,12 @@ void main() {
       expect(platformIntToNullableInt(todo.dueAtMs), isNull);
       expect(todo.status, 'open');
 
-      final beforeApprove = DateTime.now();
       await tester.tap(find.text('Review & Approve'));
       await tester.pumpAndSettle();
 
       expect(sender.approvalDecisions, ['approval-task-1:approve']);
       todo = (await backend.listTodos(Uint8List(32))).single;
-      final dueAt = DateTime.fromMillisecondsSinceEpoch(
-        platformIntToNullableInt(todo.dueAtMs)!,
-      );
-      expect(dueAt.year, beforeApprove.year);
-      expect(dueAt.month, beforeApprove.month);
-      expect(dueAt.day, beforeApprove.day);
-      expect(dueAt.hour, 20);
-      expect(dueAt.minute, 0);
+      expect(platformIntToNullableInt(todo.dueAtMs), isNull);
       expect(todo.status, 'open');
     },
   );
@@ -597,12 +589,7 @@ void main() {
         findsNothing,
       );
       final pages = await backend.listMemoryPages(Uint8List(32));
-      expect(pages.map((page) => page.title), [
-        '我上午 9 点前不开会',
-        '任务回复请使用中文',
-      ]);
-      expect(find.text('我上午 9 点前不开会'), findsWidgets);
-      expect(find.text('任务回复请使用中文'), findsWidgets);
+      expect(pages, isEmpty);
     },
   );
 }

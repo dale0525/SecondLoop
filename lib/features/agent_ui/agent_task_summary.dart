@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/runtime_agent_state_models.dart';
+import '../../core/cloud/runtime_agent_state_repository.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import 'package:secondloop/core/models/app_models.dart';
@@ -18,6 +21,170 @@ const _soft = Color(0xFFF7F9FC);
 List<Todo> agentOpenTasks(List<Todo> todos) {
   final open = todos.where(_isOpenTask).toList(growable: false);
   return List<Todo>.from(open)..sort(_compareTasks);
+}
+
+List<Todo> agentTodosFromRuntimeTasks(List<RuntimeWorkingSetRecord> tasks) {
+  return tasks.map(agentTodoFromRuntimeTask).toList(growable: false);
+}
+
+List<Todo> agentTodosFromRuntimeState(RuntimeAgentState state) {
+  return _mergeTodosById([
+    ...agentTodosFromRuntimeTasks(state.tasks),
+    ...agentTodosFromRuntimeRecurringRules(state.recurringReminderRules),
+  ]);
+}
+
+Todo agentTodoFromRuntimeTask(RuntimeWorkingSetRecord record) {
+  final createdAtMs =
+      _runtimeInt(record.raw['created_at_ms'] ?? record.raw['createdAtMs']) ??
+          record.updatedAtMs;
+  return Todo(
+    id: record.id,
+    title: record.title,
+    dueAtMs: _runtimeDueAtMs(record.raw),
+    status: _runtimeTaskStatus(record.status),
+    sourceEntryId: _runtimeString(record.raw['source_message_id']) ??
+        _runtimeString(record.raw['sourceMessageId']) ??
+        _runtimeString(record.raw['source_entry_id']) ??
+        _runtimeString(record.raw['sourceEntryId']),
+    createdAtMs: createdAtMs,
+    updatedAtMs: record.updatedAtMs == 0 ? createdAtMs : record.updatedAtMs,
+    reviewStage: _runtimeInt(record.raw['review_stage']) ??
+        _runtimeInt(record.raw['reviewStage']),
+    nextReviewAtMs: _runtimeInt(record.raw['next_review_at_ms']) ??
+        _runtimeInt(record.raw['nextReviewAtMs']),
+    lastReviewAtMs: _runtimeInt(record.raw['last_review_at_ms']) ??
+        _runtimeInt(record.raw['lastReviewAtMs']),
+    manualImportanceNudgeScore:
+        _runtimeInt(record.raw['manual_importance_nudge_score']) ??
+            _runtimeInt(record.raw['manualImportanceNudgeScore']),
+    manualUrgencyNudgeScore:
+        _runtimeInt(record.raw['manual_urgency_nudge_score']) ??
+            _runtimeInt(record.raw['manualUrgencyNudgeScore']),
+  );
+}
+
+List<Todo> agentTodosFromRuntimeRecurringRules(
+  List<Map<String, Object?>> rules,
+) {
+  return rules
+      .where(_isVisibleRuntimeRecurringRule)
+      .map(agentTodoFromRuntimeRecurringRule)
+      .where(
+          (todo) => todo.id.trim().isNotEmpty && todo.title.trim().isNotEmpty)
+      .toList(growable: false);
+}
+
+Todo agentTodoFromRuntimeRecurringRule(Map<String, Object?> rule) {
+  final title = _firstRuntimeString([
+        rule['title'],
+        rule['text'],
+        rule['content'],
+        rule['summary'],
+      ]) ??
+      '';
+  final id = _firstRuntimeString([
+        rule['id'],
+        rule['record_id'],
+        rule['recordId'],
+        rule['recurring_rule_id'],
+        rule['recurringRuleId'],
+      ]) ??
+      '';
+  final dueAtMs = _runtimeDueAtMs(rule);
+  final createdAtMs = _runtimeInt(rule['created_at_ms']) ??
+      _runtimeInt(rule['createdAtMs']) ??
+      _runtimeInt(rule['updated_at_ms']) ??
+      _runtimeInt(rule['updatedAtMs']) ??
+      dueAtMs ??
+      0;
+  final updatedAtMs = _runtimeInt(rule['updated_at_ms']) ??
+      _runtimeInt(rule['updatedAtMs']) ??
+      createdAtMs;
+  return Todo(
+    id: id,
+    title: title,
+    dueAtMs: dueAtMs,
+    status: 'open',
+    sourceEntryId: _runtimeString(rule['source_intent_id']) ??
+        _runtimeString(rule['sourceIntentId']),
+    createdAtMs: createdAtMs,
+    updatedAtMs: updatedAtMs,
+    reviewStage: null,
+    nextReviewAtMs: null,
+    lastReviewAtMs: null,
+    manualImportanceNudgeScore: null,
+    manualUrgencyNudgeScore: null,
+  );
+}
+
+List<MemoryPageRecord> agentMemoryPagesFromRuntimeRecords(
+  List<RuntimeWorkingSetRecord> records,
+) {
+  return records.map(agentMemoryPageFromRuntimeRecord).toList(growable: false);
+}
+
+MemoryPageRecord agentMemoryPageFromRuntimeRecord(
+  RuntimeWorkingSetRecord record,
+) {
+  final title = _runtimeMemoryTitle(record);
+  final body = _runtimeMemoryBody(record, fallback: title);
+  final updatedAtMs = record.updatedAtMs;
+  final createdAtMs =
+      _runtimeInt(record.raw['created_at_ms'] ?? record.raw['createdAtMs']) ??
+          updatedAtMs;
+  return MemoryPageRecord(
+    pageId: record.id,
+    pageType: _runtimeString(record.raw['memory_kind']) ??
+        _runtimeString(record.raw['memoryKind']) ??
+        _runtimeString(record.raw['page_type']) ??
+        _runtimeString(record.raw['pageType']) ??
+        'preference',
+    state: _runtimeString(record.raw['state']) ?? 'active',
+    sourceCount: 0,
+    title: title,
+    summary: _runtimeString(record.raw['summary']) ?? body,
+    body: body,
+    primaryEvidenceJson: '{}',
+    sourceDocumentIdsJson: '[]',
+    confidenceLevel: _runtimeDouble(record.raw['confidence']) ?? 0.9,
+    humanCorrected: record.raw['human_corrected'] == true ||
+        record.raw['humanCorrected'] == true,
+    createdAtMs: createdAtMs,
+    updatedAtMs: updatedAtMs == 0 ? createdAtMs : updatedAtMs,
+  );
+}
+
+ConversationContextSnapshot agentRuntimeContextSnapshot(
+  RuntimeAgentState state,
+) {
+  final latest = state.latestContextSnapshot;
+  if (latest != null) {
+    final records = _runtimeRecordsFromWorkingSet(latest.packet['working_set']);
+    final tasks = _mergeTodosById([
+      ...agentTodosFromRuntimeTasks(state.tasks),
+      ...records
+          .where((record) => record.kind == 'task')
+          .map(agentTodoFromRuntimeTask),
+      ...agentTodosFromRuntimeRecurringRules([
+        ...state.recurringReminderRules,
+        ..._runtimeObjectList(latest.packet['recurring_reminder_rules']),
+      ]),
+    ]);
+    final memories = _mergeRuntimeRecordsById([
+      ...state.memoryRecords,
+      ..._runtimeRecordList(latest.packet['memory_records']),
+      ...records.where((record) => record.kind == 'memory'),
+    ]);
+    return agentTaskContextSnapshot(
+      tasks,
+      memories: agentMemoryPagesFromRuntimeRecords(memories),
+    );
+  }
+  return agentTaskContextSnapshot(
+    agentTodosFromRuntimeState(state),
+    memories: agentMemoryPagesFromRuntimeRecords(state.memoryRecords),
+  );
 }
 
 List<Todo> agentTasksCreatedFromSources(
@@ -83,6 +250,151 @@ List<ConversationContextItem> agentMemoryContextItems(
       subtitle: _memorySubtitle(memory),
     );
   }).toList(growable: false);
+}
+
+List<RuntimeWorkingSetRecord> _runtimeRecordsFromWorkingSet(Object? raw) {
+  if (raw is! Map) return const <RuntimeWorkingSetRecord>[];
+  return _runtimeRecordList(raw['records']);
+}
+
+List<RuntimeWorkingSetRecord> _runtimeRecordList(Object? raw) {
+  if (raw is! List) return const <RuntimeWorkingSetRecord>[];
+  return raw
+      .whereType<Map>()
+      .map(
+        (item) => RuntimeWorkingSetRecord.fromJson(
+          item.map((key, value) => MapEntry('$key', value as Object?)),
+        ),
+      )
+      .toList(growable: false);
+}
+
+List<Map<String, Object?>> _runtimeObjectList(Object? raw) {
+  if (raw is! List) return const <Map<String, Object?>>[];
+  return raw
+      .whereType<Map>()
+      .map(
+        (item) => item.map((key, value) => MapEntry('$key', value as Object?)),
+      )
+      .toList(growable: false);
+}
+
+List<Todo> _mergeTodosById(Iterable<Todo> todos) {
+  final byId = <String, Todo>{};
+  for (final todo in todos) {
+    final id = todo.id.trim();
+    if (id.isEmpty || byId.containsKey(id)) continue;
+    byId[id] = todo;
+  }
+  return byId.values.toList(growable: false);
+}
+
+List<RuntimeWorkingSetRecord> _mergeRuntimeRecordsById(
+  Iterable<RuntimeWorkingSetRecord> records,
+) {
+  final byId = <String, RuntimeWorkingSetRecord>{};
+  for (final record in records) {
+    final id = record.id.trim();
+    if (id.isEmpty || byId.containsKey(id)) continue;
+    byId[id] = record;
+  }
+  return byId.values.toList(growable: false);
+}
+
+String _runtimeTaskStatus(String status) {
+  final normalized = status.trim().toLowerCase();
+  if (normalized.isEmpty ||
+      normalized == 'todo' ||
+      normalized == 'to_do' ||
+      normalized == 'pending' ||
+      normalized == 'not_started') {
+    return 'open';
+  }
+  return normalized;
+}
+
+String _runtimeMemoryTitle(RuntimeWorkingSetRecord record) {
+  return _firstRuntimeString([
+        record.raw['title'],
+        record.raw['text'],
+        record.raw['content'],
+        record.raw['summary'],
+        record.raw['body'],
+      ]) ??
+      record.title;
+}
+
+String _runtimeMemoryBody(
+  RuntimeWorkingSetRecord record, {
+  required String fallback,
+}) {
+  return _firstRuntimeString([
+        record.raw['body'],
+        record.raw['summary'],
+        record.raw['detail'],
+        record.raw['description'],
+        record.raw['text'],
+        record.raw['content'],
+      ]) ??
+      fallback;
+}
+
+String? _firstRuntimeString(Iterable<Object?> values) {
+  for (final value in values) {
+    final parsed = _runtimeString(value);
+    if (parsed != null) return parsed;
+  }
+  return null;
+}
+
+String? _runtimeString(Object? raw) {
+  if (raw is! String) return null;
+  final value = raw.trim();
+  return value.isEmpty ? null : value;
+}
+
+int? _runtimeInt(Object? raw) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw);
+  return null;
+}
+
+bool _isVisibleRuntimeRecurringRule(Map<String, Object?> rule) {
+  final kind = _runtimeString(rule['kind']);
+  if (kind != null && kind != 'recurring_reminder_rule') return false;
+  final approvalStatus = _runtimeString(rule['approval_status']) ??
+      _runtimeString(rule['approvalStatus']);
+  if (approvalStatus != null && approvalStatus != 'approved') return false;
+  final status = _runtimeString(rule['status']) ?? 'active';
+  return status != 'pending_approval' &&
+      status != 'rejected' &&
+      status != 'archived' &&
+      status != 'deleted' &&
+      status != 'dismissed';
+}
+
+double? _runtimeDouble(Object? raw) {
+  if (raw is num) return raw.toDouble();
+  if (raw is String) return double.tryParse(raw);
+  return null;
+}
+
+int? _runtimeDueAtMs(Map<String, Object?> raw) {
+  return _runtimeInt(raw['due_at_ms']) ??
+      _runtimeInt(raw['dueAtMs']) ??
+      _runtimeInt(raw['new_due_at_ms']) ??
+      _runtimeInt(raw['newDueAtMs']) ??
+      _runtimeInt(raw['next_fire_at_ms']) ??
+      _runtimeInt(raw['nextFireAtMs']) ??
+      _runtimeIsoDateTimeMs(raw['due_local_iso']) ??
+      _runtimeIsoDateTimeMs(raw['dueLocalIso']);
+}
+
+int? _runtimeIsoDateTimeMs(Object? raw) {
+  final value = _runtimeString(raw);
+  if (value == null) return null;
+  return DateTime.tryParse(value)?.millisecondsSinceEpoch;
 }
 
 final class AgentCreatedTaskCard extends StatelessWidget {
@@ -260,16 +572,40 @@ final class _AgentTaskFactRow extends StatelessWidget {
 }
 
 final class AgentTasksPage extends StatelessWidget {
-  const AgentTasksPage({super.key});
+  const AgentTasksPage({
+    this.runtimeAgentStateRepository,
+    this.conversationId = 'loop_home',
+    super.key,
+  });
+
+  final RuntimeAgentStateRepository? runtimeAgentStateRepository;
+  final String conversationId;
 
   @override
   Widget build(BuildContext context) {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
+    final repository = runtimeAgentStateRepository ??
+        (cloudAuthScope == null || vaultId.isEmpty
+            ? null
+            : SecretaryRuntimeAgentStateRepository.hostedManagedPro(
+                apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
+                hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
+              ));
+    final Future<List<Todo>> tasksFuture = repository == null
+        ? backend.listTodos(sessionKey)
+        : repository
+            .fetchAgentState(
+              vaultId: vaultId,
+              conversationId: conversationId,
+            )
+            .then(agentTodosFromRuntimeState);
     return Scaffold(
       appBar: AppBar(title: Text(t.chat.agentTasks.allTasks)),
       body: FutureBuilder<List<Todo>>(
-        future: backend.listTodos(sessionKey),
+        future: tasksFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done &&
               !snapshot.hasData) {

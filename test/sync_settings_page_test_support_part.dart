@@ -174,6 +174,9 @@ class _SyncSettingsBackend extends AppBackend {
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {}
 
   @override
+  Future<List<Todo>> listTodos(Uint8List key) async => const <Todo>[];
+
+  @override
   Future<int> processPendingMessageEmbeddings(
     Uint8List key, {
     int limit = 32,

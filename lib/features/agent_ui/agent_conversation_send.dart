@@ -62,13 +62,6 @@ Future<AgentConversationSendResult> sendAgentConversationMessage({
       if (cloudAuthScope == null || vaultId.isEmpty) {
         throw StateError('managed_pro_vault_id_required');
       }
-      final userMessage = await backend.insertMessage(
-        sessionKey,
-        conversationId,
-        role: 'user',
-        content: message,
-      );
-      userMessageCommitted = true;
 
       final sender = runtimeConversationSender ??
           SecretaryRuntimeConversationSender.hostedManagedPro(
@@ -84,7 +77,6 @@ Future<AgentConversationSendResult> sendAgentConversationMessage({
         vaultId: vaultId,
         conversationId: conversationId,
         message: message,
-        sourceMessageId: userMessage.id,
       );
       var approvalItems = result.metadata.approvalItems;
       if (approvalItems.isEmpty && result.metadata.approvalRequired) {

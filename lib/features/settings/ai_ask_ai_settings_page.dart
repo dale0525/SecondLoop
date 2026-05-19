@@ -10,6 +10,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import 'ai_settings_page.dart';
+import 'cloud_account_page.dart';
 import 'cloud_runtime_mode_page.dart';
 
 class AiAskAiSettingsPage extends StatefulWidget {
@@ -130,6 +131,20 @@ class _AiAskAiSettingsPageState extends State<AiAskAiSettingsPage> {
                       Navigator.of(context),
                       context,
                       const CloudRuntimeModePage(),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  key: const ValueKey('ask_ai_settings_open_cloud_account'),
+                  title: Text(
+                      context.t.settings.runtimeMode.actions.openCloudAccount),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const CloudAccountPage(),
                     );
                   },
                 ),

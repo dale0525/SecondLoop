@@ -111,9 +111,7 @@ abstract class AppBackend with _AppBackendSemanticAndSyncMixin {
     throw UnimplementedError('getOrCreateDeviceId');
   }
 
-  Future<List<Todo>> listTodos(Uint8List key) {
-    throw UnimplementedError('listTodos');
-  }
+  Future<List<Todo>> listTodos(Uint8List key) async => const <Todo>[];
 
   Future<Todo?> getTodoById(Uint8List key, String todoId) {
     return listTodos(key).then((todos) {
