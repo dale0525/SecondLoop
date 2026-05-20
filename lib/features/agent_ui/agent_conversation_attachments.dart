@@ -45,6 +45,15 @@ final class _AgentMessageAttachmentView {
     return normalizedMediaType == 'image' ||
         normalizedMimeType.startsWith('image/');
   }
+
+  bool get isAudio {
+    final normalizedMediaType = mediaType.trim().toLowerCase();
+    final normalizedMimeType = mimeType.trim().toLowerCase();
+    return normalizedMediaType == 'audio' ||
+        normalizedMimeType.startsWith('audio/');
+  }
+
+  bool get needsHydratedBytesForPreview => isImage || isAudio;
 }
 
 extension _AgentConversationAttachmentHydration on _AgentConversationPageState {
@@ -62,7 +71,8 @@ extension _AgentConversationAttachmentHydration on _AgentConversationPageState {
     for (final entry in attachmentsByMessageId.entries) {
       final attachments = <_AgentMessageAttachmentView>[];
       for (final attachment in entry.value) {
-        if (!attachment.isImage || attachment.bytes != null) {
+        if (!attachment.needsHydratedBytesForPreview ||
+            attachment.bytes != null) {
           attachments.add(attachment);
           continue;
         }

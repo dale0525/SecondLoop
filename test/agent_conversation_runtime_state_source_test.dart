@@ -7,6 +7,8 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_models.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_repository.dart';
+import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart';
+import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
@@ -504,6 +506,89 @@ void main() {
   );
 
   testWidgets(
+    'managed pro conversation hydrates audio attachment bytes for preview',
+    (tester) async {
+      const attachmentId = 'sha-audio-preview-1';
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [
+            {
+              'turn_id': 'turn-user-audio-preview',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'user',
+              'content': '生成会议纪要、决策和行动项。',
+              'attachment_refs': [attachmentId],
+              'attachments': [
+                {
+                  'attachment_id': attachmentId,
+                  'filename': 'qa-meeting-audio.m4a',
+                  'mime_type': 'audio/mp4',
+                  'media_type': 'audio',
+                },
+              ],
+              'created_at_ms': 1700000000000,
+            },
+          ],
+          'working_set_records': [],
+          'tasks': [],
+          'memory_records': [],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [],
+          'latest_context_snapshot': null,
+          'audit_refs': [],
+        }),
+      );
+      final fetcher = _RuntimeAttachmentBytesFetcher(
+        bytesByAttachmentId: const {
+          attachmentId: <int>[0, 1, 2, 3],
+        },
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1012, 701));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: _ThrowingLocalStoreBackend(),
+              child: CloudAuthScope(
+                controller: _CloudAuthController(),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.example.test',
+                  modelName: 'cloud',
+                ),
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeConversationSender: fetcher,
+                    runtimeAgentStateRepository: repository,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fetcher.fetches, [('uid_1', attachmentId)]);
+    },
+  );
+
+  testWidgets(
     'managed pro conversation loads runtime state after cloud auth warms',
     (tester) async {
       final controller = _MutableCloudAuthController();
@@ -577,6 +662,35 @@ void main() {
       expect(find.text('重启后从 runtime 恢复的聊天记录。'), findsOneWidget);
     },
   );
+}
+
+final class _RuntimeAttachmentBytesFetcher
+    implements
+        ChatRuntimeConversationSender,
+        ChatRuntimeAttachmentContentFetcher {
+  _RuntimeAttachmentBytesFetcher({required this.bytesByAttachmentId});
+
+  final Map<String, List<int>> bytesByAttachmentId;
+  final List<(String, String)> fetches = <(String, String)>[];
+
+  @override
+  Future<Uint8List?> fetchAttachmentBytes({
+    required String vaultId,
+    required String attachmentId,
+  }) async {
+    fetches.add((vaultId, attachmentId));
+    final bytes = bytesByAttachmentId[attachmentId];
+    return bytes == null ? null : Uint8List.fromList(bytes);
+  }
+
+  @override
+  Future<SecretaryRuntimeConversationResult> send({
+    required String vaultId,
+    required String conversationId,
+    required String message,
+  }) {
+    throw StateError('send should not be used');
+  }
 }
 
 final class _FakeRuntimeAgentStateRepository
