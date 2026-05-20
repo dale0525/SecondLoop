@@ -46,6 +46,7 @@ Future<AgentConversationSendResult> sendAgentConversationMessage({
   required Uint8List sessionKey,
   required String conversationId,
   required String message,
+  List<Map<String, Object?>> attachments = const <Map<String, Object?>>[],
   ChatRuntimeConversationSender? runtimeConversationSender,
 }) async {
   var userMessageCommitted = false;
@@ -77,6 +78,7 @@ Future<AgentConversationSendResult> sendAgentConversationMessage({
         vaultId: vaultId,
         conversationId: conversationId,
         message: message,
+        attachments: attachments,
       );
       var approvalItems = result.metadata.approvalItems;
       if (approvalItems.isEmpty && result.metadata.approvalRequired) {

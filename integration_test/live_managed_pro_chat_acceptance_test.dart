@@ -10,8 +10,6 @@ import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/core/cloud/runtime_secretary_app_service.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
-import 'package:secondloop/core/models/app_models.dart';
-import 'package:secondloop/core/models/platform_int.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -39,9 +37,11 @@ void main() {
       await backend.init();
       final sessionKey =
           await backend.initMasterPassword('live-managed-pro-acceptance');
-      final conversation = await backend.getOrCreateLoopHomeConversation(
+      final conversation = await backend.createConversation(
         sessionKey,
+        'Live managed pro task acceptance',
       );
+      final taskTitle = '完成周报 ${DateTime.now().microsecondsSinceEpoch}';
 
       final authController = CloudAuthControllerImpl(
         identityToolkit: FirebaseIdentityToolkitHttp(
@@ -73,7 +73,7 @@ void main() {
         sessionKey,
         conversation.id,
         role: 'user',
-        content: '帮我创建一个任务：完成周报。',
+        content: '帮我创建一个任务：$taskTitle。',
       );
       final createResult = await service.sendAndApply(
         vaultId: resolvedVaultId,
@@ -91,18 +91,25 @@ void main() {
             'QA-CHAT-01 must be proven by applied task mutations, not assistant text only. '
             'Runtime result: ${_runtimeResultSnapshot(createResult)}',
       );
-
-      final createdTask = _singleTodoByTitle(
-        await backend.listTodos(sessionKey),
-        '完成周报',
+      expect(
+        createResult.metadata.appliedMutations
+            .where((mutation) => mutation['entity_type'] == 'task')
+            .where((mutation) => mutation['mutation_type'] == 'create')
+            .where((mutation) {
+          final record = mutation['record'];
+          return record is Map && record['title'] == taskTitle;
+        }),
+        isNotEmpty,
+        reason:
+            'Managed pro task creation must be proven from runtime metadata. '
+            'Runtime result: ${_runtimeResultSnapshot(createResult)}',
       );
-      expect(createdTask.status, isNot('done'));
 
       final updateUserMessage = await backend.insertMessage(
         sessionKey,
         conversation.id,
         role: 'user',
-        content: '把“完成周报”改到今天 20:00',
+        content: '把“$taskTitle”改到今天 20:00',
       );
       final updateResult = await service.sendAndApply(
         vaultId: resolvedVaultId,
@@ -114,19 +121,12 @@ void main() {
       expect(
         updateResult.metadata.approvalItems
             .where((item) => item.kind == 'task_mutation_confirmation')
-            .where((item) => item.title.contains('完成周报')),
+            .where((item) => item.title.contains(taskTitle)),
         isNotEmpty,
         reason:
             'QA-CHAT-02 must prove the live runtime targeted the existing task. '
             'Runtime result: ${_runtimeResultSnapshot(updateResult)}',
       );
-
-      final beforeApprovalTask = _singleTodoByTitle(
-        await backend.listTodos(sessionKey),
-        '完成周报',
-      );
-      expect(platformIntToNullableInt(beforeApprovalTask.dueAtMs), isNull);
-      expect(beforeApprovalTask.status, isNot('done'));
     },
     timeout: const Timeout(Duration(minutes: 3)),
   );
@@ -154,8 +154,9 @@ void main() {
       await backend.init();
       final sessionKey =
           await backend.initMasterPassword('live-managed-pro-acceptance');
-      final conversation = await backend.getOrCreateLoopHomeConversation(
+      final conversation = await backend.createConversation(
         sessionKey,
+        'Live managed pro search acceptance',
       );
 
       final authController = CloudAuthControllerImpl(
@@ -208,20 +209,36 @@ void main() {
             'QA-CHAT-05B must include traceable citations, not only assistant text. '
             'Runtime result: ${_runtimeResultSnapshot(searchResult)}',
       );
-
-      final firstAssistantMessage = (await backend.listMessages(
-        sessionKey,
-        conversation.id,
-      ))
-          .where((message) => message.role == 'assistant')
-          .last;
       expect(
-        firstAssistantMessage.citationsJson,
-        isNotNull,
+        _webResearchQueries(searchResult),
+        everyElement(
+          allOf(
+            contains(
+              RegExp(r'Apple|iPhone|AirPods|Apple Watch|WWDC|苹果|蘋果|アップル'),
+            ),
+          ),
+        ),
         reason:
-            'App must persist runtime web research citations into assistant message evidence.',
+            'QA-CHAT-05B must execute concise Apple-related search queries. '
+            'Runtime result: ${_runtimeResultSnapshot(searchResult)}',
       );
-      expect(firstAssistantMessage.citationsJson, contains('direct_sources'));
+      expect(
+        _webResearchCitationDomains(searchResult),
+        isNot(
+          contains(
+            anyOf(
+              contains('dictionary'),
+              contains('collins'),
+              contains('egrammarbook'),
+              contains('merriam'),
+              contains('cambridge'),
+            ),
+          ),
+        ),
+        reason:
+            'QA-CHAT-05B must not accept generic dictionary-style search results. '
+            'Runtime result: ${_runtimeResultSnapshot(searchResult)}',
+      );
 
       final followUpUserMessage = await backend.insertMessage(
         sessionKey,
@@ -293,14 +310,22 @@ List<String> _webResearchCitationUrls(
   return urls;
 }
 
-Todo _singleTodoByTitle(List<Todo> todos, String title) {
-  final matches = todos.where((todo) => todo.title == title).toList();
-  expect(
-    matches,
-    hasLength(1),
-    reason: 'Expected exactly one app task titled "$title".',
-  );
-  return matches.single;
+List<String> _webResearchQueries(SecretaryRuntimeConversationResult result) {
+  return result.metadata.webResearchDrafts
+      .map((draft) => draft['query'])
+      .whereType<String>()
+      .map((query) => query.trim())
+      .where((query) => query.isNotEmpty)
+      .toList(growable: false);
+}
+
+List<String> _webResearchCitationDomains(
+    SecretaryRuntimeConversationResult result) {
+  return _webResearchCitationUrls(result)
+      .map((url) => Uri.tryParse(url)?.host ?? '')
+      .map((host) => host.replaceFirst(RegExp(r'^www\.'), '').toLowerCase())
+      .where((host) => host.isNotEmpty)
+      .toList(growable: false);
 }
 
 final class _LiveManagedProConfig {

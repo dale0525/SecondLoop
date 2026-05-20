@@ -227,6 +227,26 @@ final class SecretaryRuntimeClient {
     );
   }
 
+  Future<void> uploadVaultAttachment(
+    String vaultId, {
+    required String attachmentId,
+    required String filename,
+    required String mimeType,
+    required String mediaType,
+    required List<int> bytes,
+  }) async {
+    await _apiClient.putBytes(
+      '/v1/runtime/vaults/$vaultId/blobs/$attachmentId',
+      bytes: bytes,
+      headers: <String, String>{
+        'content-type': mimeType,
+        'x-attachment-id': attachmentId,
+        'x-filename': filename,
+        'x-media-type': mediaType,
+      },
+    );
+  }
+
   Future<RuntimeAgentState> fetchAgentState(
     String vaultId, {
     required String conversationId,

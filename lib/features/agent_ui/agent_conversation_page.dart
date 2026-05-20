@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:cryptography/cryptography.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
@@ -31,6 +35,8 @@ import '../actions/time/date_time_picker_dialog.dart';
 import '../actions/time/time_resolver.dart';
 import '../actions/todo/todo_deeplink.dart';
 import '../attachments/attachment_deeplink.dart';
+import '../attachments/attachment_draft_builders.dart';
+import '../attachments/attachment_draft_send_contract.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../conversation_cards/approval_preview_card.dart';
 import '../conversation_cards/calendar_email_card.dart';
@@ -52,6 +58,7 @@ import 'agent_task_summary.dart';
 import 'agent_ui_acceptance_driver.dart';
 
 part 'agent_assistant_text_message.dart';
+part 'agent_conversation_attachments.dart';
 part 'agent_conversation_widgets.dart';
 
 final class AgentConversationPage extends StatefulWidget {
@@ -96,9 +103,18 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   List<MemoryPageRecord> _memoryPages = const <MemoryPageRecord>[];
   RuntimeAgentState? _runtimeAgentState;
   String? _pendingUserContent;
+  List<_AgentMessageAttachmentView> _pendingUserAttachments =
+      const <_AgentMessageAttachmentView>[];
+  List<AttachmentDraftPayload> _pendingAttachmentDrafts =
+      const <AttachmentDraftPayload>[];
+  Map<String, List<_AgentMessageAttachmentView>> _messageAttachmentsById =
+      const <String, List<_AgentMessageAttachmentView>>{};
+  Map<String, _AgentMessageAttachmentView> _sentAttachmentsByRef =
+      const <String, _AgentMessageAttachmentView>{};
   String _streamingAnswer = '';
   String _streamingReasoning = '';
   String? _askError;
+  int _attachmentDraftSeq = 0;
   List<SecretaryRuntimeApprovalItem> _runtimeApprovalItems =
       const <SecretaryRuntimeApprovalItem>[];
   final Set<String> _busyApprovalIds = <String>{};
@@ -187,9 +203,14 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       conversationId: widget.conversation.id,
     );
     if (mounted) {
+      final projection = _runtimeMessagesFromTurns(
+        state.conversationTurns,
+        localAttachmentsByRef: _sentAttachmentsByRef,
+      );
       setState(() {
         _runtimeAgentState = state;
-        _messages = _messagesFromRuntimeTurns(state.conversationTurns);
+        _messages = projection.messages;
+        _messageAttachmentsById = projection.attachmentsByMessageId;
         _todos = agentTodosFromRuntimeState(state);
         _memoryPages = agentMemoryPagesFromRuntimeRecords(state.memoryRecords);
         _runtimeApprovalItems = _validApprovalItems(
@@ -205,22 +226,6 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       _scrollToLatest();
     }
     return state;
-  }
-
-  List<Message> _messagesFromRuntimeTurns(
-    List<RuntimeConversationTurn> turns,
-  ) {
-    return turns.map((turn) {
-      return Message(
-        id: turn.turnId,
-        conversationId: turn.conversationId,
-        role: turn.role,
-        content: turn.content,
-        createdAtMs: turn.createdAtMs,
-        isMemory: true,
-        citationsJson: turn.citationsJson,
-      );
-    }).toList(growable: false);
   }
 
   Future<void> _refreshVisibleState() async {
@@ -322,24 +327,109 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
     unawaited(_sendText(text));
   }
 
+  String _nextAttachmentLocalId() {
+    _attachmentDraftSeq += 1;
+    return 'agent_attachment_$_attachmentDraftSeq';
+  }
+
+  Future<void> _pickAttachments() async {
+    if (_sending || _thinking) return;
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      withData: true,
+      type: FileType.any,
+    );
+    if (!mounted || result == null || result.files.isEmpty) return;
+
+    final drafts = <AttachmentDraftPayload>[];
+    for (final file in result.files) {
+      final bytes = await _readPickedFileBytes(file);
+      if (!mounted) return;
+      if (bytes == null || bytes.isEmpty) continue;
+      drafts.add(
+        buildAttachmentDraftPayload(
+          localId: _nextAttachmentLocalId(),
+          filename: file.name,
+          mimeType: inferAttachmentMimeTypeFromFilename(file.name),
+          rawBytes: bytes,
+        ),
+      );
+    }
+    if (drafts.isEmpty) return;
+
+    setState(() {
+      _pendingAttachmentDrafts = dedupeAttachmentDraftPayloads([
+        ..._pendingAttachmentDrafts,
+        ...drafts,
+      ]);
+      _askError = null;
+    });
+    _focusNode.requestFocus();
+  }
+
+  Future<Uint8List?> _readPickedFileBytes(PlatformFile file) async {
+    final bytes = file.bytes;
+    if (bytes != null) return bytes;
+    try {
+      return await file.xFile.readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _removePendingAttachment(String localId) {
+    setState(() {
+      _pendingAttachmentDrafts = _pendingAttachmentDrafts
+          .where((draft) => draft.localId != localId)
+          .toList(growable: false);
+    });
+  }
+
   Future<void> _send() async {
     if (_sending || _thinking) return;
 
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    final attachments = List<AttachmentDraftPayload>.from(
+      _pendingAttachmentDrafts,
+    );
+    if (text.isEmpty && attachments.isEmpty) return;
     _controller.clear();
-    await _sendText(text);
+    if (attachments.isNotEmpty) {
+      setState(
+          () => _pendingAttachmentDrafts = const <AttachmentDraftPayload>[]);
+    }
+    await _sendText(text, attachments: attachments);
   }
 
-  Future<void> _sendText(String text) async {
+  Future<void> _sendText(
+    String text, {
+    List<AttachmentDraftPayload> attachments = const <AttachmentDraftPayload>[],
+  }) async {
     if (_sending || _thinking) return;
 
+    final normalizedText = text.trim();
+    final dedupedAttachments = dedupeAttachmentDraftPayloads(attachments);
+    if (normalizedText.isEmpty && dedupedAttachments.isEmpty) return;
+    final messageText = normalizedText.isEmpty
+        ? _attachmentOnlyFallbackText(dedupedAttachments)
+        : normalizedText;
+    final runtimeAttachments =
+        await _runtimeAttachmentPayloads(dedupedAttachments);
+    if (!mounted) return;
+    final outgoingAttachmentViews =
+        _messageAttachmentsFromRuntimePayloads(runtimeAttachments);
     var newUserMessageCommitted = false;
 
     setState(() {
       _sending = true;
       _thinking = true;
-      _pendingUserContent = text;
+      _pendingUserContent = messageText;
+      _pendingUserAttachments = outgoingAttachmentViews;
+      _sentAttachmentsByRef = {
+        ..._sentAttachmentsByRef,
+        for (final attachment in outgoingAttachmentViews)
+          attachment.id: attachment,
+      };
       _streamingAnswer = '';
       _streamingReasoning = '';
       _askError = null;
@@ -355,7 +445,8 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         backend: backend,
         sessionKey: sessionKey,
         conversationId: widget.conversation.id,
-        message: text,
+        message: messageText,
+        attachments: runtimeAttachments,
         runtimeConversationSender: widget.runtimeConversationSender,
       );
       if (!mounted) return;
@@ -372,6 +463,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                 : _runtimeApprovalItems,
           );
           _pendingUserContent = null;
+          _pendingUserAttachments = const <_AgentMessageAttachmentView>[];
           _streamingAnswer = '';
           _streamingReasoning = '';
           _thinking = false;
@@ -406,6 +498,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       _streamingReasoning = '';
       if (newUserMessageCommitted) {
         _pendingUserContent = null;
+        _pendingUserAttachments = const <_AgentMessageAttachmentView>[];
       }
     });
   }
@@ -765,6 +858,8 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                   streamingAnswer: _streamingAnswer,
                   streamingReasoning: _streamingReasoning,
                   askError: _askError,
+                  pendingUserAttachments: _pendingUserAttachments,
+                  messageAttachmentsById: _messageAttachmentsById,
                   onTaskViewed: _recordTaskFocus,
                 );
               },
@@ -775,6 +870,9 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
             controller: _controller,
             focusNode: _focusNode,
             busy: _sending || _thinking,
+            attachments: _pendingAttachmentDrafts,
+            onAttach: () => unawaited(_pickAttachments()),
+            onRemoveAttachment: _removePendingAttachment,
             onSend: _send,
           ),
         ],

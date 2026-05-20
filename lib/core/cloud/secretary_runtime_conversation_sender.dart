@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
 import 'runtime_connection_store.dart';
@@ -12,6 +14,16 @@ abstract interface class ChatRuntimeConversationSender {
     required String vaultId,
     required String conversationId,
     required String message,
+  });
+}
+
+abstract interface class ChatRuntimeConversationAttachmentSender
+    implements ChatRuntimeConversationSender {
+  Future<SecretaryRuntimeConversationResult> sendWithAttachments({
+    required String vaultId,
+    required String conversationId,
+    required String message,
+    required List<Map<String, Object?>> attachments,
   });
 }
 
@@ -47,6 +59,7 @@ abstract interface class ChatRuntimeEntityFocusSender {
 final class SecretaryRuntimeConversationSender
     implements
         ChatRuntimeConversationSender,
+        ChatRuntimeConversationAttachmentSender,
         ChatRuntimeApprovalSender,
         ChatRuntimeEntityFocusSender {
   SecretaryRuntimeConversationSender({
@@ -102,11 +115,69 @@ final class SecretaryRuntimeConversationSender
     required String conversationId,
     required String message,
   }) {
+    return sendWithAttachments(
+      vaultId: vaultId,
+      conversationId: conversationId,
+      message: message,
+      attachments: const <Map<String, Object?>>[],
+    );
+  }
+
+  @override
+  Future<SecretaryRuntimeConversationResult> sendWithAttachments({
+    required String vaultId,
+    required String conversationId,
+    required String message,
+    required List<Map<String, Object?>> attachments,
+  }) async {
+    await _uploadVaultAttachments(
+      vaultId: vaultId,
+      attachments: attachments,
+    );
     return _client.sendConversationMessage(
       vaultId,
       conversationId: conversationId,
       message: message,
+      attachments: attachments,
     );
+  }
+
+  Future<void> _uploadVaultAttachments({
+    required String vaultId,
+    required List<Map<String, Object?>> attachments,
+  }) async {
+    for (final attachment in attachments) {
+      final attachmentId = _attachmentString(
+        attachment,
+        const ['attachment_id', 'id', 'sha256', 'blob_id'],
+      );
+      final encoded = _attachmentString(
+        attachment,
+        const ['content_base64', 'bytes_base64'],
+      );
+      if (attachmentId.isEmpty || encoded.isEmpty) continue;
+      final bytes = base64Decode(encoded);
+      await _client.uploadVaultAttachment(
+        vaultId,
+        attachmentId: attachmentId,
+        filename: _attachmentString(
+          attachment,
+          const ['filename', 'display_name', 'name'],
+          fallback: attachmentId,
+        ),
+        mimeType: _attachmentString(
+          attachment,
+          const ['mime_type', 'content_type'],
+          fallback: 'application/octet-stream',
+        ),
+        mediaType: _attachmentString(
+          attachment,
+          const ['media_type', 'type'],
+          fallback: 'file',
+        ),
+        bytes: bytes,
+      );
+    }
   }
 
   @override
@@ -160,4 +231,16 @@ final class SecretaryRuntimeConversationSender
       title: title,
     );
   }
+}
+
+String _attachmentString(
+  Map<String, Object?> attachment,
+  List<String> keys, {
+  String fallback = '',
+}) {
+  for (final key in keys) {
+    final value = '${attachment[key] ?? ''}'.trim();
+    if (value.isNotEmpty && value != 'null') return value;
+  }
+  return fallback;
 }

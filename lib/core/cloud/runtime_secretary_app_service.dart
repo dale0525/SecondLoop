@@ -20,13 +20,23 @@ final class RuntimeSecretaryAppService {
     required String vaultId,
     required String conversationId,
     required String message,
+    List<Map<String, Object?>> attachments = const <Map<String, Object?>>[],
     String? sourceMessageId,
   }) async {
-    final result = await _sender.send(
-      vaultId: vaultId,
-      conversationId: conversationId,
-      message: message,
-    );
+    final sender = _sender;
+    final result = attachments.isNotEmpty &&
+            sender is ChatRuntimeConversationAttachmentSender
+        ? await sender.sendWithAttachments(
+            vaultId: vaultId,
+            conversationId: conversationId,
+            message: message,
+            attachments: attachments,
+          )
+        : await sender.send(
+            vaultId: vaultId,
+            conversationId: conversationId,
+            message: message,
+          );
     await applyResult(
       result,
       conversationId: conversationId,

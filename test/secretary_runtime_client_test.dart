@@ -443,6 +443,45 @@ void main() {
     expect(run.metadata.runStatus, 'unknown_future_status');
   });
 
+  test('uploads conversation attachments through the runtime vault proxy',
+      () async {
+    late http.Request capturedRequest;
+    final client = SecretaryRuntimeClient(
+      apiClient: RuntimeApiClient(
+        connectionStore: RuntimeConnectionStore(),
+        httpClient: MockClient((request) async {
+          capturedRequest = request;
+          return http.Response(
+            jsonEncode({'ok': true, 'blob_id': 'sha-1'}),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      ),
+    );
+
+    await client.uploadVaultAttachment(
+      'vault-1',
+      attachmentId: 'sha-1',
+      filename: 'qa-ocr-sample.png',
+      mimeType: 'image/png',
+      mediaType: 'image',
+      bytes: const <int>[1, 2, 3],
+    );
+
+    expect(
+      capturedRequest.url.path,
+      '/v1/runtime/vaults/vault-1/blobs/sha-1',
+    );
+    expect(capturedRequest.method, 'PUT');
+    expect(capturedRequest.headers['authorization'], 'Bearer runtime-token-1');
+    expect(capturedRequest.headers['content-type'], 'image/png');
+    expect(capturedRequest.headers['x-attachment-id'], 'sha-1');
+    expect(capturedRequest.headers['x-filename'], 'qa-ocr-sample.png');
+    expect(capturedRequest.headers['x-media-type'], 'image');
+    expect(capturedRequest.bodyBytes, const <int>[1, 2, 3]);
+  });
+
   test('hosted managed pro sender routes runtime chat through cloud gateway',
       () async {
     final requests = <http.BaseRequest>[];

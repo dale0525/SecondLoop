@@ -62,6 +62,8 @@ final class _MessageList extends StatelessWidget {
     required this.streamingAnswer,
     required this.streamingReasoning,
     required this.askError,
+    required this.pendingUserAttachments,
+    required this.messageAttachmentsById,
     this.onTaskViewed,
   });
 
@@ -75,6 +77,8 @@ final class _MessageList extends StatelessWidget {
   final String streamingAnswer;
   final String streamingReasoning;
   final String? askError;
+  final List<_AgentMessageAttachmentView> pendingUserAttachments;
+  final Map<String, List<_AgentMessageAttachmentView>> messageAttachmentsById;
   final Future<void> Function(Todo todo)? onTaskViewed;
 
   @override
@@ -103,7 +107,10 @@ final class _MessageList extends StatelessWidget {
           child: _AcceptanceCardStack(cards: acceptanceCards),
         ),
       if (pendingContent != null && pendingContent.isNotEmpty)
-        _UserMessage(content: pendingContent),
+        _UserMessage(
+          content: pendingContent,
+          attachments: pendingUserAttachments,
+        ),
       if (streamingContent.isNotEmpty)
         _AssistantTextMessage(
           content: streamingContent,
@@ -151,7 +158,13 @@ final class _MessageList extends StatelessWidget {
         );
         sourceUserMessageId = null;
       } else {
-        widgets.add(_UserMessage(content: message.content));
+        widgets.add(
+          _UserMessage(
+            content: message.content,
+            attachments: messageAttachmentsById[message.id] ??
+                const <_AgentMessageAttachmentView>[],
+          ),
+        );
         sourceUserMessageId = message.id;
       }
     }
@@ -193,9 +206,13 @@ final class _AcceptanceCardStack extends StatelessWidget {
 }
 
 final class _UserMessage extends StatelessWidget {
-  const _UserMessage({required this.content});
+  const _UserMessage({
+    required this.content,
+    this.attachments = const <_AgentMessageAttachmentView>[],
+  });
 
   final String content;
+  final List<_AgentMessageAttachmentView> attachments;
 
   @override
   Widget build(BuildContext context) {
@@ -218,15 +235,108 @@ final class _UserMessage extends StatelessWidget {
                 horizontal: AgentDesignTokens.gapLg,
                 vertical: AgentDesignTokens.gapMd,
               ),
-              child: Text(
-                content,
-                style: const TextStyle(
-                  color: _AgentConversationPageState._ink,
-                  fontWeight: FontWeight.w700,
-                  height: 1.45,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (content.trim().isNotEmpty)
+                    Text(
+                      content,
+                      style: const TextStyle(
+                        color: _AgentConversationPageState._ink,
+                        fontWeight: FontWeight.w700,
+                        height: 1.45,
+                      ),
+                    ),
+                  if (attachments.isNotEmpty) ...[
+                    if (content.trim().isNotEmpty)
+                      const SizedBox(height: AgentDesignTokens.gapMd),
+                    _MessageAttachmentStrip(attachments: attachments),
+                  ],
+                ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _MessageAttachmentStrip extends StatelessWidget {
+  const _MessageAttachmentStrip({required this.attachments});
+
+  final List<_AgentMessageAttachmentView> attachments;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      key: const ValueKey('agent_message_attachment_strip'),
+      spacing: AgentDesignTokens.gapSm,
+      runSpacing: AgentDesignTokens.gapSm,
+      children: [
+        for (final attachment in attachments)
+          _MessageAttachmentTile(attachment: attachment),
+      ],
+    );
+  }
+}
+
+final class _MessageAttachmentTile extends StatelessWidget {
+  const _MessageAttachmentTile({required this.attachment});
+
+  final _AgentMessageAttachmentView attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewBytes = attachment.bytes;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 240),
+      child: DecoratedBox(
+        key: ValueKey('agent_message_attachment_chip_${attachment.id}'),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.72),
+          borderRadius: BorderRadius.circular(AgentDesignTokens.radiusSm),
+          border: Border.all(color: const Color(0xFFBFD2FF)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AgentDesignTokens.gapSm),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (attachment.isImage && previewBytes != null)
+                ClipRRect(
+                  borderRadius:
+                      BorderRadius.circular(AgentDesignTokens.radiusSm),
+                  child: Image.memory(
+                    previewBytes,
+                    key: ValueKey(
+                      'agent_message_attachment_image_${attachment.id}',
+                    ),
+                    width: 64,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.image_outlined, size: 22),
+                  ),
+                )
+              else
+                const Icon(Icons.attach_file_rounded, size: 20),
+              const SizedBox(width: AgentDesignTokens.gapSm),
+              Flexible(
+                child: Text(
+                  attachment.filename,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _AgentConversationPageState._ink,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -660,12 +770,18 @@ final class _Composer extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.busy,
+    required this.attachments,
+    required this.onAttach,
+    required this.onRemoveAttachment,
     required this.onSend,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
+  final List<AttachmentDraftPayload> attachments;
+  final VoidCallback onAttach;
+  final ValueChanged<String> onRemoveAttachment;
   final VoidCallback onSend;
 
   @override
@@ -686,52 +802,103 @@ final class _Composer extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: TextField(
-                key: const ValueKey('chat_input'),
-                controller: controller,
-                focusNode: focusNode,
-                minLines: 1,
-                maxLines: 5,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(
-                  hintText: t.composerHint,
-                  border: InputBorder.none,
-                  isDense: true,
-                ),
-                style: const TextStyle(
-                  color: _AgentConversationPageState._ink,
-                  fontWeight: FontWeight.w700,
-                ),
+            if (attachments.isNotEmpty) ...[
+              _AttachmentDraftStrip(
+                attachments: attachments,
+                onRemoveAttachment: onRemoveAttachment,
               ),
-            ),
-            IconButton(
-              tooltip: t.attach,
-              onPressed: busy ? null : () {},
-              icon: const Icon(Icons.add_rounded),
-            ),
-            IconButton(
-              tooltip: t.record,
-              onPressed: busy ? null : () {},
-              icon: const Icon(Icons.mic_none_rounded),
-            ),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, child) {
-                final enabled = !busy && value.text.trim().isNotEmpty;
-                return FilledButton.icon(
-                  key: const ValueKey('chat_send'),
-                  onPressed: enabled ? onSend : null,
-                  icon: const Icon(Icons.send_rounded, size: 18),
-                  label: Text(busy ? t.working : t.send),
-                );
-              },
+              const SizedBox(height: AgentDesignTokens.gapSm),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('chat_input'),
+                    controller: controller,
+                    focusNode: focusNode,
+                    minLines: 1,
+                    maxLines: 5,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: t.composerHint,
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                    style: const TextStyle(
+                      color: _AgentConversationPageState._ink,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  key: const ValueKey('chat_attach'),
+                  tooltip: t.attach,
+                  onPressed: busy ? null : onAttach,
+                  icon: const Icon(Icons.add_rounded),
+                ),
+                IconButton(
+                  tooltip: t.record,
+                  onPressed: busy ? null : () {},
+                  icon: const Icon(Icons.mic_none_rounded),
+                ),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller,
+                  builder: (context, value, child) {
+                    final enabled = !busy &&
+                        (value.text.trim().isNotEmpty ||
+                            attachments.isNotEmpty);
+                    return FilledButton.icon(
+                      key: const ValueKey('chat_send'),
+                      onPressed: enabled ? onSend : null,
+                      icon: const Icon(Icons.send_rounded, size: 18),
+                      label: Text(busy ? t.working : t.send),
+                    );
+                  },
+                ),
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+final class _AttachmentDraftStrip extends StatelessWidget {
+  const _AttachmentDraftStrip({
+    required this.attachments,
+    required this.onRemoveAttachment,
+  });
+
+  final List<AttachmentDraftPayload> attachments;
+  final ValueChanged<String> onRemoveAttachment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      key: const ValueKey('agent_attachment_draft_strip'),
+      spacing: AgentDesignTokens.gapSm,
+      runSpacing: AgentDesignTokens.gapSm,
+      children: [
+        for (final attachment in attachments)
+          InputChip(
+            key: ValueKey('agent_attachment_chip_${attachment.localId}'),
+            avatar: const Icon(Icons.attach_file_rounded, size: 16),
+            label: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(
+                attachment.normalizedFilename,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            onDeleted: () => onRemoveAttachment(attachment.localId),
+          ),
+      ],
     );
   }
 }

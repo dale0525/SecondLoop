@@ -73,6 +73,46 @@ final class RuntimeApiClient {
     );
   }
 
+  Future<Map<String, dynamic>?> putBytes(
+    String path, {
+    required List<int> bytes,
+    Map<String, String>? headers,
+  }) async {
+    final connection =
+        await (_connectionLoader ?? _connectionStore.loadConnection)();
+    if (connection == null) {
+      throw StateError('missing_cloud_runtime_connection');
+    }
+
+    final uri = Uri.parse(connection.manifest.apiBaseUrl).resolve(path);
+    final request = http.Request('PUT', uri);
+    request.headers.addAll(_buildHeaders(connection.profile));
+    if (headers != null) {
+      request.headers.addAll(headers);
+    }
+    request.bodyBytes = bytes;
+
+    final streamed = await _httpClient.send(request);
+    final response = await http.Response.fromStream(streamed);
+    final responseBody = utf8.decode(response.bodyBytes);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw CloudRuntimeApiException(
+        uri: uri,
+        statusCode: response.statusCode,
+        responseBody: responseBody,
+      );
+    }
+
+    if (responseBody.trim().isEmpty) {
+      return null;
+    }
+    final decoded = jsonDecode(responseBody);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('invalid_cloud_runtime_response');
+    }
+    return decoded;
+  }
+
   Future<Map<String, dynamic>?> _sendJson({
     required String method,
     required String path,
