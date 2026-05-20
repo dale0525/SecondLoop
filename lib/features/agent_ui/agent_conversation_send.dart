@@ -30,6 +30,9 @@ final class AgentConversationSendResult {
     required this.userMessageCommitted,
     required this.sawVisibleDelta,
     required this.approvalItems,
+    required this.assistantContent,
+    required this.mediaResults,
+    required this.turnId,
     this.streamError,
   });
 
@@ -38,6 +41,9 @@ final class AgentConversationSendResult {
   final bool sawVisibleDelta;
   final String? streamError;
   final List<SecretaryRuntimeApprovalItem> approvalItems;
+  final String assistantContent;
+  final List<Map<String, Object?>> mediaResults;
+  final String turnId;
 }
 
 Future<AgentConversationSendResult> sendAgentConversationMessage({
@@ -80,6 +86,7 @@ Future<AgentConversationSendResult> sendAgentConversationMessage({
         message: message,
         attachments: attachments,
       );
+      userMessageCommitted = true;
       var approvalItems = result.metadata.approvalItems;
       if (approvalItems.isEmpty && result.metadata.approvalRequired) {
         approvalItems = await service.fetchApprovalItems(vaultId: vaultId);
@@ -89,6 +96,9 @@ Future<AgentConversationSendResult> sendAgentConversationMessage({
         userMessageCommitted: userMessageCommitted,
         sawVisibleDelta: result.assistantContent.trim().isNotEmpty,
         approvalItems: _validApprovalItems(approvalItems),
+        assistantContent: result.assistantContent,
+        mediaResults: result.metadata.mediaResults,
+        turnId: result.metadata.turnId,
       );
     }
 

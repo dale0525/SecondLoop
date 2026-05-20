@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -18,6 +19,7 @@ import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
+import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -117,8 +119,7 @@ void main() {
       const attachmentId =
           '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81';
       final sender = _FakeRuntimeConversationSender()
-        ..fetchedAttachmentBytes[attachmentId] =
-            Uint8List.fromList(<int>[1, 2, 3]);
+        ..fetchedAttachmentBytes[attachmentId] = _tinyPngBytes();
       final repository = _StaticRuntimeAgentStateRepository(
         RuntimeAgentState.fromJson(const {
           'vault_id': 'uid_1',
@@ -176,8 +177,73 @@ void main() {
         ),
         findsOneWidget,
       );
+
+      final imageRect = tester.getRect(
+        find.byKey(
+          const ValueKey('agent_message_attachment_image_$attachmentId'),
+        ),
+      );
+      final attachmentChip = find.byKey(
+        const ValueKey('agent_message_attachment_chip_$attachmentId'),
+      );
+      final filenameRect = tester.getRect(
+        find.descendant(
+          of: attachmentChip,
+          matching: find.text('qa-ocr-sample.png'),
+        ),
+      );
+      expect(imageRect.width, greaterThan(filenameRect.height));
+      expect(filenameRect.top, greaterThanOrEqualTo(imageRect.bottom));
+
+      await tester.tap(attachmentChip);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(AttachmentViewerPage), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('attachment_image_preview_surface')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.broken_image_outlined), findsNothing);
     },
   );
+
+  testWidgets(
+    'agent conversation keeps successful runtime reply visible when state refresh fails',
+    (tester) async {
+      final sender = _FakeRuntimeConversationSender();
+      final repository = _ThrowingRuntimeAgentStateRepository(
+        StateError('agent_state_unavailable'),
+      );
+
+      await _pumpManagedProAgentConversation(
+        tester,
+        sender: sender,
+        runtimeAgentStateRepository: repository,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('chat_input')),
+        'Extract text from this image.',
+      );
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('chat_send')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+
+      expect(sender.sentMessages, <String>['Extract text from this image.']);
+      expect(find.text('Attachment received.'), findsOneWidget);
+      expect(find.text('Ask AI failed. Please try again.'), findsNothing);
+    },
+  );
+}
+
+Uint8List _tinyPngBytes() {
+  const b64 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBApGq4QAAAABJRU5ErkJggg==';
+  return Uint8List.fromList(base64Decode(b64));
 }
 
 Future<void> _pumpManagedProAgentConversation(
@@ -322,6 +388,21 @@ final class _StaticRuntimeAgentStateRepository
     required String conversationId,
   }) async =>
       state;
+}
+
+final class _ThrowingRuntimeAgentStateRepository
+    implements RuntimeAgentStateRepository {
+  const _ThrowingRuntimeAgentStateRepository(this.error);
+
+  final Object error;
+
+  @override
+  Future<RuntimeAgentState> fetchAgentState({
+    required String vaultId,
+    required String conversationId,
+  }) async {
+    throw error;
+  }
 }
 
 final class _FakeRuntimeConversationSender

@@ -64,6 +64,7 @@ final class _MessageList extends StatelessWidget {
     required this.askError,
     required this.pendingUserAttachments,
     required this.messageAttachmentsById,
+    required this.messageMediaResultsById,
     this.onTaskViewed,
   });
 
@@ -79,6 +80,7 @@ final class _MessageList extends StatelessWidget {
   final String? askError;
   final List<_AgentMessageAttachmentView> pendingUserAttachments;
   final Map<String, List<_AgentMessageAttachmentView>> messageAttachmentsById;
+  final Map<String, List<_AgentMessageMediaResultView>> messageMediaResultsById;
   final Future<void> Function(Todo todo)? onTaskViewed;
 
   @override
@@ -154,6 +156,8 @@ final class _MessageList extends StatelessWidget {
               message: message,
               sourceUserMessageId: sourceUserMessageId,
             ),
+            mediaResults: messageMediaResultsById[message.id] ??
+                const <_AgentMessageMediaResultView>[],
           ),
         );
         sourceUserMessageId = null;
@@ -290,53 +294,88 @@ final class _MessageAttachmentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final previewBytes = attachment.bytes;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 240),
-      child: DecoratedBox(
-        key: ValueKey('agent_message_attachment_chip_${attachment.id}'),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.72),
+    return SizedBox(
+      width: 112,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('agent_message_attachment_chip_${attachment.id}'),
           borderRadius: BorderRadius.circular(AgentDesignTokens.radiusSm),
-          border: Border.all(color: const Color(0xFFBFD2FF)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AgentDesignTokens.gapSm),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (attachment.isImage && previewBytes != null)
-                ClipRRect(
-                  borderRadius:
-                      BorderRadius.circular(AgentDesignTokens.radiusSm),
-                  child: Image.memory(
-                    previewBytes,
-                    key: ValueKey(
-                      'agent_message_attachment_image_${attachment.id}',
+          onTap: () => _openAttachment(context),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.72),
+              borderRadius: BorderRadius.circular(AgentDesignTokens.radiusSm),
+              border: Border.all(color: const Color(0xFFBFD2FF)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(AgentDesignTokens.gapSm),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height:
+                        attachment.isImage && previewBytes != null ? 72 : 48,
+                    child: attachment.isImage && previewBytes != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AgentDesignTokens.radiusSm,
+                            ),
+                            child: Image.memory(
+                              previewBytes,
+                              key: ValueKey(
+                                'agent_message_attachment_image_${attachment.id}',
+                              ),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Icon(Icons.image_outlined, size: 22),
+                              ),
+                            ),
+                          )
+                        : const Center(
+                            child: Icon(Icons.attach_file_rounded, size: 24),
+                          ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    attachment.filename,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: _AgentConversationPageState._ink,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      height: 1.25,
                     ),
-                    width: 64,
-                    height: 48,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.image_outlined, size: 22),
                   ),
-                )
-              else
-                const Icon(Icons.attach_file_rounded, size: 20),
-              const SizedBox(width: AgentDesignTokens.gapSm),
-              Flexible(
-                child: Text(
-                  attachment.filename,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _AgentConversationPageState._ink,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    height: 1.2,
-                  ),
-                ),
+                ],
               ),
-            ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openAttachment(BuildContext context) {
+    final attachmentId = attachment.id.trim();
+    if (attachmentId.isEmpty) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          AttachmentViewerPage(
+            attachment: Attachment(
+              sha256: attachmentId,
+              mimeType: attachment.mimeType,
+              path: attachment.filename,
+              byteLen: attachment.bytes?.length ?? 0,
+              createdAtMs: 0,
+            ),
+            initialBytes: attachment.bytes,
           ),
         ),
       ),

@@ -24,6 +24,8 @@ import 'package:secondloop/core/subscription/cloud_subscription_controller.dart'
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
 import 'package:secondloop/features/agent_ui/agent_ui_acceptance_driver.dart';
+import 'package:secondloop/features/review/review_models.dart';
+import 'package:secondloop/features/review/review_page.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/ui/sl_background.dart';
 
@@ -357,7 +359,10 @@ final class _ManagedProAcceptanceApp extends StatelessWidget {
                       child: SessionScope(
                         sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
                         lock: () {},
-                        child: const AppShell(),
+                        child: AppShell(
+                          reviewTabBuilder: (_, __) =>
+                              ReviewPage(items: demoReviewItems()),
+                        ),
                       ),
                     ),
                   ),

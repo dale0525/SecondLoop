@@ -203,6 +203,11 @@ void main() {
 
     expect(find.text('Preview unavailable'), findsOneWidget);
     expect(find.textContaining('media_download_remoteMissing'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.refresh));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

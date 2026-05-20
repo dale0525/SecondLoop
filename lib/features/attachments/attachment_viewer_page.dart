@@ -59,6 +59,7 @@ class AttachmentViewerPage extends StatefulWidget {
     required this.attachment,
     this.cloudMediaDownload,
     this.isWebOverride,
+    this.initialBytes,
     this.initialContentKind,
     this.initialChunkIndex,
     super.key,
@@ -67,6 +68,7 @@ class AttachmentViewerPage extends StatefulWidget {
   final Attachment attachment;
   final CloudMediaDownload? cloudMediaDownload;
   final bool? isWebOverride;
+  final Uint8List? initialBytes;
   final String? initialContentKind;
   final int? initialChunkIndex;
 
@@ -231,7 +233,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _bytesFuture ??= _loadBytes();
+    _bytesFuture ??= _initialBytesFuture();
     final isImage = widget.attachment.mimeType.startsWith('image/');
     if (_metadataFuture == null) {
       _startMetadataLoad();
@@ -254,6 +256,41 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     }
     _attachSyncEngine();
     _probeRetryRouteAvailability();
+  }
+
+  Future<Uint8List> _initialBytesFuture() {
+    final bytes = widget.initialBytes;
+    if (bytes != null && bytes.isNotEmpty) {
+      return Future<Uint8List>.value(bytes);
+    }
+    return _loadBytes();
+  }
+
+  void _retryLoadBytesAfterError() {
+    final completer = Completer<Uint8List>();
+    setState(() {
+      _bytesFuture = completer.future;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        if (!completer.isCompleted) {
+          completer.completeError(StateError('attachment_viewer_disposed'));
+        }
+        return;
+      }
+      unawaited(
+        _loadBytes().then(
+          (bytes) {
+            if (!completer.isCompleted) completer.complete(bytes);
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (!completer.isCompleted) {
+              completer.completeError(error, stackTrace);
+            }
+          },
+        ),
+      );
+    });
   }
 
   @override
@@ -1167,8 +1204,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                           Text(errorText, textAlign: TextAlign.center),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
-                            onPressed: () =>
-                                setState(() => _bytesFuture = _loadBytes()),
+                            onPressed: _retryLoadBytesAfterError,
                             icon: const Icon(Icons.refresh),
                             label: Text(context.t.common.actions.refresh),
                           ),

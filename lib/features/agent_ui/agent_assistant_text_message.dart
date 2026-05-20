@@ -5,6 +5,7 @@ final class _AssistantTextMessage extends StatelessWidget {
     required this.content,
     required this.time,
     this.createdTasks = const <Todo>[],
+    this.mediaResults = const <_AgentMessageMediaResultView>[],
     this.sourceMessage,
     this.onTaskViewed,
   });
@@ -12,6 +13,7 @@ final class _AssistantTextMessage extends StatelessWidget {
   final String content;
   final String time;
   final List<Todo> createdTasks;
+  final List<_AgentMessageMediaResultView> mediaResults;
   final Message? sourceMessage;
   final Future<void> Function(Todo todo)? onTaskViewed;
 
@@ -325,6 +327,18 @@ final class _AssistantTextMessage extends StatelessWidget {
                             ),
                           ),
                         ),
+                      if (mediaResults.isNotEmpty) ...[
+                        if (displayText.isNotEmpty)
+                          const SizedBox(height: AgentDesignTokens.gapMd),
+                        KeyedSubtree(
+                          key: ValueKey(
+                            'agent_assistant_media_results_${message?.id ?? 'live'}',
+                          ),
+                          child: _AssistantRuntimeMediaResults(
+                            results: mediaResults,
+                          ),
+                        ),
+                      ],
                       if ((evidence != null && evidence.hasEvidence) ||
                           actionSuggestions.isNotEmpty)
                         ChatAssistantMessageFooter(

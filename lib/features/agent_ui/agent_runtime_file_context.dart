@@ -79,12 +79,7 @@ List<ConversationContextItem> agentRuntimeRecentFileItems(
     items.add(
       ConversationContextItem(
         title: attachment.filename,
-        subtitle: _runtimeFileSubtitle(
-          summary: null,
-          text: null,
-          status: 'registered',
-          mimeType: attachment.mimeType,
-        ),
+        subtitle: _uploadedFileSubtitle(attachment.mimeType),
       ),
     );
   }
@@ -97,13 +92,46 @@ String _runtimeFileSubtitle({
   required String? status,
   required String? mimeType,
 }) {
-  final parts = <String>[
-    if (summary != null) summary,
-    if (text != null && (summary == null || !summary.contains(text))) text,
-    if (status != null) status,
-    if (mimeType != null) mimeType,
-  ];
-  return parts.isEmpty ? 'Attachment' : parts.join(' · ');
+  final normalizedSummary = _compactRuntimeText(summary);
+  if (normalizedSummary != null) return normalizedSummary;
+
+  final normalizedText = _compactRuntimeText(text);
+  if (normalizedText != null) return 'Extracted text: $normalizedText';
+
+  final kind = _fileKindLabel(mimeType);
+  final normalizedStatus = status?.trim().toLowerCase() ?? '';
+  if (normalizedStatus.contains('fail') || normalizedStatus.contains('error')) {
+    return '$kind processing failed';
+  }
+  if (normalizedStatus.contains('running') ||
+      normalizedStatus.contains('pending') ||
+      normalizedStatus.contains('processing')) {
+    return '$kind processing';
+  }
+  if (normalizedStatus.isNotEmpty && normalizedStatus != 'registered') {
+    return '$kind processed';
+  }
+  return _uploadedFileSubtitle(mimeType);
+}
+
+String _uploadedFileSubtitle(String? mimeType) {
+  return '${_fileKindLabel(mimeType)} uploaded';
+}
+
+String _fileKindLabel(String? mimeType) {
+  final normalized = mimeType?.trim().toLowerCase() ?? '';
+  if (normalized.startsWith('image/')) return 'Image';
+  if (normalized == 'application/pdf') return 'PDF';
+  if (normalized.startsWith('audio/')) return 'Audio';
+  if (normalized.startsWith('video/')) return 'Video';
+  return 'File';
+}
+
+String? _compactRuntimeText(String? value) {
+  final normalized = value?.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (normalized == null || normalized.isEmpty) return null;
+  if (normalized.length <= 96) return normalized;
+  return '${normalized.substring(0, 95)}…';
 }
 
 _RuntimeFileAttachment? _runtimeFileAttachment(Object? raw) {

@@ -15,6 +15,7 @@ import '../../core/cloud/runtime_secretary_app_service.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/secretary_runtime_client.dart';
 import '../../core/cloud/secretary_runtime_conversation_sender.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/quick_capture/quick_capture_controller.dart';
 import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
@@ -59,6 +60,8 @@ import 'agent_ui_acceptance_driver.dart';
 
 part 'agent_assistant_text_message.dart';
 part 'agent_conversation_attachments.dart';
+part 'agent_conversation_runtime_helpers.dart';
+part 'agent_runtime_media_results.dart';
 part 'agent_conversation_widgets.dart';
 
 final class AgentConversationPage extends StatefulWidget {
@@ -109,6 +112,8 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       const <AttachmentDraftPayload>[];
   Map<String, List<_AgentMessageAttachmentView>> _messageAttachmentsById =
       const <String, List<_AgentMessageAttachmentView>>{};
+  Map<String, List<_AgentMessageMediaResultView>> _messageMediaResultsById =
+      const <String, List<_AgentMessageMediaResultView>>{};
   Map<String, _AgentMessageAttachmentView> _sentAttachmentsByRef =
       const <String, _AgentMessageAttachmentView>{};
   String _streamingAnswer = '';
@@ -206,6 +211,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       final projection = _runtimeMessagesFromTurns(
         state.conversationTurns,
         localAttachmentsByRef: _sentAttachmentsByRef,
+        mediaRecords: _runtimeMediaResultRecordsForState(state),
       );
       final attachmentsByMessageId = await _hydrateRuntimeAttachmentBytes(
         projection.attachmentsByMessageId,
@@ -217,6 +223,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         _runtimeAgentState = state;
         _messages = projection.messages;
         _messageAttachmentsById = attachmentsByMessageId;
+        _messageMediaResultsById = projection.mediaResultsByMessageId;
         _todos = agentTodosFromRuntimeState(state);
         _memoryPages = agentMemoryPagesFromRuntimeRecords(state.memoryRecords);
         _runtimeApprovalItems = _validApprovalItems(
@@ -238,8 +245,10 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
     if (_usesRuntimeAgentState) {
       final future = _loadRuntimeAgentState();
       _runtimeAgentStateFuture = future;
-      _messagesFuture = future.then((_) => List<Message>.from(_messages));
       await future;
+      _messagesFuture = Future<List<Message>>.value(
+        List<Message>.from(_messages),
+      );
       return;
     }
     await Future.wait<Object>([
@@ -460,9 +469,21 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
 
       if (result.routeKind == AskAiRouteKind.cloudGateway) {
         syncEngine?.notifyExternalChange();
-        await _refreshVisibleState();
+        try {
+          await _refreshVisibleState();
+        } catch (_) {
+          if (!mounted) return;
+          _showRuntimeSendFallback(
+            userContent: messageText,
+            userAttachments: outgoingAttachmentViews,
+            result: result,
+          );
+          _scrollToLatest();
+          return;
+        }
         if (!mounted) return;
         setState(() {
+          _applyRuntimeResultMediaFallback(result);
           _runtimeApprovalItems = _validApprovalItems(
             _runtimeApprovalItems.isEmpty
                 ? result.approvalItems
@@ -507,6 +528,10 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         _pendingUserAttachments = const <_AgentMessageAttachmentView>[];
       }
     });
+  }
+
+  void _updateRuntimeState(VoidCallback update) {
+    setState(update);
   }
 
   void _scrollToLatest() {
@@ -866,6 +891,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                   askError: _askError,
                   pendingUserAttachments: _pendingUserAttachments,
                   messageAttachmentsById: _messageAttachmentsById,
+                  messageMediaResultsById: _messageMediaResultsById,
                   onTaskViewed: _recordTaskFocus,
                 );
               },
@@ -915,54 +941,4 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       // Task viewing should never block task inspection.
     }
   }
-}
-
-List<SecretaryRuntimeApprovalItem> _validApprovalItems(
-  List<SecretaryRuntimeApprovalItem> items,
-) {
-  return items
-      .where((item) => item.id.trim().isNotEmpty)
-      .toList(growable: false);
-}
-
-int? _runtimeDueAtMs(Map<String, Object?> record) {
-  return _runtimeInt(record['due_at_ms']) ??
-      _runtimeInt(record['dueAtMs']) ??
-      _runtimeInt(record['new_due_at_ms']) ??
-      _runtimeInt(record['newDueAtMs']) ??
-      _runtimeIsoDateTimeMs(record['due_local_iso']) ??
-      _runtimeIsoDateTimeMs(record['dueLocalIso']) ??
-      _runtimeTodayTimeMs(record['due_time']) ??
-      _runtimeTodayTimeMs(record['dueTime']) ??
-      _runtimeTodayTimeMs(record['new_due_time']) ??
-      _runtimeTodayTimeMs(record['newDueTime']);
-}
-
-int? _runtimeIsoDateTimeMs(Object? raw) {
-  if (raw is! String) return null;
-  final value = raw.trim();
-  if (value.isEmpty) return null;
-  return DateTime.tryParse(value)?.millisecondsSinceEpoch;
-}
-
-int? _runtimeTodayTimeMs(Object? raw) {
-  if (raw is! String) return null;
-  final match =
-      RegExp(r'([01]?\d|2[0-3])\s*[:：]\s*([0-5]\d)').firstMatch(raw.trim());
-  if (match == null) return null;
-  final now = DateTime.now();
-  return DateTime(
-    now.year,
-    now.month,
-    now.day,
-    int.parse(match.group(1)!),
-    int.parse(match.group(2)!),
-  ).millisecondsSinceEpoch;
-}
-
-int? _runtimeInt(Object? raw) {
-  if (raw is int) return raw;
-  if (raw is num) return raw.toInt();
-  if (raw is String) return int.tryParse(raw);
-  return null;
 }

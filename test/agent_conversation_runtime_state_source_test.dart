@@ -373,6 +373,137 @@ void main() {
   );
 
   testWidgets(
+    'managed pro conversation shows audio meeting media result under assistant reply',
+    (tester) async {
+      const attachmentId = 'sha-audio-1';
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [
+            {
+              'turn_id': 'turn-user-audio',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'user',
+              'content': '生成会议纪要、决策和行动项。',
+              'attachment_refs': [attachmentId],
+              'attachments': [
+                {
+                  'attachment_id': attachmentId,
+                  'blob_id': attachmentId,
+                  'sha256': attachmentId,
+                  'filename': 'qa-meeting-audio.m4a',
+                  'mime_type': 'audio/mp4',
+                  'media_type': 'audio',
+                },
+              ],
+              'created_at_ms': 1700000000000,
+            },
+            {
+              'turn_id': 'turn-assistant-audio',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'assistant',
+              'content': '已为您生成会议纪要、决策和行动项：',
+              'created_at_ms': 1700000000100,
+            },
+          ],
+          'working_set_records': [
+            {
+              'id': 'media-result-sha-audio-1',
+              'kind': 'media_result',
+              'attachment_id': attachmentId,
+              'media_type': 'audio',
+              'transcript': 'Alex: 我们下周三前确认发布清单。',
+              'meeting_minutes': '会议纪要：团队确认发布清单和预算节奏。',
+              'decisions': ['同意 6 月 1 日发布。'],
+              'action_items': ['Alex 跟进预算确认。'],
+              'status': 'completed',
+            },
+          ],
+          'tasks': [],
+          'memory_records': [],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [],
+          'latest_context_snapshot': null,
+          'audit_refs': [],
+        }),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1012, 701));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: _ThrowingLocalStoreBackend(),
+              child: CloudAuthScope(
+                controller: _CloudAuthController(),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.example.test',
+                  modelName: 'cloud',
+                ),
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeAgentStateRepository: repository,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final inlineResult = find.byKey(
+        const ValueKey('agent_assistant_media_results_turn-assistant-audio'),
+      );
+
+      expect(inlineResult, findsOneWidget);
+      expect(
+        find.descendant(
+          of: inlineResult,
+          matching: find.textContaining('Alex: 我们下周三前确认发布清单。'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: inlineResult,
+          matching: find.textContaining('会议纪要：团队确认发布清单和预算节奏。'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: inlineResult,
+          matching: find.textContaining('同意 6 月 1 日发布。'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: inlineResult,
+          matching: find.textContaining('Alex 跟进预算确认。'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'managed pro conversation loads runtime state after cloud auth warms',
     (tester) async {
       final controller = _MutableCloudAuthController();

@@ -4,10 +4,12 @@ final class _RuntimeMessageProjection {
   const _RuntimeMessageProjection({
     required this.messages,
     required this.attachmentsByMessageId,
+    required this.mediaResultsByMessageId,
   });
 
   final List<Message> messages;
   final Map<String, List<_AgentMessageAttachmentView>> attachmentsByMessageId;
+  final Map<String, List<_AgentMessageMediaResultView>> mediaResultsByMessageId;
 }
 
 final class _AgentMessageAttachmentView {
@@ -107,6 +109,8 @@ extension _AgentConversationAttachmentHydration on _AgentConversationPageState {
 _RuntimeMessageProjection _runtimeMessagesFromTurns(
   List<RuntimeConversationTurn> turns, {
   required Map<String, _AgentMessageAttachmentView> localAttachmentsByRef,
+  List<RuntimeWorkingSetRecord> mediaRecords =
+      const <RuntimeWorkingSetRecord>[],
 }) {
   final messages = <Message>[];
   final attachmentsByMessageId = <String, List<_AgentMessageAttachmentView>>{};
@@ -132,6 +136,11 @@ _RuntimeMessageProjection _runtimeMessagesFromTurns(
   return _RuntimeMessageProjection(
     messages: messages,
     attachmentsByMessageId: Map.unmodifiable(attachmentsByMessageId),
+    mediaResultsByMessageId: _messageMediaResultsFromRuntimeRecords(
+      turns: turns,
+      mediaRecords: mediaRecords,
+      localAttachmentsByRef: localAttachmentsByRef,
+    ),
   );
 }
 
