@@ -207,10 +207,16 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         state.conversationTurns,
         localAttachmentsByRef: _sentAttachmentsByRef,
       );
+      final attachmentsByMessageId = await _hydrateRuntimeAttachmentBytes(
+        projection.attachmentsByMessageId,
+        vaultId: vaultId,
+        cloudAuthScope: cloudAuthScope,
+      );
+      if (!mounted) return state;
       setState(() {
         _runtimeAgentState = state;
         _messages = projection.messages;
-        _messageAttachmentsById = projection.attachmentsByMessageId;
+        _messageAttachmentsById = attachmentsByMessageId;
         _todos = agentTodosFromRuntimeState(state);
         _memoryPages = agentMemoryPagesFromRuntimeRecords(state.memoryRecords);
         _runtimeApprovalItems = _validApprovalItems(

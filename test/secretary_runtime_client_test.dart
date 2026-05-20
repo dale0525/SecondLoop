@@ -477,9 +477,40 @@ void main() {
     expect(capturedRequest.headers['authorization'], 'Bearer runtime-token-1');
     expect(capturedRequest.headers['content-type'], 'image/png');
     expect(capturedRequest.headers['x-attachment-id'], 'sha-1');
+    expect(capturedRequest.headers['x-sha256'], 'sha-1');
     expect(capturedRequest.headers['x-filename'], 'qa-ocr-sample.png');
     expect(capturedRequest.headers['x-media-type'], 'image');
     expect(capturedRequest.bodyBytes, const <int>[1, 2, 3]);
+  });
+
+  test('fetches runtime attachment bytes through the vault proxy', () async {
+    late http.Request capturedRequest;
+    final client = SecretaryRuntimeClient(
+      apiClient: RuntimeApiClient(
+        connectionStore: RuntimeConnectionStore(),
+        httpClient: MockClient((request) async {
+          capturedRequest = request;
+          return http.Response.bytes(
+            const <int>[1, 2, 3],
+            200,
+            headers: {'content-type': 'image/png'},
+          );
+        }),
+      ),
+    );
+
+    final bytes = await client.fetchVaultAttachmentBytes(
+      'vault-1',
+      attachmentId: 'sha-1',
+    );
+
+    expect(
+      capturedRequest.url.path,
+      '/v1/runtime/vaults/vault-1/blobs/sha-1',
+    );
+    expect(capturedRequest.method, 'GET');
+    expect(capturedRequest.headers['authorization'], 'Bearer runtime-token-1');
+    expect(bytes, const <int>[1, 2, 3]);
   });
 
   test('hosted managed pro sender routes runtime chat through cloud gateway',

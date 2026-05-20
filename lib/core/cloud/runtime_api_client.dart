@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -111,6 +112,35 @@ final class RuntimeApiClient {
       throw const FormatException('invalid_cloud_runtime_response');
     }
     return decoded;
+  }
+
+  Future<Uint8List> getBytes(
+    String path, {
+    Map<String, String>? headers,
+  }) async {
+    final connection =
+        await (_connectionLoader ?? _connectionStore.loadConnection)();
+    if (connection == null) {
+      throw StateError('missing_cloud_runtime_connection');
+    }
+
+    final uri = Uri.parse(connection.manifest.apiBaseUrl).resolve(path);
+    final request = http.Request('GET', uri);
+    request.headers.addAll(_buildHeaders(connection.profile));
+    if (headers != null) {
+      request.headers.addAll(headers);
+    }
+
+    final streamed = await _httpClient.send(request);
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw CloudRuntimeApiException(
+        uri: uri,
+        statusCode: response.statusCode,
+        responseBody: utf8.decode(response.bodyBytes, allowMalformed: true),
+      );
+    }
+    return response.bodyBytes;
   }
 
   Future<Map<String, dynamic>?> _sendJson({

@@ -274,6 +274,105 @@ void main() {
   );
 
   testWidgets(
+    'managed pro conversation right rail shows runtime media attachments',
+    (tester) async {
+      const attachmentId = 'sha-image-1';
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [
+            {
+              'turn_id': 'turn-user-media',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'user',
+              'content': '提取这张图里的文字。',
+              'attachment_refs': [attachmentId],
+              'attachments': [
+                {
+                  'attachment_id': attachmentId,
+                  'blob_id': attachmentId,
+                  'sha256': attachmentId,
+                  'filename': 'qa-ocr-sample.png',
+                  'mime_type': 'image/png',
+                  'media_type': 'image',
+                },
+              ],
+              'created_at_ms': 1700000000000,
+            },
+            {
+              'turn_id': 'turn-assistant-media',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'assistant',
+              'content': '已提取图片文字。',
+              'created_at_ms': 1700000000100,
+            },
+          ],
+          'working_set_records': [
+            {
+              'id': 'media-result-sha-image-1',
+              'kind': 'media_result',
+              'attachment_id': attachmentId,
+              'media_type': 'image',
+              'ocr_text': 'QA MEDIA',
+              'summary': '图片中包含 QA MEDIA。',
+              'status': 'completed',
+            },
+          ],
+          'tasks': [],
+          'memory_records': [],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [],
+          'latest_context_snapshot': null,
+          'audit_refs': [],
+        }),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1012, 701));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: _ThrowingLocalStoreBackend(),
+              child: CloudAuthScope(
+                controller: _CloudAuthController(),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.example.test',
+                  modelName: 'cloud',
+                ),
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeAgentStateRepository: repository,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.requests, [('uid_1', 'loop_home')]);
+      expect(find.text('qa-ocr-sample.png'), findsWidgets);
+      expect(find.textContaining('QA MEDIA'), findsWidgets);
+    },
+  );
+
+  testWidgets(
     'managed pro conversation loads runtime state after cloud auth warms',
     (tester) async {
       final controller = _MutableCloudAuthController();

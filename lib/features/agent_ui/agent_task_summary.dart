@@ -12,6 +12,7 @@ import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/models/platform_int.dart';
 import '../conversation_context/conversation_context_rail.dart';
 import 'agent_design_tokens.dart';
+import 'agent_runtime_file_context.dart';
 
 const _ink = Color(0xFF101936);
 const _muted = Color(0xFF63708A);
@@ -159,6 +160,7 @@ ConversationContextSnapshot agentRuntimeContextSnapshot(
   RuntimeAgentState state,
 ) {
   final latest = state.latestContextSnapshot;
+  final recentFiles = agentRuntimeRecentFileItems(state, latest?.packet);
   if (latest != null) {
     final records = _runtimeRecordsFromWorkingSet(latest.packet['working_set']);
     final tasks = _mergeTodosById([
@@ -179,11 +181,13 @@ ConversationContextSnapshot agentRuntimeContextSnapshot(
     return agentTaskContextSnapshot(
       tasks,
       memories: agentMemoryPagesFromRuntimeRecords(memories),
+      recentFiles: recentFiles,
     );
   }
   return agentTaskContextSnapshot(
     agentTodosFromRuntimeState(state),
     memories: agentMemoryPagesFromRuntimeRecords(state.memoryRecords),
+    recentFiles: recentFiles,
   );
 }
 
@@ -203,10 +207,11 @@ List<Todo> agentTasksCreatedFromSources(
 ConversationContextSnapshot agentTaskContextSnapshot(
   List<Todo> todos, {
   List<MemoryPageRecord> memories = const <MemoryPageRecord>[],
+  List<ConversationContextItem> recentFiles = const <ConversationContextItem>[],
 }) {
   final openTasks = agentOpenTasks(todos);
   final memoryItems = agentMemoryContextItems(memories);
-  if (openTasks.isEmpty && memoryItems.isEmpty) {
+  if (openTasks.isEmpty && memoryItems.isEmpty && recentFiles.isEmpty) {
     return const ConversationContextSnapshot.empty();
   }
   final count = openTasks.length;
@@ -227,7 +232,7 @@ ConversationContextSnapshot agentTaskContextSnapshot(
           ],
     longTermMemory: memoryItems,
     people: const <ConversationContextItem>[],
-    recentFiles: const <ConversationContextItem>[],
+    recentFiles: recentFiles.take(3).toList(growable: false),
     pendingReview: const <ConversationContextItem>[],
     privacyNote: t.chat.agentContext.defaultPrivacyNote,
   );

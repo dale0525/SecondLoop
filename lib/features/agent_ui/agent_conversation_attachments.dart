@@ -25,11 +25,82 @@ final class _AgentMessageAttachmentView {
   final String mediaType;
   final Uint8List? bytes;
 
+  _AgentMessageAttachmentView copyWith({
+    Uint8List? bytes,
+  }) {
+    return _AgentMessageAttachmentView(
+      id: id,
+      filename: filename,
+      mimeType: mimeType,
+      mediaType: mediaType,
+      bytes: bytes ?? this.bytes,
+    );
+  }
+
   bool get isImage {
     final normalizedMediaType = mediaType.trim().toLowerCase();
     final normalizedMimeType = mimeType.trim().toLowerCase();
     return normalizedMediaType == 'image' ||
         normalizedMimeType.startsWith('image/');
+  }
+}
+
+extension _AgentConversationAttachmentHydration on _AgentConversationPageState {
+  Future<Map<String, List<_AgentMessageAttachmentView>>>
+      _hydrateRuntimeAttachmentBytes(
+    Map<String, List<_AgentMessageAttachmentView>> attachmentsByMessageId, {
+    required String vaultId,
+    required CloudAuthScope? cloudAuthScope,
+  }) async {
+    if (attachmentsByMessageId.isEmpty) return attachmentsByMessageId;
+    final fetcher = _runtimeAttachmentContentFetcher(cloudAuthScope);
+    if (fetcher == null) return attachmentsByMessageId;
+
+    final hydrated = <String, List<_AgentMessageAttachmentView>>{};
+    for (final entry in attachmentsByMessageId.entries) {
+      final attachments = <_AgentMessageAttachmentView>[];
+      for (final attachment in entry.value) {
+        if (!attachment.isImage || attachment.bytes != null) {
+          attachments.add(attachment);
+          continue;
+        }
+        try {
+          final bytes = await fetcher.fetchAttachmentBytes(
+            vaultId: vaultId,
+            attachmentId: attachment.id,
+          );
+          attachments.add(
+            bytes == null || bytes.isEmpty
+                ? attachment
+                : attachment.copyWith(bytes: bytes),
+          );
+        } catch (_) {
+          attachments.add(attachment);
+        }
+      }
+      hydrated[entry.key] = List<_AgentMessageAttachmentView>.unmodifiable(
+        attachments,
+      );
+    }
+    return Map<String, List<_AgentMessageAttachmentView>>.unmodifiable(
+      hydrated,
+    );
+  }
+
+  ChatRuntimeAttachmentContentFetcher? _runtimeAttachmentContentFetcher(
+    CloudAuthScope? cloudAuthScope,
+  ) {
+    final Object? configured = widget.runtimeConversationSender;
+    if (configured is ChatRuntimeAttachmentContentFetcher) {
+      return configured;
+    }
+    final normalizedBaseUrl =
+        cloudAuthScope?.gatewayConfig.baseUrl.trim() ?? '';
+    if (cloudAuthScope == null || normalizedBaseUrl.isEmpty) return null;
+    return SecretaryRuntimeConversationSender.hostedManagedPro(
+      apiBaseUrl: normalizedBaseUrl,
+      hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
+    );
   }
 }
 

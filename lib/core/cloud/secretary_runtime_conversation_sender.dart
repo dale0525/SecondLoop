@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -24,6 +25,13 @@ abstract interface class ChatRuntimeConversationAttachmentSender
     required String conversationId,
     required String message,
     required List<Map<String, Object?>> attachments,
+  });
+}
+
+abstract interface class ChatRuntimeAttachmentContentFetcher {
+  Future<Uint8List?> fetchAttachmentBytes({
+    required String vaultId,
+    required String attachmentId,
   });
 }
 
@@ -60,6 +68,7 @@ final class SecretaryRuntimeConversationSender
     implements
         ChatRuntimeConversationSender,
         ChatRuntimeConversationAttachmentSender,
+        ChatRuntimeAttachmentContentFetcher,
         ChatRuntimeApprovalSender,
         ChatRuntimeEntityFocusSender {
   SecretaryRuntimeConversationSender({
@@ -178,6 +187,17 @@ final class SecretaryRuntimeConversationSender
         bytes: bytes,
       );
     }
+  }
+
+  @override
+  Future<Uint8List?> fetchAttachmentBytes({
+    required String vaultId,
+    required String attachmentId,
+  }) {
+    return _client.fetchVaultAttachmentBytes(
+      vaultId,
+      attachmentId: attachmentId,
+    );
   }
 
   @override

@@ -110,6 +110,74 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'agent conversation restores image preview from persisted runtime metadata',
+    (tester) async {
+      const attachmentId =
+          '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81';
+      final sender = _FakeRuntimeConversationSender()
+        ..fetchedAttachmentBytes[attachmentId] =
+            Uint8List.fromList(<int>[1, 2, 3]);
+      final repository = _StaticRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [
+            {
+              'turn_id': 'turn-user-attachment',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'user',
+              'content': 'Extract text from this image.',
+              'attachment_refs': [attachmentId],
+              'attachments': [
+                {
+                  'attachment_id': attachmentId,
+                  'blob_id': attachmentId,
+                  'sha256': attachmentId,
+                  'filename': 'qa-ocr-sample.png',
+                  'mime_type': 'image/png',
+                  'media_type': 'image',
+                  'byte_size': 3,
+                },
+              ],
+              'created_at_ms': 1700000000000,
+            },
+            {
+              'turn_id': 'turn-assistant-attachment',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'assistant',
+              'content': 'Attachment received.',
+              'created_at_ms': 1700000000100,
+            },
+          ],
+        }),
+      );
+
+      await _pumpManagedProAgentConversation(
+        tester,
+        sender: sender,
+        runtimeAgentStateRepository: repository,
+      );
+
+      expect(sender.fetchedAttachmentIds, [attachmentId]);
+      expect(find.text('qa-ocr-sample.png'), findsWidgets);
+      expect(
+        find.byKey(
+          const ValueKey('agent_message_attachment_chip_$attachmentId'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('agent_message_attachment_image_$attachmentId'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 Future<void> _pumpManagedProAgentConversation(
@@ -242,13 +310,30 @@ final class _FakeRuntimeAgentStateRepository
   }
 }
 
+final class _StaticRuntimeAgentStateRepository
+    implements RuntimeAgentStateRepository {
+  const _StaticRuntimeAgentStateRepository(this.state);
+
+  final RuntimeAgentState state;
+
+  @override
+  Future<RuntimeAgentState> fetchAgentState({
+    required String vaultId,
+    required String conversationId,
+  }) async =>
+      state;
+}
+
 final class _FakeRuntimeConversationSender
     implements
         ChatRuntimeConversationSender,
-        ChatRuntimeConversationAttachmentSender {
+        ChatRuntimeConversationAttachmentSender,
+        ChatRuntimeAttachmentContentFetcher {
   final List<String> sentMessages = <String>[];
   final List<List<Map<String, Object?>>> sentAttachments =
       <List<Map<String, Object?>>>[];
+  final Map<String, Uint8List> fetchedAttachmentBytes = <String, Uint8List>{};
+  final List<String> fetchedAttachmentIds = <String>[];
 
   @override
   Future<SecretaryRuntimeConversationResult> send({
@@ -287,6 +372,15 @@ final class _FakeRuntimeConversationSender
         'approval_required': false,
       },
     });
+  }
+
+  @override
+  Future<Uint8List?> fetchAttachmentBytes({
+    required String vaultId,
+    required String attachmentId,
+  }) async {
+    fetchedAttachmentIds.add(attachmentId);
+    return fetchedAttachmentBytes[attachmentId];
   }
 }
 

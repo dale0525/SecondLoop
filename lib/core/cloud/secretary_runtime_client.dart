@@ -241,10 +241,19 @@ final class SecretaryRuntimeClient {
       headers: <String, String>{
         'content-type': mimeType,
         'x-attachment-id': attachmentId,
+        'x-sha256': attachmentId,
         'x-filename': filename,
         'x-media-type': mediaType,
       },
     );
+  }
+
+  Future<Uint8List> fetchVaultAttachmentBytes(
+    String vaultId, {
+    required String attachmentId,
+  }) {
+    return _apiClient
+        .getBytes('/v1/runtime/vaults/$vaultId/blobs/$attachmentId');
   }
 
   Future<RuntimeAgentState> fetchAgentState(
