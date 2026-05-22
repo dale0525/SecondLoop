@@ -461,8 +461,12 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
     final messageText = normalizedText.isEmpty
         ? _attachmentOnlyFallbackText(dedupedAttachments)
         : normalizedText;
+    final attachmentIntent =
+        _runtimeAttachmentIntent(normalizedText, dedupedAttachments);
     final runtimeAttachments =
         await _runtimeAttachmentPayloads(dedupedAttachments);
+    final messageAttachments =
+        _runtimeMessageAttachmentPayloads(runtimeAttachments);
     if (!mounted) return;
     final outgoingAttachmentViews =
         _messageAttachmentsFromRuntimePayloads(runtimeAttachments);
@@ -493,8 +497,11 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
         backend: backend,
         sessionKey: sessionKey,
         conversationId: widget.conversation.id,
-        message: messageText,
-        attachments: runtimeAttachments,
+        message: normalizedText,
+        attachments: messageAttachments,
+        uploadAttachments: runtimeAttachments,
+        messageDisplayText: attachmentIntent == null ? null : messageText,
+        attachmentIntent: attachmentIntent,
         runtimeConversationSender: widget.runtimeConversationSender,
       );
       if (!mounted) return;

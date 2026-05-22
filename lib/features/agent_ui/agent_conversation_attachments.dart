@@ -267,6 +267,14 @@ String _attachmentOnlyFallbackText(List<AttachmentDraftPayload> attachments) {
   return 'Uploaded attachments: ${names.join(', ')}';
 }
 
+String? _runtimeAttachmentIntent(
+  String message,
+  List<AttachmentDraftPayload> attachments,
+) {
+  if (message.trim().isNotEmpty || attachments.isEmpty) return null;
+  return 'understand_uploaded_files';
+}
+
 Future<List<Map<String, Object?>>> _runtimeAttachmentPayloads(
   List<AttachmentDraftPayload> attachments,
 ) async {
@@ -295,6 +303,20 @@ Future<List<Map<String, Object?>>> _runtimeAttachmentPayloads(
     });
   }
   return payloads;
+}
+
+List<Map<String, Object?>> _runtimeMessageAttachmentPayloads(
+  List<Map<String, Object?>> attachments,
+) {
+  return attachments
+      .map(
+        (attachment) => Map<String, Object?>.from(attachment)
+          ..remove('content_base64')
+          ..remove('bytes_base64')
+          ..remove('data_url')
+          ..remove('image_url'),
+      )
+      .toList(growable: false);
 }
 
 String _runtimeAttachmentMediaType(String mimeType) {

@@ -21,6 +21,10 @@ final class RuntimeSecretaryAppService {
     required String conversationId,
     required String message,
     List<Map<String, Object?>> attachments = const <Map<String, Object?>>[],
+    List<Map<String, Object?>> uploadAttachments =
+        const <Map<String, Object?>>[],
+    String? messageDisplayText,
+    String? attachmentIntent,
     String? sourceMessageId,
   }) async {
     final sender = _sender;
@@ -30,7 +34,10 @@ final class RuntimeSecretaryAppService {
             vaultId: vaultId,
             conversationId: conversationId,
             message: message,
-            attachments: attachments,
+            messageDisplayText: messageDisplayText,
+            attachmentIntent: attachmentIntent,
+            uploadAttachments: uploadAttachments,
+            messageAttachments: attachments,
           )
         : await sender.send(
             vaultId: vaultId,

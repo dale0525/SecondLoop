@@ -53,6 +53,9 @@ Future<AgentConversationSendResult> sendAgentConversationMessage({
   required String conversationId,
   required String message,
   List<Map<String, Object?>> attachments = const <Map<String, Object?>>[],
+  List<Map<String, Object?>> uploadAttachments = const <Map<String, Object?>>[],
+  String? messageDisplayText,
+  String? attachmentIntent,
   ChatRuntimeConversationSender? runtimeConversationSender,
 }) async {
   var userMessageCommitted = false;
@@ -85,6 +88,9 @@ Future<AgentConversationSendResult> sendAgentConversationMessage({
         conversationId: conversationId,
         message: message,
         attachments: attachments,
+        uploadAttachments: uploadAttachments,
+        messageDisplayText: messageDisplayText,
+        attachmentIntent: attachmentIntent,
       );
       userMessageCommitted = true;
       var approvalItems = result.metadata.approvalItems;

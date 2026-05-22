@@ -24,7 +24,11 @@ abstract interface class ChatRuntimeConversationAttachmentSender
     required String vaultId,
     required String conversationId,
     required String message,
-    required List<Map<String, Object?>> attachments,
+    String? messageDisplayText,
+    String? attachmentIntent,
+    List<Map<String, Object?>> uploadAttachments =
+        const <Map<String, Object?>>[],
+    required List<Map<String, Object?>> messageAttachments,
   });
 }
 
@@ -128,7 +132,8 @@ final class SecretaryRuntimeConversationSender
       vaultId: vaultId,
       conversationId: conversationId,
       message: message,
-      attachments: const <Map<String, Object?>>[],
+      uploadAttachments: const <Map<String, Object?>>[],
+      messageAttachments: const <Map<String, Object?>>[],
     );
   }
 
@@ -137,17 +142,23 @@ final class SecretaryRuntimeConversationSender
     required String vaultId,
     required String conversationId,
     required String message,
-    required List<Map<String, Object?>> attachments,
+    String? messageDisplayText,
+    String? attachmentIntent,
+    List<Map<String, Object?>> uploadAttachments =
+        const <Map<String, Object?>>[],
+    required List<Map<String, Object?>> messageAttachments,
   }) async {
     await _uploadVaultAttachments(
       vaultId: vaultId,
-      attachments: attachments,
+      attachments: uploadAttachments,
     );
     return _client.sendConversationMessage(
       vaultId,
       conversationId: conversationId,
       message: message,
-      attachments: attachments,
+      attachments: messageAttachments,
+      messageDisplayText: messageDisplayText,
+      attachmentIntent: attachmentIntent,
     );
   }
 

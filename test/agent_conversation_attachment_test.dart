@@ -81,18 +81,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(sender.sentMessages, <String>['Extract text from this image.']);
-    expect(sender.sentAttachments.single, hasLength(1));
+    expect(sender.sentMessageDisplayTexts, <String?>[null]);
+    expect(sender.sentAttachmentIntents, <String?>[null]);
+    expect(sender.sentUploadAttachments.single, hasLength(1));
+    expect(sender.sentMessageAttachments.single, hasLength(1));
+    expect(sender.sentMessageAttachments.single.single.keys,
+        isNot(contains('content_base64')));
+    expect(sender.sentMessageAttachments.single.single.keys,
+        isNot(contains('bytes_base64')));
+    expect(sender.sentMessageAttachments.single.single.keys,
+        isNot(contains('data_url')));
+    expect(sender.sentMessageAttachments.single.single.keys,
+        isNot(contains('image_url')));
+    expect(sender.sentMessageAttachments.single.single['filename'],
+        'qa-ocr-sample.png');
     expect(
-        sender.sentAttachments.single.single['filename'], 'qa-ocr-sample.png');
-    expect(sender.sentAttachments.single.single['mime_type'], 'image/png');
-    expect(sender.sentAttachments.single.single['byte_size'], 3);
+        sender.sentMessageAttachments.single.single['mime_type'], 'image/png');
+    expect(sender.sentMessageAttachments.single.single['byte_size'], 3);
     expect(
-      sender.sentAttachments.single.single['attachment_id'],
+      sender.sentMessageAttachments.single.single['attachment_id'],
       '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
     );
-    expect(sender.sentAttachments.single.single['content_base64'], 'AQID');
     expect(
-      sender.sentAttachments.single.single['data_url'],
+        sender.sentUploadAttachments.single.single['content_base64'], 'AQID');
+    expect(
+      sender.sentUploadAttachments.single.single['data_url'],
       'data:image/png;base64,AQID',
     );
     expect(
@@ -111,6 +124,63 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('agent composer sends attachment-only message with display text',
+      (tester) async {
+    FilePicker? originalFilePicker;
+    try {
+      originalFilePicker = FilePicker.platform;
+    } catch (_) {
+      originalFilePicker = null;
+    }
+    final filePicker = _FakeFilePicker(
+      FilePickerResult([
+        PlatformFile(
+          name: 'qa-ocr-sample.png',
+          size: 3,
+          bytes: Uint8List.fromList(<int>[1, 2, 3]),
+        ),
+      ]),
+    );
+    FilePicker.platform = filePicker;
+    addTearDown(() {
+      if (originalFilePicker != null) {
+        FilePicker.platform = originalFilePicker;
+      }
+    });
+
+    final sender = _FakeRuntimeConversationSender();
+    await _pumpManagedProAgentConversation(
+      tester,
+      sender: sender,
+      runtimeAgentStateRepository: _FakeRuntimeAgentStateRepository(sender),
+    );
+
+    await tester.tap(find.byTooltip('Attach'));
+    await tester.pumpAndSettle();
+    expect(find.text('qa-ocr-sample.png'), findsOneWidget);
+
+    tester
+        .widget<FilledButton>(find.byKey(const ValueKey('chat_send')))
+        .onPressed!();
+    await tester.pumpAndSettle();
+
+    expect(sender.sentMessages, <String>['']);
+    expect(sender.sentMessageDisplayTexts,
+        <String?>['Uploaded attachment: qa-ocr-sample.png']);
+    expect(
+        sender.sentAttachmentIntents, <String?>['understand_uploaded_files']);
+    expect(
+        sender.sentUploadAttachments.single.single['content_base64'], 'AQID');
+    expect(sender.sentMessageAttachments.single.single.keys,
+        isNot(contains('content_base64')));
+    expect(sender.sentMessageAttachments.single.single.keys,
+        isNot(contains('bytes_base64')));
+    expect(sender.sentMessageAttachments.single.single.keys,
+        isNot(contains('data_url')));
+    expect(sender.sentMessageAttachments.single.single.keys,
+        isNot(contains('image_url')));
   });
 
   testWidgets(
@@ -349,7 +419,7 @@ final class _FakeRuntimeAgentStateRepository
         conversationId: conversationId,
       );
     }
-    final attachments = sender.sentAttachments.last;
+    final attachments = sender.sentMessageAttachments.last;
     return RuntimeAgentState.fromJson({
       'vault_id': vaultId,
       'conversation_id': conversationId,
@@ -420,7 +490,11 @@ final class _FakeRuntimeConversationSender
         ChatRuntimeConversationAttachmentSender,
         ChatRuntimeAttachmentContentFetcher {
   final List<String> sentMessages = <String>[];
-  final List<List<Map<String, Object?>>> sentAttachments =
+  final List<String?> sentMessageDisplayTexts = <String?>[];
+  final List<String?> sentAttachmentIntents = <String?>[];
+  final List<List<Map<String, Object?>>> sentUploadAttachments =
+      <List<Map<String, Object?>>>[];
+  final List<List<Map<String, Object?>>> sentMessageAttachments =
       <List<Map<String, Object?>>>[];
   final Map<String, Uint8List> fetchedAttachmentBytes = <String, Uint8List>{};
   final List<String> fetchedAttachmentIds = <String>[];
@@ -435,7 +509,8 @@ final class _FakeRuntimeConversationSender
       vaultId: vaultId,
       conversationId: conversationId,
       message: message,
-      attachments: const <Map<String, Object?>>[],
+      uploadAttachments: const <Map<String, Object?>>[],
+      messageAttachments: const <Map<String, Object?>>[],
     );
   }
 
@@ -444,10 +519,17 @@ final class _FakeRuntimeConversationSender
     required String vaultId,
     required String conversationId,
     required String message,
-    required List<Map<String, Object?>> attachments,
+    String? messageDisplayText,
+    String? attachmentIntent,
+    List<Map<String, Object?>> uploadAttachments =
+        const <Map<String, Object?>>[],
+    required List<Map<String, Object?>> messageAttachments,
   }) async {
     sentMessages.add(message);
-    sentAttachments.add(attachments);
+    sentMessageDisplayTexts.add(messageDisplayText);
+    sentAttachmentIntents.add(attachmentIntent);
+    sentUploadAttachments.add(uploadAttachments);
+    sentMessageAttachments.add(messageAttachments);
     return SecretaryRuntimeConversationResult.fromJson({
       'run_id': 'run-attachment',
       'conversation_id': conversationId,

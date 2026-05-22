@@ -214,12 +214,18 @@ final class SecretaryRuntimeClient {
     required String conversationId,
     required String message,
     List<Map<String, Object?>> attachments = const [],
+    String? messageDisplayText,
+    String? attachmentIntent,
   }) async {
+    final displayText = messageDisplayText?.trim() ?? '';
+    final intent = attachmentIntent?.trim() ?? '';
     final response = await _apiClient.postJson(
       '/v1/runtime/vaults/$vaultId/conversations/$conversationId/messages',
       body: <String, Object?>{
         'message': message,
         'attachments': attachments,
+        if (displayText.isNotEmpty) 'message_display_text': displayText,
+        if (intent.isNotEmpty) 'attachment_intent': intent,
       },
     );
     return SecretaryRuntimeConversationResult.fromJson(
