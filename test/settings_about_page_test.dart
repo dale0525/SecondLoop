@@ -8,6 +8,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/features/settings/about_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
+import 'package:secondloop/features/settings/settings_ui.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -133,6 +134,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byType(SettingsPageShell), findsOneWidget);
+    expect(find.byType(SettingsSection), findsWidgets);
     expect(find.byKey(const ValueKey('about_open_homepage')), findsOneWidget);
     expect(find.byKey(const ValueKey('about_check_updates')), findsOneWidget);
     expect(find.byKey(const ValueKey('about_manual_update')), findsNothing);

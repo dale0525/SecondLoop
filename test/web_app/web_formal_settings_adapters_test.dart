@@ -55,6 +55,7 @@ class _FakeWebAppService extends WebAppService {
     this.usage,
     this.vaultUsage,
     this.items = const <WebVaultAttachmentItem>[],
+    this.previews = const <String, WebVaultAttachmentPreview>{},
   });
 
   final WebSubscriptionState subscription;
@@ -62,6 +63,7 @@ class _FakeWebAppService extends WebAppService {
   final WebUsageSummary? usage;
   final WebVaultUsageSummary? vaultUsage;
   final List<WebVaultAttachmentItem> items;
+  final Map<String, WebVaultAttachmentPreview> previews;
   final List<String> openedActions = <String>[];
 
   @override
@@ -102,6 +104,19 @@ class _FakeWebAppService extends WebAppService {
       items;
 
   @override
+  Future<WebVaultAttachmentPreview> fetchVaultAttachmentPreview({
+    required String idToken,
+    required String vaultId,
+    required String attachmentId,
+  }) async =>
+      previews[attachmentId] ??
+      WebVaultAttachmentPreview(
+        kind: 'download',
+        url: '/api/app/vault-proxy/v1/vaults/$vaultId/attachments/'
+            '$attachmentId',
+      );
+
+  @override
   Future<void> deleteVaultAttachment({
     required String idToken,
     required String vaultId,
@@ -124,12 +139,26 @@ void main() {
       ),
       items: const <WebVaultAttachmentItem>[
         WebVaultAttachmentItem(
+          id: 'att-settings',
           sha256: 'sha-settings',
+          displayName: 'original-name.txt',
           mimeType: 'text/plain',
           byteLen: 12,
           uploadedAtMs: 200,
+          preview: WebVaultAttachmentPreview(
+            kind: 'download',
+            url: '/api/app/vault-proxy/v1/vaults/uid-1/attachments/'
+                'att-settings',
+          ),
         ),
       ],
+      previews: const <String, WebVaultAttachmentPreview>{
+        'att-settings': WebVaultAttachmentPreview(
+          kind: 'download',
+          url: '/api/app/vault-proxy/v1/vaults/uid-1/attachments/'
+              'att-settings',
+        ),
+      },
     );
 
     final usageClient = CloudUsageClient(
@@ -173,7 +202,22 @@ void main() {
     expect(vaultUsage.limitBytes, 128);
     expect(attachmentUsage.totalCount, 1);
     expect(attachmentUsage.totalBytesUsed, 12);
+    expect(attachmentUsage.items.single.id, 'att-settings');
     expect(attachmentUsage.items.single.sha256, 'sha-settings');
+    expect(attachmentUsage.items.single.displayName, 'original-name.txt');
+
+    final preview = await attachmentsClient.fetchAttachmentPreview(
+      managedVaultBaseUrl: kWebFormalSettingsBaseUrl,
+      vaultId: 'uid-1',
+      idToken: 'token',
+      attachmentId: 'att-settings',
+    );
+    expect(preview.kind, 'download');
+    expect(
+      preview.url,
+      'https://web.secondloop.invalid/api/app/vault-proxy/v1/vaults/'
+      'uid-1/attachments/att-settings',
+    );
   });
 
   test(

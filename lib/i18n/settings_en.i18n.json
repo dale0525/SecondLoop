@@ -4,8 +4,6 @@
     "appearance": "Appearance",
     "security": "Security",
     "cloud": "SecondLoop Cloud",
-    "aiAdvanced": "Advanced (API keys)",
-    "storage": "Sync & storage",
     "actions": "Actions",
     "support": "Help & support",
     "debug": "Debug"
@@ -224,92 +222,7 @@
       "monochrome": "Monochrome"
     }
   },
-  "llmProfiles": {
-    "title": "API keys (Ask AI)",
-    "subtitle": "Advanced: use your own provider and key"
-  },
-  "embeddingProfiles": {
-    "title": "API keys (Semantic search)",
-    "subtitle": "Advanced: use your own provider and key"
-  },
   "aiSelection": {
-    "title": "Intelligence",
-    "subtitle": "Choose the few AI controls that matter most first. Detailed provider and media options live under Advanced settings.",
-    "advancedSettings": {
-      "title": "Advanced settings",
-      "description": "Provider routing, embeddings, media understanding, and detailed controls.",
-      "collapsed": "Hidden by default to keep setup simple.",
-      "expanded": "Showing expert controls and provider details."
-    },
-    "askAi": {
-      "title": "Ask AI",
-      "description": "Use AI actively when you want help with messages, memory, and drafting.",
-      "setupHint": "Ask AI is not configured yet. Open Runtime mode to choose managed pro or self-managed.",
-      "status": {
-        "loading": "Checking current route...",
-        "cloud": "Current route: SecondLoop Cloud",
-        "notConfigured": "Current route: setup required"
-      },
-      "actions": {
-        "openSettings": "Open Ask AI settings",
-        "reviewAdvanced": "Review runtime and advanced settings"
-      }
-    },
-    "smartOrganization": {
-      "title": "Smart organization enhancement",
-      "description": "Improve message understanding, task linking, and automatic organization.",
-      "privacySummary": "Only the minimum necessary text is sent. Your vault key and sync key are never uploaded.",
-      "status": {
-        "loading": "Checking current setup...",
-        "enabled": "Enhanced automation is on",
-        "disabled": "Enhanced automation is off",
-        "requiresSetup": "Choose managed pro or self-managed runtime to enable smarter organization."
-      },
-      "actions": {
-        "openSettings": "Open smart organization settings",
-        "useRecommended": "Use recommended setup",
-        "reviewAdvanced": "Review advanced components"
-      },
-      "dialogTitle": "Enable smart organization enhancement?",
-      "dialogBody": "When enabled, SecondLoop improves message understanding, task linking, and automatic organization using the best available AI route. Only the minimum necessary text is sent, and your keys are never uploaded.",
-      "dialogActions": {
-        "enable": "Enable"
-      }
-    },
-    "embeddings": {
-      "title": "Semantic search & embeddings",
-      "description": "Used for recall, todo linking, and Ask AI retrieval quality.",
-      "preferenceUnavailableHint": "Selected embeddings source is unavailable. Running on fallback route.",
-      "status": {
-        "loading": "Checking current route...",
-        "cloud": "Current route: SecondLoop Cloud",
-        "byok": "Current route: Embedding API key (BYOK)",
-        "notConfigured": "Configure managed pro or an embedding API key to use semantic search.",
-        "local": "Current route: Local embeddings runtime"
-      },
-      "preference": {
-        "auto": {
-          "title": "Auto",
-          "description": "Prefer Cloud, then BYOK. Setup is required if neither is available."
-        },
-        "cloud": {
-          "title": "SecondLoop Cloud",
-          "description": "Prefer Cloud. If unavailable, fallback to BYOK."
-        },
-        "byok": {
-          "title": "API key (BYOK)",
-          "description": "Prefer your embedding API key."
-        },
-        "local": {
-          "title": "Local runtime",
-          "description": "Run embeddings only on local runtime when available."
-        }
-      },
-      "actions": {
-        "openEmbeddingProfiles": "Open embedding API keys",
-        "openCloudAccount": "Open Cloud account"
-      }
-    },
     "mediaUnderstanding": {
       "title": "Media understanding",
       "description": "OCR, captions, and audio transcription source selection.",
@@ -607,22 +520,14 @@
       "wifiOnlySubtitle": "Run cloud/BYOK processing only on Wi-Fi. Local capability is unaffected."
     }
   },
-  "cloudEmbeddings": {
-    "title": "Smarter search",
-    "subtitleEnabled": "On. Improves search. Uses your Cloud quota.",
-    "subtitleDisabled": "Off. Search runs without cloud processing.",
-    "subtitleUnset": "Not set. We'll ask when it's first needed.",
-    "subtitleRequiresPro": "Requires SecondLoop Pro.",
-    "dialogTitle": "Turn on smarter search?",
-    "dialogBody": "To improve search and memory recall, SecondLoop can send small pieces of text (message previews, todo titles, follow‑ups) to SecondLoop Cloud to generate search data.\n\nThe text is processed confidentially (not logged or stored). Your vault key and sync key are never uploaded.\n\nThis uses your Cloud quota.",
-    "dialogActions": {
-      "enable": "Enable"
-    }
-  },
   "cloudAccount": {
     "title": "Cloud account",
     "subtitle": "Sign in to SecondLoop Cloud",
     "signedInAs": "Signed in as $email",
+    "onboarding": {
+      "title": "SecondLoop Pro",
+      "subscriptionRequiredBody": "SecondLoop Pro is required to continue. This account is signed in, but Pro is not active yet. Subscribe to use the hosted runtime. No Cloudflare account, Workers Paid plan, provider keys, or deployment work is needed."
+    },
     "benefits": {
       "title": "Create a cloud account to subscribe",
       "items": {
@@ -848,10 +753,6 @@
       "loadFailed": "Failed to load: $error"
     }
   },
-  "sync": {
-    "title": "Sync",
-    "subtitle": "Choose where your data syncs (Cloud / WebDAV / folder)"
-  },
   "debugSemanticSearch": {
     "title": "Debug: Semantic search",
     "subtitle": "Search similar messages + rebuild embeddings index"
@@ -951,8 +852,6 @@
     "links": {
       "cloudAccount": "Open Cloud account",
       "runtimeMode": "Open runtime mode",
-      "syncSettings": "Open sync settings",
-      "aiSettings": "Open AI settings",
       "diagnostics": "Open diagnostics"
     }
   }

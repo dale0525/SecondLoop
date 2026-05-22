@@ -22,6 +22,7 @@ import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/core/update/update_event_log.dart';
 import 'package:secondloop/features/settings/diagnostics_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
+import 'package:secondloop/features/settings/settings_ui.dart';
 import 'package:secondloop/web_app/web_formal_settings_scope.dart';
 
 import 'test_backend.dart';
@@ -57,6 +58,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('diagnostics_page')), findsOneWidget);
+    expect(find.byType(SettingsPageShell), findsOneWidget);
+    expect(find.byType(SettingsSection), findsWidgets);
   });
 
   testWidgets('Settings debug section hides knowledge debug entries',

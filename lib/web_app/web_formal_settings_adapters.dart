@@ -159,7 +159,9 @@ final class WebFormalSettingsHttpClient extends http.BaseClient {
             'items': items
                 .map(
                   (item) => <String, Object?>{
+                    'id': item.id,
                     'sha256': item.sha256,
+                    'display_name': item.displayName,
                     'root_sha256': item.rootSha256,
                     'group_type': item.groupType,
                     'leaf_count': item.leafCount,
@@ -167,11 +169,58 @@ final class WebFormalSettingsHttpClient extends http.BaseClient {
                     'byte_len': item.byteLen,
                     'created_at_ms': item.createdAtMs,
                     'uploaded_at_ms': item.uploadedAtMs,
+                    'preview': item.preview == null
+                        ? null
+                        : <String, Object?>{
+                            'kind': item.preview!.kind,
+                            'url': item.preview!.url,
+                            'thumbnail_url': item.preview!.thumbnailUrl,
+                          },
+                    'processing_status': item.processingStatus,
+                    'can_delete': item.canDelete,
                   },
                 )
                 .toList(growable: false),
             'total_count': items.length,
             'total_bytes_used': totalBytes,
+          },
+        );
+      }
+
+      if (request.method == 'GET' &&
+          segments.length == 6 &&
+          segments[3] == 'attachments' &&
+          segments[5] == 'preview') {
+        final preview = await service.fetchVaultAttachmentPreview(
+          idToken: idToken,
+          vaultId: vaultId,
+          attachmentId: segments[4],
+        );
+        return _jsonResponse(
+          request,
+          body: <String, Object?>{
+            'kind': preview.kind,
+            'url': preview.url,
+            'thumbnail_url': preview.thumbnailUrl,
+          },
+        );
+      }
+
+      if (request.method == 'GET' &&
+          segments[3] == 'attachments' &&
+          (segments.length == 5 ||
+              (segments.length == 6 && segments[5] == 'content'))) {
+        final bytes = await service.fetchVaultAttachmentBytes(
+          idToken: idToken,
+          vaultId: vaultId,
+          sha256: segments[4],
+        );
+        return http.StreamedResponse(
+          Stream<List<int>>.value(bytes),
+          200,
+          request: request,
+          headers: const <String, String>{
+            'content-type': 'application/octet-stream',
           },
         );
       }

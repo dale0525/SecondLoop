@@ -17,6 +17,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/settings/agent_digest_settings_page.dart';
+import 'package:secondloop/features/settings/settings_ui.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/models/platform_int.dart';
 
@@ -251,6 +252,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byType(SettingsPageShell), findsOneWidget);
+    expect(find.byType(SettingsSection), findsWidgets);
     expect(find.text('Paused'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('agent_digest_regenerate')));
     await tester.pumpAndSettle();

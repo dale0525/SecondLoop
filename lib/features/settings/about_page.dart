@@ -11,6 +11,8 @@ import '../../core/update/app_update_flow.dart';
 import '../../core/update/app_update_service.dart';
 import '../../core/update/update_badge_prefs.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/sl_button.dart';
+import 'settings_ui.dart';
 
 typedef AboutRuntimeVersionLoader = Future<AppRuntimeVersion> Function();
 typedef AboutExternalUriLauncher = Future<bool> Function(Uri uri);
@@ -328,101 +330,73 @@ class _AboutPageState extends State<AboutPage> {
         ? (_checkingUpdate ? text.actions.checking : text.actions.check)
         : (_updating ? text.actions.updating : text.actions.autoUpdate);
 
-    return Scaffold(
+    return SettingsPageShell(
       key: const ValueKey('about_page'),
-      appBar: AppBar(
-        title: Text(text.title),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).dividerColor),
-              borderRadius: BorderRadius.circular(12),
+      title: text.title,
+      children: [
+        SettingsSection(
+          title: text.productName,
+          children: [
+            SettingsRow(
+              title: text.currentVersion(version: _currentVersionText()),
+              body: update == null
+                  ? null
+                  : text.latestVersion(version: update.latestTag),
+              leading: const Icon(Icons.info_outline_rounded),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    text.productName,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(text.currentVersion(version: _currentVersionText())),
-                  if (update != null) ...[
-                    const SizedBox(height: 4),
-                    Text(text.latestVersion(version: update.latestTag)),
-                  ],
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SettingsActionBar(
+                actions: [
+                  SettingsAction(
                     key: const ValueKey('about_open_homepage'),
+                    label: text.openHomepage,
+                    icon: const Icon(Icons.public_rounded),
+                    variant: SlButtonVariant.outline,
                     onPressed: () => _openExternalUri(
                       AboutPage.homepageUri,
                       failedMessage: text.messages.openHomepageFailed,
                     ),
-                    icon: const Icon(Icons.public_rounded),
-                    label: Text(text.openHomepage),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).dividerColor),
-              borderRadius: BorderRadius.circular(12),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SettingsSection(
+          title: text.updatesTitle,
+          children: [
+            SettingsRow(
+              title: _updateStatusText(),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    text.updatesTitle,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(_updateStatusText()),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        key: const ValueKey('about_check_updates'),
-                        onPressed: (_checkingUpdate || _updating)
-                            ? null
-                            : (update == null
-                                ? _checkForUpdates
-                                : _applyManagedUpdate),
-                        icon: _checkingUpdate
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Icon(_updateActionIcon(update)),
-                        label: Text(updateActionLabel),
-                      ),
-                    ],
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SettingsActionBar(
+                actions: [
+                  SettingsAction(
+                    key: const ValueKey('about_check_updates'),
+                    label: updateActionLabel,
+                    icon: _checkingUpdate
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(_updateActionIcon(update)),
+                    variant: SlButtonVariant.outline,
+                    onPressed: (_checkingUpdate || _updating)
+                        ? null
+                        : (update == null
+                            ? _checkForUpdates
+                            : _applyManagedUpdate),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      ],
     );
   }
 }

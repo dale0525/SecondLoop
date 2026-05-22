@@ -27,6 +27,7 @@ final class InheritedScopeCapture {
     this.cloudGatewayConfig,
     this.syncEngine,
     this.webFormalSettingsDependencies,
+    this.theme,
   });
 
   final AppBackend? backend;
@@ -38,6 +39,7 @@ final class InheritedScopeCapture {
   final CloudGatewayConfig? cloudGatewayConfig;
   final SyncEngine? syncEngine;
   final WebFormalSettingsDependencies? webFormalSettingsDependencies;
+  final ThemeData? theme;
 
   bool get isEmpty =>
       backend == null &&
@@ -48,7 +50,8 @@ final class InheritedScopeCapture {
       cloudAuthController == null &&
       cloudGatewayConfig == null &&
       syncEngine == null &&
-      webFormalSettingsDependencies == null;
+      webFormalSettingsDependencies == null &&
+      theme == null;
 }
 
 InheritedScopeCapture captureInheritedScopes(BuildContext context) {
@@ -67,6 +70,7 @@ InheritedScopeCapture captureInheritedScopes(BuildContext context) {
     syncEngine: SyncEngineScope.maybeOf(context),
     webFormalSettingsDependencies:
         WebFormalSettingsScope.maybeOf(context)?.dependencies,
+    theme: Theme.of(context),
   );
 }
 
@@ -165,6 +169,11 @@ Widget wrapPushedPageWithInheritedScopeCapture(
         ),
       );
     }
+  }
+
+  final theme = capturedScopes.theme;
+  if (theme != null) {
+    wrapped = Theme(data: theme, child: wrapped);
   }
 
   return wrapped;

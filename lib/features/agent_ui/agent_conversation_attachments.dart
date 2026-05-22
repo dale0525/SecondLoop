@@ -121,6 +121,7 @@ _RuntimeMessageProjection _runtimeMessagesFromTurns(
   required Map<String, _AgentMessageAttachmentView> localAttachmentsByRef,
   List<RuntimeWorkingSetRecord> mediaRecords =
       const <RuntimeWorkingSetRecord>[],
+  required _RuntimeMediaInlineLabels mediaLabels,
 }) {
   final messages = <Message>[];
   final attachmentsByMessageId = <String, List<_AgentMessageAttachmentView>>{};
@@ -150,6 +151,7 @@ _RuntimeMessageProjection _runtimeMessagesFromTurns(
       turns: turns,
       mediaRecords: mediaRecords,
       localAttachmentsByRef: localAttachmentsByRef,
+      labels: mediaLabels,
     ),
   );
 }

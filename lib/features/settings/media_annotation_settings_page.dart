@@ -24,8 +24,9 @@ import '../audio_transcribe/audio_transcribe_runner.dart';
 import '../../i18n/strings.g.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
-import 'llm_profiles_page.dart';
 import 'media_annotation_settings_sections.dart';
+import 'self_managed_setup_page.dart';
+import 'settings_ui.dart';
 
 part 'media_annotation_settings_page_ocr.dart';
 part 'media_annotation_settings_page_linux_ocr.dart';
@@ -222,7 +223,7 @@ class _MediaAnnotationSettingsPageState
           await pushPageWithInheritedScopes(
             Navigator.of(context),
             context,
-            const LlmProfilesPage(),
+            const SelfManagedSetupPage(),
           );
         },
       );
@@ -835,11 +836,9 @@ class _MediaAnnotationSettingsPageState
       return _buildEmbeddedSettings(context);
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(t.title),
-      ),
-      body: _buildSettingsListView(context),
+    return SettingsPageShell(
+      title: t.title,
+      children: _buildSettingsChildren(context),
     );
   }
 }

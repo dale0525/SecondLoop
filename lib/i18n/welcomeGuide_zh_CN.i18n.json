@@ -1,17 +1,31 @@
 {
   "title": "欢迎使用 SecondLoop",
-  "subtitle": "几分钟内完成关键设置。",
-  "ai": {
-    "title": "AI 设置",
-    "description": "连接你偏好的 AI 来源，启用 AI 对话。",
-    "open": "打开 AI 设置",
-    "statusReady": "已就绪",
-    "statusNotSet": "未设置"
-  },
-  "sync": {
-    "title": "同步设置",
-    "description": "配置同步，保持多设备数据一致。",
-    "open": "打开同步设置",
+  "subtitle": "先选择 SecondLoop 的运行方式，再检查系统权限。",
+  "runtime": {
+    "managedPro": {
+      "title": "SecondLoop Pro",
+      "description": "使用托管 runtime，无需 Cloudflare 账号或自带模型密钥。",
+      "comparisonTitle": "无需准备",
+      "comparison": {
+        "cloudflare": "不需要 Cloudflare 账号",
+        "workersPaid": "不需要 Workers Paid plan 或 Containers 配置",
+        "providerKeys": "不需要 provider API Key",
+        "maintenance": "不需要自己部署、维护或管理用量成本"
+      },
+      "open": "登录账号"
+    },
+    "selfManaged": {
+      "title": "Self-managed",
+      "description": "使用自己的 Cloudflare 账号和 provider secrets 部署个人 runtime。",
+      "comparisonTitle": "开始前需要准备",
+      "comparison": {
+        "cloudflare": "Cloudflare 账号",
+        "workersPaid": "Cloudflare Workers Paid plan，用于 Containers（\\$5/月起，超额按量计费）",
+        "providerKeys": "LLM、embedding 和媒体工具的 provider API Key",
+        "maintenance": "自有账号里的部署、维护和 runtime 成本"
+      },
+      "open": "开始自部署"
+    },
     "statusReady": "已就绪",
     "statusNotSet": "未设置"
   },
@@ -30,6 +44,6 @@
   },
   "reopen": {
     "title": "重新打开欢迎引导",
-    "subtitle": "再次查看 AI、同步与权限设置入口"
+    "subtitle": "再次查看运行模式和权限设置入口"
   }
 }

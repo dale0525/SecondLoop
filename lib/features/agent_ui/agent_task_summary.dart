@@ -125,6 +125,25 @@ List<MemoryPageRecord> agentMemoryPagesFromRuntimeRecords(
   return records.map(agentMemoryPageFromRuntimeRecord).toList(growable: false);
 }
 
+List<MemoryPageRecord> agentMemoryPagesFromRuntimeState(
+  RuntimeAgentState state,
+) {
+  final latest = state.latestContextSnapshot;
+  final snapshotRecords = latest == null
+      ? const <RuntimeWorkingSetRecord>[]
+      : <RuntimeWorkingSetRecord>[
+          ..._runtimeRecordList(latest.packet['memory_records']),
+          ..._runtimeRecordsFromWorkingSet(latest.packet['working_set'])
+              .where((record) => record.kind == 'memory'),
+        ];
+  final records = _mergeRuntimeRecordsById([
+    ...state.memoryRecords,
+    ...state.workingSetRecords.where((record) => record.kind == 'memory'),
+    ...snapshotRecords,
+  ]);
+  return agentMemoryPagesFromRuntimeRecords(records);
+}
+
 MemoryPageRecord agentMemoryPageFromRuntimeRecord(
   RuntimeWorkingSetRecord record,
 ) {
@@ -173,20 +192,15 @@ ConversationContextSnapshot agentRuntimeContextSnapshot(
         ..._runtimeObjectList(latest.packet['recurring_reminder_rules']),
       ]),
     ]);
-    final memories = _mergeRuntimeRecordsById([
-      ...state.memoryRecords,
-      ..._runtimeRecordList(latest.packet['memory_records']),
-      ...records.where((record) => record.kind == 'memory'),
-    ]);
     return agentTaskContextSnapshot(
       tasks,
-      memories: agentMemoryPagesFromRuntimeRecords(memories),
+      memories: agentMemoryPagesFromRuntimeState(state),
       recentFiles: recentFiles,
     );
   }
   return agentTaskContextSnapshot(
     agentTodosFromRuntimeState(state),
-    memories: agentMemoryPagesFromRuntimeRecords(state.memoryRecords),
+    memories: agentMemoryPagesFromRuntimeState(state),
     recentFiles: recentFiles,
   );
 }

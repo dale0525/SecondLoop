@@ -14,9 +14,15 @@ import '../../core/subscription/creem_billing_client.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../i18n/strings.g.dart';
-import '../../ui/sl_surface.dart';
 import '../agent_ui/agent_ui_acceptance_driver.dart';
+import 'cloud_account_auth_section.dart';
+import 'cloud_account_benefits_section.dart';
+import 'cloud_account_entry_mode.dart';
+import 'cloud_account_email_verification_section.dart';
+import 'cloud_account_identity_section.dart';
+import 'cloud_account_subscription_section.dart';
 import 'cloud_usage_card.dart';
+import 'settings_ui.dart';
 import 'vault_usage_card.dart';
 
 typedef BillingClientFactory = BillingClient Function({
@@ -34,6 +40,8 @@ class CloudAccountPanel extends StatefulWidget {
     this.vaultAttachmentsClient,
     this.vaultConfigStore,
     this.isWebOverride,
+    this.entryMode = CloudAccountEntryMode.settings,
+    this.onEntitled,
   });
 
   final BillingClient? billingClient;
@@ -43,6 +51,8 @@ class CloudAccountPanel extends StatefulWidget {
   final VaultAttachmentsClient? vaultAttachmentsClient;
   final SyncConfigStore? vaultConfigStore;
   final bool? isWebOverride;
+  final CloudAccountEntryMode entryMode;
+  final VoidCallback? onEntitled;
 
   @override
   State<CloudAccountPanel> createState() => _CloudAccountPanelState();
@@ -75,6 +85,7 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
   CloudAuthController? _ownedBillingAuthController;
   String? _ownedBillingGatewayBaseUrl;
   BillingClientFactory? _ownedBillingClientFactory;
+  bool _onboardingCompletionScheduled = false;
 
   bool get _verificationCooldownActive => _verificationCooldownSeconds > 0;
 
@@ -157,39 +168,6 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  Widget _subscriptionStatusLine(
-      BuildContext context, SubscriptionStatus status) {
-    final t = context.t;
-    final label = switch (status) {
-      SubscriptionStatus.entitled => t.settings.subscription.status.entitled,
-      SubscriptionStatus.notEntitled =>
-        t.settings.subscription.status.notEntitled,
-      SubscriptionStatus.unknown => t.settings.subscription.status.unknown,
-    };
-    return Row(
-      children: [
-        Text(t.settings.subscription.labels.status),
-        const SizedBox(width: 8),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ],
-    );
-  }
-
-  Widget _valuePropTile(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String body,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: scheme.primary),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(body),
-    );
   }
 
   Future<void> _refreshSubscription() async {
@@ -614,8 +592,28 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
     }
   }
 
+  void _completeOnboardingIfEntitled({
+    required String? uid,
+    required SubscriptionStatus subscriptionStatus,
+  }) {
+    if (widget.entryMode != CloudAccountEntryMode.onboarding ||
+        uid == null ||
+        subscriptionStatus != SubscriptionStatus.entitled) {
+      _onboardingCompletionScheduled = false;
+      return;
+    }
+    if (_onboardingCompletionScheduled) return;
+    _onboardingCompletionScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onEntitled?.call();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final t = context.t;
     final scope = CloudAuthScope.maybeOf(context);
     final controller = scope?.controller;
     final uid = controller?.uid;
@@ -646,350 +644,162 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
 
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
+    final isOnboarding = widget.entryMode == CloudAccountEntryMode.onboarding;
+    _completeOnboardingIfEntitled(
+      uid: uid,
+      subscriptionStatus: subscriptionStatus,
+    );
     final canManageSubscription =
         _subscriptionDetailsController(context)?.canManageSubscription ?? true;
     final resendLabel = _verificationCooldownActive
-        ? context.t.settings.cloudAccount.emailVerification.actions
+        ? t.settings.cloudAccount.emailVerification.actions
             .resendCooldown(seconds: _verificationCooldownSeconds)
-        : context.t.settings.cloudAccount.emailVerification.actions.resend;
+        : t.settings.cloudAccount.emailVerification.actions.resend;
+    final subscriptionStatusValue = switch (subscriptionStatus) {
+      SubscriptionStatus.entitled => t.settings.subscription.status.entitled,
+      SubscriptionStatus.notEntitled =>
+        t.settings.subscription.status.notEntitled,
+      SubscriptionStatus.unknown => t.settings.subscription.status.unknown,
+    };
+    final emailVerificationStatusValue = controller?.emailVerified == true
+        ? t.settings.cloudAccount.emailVerification.status.verified
+        : controller?.emailVerified == false
+            ? t.settings.cloudAccount.emailVerification.status.notVerified
+            : t.settings.cloudAccount.emailVerification.status.unknown;
+    final purchaseBenefit = CloudAccountBenefit(
+      icon: Icons.shopping_cart_rounded,
+      title: t.settings.cloudAccount.benefits.items.purchase.title,
+      body: t.settings.cloudAccount.benefits.items.purchase.body,
+    );
+    final subscriptionBenefits = [
+      CloudAccountBenefit(
+        icon: Icons.flash_on_rounded,
+        title: t.settings.subscription.benefits.items.noSetup.title,
+        body: t.settings.subscription.benefits.items.noSetup.body,
+      ),
+      CloudAccountBenefit(
+        icon: Icons.cloud_sync_rounded,
+        title: t.settings.subscription.benefits.items.cloudSync.title,
+        body: t.settings.subscription.benefits.items.cloudSync.body,
+      ),
+      CloudAccountBenefit(
+        icon: Icons.manage_search_rounded,
+        title: t.settings.subscription.benefits.items.mobileSearch.title,
+        body: t.settings.subscription.benefits.items.mobileSearch.body,
+      ),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
         if (uid == null) ...[
-          SlSurface(
-            key: const ValueKey('cloud_account_value_props'),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t.settings.cloudAccount.benefits.title,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 12),
-                _valuePropTile(
-                  context,
-                  icon: Icons.shopping_cart,
-                  title: context
-                      .t.settings.cloudAccount.benefits.items.purchase.title,
-                  body: context
-                      .t.settings.cloudAccount.benefits.items.purchase.body,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  context.t.settings.subscription.benefits.title,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 12),
-                _valuePropTile(
-                  context,
-                  icon: Icons.flash_on,
-                  title: context
-                      .t.settings.subscription.benefits.items.noSetup.title,
-                  body: context
-                      .t.settings.subscription.benefits.items.noSetup.body,
-                ),
-                _valuePropTile(
-                  context,
-                  icon: Icons.cloud_sync,
-                  title: context
-                      .t.settings.subscription.benefits.items.cloudSync.title,
-                  body: context
-                      .t.settings.subscription.benefits.items.cloudSync.body,
-                ),
-                _valuePropTile(
-                  context,
-                  icon: Icons.manage_search,
-                  title: context.t.settings.subscription.benefits.items
-                      .mobileSearch.title,
-                  body: context
-                      .t.settings.subscription.benefits.items.mobileSearch.body,
-                ),
-              ],
+          if (!isOnboarding) ...[
+            CloudAccountBenefitsSection(
+              surfaceKey: const ValueKey('cloud_account_value_props'),
+              title: t.settings.cloudAccount.benefits.title,
+              benefits: [purchaseBenefit],
             ),
-          ),
-          const SizedBox(height: 16),
-          SlSurface(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: context.t.settings.cloudAccount.fields.email,
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  enabled: !_busy,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _passwordController,
-                  decoration: InputDecoration(
-                    labelText: context.t.settings.cloudAccount.fields.password,
-                  ),
-                  obscureText: true,
-                  enabled: !_busy,
-                  onSubmitted: (_) => _signIn(),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton(
-                        key: const ValueKey('cloud_sign_in'),
-                        onPressed: _busy ? null : _signIn,
-                        child: Text(
-                          context.t.settings.cloudAccount.actions.signIn,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton(
-                        key: const ValueKey('cloud_sign_up'),
-                        onPressed: _busy ? null : _signUp,
-                        child: Text(
-                          context.t.settings.cloudAccount.actions.signUp,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    key: const ValueKey('cloud_forgot_password'),
-                    onPressed: _busy ? null : _forgotPassword,
-                    child: Text(_forgotPasswordLabel(context)),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 16),
+            CloudAccountBenefitsSection(
+              title: t.settings.subscription.benefits.title,
+              benefits: subscriptionBenefits,
             ),
+            const SizedBox(height: 16),
+          ],
+          CloudAccountAuthSection(
+            emailController: _emailController,
+            passwordController: _passwordController,
+            busy: _busy,
+            emailLabel: t.settings.cloudAccount.fields.email,
+            passwordLabel: t.settings.cloudAccount.fields.password,
+            signInLabel: t.settings.cloudAccount.actions.signIn,
+            signUpLabel: t.settings.cloudAccount.actions.signUp,
+            forgotPasswordLabel: _forgotPasswordLabel(context),
+            onSignIn: _signIn,
+            onSignUp: _signUp,
+            onForgotPassword: _forgotPassword,
           ),
         ] else ...[
-          SlSurface(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t.settings.cloudAccount
-                      .signedInAs(email: displayEmail ?? '—'),
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _busy ? null : _signOut,
-                  child: Text(context.t.settings.cloudAccount.actions.signOut),
-                ),
-              ],
+          CloudAccountIdentitySection(
+            signedInLabel:
+                t.settings.cloudAccount.signedInAs(email: displayEmail ?? '—'),
+            signOutLabel: t.settings.cloudAccount.actions.signOut,
+            busy: _busy,
+            onSignOut: _signOut,
+          ),
+          if (!isOnboarding || controller?.emailVerified != true) ...[
+            const SizedBox(height: 16),
+            CloudAccountEmailVerificationSection(
+              title: t.settings.cloudAccount.emailVerification.title,
+              statusLabel:
+                  t.settings.cloudAccount.emailVerification.labels.status,
+              statusValue: emailVerificationStatusValue,
+              helpText: t.settings.cloudAccount.emailVerification.labels.help,
+              resendLabel: resendLabel,
+              refreshTooltip: t.common.actions.refresh,
+              userInfoBusy: _userInfoBusy,
+              verificationBusy: _verificationBusy,
+              verificationCooldownActive: _verificationCooldownActive,
+              emailVerified: controller?.emailVerified,
+              onRefresh: _refreshUserInfo,
+              onResend: _resendVerificationEmail,
+              loadFailedText: _userInfoError == null
+                  ? null
+                  : t.settings.cloudAccount.emailVerification.labels
+                      .loadFailed(error: '$_userInfoError'),
+              verificationHint: _verificationHint,
             ),
-          ),
+          ],
           const SizedBox(height: 16),
-          SlSurface(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        context.t.settings.cloudAccount.emailVerification.title,
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _userInfoBusy ? null : _refreshUserInfo,
-                      icon: const Icon(Icons.refresh),
-                      tooltip: context.t.common.actions.refresh,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      context.t.settings.cloudAccount.emailVerification.labels
-                          .status,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      controller?.emailVerified == true
-                          ? context.t.settings.cloudAccount.emailVerification
-                              .status.verified
-                          : controller?.emailVerified == false
-                              ? context.t.settings.cloudAccount
-                                  .emailVerification.status.notVerified
-                              : context.t.settings.cloudAccount
-                                  .emailVerification.status.unknown,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                if (_userInfoError != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    context.t.settings.cloudAccount.emailVerification.labels
-                        .loadFailed(error: '$_userInfoError'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+          CloudAccountSubscriptionSection(
+            status: subscriptionStatus,
+            canManageSubscription: canManageSubscription,
+            subBusy: _subBusy,
+            billingBusy: _billingBusy,
+            statusLabel: t.settings.subscription.labels.status,
+            statusValue: subscriptionStatusValue,
+            title: t.settings.subscription.title,
+            refreshTooltip: t.common.actions.refresh,
+            purchaseLabel: t.settings.subscription.actions.purchase,
+            manageLabel: t.settings.subscription.subtitle,
+            benefitsTitle: t.settings.subscription.benefits.title,
+            benefits: subscriptionBenefits,
+            onboarding: isOnboarding,
+            subscriptionRequiredBody:
+                t.settings.cloudAccount.onboarding.subscriptionRequiredBody,
+            onRefresh: _refreshSubscription,
+            onSubscribe: _openCheckout,
+            onManage: _openPortal,
+            subscriptionErrorText: _subError == null
+                ? null
+                : t.settings.subscription.labels.loadFailed(
+                    error: _formatCloudSubscriptionError(context, _subError!),
                   ),
-                ],
-                if (_verificationHint != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _verificationHint!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+            billingErrorText: _billingError == null
+                ? null
+                : t.settings.subscription.labels.loadFailed(
+                    error:
+                        _formatCloudSubscriptionError(context, _billingError!),
                   ),
-                ],
-                if (controller?.emailVerified == false) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    context
-                        .t.settings.cloudAccount.emailVerification.labels.help,
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    key: const ValueKey('cloud_resend_verification'),
-                    onPressed:
-                        (_verificationBusy || _verificationCooldownActive)
-                            ? null
-                            : _resendVerificationEmail,
-                    child: Text(resendLabel),
-                  ),
-                ],
-              ],
+          ),
+          if (!isOnboarding) ...[
+            const SizedBox(height: 16),
+            CloudUsageCard(client: widget.cloudUsageClient),
+            const SizedBox(height: 16),
+            VaultUsageCard(
+              client: widget.vaultUsageClient,
+              attachmentsClient: widget.vaultAttachmentsClient,
+              configStore: widget.vaultConfigStore,
+              isWebOverride: widget.isWebOverride,
             ),
-          ),
-          const SizedBox(height: 16),
-          SlSurface(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        context.t.settings.subscription.title,
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
-                    IconButton(
-                      key: const ValueKey('cloud_subscription_refresh'),
-                      onPressed: _subBusy ? null : _refreshSubscription,
-                      icon: const Icon(Icons.refresh),
-                      tooltip: context.t.common.actions.refresh,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                _subscriptionStatusLine(context, subscriptionStatus),
-                const SizedBox(height: 12),
-                if (_subError != null) ...[
-                  Text(
-                    context.t.settings.subscription.labels.loadFailed(
-                      error: _formatCloudSubscriptionError(context, _subError!),
-                    ),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (_billingError != null) ...[
-                  Text(
-                    context.t.settings.subscription.labels.loadFailed(
-                      error: _formatCloudSubscriptionError(
-                          context, _billingError!),
-                    ),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (subscriptionStatus != SubscriptionStatus.entitled) ...[
-                  Container(
-                    key: const ValueKey('cloud_subscription_value_props'),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.t.settings.subscription.benefits.title,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 12),
-                        _valuePropTile(
-                          context,
-                          icon: Icons.flash_on,
-                          title: context.t.settings.subscription.benefits.items
-                              .noSetup.title,
-                          body: context.t.settings.subscription.benefits.items
-                              .noSetup.body,
-                        ),
-                        _valuePropTile(
-                          context,
-                          icon: Icons.cloud_sync,
-                          title: context.t.settings.subscription.benefits.items
-                              .cloudSync.title,
-                          body: context.t.settings.subscription.benefits.items
-                              .cloudSync.body,
-                        ),
-                        _valuePropTile(
-                          context,
-                          icon: Icons.manage_search,
-                          title: context.t.settings.subscription.benefits.items
-                              .mobileSearch.title,
-                          body: context.t.settings.subscription.benefits.items
-                              .mobileSearch.body,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    key: const ValueKey('cloud_subscribe'),
-                    onPressed: _billingBusy ? null : _openCheckout,
-                    child: Text(
-                      context.t.settings.subscription.actions.purchase,
-                    ),
-                  ),
-                ] else ...[
-                  if (canManageSubscription)
-                    OutlinedButton(
-                      key: const ValueKey('cloud_manage_subscription'),
-                      onPressed: _billingBusy ? null : _openPortal,
-                      child: Text(context.t.settings.subscription.subtitle),
-                    ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          CloudUsageCard(client: widget.cloudUsageClient),
-          const SizedBox(height: 16),
-          VaultUsageCard(
-            client: widget.vaultUsageClient,
-            attachmentsClient: widget.vaultAttachmentsClient,
-            configStore: widget.vaultConfigStore,
-            isWebOverride: widget.isWebOverride,
-          ),
+          ],
         ],
         if (_error != null) ...[
           const SizedBox(height: 16),
-          Text(
-            _error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          SettingsInlineMessage(
+            message: _error!,
+            tone: SettingsInlineMessageTone.error,
           ),
         ],
       ],

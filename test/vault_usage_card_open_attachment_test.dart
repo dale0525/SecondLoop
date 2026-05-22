@@ -221,6 +221,91 @@ void main() {
     );
   });
 
+  testWidgets('VaultUsageCard repairs zero summary from attachment inventory',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final httpClient = MockClient((request) async {
+      final url = request.url.toString();
+      if (url == 'https://vault-1.test/v1/vaults/uid_1/usage') {
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'total_bytes_used': 0,
+            'attachments_bytes_used': 0,
+            'ops_bytes_used': 0,
+            'other_bytes_used': 0,
+            'limit_bytes': null,
+          }),
+          200,
+        );
+      }
+      if (url == 'https://vault-1.test/v1/vaults/uid_1/attachments?limit=200') {
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'items': [
+              {
+                'id': 'att-a',
+                'sha256': 'sha-a',
+                'display_name': 'scan-a.pdf',
+                'mime_type': 'application/pdf',
+                'byte_len': 7,
+                'created_at_ms': 1000,
+                'uploaded_at_ms': 2000,
+              },
+              {
+                'id': 'att-b',
+                'sha256': 'sha-b',
+                'display_name': 'scan-b.pdf',
+                'mime_type': 'application/pdf',
+                'byte_len': 5,
+                'created_at_ms': 3000,
+                'uploaded_at_ms': 4000,
+              },
+            ],
+            'total_count': 2,
+            'total_bytes_used': 12,
+          }),
+          200,
+        );
+      }
+      throw StateError('unexpected url: $url');
+    });
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        CloudAuthScope(
+          controller: _FakeCloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.test',
+            modelName: 'cloud',
+          ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: MaterialApp(
+              home: Scaffold(
+                body: VaultUsageCard(
+                  client: VaultUsageClient(httpClient: httpClient),
+                  attachmentsClient:
+                      VaultAttachmentsClient(httpClient: httpClient),
+                  configStore: SyncConfigStore(
+                    managedVaultDefaultBaseUrl: 'https://vault-1.test',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('12 B'), findsNWidgets(2));
+    expect(find.text('scan-a.pdf'), findsOneWidget);
+    expect(find.text('scan-b.pdf'), findsOneWidget);
+  });
+
   testWidgets('VaultUsageCard refreshes when managed vault base URL changes',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

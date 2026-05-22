@@ -10,6 +10,7 @@ import 'package:secondloop/core/cloud/vault_usage_client.dart';
 import 'package:secondloop/core/subscription/creem_billing_client.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
+import 'package:secondloop/features/settings/agent_settings_page.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
@@ -47,12 +48,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final cloudAccountLink = find.text(t.settings.agentUi.links.cloudAccount);
-    await tester.ensureVisible(cloudAccountLink);
-    await tester.tap(cloudAccountLink);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('cloud_manage_subscription')));
+    expect(find.byType(AgentSettingsPage), findsOneWidget);
+    final manageSubscription =
+        find.byKey(const ValueKey('cloud_manage_subscription'));
+    await tester.ensureVisible(manageSubscription);
+    await tester.tap(manageSubscription);
     await tester.pumpAndSettle();
 
     expect(service.openPortalCount, 1);

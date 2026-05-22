@@ -14,7 +14,7 @@ import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
-import '../../features/settings/ai_settings_page.dart';
+import '../../features/settings/cloud_runtime_mode_page.dart';
 import 'cloud_sync_switch_prefs.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
@@ -442,10 +442,7 @@ final class _CloudSyncSwitchPromptGateState
     if (review == true && effectiveContext.mounted) {
       await Navigator.of(effectiveContext, rootNavigator: true).push(
         MaterialPageRoute(
-          builder: (_) => const AiSettingsPage(
-            focusSection: AiSettingsSection.smartOrganization,
-            highlightFocus: true,
-          ),
+          builder: (_) => const CloudRuntimeModePage(),
         ),
       );
     }

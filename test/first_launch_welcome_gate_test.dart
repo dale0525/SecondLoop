@@ -2,14 +2,50 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:secondloop/features/settings/ai_settings_page.dart';
-import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
+import 'package:secondloop/core/cloud/runtime_connection_store.dart';
+import 'package:secondloop/core/cloud/runtime_manifest.dart';
+import 'package:secondloop/core/cloud/runtime_profile.dart';
+import 'package:secondloop/features/settings/cloud_account_page.dart';
+import 'package:secondloop/features/settings/self_managed_setup_page.dart';
 import 'package:secondloop/features/welcome/first_launch_welcome_gate.dart';
 import 'package:secondloop/features/welcome/welcome_page.dart';
 
 import 'test_i18n.dart';
 
 void main() {
+  Future<void> bringIntoView(WidgetTester tester, Finder target) async {
+    final scrollable = find.byType(SingleChildScrollView);
+    if (scrollable.evaluate().isEmpty) return;
+    await tester.dragUntilVisible(
+      target,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> configureSelfManagedRuntime() async {
+    await RuntimeConnectionStore().saveConnection(
+      const CloudRuntimeConnection(
+        profile: CloudRuntimeProfile(
+          runtimeMode: CloudRuntimeMode.selfManaged,
+          apiBaseUrl: 'https://runtime.example.test',
+          authMode: CloudRuntimeAuthMode.runtimeToken,
+          authToken: 'runtime-token',
+          capabilityManifestId: 'self-managed-runtime',
+          manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+        ),
+        manifest: CloudRuntimeManifest(
+          manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+          runtimeMode: CloudRuntimeMode.selfManaged,
+          apiBaseUrl: 'https://runtime.example.test',
+          authMode: CloudRuntimeAuthMode.runtimeToken,
+          capabilities: [CloudRuntimeCapability('chat')],
+        ),
+      ),
+    );
+  }
+
   Future<void> pumpGate(WidgetTester tester) async {
     await tester.pumpWidget(
       wrapWithI18n(
@@ -48,8 +84,22 @@ void main() {
     expect(find.text('app shell child'), findsOneWidget);
   });
 
-  testWidgets('skip writes seen flag and exits welcome page', (tester) async {
+  testWidgets('first runtime step cannot be skipped', (tester) async {
     SharedPreferences.setMockInitialValues({});
+
+    await pumpGate(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('welcome_guide_skip')), findsNothing);
+    expect(find.byKey(const ValueKey('welcome_guide_finish')), findsNothing);
+    expect(find.byType(WelcomePage), findsOneWidget);
+    expect(find.text('app shell child'), findsNothing);
+  });
+
+  testWidgets('skip writes seen flag from permissions step and exits welcome',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await configureSelfManagedRuntime();
 
     await pumpGate(tester);
     await tester.pumpAndSettle();
@@ -63,8 +113,10 @@ void main() {
     expect(find.text('app shell child'), findsOneWidget);
   });
 
-  testWidgets('finish writes seen flag and exits welcome page', (tester) async {
+  testWidgets('finish writes seen flag from permissions step and exits welcome',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
+    await configureSelfManagedRuntime();
 
     await pumpGate(tester);
     await tester.pumpAndSettle();
@@ -78,7 +130,7 @@ void main() {
     expect(find.text('app shell child'), findsOneWidget);
   });
 
-  testWidgets('welcome in app builder can open AI and runtime settings',
+  testWidgets('welcome in app builder can open managed and self-managed setup',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -98,16 +150,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('welcome_guide_card_ai_open')));
+    await tester
+        .tap(find.byKey(const ValueKey('welcome_guide_card_managed_pro_open')));
     await tester.pumpAndSettle();
-    expect(find.byType(AiSettingsPage), findsOneWidget);
+    expect(find.byType(CloudAccountPage), findsOneWidget);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('welcome_guide_card_runtime_open')),
+    final selfManagedButton =
+        find.byKey(const ValueKey('welcome_guide_card_self_managed_open'));
+    await bringIntoView(
+      tester,
+      selfManagedButton,
     );
+    await tester.tap(selfManagedButton);
     await tester.pumpAndSettle();
-    expect(find.byType(CloudRuntimeModePage), findsOneWidget);
+    expect(find.byType(SelfManagedSetupPage), findsOneWidget);
   });
 }

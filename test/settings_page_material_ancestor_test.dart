@@ -31,7 +31,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(ListTile), findsWidgets);
+      expect(
+          find.byKey(const ValueKey('settings_runtime_mode')), findsOneWidget);
       expect(tester.takeException(), isNull);
     } finally {
       debugDefaultTargetPlatformOverride = null;

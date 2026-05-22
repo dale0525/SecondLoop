@@ -17,6 +17,7 @@ import 'package:secondloop/core/media_annotation/media_annotation_config_store.d
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/settings/media_annotation_settings_page.dart';
+import 'package:secondloop/features/settings/settings_ui.dart';
 import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_i18n.dart';
@@ -322,6 +323,8 @@ void main() {
       contentStore: contentStore,
     );
 
+    expect(find.byType(SettingsPageShell), findsOneWidget);
+    expect(find.byType(SettingsSection), findsWidgets);
     expect(
       find.byKey(MediaAnnotationSettingsPage.mediaUnderstandingSwitchKey),
       findsNothing,

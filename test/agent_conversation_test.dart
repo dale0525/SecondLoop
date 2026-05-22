@@ -22,6 +22,7 @@ import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
 import 'package:secondloop/features/chat/chat_markdown_rich_rendering.dart';
 import 'package:secondloop/features/inbox/inbox_page.dart';
 import 'package:secondloop/core/models/app_models.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -865,6 +866,90 @@ secondloop://message/history-rich-1
       );
       expect(find.text('1 sources'), findsOneWidget);
       expect(find.text('[1]', findRichText: true), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'managed pro conversation localizes runtime media result labels',
+    (tester) async {
+      LocaleSettings.setLocale(AppLocale.zhCn);
+      addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
+
+      final backend = _RuntimeTaskCreationBackend();
+      final result = SecretaryRuntimeConversationResult.fromJson(const {
+        'run_id': 'run-qa-file-03',
+        'conversation_id': 'loop_home',
+        'assistant': {'content': '已整理这段音频。'},
+        'metadata': {
+          'run_id': 'run-qa-file-03',
+          'turn_id': 'turn-assistant-1',
+          'conversation_id': 'loop_home',
+          'vault_id': 'uid_1',
+          'response_type': 'assistant_message',
+          'run_status': 'completed',
+          'approval_required': false,
+          'media_results': [
+            {
+              'id': 'media-audio-1',
+              'filename': 'qa-meeting-audio.m4a',
+              'media_type': 'audio',
+              'transcript': 'Alice said the release can go out Friday.',
+              'meeting_minutes': 'The release decision is ready.',
+              'decisions': ['Ship on Friday'],
+              'action_items': [
+                {
+                  'title': 'Send the release notes',
+                  'owner': 'Mina',
+                  'due': 'Tomorrow',
+                },
+              ],
+              'citations': [
+                {'title': 'qa-meeting-audio.m4a'},
+              ],
+            },
+          ],
+        },
+      });
+      final repository = _FakeRuntimeAgentStateRepository();
+      final sender = _FakeRuntimeConversationSender(
+        result: result,
+        onSend: (vaultId, conversationId, message, result) {
+          repository.state = _runtimeAgentStateFromResult(
+            result,
+            vaultId: vaultId,
+            conversationId: conversationId,
+            userMessage: message,
+          );
+        },
+      );
+
+      await _pumpManagedProAgentConversation(
+        tester,
+        backend,
+        sender,
+        runtimeAgentStateRepository: repository,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('chat_input')),
+        '请整理这段音频。',
+      );
+      await tester.pumpAndSettle();
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('chat_send')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+
+      expect(find.text('转录'), findsOneWidget);
+      expect(find.text('会议纪要'), findsOneWidget);
+      expect(find.text('决策'), findsOneWidget);
+      expect(find.text('行动项'), findsOneWidget);
+      expect(find.text('来源'), findsOneWidget);
+      expect(find.textContaining('负责人：Mina'), findsOneWidget);
+      expect(find.textContaining('截止：Tomorrow'), findsOneWidget);
+      expect(find.text('Transcript'), findsNothing);
+      expect(find.text('Meeting minutes'), findsNothing);
+      expect(find.text('Action items'), findsNothing);
     },
   );
 

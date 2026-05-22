@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
+import 'package:secondloop/features/settings/settings_ui.dart';
 import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
@@ -29,5 +30,8 @@ void main() {
 
     expect(find.text('Theme'), findsOneWidget);
     expect(find.byType(SlSurface), findsWidgets);
+    expect(find.byType(SettingsSection), findsWidgets);
+    expect(find.byKey(const ValueKey('settings_runtime_mode')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings_ai_source')), findsNothing);
   });
 }

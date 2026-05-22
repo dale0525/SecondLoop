@@ -64,9 +64,7 @@ final class _MemoryPageState extends State<MemoryPage> {
         vaultId: vaultId,
         conversationId: widget.conversationId,
       );
-      return _memoryDataFromPages(
-        agentMemoryPagesFromRuntimeRecords(state.memoryRecords),
-      );
+      return _memoryDataFromPages(agentMemoryPagesFromRuntimeState(state));
     }
 
     final backend = AppBackendScope.maybeOf(context);

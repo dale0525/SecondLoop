@@ -28,13 +28,12 @@ import '../../core/update/update_badge_prefs.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
-import '../../ui/sl_surface.dart';
 import '../actions/settings/actions_settings_store.dart';
 import 'cloud_runtime_mode_page.dart';
-import 'ai_settings_page.dart';
 import 'diagnostics_page.dart';
 import 'about_page.dart';
 import '../welcome/welcome_page.dart';
+import 'settings_ui.dart';
 
 part 'settings_page_build.dart';
 part 'settings_page_reset_actions.dart';

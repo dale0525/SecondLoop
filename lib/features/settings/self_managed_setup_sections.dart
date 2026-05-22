@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/cloud/self_managed_setup_controller.dart';
 import '../../core/cloud/self_managed_setup_models.dart';
 import '../../i18n/strings.g.dart';
+import '../agent_ui/agent_design_tokens.dart';
+import 'settings_ui.dart';
 
 class SelfManagedSetupSections extends StatelessWidget {
   const SelfManagedSetupSections({
@@ -28,63 +30,73 @@ class SelfManagedSetupSections extends StatelessWidget {
       animation: controller,
       builder: (context, _) {
         final refreshedState = controller.state;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return SettingsSection(
           children: [
-            TextField(
-              key: const ValueKey('self_managed_cloudflare_account'),
-              controller: cloudflareAccountController,
-              decoration: InputDecoration(
-                labelText:
-                    context.t.settings.selfManagedSetup.fields.accountLabel,
+            Padding(
+              padding: const EdgeInsets.all(AgentDesignTokens.gapLg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    key: const ValueKey('self_managed_cloudflare_account'),
+                    controller: cloudflareAccountController,
+                    decoration: InputDecoration(
+                      labelText: context
+                          .t.settings.selfManagedSetup.fields.accountLabel,
+                    ),
+                  ),
+                  const SizedBox(height: AgentDesignTokens.gapMd),
+                  TextField(
+                    key: const ValueKey('self_managed_provider'),
+                    controller: providerController,
+                    decoration: InputDecoration(
+                      labelText: context
+                          .t.settings.selfManagedSetup.fields.providerLabel,
+                    ),
+                  ),
+                  const SizedBox(height: AgentDesignTokens.gapMd),
+                  TextField(
+                    key: const ValueKey('self_managed_api_key'),
+                    controller: apiKeyController,
+                    decoration: InputDecoration(
+                      labelText: context
+                          .t.settings.selfManagedSetup.fields.apiKeyLabel,
+                    ),
+                  ),
+                  const SizedBox(height: AgentDesignTokens.gapMd),
+                  TextField(
+                    key: const ValueKey('self_managed_embedding_api_key'),
+                    controller: embeddingApiKeyController,
+                    decoration: InputDecoration(
+                      labelText: context.t.settings.selfManagedSetup.fields
+                          .embeddingApiKeyLabel,
+                    ),
+                  ),
+                  const SizedBox(height: AgentDesignTokens.gapMd),
+                  TextField(
+                    key: const ValueKey('self_managed_multimodal_api_key'),
+                    controller: multimodalApiKeyController,
+                    decoration: InputDecoration(
+                      labelText: context.t.settings.selfManagedSetup.fields
+                          .multimodalApiKeyLabel,
+                    ),
+                  ),
+                  const SizedBox(height: AgentDesignTokens.gapLg),
+                  Text(_statusLabel(context, refreshedState)),
+                  if (refreshedState.errorCode != null) ...[
+                    const SizedBox(height: AgentDesignTokens.gapSm),
+                    SettingsInlineMessage(
+                      message: refreshedState.errorCode!,
+                      tone: SettingsInlineMessageTone.error,
+                    ),
+                  ],
+                  if (refreshedState.manifest != null) ...[
+                    const SizedBox(height: AgentDesignTokens.gapSm),
+                    Text(refreshedState.manifest!.apiBaseUrl),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('self_managed_provider'),
-              controller: providerController,
-              decoration: InputDecoration(
-                labelText:
-                    context.t.settings.selfManagedSetup.fields.providerLabel,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('self_managed_api_key'),
-              controller: apiKeyController,
-              decoration: InputDecoration(
-                labelText:
-                    context.t.settings.selfManagedSetup.fields.apiKeyLabel,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('self_managed_embedding_api_key'),
-              controller: embeddingApiKeyController,
-              decoration: InputDecoration(
-                labelText: context
-                    .t.settings.selfManagedSetup.fields.embeddingApiKeyLabel,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('self_managed_multimodal_api_key'),
-              controller: multimodalApiKeyController,
-              decoration: InputDecoration(
-                labelText: context
-                    .t.settings.selfManagedSetup.fields.multimodalApiKeyLabel,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(_statusLabel(context, refreshedState)),
-            if (refreshedState.errorCode != null) ...[
-              const SizedBox(height: 8),
-              Text(refreshedState.errorCode!),
-            ],
-            if (refreshedState.manifest != null) ...[
-              const SizedBox(height: 8),
-              Text(refreshedState.manifest!.apiBaseUrl),
-            ],
           ],
         );
       },

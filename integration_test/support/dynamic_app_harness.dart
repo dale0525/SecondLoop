@@ -13,8 +13,6 @@ import 'package:secondloop/core/platform/app_platform_capabilities.dart';
 import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
-import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
-import 'package:secondloop/features/settings/ai_settings_page.dart';
 import 'package:secondloop/features/settings/agent_settings_page.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
@@ -157,48 +155,39 @@ final class DynamicAppHarness {
     );
   }
 
-  Future<void> openAiSettings() async {
-    if (find.byType(AgentSettingsPage).evaluate().isNotEmpty) {
-      await tester.tap(find.text('Permissions'));
-      await tester.pump();
-      await tapByKey('agent_settings_open_ai_settings');
-    } else {
-      await tapByKey('settings_ai_source');
-    }
-    await pumpUntilFound(
-      find.byType(AiSettingsPage),
-      description: 'AI settings page',
-    );
-  }
-
-  Future<void> openAskAiSettings() async {
-    await tapByKey('ai_settings_open_ask_ai_settings');
-    await pumpUntilFound(
-      find.byType(AiAskAiSettingsPage),
-      description: 'Ask AI settings page',
-    );
-  }
-
-  Future<void> openCloudAccountFromAskAi() async {
-    await tapByKey('ask_ai_settings_open_cloud_account');
-    await pumpUntilFound(
-      find.byType(CloudAccountPage),
-      description: 'cloud account page',
-    );
-  }
-
   Future<void> openRuntimeModeSettings() async {
     if (find.byType(AgentSettingsPage).evaluate().isNotEmpty) {
       await tester.tap(find.text('Connection'));
       await tester.pump();
-      await tapByKey('agent_settings_open_runtime_mode');
+      await pumpUntilFound(
+        find.byKey(const ValueKey('runtime_mode_self_managed')),
+        description: 'runtime mode tab content',
+      );
     } else {
       await tapByKey('settings_runtime_mode');
+      await pumpUntilFound(
+        find.byType(CloudRuntimeModePage),
+        description: 'runtime mode page',
+      );
     }
-    await pumpUntilFound(
-      find.byType(CloudRuntimeModePage),
-      description: 'runtime mode page',
-    );
+  }
+
+  Future<void> openManagedProAccount() async {
+    if (find.byType(AgentSettingsPage).evaluate().isNotEmpty) {
+      await tester.tap(find.text('Account'));
+      await tester.pump();
+      await pumpUntilFound(
+        find.byType(CloudAccountSettingsHost),
+        description: 'cloud account tab content',
+      );
+    } else {
+      await openRuntimeModeSettings();
+      await tapByKey('runtime_mode_managed_pro');
+      await pumpUntilFound(
+        find.byType(CloudAccountPage),
+        description: 'cloud account page',
+      );
+    }
   }
 
   Future<void> openSelfManagedSetup() async {

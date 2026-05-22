@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/settings/cloud_account_page.dart';
+import 'package:secondloop/features/settings/settings_ui.dart';
 import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
@@ -17,6 +18,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CloudAccountPage), findsOneWidget);
+    expect(find.byType(SettingsPageShell), findsOneWidget);
     expect(find.byType(SlSurface), findsWidgets);
   });
 }

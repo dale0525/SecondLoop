@@ -55,6 +55,62 @@ void main() {
       expect(find.text('No knowledge pages yet.'), findsNothing);
     },
   );
+
+  testWidgets(
+    'managed pro MemoryPage reads memories from the runtime context snapshot',
+    (tester) async {
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [],
+          'working_set_records': [],
+          'tasks': [],
+          'memory_records': [],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [],
+          'latest_context_snapshot': {
+            'id': 'context-snapshot-1',
+            'generated_at_ms': 1700000000000,
+            'packet': {
+              'conversation_id': 'loop_home',
+              'working_set': {'records': []},
+              'memory_records': [
+                {
+                  'id': 'memory-focus-time',
+                  'kind': 'memory',
+                  'text': '下午 4 点后再安排深度会议',
+                  'state': 'active',
+                }
+              ],
+            },
+          },
+          'audit_refs': [],
+        }),
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: CloudAuthScope(
+              controller: _CloudAuthController(),
+              gatewayConfig: const CloudGatewayConfig(
+                baseUrl: 'https://gateway.example.test',
+                modelName: 'cloud',
+              ),
+              child: MemoryPage(runtimeAgentStateRepository: repository),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.requests, [('uid_1', 'loop_home')]);
+      expect(find.text('下午 4 点后再安排深度会议'), findsWidgets);
+      expect(find.text('No knowledge pages yet.'), findsNothing);
+    },
+  );
 }
 
 final class _FakeRuntimeAgentStateRepository

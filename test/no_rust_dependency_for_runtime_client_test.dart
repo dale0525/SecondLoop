@@ -124,29 +124,17 @@ void main() {
     }
   });
 
-  test('AI settings does not expose retired local media runtime settings', () {
-    final files = [
-      File('lib/features/settings/ai_settings_page.dart'),
-      File('lib/features/settings/ai_settings_page_ui.dart'),
-    ];
-
-    const forbidden = [
-      'media_annotation_settings_page.dart',
-      'MediaAnnotationSettingsPage',
-      'focusMediaLocalCapabilityCard',
-      'mediaLocalCapability',
-    ];
-
-    for (final file in files) {
-      final source = file.readAsStringSync();
-      for (final token in forbidden) {
-        expect(
-          source,
-          isNot(contains(token)),
-          reason: '${file.path} must not expose retired local media runtime '
-              'settings in the runtime-first AI settings flow',
-        );
-      }
+  test('runtime-first settings tree does not keep legacy AI settings pages',
+      () {
+    for (final path in [
+      'lib/features/settings/ai_settings_page.dart',
+      'lib/features/settings/ai_settings_page_ui.dart',
+      'lib/features/settings/ai_ask_ai_settings_page.dart',
+      'lib/features/settings/ai_smart_organization_settings_page.dart',
+      'lib/features/settings/llm_profiles_page.dart',
+      'lib/features/settings/embedding_profiles_page.dart',
+    ]) {
+      expect(File(path).existsSync(), isFalse, reason: '$path is retired');
     }
   });
 
@@ -362,7 +350,6 @@ List<File> _runtimeClientFiles() {
     ..._dartFiles(Directory('lib/features/notes')),
     File('lib/features/attachments/attachment_preview_descriptor.dart'),
     File('lib/features/attachments/attachment_storage_controller.dart'),
-    File('lib/features/settings/ai_settings_page.dart'),
     File('lib/features/settings/cloud_runtime_mode_page.dart'),
     File('lib/features/settings/vault_usage_card.dart'),
   ];

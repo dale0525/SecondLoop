@@ -4,20 +4,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/app/app_shell_style.dart';
+import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
-import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
-import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/cloud/runtime_connection_store.dart';
+import 'package:secondloop/core/cloud/runtime_manifest.dart';
+import 'package:secondloop/core/cloud/runtime_profile.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
-import 'package:secondloop/core/sync/sync_config_store.dart';
-import 'package:secondloop/core/sync/sync_engine.dart';
-import 'package:secondloop/features/settings/ai_settings_page.dart';
-import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
+import 'package:secondloop/features/settings/cloud_account_page.dart';
+import 'package:secondloop/features/settings/self_managed_setup_page.dart';
 import 'package:secondloop/features/welcome/welcome_page.dart';
 import 'package:secondloop/features/welcome/welcome_status.dart';
+import 'package:secondloop/ui/sl_surface.dart';
+import 'package:secondloop/ui/sl_tokens.dart';
 
-import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
@@ -34,8 +36,6 @@ void main() {
 
   Future<void> pumpWelcomePage(
     WidgetTester tester, {
-    AppBackend? backend,
-    Uint8List? sessionKey,
     required VoidCallback onSkip,
     required VoidCallback onFinish,
     WelcomeGuideStatusLoader? statusLoader,
@@ -43,9 +43,11 @@ void main() {
     CloudAuthController? cloudAuthController,
     CloudGatewayConfig cloudGatewayConfig = CloudGatewayConfig.defaultConfig,
     SubscriptionStatusController? subscriptionController,
+    ThemeData? theme,
   }) async {
     Widget app = wrapWithI18n(
       MaterialApp(
+        theme: theme,
         home: WelcomePage(
           onSkipForNow: onSkip,
           onFinishSetup: onFinish,
@@ -54,13 +56,6 @@ void main() {
         ),
       ),
     );
-
-    if (backend != null) {
-      app = AppBackendScope(
-        backend: backend,
-        child: app,
-      );
-    }
 
     if (cloudAuthController != null) {
       app = CloudAuthScope(
@@ -77,19 +72,53 @@ void main() {
       );
     }
 
-    if (sessionKey != null) {
-      app = SessionScope(
-        sessionKey: sessionKey,
-        lock: () {},
-        child: app,
-      );
-    }
-
     await tester.pumpWidget(app);
     await tester.pumpAndSettle();
   }
 
-  testWidgets('renders three setup cards and footer actions', (tester) async {
+  testWidgets('renders runtime mode choices before permissions',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await pumpWelcomePage(
+      tester,
+      onSkip: () {},
+      onFinish: () {},
+      statusLoader: (_) async => const WelcomeGuideStatus(
+        runtimeMode: WelcomeGuideRuntimeMode.notConfigured,
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('welcome_guide_header_title')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('welcome_guide_workspace')), findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_header_subtitle')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_card_managed_pro')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_card_self_managed')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('welcome_guide_shell_rail')), findsNothing);
+    expect(find.text('No Cloudflare account'), findsOneWidget);
+    expect(
+        find.text('No Workers Paid plan or Containers setup'), findsOneWidget);
+    expect(find.textContaining('Cloudflare Workers Paid plan for Containers'),
+        findsOneWidget);
+    expect(find.textContaining(r'$5/month'), findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_card_ai')), findsNothing);
+    expect(find.byKey(const ValueKey('welcome_guide_card_sync')), findsNothing);
+    expect(find.byKey(const ValueKey('welcome_guide_card_permissions')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('welcome_guide_skip')), findsNothing);
+    expect(find.byKey(const ValueKey('welcome_guide_finish')), findsNothing);
+  });
+
+  testWidgets('starts at permissions once runtime is ready', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     await pumpWelcomePage(
@@ -97,25 +126,73 @@ void main() {
       onSkip: () {},
       onFinish: () {},
       statusLoader: (_) async => const WelcomeGuideStatus(
-        aiReady: false,
-        syncReady: false,
+        runtimeMode: WelcomeGuideRuntimeMode.managedPro,
       ),
     );
 
-    expect(find.byKey(const ValueKey('welcome_guide_header_title')),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('welcome_guide_header_subtitle')),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('welcome_guide_card_ai')), findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('welcome_guide_card_sync')), findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_card_managed_pro')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('welcome_guide_card_self_managed')),
+        findsNothing);
     expect(find.byKey(const ValueKey('welcome_guide_card_permissions')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('welcome_guide_skip')), findsOneWidget);
     expect(find.byKey(const ValueKey('welcome_guide_finish')), findsOneWidget);
   });
 
-  testWidgets('fires callbacks when tapping skip and finish', (tester) async {
+  testWidgets('reuses the app shell workspace style', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await pumpWelcomePage(
+      tester,
+      onSkip: () {},
+      onFinish: () {},
+      statusLoader: (_) async => const WelcomeGuideStatus(
+        runtimeMode: WelcomeGuideRuntimeMode.notConfigured,
+      ),
+    );
+
+    final scaffold = tester.widget<Scaffold>(
+      find.byKey(const ValueKey('welcome_guide_page')),
+    );
+    final workspace = tester.widget<SlSurface>(
+      find.byKey(const ValueKey('welcome_guide_workspace')),
+    );
+
+    expect(scaffold.backgroundColor, AppShellPalette.soft);
+    expect(workspace.color, AppShellPalette.panel);
+    expect(workspace.borderColor, AppShellPalette.line);
+    expect(
+      workspace.borderRadius,
+      BorderRadius.circular(AppShellStyle.desktopShellRadius),
+    );
+  });
+
+  testWidgets('uses the light onboarding theme even inside a dark app theme',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await pumpWelcomePage(
+      tester,
+      theme: AppTheme.dark(),
+      onSkip: () {},
+      onFinish: () {},
+      statusLoader: (_) async => const WelcomeGuideStatus(
+        runtimeMode: WelcomeGuideRuntimeMode.notConfigured,
+      ),
+    );
+
+    final shellContext =
+        tester.element(find.byKey(const ValueKey('welcome_guide_workspace')));
+    final expectedLightTokens = AppTheme.light().extension<SlTokens>()!;
+
+    expect(Theme.of(shellContext).brightness, Brightness.light);
+    expect(
+        SlTokens.of(shellContext).background, expectedLightTokens.background);
+    expect(SlTokens.of(shellContext).surface, expectedLightTokens.surface);
+  });
+
+  testWidgets('fires callbacks from the permissions step', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     var skipTapped = false;
@@ -126,8 +203,7 @@ void main() {
       onSkip: () => skipTapped = true,
       onFinish: () => finishTapped = true,
       statusLoader: (_) async => const WelcomeGuideStatus(
-        aiReady: false,
-        syncReady: false,
+        runtimeMode: WelcomeGuideRuntimeMode.managedPro,
       ),
     );
 
@@ -142,89 +218,197 @@ void main() {
     expect(finishTapped, isTrue);
   });
 
-  testWidgets('AI status shows ready when at least one route is available',
+  testWidgets('managed pro account needs active subscription to be ready',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     await pumpWelcomePage(
       tester,
-      backend: TestAppBackend(),
-      sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
       cloudAuthController: _FakeCloudAuthController(),
       cloudGatewayConfig: const CloudGatewayConfig(
         baseUrl: 'https://gateway.example.test',
         modelName: 'cloud',
       ),
-      subscriptionController: _FakeSubscriptionController(),
       onSkip: () {},
       onFinish: () {},
     );
 
-    expect(find.byKey(const ValueKey('welcome_guide_ai_status_ready')),
+    expect(find.byKey(const ValueKey('welcome_guide_card_managed_pro')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_card_permissions')),
+        findsNothing);
   });
 
-  testWidgets('sync status shows ready when configured sync exists',
+  testWidgets('managed pro account opens permissions after subscription active',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final store = SyncConfigStore();
-    await store.writeBackendType(SyncBackendType.webdav);
-    await store.writeWebdavBaseUrl('https://example.com/webdav');
-    await store.writeRemoteRoot('SecondLoop');
-    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 9)));
 
     await pumpWelcomePage(
       tester,
+      cloudAuthController: _FakeCloudAuthController(),
+      cloudGatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://gateway.example.test',
+        modelName: 'cloud',
+      ),
+      subscriptionController: _FakeSubscriptionController(
+        SubscriptionStatus.entitled,
+      ),
       onSkip: () {},
       onFinish: () {},
     );
 
-    expect(find.byKey(const ValueKey('welcome_guide_sync_status_ready')),
+    expect(find.byKey(const ValueKey('welcome_guide_card_permissions')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_card_managed_pro')),
+        findsNothing);
   });
 
-  testWidgets('opens AI settings from AI card', (tester) async {
+  testWidgets('self-managed runtime opens permissions once configured',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = RuntimeConnectionStore();
+    await store.saveConnection(
+      const CloudRuntimeConnection(
+        profile: CloudRuntimeProfile(
+          runtimeMode: CloudRuntimeMode.selfManaged,
+          apiBaseUrl: 'https://runtime.example.test',
+          authMode: CloudRuntimeAuthMode.runtimeToken,
+          authToken: 'runtime-token',
+          capabilityManifestId: 'self-managed-runtime',
+          manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+        ),
+        manifest: CloudRuntimeManifest(
+          manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+          runtimeMode: CloudRuntimeMode.selfManaged,
+          apiBaseUrl: 'https://runtime.example.test',
+          authMode: CloudRuntimeAuthMode.runtimeToken,
+          capabilities: [CloudRuntimeCapability('chat')],
+        ),
+      ),
+    );
+
+    await pumpWelcomePage(
+      tester,
+      onSkip: () {},
+      onFinish: () {},
+    );
+
+    expect(find.byKey(const ValueKey('welcome_guide_card_permissions')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_card_self_managed')),
+        findsNothing);
+  });
+
+  testWidgets('returns from self-managed setup to permissions after success',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    var loadCount = 0;
+
+    await pumpWelcomePage(
+      tester,
+      onSkip: () {},
+      onFinish: () {},
+      statusLoader: (_) async {
+        loadCount += 1;
+        return WelcomeGuideStatus(
+          runtimeMode: loadCount == 1
+              ? WelcomeGuideRuntimeMode.notConfigured
+              : WelcomeGuideRuntimeMode.selfManaged,
+        );
+      },
+    );
+
+    final selfManagedButton =
+        find.byKey(const ValueKey('welcome_guide_card_self_managed_open'));
+    await bringIntoView(
+      tester,
+      selfManagedButton,
+    );
+    await tester.tap(selfManagedButton);
+    await tester.pumpAndSettle();
+    expect(find.byType(SelfManagedSetupPage), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('welcome_guide_card_permissions')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('welcome_guide_card_self_managed')),
+        findsNothing);
+  });
+
+  testWidgets('opens managed pro account from managed pro card',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     await pumpWelcomePage(
       tester,
-      backend: TestAppBackend(),
-      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
       onSkip: () {},
       onFinish: () {},
       statusLoader: (_) async => const WelcomeGuideStatus(
-        aiReady: false,
-        syncReady: false,
+        runtimeMode: WelcomeGuideRuntimeMode.notConfigured,
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('welcome_guide_card_ai_open')));
+    await tester
+        .tap(find.byKey(const ValueKey('welcome_guide_card_managed_pro_open')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AiSettingsPage), findsOneWidget);
+    expect(find.byType(CloudAccountPage), findsOneWidget);
   });
 
-  testWidgets('opens runtime mode from sync card', (tester) async {
+  testWidgets('entitled managed pro account completes onboarding from login',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    var finished = false;
+
+    await pumpWelcomePage(
+      tester,
+      cloudAuthController: _FakeCloudAuthController(),
+      cloudGatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://gateway.example.test',
+        modelName: 'cloud',
+      ),
+      subscriptionController: _FakeSubscriptionController(
+        SubscriptionStatus.entitled,
+      ),
+      onSkip: () {},
+      onFinish: () => finished = true,
+      statusLoader: (_) async => const WelcomeGuideStatus(
+        runtimeMode: WelcomeGuideRuntimeMode.notConfigured,
+      ),
+    );
+
+    await tester
+        .tap(find.byKey(const ValueKey('welcome_guide_card_managed_pro_open')));
+    await tester.pumpAndSettle();
+
+    expect(finished, isTrue);
+  });
+
+  testWidgets('opens self-managed setup from self-managed card',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     await pumpWelcomePage(
       tester,
-      backend: TestAppBackend(),
-      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
       onSkip: () {},
       onFinish: () {},
       statusLoader: (_) async => const WelcomeGuideStatus(
-        aiReady: false,
-        syncReady: false,
+        runtimeMode: WelcomeGuideRuntimeMode.notConfigured,
       ),
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('welcome_guide_card_runtime_open')),
+    final selfManagedButton =
+        find.byKey(const ValueKey('welcome_guide_card_self_managed_open'));
+    await bringIntoView(
+      tester,
+      selfManagedButton,
     );
+    await tester.tap(selfManagedButton);
     await tester.pumpAndSettle();
 
-    expect(find.byType(CloudRuntimeModePage), findsOneWidget);
+    expect(find.byType(SelfManagedSetupPage), findsOneWidget);
   });
 
   testWidgets('permissions section renders entries and taps launcher',
@@ -238,8 +422,7 @@ void main() {
       onSkip: () {},
       onFinish: () {},
       statusLoader: (_) async => const WelcomeGuideStatus(
-        aiReady: false,
-        syncReady: false,
+        runtimeMode: WelcomeGuideRuntimeMode.managedPro,
       ),
       uriLauncher: (uri) async {
         launched.add(uri);
@@ -287,8 +470,7 @@ void main() {
         onSkip: () {},
         onFinish: () {},
         statusLoader: (_) async => const WelcomeGuideStatus(
-          aiReady: false,
-          syncReady: false,
+          runtimeMode: WelcomeGuideRuntimeMode.managedPro,
         ),
         uriLauncher: (_) async => true,
       );
@@ -331,8 +513,7 @@ void main() {
       onSkip: () {},
       onFinish: () {},
       statusLoader: (_) async => const WelcomeGuideStatus(
-        aiReady: false,
-        syncReady: false,
+        runtimeMode: WelcomeGuideRuntimeMode.managedPro,
       ),
       uriLauncher: (_) async => false,
     );
@@ -376,8 +557,7 @@ void main() {
         onSkip: () {},
         onFinish: () {},
         statusLoader: (_) async => const WelcomeGuideStatus(
-          aiReady: false,
-          syncReady: false,
+          runtimeMode: WelcomeGuideRuntimeMode.managedPro,
         ),
         uriLauncher: (_) async => true,
       );
@@ -450,6 +630,8 @@ final class _FakeCloudAuthController implements CloudAuthController {
 
 final class _FakeSubscriptionController extends ChangeNotifier
     implements SubscriptionStatusController {
+  _FakeSubscriptionController(this.status);
+
   @override
-  SubscriptionStatus get status => SubscriptionStatus.entitled;
+  final SubscriptionStatus status;
 }

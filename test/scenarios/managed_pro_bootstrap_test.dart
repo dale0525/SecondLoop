@@ -27,11 +27,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(TestSemanticsIds.key(TestSemanticsIds.cloudAccountPageRoot)),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey('cloud_account_value_props')),
+    expect(find.byKey(const ValueKey('cloud_manage_subscription')),
         findsOneWidget);
   });
 }

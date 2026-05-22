@@ -12,8 +12,6 @@ void main() {
       'lib/i18n/settings_en.i18n.json',
       'lib/i18n/settings_zh_CN.i18n.json',
       'test/sync_engine_gate_media_uploads_test.dart',
-      'test/sync_settings_page_test_support_part.dart',
-      'test/sync_settings_page_managed_vault_support_part.dart',
     ];
 
     for (final path in targets) {

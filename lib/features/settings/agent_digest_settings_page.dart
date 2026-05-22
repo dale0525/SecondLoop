@@ -17,9 +17,10 @@ import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import 'package:secondloop/core/models/app_models.dart';
-import '../../ui/sl_surface.dart';
+import '../../ui/sl_button.dart';
 import '../../web_app/web_formal_settings_scope.dart';
+import 'package:secondloop/core/models/app_models.dart';
+import 'settings_ui.dart';
 
 typedef AgentDigestTodosLoader = Future<List<Todo>> Function(Uint8List key);
 typedef AgentDigestDeviceIdLoader = Future<String> Function();
@@ -49,6 +50,7 @@ class AgentDigestSettingsPage extends StatefulWidget {
     this.todosLoader,
     this.deviceIdLoader,
     this.nowMsProvider,
+    this.embedded = false,
   });
 
   final AgentDigestApi? api;
@@ -57,6 +59,7 @@ class AgentDigestSettingsPage extends StatefulWidget {
   final AgentDigestTodosLoader? todosLoader;
   final AgentDigestDeviceIdLoader? deviceIdLoader;
   final int Function()? nowMsProvider;
+  final bool embedded;
 
   @override
   State<AgentDigestSettingsPage> createState() =>
@@ -349,135 +352,100 @@ class _AgentDigestSettingsPageState extends State<AgentDigestSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final t = context.t.settings.agentDigest;
-    final theme = Theme.of(context);
     final statusLabel = _enabled ? t.status.enabled : t.status.paused;
     final targetReady = SubscriptionScope.maybeOf(context)?.status ==
         SubscriptionStatus.entitled;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(t.title)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    final children = [
+      SettingsSection(
         children: [
-          SlSurface(
-            child: Padding(
+          SettingsRow(
+            title: targetReady ? t.subtitle : t.requiresCloud,
+            leading: Icon(_enabled ? Icons.cloud_done : Icons.cloud_off),
+            trailing: SettingsStatusBadge(
+              label: statusLabel,
+              tone: _enabled
+                  ? SettingsStatusTone.positive
+                  : SettingsStatusTone.neutral,
+            ),
+          ),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: LinearProgressIndicator(),
+            ),
+          if (_statusMessage != null)
+            Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _enabled ? Icons.cloud_done : Icons.cloud_off,
-                        color: _enabled
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              statusLabel,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              targetReady ? t.subtitle : t.requiresCloud,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_loading) ...[
-                    const SizedBox(height: 16),
-                    const LinearProgressIndicator(),
-                  ],
-                  if (_statusMessage != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _statusMessage!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              child: SettingsInlineMessage(message: _statusMessage!),
             ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      SettingsSection(
+        children: [
+          _InfoTile(
+            label: t.fields.lastGenerated,
+            value: _meta.generatedAtMs == null
+                ? t.values.never
+                : _formatTimestamp(_meta.generatedAtMs!),
           ),
-          const SizedBox(height: 16),
-          SlSurface(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _InfoTile(
-                  label: t.fields.lastGenerated,
-                  value: _meta.generatedAtMs == null
-                      ? t.values.never
-                      : _formatTimestamp(_meta.generatedAtMs!),
-                ),
-                const Divider(height: 1),
-                _InfoTile(
-                  label: t.fields.size,
-                  value: _meta.byteLen == null
-                      ? t.values.none
-                      : _formatBytes(_meta.byteLen!),
-                ),
-                const Divider(height: 1),
-                _InfoTile(
-                  label: t.fields.device,
-                  value: _meta.deviceId ?? t.values.unknownDevice,
-                ),
-                const Divider(height: 1),
-                _InfoTile(
-                  label: t.fields.version,
-                  value: _meta.version ?? t.values.none,
-                ),
-              ],
-            ),
+          _InfoTile(
+            label: t.fields.size,
+            value: _meta.byteLen == null
+                ? t.values.none
+                : _formatBytes(_meta.byteLen!),
           ),
-          const SizedBox(height: 16),
-          Text(
-            t.privacyNote,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+          _InfoTile(
+            label: t.fields.device,
+            value: _meta.deviceId ?? t.values.unknownDevice,
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              FilledButton.icon(
-                key: const ValueKey('agent_digest_regenerate'),
-                onPressed: _busy ? null : _confirmRegenerate,
-                icon: const Icon(Icons.refresh),
-                label: Text(t.actions.regenerate),
-              ),
-              OutlinedButton.icon(
-                key: const ValueKey('agent_digest_pause'),
-                onPressed: (_busy || !_enabled) ? null : _pause,
-                icon: const Icon(Icons.pause_circle_outline),
-                label: Text(t.actions.pause),
-              ),
-              OutlinedButton.icon(
-                key: const ValueKey('agent_digest_delete'),
-                onPressed: (_busy || !_meta.exists) ? null : _delete,
-                icon: const Icon(Icons.delete_outline),
-                label: Text(t.actions.delete),
-              ),
-            ],
+          _InfoTile(
+            label: t.fields.version,
+            value: _meta.version ?? t.values.none,
           ),
         ],
       ),
+      const SizedBox(height: 16),
+      SettingsInlineMessage(message: t.privacyNote),
+      const SizedBox(height: 16),
+      SettingsActionBar(
+        actions: [
+          SettingsAction(
+            key: const ValueKey('agent_digest_regenerate'),
+            label: t.actions.regenerate,
+            onPressed: _busy ? null : _confirmRegenerate,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          SettingsAction(
+            key: const ValueKey('agent_digest_pause'),
+            label: t.actions.pause,
+            onPressed: (_busy || !_enabled) ? null : _pause,
+            icon: const Icon(Icons.pause_circle_outline_rounded),
+            variant: SlButtonVariant.outline,
+          ),
+          SettingsAction(
+            key: const ValueKey('agent_digest_delete'),
+            label: t.actions.delete,
+            onPressed: (_busy || !_meta.exists) ? null : _delete,
+            icon: const Icon(Icons.delete_outline_rounded),
+            variant: SlButtonVariant.outline,
+          ),
+        ],
+      ),
+    ];
+
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: children,
+      );
+    }
+
+    return SettingsPageShell(
+      title: t.title,
+      children: children,
     );
   }
 }
@@ -493,9 +461,9 @@ class _InfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return SettingsRow(
       dense: true,
-      title: Text(label),
+      title: label,
       trailing: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 220),
         child: Text(

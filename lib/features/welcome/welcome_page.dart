@@ -5,11 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../features/settings/ai_settings_page.dart';
-import '../../features/settings/cloud_runtime_mode_page.dart';
+import '../../app/app_shell_style.dart';
+import '../../app/theme.dart';
+import '../../app/theme_palette_prefs.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
+import '../../features/settings/cloud_account_page.dart';
+import '../../features/settings/self_managed_setup_page.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
+import '../agent_ui/agent_design_tokens.dart';
 import 'welcome_status.dart';
+
+part 'welcome_page_widgets.dart';
 
 typedef WelcomeGuideUriLauncher = Future<bool> Function(Uri uri);
 
@@ -40,9 +47,9 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
   bool _permissionStatusLoaded = false;
   int _permissionStatusGeneration = 0;
   WelcomeGuideStatus _status = const WelcomeGuideStatus(
-    aiReady: false,
-    syncReady: false,
+    runtimeMode: WelcomeGuideRuntimeMode.notConfigured,
   );
+  _WelcomeGuideStep _step = _WelcomeGuideStep.runtime;
   Map<_PermissionItem, _PermissionStatus> _permissionStatusMap =
       const <_PermissionItem, _PermissionStatus>{};
 
@@ -81,28 +88,46 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
     try {
       status = await widget.statusLoader(context);
     } catch (_) {
-      status = const WelcomeGuideStatus(aiReady: false, syncReady: false);
+      status = const WelcomeGuideStatus(
+        runtimeMode: WelcomeGuideRuntimeMode.notConfigured,
+      );
     }
 
     if (!mounted) return;
-    setState(() => _status = status);
+    setState(() {
+      _status = status;
+      _step = _runtimeReady(status)
+          ? _WelcomeGuideStep.permissions
+          : _WelcomeGuideStep.runtime;
+    });
   }
 
-  Future<void> _openAiSettings() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const AiSettingsPage(),
+  bool _runtimeReady(WelcomeGuideStatus status) {
+    return status.runtimeMode != WelcomeGuideRuntimeMode.notConfigured;
+  }
+
+  Future<void> _openManagedProSetup(BuildContext launchContext) async {
+    await pushPageWithInheritedScopes<void>(
+      Navigator.of(launchContext),
+      launchContext,
+      CloudAccountPage(
+        entryMode: CloudAccountEntryMode.onboarding,
+        onEntitled: () {
+          final navigator = Navigator.of(launchContext);
+          if (navigator.canPop()) navigator.pop();
+          widget.onFinishSetup();
+        },
       ),
     );
     if (!mounted) return;
     await _reloadStatus();
   }
 
-  Future<void> _openRuntimeModeSettings() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const CloudRuntimeModePage(),
-      ),
+  Future<void> _openSelfManagedSetup(BuildContext launchContext) async {
+    await pushPageWithInheritedScopes<void>(
+      Navigator.of(launchContext),
+      launchContext,
+      const SelfManagedSetupPage(),
     );
     if (!mounted) return;
     await _reloadStatus();
@@ -449,7 +474,28 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    return Theme(
+      data: _welcomeLightTheme(context),
+      child: Builder(
+        builder: _buildContent,
+      ),
+    );
+  }
+
+  ThemeData _welcomeLightTheme(BuildContext context) {
+    return AppTheme.light(
+      locale: Localizations.localeOf(context),
+      platform: Theme.of(context).platform,
+      palette: AppThemePalettePrefs.value.value,
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final t = context.t.welcomeGuide;
+    final managedProReady =
+        _status.runtimeMode == WelcomeGuideRuntimeMode.managedPro;
+    final selfManagedReady =
+        _status.runtimeMode == WelcomeGuideRuntimeMode.selfManaged;
     final permissionTiles = _permissionTiles();
     final permissionSummaryStatusLabel = _permissionSummaryStatusLabel();
     final permissionSummaryStatusKey = ValueKey(
@@ -457,317 +503,146 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
           ? 'welcome_guide_permissions_status_needs_review'
           : 'welcome_guide_permissions_status_enabled',
     );
+    final showPermissionsStep = _step == _WelcomeGuideStep.permissions;
+    final contentChildren = showPermissionsStep
+        ? <Widget>[
+            _PermissionPanel(
+              title: t.permissions.title,
+              description: t.permissions.description,
+              statusLabel: permissionSummaryStatusLabel,
+              statusKey: permissionSummaryStatusKey,
+              unavailableHint: _permissionUnavailableHint(),
+              permissionTiles: permissionTiles,
+              statusLabelFor: _permissionStatusLabel,
+              onPermissionTap: (item) =>
+                  unawaited(_openPermissionSettings(item)),
+            ),
+          ]
+        : <Widget>[
+            _WelcomeModeCards(
+              managedCard: _WelcomeGuideCard(
+                cardKey: const ValueKey('welcome_guide_card_managed_pro'),
+                icon: Icons.cloud_done_rounded,
+                title: t.runtime.managedPro.title,
+                description: t.runtime.managedPro.description,
+                comparisonTitle: t.runtime.managedPro.comparisonTitle,
+                comparisonItems: [
+                  t.runtime.managedPro.comparison.cloudflare,
+                  t.runtime.managedPro.comparison.workersPaid,
+                  t.runtime.managedPro.comparison.providerKeys,
+                  t.runtime.managedPro.comparison.maintenance,
+                ],
+                comparisonKey:
+                    const ValueKey('welcome_guide_managed_pro_comparison'),
+                comparisonPositive: true,
+                statusLabel: managedProReady
+                    ? t.runtime.statusReady
+                    : t.runtime.statusNotSet,
+                statusKey: ValueKey(
+                  managedProReady
+                      ? 'welcome_guide_managed_pro_status_ready'
+                      : 'welcome_guide_managed_pro_status_not_set',
+                ),
+                ready: managedProReady,
+                actionKey:
+                    const ValueKey('welcome_guide_card_managed_pro_open'),
+                actionLabel: t.runtime.managedPro.open,
+                onActionTap: () => unawaited(_openManagedProSetup(context)),
+              ),
+              selfManagedCard: _WelcomeGuideCard(
+                cardKey: const ValueKey('welcome_guide_card_self_managed'),
+                icon: Icons.dns_rounded,
+                title: t.runtime.selfManaged.title,
+                description: t.runtime.selfManaged.description,
+                comparisonTitle: t.runtime.selfManaged.comparisonTitle,
+                comparisonItems: [
+                  t.runtime.selfManaged.comparison.cloudflare,
+                  t.runtime.selfManaged.comparison.workersPaid,
+                  t.runtime.selfManaged.comparison.providerKeys,
+                  t.runtime.selfManaged.comparison.maintenance,
+                ],
+                comparisonKey:
+                    const ValueKey('welcome_guide_self_managed_comparison'),
+                comparisonPositive: false,
+                statusLabel: selfManagedReady
+                    ? t.runtime.statusReady
+                    : t.runtime.statusNotSet,
+                statusKey: ValueKey(
+                  selfManagedReady
+                      ? 'welcome_guide_self_managed_status_ready'
+                      : 'welcome_guide_self_managed_status_not_set',
+                ),
+                ready: selfManagedReady,
+                actionKey:
+                    const ValueKey('welcome_guide_card_self_managed_open'),
+                actionLabel: t.runtime.selfManaged.open,
+                onActionTap: () => unawaited(_openSelfManagedSetup(context)),
+              ),
+            ),
+          ];
+
     return Scaffold(
       key: const ValueKey('welcome_guide_page'),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      t.title,
-                      key: const ValueKey('welcome_guide_header_title'),
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
+      backgroundColor: AppShellPalette.soft,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final pane = _WelcomeContentPane(
+            footer: showPermissionsStep
+                ? _WelcomeFooter(
+                    skipLabel: t.actions.skip,
+                    finishLabel: t.actions.finish,
+                    onSkip: widget.onSkipForNow,
+                    onFinish: widget.onFinishSetup,
+                  )
+                : null,
+            children: [
+              Text(
+                t.title,
+                key: const ValueKey('welcome_guide_header_title'),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: AppShellPalette.ink,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      t.subtitle,
-                      key: const ValueKey('welcome_guide_header_subtitle'),
-                      style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: AgentDesignTokens.gapSm),
+              Text(
+                t.subtitle,
+                key: const ValueKey('welcome_guide_header_subtitle'),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppShellPalette.muted,
                     ),
-                    const SizedBox(height: 16),
-                    _WelcomeGuideCard(
-                      cardKey: const ValueKey('welcome_guide_card_ai'),
-                      title: t.ai.title,
-                      description: t.ai.description,
-                      statusLabel: _status.aiReady
-                          ? t.ai.statusReady
-                          : t.ai.statusNotSet,
-                      statusKey: ValueKey(
-                        _status.aiReady
-                            ? 'welcome_guide_ai_status_ready'
-                            : 'welcome_guide_ai_status_not_set',
-                      ),
-                      actionKey: const ValueKey('welcome_guide_card_ai_open'),
-                      actionLabel: t.ai.open,
-                      onActionTap: () => unawaited(_openAiSettings()),
-                    ),
-                    const SizedBox(height: 12),
-                    _WelcomeGuideCard(
-                      cardKey: const ValueKey('welcome_guide_card_sync'),
-                      title: t.sync.title,
-                      description: t.sync.description,
-                      statusLabel: _status.syncReady
-                          ? t.sync.statusReady
-                          : t.sync.statusNotSet,
-                      statusKey: ValueKey(
-                        _status.syncReady
-                            ? 'welcome_guide_sync_status_ready'
-                            : 'welcome_guide_sync_status_not_set',
-                      ),
-                      actionKey:
-                          const ValueKey('welcome_guide_card_runtime_open'),
-                      actionLabel: t.sync.open,
-                      onActionTap: () => unawaited(_openRuntimeModeSettings()),
-                    ),
-                    const SizedBox(height: 12),
-                    SlSurface(
-                      key: const ValueKey('welcome_guide_card_permissions'),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    t.permissions.title,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                                _StatusBadge(
-                                  label: permissionSummaryStatusLabel,
-                                  badgeKey: permissionSummaryStatusKey,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              t.permissions.description,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                            const SizedBox(height: 12),
-                            if (permissionTiles.isEmpty)
-                              Text(
-                                _permissionUnavailableHint(),
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            for (var i = 0;
-                                i < permissionTiles.length;
-                                i++) ...[
-                              _PermissionTile(
-                                tileKey: permissionTiles[i].key,
-                                icon: permissionTiles[i].icon,
-                                label: permissionTiles[i].label,
-                                reason: permissionTiles[i].reason,
-                                statusLabel: _permissionStatusLabel(
-                                    permissionTiles[i].status),
-                                statusKey: ValueKey(
-                                  'welcome_guide_permission_status_${permissionTiles[i].item.keySuffix}_${permissionTiles[i].status.keySuffix}',
-                                ),
-                                onTap: () => unawaited(
-                                  _openPermissionSettings(
-                                      permissionTiles[i].item),
-                                ),
-                              ),
-                              if (i != permissionTiles.length - 1)
-                                const SizedBox(height: 8),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+              ),
+              const SizedBox(height: AgentDesignTokens.gapXl),
+              ...contentChildren,
+            ],
+          );
+
+          return Padding(
+            padding: const EdgeInsets.all(AppShellStyle.desktopShellMargin),
+            child: SlSurface(
+              key: const ValueKey('welcome_guide_workspace'),
+              color: AppShellPalette.panel,
+              borderColor: AppShellPalette.line,
+              borderRadius: BorderRadius.circular(
+                AppShellStyle.desktopShellRadius,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(
+                  AppShellStyle.desktopShellRadius,
                 ),
+                child: pane,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-              child: Row(
-                children: [
-                  TextButton(
-                    key: const ValueKey('welcome_guide_skip'),
-                    onPressed: widget.onSkipForNow,
-                    child: Text(t.actions.skip),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      key: const ValueKey('welcome_guide_finish'),
-                      onPressed: widget.onFinishSetup,
-                      child: Text(t.actions.finish),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 }
 
-class _WelcomeGuideCard extends StatelessWidget {
-  const _WelcomeGuideCard({
-    required this.cardKey,
-    required this.title,
-    required this.description,
-    required this.statusLabel,
-    required this.statusKey,
-    required this.actionKey,
-    required this.actionLabel,
-    required this.onActionTap,
-  });
-
-  final Key cardKey;
-  final String title;
-  final String description;
-  final String statusLabel;
-  final Key statusKey;
-  final Key actionKey;
-  final String actionLabel;
-  final VoidCallback onActionTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SlSurface(
-      key: cardKey,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                _StatusBadge(label: statusLabel, badgeKey: statusKey),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              description,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            FilledButton.tonalIcon(
-              key: actionKey,
-              onPressed: onActionTap,
-              icon: const Icon(Icons.arrow_forward_rounded),
-              label: Text(actionLabel),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({
-    required this.label,
-    required this.badgeKey,
-  });
-
-  final String label;
-  final Key badgeKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Text(
-          label,
-          key: badgeKey,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PermissionTile extends StatelessWidget {
-  const _PermissionTile({
-    required this.tileKey,
-    required this.icon,
-    required this.label,
-    required this.reason,
-    required this.statusLabel,
-    required this.statusKey,
-    required this.onTap,
-  });
-
-  final Key tileKey;
-  final IconData icon;
-  final String label;
-  final String reason;
-  final String statusLabel;
-  final Key statusKey;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      key: tileKey,
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          children: [
-            Icon(icon, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label),
-                  const SizedBox(height: 2),
-                  Text(
-                    reason,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  statusLabel,
-                  key: statusKey,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                const Icon(Icons.open_in_new_rounded, size: 16),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+enum _WelcomeGuideStep {
+  runtime,
+  permissions,
 }
 
 enum _PermissionItem {

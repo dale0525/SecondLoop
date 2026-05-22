@@ -53,6 +53,92 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('Onboarding cloud account page keeps sign-in simple',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: CloudAccountPage(entryMode: CloudAccountEntryMode.onboarding),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('cloud_account_value_props')), findsNothing);
+    expect(find.byKey(const ValueKey('cloud_subscription_value_props')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('cloud_sign_in')), findsOneWidget);
+    expect(find.byKey(const ValueKey('cloud_sign_up')), findsOneWidget);
+  });
+
+  testWidgets('Onboarding not-entitled account shows subscription decision',
+      (tester) async {
+    final auth = _FakeCloudAuthController();
+    final subscriptions =
+        _FakeSubscriptionStatusController(SubscriptionStatus.notEntitled);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: SubscriptionScope(
+            controller: subscriptions,
+            child: CloudAuthScope(
+              controller: auth,
+              gatewayConfig: const CloudGatewayConfig(
+                baseUrl: 'https://gateway.test',
+                modelName: 'cloud',
+              ),
+              child: const CloudAccountPage(
+                entryMode: CloudAccountEntryMode.onboarding,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('cloud_subscription_required')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('cloud_subscription_value_props')),
+        findsNothing);
+    expect(find.textContaining('SecondLoop Pro is required'), findsOneWidget);
+    expect(find.textContaining('No Cloudflare'), findsOneWidget);
+  });
+
+  testWidgets('Onboarding entitled account calls completion callback',
+      (tester) async {
+    final auth = _FakeCloudAuthController();
+    final subscriptions =
+        _FakeSubscriptionStatusController(SubscriptionStatus.entitled);
+    var completed = false;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: SubscriptionScope(
+            controller: subscriptions,
+            child: CloudAuthScope(
+              controller: auth,
+              gatewayConfig: const CloudGatewayConfig(
+                baseUrl: 'https://gateway.test',
+                modelName: 'cloud',
+              ),
+              child: CloudAccountPage(
+                entryMode: CloudAccountEntryMode.onboarding,
+                onEntitled: () => completed = true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(completed, isTrue);
+  });
+
   testWidgets('Cloud account page can redact signed-in email for screenshots',
       (tester) async {
     final auth = _FakeCloudAuthController(email: 'real-managed@example.com');

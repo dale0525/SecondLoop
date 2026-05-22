@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ai/ai_routing.dart';
 import '../../core/cloud/cloud_auth_access.dart';
@@ -16,6 +15,8 @@ import '../../features/attachments/web_media_processing_notice.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_delete_confirm_dialog.dart';
 import '../../ui/sl_surface.dart';
+import 'vault_attachment_content_opener.dart';
+import 'vault_attachment_preview_open.dart';
 
 String _formatBytes(int bytes) {
   if (bytes < 1024) return '$bytes B';
@@ -151,6 +152,32 @@ Widget _usageRow(String label, String value) {
         Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
       ],
     ),
+  );
+}
+
+int _maxInt(int a, int b) => a >= b ? a : b;
+
+VaultUsageSummary _reconcileVaultUsageSummary(
+  VaultUsageSummary summary,
+  VaultAttachmentUsageList attachmentUsage,
+) {
+  final attachmentBytes = attachmentUsage.totalBytesUsed;
+  if (attachmentBytes <= summary.attachmentsBytesUsed &&
+      attachmentBytes <= summary.totalBytesUsed) {
+    return summary;
+  }
+
+  final attachmentsBytesUsed =
+      _maxInt(summary.attachmentsBytesUsed, attachmentBytes);
+  final minimumTotal =
+      attachmentsBytesUsed + summary.opsBytesUsed + summary.otherBytesUsed;
+  final totalBytesUsed = _maxInt(summary.totalBytesUsed, minimumTotal);
+  return VaultUsageSummary(
+    totalBytesUsed: totalBytesUsed,
+    attachmentsBytesUsed: attachmentsBytesUsed,
+    opsBytesUsed: summary.opsBytesUsed,
+    otherBytesUsed: summary.otherBytesUsed,
+    limitBytes: summary.limitBytes,
   );
 }
 
@@ -392,12 +419,14 @@ class VaultUsageCard extends StatefulWidget {
     this.attachmentsClient,
     this.configStore,
     this.isWebOverride,
+    this.attachmentContentOpener,
   });
 
   final VaultUsageClient? client;
   final VaultAttachmentsClient? attachmentsClient;
   final SyncConfigStore? configStore;
   final bool? isWebOverride;
+  final VaultAttachmentContentOpener? attachmentContentOpener;
 
   @override
   State<VaultUsageCard> createState() => _VaultUsageCardState();
@@ -615,6 +644,13 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       nextAttachmentError = e;
     }
 
+    if (nextSummary != null && nextAttachmentUsage != null) {
+      nextSummary = _reconcileVaultUsageSummary(
+        nextSummary,
+        nextAttachmentUsage,
+      );
+    }
+
     final shouldApply = mounted && refreshEpoch == _refreshEpoch;
     if (shouldApply) {
       setState(() {
@@ -645,11 +681,14 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     if (auth == null || !mounted) return;
 
     try {
-      final controller = _createAttachmentStorageController(auth);
-      final descriptor = await controller.previewAttachment(item);
-      final launched = await launchUrl(
-        Uri.parse(descriptor.url),
-        mode: LaunchMode.externalApplication,
+      final launched = await openVaultAttachmentPreview(
+        client: _attachmentsClient,
+        item: item,
+        managedVaultBaseUrl: auth.baseUrl,
+        vaultId: auth.vaultId,
+        idToken: auth.idToken,
+        contentOpener:
+            widget.attachmentContentOpener ?? openVaultAttachmentContent,
       );
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -10,8 +10,10 @@ extension _AgentConversationRuntimeHelpers on _AgentConversationPageState {
     final userMessageId = 'runtime_local_user_$nowMs';
     final assistantMessageId = 'runtime_local_assistant_$nowMs';
     final assistantContent = result.assistantContent.trim();
-    final fallbackMediaResults =
-        _agentMessageMediaResultViewsFromRaw(result.mediaResults);
+    final fallbackMediaResults = _agentMessageMediaResultViewsFromRaw(
+      result.mediaResults,
+      labels: _runtimeMediaInlineLabels(context),
+    );
     final nextMessages = <Message>[
       ..._messages,
       Message(
@@ -79,8 +81,10 @@ extension _AgentConversationRuntimeHelpers on _AgentConversationPageState {
   }
 
   void _applyRuntimeResultMediaFallback(AgentConversationSendResult result) {
-    final fallbackMediaResults =
-        _agentMessageMediaResultViewsFromRaw(result.mediaResults);
+    final fallbackMediaResults = _agentMessageMediaResultViewsFromRaw(
+      result.mediaResults,
+      labels: _runtimeMediaInlineLabels(context),
+    );
     if (fallbackMediaResults.isEmpty) return;
 
     final assistantMessageId = _assistantMessageIdForRuntimeResult(

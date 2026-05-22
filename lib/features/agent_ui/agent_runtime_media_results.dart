@@ -46,6 +46,7 @@ Map<String, List<_AgentMessageMediaResultView>>
   required List<RuntimeConversationTurn> turns,
   required List<RuntimeWorkingSetRecord> mediaRecords,
   required Map<String, _AgentMessageAttachmentView> localAttachmentsByRef,
+  required _RuntimeMediaInlineLabels labels,
 }) {
   if (turns.isEmpty || mediaRecords.isEmpty) {
     return const <String, List<_AgentMessageMediaResultView>>{};
@@ -103,6 +104,7 @@ Map<String, List<_AgentMessageMediaResultView>>
     final view = _agentMessageMediaResultViewFromRecord(
       record,
       attachment: attachmentId == null ? null : attachmentById[attachmentId],
+      labels: labels,
     );
     if (view == null || !view.hasVisibleContent) continue;
     mediaResultsByMessageId
@@ -121,8 +123,9 @@ Map<String, List<_AgentMessageMediaResultView>>
 }
 
 List<_AgentMessageMediaResultView> _agentMessageMediaResultViewsFromRaw(
-  List<Map<String, Object?>> rawResults,
-) {
+  List<Map<String, Object?>> rawResults, {
+  required _RuntimeMediaInlineLabels labels,
+}) {
   return rawResults
       .asMap()
       .entries
@@ -139,6 +142,7 @@ List<_AgentMessageMediaResultView> _agentMessageMediaResultViewsFromRaw(
         raw['kind'] = _firstRuntimeMediaString([raw['kind']]) ?? 'media_result';
         return _agentMessageMediaResultViewFromRecord(
           RuntimeWorkingSetRecord.fromJson(raw),
+          labels: labels,
         );
       })
       .whereType<_AgentMessageMediaResultView>()
@@ -211,6 +215,7 @@ String? _mediaResultAssistantTurnId(
 _AgentMessageMediaResultView? _agentMessageMediaResultViewFromRecord(
   RuntimeWorkingSetRecord record, {
   _AgentMessageAttachmentView? attachment,
+  required _RuntimeMediaInlineLabels labels,
 }) {
   final raw = record.raw;
   final transcript = _firstRuntimeMediaString([
@@ -267,6 +272,7 @@ _AgentMessageMediaResultView? _agentMessageMediaResultViewFromRecord(
         raw['decision_items'],
         raw['decisionItems'],
       ]),
+      labels: labels,
     ),
     actionItems: _runtimeMediaStringList(
       _firstRuntimeMediaValue([
@@ -279,6 +285,7 @@ _AgentMessageMediaResultView? _agentMessageMediaResultViewFromRecord(
         raw['suggested_actions'],
         raw['suggestedActions'],
       ]),
+      labels: labels,
     ),
     sources: _runtimeMediaSources(raw, attachment: attachment),
   );
@@ -389,7 +396,10 @@ bool _sameRuntimeMediaText(String? left, String? right) {
       normalizedLeft == normalizedRight;
 }
 
-List<String> _runtimeMediaStringList(Object? raw) {
+List<String> _runtimeMediaStringList(
+  Object? raw, {
+  required _RuntimeMediaInlineLabels labels,
+}) {
   if (raw == null) return const <String>[];
   if (raw is String) {
     final value = _runtimeMediaPreviewText(raw);
@@ -397,9 +407,9 @@ List<String> _runtimeMediaStringList(Object? raw) {
   }
   if (raw is Map) {
     final map = raw.map((key, value) => MapEntry('$key', value as Object?));
-    final items = _runtimeMediaStringList(map['items']);
+    final items = _runtimeMediaStringList(map['items'], labels: labels);
     if (items.isNotEmpty) return items;
-    final text = _runtimeMediaItemText(map);
+    final text = _runtimeMediaItemText(map, labels: labels);
     return text == null ? const <String>[] : <String>[text];
   }
   if (raw is! List) return const <String>[];
@@ -408,16 +418,21 @@ List<String> _runtimeMediaStringList(Object? raw) {
         if (item is Map) {
           return _runtimeMediaItemText(
             item.map((key, value) => MapEntry('$key', value as Object?)),
+            labels: labels,
           );
         }
-        return _runtimeMediaPreviewText('$item');
+        final itemText = '$item';
+        return _runtimeMediaPreviewText(itemText);
       })
       .whereType<String>()
       .where((item) => item.trim().isNotEmpty)
       .toList(growable: false);
 }
 
-String? _runtimeMediaItemText(Map<String, Object?> raw) {
+String? _runtimeMediaItemText(
+  Map<String, Object?> raw, {
+  required _RuntimeMediaInlineLabels labels,
+}) {
   final primary = _firstRuntimeMediaString([
     raw['title'],
     raw['text'],
@@ -433,9 +448,48 @@ String? _runtimeMediaItemText(Map<String, Object?> raw) {
       _firstRuntimeMediaString([raw['due'], raw['due_at'], raw['dueAt']]);
   return _runtimeMediaPreviewText([
     primary,
-    if (owner != null) 'Owner: $owner',
-    if (due != null) 'Due: $due',
+    if (owner != null) labels.owner(owner),
+    if (due != null) labels.due(due),
   ].join(' - '));
+}
+
+final class _RuntimeMediaInlineLabels {
+  const _RuntimeMediaInlineLabels({
+    required this.transcript,
+    required this.meetingMinutes,
+    required this.summary,
+    required this.decisions,
+    required this.actionItems,
+    required this.sources,
+    required this.listItem,
+    required this.owner,
+    required this.due,
+  });
+
+  final String transcript;
+  final String meetingMinutes;
+  final String summary;
+  final String decisions;
+  final String actionItems;
+  final String sources;
+  final String Function(String value) listItem;
+  final String Function(String value) owner;
+  final String Function(String value) due;
+}
+
+_RuntimeMediaInlineLabels _runtimeMediaInlineLabels(BuildContext context) {
+  final labels = context.t.chat.runtimeMediaResult;
+  return _RuntimeMediaInlineLabels(
+    transcript: labels.transcript,
+    meetingMinutes: labels.meetingMinutes,
+    summary: labels.summary,
+    decisions: labels.decisions,
+    actionItems: labels.actionItems,
+    sources: labels.sources,
+    listItem: (value) => labels.listItem(value: value),
+    owner: (value) => labels.owner(value: value),
+    due: (value) => labels.due(value: value),
+  );
 }
 
 List<Map<String, Object?>> _runtimeMediaObjectList(Object? raw) {
@@ -455,12 +509,16 @@ final class _AssistantRuntimeMediaResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final labels = _runtimeMediaInlineLabels(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var index = 0; index < results.length; index++) ...[
-          _AssistantRuntimeMediaResult(result: results[index]),
+          _AssistantRuntimeMediaResult(
+            result: results[index],
+            labels: labels,
+          ),
           if (index < results.length - 1)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: AgentDesignTokens.gapMd),
@@ -473,9 +531,13 @@ final class _AssistantRuntimeMediaResults extends StatelessWidget {
 }
 
 final class _AssistantRuntimeMediaResult extends StatelessWidget {
-  const _AssistantRuntimeMediaResult({required this.result});
+  const _AssistantRuntimeMediaResult({
+    required this.result,
+    required this.labels,
+  });
 
   final _AgentMessageMediaResultView result;
+  final _RuntimeMediaInlineLabels labels;
 
   @override
   Widget build(BuildContext context) {
@@ -505,33 +567,39 @@ final class _AssistantRuntimeMediaResult extends StatelessWidget {
         ),
         if (result.transcript != null)
           _RuntimeMediaResultTextSection(
-            title: 'Transcript',
+            title: labels.transcript,
             body: result.transcript!,
             labelStyle: labelStyle,
           ),
         if (result.summary != null)
           _RuntimeMediaResultTextSection(
-            title: _runtimeMediaSummaryLabel(result.mediaType),
+            title: _runtimeMediaSummaryLabel(
+              result.mediaType,
+              labels: labels,
+            ),
             body: result.summary!,
             labelStyle: labelStyle,
           ),
         if (result.decisions.isNotEmpty)
           _RuntimeMediaResultListSection(
-            title: 'Decisions',
+            title: labels.decisions,
             items: result.decisions,
             labelStyle: labelStyle,
+            listItem: labels.listItem,
           ),
         if (result.actionItems.isNotEmpty)
           _RuntimeMediaResultListSection(
-            title: 'Action items',
+            title: labels.actionItems,
             items: result.actionItems,
             labelStyle: labelStyle,
+            listItem: labels.listItem,
           ),
         if (result.sources.isNotEmpty)
           _RuntimeMediaResultListSection(
-            title: 'Sources',
+            title: labels.sources,
             items: result.sources,
             labelStyle: labelStyle,
+            listItem: labels.listItem,
             compact: true,
           ),
       ],
@@ -579,12 +647,14 @@ final class _RuntimeMediaResultListSection extends StatelessWidget {
     required this.title,
     required this.items,
     required this.labelStyle,
+    required this.listItem,
     this.compact = false,
   });
 
   final String title;
   final List<String> items;
   final TextStyle? labelStyle;
+  final String Function(String value) listItem;
   final bool compact;
 
   @override
@@ -603,7 +673,7 @@ final class _RuntimeMediaResultListSection extends StatelessWidget {
                 bottom: compact ? 0 : AgentDesignTokens.gapXs,
               ),
               child: Text(
-                compact ? item : '- $item',
+                compact ? item : listItem(item),
                 style: const TextStyle(
                   color: _AgentConversationPageState._ink,
                   fontWeight: FontWeight.w600,
@@ -617,9 +687,12 @@ final class _RuntimeMediaResultListSection extends StatelessWidget {
   }
 }
 
-String _runtimeMediaSummaryLabel(String mediaType) {
+String _runtimeMediaSummaryLabel(
+  String mediaType, {
+  required _RuntimeMediaInlineLabels labels,
+}) {
   final normalized = mediaType.trim().toLowerCase();
-  return normalized == 'audio' ? 'Meeting minutes' : 'Summary';
+  return normalized == 'audio' ? labels.meetingMinutes : labels.summary;
 }
 
 extension on String {

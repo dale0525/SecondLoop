@@ -21,6 +21,7 @@ import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../app/app_shell_style.dart';
 import '../../i18n/strings.g.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
@@ -85,12 +86,12 @@ final class AgentConversationPage extends StatefulWidget {
 
 final class _AgentConversationPageState extends State<AgentConversationPage>
     with _AgentConversationRuntimePagination {
-  static const _blue = Color(0xFF0B5CF6);
-  static const _ink = Color(0xFF101936);
-  static const _muted = Color(0xFF63708A);
-  static const _line = Color(0xFFE1E7F0);
-  static const _soft = Color(0xFFF7F9FC);
-  static const _panel = Color(0xFFFFFFFF);
+  static const _blue = AppShellPalette.blue;
+  static const _ink = AppShellPalette.ink;
+  static const _muted = AppShellPalette.muted;
+  static const _line = AppShellPalette.line;
+  static const _soft = AppShellPalette.soft;
+  static const _panel = AppShellPalette.panel;
 
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
@@ -222,6 +223,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
         state.conversationTurns,
         localAttachmentsByRef: _sentAttachmentsByRef,
         mediaRecords: _runtimeMediaResultRecordsForState(state),
+        mediaLabels: _runtimeMediaInlineLabels(context),
       );
       final attachmentsByMessageId = await _hydrateRuntimeAttachmentBytes(
         projection.attachmentsByMessageId,
@@ -256,7 +258,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
           _messageMediaResultsById = projection.mediaResultsByMessageId;
         }
         _todos = agentTodosFromRuntimeState(state);
-        _memoryPages = agentMemoryPagesFromRuntimeRecords(state.memoryRecords);
+        _memoryPages = agentMemoryPagesFromRuntimeState(state);
         _runtimeApprovalItems = _validApprovalItems(
           state.approvalItems
               .map(

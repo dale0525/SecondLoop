@@ -8,6 +8,7 @@ import 'package:secondloop/core/cloud/runtime_profile.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
 import 'package:secondloop/features/settings/self_managed_setup_page.dart';
+import 'package:secondloop/features/settings/settings_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_i18n.dart';
@@ -27,6 +28,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byType(SettingsPageShell), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('runtime_mode_self_managed')));
     await tester.pumpAndSettle();
 

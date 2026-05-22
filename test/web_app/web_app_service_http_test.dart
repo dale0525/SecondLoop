@@ -295,6 +295,87 @@ void main() {
     expect(captured!.headers['x-secondloop-vault-id'], 'vault-123');
   });
 
+  test('vault attachment preview uses managed-vault proxy and rewrites urls',
+      () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode(<String, Object?>{
+          'kind': 'image',
+          'url': '/v1/vaults/vault-123/attachments/att-1/content',
+          'thumbnail_url': '/v1/vaults/vault-123/attachments/att-1/thumb',
+        }),
+        200,
+        headers: const <String, String>{
+          'content-type': 'application/json; charset=utf-8',
+        },
+      );
+    });
+
+    final service = WebAppServiceHttp(client: client);
+    final preview = await service.fetchVaultAttachmentPreview(
+      idToken: 'token',
+      vaultId: 'vault-123',
+      attachmentId: 'att-1',
+    );
+
+    expect(captured, isNotNull);
+    expect(
+      captured!.url.path,
+      '/api/app/vault-proxy/v1/vaults/vault-123/attachments/att-1/preview',
+    );
+    expect(captured!.headers['authorization'], 'Bearer token');
+    expect(captured!.headers['x-secondloop-vault-id'], 'vault-123');
+    expect(preview.kind, 'image');
+    expect(
+      preview.url,
+      Uri.base
+          .resolve('/api/app/vault-proxy/v1/vaults/vault-123/attachments/'
+              'att-1/content')
+          .toString(),
+    );
+    expect(
+      preview.thumbnailUrl,
+      Uri.base
+          .resolve('/api/app/vault-proxy/v1/vaults/vault-123/attachments/'
+              'att-1/thumb')
+          .toString(),
+    );
+  });
+
+  test('vault attachment preview falls back to direct content when unavailable',
+      () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode(<String, Object?>{'error': 'not_found'}),
+        404,
+        headers: const <String, String>{
+          'content-type': 'application/json; charset=utf-8',
+        },
+      );
+    });
+
+    final service = WebAppServiceHttp(client: client);
+    final preview = await service.fetchVaultAttachmentPreview(
+      idToken: 'token',
+      vaultId: 'vault-123',
+      attachmentId: 'att-1',
+    );
+
+    expect(captured, isNotNull);
+    expect(preview.kind, 'download');
+    expect(
+      preview.url,
+      Uri.base
+          .resolve('/api/app/vault-proxy/v1/vaults/vault-123/attachments/'
+              'att-1')
+          .toString(),
+    );
+  });
+
   test('vault attachment bytes reject oversized browser downloads early',
       () async {
     http.BaseRequest? captured;
@@ -337,7 +418,9 @@ void main() {
         jsonEncode({
           'items': [
             {
+              'id': 'att-leaf',
               'sha256': 'leaf-sha',
+              'display_name': 'camera clip.mov',
               'root_sha256': 'root-sha',
               'group_type': 'video',
               'leaf_count': 3,
@@ -345,6 +428,12 @@ void main() {
               'byte_len': 4096,
               'created_at_ms': 1000,
               'uploaded_at_ms': 2000,
+              'preview': {
+                'kind': 'video',
+                'url': '/v1/vaults/vault-123/attachments/att-leaf',
+              },
+              'processing_status': 'ready',
+              'can_delete': false,
             },
           ],
         }),
@@ -359,11 +448,16 @@ void main() {
     );
 
     expect(items, hasLength(1));
+    expect(items.single.id, 'att-leaf');
     expect(items.single.sha256, 'leaf-sha');
+    expect(items.single.displayName, 'camera clip.mov');
     expect(items.single.rootSha256, 'root-sha');
     expect(items.single.groupType, 'video');
     expect(items.single.leafCount, 3);
     expect(items.single.primarySha256, 'root-sha');
+    expect(items.single.preview?.url, contains('/api/app/vault-proxy/v1/'));
+    expect(items.single.processingStatus, 'ready');
+    expect(items.single.canDelete, isFalse);
   });
 
   test('usage errors preserve parseable http status and cloud code', () async {

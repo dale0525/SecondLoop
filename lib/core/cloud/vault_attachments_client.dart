@@ -66,6 +66,17 @@ class VaultAttachmentPreview {
 }
 
 @immutable
+class VaultAttachmentContent {
+  const VaultAttachmentContent({
+    required this.bytes,
+    required this.mimeType,
+  });
+
+  final Uint8List bytes;
+  final String mimeType;
+}
+
+@immutable
 class VaultAttachmentLinkedEntity {
   const VaultAttachmentLinkedEntity({
     required this.kind,
@@ -158,7 +169,13 @@ final class VaultAttachmentsClient {
       final groupType = '${map['group_type'] ?? ''}'.trim();
       final leafCount = _parseInt(map['leaf_count']);
       final id = '${map['id'] ?? ''}'.trim();
-      final displayName = '${map['display_name'] ?? ''}'.trim();
+      final displayName = _firstString(
+        map['display_name'],
+        map['displayName'],
+        map['filename'],
+        map['file_name'],
+        map['name'],
+      );
       final processingStatus = '${map['processing_status'] ?? ''}'.trim();
       final linkedEntities = _parseLinkedEntities(map['linked_entities']);
       final preview = _parsePreview(map['preview']);
@@ -201,6 +218,10 @@ final class VaultAttachmentsClient {
     required String idToken,
     required String attachmentId,
   }) async {
+    final directUri = _resolveVaultUri(
+      managedVaultBaseUrl,
+      '/v1/vaults/$vaultId/attachments/$attachmentId',
+    );
     final uri = _resolveVaultUri(
       managedVaultBaseUrl,
       '/v1/vaults/$vaultId/attachments/$attachmentId/preview',
@@ -214,15 +235,82 @@ final class VaultAttachmentsClient {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (response.statusCode == 404) {
+        return VaultAttachmentPreview(
+          kind: 'download',
+          url: directUri.toString(),
+        );
+      }
       throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
 
     final decoded = response.tryDecodeObject();
-    final preview = _parsePreview(decoded);
+    final preview = _parsePreview(decoded, baseUri: uri);
     if (preview == null) {
       throw const FormatException('invalid_vault_attachment_preview');
     }
     return preview;
+  }
+
+  Future<VaultAttachmentContent> fetchAttachmentContent({
+    required String managedVaultBaseUrl,
+    required String vaultId,
+    required String idToken,
+    required String attachmentId,
+    String? contentUrl,
+  }) async {
+    final candidates = <Uri>[];
+    void addCandidate(Uri uri) {
+      if (candidates
+          .any((candidate) => candidate.toString() == uri.toString())) {
+        return;
+      }
+      candidates.add(uri);
+    }
+
+    final normalizedContentUrl = contentUrl?.trim() ?? '';
+    if (normalizedContentUrl.isNotEmpty) {
+      addCandidate(_resolveVaultUri(managedVaultBaseUrl, normalizedContentUrl));
+    }
+    addCandidate(
+      _resolveVaultUri(
+        managedVaultBaseUrl,
+        '/v1/vaults/$vaultId/attachments/$attachmentId/content',
+      ),
+    );
+    addCandidate(
+      _resolveVaultUri(
+        managedVaultBaseUrl,
+        '/v1/vaults/$vaultId/attachments/$attachmentId',
+      ),
+    );
+
+    Object? lastError;
+    for (final uri in candidates) {
+      final response = await _httpClient.getRaw(
+        uri,
+        headers: <String, String>{
+          'authorization': 'Bearer $idToken',
+          'accept': '*/*',
+        },
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final mimeType = response.headers['content-type']?.trim();
+        return VaultAttachmentContent(
+          bytes: Uint8List.fromList(response.bodyBytes),
+          mimeType: mimeType == null || mimeType.isEmpty
+              ? 'application/octet-stream'
+              : mimeType,
+        );
+      }
+      lastError = Exception('HTTP ${response.statusCode}: ${response.body}');
+      if (response.statusCode != 404 && response.statusCode != 405) {
+        throw lastError;
+      }
+    }
+
+    throw lastError ??
+        const FormatException('invalid_vault_attachment_content');
   }
 
   Future<VaultAttachmentDeleteImpact> fetchDeleteImpact({
@@ -315,7 +403,22 @@ bool? _parseBool(Object? value) {
   return null;
 }
 
-VaultAttachmentPreview? _parsePreview(Object? value) {
+String _firstString(Object? first, Object? second, Object? third,
+    Object? fourth, Object? fifth) {
+  for (final value in <Object?>[first, second, third, fourth, fifth]) {
+    final text = '${value ?? ''}'.trim();
+    if (text.isNotEmpty && text != 'null') return text;
+  }
+  return '';
+}
+
+String _resolvePreviewUrl(String value, Uri? baseUri) {
+  final parsed = Uri.tryParse(value);
+  if (parsed == null || baseUri == null || parsed.hasScheme) return value;
+  return baseUri.resolveUri(parsed).toString();
+}
+
+VaultAttachmentPreview? _parsePreview(Object? value, {Uri? baseUri}) {
   if (value is! Map) return null;
   final map = Map<String, Object?>.from(value);
   final kind = '${map['kind'] ?? ''}'.trim();
@@ -324,8 +427,9 @@ VaultAttachmentPreview? _parsePreview(Object? value) {
   if (kind.isEmpty || url.isEmpty) return null;
   return VaultAttachmentPreview(
     kind: kind,
-    url: url,
-    thumbnailUrl: thumbnailUrl.isEmpty ? null : thumbnailUrl,
+    url: _resolvePreviewUrl(url, baseUri),
+    thumbnailUrl:
+        thumbnailUrl.isEmpty ? null : _resolvePreviewUrl(thumbnailUrl, baseUri),
   );
 }
 

@@ -46,9 +46,38 @@ void main() {
     ]) {
       expect(source, isNot(contains('SyncSettingsPage')));
       expect(source, isNot(contains('settings_sync')));
+      expect(source, isNot(contains('AiSettingsPage')));
+      expect(source, isNot(contains('AiAskAiSettingsPage')));
+      expect(source, isNot(contains('settings_ai_source')));
       expect(source, isNot(contains('agent_settings_open_sync_settings')));
       expect(source, isNot(contains('openSyncSettings')));
+      expect(source, isNot(contains('welcome_guide_card_ai')));
+      expect(source, isNot(contains('welcome_guide_card_sync')));
       expect(source, isNot(contains('welcome_guide_card_sync_open')));
+    }
+  });
+
+  test('runtime-first settings tree removes legacy AI and sync setting pages',
+      () {
+    for (final path in [
+      'lib/features/settings/ai_settings_page.dart',
+      'lib/features/settings/ai_settings_page_ui.dart',
+      'lib/features/settings/ai_ask_ai_settings_page.dart',
+      'lib/features/settings/ai_smart_organization_settings_page.dart',
+      'lib/features/settings/llm_profiles_page.dart',
+      'lib/features/settings/embedding_profiles_page.dart',
+      'lib/features/settings/sync_settings_page.dart',
+      'lib/features/settings/sync_settings_page_cloud_session.dart',
+      'lib/features/settings/sync_settings_page_delete_actions.dart',
+      'lib/features/settings/sync_settings_page_delete_progress.dart',
+      'lib/features/settings/sync_settings_page_managed_vault_save.dart',
+      'lib/features/settings/sync_settings_page_managed_vault_sync.dart',
+      'lib/features/settings/sync_settings_page_media_actions.dart',
+      'lib/features/settings/sync_settings_page_switch_direction.dart',
+      'lib/features/settings/sync_settings_page_sync_actions.dart',
+      'lib/features/settings/sync_settings_page_sync_progress.dart',
+    ]) {
+      expect(File(path).existsSync(), isFalse, reason: '$path is retired');
     }
   });
 

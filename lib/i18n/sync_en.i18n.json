@@ -135,10 +135,10 @@
       "confirm": "Switch"
     },
     "aiFeatureGuideDialog": {
-      "title": "More AI features are now available",
-      "message": "Your Pro subscription unlocked smarter AI setup. Review the recommended AI configuration now, or do it later from Settings > Intelligence.",
+      "title": "Cloud runtime is available",
+      "message": "Your Pro subscription can use the hosted runtime. Review managed pro or self-managed options now, or do it later from Settings > Connection.",
       "cancel": "Later",
-      "confirm": "Review setup"
+      "confirm": "Review runtime"
     },
     "setPassphraseDialog": {
       "title": "Set recovery passphrase (Advanced)",

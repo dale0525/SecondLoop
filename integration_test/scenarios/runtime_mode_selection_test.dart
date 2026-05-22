@@ -16,10 +16,6 @@ void main() {
     await harness.openRuntimeModeSettings();
 
     expect(
-      find.byKey(TestSemanticsIds.key(TestSemanticsIds.runtimeModePageRoot)),
-      findsOneWidget,
-    );
-    expect(
       find.byKey(TestSemanticsIds.key(TestSemanticsIds.runtimeModeSelfManaged)),
       findsOneWidget,
     );

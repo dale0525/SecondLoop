@@ -10,24 +10,8 @@ import '../core/update/update_badge_prefs.dart';
 import '../i18n/strings.g.dart';
 import '../ui/sl_surface.dart';
 import '../ui/sl_tokens.dart';
+import 'app_shell_style.dart';
 import 'theme.dart';
-
-const _kDesktopShellMaxWidth = double.infinity;
-const _kDesktopShellSidebarWidth = 230.0;
-const _kDesktopShellMargin = 12.0;
-const _kDesktopShellRadius = 16.0;
-
-final class _AgentShellPalette {
-  const _AgentShellPalette._();
-
-  static const blue = Color(0xFF0B5CF6);
-  static const ink = Color(0xFF101936);
-  static const muted = Color(0xFF63708A);
-  static const line = Color(0xFFE1E7F0);
-  static const panel = Color(0xFFFFFFFF);
-  static const soft = Color(0xFFF7F9FC);
-  static const selected = Color(0xFFEAF1FF);
-}
 
 enum AppTab {
   conversation(Icons.chat_bubble_outline, Icons.chat_bubble),
@@ -237,7 +221,7 @@ class _AppShellState extends State<AppShell> {
                     };
 
               return Scaffold(
-                backgroundColor: _AgentShellPalette.soft,
+                backgroundColor: AppShellPalette.soft,
                 resizeToAvoidBottomInset: false,
                 body: useCollapsedShell
                     ? const SizedBox.shrink()
@@ -245,24 +229,24 @@ class _AppShellState extends State<AppShell> {
                         ? Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(
-                                maxWidth: _kDesktopShellMaxWidth,
+                                maxWidth: AppShellStyle.desktopShellMaxWidth,
                               ),
                               child: Padding(
                                 padding: const EdgeInsets.all(
-                                  _kDesktopShellMargin,
+                                  AppShellStyle.desktopShellMargin,
                                 ),
                                 child: SlSurface(
                                   key: const ValueKey(
                                     'app_shell_desktop_workspace',
                                   ),
-                                  color: _AgentShellPalette.panel,
-                                  borderColor: _AgentShellPalette.line,
+                                  color: AppShellPalette.panel,
+                                  borderColor: AppShellPalette.line,
                                   borderRadius: BorderRadius.circular(
-                                    _kDesktopShellRadius,
+                                    AppShellStyle.desktopShellRadius,
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(
-                                      _kDesktopShellRadius,
+                                      AppShellStyle.desktopShellRadius,
                                     ),
                                     child: Row(
                                       children: [
@@ -347,7 +331,7 @@ final class _AppShellSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       key: const ValueKey('app_shell_sidebar'),
-      width: _kDesktopShellSidebarWidth,
+      width: AppShellStyle.desktopShellSidebarWidth,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(26, 30, 16, 24),
         child: Column(
@@ -379,7 +363,7 @@ final class _AppShellBrand extends StatelessWidget {
       children: [
         const Icon(
           Icons.all_inclusive_rounded,
-          color: _AgentShellPalette.blue,
+          color: AppShellPalette.blue,
           size: 34,
         ),
         const SizedBox(width: 10),
@@ -388,7 +372,7 @@ final class _AppShellBrand extends StatelessWidget {
             context.t.app.title,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: _AgentShellPalette.ink,
+              color: AppShellPalette.ink,
               fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
@@ -413,10 +397,8 @@ final class _AppShellNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = tab.label(context);
-    final iconColor =
-        selected ? _AgentShellPalette.blue : _AgentShellPalette.muted;
-    final textColor =
-        selected ? _AgentShellPalette.blue : _AgentShellPalette.ink;
+    final iconColor = selected ? AppShellPalette.blue : AppShellPalette.muted;
+    final textColor = selected ? AppShellPalette.blue : AppShellPalette.ink;
     final icon = selected ? tab.selectedIcon : tab.icon;
 
     return Semantics(
@@ -429,12 +411,11 @@ final class _AppShellNavItem extends StatelessWidget {
           key: ValueKey('app_shell_nav_${tab.name}'),
           onTap: onTap,
           borderRadius: BorderRadius.circular(8),
-          hoverColor: _AgentShellPalette.selected.withOpacity(0.52),
+          hoverColor: AppShellPalette.selected.withOpacity(0.52),
           child: Container(
             height: 50,
             decoration: BoxDecoration(
-              color:
-                  selected ? _AgentShellPalette.selected : Colors.transparent,
+              color: selected ? AppShellPalette.selected : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -482,7 +463,7 @@ final class _AppShellDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return const SizedBox(
       width: 1,
-      child: ColoredBox(color: _AgentShellPalette.line),
+      child: ColoredBox(color: AppShellPalette.line),
     );
   }
 }

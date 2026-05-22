@@ -16,9 +16,12 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/update/update_event_log.dart';
 import '../../i18n/strings.g.dart';
 import '../../web_app/web_formal_settings_scope.dart';
+import 'settings_ui.dart';
 
 class DiagnosticsPage extends StatefulWidget {
-  const DiagnosticsPage({super.key});
+  const DiagnosticsPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<DiagnosticsPage> createState() => _DiagnosticsPageState();
@@ -329,63 +332,162 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: const ValueKey('diagnostics_page'),
-      appBar: AppBar(
-        title: Text(context.t.settings.diagnostics.title),
-        actions: [
-          IconButton(
-            key: const ValueKey('diagnostics_copy'),
-            tooltip: context.t.common.actions.copy,
-            onPressed: _busy ? null : _copyToClipboard,
-            icon: const Icon(Icons.copy_rounded),
-          ),
-          IconButton(
-            key: const ValueKey('diagnostics_share'),
-            tooltip: context.t.common.actions.share,
-            onPressed: _busy ? null : _shareJson,
-            icon: const Icon(Icons.share_rounded),
-          ),
-        ],
-      ),
-      body: FutureBuilder(
+    if (widget.embedded) {
+      final t = context.t;
+      return FutureBuilder(
         future: _jsonFuture,
         builder: (context, snapshot) {
+          final body = <Widget>[
+            SettingsActionBar(
+              actions: [
+                SettingsAction(
+                  key: const ValueKey('diagnostics_copy'),
+                  label: t.common.actions.copy,
+                  onPressed: _busy ? null : _copyToClipboard,
+                  icon: const Icon(Icons.copy_rounded),
+                ),
+                SettingsAction(
+                  key: const ValueKey('diagnostics_share'),
+                  label: t.common.actions.share,
+                  onPressed: _busy ? null : _shareJson,
+                  icon: const Icon(Icons.share_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ];
+
           if (snapshot.connectionState != ConnectionState.done) {
-            return Center(
-              child: Text(context.t.settings.diagnostics.loading),
+            body.add(
+              SettingsSection(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(t.settings.diagnostics.loading),
+                  ),
+                ],
+              ),
             );
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                context.t.errors.loadFailed(error: '${snapshot.error}'),
+          } else if (snapshot.hasError) {
+            body.add(
+              SettingsSection(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      t.errors.loadFailed(error: '${snapshot.error}'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            final json = snapshot.data ?? '{}';
+            body.add(
+              SettingsSection(
+                title: t.settings.diagnostics.title,
+                subtitle: t.settings.diagnostics.privacyNote,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SelectableText(
+                      json,
+                      style: const TextStyle(fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
               ),
             );
           }
-          final json = snapshot.data ?? '{}';
-          return ListView(
-            padding: const EdgeInsets.all(16),
+
+          return KeyedSubtree(
+            key: const ValueKey('diagnostics_page'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: body,
+            ),
+          );
+        },
+      );
+    }
+
+    final appBar = AppBar(
+      title: Text(context.t.settings.diagnostics.title),
+      actions: [
+        IconButton(
+          key: const ValueKey('diagnostics_copy'),
+          tooltip: context.t.common.actions.copy,
+          onPressed: _busy ? null : _copyToClipboard,
+          icon: const Icon(Icons.copy_rounded),
+        ),
+        IconButton(
+          key: const ValueKey('diagnostics_share'),
+          tooltip: context.t.common.actions.share,
+          onPressed: _busy ? null : _shareJson,
+          icon: const Icon(Icons.share_rounded),
+        ),
+      ],
+    );
+
+    return FutureBuilder(
+      future: _jsonFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return SettingsPageShell(
+            key: const ValueKey('diagnostics_page'),
+            appBar: appBar,
             children: [
-              Text(context.t.settings.diagnostics.privacyNote),
-              const SizedBox(height: 12),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
+              SettingsSection(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(context.t.settings.diagnostics.loading),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+        if (snapshot.hasError) {
+          return SettingsPageShell(
+            key: const ValueKey('diagnostics_page'),
+            appBar: appBar,
+            children: [
+              SettingsSection(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      context.t.errors.loadFailed(error: '${snapshot.error}'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+        final json = snapshot.data ?? '{}';
+        return SettingsPageShell(
+          key: const ValueKey('diagnostics_page'),
+          appBar: appBar,
+          children: [
+            SettingsSection(
+              title: context.t.settings.diagnostics.title,
+              subtitle: context.t.settings.diagnostics.privacyNote,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
                   child: SelectableText(
                     json,
                     style: const TextStyle(fontFamily: 'monospace'),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

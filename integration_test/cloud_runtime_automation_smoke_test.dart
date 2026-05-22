@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_helpers/test_semantics_ids.dart';
@@ -27,10 +28,6 @@ void main() {
     await harness.openSettings();
     await harness.openRuntimeModeSettings();
 
-    expect(
-      find.byKey(TestSemanticsIds.key(TestSemanticsIds.runtimeModePageRoot)),
-      findsOneWidget,
-    );
     expect(
       find.byKey(TestSemanticsIds.key(TestSemanticsIds.runtimeModeSelfManaged)),
       findsOneWidget,
@@ -65,9 +62,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(TestSemanticsIds.key(TestSemanticsIds.cloudAccountPageRoot)),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('cloud_manage_subscription')),
+        findsOneWidget);
   });
 }

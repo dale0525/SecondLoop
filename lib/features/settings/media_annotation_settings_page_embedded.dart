@@ -74,7 +74,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
               pushPageWithInheritedScopes(
                 Navigator.of(context),
                 context,
-                const LlmProfilesPage(),
+                const SelfManagedSetupPage(),
               );
             },
     );
@@ -572,13 +572,6 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
           ];
         }(),
     ];
-  }
-
-  Widget _buildSettingsListView(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: _buildSettingsChildren(context),
-    );
   }
 
   Widget _buildEmbeddedSettings(BuildContext context) {

@@ -18,6 +18,7 @@ const String _kApiTaskPriorityAssessmentsPath =
 const String _kApiVaultUsagePath = '/api/app/vault/usage';
 const String _kApiVaultAttachmentsPath = '/api/app/vault/attachments';
 const String _kApiVaultAttachmentPath = '/api/app/vault/attachment';
+const String _kApiManagedVaultProxyPath = '/api/app/vault-proxy';
 const int _kMaxWebAttachmentBytes = 50 * 1024 * 1024;
 
 enum WebSubscriptionState {
@@ -60,7 +61,9 @@ class WebVaultUsageSummary {
 
 class WebVaultAttachmentItem {
   const WebVaultAttachmentItem({
+    this.id,
     required this.sha256,
+    this.displayName,
     required this.mimeType,
     required this.byteLen,
     this.createdAtMs,
@@ -68,9 +71,14 @@ class WebVaultAttachmentItem {
     this.rootSha256,
     this.groupType,
     this.leafCount,
+    this.preview,
+    this.processingStatus,
+    this.canDelete = true,
   });
 
+  final String? id;
   final String sha256;
+  final String? displayName;
   final String mimeType;
   final int byteLen;
   final int? createdAtMs;
@@ -78,6 +86,9 @@ class WebVaultAttachmentItem {
   final String? rootSha256;
   final String? groupType;
   final int? leafCount;
+  final WebVaultAttachmentPreview? preview;
+  final String? processingStatus;
+  final bool canDelete;
 
   String get primarySha256 {
     final normalizedRoot = rootSha256?.trim() ?? '';
@@ -86,6 +97,18 @@ class WebVaultAttachmentItem {
   }
 
   bool get needsAppProcessing => needsAppProcessingInWeb(mimeType);
+}
+
+class WebVaultAttachmentPreview {
+  const WebVaultAttachmentPreview({
+    required this.kind,
+    required this.url,
+    this.thumbnailUrl,
+  });
+
+  final String kind;
+  final String url;
+  final String? thumbnailUrl;
 }
 
 class WebManagedVaultPullOp {
@@ -159,6 +182,18 @@ abstract class WebAppService {
     required String vaultId,
   }) async =>
       const <WebVaultAttachmentItem>[];
+
+  Future<WebVaultAttachmentPreview> fetchVaultAttachmentPreview({
+    required String idToken,
+    required String vaultId,
+    required String attachmentId,
+  }) async =>
+      WebVaultAttachmentPreview(
+        kind: 'download',
+        url: _absoluteWebUrl(
+          _managedVaultProxyAttachmentPath(vaultId, attachmentId),
+        ),
+      );
 
   Future<void> uploadVaultAttachment({
     required String idToken,
@@ -556,22 +591,81 @@ class WebAppServiceHttp extends WebAppService {
     if (rawItems is! List) return const <WebVaultAttachmentItem>[];
     return rawItems
         .whereType<Map>()
-        .map((raw) => WebVaultAttachmentItem(
-              sha256: '${raw['sha256'] ?? ''}',
-              mimeType: '${raw['mime_type'] ?? ''}',
-              byteLen: (raw['byte_len'] as num?)?.toInt() ?? 0,
-              createdAtMs: (raw['created_at_ms'] as num?)?.toInt(),
-              uploadedAtMs: (raw['uploaded_at_ms'] as num?)?.toInt(),
-              rootSha256: '${raw['root_sha256'] ?? ''}'.trim().isEmpty
-                  ? null
-                  : '${raw['root_sha256']}',
-              groupType: '${raw['group_type'] ?? ''}'.trim().isEmpty
-                  ? null
-                  : '${raw['group_type']}',
-              leafCount: (raw['leaf_count'] as num?)?.toInt(),
-            ))
+        .map((raw) {
+          final id = _optionalString(raw['id']);
+          final sha256 = '${raw['sha256'] ?? ''}';
+          return WebVaultAttachmentItem(
+            id: id,
+            sha256: sha256,
+            displayName: _firstOptionalString(
+              raw['display_name'],
+              raw['displayName'],
+              raw['filename'],
+              raw['name'],
+            ),
+            mimeType: '${raw['mime_type'] ?? ''}',
+            byteLen: (raw['byte_len'] as num?)?.toInt() ?? 0,
+            createdAtMs: (raw['created_at_ms'] as num?)?.toInt(),
+            uploadedAtMs: (raw['uploaded_at_ms'] as num?)?.toInt(),
+            rootSha256: '${raw['root_sha256'] ?? ''}'.trim().isEmpty
+                ? null
+                : '${raw['root_sha256']}',
+            groupType: '${raw['group_type'] ?? ''}'.trim().isEmpty
+                ? null
+                : '${raw['group_type']}',
+            leafCount: (raw['leaf_count'] as num?)?.toInt(),
+            preview: _parseWebVaultAttachmentPreview(
+              raw['preview'],
+              vaultId: vaultId,
+              attachmentId: id ?? sha256,
+            ),
+            processingStatus: _optionalString(raw['processing_status']),
+            canDelete: _parseBool(raw['can_delete']) ?? true,
+          );
+        })
         .where((item) => item.sha256.trim().isNotEmpty)
         .toList(growable: false);
+  }
+
+  @override
+  Future<WebVaultAttachmentPreview> fetchVaultAttachmentPreview({
+    required String idToken,
+    required String vaultId,
+    required String attachmentId,
+  }) async {
+    if (!_managedVaultConfigured) {
+      throw StateError('managed_vault_not_configured');
+    }
+
+    try {
+      final json = await _getJson(
+        '${_managedVaultProxyAttachmentPath(vaultId, attachmentId)}/preview',
+        idToken,
+        headers: _vaultHeaders(vaultId),
+      );
+      return WebVaultAttachmentPreview(
+        kind: _optionalString(json['kind']) ?? 'download',
+        url: _normalizeManagedVaultPreviewUrl(
+          json['url'],
+          vaultId: vaultId,
+          attachmentId: attachmentId,
+        )!,
+        thumbnailUrl: _normalizeManagedVaultPreviewUrl(
+          json['thumbnail_url'],
+          vaultId: vaultId,
+          attachmentId: attachmentId,
+          allowEmpty: true,
+        ),
+      );
+    } on WebAppHttpException catch (error) {
+      if (error.statusCode != 404) rethrow;
+      return WebVaultAttachmentPreview(
+        kind: 'download',
+        url: _absoluteWebUrl(
+          _managedVaultProxyAttachmentPath(vaultId, attachmentId),
+        ),
+      );
+    }
   }
 
   @override
@@ -777,6 +871,87 @@ bool? _parseBool(Object? value) {
     if (normalized == 'false') return false;
   }
   return null;
+}
+
+String? _optionalString(Object? value) {
+  final text = '${value ?? ''}'.trim();
+  return text.isEmpty ? null : text;
+}
+
+String? _firstOptionalString(
+    Object? first, Object? second, Object? third, Object? fourth) {
+  for (final value in <Object?>[first, second, third, fourth]) {
+    final text = _optionalString(value);
+    if (text != null) return text;
+  }
+  return null;
+}
+
+String _managedVaultProxyAttachmentPath(String vaultId, String attachmentId) {
+  return '$_kApiManagedVaultProxyPath/v1/vaults/'
+      '${Uri.encodeComponent(vaultId)}/attachments/'
+      '${Uri.encodeComponent(attachmentId)}';
+}
+
+String _absoluteWebUrl(String pathOrUrl) {
+  final parsed = Uri.tryParse(pathOrUrl);
+  if (parsed != null && parsed.hasScheme) return pathOrUrl;
+  final path = pathOrUrl.startsWith('/') ? pathOrUrl : '/$pathOrUrl';
+  return Uri.base.resolve(path).toString();
+}
+
+String? _normalizeManagedVaultPreviewUrl(
+  Object? value, {
+  required String vaultId,
+  required String attachmentId,
+  bool allowEmpty = false,
+}) {
+  final raw = '${value ?? ''}'.trim();
+  if (raw.isEmpty) {
+    return allowEmpty
+        ? null
+        : _absoluteWebUrl(_managedVaultProxyAttachmentPath(
+            vaultId,
+            attachmentId,
+          ));
+  }
+
+  final parsed = Uri.tryParse(raw);
+  if (parsed != null && parsed.hasScheme) return raw;
+
+  final path = raw.startsWith('/') ? raw : '/$raw';
+  if (path.startsWith(_kApiManagedVaultProxyPath)) {
+    return _absoluteWebUrl(path);
+  }
+  if (path.startsWith('/v1/') || path.startsWith('/v2/')) {
+    return _absoluteWebUrl('$_kApiManagedVaultProxyPath$path');
+  }
+  return _absoluteWebUrl(path);
+}
+
+WebVaultAttachmentPreview? _parseWebVaultAttachmentPreview(
+  Object? value, {
+  required String vaultId,
+  required String attachmentId,
+}) {
+  if (value is! Map) return null;
+  final map = Map<String, Object?>.from(value);
+  final rawUrl = _optionalString(map['url']);
+  if (rawUrl == null) return null;
+  return WebVaultAttachmentPreview(
+    kind: _optionalString(map['kind']) ?? 'download',
+    url: _normalizeManagedVaultPreviewUrl(
+      rawUrl,
+      vaultId: vaultId,
+      attachmentId: attachmentId,
+    )!,
+    thumbnailUrl: _normalizeManagedVaultPreviewUrl(
+      map['thumbnail_url'],
+      vaultId: vaultId,
+      attachmentId: attachmentId,
+      allowEmpty: true,
+    ),
+  );
 }
 
 Future<String> _sha256Hex(List<int> bytes) async {

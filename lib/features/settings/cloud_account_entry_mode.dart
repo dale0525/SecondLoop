@@ -1,0 +1,4 @@
+enum CloudAccountEntryMode {
+  settings,
+  onboarding,
+}

@@ -5,7 +5,7 @@ import '../integration_test/support/dynamic_app_harness.dart';
 import '../integration_test/support/dynamic_test_backend.dart';
 
 void main() {
-  testWidgets('signed in pro harness opens AI settings without setup warning',
+  testWidgets('signed in pro harness opens runtime mode without AI setup entry',
       (tester) async {
     final backend = DynamicTestBackend();
     final harness = await DynamicAppHarness.launch(
@@ -19,16 +19,14 @@ void main() {
     );
 
     await harness.openSettings();
-    await harness.openAiSettings();
+    await harness.openRuntimeModeSettings();
 
     expect(
-      find.byKey(const ValueKey('ai_settings_ask_ai_setup_hint')),
+      find.byKey(const ValueKey('settings_ai_source')),
       findsNothing,
     );
     expect(
-      find.byKey(
-        const ValueKey('ai_settings_open_smart_organization_settings'),
-      ),
+      find.byKey(const ValueKey('runtime_mode_managed_pro')),
       findsOneWidget,
     );
   });
@@ -48,9 +46,7 @@ void main() {
     );
 
     await harness.openSettings();
-    await harness.openAiSettings();
-    await harness.openAskAiSettings();
-    await harness.openCloudAccountFromAskAi();
+    await harness.openManagedProAccount();
 
     expect(find.byKey(const ValueKey('cloud_manage_subscription')),
         findsOneWidget);

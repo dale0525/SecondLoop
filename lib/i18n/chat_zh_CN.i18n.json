@@ -223,6 +223,17 @@
     "source": "来源：$name",
     "confidence": "置信度 $percent%"
   },
+  "runtimeMediaResult": {
+    "transcript": "转录",
+    "meetingMinutes": "会议纪要",
+    "summary": "摘要",
+    "decisions": "决策",
+    "actionItems": "行动项",
+    "sources": "来源",
+    "listItem": "- $value",
+    "owner": "负责人：$value",
+    "due": "截止：$value"
+  },
   "dailyBrief": {
     "topPriorities": "优先事项",
     "calendarWindows": "日历空档",

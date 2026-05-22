@@ -6,6 +6,7 @@ import 'package:secondloop/core/cloud/runtime_profile.dart';
 import 'package:secondloop/core/cloud/self_managed_setup_controller.dart';
 import 'package:secondloop/core/cloud/self_managed_setup_models.dart';
 import 'package:secondloop/features/settings/self_managed_setup_page.dart';
+import 'package:secondloop/features/settings/settings_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_i18n.dart';
@@ -58,6 +59,7 @@ void main() {
       ),
     );
 
+    expect(find.byType(SettingsPageShell), findsOneWidget);
     await tester.enterText(
       find.byKey(const ValueKey('self_managed_cloudflare_account')),
       'acct-1',

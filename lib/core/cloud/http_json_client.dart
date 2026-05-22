@@ -29,6 +29,20 @@ class HttpJsonResponse {
   }
 }
 
+class HttpRawResponse {
+  const HttpRawResponse({
+    required this.statusCode,
+    required this.body,
+    required this.bodyBytes,
+    required this.headers,
+  });
+
+  final int statusCode;
+  final String body;
+  final List<int> bodyBytes;
+  final Map<String, String> headers;
+}
+
 final class HttpJsonClient {
   HttpJsonClient({http.Client? client})
       : _client = client ?? createPlatformHttpClient();
@@ -44,6 +58,19 @@ final class HttpJsonClient {
         uri: uri,
         headers: headers,
       );
+
+  Future<HttpRawResponse> getRaw(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) async {
+    final response = await _client.get(uri, headers: headers);
+    return HttpRawResponse(
+      statusCode: response.statusCode,
+      body: response.body,
+      bodyBytes: response.bodyBytes,
+      headers: response.headers,
+    );
+  }
 
   Future<HttpJsonResponse> delete(
     Uri uri, {

@@ -17,7 +17,7 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_diagnostics.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
-import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
 import 'package:secondloop/core/models/app_models.dart';
 
 import 'test_i18n.dart';
@@ -236,7 +236,7 @@ void main() {
   });
 
   testWidgets(
-      'Cloud sync switch prompt continues to a single AI feature guide prompt and can open AI settings',
+      'Cloud sync switch prompt continues to a single runtime guide prompt and can open runtime mode',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       // Can be set by previous Ask AI / settings interactions.
@@ -283,7 +283,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('More AI features are now available'), findsOneWidget);
+    expect(find.text('Cloud runtime is available'), findsOneWidget);
 
     await tester.tap(
       find.descendant(
@@ -293,11 +293,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(AiSettingsPage), findsOneWidget);
+    expect(find.byType(CloudRuntimeModePage), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('ai_settings_home_smart_organization')),
-      findsOneWidget,
-    );
+        find.byKey(const ValueKey('runtime_mode_managed_pro')), findsOneWidget);
+    expect(find.byKey(const ValueKey('runtime_mode_self_managed')),
+        findsOneWidget);
   });
 
   testWidgets(
@@ -359,7 +359,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('More AI features are now available'),
+      find.text('Cloud runtime is available'),
       findsNothing,
     );
 
@@ -371,7 +371,7 @@ void main() {
       backend.calls,
       <String>['syncManagedVaultPush', 'syncManagedVaultPull'],
     );
-    expect(find.text('More AI features are now available'), findsOneWidget);
+    expect(find.text('Cloud runtime is available'), findsOneWidget);
   });
 
   testWidgets(

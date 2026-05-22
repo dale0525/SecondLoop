@@ -223,6 +223,17 @@
     "source": "Source: $name",
     "confidence": "Confidence $percent%"
   },
+  "runtimeMediaResult": {
+    "transcript": "Transcript",
+    "meetingMinutes": "Meeting minutes",
+    "summary": "Summary",
+    "decisions": "Decisions",
+    "actionItems": "Action items",
+    "sources": "Sources",
+    "listItem": "- $value",
+    "owner": "Owner: $value",
+    "due": "Due: $value"
+  },
   "dailyBrief": {
     "topPriorities": "Top priorities",
     "calendarWindows": "Calendar windows",

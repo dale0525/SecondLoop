@@ -1,17 +1,31 @@
 {
   "title": "Welcome to SecondLoop",
-  "subtitle": "Set up essentials in minutes.",
-  "ai": {
-    "title": "AI setup",
-    "description": "Connect your preferred AI source for Ask AI.",
-    "open": "Open AI settings",
-    "statusReady": "Ready",
-    "statusNotSet": "Not set"
-  },
-  "sync": {
-    "title": "Sync setup",
-    "description": "Configure sync so your data stays consistent.",
-    "open": "Open sync settings",
+  "subtitle": "Choose how SecondLoop runs, then review system permissions.",
+  "runtime": {
+    "managedPro": {
+      "title": "SecondLoop Pro",
+      "description": "Use the hosted runtime without Cloudflare setup or BYOK.",
+      "comparisonTitle": "Nothing to prepare",
+      "comparison": {
+        "cloudflare": "No Cloudflare account",
+        "workersPaid": "No Workers Paid plan or Containers setup",
+        "providerKeys": "No provider API keys",
+        "maintenance": "No deployment, maintenance, or usage-cost management"
+      },
+      "open": "Sign in"
+    },
+    "selfManaged": {
+      "title": "Self-managed",
+      "description": "Deploy your own runtime with your Cloudflare account and provider secrets.",
+      "comparisonTitle": "Prepare before setup",
+      "comparison": {
+        "cloudflare": "Cloudflare account",
+        "workersPaid": "Cloudflare Workers Paid plan for Containers (\\$5/month, usage may add cost)",
+        "providerKeys": "Provider API keys for LLM, embedding, and media tools",
+        "maintenance": "Deployment, maintenance, and runtime costs in your own accounts"
+      },
+      "open": "Start setup"
+    },
     "statusReady": "Ready",
     "statusNotSet": "Not set"
   },
@@ -30,6 +44,6 @@
   },
   "reopen": {
     "title": "Reopen welcome guide",
-    "subtitle": "Review AI, sync, and permissions setup links again"
+    "subtitle": "Review runtime mode and permissions setup links again"
   }
 }
