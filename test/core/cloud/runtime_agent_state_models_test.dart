@@ -106,4 +106,47 @@ void main() {
     );
     expect(state.auditRefs.single['kind'], 'conversation_turn');
   });
+
+  test('parses conversation turn pagination metadata', () {
+    final state = RuntimeAgentState.fromJson(const {
+      'vault_id': 'uid_1',
+      'conversation_id': 'loop_home',
+      'conversation_turns': [],
+      'conversation_turn_page': {
+        'limit': 20,
+        'has_more_before': true,
+        'next_before_turn_id': 'turn-newest-page-start',
+        'oldest_turn_id': 'turn-oldest',
+        'newest_turn_id': 'turn-newest',
+        'total_known_turns': 42,
+      },
+      'working_set_records': [],
+      'tasks': [],
+      'memory_records': [],
+      'recurring_reminder_rules': [],
+      'approval_items': [],
+      'recent_entity_refs': [],
+      'latest_context_snapshot': null,
+      'audit_refs': [],
+    });
+
+    expect(state.conversationTurnPage.limit, 20);
+    expect(state.conversationTurnPage.hasMoreBefore, isTrue);
+    expect(
+        state.conversationTurnPage.nextBeforeTurnId, 'turn-newest-page-start');
+    expect(state.conversationTurnPage.oldestTurnId, 'turn-oldest');
+    expect(state.conversationTurnPage.newestTurnId, 'turn-newest');
+    expect(state.conversationTurnPage.totalKnownTurns, 42);
+  });
+
+  test('uses empty conversation turn pagination metadata when missing', () {
+    final state = RuntimeAgentState.empty();
+
+    expect(state.conversationTurnPage.limit, 0);
+    expect(state.conversationTurnPage.hasMoreBefore, isFalse);
+    expect(state.conversationTurnPage.nextBeforeTurnId, isEmpty);
+    expect(state.conversationTurnPage.oldestTurnId, isEmpty);
+    expect(state.conversationTurnPage.newestTurnId, isEmpty);
+    expect(state.conversationTurnPage.totalKnownTurns, 0);
+  });
 }

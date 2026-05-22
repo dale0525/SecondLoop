@@ -60,6 +60,7 @@ import 'agent_ui_acceptance_driver.dart';
 
 part 'agent_assistant_text_message.dart';
 part 'agent_conversation_attachments.dart';
+part 'agent_conversation_runtime_pagination.dart';
 part 'agent_conversation_runtime_helpers.dart';
 part 'agent_runtime_media_results.dart';
 part 'agent_conversation_widgets.dart';
@@ -82,7 +83,8 @@ final class AgentConversationPage extends StatefulWidget {
   State<AgentConversationPage> createState() => _AgentConversationPageState();
 }
 
-final class _AgentConversationPageState extends State<AgentConversationPage> {
+final class _AgentConversationPageState extends State<AgentConversationPage>
+    with _AgentConversationRuntimePagination {
   static const _blue = Color(0xFF0B5CF6);
   static const _ink = Color(0xFF101936);
   static const _muted = Color(0xFF63708A);
@@ -105,6 +107,8 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   List<Todo> _todos = const <Todo>[];
   List<MemoryPageRecord> _memoryPages = const <MemoryPageRecord>[];
   RuntimeAgentState? _runtimeAgentState;
+  RuntimeConversationTurnPage _conversationTurnPage =
+      RuntimeConversationTurnPage.empty;
   String? _pendingUserContent;
   List<_AgentMessageAttachmentView> _pendingUserAttachments =
       const <_AgentMessageAttachmentView>[];
@@ -125,6 +129,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
   final Set<String> _busyApprovalIds = <String>{};
   bool _sending = false;
   bool _thinking = false;
+  bool _loadingOlderRuntimeTurns = false;
 
   @override
   void initState() {
@@ -193,7 +198,10 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
     );
   }
 
-  Future<RuntimeAgentState> _loadRuntimeAgentState() async {
+  Future<RuntimeAgentState> _loadRuntimeAgentState({
+    String? turnBefore,
+    bool prependOlderTurns = false,
+  }) async {
     final cloudAuthScope = CloudAuthScope.maybeOf(context);
     final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
     final repository = _runtimeStateRepository();
@@ -203,9 +211,11 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
         conversationId: widget.conversation.id,
       );
     }
-    final state = await repository.fetchAgentState(
+    final state = await _fetchRuntimeAgentStatePage(
+      repository,
       vaultId: vaultId,
       conversationId: widget.conversation.id,
+      turnBefore: turnBefore,
     );
     if (mounted) {
       final projection = _runtimeMessagesFromTurns(
@@ -221,9 +231,30 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
       if (!mounted) return state;
       setState(() {
         _runtimeAgentState = state;
-        _messages = projection.messages;
-        _messageAttachmentsById = attachmentsByMessageId;
-        _messageMediaResultsById = projection.mediaResultsByMessageId;
+        _conversationTurnPage = state.conversationTurnPage;
+        if (prependOlderTurns) {
+          final existingMessageIds =
+              _messages.map((message) => message.id).toSet();
+          _messages = <Message>[
+            ...projection.messages.where(
+              (message) => existingMessageIds.add(message.id),
+            ),
+            ..._messages,
+          ];
+          _messageAttachmentsById = <String, List<_AgentMessageAttachmentView>>{
+            ...attachmentsByMessageId,
+            ..._messageAttachmentsById,
+          };
+          _messageMediaResultsById =
+              <String, List<_AgentMessageMediaResultView>>{
+            ...projection.mediaResultsByMessageId,
+            ..._messageMediaResultsById,
+          };
+        } else {
+          _messages = projection.messages;
+          _messageAttachmentsById = attachmentsByMessageId;
+          _messageMediaResultsById = projection.mediaResultsByMessageId;
+        }
         _todos = agentTodosFromRuntimeState(state);
         _memoryPages = agentMemoryPagesFromRuntimeRecords(state.memoryRecords);
         _runtimeApprovalItems = _validApprovalItems(
@@ -236,7 +267,9 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
               .toList(growable: false),
         );
       });
-      _scrollToLatest();
+      if (!prependOlderTurns) {
+        _scrollToLatest();
+      }
     }
     return state;
   }
@@ -878,21 +911,33 @@ final class _AgentConversationPageState extends State<AgentConversationPage> {
                     subtitle: '${snapshot.error}',
                   );
                 }
-                return _MessageList(
-                  controller: _scrollController,
-                  bottomKey: _messageListBottomKey,
-                  messages: _messages,
-                  todos: todos,
-                  thinking: _thinking,
-                  acceptanceCards: acceptanceCards,
-                  pendingUserContent: _pendingUserContent,
-                  streamingAnswer: _streamingAnswer,
-                  streamingReasoning: _streamingReasoning,
-                  askError: _askError,
-                  pendingUserAttachments: _pendingUserAttachments,
-                  messageAttachmentsById: _messageAttachmentsById,
-                  messageMediaResultsById: _messageMediaResultsById,
-                  onTaskViewed: _recordTaskFocus,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_conversationTurnPage.hasMoreBefore)
+                      _LoadEarlierRuntimeTurnsButton(
+                        loading: _loadingOlderRuntimeTurns,
+                        onPressed: _loadOlderRuntimeTurns,
+                      ),
+                    Expanded(
+                      child: _MessageList(
+                        controller: _scrollController,
+                        bottomKey: _messageListBottomKey,
+                        messages: _messages,
+                        todos: todos,
+                        thinking: _thinking,
+                        acceptanceCards: acceptanceCards,
+                        pendingUserContent: _pendingUserContent,
+                        streamingAnswer: _streamingAnswer,
+                        streamingReasoning: _streamingReasoning,
+                        askError: _askError,
+                        pendingUserAttachments: _pendingUserAttachments,
+                        messageAttachmentsById: _messageAttachmentsById,
+                        messageMediaResultsById: _messageMediaResultsById,
+                        onTaskViewed: _recordTaskFocus,
+                      ),
+                    ),
+                  ],
                 );
               },
             ),

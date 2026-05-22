@@ -11,6 +11,9 @@ abstract interface class RuntimeAgentStateRepository {
   Future<RuntimeAgentState> fetchAgentState({
     required String vaultId,
     required String conversationId,
+    int? turnLimit,
+    String? turnBefore,
+    String? turnOrder,
   });
 }
 
@@ -67,10 +70,16 @@ final class SecretaryRuntimeAgentStateRepository
   Future<RuntimeAgentState> fetchAgentState({
     required String vaultId,
     required String conversationId,
+    int? turnLimit,
+    String? turnBefore,
+    String? turnOrder,
   }) {
     return _client.fetchAgentState(
       vaultId,
       conversationId: conversationId,
+      turnLimit: turnLimit,
+      turnBefore: turnBefore,
+      turnOrder: turnOrder,
     );
   }
 }

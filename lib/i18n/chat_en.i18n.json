@@ -239,6 +239,7 @@
     "done": "Done",
     "conversationLoadFailed": "Conversation could not load",
     "thinkingBody": "Preparing a reviewable change. Nothing has been saved yet.",
+    "loadEarlierMessages": "Load earlier messages",
     "composerHint": "Ask, capture, search, or attach a file...",
     "attach": "Attach",
     "record": "Record",

@@ -259,10 +259,18 @@ final class SecretaryRuntimeClient {
   Future<RuntimeAgentState> fetchAgentState(
     String vaultId, {
     required String conversationId,
+    int? turnLimit,
+    String? turnBefore,
+    String? turnOrder,
   }) async {
     final query = Uri(queryParameters: <String, String>{
       if (conversationId.trim().isNotEmpty)
         'conversation_id': conversationId.trim(),
+      if (turnLimit != null) 'turn_limit': '$turnLimit',
+      if (turnBefore?.trim().isNotEmpty ?? false)
+        'turn_before': turnBefore!.trim(),
+      if (turnOrder?.trim().isNotEmpty ?? false)
+        'turn_order': turnOrder!.trim(),
     }).query;
     final response = await _apiClient.getJson(
       '/v1/runtime/vaults/$vaultId/agent-state${query.isEmpty ? '' : '?$query'}',

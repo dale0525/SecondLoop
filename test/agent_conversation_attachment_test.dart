@@ -339,6 +339,9 @@ final class _FakeRuntimeAgentStateRepository
   Future<RuntimeAgentState> fetchAgentState({
     required String vaultId,
     required String conversationId,
+    int? turnLimit,
+    String? turnBefore,
+    String? turnOrder,
   }) async {
     if (sender.sentMessages.isEmpty) {
       return RuntimeAgentState.empty(
@@ -386,6 +389,9 @@ final class _StaticRuntimeAgentStateRepository
   Future<RuntimeAgentState> fetchAgentState({
     required String vaultId,
     required String conversationId,
+    int? turnLimit,
+    String? turnBefore,
+    String? turnOrder,
   }) async =>
       state;
 }
@@ -400,6 +406,9 @@ final class _ThrowingRuntimeAgentStateRepository
   Future<RuntimeAgentState> fetchAgentState({
     required String vaultId,
     required String conversationId,
+    int? turnLimit,
+    String? turnBefore,
+    String? turnOrder,
   }) async {
     throw error;
   }

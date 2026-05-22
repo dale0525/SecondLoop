@@ -143,6 +143,9 @@ final class _FakeRuntimeAgentStateRepository
   Future<RuntimeAgentState> fetchAgentState({
     required String vaultId,
     required String conversationId,
+    int? turnLimit,
+    String? turnBefore,
+    String? turnOrder,
   }) async {
     requests.add((vaultId, conversationId));
     return state;

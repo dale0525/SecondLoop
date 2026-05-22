@@ -14,6 +14,7 @@ final class RuntimeAgentState {
     required this.recurringReminderRules,
     required this.approvalItems,
     required this.recentEntityRefs,
+    required this.conversationTurnPage,
     required this.latestContextSnapshot,
     required this.auditRefs,
   });
@@ -27,6 +28,7 @@ final class RuntimeAgentState {
   final List<Map<String, Object?>> recurringReminderRules;
   final List<Map<String, Object?>> approvalItems;
   final List<Map<String, Object?>> recentEntityRefs;
+  final RuntimeConversationTurnPage conversationTurnPage;
   final RuntimeContextSnapshot? latestContextSnapshot;
   final List<Map<String, Object?>> auditRefs;
 
@@ -44,6 +46,7 @@ final class RuntimeAgentState {
       recurringReminderRules: const <Map<String, Object?>>[],
       approvalItems: const <Map<String, Object?>>[],
       recentEntityRefs: const <Map<String, Object?>>[],
+      conversationTurnPage: RuntimeConversationTurnPage.empty,
       latestContextSnapshot: null,
       auditRefs: const <Map<String, Object?>>[],
     );
@@ -70,10 +73,53 @@ final class RuntimeAgentState {
       ),
       approvalItems: _parseObjectList(json['approval_items']),
       recentEntityRefs: _parseObjectList(json['recent_entity_refs']),
+      conversationTurnPage: RuntimeConversationTurnPage.fromJson(
+        _parseObjectMap(json['conversation_turn_page']),
+      ),
       latestContextSnapshot: _parseContextSnapshot(
         json['latest_context_snapshot'],
       ),
       auditRefs: _parseObjectList(json['audit_refs']),
+    );
+  }
+}
+
+@immutable
+final class RuntimeConversationTurnPage {
+  const RuntimeConversationTurnPage({
+    required this.limit,
+    required this.hasMoreBefore,
+    required this.nextBeforeTurnId,
+    required this.oldestTurnId,
+    required this.newestTurnId,
+    required this.totalKnownTurns,
+  });
+
+  static const empty = RuntimeConversationTurnPage(
+    limit: 0,
+    hasMoreBefore: false,
+    nextBeforeTurnId: '',
+    oldestTurnId: '',
+    newestTurnId: '',
+    totalKnownTurns: 0,
+  );
+
+  final int limit;
+  final bool hasMoreBefore;
+  final String nextBeforeTurnId;
+  final String oldestTurnId;
+  final String newestTurnId;
+  final int totalKnownTurns;
+
+  factory RuntimeConversationTurnPage.fromJson(Map<String, Object?> json) {
+    if (json.isEmpty) return RuntimeConversationTurnPage.empty;
+    return RuntimeConversationTurnPage(
+      limit: _parseInt(json['limit']) ?? 0,
+      hasMoreBefore: _parseBool(json['has_more_before']) ?? false,
+      nextBeforeTurnId: _parseString(json['next_before_turn_id']) ?? '',
+      oldestTurnId: _parseString(json['oldest_turn_id']) ?? '',
+      newestTurnId: _parseString(json['newest_turn_id']) ?? '',
+      totalKnownTurns: _parseInt(json['total_known_turns']) ?? 0,
     );
   }
 }
@@ -237,6 +283,16 @@ int? _parseInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   if (value is String) return int.tryParse(value);
+  return null;
+}
+
+bool? _parseBool(Object? value) {
+  if (value is bool) return value;
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'true') return true;
+    if (normalized == 'false') return false;
+  }
   return null;
 }
 

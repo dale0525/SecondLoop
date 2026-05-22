@@ -239,6 +239,7 @@
     "done": "已完成",
     "conversationLoadFailed": "对话加载失败",
     "thinkingBody": "正在准备可审核的变更，尚未保存任何内容。",
+    "loadEarlierMessages": "加载更早消息",
     "composerHint": "提问、记录、搜索或添加文件…",
     "attach": "添加附件",
     "record": "录音",
