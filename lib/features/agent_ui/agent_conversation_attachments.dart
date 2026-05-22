@@ -169,7 +169,15 @@ List<_AgentMessageAttachmentView> _messageAttachmentsFromRuntimeTurn(
               .toList(growable: false),
         )
       : const <_AgentMessageAttachmentView>[];
-  if (parsed.isNotEmpty) return parsed;
+  if (parsed.isNotEmpty) {
+    return parsed.map((attachment) {
+      final local = localAttachmentsByRef[attachment.id.trim()];
+      if (attachment.bytes == null && local?.bytes != null) {
+        return attachment.copyWith(bytes: local!.bytes);
+      }
+      return attachment;
+    }).toList(growable: false);
+  }
   return turn.attachmentRefs
       .map((ref) {
         final normalized = ref.trim();
