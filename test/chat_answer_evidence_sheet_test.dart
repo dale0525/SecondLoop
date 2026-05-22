@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/chat/chat_answer_evidence_models.dart';
 import 'package:secondloop/features/chat/chat_answer_evidence_sheet.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 
 import 'test_i18n.dart';
 
@@ -55,6 +56,119 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(openedDirectSource, isEmpty);
+  });
+
+  testWidgets(
+      'ChatAnswerEvidencePanel localizes server display labels in Chinese',
+      (tester) async {
+    LocaleSettings.setLocale(AppLocale.zhCn);
+    addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: ChatAnswerEvidencePanel(
+            evidence: const ChatAnswerEvidence(
+              directSources: [
+                ChatAnswerEvidenceDirectSource(
+                  id: 'message:history-1',
+                  href: 'secondloop://message/history-1',
+                  sourceType: 'message',
+                  label: 'History',
+                  sourceTypeLabel: 'Chat message',
+                  scopeLabel: 'This thread',
+                  confidenceLabel: 'High relevance',
+                  title: 'Kickoff notes',
+                  snippet: 'Kickoff moved to Friday afternoon.',
+                  highlightedText: 'Kickoff moved to Friday afternoon.',
+                  createdAtMs: 1,
+                  updatedAtMs: 2,
+                  documentId: null,
+                  unitId: null,
+                ),
+                ChatAnswerEvidenceDirectSource(
+                  id: 'web:release-source',
+                  href: 'https://example.com/release-source',
+                  sourceType: 'web_research',
+                  label: 'Web',
+                  sourceTypeLabel: 'Web research',
+                  scopeLabel: 'Runtime web research',
+                  confidenceLabel: 'Cited source',
+                  title: 'Release source',
+                  snippet: 'The release note source.',
+                  highlightedText: 'The release note source.',
+                  createdAtMs: 3,
+                  updatedAtMs: 4,
+                  documentId: null,
+                  unitId: null,
+                ),
+              ],
+            ),
+            onOpenDirectSource: (_) async => false,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('聊天消息'), findsOneWidget);
+    expect(find.text('当前线程'), findsOneWidget);
+    expect(find.text('高相关性'), findsOneWidget);
+    expect(find.text('网页搜索'), findsOneWidget);
+    expect(find.text('运行时网页搜索'), findsOneWidget);
+    expect(find.text('已引用来源'), findsOneWidget);
+    expect(find.text('Chat message'), findsNothing);
+    expect(find.text('This thread'), findsNothing);
+    expect(find.text('High relevance'), findsNothing);
+    expect(find.text('Web research'), findsNothing);
+    expect(find.text('Runtime web research'), findsNothing);
+    expect(find.text('Cited source'), findsNothing);
+  });
+
+  testWidgets('ChatAnswerEvidencePanel shows runtime retrieval source labels',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: ChatAnswerEvidencePanel(
+            evidence: const ChatAnswerEvidence(
+              directSources: [
+                ChatAnswerEvidenceDirectSource(
+                  id: 'conversation:turn-2026-05',
+                  href: 'secondloop://conversation/turn-2026-05',
+                  sourceType: 'conversation_turn',
+                  label: 'Conversation',
+                  sourceTypeLabel: 'Conversation',
+                  scopeLabel: 'Runtime retrieval',
+                  confidenceLabel: 'high_relevance',
+                  title: 'Contract discussion',
+                  snippet: 'Nimbus contract NIM-2026-05 was discussed in chat.',
+                  highlightedText:
+                      'Nimbus contract NIM-2026-05 was discussed in chat.',
+                  createdAtMs: 1,
+                  updatedAtMs: 2,
+                  documentId: null,
+                  unitId: null,
+                ),
+              ],
+            ),
+            onOpenDirectSource: (_) async => false,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conversation'), findsOneWidget);
+    expect(find.text('Runtime retrieval'), findsOneWidget);
+    expect(
+      find.text('Nimbus contract NIM-2026-05 was discussed in chat.'),
+      findsOneWidget,
+    );
+    expect(find.text('conversation_turn'), findsNothing);
+    expect(find.text('runtime_retrieval'), findsNothing);
   });
 
   testWidgets(

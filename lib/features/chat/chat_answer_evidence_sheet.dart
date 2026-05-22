@@ -235,10 +235,20 @@ String _localizedSourceTypeLabel(
   BuildContext context,
   ChatAnswerEvidenceDirectSource item,
 ) {
-  switch (item.sourceTypeLabel?.trim().toLowerCase()) {
+  for (final rawLabel in [item.sourceTypeLabel, item.sourceType]) {
+    final localized = _localizedSourceTypeLabelValue(context, rawLabel);
+    if (localized != null) return localized;
+  }
+  return item.displaySourceTypeLabel;
+}
+
+String? _localizedSourceTypeLabelValue(BuildContext context, String? rawLabel) {
+  switch (_serverLabelKey(rawLabel)) {
     case 'item':
+    case 'todo':
       return context.t.chat.answerEvidence.sourceTypeLabels.item;
     case 'chat_message':
+    case 'message':
       return context.t.chat.answerEvidence.sourceTypeLabels.chatMessage;
     case 'attachment':
       return context.t.chat.answerEvidence.sourceTypeLabels.attachment;
@@ -255,31 +265,62 @@ String _localizedSourceTypeLabel(
       return context.t.chat.answerEvidence.sourceTypeLabels.attachmentMetadata;
     case 'attachment_excerpt':
       return context.t.chat.answerEvidence.sourceTypeLabels.attachmentExcerpt;
+    case 'conversation':
+    case 'conversation_turn':
+      return context.t.chat.answerEvidence.sourceTypeLabels.conversation;
+    case 'document':
+      return context.t.chat.answerEvidence.sourceTypeLabels.document;
+    case 'transcript':
+      return context.t.chat.answerEvidence.sourceTypeLabels.transcript;
+    case 'summary':
+      return context.t.chat.answerEvidence.sourceTypeLabels.summary;
+    case 'working_set':
+    case 'working_set_fragment':
+      return context.t.chat.answerEvidence.sourceTypeLabels.workingSetFragment;
+    case 'runtime_context':
+      return context.t.chat.answerEvidence.sourceTypeLabels.runtimeContext;
+    case 'web_research':
+      return context.t.chat.answerEvidence.sourceTypeLabels.webResearch;
     default:
-      return item.displaySourceTypeLabel;
+      return null;
   }
 }
 
 String _localizedScopeLabel(BuildContext context, String rawScope) {
-  switch (rawScope.trim().toLowerCase()) {
+  switch (_serverLabelKey(rawScope)) {
     case 'this_thread':
       return context.t.chat.answerEvidence.scopeLabels.thisThread;
+    case 'runtime_retrieval':
+      return context.t.chat.answerEvidence.scopeLabels.runtimeRetrieval;
+    case 'runtime_web_research':
+      return context.t.chat.answerEvidence.scopeLabels.runtimeWebResearch;
     default:
       return rawScope.trim();
   }
 }
 
 String _localizedConfidenceLabel(BuildContext context, String rawConfidence) {
-  switch (rawConfidence.trim().toLowerCase()) {
+  switch (_serverLabelKey(rawConfidence)) {
     case 'high_relevance':
       return context.t.chat.answerEvidence.confidenceLabels.highRelevance;
     case 'relevant':
       return context.t.chat.answerEvidence.confidenceLabels.relevant;
     case 'possible_match':
       return context.t.chat.answerEvidence.confidenceLabels.possibleMatch;
+    case 'cited_source':
+      return context.t.chat.answerEvidence.confidenceLabels.citedSource;
     default:
       return rawConfidence.trim();
   }
+}
+
+String _serverLabelKey(String? value) {
+  final normalized = value?.trim().toLowerCase() ?? '';
+  if (normalized.isEmpty) return '';
+  return normalized
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'_+'), '_')
+      .replaceAll(RegExp(r'^_|_$'), '');
 }
 
 String _messageTimestampLabel(BuildContext context, int? createdAtMs) {

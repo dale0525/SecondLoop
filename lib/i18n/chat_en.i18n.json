@@ -391,15 +391,25 @@
       "attachmentText": "Attachment text",
       "attachmentSummary": "Attachment summary",
       "attachmentMetadata": "Attachment metadata",
-      "attachmentExcerpt": "Attachment excerpt"
+      "attachmentExcerpt": "Attachment excerpt",
+      "conversation": "Conversation",
+      "document": "Document",
+      "transcript": "Transcript",
+      "summary": "Summary",
+      "workingSetFragment": "Working set",
+      "runtimeContext": "Runtime context",
+      "webResearch": "Web research"
     },
     "scopeLabels": {
-      "thisThread": "This thread"
+      "thisThread": "This thread",
+      "runtimeRetrieval": "Runtime retrieval",
+      "runtimeWebResearch": "Runtime web research"
     },
     "confidenceLabels": {
       "highRelevance": "High relevance",
       "relevant": "Relevant",
-      "possibleMatch": "Possible match"
+      "possibleMatch": "Possible match",
+      "citedSource": "Cited source"
     }
   },
   "secretary": {

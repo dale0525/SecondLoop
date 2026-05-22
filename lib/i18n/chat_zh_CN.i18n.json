@@ -391,15 +391,25 @@
       "attachmentText": "附件文本",
       "attachmentSummary": "附件摘要",
       "attachmentMetadata": "附件元数据",
-      "attachmentExcerpt": "附件片段"
+      "attachmentExcerpt": "附件片段",
+      "conversation": "对话",
+      "document": "文档",
+      "transcript": "转录",
+      "summary": "摘要",
+      "workingSetFragment": "工作集",
+      "runtimeContext": "运行时上下文",
+      "webResearch": "网页搜索"
     },
     "scopeLabels": {
-      "thisThread": "当前线程"
+      "thisThread": "当前线程",
+      "runtimeRetrieval": "运行时检索",
+      "runtimeWebResearch": "运行时网页搜索"
     },
     "confidenceLabels": {
       "highRelevance": "高相关性",
       "relevant": "相关",
-      "possibleMatch": "可能匹配"
+      "possibleMatch": "可能匹配",
+      "citedSource": "已引用来源"
     }
   },
   "secretary": {
