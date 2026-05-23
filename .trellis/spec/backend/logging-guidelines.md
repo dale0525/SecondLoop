@@ -1,51 +1,43 @@
 # Logging Guidelines
 
-> How logging is done in this project.
+Logging is intentionally limited in the app. Prefer persisted event records for
+user-visible diagnostics and `debugPrint` only for best-effort local diagnostics.
 
----
+## Persisted Event Logs
 
-## Overview
+Use typed records when users or support flows need recent diagnostic history.
+The update flow stores bounded, pruned `UpdateEventRecord` entries in
+`SharedPreferences`.
 
-<!--
-Document your project's logging conventions here.
+Reference files:
 
-Questions to answer:
-- What logging library do you use?
-- What are the log levels and when to use each?
-- What should be logged?
-- What should NOT be logged (PII, secrets)?
--->
+- `lib/core/update/update_event_log.dart`
+- `lib/core/update/app_update_service.dart`
+- `test/update_event_log_test.dart`
+- `test/support/app_update_service_test_support.dart`
 
-(To be filled by the team)
+## Debug Diagnostics
 
----
+- Use `debugPrint` for best-effort cleanup or platform diagnostic messages that
+  should not affect behavior.
+- Include a short stable prefix so logs can be searched, such as
+  `sync replace-local:` or `cloud sync switch:`.
+- Do not log bearer tokens, refresh tokens, API keys, secure blob payloads,
+  vault contents, private runtime internals, or private service paths.
 
-## Log Levels
+Reference files:
 
-<!-- When to use each level: debug, info, warn, error -->
+- `lib/core/sync/cloud_sync_switch_prompt_gate.dart`
+- `lib/core/sync/vault_replace_local_guard.dart`
+- `lib/core/update/auto_upgrade_gate.dart`
 
-(To be filled by the team)
+## Tests
 
----
+When logging behavior matters, inject an in-memory logger rather than scraping
+console output.
 
-## Structured Logging
+Reference files:
 
-<!-- Log format, required fields -->
-
-(To be filled by the team)
-
----
-
-## What to Log
-
-<!-- Important events to log -->
-
-(To be filled by the team)
-
----
-
-## What NOT to Log
-
-<!-- Sensitive data, PII, secrets -->
-
-(To be filled by the team)
+- `test/app_update_service_test.dart`
+- `test/app_update_service_check_test.dart`
+- `test/support/app_update_service_test_support.dart`

@@ -1,59 +1,63 @@
 # Component Guidelines
 
-> How components are built in this project.
+Use Flutter widgets that are small enough to test and review. Prefer explicit
+constructor dependencies over hidden globals, and keep orchestration in the
+owning page.
 
----
+## Widget Shape
 
-## Overview
+- Public pages are usually `StatefulWidget` when they own controllers,
+  async state, or listeners.
+- Private leaf widgets are often `StatelessWidget` or private stateful dialogs.
+- Split repeated sections into private widgets in the same file first. Move them
+  to a sibling file when the owning file is growing or the widget is reused.
 
-<!--
-Document your project's component conventions here.
+Reference files:
 
-Questions to answer:
-- What component patterns do you use?
-- How are props defined?
-- How do you handle composition?
-- What accessibility standards apply?
--->
+- `lib/features/settings/cloud_account_panel.dart`
+- `lib/features/settings/cloud_account_auth_section.dart`
+- `lib/features/agent_ui/agent_conversation_widgets.dart`
+- `lib/features/notes/note_editor_page.dart`
 
-(To be filled by the team)
+## Design Tokens And Shared Controls
 
----
+- Use existing tokens and primitives before adding new styling systems:
+  `AppShellPalette`, `AgentDesignTokens`, `SlButton`, `SettingsSection`,
+  `SettingsActionBar`, and `SettingsInlineMessage`.
+- Use Material icons and `IconButton`/`FilledButton.icon` where the existing UI
+  already uses them.
+- Keep settings pages composed from settings sections and action bars rather
+  than one-off layout primitives.
 
-## Component Structure
+Reference files:
 
-<!-- Standard structure of a component file -->
+- `lib/app/app_shell_style.dart`
+- `lib/features/settings/settings_ui.dart`
+- `lib/features/settings/self_managed_setup_page.dart`
+- `lib/features/agent_ui/agent_conversation_widgets.dart`
 
-(To be filled by the team)
+## Stable Test Handles
 
----
+Add `ValueKey` values for controls, cards, dialogs, and list items that tests or
+manual QA need to locate. Use stable semantic names rather than visual copy.
 
-## Props Conventions
+Reference files:
 
-<!-- How props should be defined and typed -->
+- `lib/features/agent_ui/agent_conversation_widgets.dart`
+- `lib/features/settings/self_managed_setup_page.dart`
+- `lib/features/notes/note_editor_page.dart`
+- `test/agent_conversation_runtime_approval_test.dart`
+- `test/agent_ui/agent_ui_acceptance_driver_test.dart`
 
-(To be filled by the team)
+## User-Facing Copy
 
----
+Prefer generated i18n access through `context.t` for user-facing copy in app
+surfaces. Some legacy strings remain, but new reusable UI should not hard-code
+localizable text without a reason.
 
-## Styling Patterns
+Reference files:
 
-<!-- How styles are applied (CSS modules, styled-components, Tailwind, etc.) -->
-
-(To be filled by the team)
-
----
-
-## Accessibility
-
-<!-- A11y requirements and patterns -->
-
-(To be filled by the team)
-
----
-
-## Common Mistakes
-
-<!-- Component-related mistakes your team has made -->
-
-(To be filled by the team)
+- `lib/i18n/strings.g.dart`
+- `lib/features/settings/cloud_account_panel.dart`
+- `lib/features/notes/note_editor_page.dart`
+- `lib/features/agent_ui/agent_conversation_widgets.dart`

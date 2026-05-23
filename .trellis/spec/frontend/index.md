@@ -1,39 +1,17 @@
-# Frontend Development Guidelines
+# Flutter UI Guidelines
 
-> Best practices for frontend development in this project.
+This directory documents the current Flutter UI patterns in the app. It should
+not describe React, web-server routes, or private backend implementation
+details.
 
----
+## Guides
 
-## Overview
+| Guide | Scope |
+|-------|-------|
+| [Directory Structure](./directory-structure.md) | App shell, feature folders, UI primitives, web entry points |
+| [Component Guidelines](./component-guidelines.md) | Widget composition, design tokens, keys, i18n, responsive layout |
+| [State Management](./state-management.md) | Inherited scopes, controllers, form fields, async busy state |
+| [Type Safety](./type-safety.md) | Dart model, enum, JSON, and callback conventions used by UI code |
+| [Quality Guidelines](./quality-guidelines.md) | Widget tests, HTTP client tests, accessibility handles, verification |
 
-This directory contains guidelines for frontend development. Fill in each file with your project's specific conventions.
-
----
-
-## Guidelines Index
-
-| Guide | Description | Status |
-|-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
-| [Component Guidelines](./component-guidelines.md) | Component patterns, props, composition | To fill |
-| [Hook Guidelines](./hook-guidelines.md) | Custom hooks, data fetching patterns | To fill |
-| [State Management](./state-management.md) | Local state, global state, server state | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Type Safety](./type-safety.md) | Type patterns, validation | To fill |
-
----
-
-## How to Fill These Guidelines
-
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
-
----
-
-**Language**: All documentation should be written in **English**.
+Keep rules concrete and backed by files in `lib/` or `test/`.
