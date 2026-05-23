@@ -6,7 +6,9 @@ abstract final class AgentOperatingSystemTokens {
   static const surfaceContainer = Color(0xFFECEEF0);
   static const surfaceContainerLow = Color(0xFFF2F4F6);
   static const surfaceContainerHigh = Color(0xFFE6E8EA);
+  static const surfaceContainerHighest = Color(0xFFE0E3E5);
   static const outlineVariant = Color(0xFFC6C6CD);
+  static const outline = Color(0xFF76777D);
   static const onSurface = Color(0xFF191C1E);
   static const onSurfaceVariant = Color(0xFF45464D);
   static const muted = Color(0xFF75859D);

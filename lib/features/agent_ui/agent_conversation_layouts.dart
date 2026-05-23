@@ -80,12 +80,17 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
     required List<Widget> acceptanceCards,
     required List<Todo> todos,
   }) {
+    final webResearchActive = _hasOperatingWebResearchState(
+      runtimeState: _runtimeAgentState,
+      messages: _messages,
+    );
     return ColoredBox(
       color: AgentOperatingSystemTokens.background,
       child: Column(
         children: [
           _OperatingTopAppBar(
             pendingApprovals: _runtimeApprovalItems.length,
+            webResearchActive: webResearchActive,
           ),
           Expanded(
             child: FutureBuilder<List<Message>>(
@@ -140,6 +145,8 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
             controller: _controller,
             focusNode: _focusNode,
             busy: _sending || _thinking,
+            placeholder: webResearchActive ? 'Ask a follow-up...' : null,
+            followUpMode: webResearchActive,
             attachments: _pendingAttachmentDrafts,
             onAttach: () => unawaited(_pickAttachments()),
             onRemoveAttachment: _removePendingAttachment,
@@ -182,9 +189,13 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
 }
 
 final class _OperatingTopAppBar extends StatelessWidget {
-  const _OperatingTopAppBar({required this.pendingApprovals});
+  const _OperatingTopAppBar({
+    required this.pendingApprovals,
+    required this.webResearchActive,
+  });
 
   final int pendingApprovals;
+  final bool webResearchActive;
 
   @override
   Widget build(BuildContext context) {
@@ -203,24 +214,31 @@ final class _OperatingTopAppBar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                ClipOval(
-                  child: Image.asset(
-                    'assets/icon/tray_icon.png',
-                    width: 32,
-                    height: 32,
-                    fit: BoxFit.cover,
+                if (!webResearchActive) ...[
+                  ClipOval(
+                    child: Image.asset(
+                      'assets/icon/tray_icon.png',
+                      width: 32,
+                      height: 32,
+                      fit: BoxFit.cover,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
                   child: Text(
-                    'SecondLoop Agent',
+                    webResearchActive ? 'SecondLoop' : 'SecondLoop Agent',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AgentOperatingSystemTokens.headlineMd,
                   ),
                 ),
-                const _OperatingModeChip(),
+                if (webResearchActive) ...[
+                  const _OperatingPrimaryModeChip(),
+                  const SizedBox(width: 6),
+                  const _OperatingWebResearchModeChip(),
+                ] else
+                  const _OperatingModeChip(),
                 const SizedBox(width: 8),
                 IconButton(
                   tooltip: 'Notifications',
@@ -238,9 +256,88 @@ final class _OperatingTopAppBar extends StatelessWidget {
                     color: AgentOperatingSystemTokens.onSurfaceVariant,
                   ),
                 ),
+                if (webResearchActive) ...[
+                  const SizedBox(width: 4),
+                  ClipOval(
+                    child: Image.asset(
+                      'assets/icon/tray_icon.png',
+                      width: 32,
+                      height: 32,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _OperatingPrimaryModeChip extends StatelessWidget {
+  const _OperatingPrimaryModeChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius:
+            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          'Managed Pro',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            height: 1.2,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _OperatingWebResearchModeChip extends StatelessWidget {
+  const _OperatingWebResearchModeChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AgentOperatingSystemTokens.surfaceContainerHigh,
+        borderRadius:
+            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
+        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.public_rounded,
+              size: 13,
+              color: AgentOperatingSystemTokens.onSurfaceVariant,
+            ),
+            SizedBox(width: 4),
+            Text(
+              'web-research',
+              style: TextStyle(
+                color: AgentOperatingSystemTokens.onSurfaceVariant,
+                fontSize: 10,
+                height: 1.2,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -348,19 +445,44 @@ final class _OperatingMessageList extends StatelessWidget {
     var renderedActionCards = false;
     final processingLabels = _processingLabels();
     String? sourceUserMessageId;
+    var renderedWebResearch = false;
+    final suppressContextStrip = _hasOperatingWebResearchState(
+      runtimeState: runtimeState,
+      messages: messages,
+    );
+    final turnsById = <String, RuntimeConversationTurn>{
+      for (final turn in runtimeState?.conversationTurns ??
+          const <RuntimeConversationTurn>[])
+        if (turn.turnId.trim().isNotEmpty) turn.turnId: turn,
+    };
 
     for (var index = 0; index < messages.length; index++) {
       final message = messages[index];
       final next = index + 1 < messages.length ? messages[index + 1] : null;
       if (message.role == 'assistant') {
+        final runtimeTurn = turnsById[message.id];
+        final isWebResearch =
+            _isOperatingWebResearchMessage(message, runtimeTurn);
         children.add(
-          _OperatingAssistantBubble(
-            content: message.content,
-            messageId: message.id,
-            mediaResults: messageMediaResultsById[message.id] ??
-                const <_AgentMessageMediaResultView>[],
-          ),
+          isWebResearch
+              ? _OperatingAssistantResponse(
+                  message: message,
+                  runtimeTurn: runtimeTurn,
+                  contextSnapshot: runtimeState?.latestContextSnapshot,
+                  isFollowUpResearch: renderedWebResearch,
+                  mediaResults: messageMediaResultsById[message.id] ??
+                      const <_AgentMessageMediaResultView>[],
+                )
+              : _OperatingAssistantBubble(
+                  content: message.content,
+                  messageId: message.id,
+                  mediaResults: messageMediaResultsById[message.id] ??
+                      const <_AgentMessageMediaResultView>[],
+                ),
         );
+        if (isWebResearch) {
+          renderedWebResearch = true;
+        }
         final createdTaskCards =
             _createdTaskCards(sourceUserMessageId, message.id);
         sourceUserMessageId = null;
@@ -373,7 +495,9 @@ final class _OperatingMessageList extends StatelessWidget {
             children.add(_OperatingActionCardGrid(children: actionCards));
             renderedActionCards = true;
           }
-          children.add(_OperatingContextStrip(state: runtimeState));
+          if (!suppressContextStrip) {
+            children.add(_OperatingContextStrip(state: runtimeState));
+          }
         } else {
           children.addAll(createdTaskCards);
         }

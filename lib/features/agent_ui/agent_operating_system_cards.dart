@@ -484,6 +484,8 @@ final class _OperatingComposer extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.busy,
+    required this.placeholder,
+    required this.followUpMode,
     required this.attachments,
     required this.onAttach,
     required this.onRemoveAttachment,
@@ -493,6 +495,8 @@ final class _OperatingComposer extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
+  final String? placeholder;
+  final bool followUpMode;
   final List<AttachmentDraftPayload> attachments;
   final VoidCallback onAttach;
   final ValueChanged<String> onRemoveAttachment;
@@ -500,6 +504,18 @@ final class _OperatingComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (followUpMode) {
+      return _OperatingFollowUpComposer(
+        controller: controller,
+        focusNode: focusNode,
+        busy: busy,
+        placeholder: placeholder ?? 'Ask a follow-up...',
+        attachments: attachments,
+        onAttach: onAttach,
+        onRemoveAttachment: onRemoveAttachment,
+        onSend: onSend,
+      );
+    }
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.fromLTRB(16, 4, 16, 16),
@@ -588,6 +604,145 @@ final class _OperatingComposer extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _OperatingFollowUpComposer extends StatelessWidget {
+  const _OperatingFollowUpComposer({
+    required this.controller,
+    required this.focusNode,
+    required this.busy,
+    required this.placeholder,
+    required this.attachments,
+    required this.onAttach,
+    required this.onRemoveAttachment,
+    required this.onSend,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool busy;
+  final String placeholder;
+  final List<AttachmentDraftPayload> attachments;
+  final VoidCallback onAttach;
+  final ValueChanged<String> onRemoveAttachment;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AgentOperatingSystemTokens.surface,
+        border: Border(
+          top: BorderSide(color: AgentOperatingSystemTokens.outlineVariant),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (attachments.isNotEmpty) ...[
+              _AttachmentDraftStrip(
+                attachments: attachments,
+                onRemoveAttachment: onRemoveAttachment,
+              ),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                IconButton(
+                  key: const ValueKey('chat_attach'),
+                  tooltip: 'Attach',
+                  onPressed: busy ? null : onAttach,
+                  icon: const Icon(
+                    Icons.add_circle_outline_rounded,
+                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AgentOperatingSystemTokens.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(
+                        AgentOperatingSystemTokens.radiusLg,
+                      ),
+                      border: Border.all(
+                        color: AgentOperatingSystemTokens.outlineVariant,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            key: const ValueKey('chat_input'),
+                            controller: controller,
+                            focusNode: focusNode,
+                            minLines: 1,
+                            maxLines: 4,
+                            textInputAction: TextInputAction.newline,
+                            decoration: InputDecoration(
+                              hintText: placeholder,
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
+                            style: AgentOperatingSystemTokens.bodyMd.copyWith(
+                              color: AgentOperatingSystemTokens.onSurface,
+                            ),
+                          ),
+                        ),
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: controller,
+                          builder: (context, value, child) {
+                            final enabled = !busy &&
+                                (value.text.trim().isNotEmpty ||
+                                    attachments.isNotEmpty);
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: SizedBox.square(
+                                dimension: 32,
+                                child: FilledButton(
+                                  key: const ValueKey('chat_send'),
+                                  style: FilledButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    backgroundColor:
+                                        AgentOperatingSystemTokens.secondary,
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor:
+                                        AgentOperatingSystemTokens
+                                            .surfaceContainerHigh,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        AgentOperatingSystemTokens.radiusLg,
+                                      ),
+                                    ),
+                                  ),
+                                  onPressed: enabled ? onSend : null,
+                                  child: const Icon(
+                                    Icons.arrow_upward_rounded,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
