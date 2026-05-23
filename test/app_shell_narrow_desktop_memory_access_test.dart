@@ -17,7 +17,7 @@ void main() {
     UpdateBadgePrefs.resetForTests();
   });
 
-  testWidgets('narrow desktop AppShell exposes Memory navigation',
+  testWidgets('narrow desktop AppShell exposes Tasks navigation',
       (tester) async {
     final previousPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -45,7 +45,7 @@ void main() {
         find.byKey(const ValueKey('app_shell_bottom_nav')),
         findsOneWidget,
       );
-      expect(find.text('Memory'), findsOneWidget);
+      expect(find.text('Tasks'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = previousPlatform;
       await tester.binding.setSurfaceSize(null);

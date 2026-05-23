@@ -43,10 +43,10 @@ void main() {
 
     expect(find.byKey(const ValueKey('app_shell_sidebar')), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
-    expect(find.text('Conversation'), findsOneWidget);
-    expect(find.text('Notes'), findsOneWidget);
-    expect(find.text('Memory'), findsOneWidget);
-    expect(find.text('Review'), findsOneWidget);
+    expect(find.text('Briefing'), findsOneWidget);
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.text('Vault'), findsOneWidget);
+    expect(find.text('Tasks'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
   });
 
@@ -82,13 +82,13 @@ void main() {
         find.byKey(const ValueKey('app_shell_bottom_nav')),
         findsOneWidget,
       );
-      expect(find.text('Conversation'), findsOneWidget);
-      expect(find.text('Notes'), findsOneWidget);
-      expect(find.text('Memory'), findsOneWidget);
-      expect(find.text('Review'), findsOneWidget);
+      expect(find.text('Briefing'), findsOneWidget);
+      expect(find.text('Chat'), findsOneWidget);
+      expect(find.text('Vault'), findsOneWidget);
+      expect(find.text('Tasks'), findsOneWidget);
       expect(find.text('Settings'), findsOneWidget);
 
-      await tester.tap(find.text('Review'));
+      await tester.tap(find.text('Briefing'));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('agent_review_tab')), findsOneWidget);

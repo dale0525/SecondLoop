@@ -16,3 +16,24 @@ abstract final class AppShellPalette {
   static const soft = Color(0xFFF7F9FC);
   static const selected = Color(0xFFEAF1FF);
 }
+
+final class AppShellLayoutScope extends InheritedWidget {
+  const AppShellLayoutScope({
+    required this.desktopWorkbench,
+    required super.child,
+    super.key,
+  });
+
+  final bool desktopWorkbench;
+
+  static bool? desktopWorkbenchOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<AppShellLayoutScope>()
+        ?.desktopWorkbench;
+  }
+
+  @override
+  bool updateShouldNotify(AppShellLayoutScope oldWidget) {
+    return oldWidget.desktopWorkbench != desktopWorkbench;
+  }
+}

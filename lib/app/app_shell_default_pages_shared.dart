@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/backend/app_backend.dart';
 import '../core/session/session_scope.dart';
 import '../features/agent_ui/agent_conversation_page.dart';
-import '../features/memory/memory_page.dart';
+import '../features/agent_ui/agent_task_summary.dart';
 import '../features/notes/notes_home_page.dart';
 import '../features/review/review_page.dart';
 import '../features/settings/agent_settings_page.dart';
@@ -35,7 +35,7 @@ Widget buildSharedDefaultMemoryTab(
   BuildContext context, {
   required bool isActive,
 }) {
-  return const MemoryPage();
+  return const AgentTasksPage();
 }
 
 Widget buildSharedDefaultReviewTab(

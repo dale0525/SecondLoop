@@ -47,6 +47,7 @@ import '../conversation_cards/media_summary_card.dart';
 import '../conversation_cards/research_brief_card.dart';
 import '../conversation_context/conversation_context_rail.dart';
 import '../chat/chat_answer_citation_controller.dart';
+import '../chat/chat_answer_evidence_models.dart';
 import '../chat/chat_answer_evidence_parser.dart';
 import '../chat/chat_assistant_message_footer.dart';
 import '../chat/chat_markdown_link_handler.dart';
@@ -56,6 +57,7 @@ import '../chat/message_viewer_page.dart';
 import 'agent_design_tokens.dart';
 import 'agent_conversation_send.dart';
 import 'agent_status_chip.dart';
+import 'agent_operating_system_tokens.dart';
 import 'agent_task_summary.dart';
 import 'agent_ui_acceptance_driver.dart';
 
@@ -64,6 +66,10 @@ part 'agent_conversation_attachments.dart';
 part 'agent_conversation_runtime_pagination.dart';
 part 'agent_conversation_runtime_helpers.dart';
 part 'agent_runtime_media_results.dart';
+part 'agent_conversation_layouts.dart';
+part 'agent_desktop_workbench_layout.dart';
+part 'agent_desktop_workbench_primitives.dart';
+part 'agent_operating_system_cards.dart';
 part 'agent_conversation_widgets.dart';
 
 final class AgentConversationPage extends StatefulWidget {
@@ -212,12 +218,35 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
         conversationId: widget.conversation.id,
       );
     }
-    final state = await _fetchRuntimeAgentStatePage(
-      repository,
-      vaultId: vaultId,
-      conversationId: widget.conversation.id,
-      turnBefore: turnBefore,
-    );
+    late final RuntimeAgentState state;
+    try {
+      state = await _fetchRuntimeAgentStatePage(
+        repository,
+        vaultId: vaultId,
+        conversationId: widget.conversation.id,
+        turnBefore: turnBefore,
+      );
+    } catch (_) {
+      state = RuntimeAgentState.empty(
+        vaultId: vaultId,
+        conversationId: widget.conversation.id,
+      );
+      if (mounted) {
+        setState(() {
+          _runtimeAgentState = state;
+          _conversationTurnPage = RuntimeConversationTurnPage.empty;
+          _messages = const <Message>[];
+          _todos = const <Todo>[];
+          _memoryPages = const <MemoryPageRecord>[];
+          _runtimeApprovalItems = const <SecretaryRuntimeApprovalItem>[];
+          _messageAttachmentsById =
+              const <String, List<_AgentMessageAttachmentView>>{};
+          _messageMediaResultsById =
+              const <String, List<_AgentMessageMediaResultView>>{};
+        });
+      }
+      return state;
+    }
     if (mounted) {
       final projection = _runtimeMessagesFromTurns(
         state.conversationTurns,
@@ -851,148 +880,29 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
           color: _soft,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final showContext = constraints.maxWidth >= 680;
-              final contextWidth = constraints.maxWidth < 900 ? 260.0 : 320.0;
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: _buildConversationPane(
-                      context,
-                      acceptanceCards: acceptanceCards,
-                      todos: _todos,
-                    ),
-                  ),
-                  if (showContext) ...[
-                    const VerticalDivider(width: 1, color: _line),
-                    SizedBox(
-                      width: contextWidth,
-                      child: ColoredBox(
-                        color: _panel,
-                        child: ConversationContextRail(
-                          snapshot: contextSnapshot,
-                          compact: true,
-                          openTasksCount: openTasksCount,
-                          onOpenTasks: openTasksCount == 0
-                              ? null
-                              : () => showAgentTasksSheet(
-                                    context: context,
-                                    todos: _todos,
-                                    onTaskViewed: _recordTaskFocus,
-                                  ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+              final shellDesktopWorkbench =
+                  AppShellLayoutScope.desktopWorkbenchOf(context);
+              final useDesktopWorkbench = shellDesktopWorkbench == null
+                  ? constraints.maxWidth >= 1280
+                  : shellDesktopWorkbench && constraints.maxWidth >= 1120;
+              if (!useDesktopWorkbench) {
+                return _buildOperatingSystemMobileShell(
+                  context,
+                  acceptanceCards: acceptanceCards,
+                  todos: _todos,
+                );
+              }
+              return _buildOperatingSystemDesktopWorkbench(
+                context,
+                acceptanceCards: acceptanceCards,
+                todos: _todos,
+                contextSnapshot: contextSnapshot,
+                openTasksCount: openTasksCount,
               );
             },
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildConversationPane(
-    BuildContext context, {
-    required List<Widget> acceptanceCards,
-    required List<Todo> todos,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 26, 28, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _Header(),
-          const SizedBox(height: AgentDesignTokens.gapXl),
-          Expanded(
-            child: FutureBuilder<List<Message>>(
-              future: _messagesFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done &&
-                    _messages.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError && _messages.isEmpty) {
-                  return _EmptyState(
-                    title:
-                        context.t.chat.agentConversation.conversationLoadFailed,
-                    subtitle: '${snapshot.error}',
-                  );
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_conversationTurnPage.hasMoreBefore)
-                      _LoadEarlierRuntimeTurnsButton(
-                        loading: _loadingOlderRuntimeTurns,
-                        onPressed: _loadOlderRuntimeTurns,
-                      ),
-                    Expanded(
-                      child: _MessageList(
-                        controller: _scrollController,
-                        bottomKey: _messageListBottomKey,
-                        messages: _messages,
-                        todos: todos,
-                        thinking: _thinking,
-                        acceptanceCards: acceptanceCards,
-                        pendingUserContent: _pendingUserContent,
-                        streamingAnswer: _streamingAnswer,
-                        streamingReasoning: _streamingReasoning,
-                        askError: _askError,
-                        pendingUserAttachments: _pendingUserAttachments,
-                        messageAttachmentsById: _messageAttachmentsById,
-                        messageMediaResultsById: _messageMediaResultsById,
-                        onTaskViewed: _recordTaskFocus,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: AgentDesignTokens.gapLg),
-          _Composer(
-            controller: _controller,
-            focusNode: _focusNode,
-            busy: _sending || _thinking,
-            attachments: _pendingAttachmentDrafts,
-            onAttach: () => unawaited(_pickAttachments()),
-            onRemoveAttachment: _removePendingAttachment,
-            onSend: _send,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _recordTaskFocus(Todo todo) async {
-    final entityId = todo.id.trim();
-    final conversationId = widget.conversation.id.trim();
-    if (entityId.isEmpty || conversationId.isEmpty) return;
-
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
-    if (cloudAuthScope == null || vaultId.isEmpty) return;
-
-    final Object? configuredSender = widget.runtimeConversationSender;
-    final ChatRuntimeEntityFocusSender sender =
-        configuredSender is ChatRuntimeEntityFocusSender
-            ? configuredSender
-            : SecretaryRuntimeConversationSender.hostedManagedPro(
-                apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
-                hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
-              );
-    try {
-      await sender.recordEntityFocus(
-        vaultId: vaultId,
-        conversationId: conversationId,
-        entityType: 'task',
-        entityId: entityId,
-        title: todo.title,
-      );
-    } catch (_) {
-      // Task viewing should never block task inspection.
-    }
   }
 }

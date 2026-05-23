@@ -420,6 +420,7 @@ void main() {
 
   testWidgets('wide-screen entitled shell uses the agent sidebar',
       (tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 

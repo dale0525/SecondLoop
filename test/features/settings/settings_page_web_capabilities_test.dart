@@ -60,6 +60,13 @@ void main() {
 
       expect(find.byKey(const ValueKey('settings_start_with_system_switch')),
           findsOneWidget);
+
+      final shortcutFinder =
+          find.byKey(const ValueKey('settings_quick_capture_hotkey'));
+      await tester.scrollUntilVisible(shortcutFinder, 500);
+      await tester.ensureVisible(shortcutFinder);
+      await tester.pumpAndSettle();
+      expect(shortcutFinder, findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = originalPlatform;
     }
