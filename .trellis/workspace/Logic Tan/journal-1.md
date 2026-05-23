@@ -1,4 +1,4 @@
-# Journal - logic (Part 1)
+# Journal - Logic Tan (Part 1)
 
 > AI development session journal
 > Started: 2026-05-23

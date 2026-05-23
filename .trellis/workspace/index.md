@@ -27,7 +27,7 @@ workspace/
 
 | Developer | Last Active | Sessions | Active File |
 |-----------|-------------|----------|-------------|
-| (none yet) | - | - | - |
+| Logic Tan | 2026-05-23 | 1 | `journal-1.md` |
 
 ---
 

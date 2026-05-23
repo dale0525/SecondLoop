@@ -1,4 +1,4 @@
-# Workspace Index - logic
+# Workspace Index - Logic Tan
 
 > Journal tracking for AI development sessions.
 
