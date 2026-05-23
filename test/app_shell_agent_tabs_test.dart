@@ -48,6 +48,9 @@ void main() {
     expect(find.text('Vault'), findsOneWidget);
     expect(find.text('Tasks'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Memory'), findsNothing);
+    expect(find.text('Approvals'), findsNothing);
+    expect(find.text('Connectors'), findsNothing);
   });
 
   testWidgets('mobile AppShell exposes the five agent destinations',
@@ -124,12 +127,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('SecondLoop'), findsOneWidget);
-    expect(
-      tester
-          .getSize(find.byKey(const ValueKey('app_shell_desktop_workspace')))
-          .width,
-      greaterThan(1600),
-    );
+    final shellWidth = tester
+        .getSize(find.byKey(const ValueKey('app_shell_desktop_workbench')))
+        .width;
+    final sidebarWidth =
+        tester.getSize(find.byKey(const ValueKey('app_shell_sidebar'))).width;
+
+    expect(shellWidth - sidebarWidth, greaterThan(1600));
   });
 
   testWidgets('AppShell keeps agent workspace on the light agent palette',

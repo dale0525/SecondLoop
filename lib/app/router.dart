@@ -467,46 +467,16 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
 
   static const _destinations = [
     _DesktopNavDestination(
-      label: 'Briefing',
-      icon: Icons.summarize_outlined,
-      selectedIcon: Icons.summarize,
       tab: AppTab.review,
     ),
     _DesktopNavDestination(
-      label: 'Chat',
-      icon: Icons.chat_bubble_outline,
-      selectedIcon: Icons.chat_bubble,
       tab: AppTab.conversation,
     ),
     _DesktopNavDestination(
-      label: 'Vault',
-      icon: Icons.account_balance_wallet_outlined,
-      selectedIcon: Icons.account_balance_wallet,
       tab: AppTab.notes,
     ),
     _DesktopNavDestination(
-      label: 'Tasks',
-      icon: Icons.task_alt_outlined,
-      selectedIcon: Icons.task_alt,
       tab: AppTab.memory,
-    ),
-    _DesktopNavDestination(
-      label: 'Memory',
-      icon: Icons.psychology_outlined,
-      selectedIcon: Icons.psychology,
-      tab: AppTab.notes,
-    ),
-    _DesktopNavDestination(
-      label: 'Approvals',
-      icon: Icons.rule_outlined,
-      selectedIcon: Icons.rule,
-      tab: AppTab.review,
-    ),
-    _DesktopNavDestination(
-      label: 'Connectors',
-      icon: Icons.hub_outlined,
-      selectedIcon: Icons.hub,
-      tab: AppTab.settings,
     ),
   ];
 
@@ -527,11 +497,7 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
               for (final destination in _destinations)
                 _AppShellDesktopNavItem(
                   destination: destination,
-                  selected: selectedIndex == destination.tab.index &&
-                      destination.label ==
-                          AppTab.values[selectedIndex].label(
-                            context,
-                          ),
+                  selected: selectedIndex == destination.tab.index,
                   onTap: () => onSelect(destination.tab.index),
                 ),
               const Spacer(),
@@ -539,9 +505,6 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
               const SizedBox(height: 12),
               _AppShellDesktopNavItem(
                 destination: const _DesktopNavDestination(
-                  label: 'Settings',
-                  icon: Icons.settings_outlined,
-                  selectedIcon: Icons.settings,
                   tab: AppTab.settings,
                 ),
                 selected: selectedIndex == AppTab.settings.index,
@@ -557,15 +520,9 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
 
 final class _DesktopNavDestination {
   const _DesktopNavDestination({
-    required this.label,
-    required this.icon,
-    required this.selectedIcon,
     required this.tab,
   });
 
-  final String label;
-  final IconData icon;
-  final IconData selectedIcon;
   final AppTab tab;
 }
 
@@ -582,10 +539,11 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final label = destination.tab.label(context);
     return Semantics(
       button: true,
       selected: selected,
-      label: destination.label,
+      label: label,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -607,7 +565,9 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  selected ? destination.selectedIcon : destination.icon,
+                  selected
+                      ? destination.tab.selectedIcon
+                      : destination.tab.icon,
                   size: 20,
                   color: selected
                       ? const Color(0xFF0051D5)
@@ -616,7 +576,7 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    destination.label,
+                    label,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: selected

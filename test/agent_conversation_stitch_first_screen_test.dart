@@ -300,13 +300,13 @@ void main() {
       'Chat',
       'Vault',
       'Tasks',
-      'Memory',
-      'Approvals',
-      'Connectors',
       'Settings',
     ]) {
       expect(find.text(label), findsWidgets);
     }
+    expect(find.text('Memory'), findsNothing);
+    expect(find.text('Approvals'), findsNothing);
+    expect(find.text('Connectors'), findsNothing);
     expect(find.text('Runtime Context'), findsOneWidget);
     expect(find.text('Pending Approvals'), findsOneWidget);
     expect(find.text('Tool Trace'), findsOneWidget);
