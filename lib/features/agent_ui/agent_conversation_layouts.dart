@@ -90,6 +90,8 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
     );
     final emailUnavailableActive =
         _hasOperatingEmailUnavailableState(_runtimeAgentState);
+    final purchasePaymentSafetyActive =
+        _hasOperatingPurchasePaymentSafetyState(_runtimeAgentState);
     return ColoredBox(
       color: AgentOperatingSystemTokens.background,
       child: Column(
@@ -99,6 +101,7 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
             webResearchActive: webResearchActive,
             vaultUploadActive: vaultUploadActive,
             emailUnavailableActive: emailUnavailableActive,
+            purchasePaymentSafetyActive: purchasePaymentSafetyActive,
           ),
           Expanded(
             child: FutureBuilder<List<Message>>(
@@ -149,6 +152,7 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
                       onTaskViewed: _recordTaskFocus,
                     ),
                   ),
+                  onSafeFollowUpSelected: _selectSafeFollowUp,
                 );
               },
             ),
@@ -165,6 +169,23 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
             onSend: _send,
           ),
         ],
+      ),
+    );
+  }
+
+  void _selectSafeFollowUp(String prompt) {
+    final next = prompt.trim();
+    if (next.isEmpty) return;
+    _controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    _focusNode.requestFocus();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Safe follow-up prepared. Review it before sending to runtime.',
+        ),
       ),
     );
   }
@@ -200,277 +221,6 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
   }
 }
 
-final class _OperatingTopAppBar extends StatelessWidget {
-  const _OperatingTopAppBar({
-    required this.pendingApprovals,
-    required this.webResearchActive,
-    required this.vaultUploadActive,
-    required this.emailUnavailableActive,
-  });
-
-  final int pendingApprovals;
-  final bool webResearchActive;
-  final bool vaultUploadActive;
-  final bool emailUnavailableActive;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AgentOperatingSystemTokens.background,
-        border: Border(
-          bottom: BorderSide(color: AgentOperatingSystemTokens.outlineVariant),
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(
-          height: 56,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final showVaultUploadChip =
-                    vaultUploadActive && constraints.maxWidth >= 430;
-                final showEmailUnavailableChip =
-                    emailUnavailableActive && constraints.maxWidth >= 560;
-                return Row(
-                  children: [
-                    if (!webResearchActive) ...[
-                      ClipOval(
-                        child: Image.asset(
-                          'assets/icon/tray_icon.png',
-                          width: 32,
-                          height: 32,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: Text(
-                        webResearchActive ? 'SecondLoop' : 'SecondLoop Agent',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AgentOperatingSystemTokens.headlineMd,
-                      ),
-                    ),
-                    if (webResearchActive) ...[
-                      const _OperatingPrimaryModeChip(),
-                      const SizedBox(width: 6),
-                      const _OperatingWebResearchModeChip(),
-                    ] else ...[
-                      const _OperatingModeChip(),
-                      if (showVaultUploadChip) ...[
-                        const SizedBox(width: 6),
-                        const _OperatingVaultUploadModeChip(),
-                      ],
-                      if (showEmailUnavailableChip) ...[
-                        const SizedBox(width: 6),
-                        const _OperatingEmailUnavailableModeChip(),
-                      ],
-                    ],
-                    const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: 'Notifications',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () {
-                        final message = pendingApprovals == 0
-                            ? 'No pending approvals'
-                            : '$pendingApprovals pending approval(s)';
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(message)),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.notifications_none_rounded,
-                        color: AgentOperatingSystemTokens.onSurfaceVariant,
-                      ),
-                    ),
-                    if (webResearchActive) ...[
-                      const SizedBox(width: 4),
-                      ClipOval(
-                        child: Image.asset(
-                          'assets/icon/tray_icon.png',
-                          width: 32,
-                          height: 32,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _OperatingVaultUploadModeChip extends StatelessWidget {
-  const _OperatingVaultUploadModeChip();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surfaceContainerHigh,
-        borderRadius:
-            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.cloud_upload_outlined,
-              size: 13,
-              color: AgentOperatingSystemTokens.secondary,
-            ),
-            SizedBox(width: 4),
-            Text(
-              'Vault Upload',
-              style: TextStyle(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
-                fontSize: 10,
-                height: 1.2,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-final class _OperatingPrimaryModeChip extends StatelessWidget {
-  const _OperatingPrimaryModeChip();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius:
-            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Text(
-          'Managed Pro',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            height: 1.2,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _OperatingWebResearchModeChip extends StatelessWidget {
-  const _OperatingWebResearchModeChip();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surfaceContainerHigh,
-        borderRadius:
-            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.public_rounded,
-              size: 13,
-              color: AgentOperatingSystemTokens.onSurfaceVariant,
-            ),
-            SizedBox(width: 4),
-            Text(
-              'web-research',
-              style: TextStyle(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
-                fontSize: 10,
-                height: 1.2,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-final class _OperatingModeChip extends StatelessWidget {
-  const _OperatingModeChip();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surfaceContainer,
-        borderRadius:
-            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _OperatingStatusDot(),
-            SizedBox(width: 6),
-            Text(
-              'Managed Pro',
-              style: TextStyle(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
-                fontSize: 10,
-                height: 1.2,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-final class _OperatingStatusDot extends StatelessWidget {
-  const _OperatingStatusDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 8,
-      height: 8,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AgentOperatingSystemTokens.secondary,
-          shape: BoxShape.circle,
-        ),
-      ),
-    );
-  }
-}
-
 final class _OperatingMessageList extends StatelessWidget {
   const _OperatingMessageList({
     required this.controller,
@@ -493,6 +243,7 @@ final class _OperatingMessageList extends StatelessWidget {
     required this.onRejectApproval,
     required this.onEditApprovalTitle,
     required this.onOpenTask,
+    required this.onSafeFollowUpSelected,
   });
 
   final ScrollController controller;
@@ -515,6 +266,7 @@ final class _OperatingMessageList extends StatelessWidget {
   final ValueChanged<SecretaryRuntimeApprovalItem> onRejectApproval;
   final _OperatingApprovalTitleChanged onEditApprovalTitle;
   final ValueChanged<RuntimeWorkingSetRecord> onOpenTask;
+  final ValueChanged<String> onSafeFollowUpSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -544,6 +296,14 @@ final class _OperatingMessageList extends StatelessWidget {
         final runtimeTurn = turnsById[message.id];
         final isWebResearch =
             _isOperatingWebResearchMessage(message, runtimeTurn);
+        final sourceIds = {
+          message.id,
+          if (sourceUserMessageId != null) sourceUserMessageId,
+        };
+        final safetyRecord = _operatingPurchasePaymentSafetyRecordForTurn(
+          state: runtimeState,
+          sourceIds: sourceIds,
+        );
         children.add(
           isWebResearch
               ? _OperatingAssistantResponse(
@@ -554,13 +314,22 @@ final class _OperatingMessageList extends StatelessWidget {
                   mediaResults: messageMediaResultsById[message.id] ??
                       const <_AgentMessageMediaResultView>[],
                 )
-              : _OperatingAssistantBubble(
-                  content: message.content,
-                  messageId: message.id,
-                  createdAtMs: message.createdAtMs,
-                  mediaResults: messageMediaResultsById[message.id] ??
-                      const <_AgentMessageMediaResultView>[],
-                ),
+              : safetyRecord != null
+                  ? _OperatingPurchasePaymentSafetyAssistantBubble(
+                      record: safetyRecord,
+                      content: message.content,
+                      messageId: message.id,
+                      createdAtMs: message.createdAtMs,
+                      mediaResults: messageMediaResultsById[message.id] ??
+                          const <_AgentMessageMediaResultView>[],
+                    )
+                  : _OperatingAssistantBubble(
+                      content: message.content,
+                      messageId: message.id,
+                      createdAtMs: message.createdAtMs,
+                      mediaResults: messageMediaResultsById[message.id] ??
+                          const <_AgentMessageMediaResultView>[],
+                    ),
         );
         if (isWebResearch) {
           renderedWebResearch = true;
@@ -580,11 +349,16 @@ final class _OperatingMessageList extends StatelessWidget {
           sourceUserMessageId: sourceUserMessageId,
           assistantMessageId: message.id,
         );
+        final safetyRuntimeCards = _safetyRuntimeCards(
+          sourceUserMessageId: sourceUserMessageId,
+          assistantMessageId: message.id,
+        );
         sourceUserMessageId = null;
         if (_isLatestAssistantMessage(index)) {
           final actionCards = <Widget>[
             ...createdTaskCards,
             ...emailRuntimeCards,
+            ...safetyRuntimeCards,
             ..._approvalCards(context),
           ];
           if (actionCards.isNotEmpty) {
@@ -595,7 +369,11 @@ final class _OperatingMessageList extends StatelessWidget {
             children.add(_OperatingContextStrip(state: runtimeState));
           }
         } else {
-          children.addAll([...createdTaskCards, ...emailRuntimeCards]);
+          children.addAll([
+            ...createdTaskCards,
+            ...emailRuntimeCards,
+            ...safetyRuntimeCards,
+          ]);
         }
       } else {
         children.add(
@@ -727,6 +505,23 @@ final class _OperatingMessageList extends StatelessWidget {
       const SnackBar(
         content: Text('Email setup is unavailable from this screen.'),
       ),
+    );
+  }
+
+  List<Widget> _safetyRuntimeCards({
+    required String? sourceUserMessageId,
+    required String assistantMessageId,
+  }) {
+    final state = runtimeState;
+    if (state == null) return const <Widget>[];
+    final sourceIds = {
+      assistantMessageId,
+      if (sourceUserMessageId != null) sourceUserMessageId,
+    };
+    return _operatingPurchasePaymentSafetyRuntimeCards(
+      state: state,
+      sourceIds: sourceIds,
+      onSafeFollowUpSelected: onSafeFollowUpSelected,
     );
   }
 

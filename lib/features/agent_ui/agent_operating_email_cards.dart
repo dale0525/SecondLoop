@@ -124,11 +124,7 @@ bool _isOperatingEmailDraftRecord(RuntimeWorkingSetRecord record) {
 
 bool _isOperatingEmailGuardrailRecord(RuntimeWorkingSetRecord record) {
   final kind = record.kind.trim().toLowerCase();
-  if (kind == 'email_authorization_block' ||
-      kind == 'email_guardrail' ||
-      kind == 'external_tool_block' ||
-      kind == 'external_side_effect_blocked' ||
-      kind == 'tool_blocked') {
+  if (kind == 'email_authorization_block' || kind == 'email_guardrail') {
     return true;
   }
   final tool = _firstOperatingString([
@@ -148,13 +144,19 @@ bool _isOperatingEmailGuardrailRecord(RuntimeWorkingSetRecord record) {
   ])?.toLowerCase();
   final blocksEmail = (tool != null && tool.startsWith('email.')) ||
       (action != null && action.contains('email'));
+  if (!blocksEmail) return false;
+  if (kind == 'external_tool_block' ||
+      kind == 'external_side_effect_blocked' ||
+      kind == 'tool_blocked') {
+    return true;
+  }
   final isBlocked = status == 'tool_unavailable' ||
       status == 'needs_configuration' ||
       status == 'external_side_effect_blocked' ||
       status == 'fail_closed' ||
       status == 'blocked' ||
       status == 'not_executed';
-  return blocksEmail && isBlocked;
+  return isBlocked;
 }
 
 final class _OperatingEmailDraftCard extends StatelessWidget {
