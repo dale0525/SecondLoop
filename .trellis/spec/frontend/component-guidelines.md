@@ -81,6 +81,18 @@ Reference files:
   source/tool metadata, audit/context refs, and approval status). Edit controls
   should be visibly unavailable unless a real approval patch path is wired for
   the advertised editable field.
+- Disconnected email draft-only flows must render from
+  `RuntimeAgentState.workingSetRecords`, not assistant text. Use
+  `kind == email_draft` / `email_draft_candidate` records for draft fields
+  (`to` or `recipients`, `subject`, `body`, `source`, `audit_id` / `draft_id`)
+  and `kind == external_tool_block`, `external_side_effect_blocked`,
+  `email_authorization_block`, or `tool_blocked` records for fail-closed
+  metadata (`reason`, `connector`, `blocked_action`, `status_label`, `risk`,
+  `audit_id`, `tool`). The UI must not render a send/approve action for this
+  state; `Save Draft` and connector actions must either call a real local path
+  or show an honest unavailable/configuration result. Suppress empty context
+  strips when the only available runtime state is an email draft plus its
+  guardrail record.
 - Runtime media result cards must project `kind == media_result` records from
   `RuntimeAgentState.workingSetRecords` or the context snapshot working set,
   then associate them to assistant turns with explicit assistant/source ids
