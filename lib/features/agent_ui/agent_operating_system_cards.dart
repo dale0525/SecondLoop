@@ -54,7 +54,12 @@ final class _OperatingTaskCreatedCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const _OperatingFactRow(label: 'Source', value: 'User message'),
-          _OperatingFactRow(label: 'Mutation ID', value: mutationId),
+          _OperatingFactRow(
+            label: 'Mutation ID',
+            value: mutationId,
+            valueColor: AgentOperatingSystemTokens.secondary,
+            valueWeight: FontWeight.w800,
+          ),
           _OperatingFactRow(label: 'Audit ID', value: auditId, last: true),
           const SizedBox(height: 14),
           SizedBox(
@@ -113,75 +118,106 @@ final class _OperatingMemoryCandidateCard extends StatelessWidget {
         ]) ??
         item.id;
 
-    return _OperatingCard(
-      header: const Row(
-        children: [
-          Icon(
-            Icons.psychology_alt_outlined,
-            color: AgentOperatingSystemTokens.muted,
-            size: 18,
-          ),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Memory Candidate',
-              style: AgentOperatingSystemTokens.labelLg,
+    return KeyedSubtree(
+      key: ValueKey('agent_operating_memory_candidate_${item.id}'),
+      child: _OperatingCard(
+        header: const Row(
+          children: [
+            Icon(
+              Icons.psychology_alt_outlined,
+              color: AgentOperatingSystemTokens.muted,
+              size: 18,
             ),
-          ),
-          _OperatingStatusBadge(
-            label: 'Pending approval',
-            background: AgentOperatingSystemTokens.surfaceContainerHigh,
-            foreground: AgentOperatingSystemTokens.onSurfaceVariant,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '"$text"',
-            style: AgentOperatingSystemTokens.bodyMd.copyWith(
-              color: AgentOperatingSystemTokens.onSurface,
-              fontStyle: FontStyle.italic,
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Memory Candidate',
+                style: AgentOperatingSystemTokens.labelLg,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _OperatingFactRow(
-            label: 'Conflict Risk',
-            value: risk,
-            valueColor: AgentOperatingSystemTokens.secondary,
-            valueWeight: FontWeight.w800,
-          ),
-          _OperatingFactRow(label: 'Audit ID', value: auditId, last: true),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onReject,
-                  child: const Text('Dismiss'),
+            _OperatingStatusBadge(
+              label: 'Pending Approval',
+              background: AgentOperatingSystemTokens.surfaceContainerHigh,
+              foreground: AgentOperatingSystemTokens.onSurfaceVariant,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AgentOperatingSystemTokens.surfaceContainerLow,
+                borderRadius:
+                    BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
+                border: Border.all(
+                  color: AgentOperatingSystemTokens.outlineVariant,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton(
-                  key: ValueKey('agent_operating_memory_approve_${item.id}'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AgentOperatingSystemTokens.secondary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AgentOperatingSystemTokens.radiusSm,
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FACT TO BE COMMITTED:',
+                      style: AgentOperatingSystemTokens.labelMd.copyWith(
+                        color: AgentOperatingSystemTokens.onSurfaceVariant,
                       ),
                     ),
-                  ),
-                  onPressed: onApprove,
-                  child: const Text('Approve'),
+                    const SizedBox(height: 4),
+                    Text(
+                      text,
+                      style: AgentOperatingSystemTokens.bodyMd.copyWith(
+                        color: AgentOperatingSystemTokens.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _OperatingDetailRow(
+                    label: 'Risk Score:',
+                    value: risk,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _OperatingDetailRow(
+                    label: 'Audit ID:',
+                    value: auditId,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _OperatingFooterTextButton(
+                    key: ValueKey('agent_operating_memory_approve_${item.id}'),
+                    label: 'Approve',
+                    primary: true,
+                    onPressed: onApprove,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _OperatingFooterTextButton(
+                    key: ValueKey('agent_operating_memory_dismiss_${item.id}'),
+                    label: 'Dismiss',
+                    onPressed: onReject,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -561,8 +597,8 @@ final class _OperatingComposer extends StatelessWidget {
                       minLines: 1,
                       maxLines: 4,
                       textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(
-                        hintText: 'Type instructions or data...',
+                      decoration: InputDecoration(
+                        hintText: placeholder ?? 'Type a message or command...',
                         border: InputBorder.none,
                         isDense: true,
                       ),

@@ -124,11 +124,14 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
                   pendingUserAttachments: _pendingUserAttachments,
                   messageAttachmentsById: _messageAttachmentsById,
                   messageMediaResultsById: _messageMediaResultsById,
-                  onApproveMemory: (item) => unawaited(
+                  onApproveApproval: (item) => unawaited(
                     _resolveRuntimeApproval(item, approve: true),
                   ),
-                  onRejectMemory: (item) => unawaited(
+                  onRejectApproval: (item) => unawaited(
                     _resolveRuntimeApproval(item, approve: false),
+                  ),
+                  onEditApprovalTitle: (item, title) => unawaited(
+                    _patchRuntimeApprovalTitle(item, title),
                   ),
                   onOpenTask: (record) => unawaited(
                     showAgentTaskDetailSheet(
@@ -415,8 +418,9 @@ final class _OperatingMessageList extends StatelessWidget {
     required this.pendingUserAttachments,
     required this.messageAttachmentsById,
     required this.messageMediaResultsById,
-    required this.onApproveMemory,
-    required this.onRejectMemory,
+    required this.onApproveApproval,
+    required this.onRejectApproval,
+    required this.onEditApprovalTitle,
     required this.onOpenTask,
   });
 
@@ -435,8 +439,9 @@ final class _OperatingMessageList extends StatelessWidget {
   final List<_AgentMessageAttachmentView> pendingUserAttachments;
   final Map<String, List<_AgentMessageAttachmentView>> messageAttachmentsById;
   final Map<String, List<_AgentMessageMediaResultView>> messageMediaResultsById;
-  final ValueChanged<SecretaryRuntimeApprovalItem> onApproveMemory;
-  final ValueChanged<SecretaryRuntimeApprovalItem> onRejectMemory;
+  final ValueChanged<SecretaryRuntimeApprovalItem> onApproveApproval;
+  final ValueChanged<SecretaryRuntimeApprovalItem> onRejectApproval;
+  final _OperatingApprovalTitleChanged onEditApprovalTitle;
   final ValueChanged<RuntimeWorkingSetRecord> onOpenTask;
 
   @override
@@ -446,6 +451,7 @@ final class _OperatingMessageList extends StatelessWidget {
     final processingLabels = _processingLabels();
     String? sourceUserMessageId;
     var renderedWebResearch = false;
+    final renderedPendingIntentIds = <String>{};
     final suppressContextStrip = _hasOperatingWebResearchState(
       runtimeState: runtimeState,
       messages: messages,
@@ -455,6 +461,9 @@ final class _OperatingMessageList extends StatelessWidget {
           const <RuntimeConversationTurn>[])
         if (turn.turnId.trim().isNotEmpty) turn.turnId: turn,
     };
+    if (messages.isNotEmpty && messages.first.createdAtMs > 0) {
+      children.add(_OperatingDateChip(createdAtMs: messages.first.createdAtMs));
+    }
 
     for (var index = 0; index < messages.length; index++) {
       final message = messages[index];
@@ -476,6 +485,7 @@ final class _OperatingMessageList extends StatelessWidget {
               : _OperatingAssistantBubble(
                   content: message.content,
                   messageId: message.id,
+                  createdAtMs: message.createdAtMs,
                   mediaResults: messageMediaResultsById[message.id] ??
                       const <_AgentMessageMediaResultView>[],
                 ),
@@ -483,6 +493,14 @@ final class _OperatingMessageList extends StatelessWidget {
         if (isWebResearch) {
           renderedWebResearch = true;
         }
+        children.addAll(
+          _operatingPendingIntentCards(
+            state: runtimeState,
+            userMessageId: sourceUserMessageId,
+            assistantMessageId: message.id,
+            renderedIds: renderedPendingIntentIds,
+          ),
+        );
         final createdTaskCards =
             _createdTaskCards(sourceUserMessageId, message.id);
         sourceUserMessageId = null;
@@ -495,7 +513,7 @@ final class _OperatingMessageList extends StatelessWidget {
             children.add(_OperatingActionCardGrid(children: actionCards));
             renderedActionCards = true;
           }
-          if (!suppressContextStrip) {
+          if (!suppressContextStrip && _hasContextStripState()) {
             children.add(_OperatingContextStrip(state: runtimeState));
           }
         } else {
@@ -505,6 +523,7 @@ final class _OperatingMessageList extends StatelessWidget {
         children.add(
           _OperatingUserBubble(
             content: message.content,
+            createdAtMs: message.createdAtMs,
             attachments: messageAttachmentsById[message.id] ??
                 const <_AgentMessageAttachmentView>[],
           ),
@@ -521,6 +540,7 @@ final class _OperatingMessageList extends StatelessWidget {
       children.add(
         _OperatingUserBubble(
           content: pendingContent,
+          createdAtMs: null,
           attachments: pendingUserAttachments,
         ),
       );
@@ -530,6 +550,7 @@ final class _OperatingMessageList extends StatelessWidget {
         _OperatingAssistantBubble(
           content: streamingAnswer.trim(),
           messageId: 'streaming',
+          createdAtMs: null,
         ),
       );
     } else if (thinking) {
@@ -540,6 +561,7 @@ final class _OperatingMessageList extends StatelessWidget {
         _OperatingAssistantBubble(
           content: askError!.trim(),
           messageId: 'error',
+          createdAtMs: null,
         ),
       );
     }
@@ -594,20 +616,31 @@ final class _OperatingMessageList extends StatelessWidget {
   }
 
   List<Widget> _approvalCards() {
-    final memoryApprovals = approvalItems
-        .where((item) => item.kind == 'memory_confirmation')
-        .toList(growable: false);
-    if (memoryApprovals.isNotEmpty) {
-      return [
-        for (final item in memoryApprovals)
+    if (approvalItems.isEmpty) return acceptanceCards;
+    return [
+      for (final item in approvalItems)
+        if (item.kind == 'memory_confirmation')
           _OperatingMemoryCandidateCard(
             item: item,
-            onApprove: () => onApproveMemory(item),
-            onReject: () => onRejectMemory(item),
+            onApprove: () => onApproveApproval(item),
+            onReject: () => onRejectApproval(item),
+          )
+        else if (item.kind == 'recurring_reminder_confirmation')
+          _OperatingRecurringReminderCandidateCard(
+            item: item,
+            onApprove: () => onApproveApproval(item),
+            onReject: () => onRejectApproval(item),
+            onEditTitle: item.editableFields.contains('title')
+                ? (title) => onEditApprovalTitle(item, title)
+                : null,
+          )
+        else
+          _RuntimeCandidateApprovalCard(
+            item: item,
+            onApprove: () => onApproveApproval(item),
+            onReject: () => onRejectApproval(item),
           ),
-      ];
-    }
-    return acceptanceCards;
+    ];
   }
 
   List<String> _processingLabels() {
@@ -615,15 +648,32 @@ final class _OperatingMessageList extends StatelessWidget {
     if (taskRecords.isNotEmpty || todos.isNotEmpty) {
       labels.add('task-management');
     }
-    if (approvalItems.any((item) => item.kind == 'memory_confirmation') ||
-        (runtimeState?.memoryRecords.isNotEmpty ?? false)) {
+    final hasMemoryCandidate =
+        approvalItems.any((item) => item.kind == 'memory_confirmation');
+    final hasMemoryContext = runtimeState?.memoryRecords.isNotEmpty ?? false;
+    if (hasMemoryContext ||
+        (hasMemoryCandidate && (taskRecords.isNotEmpty || todos.isNotEmpty))) {
       labels.add('memory-capture');
     }
-    if (taskRecords.isNotEmpty ||
-        (runtimeState?.memoryRecords.isNotEmpty ?? false)) {
+    if (taskRecords.isNotEmpty || hasMemoryContext) {
       labels.add('vault write');
     }
     return labels.length == 1 ? const <String>[] : labels;
+  }
+
+  bool _hasContextStripState() {
+    final state = runtimeState;
+    if (taskRecords.isNotEmpty || todos.isNotEmpty) return true;
+    if (state == null) return false;
+    if (state.recentEntityRefs.isNotEmpty || state.memoryRecords.isNotEmpty) {
+      return true;
+    }
+    return state.workingSetRecords.any(
+      (record) =>
+          record.kind == 'file' ||
+          record.kind == 'attachment' ||
+          record.kind == 'media_result',
+    );
   }
 }
 
@@ -636,7 +686,7 @@ final class _OperatingActionCardGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final useRow = constraints.maxWidth >= 720 && children.length > 1;
+        final useRow = constraints.maxWidth >= 960 && children.length > 1;
         if (!useRow) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -665,53 +715,67 @@ final class _OperatingActionCardGrid extends StatelessWidget {
 final class _OperatingUserBubble extends StatelessWidget {
   const _OperatingUserBubble({
     required this.content,
+    required this.createdAtMs,
     required this.attachments,
   });
 
   final String content;
+  final int? createdAtMs;
   final List<_AgentMessageAttachmentView> attachments;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerRight,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AgentOperatingSystemTokens.surface,
-            borderRadius:
-                BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
-            border:
-                Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x14000000),
-                blurRadius: 3,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  content,
-                  style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                    color: AgentOperatingSystemTokens.onSurface,
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AgentOperatingSystemTokens.surface,
+                borderRadius:
+                    BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
+                border: Border.all(
+                  color: AgentOperatingSystemTokens.outlineVariant,
                 ),
-                if (attachments.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _MessageAttachmentStrip(attachments: attachments),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x14000000),
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                  ),
                 ],
-              ],
+              ),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      content,
+                      style: AgentOperatingSystemTokens.bodyMd.copyWith(
+                        color: AgentOperatingSystemTokens.onSurface,
+                      ),
+                    ),
+                    if (attachments.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _MessageAttachmentStrip(attachments: attachments),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
+          if (createdAtMs != null && createdAtMs! > 0) ...[
+            const SizedBox(height: 4),
+            _OperatingTurnTimeLabel(createdAtMs: createdAtMs!),
+          ],
+        ],
       ),
     );
   }
@@ -721,85 +785,99 @@ final class _OperatingAssistantBubble extends StatelessWidget {
   const _OperatingAssistantBubble({
     required this.content,
     required this.messageId,
+    required this.createdAtMs,
     this.mediaResults = const <_AgentMessageMediaResultView>[],
   });
 
   final String content;
   final String messageId;
+  final int? createdAtMs;
   final List<_AgentMessageMediaResultView> mediaResults;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AgentOperatingSystemTokens.surface,
-            borderRadius:
-                BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
-            border:
-                Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x14000000),
-                blurRadius: 3,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(
-                  width: 3,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AgentOperatingSystemTokens.secondary,
-                      borderRadius: BorderRadius.horizontal(
-                        left: Radius.circular(
-                            AgentOperatingSystemTokens.radiusLg),
-                      ),
-                    ),
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AgentOperatingSystemTokens.surface,
+                borderRadius:
+                    BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
+                border: Border.all(
+                  color: AgentOperatingSystemTokens.outlineVariant,
                 ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          content,
-                          style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                            color: AgentOperatingSystemTokens.onSurface,
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x14000000),
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(
+                      width: 3,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: AgentOperatingSystemTokens.secondary,
+                          borderRadius: BorderRadius.horizontal(
+                            left: Radius.circular(
+                              AgentOperatingSystemTokens.radiusLg,
+                            ),
                           ),
                         ),
-                        if (mediaResults.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          KeyedSubtree(
-                            key: ValueKey(
-                              'agent_assistant_media_results_$messageId',
-                            ),
-                            child: _AssistantRuntimeMediaResults(
-                              results: mediaResults,
-                            ),
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
-                  ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              content,
+                              style: AgentOperatingSystemTokens.bodyMd.copyWith(
+                                color: AgentOperatingSystemTokens.onSurface,
+                              ),
+                            ),
+                            if (mediaResults.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              KeyedSubtree(
+                                key: ValueKey(
+                                  'agent_assistant_media_results_$messageId',
+                                ),
+                                child: _AssistantRuntimeMediaResults(
+                                  results: mediaResults,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+          if (createdAtMs != null && createdAtMs! > 0) ...[
+            const SizedBox(height: 4),
+            _OperatingTurnTimeLabel(createdAtMs: createdAtMs!),
+          ],
+        ],
       ),
     );
   }

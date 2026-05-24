@@ -106,8 +106,8 @@ void main() {
     expect(find.text('Mutation ID'), findsOneWidget);
     expect(find.text('mut_88291_sl'), findsOneWidget);
     expect(find.text('Memory Candidate'), findsOneWidget);
-    expect(find.text('Pending approval'), findsOneWidget);
-    expect(find.text('Conflict Risk'), findsOneWidget);
+    expect(find.text('Pending Approval'), findsOneWidget);
+    expect(find.text('Risk Score:'), findsOneWidget);
     expect(find.text('Low'), findsOneWidget);
     expect(find.text('Entity Ref:'), findsOneWidget);
     expect(find.text('task:"完成周报"'), findsOneWidget);

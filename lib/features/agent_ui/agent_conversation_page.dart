@@ -70,6 +70,7 @@ part 'agent_conversation_layouts.dart';
 part 'agent_desktop_workbench_layout.dart';
 part 'agent_desktop_workbench_primitives.dart';
 part 'agent_operating_research_cards.dart';
+part 'agent_operating_reminder_cards.dart';
 part 'agent_operating_system_cards.dart';
 part 'agent_conversation_widgets.dart';
 
