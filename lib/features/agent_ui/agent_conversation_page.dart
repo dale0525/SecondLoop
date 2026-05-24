@@ -80,6 +80,7 @@ part 'agent_operating_reminder_cards.dart';
 part 'agent_operating_action_candidate_cards.dart';
 part 'agent_operating_email_cards.dart';
 part 'agent_operating_safety_cards.dart';
+part 'agent_operating_local_computer_safety_cards.dart';
 part 'agent_operating_message_bubbles.dart';
 part 'agent_operating_system_cards.dart';
 part 'agent_conversation_widgets.dart';

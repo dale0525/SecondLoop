@@ -28,6 +28,11 @@ bool _hasOperatingPurchasePaymentSafetyState(RuntimeAgentState? state) {
   return state.workingSetRecords.any(_isOperatingPurchasePaymentSafetyRecord);
 }
 
+bool _hasOperatingLocalComputerSafetyState(RuntimeAgentState? state) {
+  if (state == null) return false;
+  return state.workingSetRecords.any(_isOperatingLocalComputerSafetyRecord);
+}
+
 RuntimeWorkingSetRecord? _operatingPurchasePaymentSafetyRecordForTurn({
   required RuntimeAgentState? state,
   required Set<String> sourceIds,
@@ -37,6 +42,22 @@ RuntimeWorkingSetRecord? _operatingPurchasePaymentSafetyRecordForTurn({
       sourceIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
   for (final record in state.workingSetRecords) {
     if (!_isOperatingPurchasePaymentSafetyRecord(record)) continue;
+    if (_operatingSafetyRecordMatchesSource(record, normalizedSourceIds)) {
+      return record;
+    }
+  }
+  return null;
+}
+
+RuntimeWorkingSetRecord? _operatingLocalComputerSafetyRecordForTurn({
+  required RuntimeAgentState? state,
+  required Set<String> sourceIds,
+}) {
+  if (state == null) return null;
+  final normalizedSourceIds =
+      sourceIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
+  for (final record in state.workingSetRecords) {
+    if (!_isOperatingLocalComputerSafetyRecord(record)) continue;
     if (_operatingSafetyRecordMatchesSource(record, normalizedSourceIds)) {
       return record;
     }
@@ -78,18 +99,20 @@ bool _isOperatingPurchasePaymentSafetyRecord(RuntimeWorkingSetRecord record) {
     raw['record_kind'],
     raw['recordKind'],
   ])?.toLowerCase();
-  final skill = _operatingSafetySkill(raw).toLowerCase();
+  final skill = (_operatingSafetyExplicitSkill(raw) ?? '').toLowerCase();
   final status = _operatingSafetyStatus(raw).toLowerCase();
-  final blockedAction = _operatingSafetyBlockedAction(raw).toLowerCase();
+  final blockedAction = _operatingSafetyExplicitBlockedAction(
+        raw,
+      )?.toLowerCase() ??
+      '';
   final tool = _firstOperatingString([
     raw['tool'],
     raw['tool_id'],
     raw['toolId'],
   ])?.toLowerCase();
 
-  final explicitlyPurchaseSafety = skill == 'purchase-payment-safety' ||
-      tool == 'purchase-payment-safety' ||
-      tool == 'safe-check-v2';
+  final explicitlyPurchaseSafety =
+      skill == 'purchase-payment-safety' || tool == 'purchase-payment-safety';
   final isBlockedKind = kind == 'external_side_effect_blocked' ||
       kind == 'external_tool_block' ||
       kind == 'tool_blocked' ||
@@ -110,6 +133,52 @@ bool _isOperatingPurchasePaymentSafetyRecord(RuntimeWorkingSetRecord record) {
 
   return explicitlyPurchaseSafety ||
       (isBlockedKind && isBlockedStatus && mentionsTransaction);
+}
+
+bool _isOperatingLocalComputerSafetyRecord(RuntimeWorkingSetRecord record) {
+  final kind = record.kind.trim().toLowerCase();
+  final raw = record.raw;
+  final rawKind = _firstOperatingString([
+    raw['kind'],
+    raw['type'],
+    raw['record_kind'],
+    raw['recordKind'],
+  ])?.toLowerCase();
+  final skill = (_operatingSafetyExplicitSkill(raw) ?? '').toLowerCase();
+  final status = _operatingSafetyStatus(raw).toLowerCase();
+  final blockedAction = _operatingSafetyExplicitBlockedAction(
+        raw,
+      )?.toLowerCase() ??
+      '';
+  final tool = _firstOperatingString([
+    raw['tool'],
+    raw['tool_id'],
+    raw['toolId'],
+  ])?.toLowerCase();
+
+  final explicitlyLocalComputerSafety =
+      skill == 'local-computer-safety' || tool == 'local-computer-safety';
+  final isBlockedKind = kind == 'external_side_effect_blocked' ||
+      kind == 'external_tool_block' ||
+      kind == 'tool_blocked' ||
+      rawKind == 'external_side_effect_blocked' ||
+      rawKind == 'external_tool_block' ||
+      rawKind == 'tool_blocked';
+  final isBlockedStatus = status == 'external_side_effect_blocked' ||
+      status == 'refused' ||
+      status == 'blocked' ||
+      status == 'fail_closed' ||
+      status == 'not_executed';
+  final mentionsLocalComputer = blockedAction.contains('shell') ||
+      blockedAction.contains('terminal') ||
+      blockedAction.contains('local file') ||
+      blockedAction.contains('local computer') ||
+      blockedAction.contains('finder') ||
+      blockedAction.contains('desktop') ||
+      blockedAction.contains('computer operation');
+
+  return explicitlyLocalComputerSafety ||
+      (isBlockedKind && isBlockedStatus && mentionsLocalComputer);
 }
 
 final class _OperatingPurchasePaymentSafetyModeChip extends StatelessWidget {
@@ -613,26 +682,38 @@ final class _OperatingSafetyMetadataItem extends StatelessWidget {
   }
 }
 
-String _operatingSafetySkill(Map<String, Object?> raw) {
-  return _firstOperatingString([
-        raw['skill'],
-        raw['skill_id'],
-        raw['skillId'],
-        raw['runtime_skill'],
-        raw['runtimeSkill'],
-      ]) ??
-      'purchase-payment-safety';
+String _operatingSafetySkill(
+  Map<String, Object?> raw, {
+  String fallback = 'purchase-payment-safety',
+}) {
+  return _operatingSafetyExplicitSkill(raw) ?? fallback;
 }
 
-String _operatingSafetyBlockedAction(Map<String, Object?> raw) {
+String? _operatingSafetyExplicitSkill(Map<String, Object?> raw) {
   return _firstOperatingString([
-        raw['blocked_action'],
-        raw['blockedAction'],
-        raw['action'],
-        raw['external_action'],
-        raw['externalAction'],
-      ]) ??
-      'ticket purchase + payment';
+    raw['skill'],
+    raw['skill_id'],
+    raw['skillId'],
+    raw['runtime_skill'],
+    raw['runtimeSkill'],
+  ]);
+}
+
+String _operatingSafetyBlockedAction(
+  Map<String, Object?> raw, {
+  String fallback = 'ticket purchase + payment',
+}) {
+  return _operatingSafetyExplicitBlockedAction(raw) ?? fallback;
+}
+
+String? _operatingSafetyExplicitBlockedAction(Map<String, Object?> raw) {
+  return _firstOperatingString([
+    raw['blocked_action'],
+    raw['blockedAction'],
+    raw['action'],
+    raw['external_action'],
+    raw['externalAction'],
+  ]);
 }
 
 String _operatingSafetyStatus(Map<String, Object?> raw) {
@@ -646,14 +727,17 @@ String _operatingSafetyStatus(Map<String, Object?> raw) {
       'external_side_effect_blocked';
 }
 
-String _operatingSafetyStatusLabel(Map<String, Object?> raw) {
+String _operatingSafetyStatusLabel(
+  Map<String, Object?> raw, {
+  String fallback = 'Refused / No external action',
+}) {
   return _firstOperatingString([
         raw['status_label'],
         raw['statusLabel'],
         raw['execution_status_label'],
         raw['executionStatusLabel'],
       ]) ??
-      'Refused / No external action';
+      fallback;
 }
 
 String _operatingSafetyAuditId(RuntimeWorkingSetRecord record) {
@@ -679,7 +763,10 @@ String _operatingSafetySourceId(RuntimeWorkingSetRecord record) {
       'runtime';
 }
 
-String _operatingSafetyToolTrace(Map<String, Object?> raw) {
+String _operatingSafetyToolTrace(
+  Map<String, Object?> raw, {
+  String fallback = 'safe-check-v2',
+}) {
   final trace = raw['tool_trace'] ?? raw['toolTrace'];
   if (trace is Map) {
     return _firstOperatingString([
@@ -691,7 +778,7 @@ String _operatingSafetyToolTrace(Map<String, Object?> raw) {
           trace['toolId'],
           trace['name'],
         ]) ??
-        'safe-check-v2';
+        fallback;
   }
   return _firstOperatingString([
         trace,
@@ -701,5 +788,5 @@ String _operatingSafetyToolTrace(Map<String, Object?> raw) {
         raw['tool_id'],
         raw['toolId'],
       ]) ??
-      'safe-check-v2';
+      fallback;
 }

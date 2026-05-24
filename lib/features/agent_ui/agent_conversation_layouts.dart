@@ -92,6 +92,8 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
         _hasOperatingEmailUnavailableState(_runtimeAgentState);
     final purchasePaymentSafetyActive =
         _hasOperatingPurchasePaymentSafetyState(_runtimeAgentState);
+    final localComputerSafetyActive =
+        _hasOperatingLocalComputerSafetyState(_runtimeAgentState);
     return ColoredBox(
       color: AgentOperatingSystemTokens.background,
       child: Column(
@@ -102,6 +104,7 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
             vaultUploadActive: vaultUploadActive,
             emailUnavailableActive: emailUnavailableActive,
             purchasePaymentSafetyActive: purchasePaymentSafetyActive,
+            localComputerSafetyActive: localComputerSafetyActive,
           ),
           Expanded(
             child: FutureBuilder<List<Message>>(
@@ -300,7 +303,13 @@ final class _OperatingMessageList extends StatelessWidget {
           message.id,
           if (sourceUserMessageId != null) sourceUserMessageId,
         };
-        final safetyRecord = _operatingPurchasePaymentSafetyRecordForTurn(
+        final purchasePaymentSafetyRecord =
+            _operatingPurchasePaymentSafetyRecordForTurn(
+          state: runtimeState,
+          sourceIds: sourceIds,
+        );
+        final localComputerSafetyRecord =
+            _operatingLocalComputerSafetyRecordForTurn(
           state: runtimeState,
           sourceIds: sourceIds,
         );
@@ -314,22 +323,31 @@ final class _OperatingMessageList extends StatelessWidget {
                   mediaResults: messageMediaResultsById[message.id] ??
                       const <_AgentMessageMediaResultView>[],
                 )
-              : safetyRecord != null
-                  ? _OperatingPurchasePaymentSafetyAssistantBubble(
-                      record: safetyRecord,
+              : localComputerSafetyRecord != null
+                  ? _OperatingLocalComputerSafetyAssistantBubble(
+                      record: localComputerSafetyRecord,
                       content: message.content,
                       messageId: message.id,
                       createdAtMs: message.createdAtMs,
                       mediaResults: messageMediaResultsById[message.id] ??
                           const <_AgentMessageMediaResultView>[],
                     )
-                  : _OperatingAssistantBubble(
-                      content: message.content,
-                      messageId: message.id,
-                      createdAtMs: message.createdAtMs,
-                      mediaResults: messageMediaResultsById[message.id] ??
-                          const <_AgentMessageMediaResultView>[],
-                    ),
+                  : purchasePaymentSafetyRecord != null
+                      ? _OperatingPurchasePaymentSafetyAssistantBubble(
+                          record: purchasePaymentSafetyRecord,
+                          content: message.content,
+                          messageId: message.id,
+                          createdAtMs: message.createdAtMs,
+                          mediaResults: messageMediaResultsById[message.id] ??
+                              const <_AgentMessageMediaResultView>[],
+                        )
+                      : _OperatingAssistantBubble(
+                          content: message.content,
+                          messageId: message.id,
+                          createdAtMs: message.createdAtMs,
+                          mediaResults: messageMediaResultsById[message.id] ??
+                              const <_AgentMessageMediaResultView>[],
+                        ),
         );
         if (isWebResearch) {
           renderedWebResearch = true;
@@ -518,11 +536,18 @@ final class _OperatingMessageList extends StatelessWidget {
       assistantMessageId,
       if (sourceUserMessageId != null) sourceUserMessageId,
     };
-    return _operatingPurchasePaymentSafetyRuntimeCards(
-      state: state,
-      sourceIds: sourceIds,
-      onSafeFollowUpSelected: onSafeFollowUpSelected,
-    );
+    return [
+      ..._operatingPurchasePaymentSafetyRuntimeCards(
+        state: state,
+        sourceIds: sourceIds,
+        onSafeFollowUpSelected: onSafeFollowUpSelected,
+      ),
+      ..._operatingLocalComputerSafetyRuntimeCards(
+        state: state,
+        sourceIds: sourceIds,
+        onSafeFollowUpSelected: onSafeFollowUpSelected,
+      ),
+    ];
   }
 
   List<Widget> _approvalCards(BuildContext context) {

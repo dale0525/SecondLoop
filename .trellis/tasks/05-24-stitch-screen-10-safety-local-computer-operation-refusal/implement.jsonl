@@ -1,1 +1,3 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Operating-shell safety cards must render from machine-readable runtime records and keep purchase/payment safety separate from local-computer safety."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Safe follow-up interactions should use existing controller-owned composer state and async UI rules."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Runtime record projection should normalize optional fields instead of scattering dynamic casts."}

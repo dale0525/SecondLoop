@@ -7,6 +7,7 @@ final class _OperatingTopAppBar extends StatelessWidget {
     required this.vaultUploadActive,
     required this.emailUnavailableActive,
     required this.purchasePaymentSafetyActive,
+    required this.localComputerSafetyActive,
   });
 
   final int pendingApprovals;
@@ -14,6 +15,7 @@ final class _OperatingTopAppBar extends StatelessWidget {
   final bool vaultUploadActive;
   final bool emailUnavailableActive;
   final bool purchasePaymentSafetyActive;
+  final bool localComputerSafetyActive;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +40,8 @@ final class _OperatingTopAppBar extends StatelessWidget {
                     emailUnavailableActive && constraints.maxWidth >= 560;
                 final showPurchasePaymentSafetyChip =
                     purchasePaymentSafetyActive && constraints.maxWidth >= 560;
+                final showLocalComputerSafetyChip =
+                    localComputerSafetyActive && constraints.maxWidth >= 560;
                 return Row(
                   children: [
                     if (!webResearchActive) ...[
@@ -77,6 +81,12 @@ final class _OperatingTopAppBar extends StatelessWidget {
                         const SizedBox(width: 6),
                         const Flexible(
                           child: _OperatingPurchasePaymentSafetyModeChip(),
+                        ),
+                      ],
+                      if (showLocalComputerSafetyChip) ...[
+                        const SizedBox(width: 6),
+                        const Flexible(
+                          child: _OperatingLocalComputerSafetyModeChip(),
                         ),
                       ],
                     ],

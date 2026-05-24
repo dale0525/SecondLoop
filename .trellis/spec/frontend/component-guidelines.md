@@ -104,6 +104,17 @@ Reference files:
   Safe alternatives may prefill or create research, checklist, or reminder
   follow-ups, but must never initiate buying, booking, payment, transfer, or
   signing.
+- Local-computer safety refusal cards are a separate safety family from
+  purchase/payment. Match `local-computer-safety` records through explicit
+  runtime fields such as `skill`, `skill_id`, `runtime_skill`, `tool`,
+  `blocked_action`, `source_message_id`, and `assistant_turn_id`; do not infer
+  them from assistant text. Generic `external_side_effect_blocked` records must
+  only render as local-computer safety when the explicit skill or blocked action
+  names shell, terminal, local file, Finder, desktop, or local computer
+  operation. Display no-side-effect evidence (`No command executed`, `No local
+  file access`, `No terminal automation`), audit/source/tool metadata, and only
+  manual guidance or a safe follow-up prompt. Do not add approval, shell,
+  Finder, desktop automation, or local file mutation actions.
 - Runtime media result cards must project `kind == media_result` records from
   `RuntimeAgentState.workingSetRecords` or the context snapshot working set,
   then associate them to assistant turns with explicit assistant/source ids
