@@ -49,6 +49,32 @@ Reference files:
 - `test/agent_conversation_runtime_approval_test.dart`
 - `test/agent_ui/agent_ui_acceptance_driver_test.dart`
 
+## Agent Operating Shell Runtime Cards
+
+- Render operating-shell action cards from machine-readable runtime state:
+  `RuntimeAgentState.workingSetRecords` for state records and
+  `SecretaryRuntimeApprovalItem.kind` for approval candidates. Do not parse
+  assistant message text to decide whether to create pending intents, reminders,
+  memories, tasks, or approvals.
+- Keep approval controls wired to runtime callbacks. For example,
+  `memory_confirmation` and `recurring_reminder_confirmation` cards should call
+  the shared approval decision path, and editable recurring reminder titles
+  should use the runtime approval patch path only when `editableFields` contains
+  `title`.
+- Candidate-only flows should not render empty chrome. Suppress processing
+  strips and context strips when the only available state is pending approvals
+  and every context value would be `none`, `none yet`, or `0 files`.
+- Put larger operating-shell domain cards in a sibling `part` file when
+  `agent_conversation_layouts.dart`, `agent_operating_system_cards.dart`, or
+  `agent_conversation_widgets.dart` is close to the 1000-line source limit.
+
+Reference files:
+
+- `lib/features/agent_ui/agent_conversation_layouts.dart`
+- `lib/features/agent_ui/agent_operating_system_cards.dart`
+- `lib/features/agent_ui/agent_operating_reminder_cards.dart`
+- `test/agent_conversation_stitch_third_screen_test.dart`
+
 ## User-Facing Copy
 
 Prefer generated i18n access through `context.t` for user-facing copy in app

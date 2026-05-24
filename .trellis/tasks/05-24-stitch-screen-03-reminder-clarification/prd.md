@@ -32,6 +32,16 @@ show separate memory and recurring-reminder approval candidates.
 - This child depends on screen 2 closeout only in git hygiene terms: existing
   screen 2 uncommitted changes should be preserved and not mixed with unrelated
   screen 3 changes.
+- User-supplied implementation contract confirmed for this child:
+  - use only `docs/stitch-export/secondloop-operating-system/` as the Stitch
+    source;
+  - read README, manifest, corresponding HTML/screenshot, final product shape,
+    QA acceptance, and development plan before implementation;
+  - implement only canonical register product screens;
+  - treat retired/superseded screens as negative examples only;
+  - fill real functionality/state/API wiring before visual polish;
+  - perform Computer Use review at manifest dimensions before completion;
+  - run fresh `pixi` verification and report exact evidence.
 
 ## Requirements
 
@@ -58,6 +68,16 @@ show separate memory and recurring-reminder approval candidates.
 - Use current product boundaries: runtime owns semantic decisions, formal
   mutations require approval, and local natural-language parsing must not be
   used to execute the formal reminder mutation.
+- Match the local Stitch screenshot/HTML first viewport, chat thread, status
+  labels, action buttons, composer, and bottom nav as closely as possible within
+  existing Flutter architecture.
+- Do not implement fake approvals or inactive controls. Pending intent, memory
+  candidate, and recurring reminder candidate must be backed by runtime state,
+  approval item data, or an explicit degraded state.
+- Do not track or edit `docs/`; the local Stitch export is a design baseline.
+- If app-side runtime/API wiring is insufficient, identify whether a real
+  server change is required in the `SecondLoopServer` main branch before
+  claiming the screen is complete.
 
 ## Acceptance Criteria
 
@@ -74,7 +94,12 @@ show separate memory and recurring-reminder approval candidates.
 - [ ] A focused widget test covers the runtime-state fixture for screen 3.
 - [ ] Computer Use manual review is performed at manifest width after the UI
       changes.
-- [ ] Relevant `pixi` checks pass with fresh evidence.
+- [ ] Relevant `pixi` checks pass with fresh evidence, including focused tests,
+      analyzer/typecheck, build or documented build-equivalent gate, and
+      changed-file verification.
+- [ ] Completion output includes screenId, mapping, functionality filled,
+      modified files, screenshot/manual verification result, known non-1:1
+      differences, and commands run.
 
 ## Out of Scope
 

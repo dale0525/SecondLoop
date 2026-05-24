@@ -51,6 +51,24 @@ loop.
 - Use only the local Stitch export directory listed above as visual/design
   source. Do not use stale local zips, retired/superseded screens, or Stitch
   drafts outside the canonical register.
+- Before each screen implementation, read and use these local sources as the
+  evidence base:
+  - `docs/stitch-export/secondloop-operating-system/README.md`
+  - `docs/stitch-export/secondloop-operating-system/manifest.json`
+  - the corresponding screen HTML under
+    `docs/stitch-export/secondloop-operating-system/html/`
+  - the corresponding screen screenshot under
+    `docs/stitch-export/secondloop-operating-system/screens/`
+  - `docs/product/final-product-shape.md`
+  - `docs/qa/final-product-acceptance.md`
+  - `docs/development/final-product-development-plan.md`
+- Treat `SecondLoop Final Stitch Source of Truth`
+  (`3b8ef30093554bf2bc42e296ee36be6c`) as the entry point. Implement only the
+  13 product screens in the canonical register
+  (`a5874f74133b435a9feb498e76a23fe4`).
+- Treat the retired register (`43a2a241349e40a4b3dd3d61c0d3c76b`) and
+  superseded / incomplete index (`3aa56b7a88194a37a3c38abb3ef76618`) as
+  negative evidence only. Do not implement from them.
 - Maintain a screen-by-screen mapping from Stitch `screenId` to local
   route/component/state/API behavior before implementation.
 - Work one screen, or one tightly related flow, at a time.
@@ -86,6 +104,34 @@ loop.
   checks before reporting completion.
 - Do not delete or revert user changes. Do not track `docs/` unless explicitly
   requested. Do not modify Stitch export source HTML/screenshots.
+- If a canonical screen requires server behavior that is absent in the app's
+  runtime/API contract, implement the server change in
+  `/Users/logictan/Documents/Git/SecondLoopFolder/SecondLoopServer` on its local
+  main branch and push it so staging deployment can run.
+- Each screen completion report must include: Stitch screenId, local
+  route/component mapping, missing functionality filled, modified files,
+  screenshot/manual verification result, known non-1:1 differences with
+  reasons, and fresh test/lint/typecheck/build evidence.
+
+## Canonical Screen Mapping Register
+
+Initial mapping from `manifest.json` before continuing screen implementation:
+
+| # | Stitch screenId | Canonical title | Local route/component/state/API target |
+| --- | --- | --- | --- |
+| 1 | `7478ab2f8f9b4ef2b89f2e8c6c1df11e` | Agent Chat: Personal Secretary Flow (Refined) | `AppShell` Chat tab -> `AgentConversationPage` mobile operating shell; `RuntimeAgentState` conversation turns, tasks, memory approvals; `SecretaryRuntimeClient` send/fetch agent state. |
+| 2 | `99cc1523c51a4e1d9017fb53a2bac9bb` | Chat: Web Research Follow-up Continuity (Approved) | `AgentConversationPage` -> `_OperatingMessageList` -> `agent_operating_research_cards.dart`; runtime `web_research_drafts`, `citations_json`, `tool_trace`, context snapshot; runtime web-research skill result. |
+| 3 | `2584c8e54d014209adbd37b562e3ced1` | Chat: Recurring Reminder Clarification (Approved) | `AgentConversationPage` mobile shell; runtime pending intent / clarification state, `memory_confirmation` and `recurring_reminder_confirmation` approval items; runtime approval patch/approve/reject API. |
+| 4 | `0632921a825a4f1b9e91c2f66a4c97e3` | Task Mutation Approval: Recent Reference (Approved) | `AgentConversationPage` approval cards and task summary surfaces; runtime `task_mutation_confirmation`, recent entity refs, task-management skill, approval API. |
+| 5 | `585ce0f7d36b4f55a8511bea0e2ef655` | Calendar Approval: Email Extraction (Approved) | Agent chat calendar/email candidate surfaces (`agent_calendar_email_*` patterns); runtime email/calendar extraction, draft/event candidate, `calendar_event_confirmation` approval API. |
+| 6 | `2384fe0e4de54f4e97f9935f813ecd01` | Chat: File OCR With Attachment Tile (Approved) | Agent chat attachment tile and `agent_runtime_media_results.dart`; vault attachment upload/read, runtime media result / OCR metadata, document-ocr skill. |
+| 7 | `3656acaa364f4e58b9d71c1d79f41809` | Chat: Meeting Audio Action Candidates (Approved) | Agent chat attachment/media result and action candidate surfaces; vault audio attachment, runtime transcript/minutes/action candidates, audio-meeting skill, approval API for formal actions. |
+| 8 | `a8435575721c43b9a5398a242abc28d0` | Email Unauthorized: Draft Only (Approved) | Agent chat email degraded/draft surface; runtime email skill `needs_configuration` / `tool_unavailable` / draft-only response, no send side effect. |
+| 9 | `8c87969f58254457bfb9dd85718fdd49` | Safety: Purchase Payment Refusal (Approved) | Agent chat safety refusal surface; runtime purchase-payment-safety skill, `external_side_effect_blocked`, no payment/purchase tool call. |
+| 10 | `b1bc92c06b364d0594dea7c27cf02802` | Safety: Local Computer Operation Refusal (Approved) | Agent chat safety refusal surface; runtime local-computer-safety skill, no local shell/computer side effect. |
+| 11 | `113754579c364c3b994e7bfbaa6f99d6` | Self-managed Setup: Provider Secrets and Capability Verification (Approved) | Settings runtime mode -> `SelfManagedSetupPage` / sections; setup controller, provider secrets, capability verification, runtime manifest persistence. |
+| 12 | `7296ed1e87b9466489af5de513f0e24b` | Setup: Connect Cloudflare (Security Refinement) | Settings self-managed Cloudflare connection flow; Cloudflare authorization handoff, deployment helper state, secret safety boundary. |
+| 13 | `37821c63daf74e7d96972338375758e7` | Desktop Agent Workbench: Research Continuity Refined | `AgentConversationPage` desktop workbench -> `agent_desktop_workbench_layout.dart` / primitives; runtime research continuity, approvals, context snapshot, web-research citations. |
 
 ## Acceptance Criteria
 
