@@ -19,6 +19,7 @@ final class _AgentMessageAttachmentView {
     required this.mimeType,
     required this.mediaType,
     this.sizeLabel = '',
+    this.durationLabel = '',
     this.bytes,
   });
 
@@ -27,6 +28,7 @@ final class _AgentMessageAttachmentView {
   final String mimeType;
   final String mediaType;
   final String sizeLabel;
+  final String durationLabel;
   final Uint8List? bytes;
 
   _AgentMessageAttachmentView copyWith({
@@ -38,6 +40,7 @@ final class _AgentMessageAttachmentView {
       mimeType: mimeType,
       mediaType: mediaType,
       sizeLabel: sizeLabel,
+      durationLabel: durationLabel,
       bytes: bytes ?? this.bytes,
     );
   }
@@ -57,6 +60,13 @@ final class _AgentMessageAttachmentView {
   }
 
   bool get needsHydratedBytesForPreview => isImage || isAudio;
+
+  String get secondaryLabel {
+    return [
+      durationLabel.trim(),
+      sizeLabel.trim(),
+    ].where((value) => value.isNotEmpty).join(' • ');
+  }
 }
 
 extension _AgentConversationAttachmentHydration on _AgentConversationPageState {
@@ -235,8 +245,68 @@ _AgentMessageAttachmentView? _messageAttachmentFromRuntimePayload(
       fallback: _runtimeAttachmentMediaType(mimeType),
     ),
     sizeLabel: _runtimeAttachmentSizeLabel(attachment, mimeType),
+    durationLabel: _runtimeAttachmentDurationLabel(attachment),
     bytes: _attachmentBytesFromRuntimePayload(attachment),
   );
+}
+
+String _runtimeAttachmentDurationLabel(Map<String, Object?> attachment) {
+  final explicitLabel = _firstRuntimeAttachmentString(
+    attachment,
+    const ['duration_label', 'durationLabel', 'display_duration'],
+  );
+  if (explicitLabel.isNotEmpty) return explicitLabel;
+
+  for (final entry in const [
+    ('duration_seconds', false),
+    ('durationSeconds', false),
+    ('duration_sec', false),
+    ('durationSec', false),
+    ('duration_ms', true),
+    ('durationMs', true),
+    ('duration', false),
+  ]) {
+    final label = _runtimeDurationLabelFromRaw(
+      attachment[entry.$1],
+      milliseconds: entry.$2,
+    );
+    if (label.isNotEmpty) return label;
+  }
+  return '';
+}
+
+String _runtimeDurationLabelFromRaw(
+  Object? raw, {
+  required bool milliseconds,
+}) {
+  if (raw == null) return '';
+  if (raw is String) {
+    final value = raw.trim();
+    if (value.isEmpty || value == 'null') return '';
+    if (value.contains(':')) return value;
+    final parsed = double.tryParse(value);
+    if (parsed == null) return value;
+    return _runtimeDurationSecondsLabel(
+      (milliseconds ? parsed / 1000 : parsed).round(),
+    );
+  }
+  if (raw is num) {
+    return _runtimeDurationSecondsLabel(
+      (milliseconds ? raw / 1000 : raw).round(),
+    );
+  }
+  return '';
+}
+
+String _runtimeDurationSecondsLabel(int totalSeconds) {
+  if (totalSeconds <= 0) return '';
+  final hours = totalSeconds ~/ 3600;
+  final minutes = (totalSeconds % 3600) ~/ 60;
+  final seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+  return '$minutes:${seconds.toString().padLeft(2, '0')}';
 }
 
 String _runtimeAttachmentSizeLabel(

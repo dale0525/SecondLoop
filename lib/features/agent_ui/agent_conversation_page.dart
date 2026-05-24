@@ -69,12 +69,14 @@ part 'agent_conversation_attachment_widgets.dart';
 part 'agent_conversation_runtime_pagination.dart';
 part 'agent_conversation_runtime_helpers.dart';
 part 'agent_runtime_media_results.dart';
+part 'agent_runtime_media_result_widgets.dart';
 part 'agent_conversation_layouts.dart';
 part 'agent_operating_approval_preview.dart';
 part 'agent_desktop_workbench_layout.dart';
 part 'agent_desktop_workbench_primitives.dart';
 part 'agent_operating_research_cards.dart';
 part 'agent_operating_reminder_cards.dart';
+part 'agent_operating_action_candidate_cards.dart';
 part 'agent_operating_message_bubbles.dart';
 part 'agent_operating_system_cards.dart';
 part 'agent_conversation_widgets.dart';
@@ -719,6 +721,13 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
         item: item,
         onApprove: onApprove,
         onReject: onReject,
+      );
+    }
+    if (_isOperatingActionItemCandidate(item)) {
+      return _OperatingActionItemCandidateCard(
+        item: item,
+        onCreate: onApprove,
+        onDismiss: onReject,
       );
     }
     return _RuntimeCandidateApprovalCard(

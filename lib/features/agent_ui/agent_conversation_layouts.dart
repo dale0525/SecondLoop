@@ -678,6 +678,9 @@ final class _OperatingMessageList extends StatelessWidget {
 
   List<Widget> _approvalCards(BuildContext context) {
     if (approvalItems.isEmpty) return acceptanceCards;
+    if (runtimeState == null && acceptanceCards.isNotEmpty) {
+      return acceptanceCards;
+    }
     return [
       for (final item in approvalItems)
         if (item.kind == 'memory_confirmation')
@@ -685,6 +688,16 @@ final class _OperatingMessageList extends StatelessWidget {
             item: item,
             onApprove: () => onApproveApproval(item),
             onReject: () => onRejectApproval(item),
+          )
+        else if (_isOperatingActionItemCandidate(item))
+          _OperatingActionItemCandidateCard(
+            item: item,
+            onCreate: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onApproveApproval(item),
+            onDismiss: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onRejectApproval(item),
           )
         else if (item.kind == 'reminder_confirmation')
           _OperatingReminderCandidateCard(
@@ -773,17 +786,33 @@ final class _OperatingMessageList extends StatelessWidget {
     final hasMediaResult = messageMediaResultsById.values.any(
       (results) => results.any((result) => result.hasVisibleContent),
     );
-    final hasMediaAttachment = messageAttachmentsById.values.any(
+    final mediaResults = messageMediaResultsById.values
+        .expand((results) => results)
+        .where((result) => result.hasVisibleContent)
+        .toList(growable: false);
+    final hasAudioMediaResult =
+        mediaResults.any((result) => result.isAudioResult);
+    final highFidelityConfirmation = mediaResults
+        .map((result) => result.processingConfirmationLabel?.trim() ?? '')
+        .where((label) => label.isNotEmpty)
+        .firstOrNull;
+    final hasDocumentMediaAttachment = messageAttachmentsById.values.any(
       (items) => items.any(
         (attachment) =>
             attachment.isImage ||
             attachment.mimeType.trim().toLowerCase() == 'application/pdf',
       ),
     );
+    final hasAudioAttachment = messageAttachmentsById.values.any(
+      (items) => items.any((attachment) => attachment.isAudio),
+    );
     if (hasAttachments) {
       if (hasCalendarApproval) {
         labels.add('email-analysis');
-      } else if (hasMediaAttachment || hasMediaResult) {
+      } else if (hasAudioAttachment || hasAudioMediaResult) {
+        labels.add('audio-transcription');
+        labels.add('meeting-minutes');
+      } else if (hasDocumentMediaAttachment || hasMediaResult) {
         labels.add('ocr');
         labels.add('summarize');
       } else {
@@ -801,6 +830,9 @@ final class _OperatingMessageList extends StatelessWidget {
     }
     if (hasCalendarApproval) {
       labels.add('calendar-skill');
+    }
+    if (highFidelityConfirmation != null) {
+      labels.add(highFidelityConfirmation);
     }
     if (taskRecords.isNotEmpty || hasMemoryContext || hasMediaResult) {
       labels.add(hasMediaResult ? 'source synced to Vault' : 'vault write');

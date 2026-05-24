@@ -28,8 +28,9 @@ final class _MessageAttachmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final previewBytes = attachment.bytes;
     final isImage = attachment.isImage && previewBytes != null;
+    final isAudio = attachment.isAudio && !isImage;
     return SizedBox(
-      width: isImage ? 240 : 180,
+      width: isImage ? 240 : (isAudio ? 250 : 180),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -44,62 +45,66 @@ final class _MessageAttachmentTile extends StatelessWidget {
             ),
             child: Padding(
               padding: const EdgeInsets.all(AgentDesignTokens.gapSm),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: isImage ? 112 : 48,
-                    child: isImage
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              AgentDesignTokens.radiusSm,
-                            ),
-                            child: Image.memory(
-                              previewBytes,
-                              key: ValueKey(
-                                'agent_message_attachment_image_${attachment.id}',
-                              ),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Center(
-                                child: Icon(Icons.image_outlined, size: 22),
-                              ),
-                            ),
-                          )
-                        : const Center(
-                            child: Icon(Icons.attach_file_rounded, size: 24),
+              child: isAudio
+                  ? _AudioMessageAttachmentTileBody(attachment: attachment)
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          height: isImage ? 112 : 48,
+                          child: isImage
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    AgentDesignTokens.radiusSm,
+                                  ),
+                                  child: Image.memory(
+                                    previewBytes,
+                                    key: ValueKey(
+                                      'agent_message_attachment_image_${attachment.id}',
+                                    ),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Center(
+                                      child:
+                                          Icon(Icons.image_outlined, size: 22),
+                                    ),
+                                  ),
+                                )
+                              : const Center(
+                                  child:
+                                      Icon(Icons.attach_file_rounded, size: 24),
+                                ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          attachment.filename,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: _AgentConversationPageState._ink,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            height: 1.25,
                           ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    attachment.filename,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._ink,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      height: 1.25,
+                        ),
+                        if (attachment.sizeLabel.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            attachment.sizeLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: _AgentConversationPageState._muted,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ),
-                  if (attachment.sizeLabel.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      attachment.sizeLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: _AgentConversationPageState._muted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
             ),
           ),
         ),
@@ -127,6 +132,71 @@ final class _MessageAttachmentTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+final class _AudioMessageAttachmentTileBody extends StatelessWidget {
+  const _AudioMessageAttachmentTileBody({required this.attachment});
+
+  final _AgentMessageAttachmentView attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final secondary = attachment.secondaryLabel;
+    return Row(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color:
+                AgentOperatingSystemTokens.secondaryContainer.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(AgentDesignTokens.radiusSm),
+          ),
+          child: SizedBox.square(
+            key: ValueKey('agent_message_attachment_audio_${attachment.id}'),
+            dimension: 42,
+            child: const Icon(
+              Icons.play_circle_fill_rounded,
+              color: AgentOperatingSystemTokens.secondary,
+              size: 26,
+            ),
+          ),
+        ),
+        const SizedBox(width: AgentDesignTokens.gapSm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                attachment.filename,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _AgentConversationPageState._ink,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  height: 1.25,
+                ),
+              ),
+              if (secondary.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  secondary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _AgentConversationPageState._muted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
