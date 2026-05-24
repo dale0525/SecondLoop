@@ -101,6 +101,12 @@ Reference files:
 - Candidate-only flows should not render empty chrome. Suppress processing
   strips and context strips when the only available state is pending approvals
   and every context value would be `none`, `none yet`, or `0 files`.
+- Keep repository-backed `RuntimeAgentState.approvalItems` and immediate
+  send-result approval metadata distinct. The operating message list may render
+  operating-system cards when `runtimeState` is present, but when approvals only
+  came from the latest send result and `runtimeState == null`, preserve the
+  existing `_buildRuntimeApprovalCards` acceptance-card path so memory/task
+  approval flows keep their established keys, copy, and tests.
 - Put larger operating-shell domain cards in a sibling `part` file when
   `agent_conversation_layouts.dart`, `agent_operating_system_cards.dart`, or
   `agent_conversation_widgets.dart` is close to the 1000-line source limit.
