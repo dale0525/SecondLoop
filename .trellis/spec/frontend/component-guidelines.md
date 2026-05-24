@@ -67,6 +67,20 @@ Reference files:
   contains `title`) or provides title-specific fields such as `current_title`,
   `proposed_title`, `new_title`, or `target_title`. Due-time/status mutations
   must keep a due/status approval preview instead of showing a false title diff.
+- When adding a new runtime approval kind, keep
+  `agent_conversation_layouts.dart` as a dispatcher only. Put the typed payload
+  projection next to the card, for example
+  `CalendarEventApprovalDetails.fromRuntime(...)`, and centralize repeated raw
+  `record` field reads in a helper such as
+  `runtime_approval_record_helpers.dart`. The card may format derived display
+  labels, but it must not claim external side effects happened before the
+  runtime approval state says so.
+- Calendar/email approval cards must render from runtime approval items such as
+  `calendar_event_confirmation`, using `calendar_event_id` plus `record` fields
+  (`title`, time labels or `starts_at_ms` / `ends_at_ms`, participants,
+  source/tool metadata, audit/context refs, and approval status). Edit controls
+  should be visibly unavailable unless a real approval patch path is wired for
+  the advertised editable field.
 - Candidate-only flows should not render empty chrome. Suppress processing
   strips and context strips when the only available state is pending approvals
   and every context value would be `none`, `none yet`, or `0 files`.
