@@ -140,3 +140,37 @@ Implemented canonical Stitch screen 03 reminder clarification in the Agent opera
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Stitch screen 04 task mutation approval
+
+**Date**: 2026-05-24
+**Task**: Stitch screen 04 task mutation approval
+**Branch**: `main`
+
+### Summary
+
+Implemented and validated canonical Stitch screen 04 task mutation approval in the Agent operating shell, including runtime-backed title mutation approval UI, responsive width coverage, Computer Use review, and Trellis/spec updates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cfaa1c31` | (see git log) |
+| `a0e98b9e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
