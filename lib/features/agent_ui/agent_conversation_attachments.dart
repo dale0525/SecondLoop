@@ -18,6 +18,7 @@ final class _AgentMessageAttachmentView {
     required this.filename,
     required this.mimeType,
     required this.mediaType,
+    this.sizeLabel = '',
     this.bytes,
   });
 
@@ -25,6 +26,7 @@ final class _AgentMessageAttachmentView {
   final String filename;
   final String mimeType;
   final String mediaType;
+  final String sizeLabel;
   final Uint8List? bytes;
 
   _AgentMessageAttachmentView copyWith({
@@ -35,6 +37,7 @@ final class _AgentMessageAttachmentView {
       filename: filename,
       mimeType: mimeType,
       mediaType: mediaType,
+      sizeLabel: sizeLabel,
       bytes: bytes ?? this.bytes,
     );
   }
@@ -231,8 +234,55 @@ _AgentMessageAttachmentView? _messageAttachmentFromRuntimePayload(
       const ['media_type', 'type'],
       fallback: _runtimeAttachmentMediaType(mimeType),
     ),
+    sizeLabel: _runtimeAttachmentSizeLabel(attachment, mimeType),
     bytes: _attachmentBytesFromRuntimePayload(attachment),
   );
+}
+
+String _runtimeAttachmentSizeLabel(
+  Map<String, Object?> attachment,
+  String mimeType,
+) {
+  final explicitLabel = _firstRuntimeAttachmentString(
+    attachment,
+    const ['size_label', 'sizeLabel', 'display_size', 'displaySize'],
+  );
+  if (explicitLabel.isNotEmpty) return explicitLabel;
+  final byteLength = _firstRuntimeAttachmentInt(
+    attachment,
+    const ['byte_len', 'byteLen', 'byte_length', 'byteLength', 'size_bytes'],
+  );
+  final typeLabel = _runtimeAttachmentTypeLabel(mimeType);
+  if (byteLength == null || byteLength <= 0) return typeLabel;
+  final sizeLabel = byteLength >= 1024 * 1024
+      ? '${(byteLength / (1024 * 1024)).toStringAsFixed(1)} MB'
+      : '${(byteLength / 1024).ceil()} KB';
+  return typeLabel.isEmpty ? sizeLabel : '$sizeLabel • $typeLabel';
+}
+
+int? _firstRuntimeAttachmentInt(
+  Map<String, Object?> attachment,
+  List<String> keys,
+) {
+  for (final key in keys) {
+    final value = attachment[key];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final parsed = int.tryParse(value.trim());
+      if (parsed != null) return parsed;
+    }
+  }
+  return null;
+}
+
+String _runtimeAttachmentTypeLabel(String mimeType) {
+  final normalized = mimeType.trim().toLowerCase();
+  if (normalized == 'application/pdf') return 'PDF';
+  if (normalized.startsWith('image/')) return 'Image';
+  if (normalized.startsWith('audio/')) return 'Audio';
+  if (normalized.startsWith('video/')) return 'Video';
+  return '';
 }
 
 Uint8List? _attachmentBytesFromRuntimePayload(Map<String, Object?> attachment) {

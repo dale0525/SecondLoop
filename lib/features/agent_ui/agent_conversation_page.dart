@@ -41,6 +41,7 @@ import '../attachments/attachment_draft_builders.dart';
 import '../attachments/attachment_draft_send_contract.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../conversation_cards/approval_preview_card.dart';
+import '../conversation_cards/calendar_event_approval_card.dart';
 import '../conversation_cards/calendar_email_card.dart';
 import '../conversation_cards/daily_brief_card.dart';
 import '../conversation_cards/media_summary_card.dart';
@@ -64,6 +65,7 @@ import 'agent_ui_acceptance_driver.dart';
 
 part 'agent_assistant_text_message.dart';
 part 'agent_conversation_attachments.dart';
+part 'agent_conversation_attachment_widgets.dart';
 part 'agent_conversation_runtime_pagination.dart';
 part 'agent_conversation_runtime_helpers.dart';
 part 'agent_runtime_media_results.dart';
@@ -73,6 +75,7 @@ part 'agent_desktop_workbench_layout.dart';
 part 'agent_desktop_workbench_primitives.dart';
 part 'agent_operating_research_cards.dart';
 part 'agent_operating_reminder_cards.dart';
+part 'agent_operating_message_bubbles.dart';
 part 'agent_operating_system_cards.dart';
 part 'agent_conversation_widgets.dart';
 

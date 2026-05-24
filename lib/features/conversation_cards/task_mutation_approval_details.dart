@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/secretary_runtime_client.dart';
+import 'runtime_approval_record_helpers.dart';
 
 @immutable
 final class TaskMutationApprovalDetails {
@@ -195,15 +196,7 @@ final class TaskMutationApprovalDetails {
 }
 
 String? taskMutationApprovalFirstString(List<Object?> values) {
-  for (final value in values) {
-    if (value is String) {
-      final trimmed = value.trim();
-      if (trimmed.isNotEmpty) return trimmed;
-    } else if (value is num) {
-      return '$value';
-    }
-  }
-  return null;
+  return runtimeApprovalFirstString(values);
 }
 
 RuntimeWorkingSetRecord? _taskRecordById(
