@@ -560,6 +560,16 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
           return;
         }
         if (!mounted) return;
+        if (result.sawVisibleDelta &&
+            !_hasVisibleRuntimeAssistantContent(result.assistantContent)) {
+          _showRuntimeSendFallback(
+            userContent: messageText,
+            userAttachments: outgoingAttachmentViews,
+            result: result,
+          );
+          _scrollToLatest();
+          return;
+        }
         setState(() {
           _applyRuntimeResultMediaFallback(result);
           _runtimeApprovalItems = _validApprovalItems(
@@ -610,6 +620,15 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
 
   void _updateRuntimeState(VoidCallback update) {
     setState(update);
+  }
+
+  bool _hasVisibleRuntimeAssistantContent(String content) {
+    final normalized = content.trim();
+    if (normalized.isEmpty) return true;
+    return _messages.any(
+      (message) =>
+          message.role == 'assistant' && message.content.trim() == normalized,
+    );
   }
 
   void _scrollToLatest() {

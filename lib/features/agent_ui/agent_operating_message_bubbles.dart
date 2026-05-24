@@ -202,10 +202,10 @@ final class _OperatingProcessingStrip extends StatelessWidget {
                 Text(
                   labels[index],
                   style: AgentOperatingSystemTokens.code.copyWith(
-                    color: labels[index] == 'vault write'
+                    color: labels[index].toLowerCase().contains('vault')
                         ? AgentOperatingSystemTokens.secondary
                         : AgentOperatingSystemTokens.onSurfaceVariant,
-                    fontWeight: labels[index] == 'vault write'
+                    fontWeight: labels[index].toLowerCase().contains('vault')
                         ? FontWeight.w800
                         : FontWeight.w500,
                   ),

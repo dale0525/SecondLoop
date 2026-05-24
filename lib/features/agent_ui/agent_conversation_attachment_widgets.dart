@@ -27,8 +27,9 @@ final class _MessageAttachmentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final previewBytes = attachment.bytes;
+    final isImage = attachment.isImage && previewBytes != null;
     return SizedBox(
-      width: 180,
+      width: isImage ? 240 : 180,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -48,9 +49,8 @@ final class _MessageAttachmentTile extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: double.infinity,
-                    height:
-                        attachment.isImage && previewBytes != null ? 72 : 48,
-                    child: attachment.isImage && previewBytes != null
+                    height: isImage ? 112 : 48,
+                    child: isImage
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(
                               AgentDesignTokens.radiusSm,

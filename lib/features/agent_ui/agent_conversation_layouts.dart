@@ -84,6 +84,10 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
       runtimeState: _runtimeAgentState,
       messages: _messages,
     );
+    final vaultUploadActive = _hasOperatingVaultUploadState(
+      runtimeState: _runtimeAgentState,
+      attachmentsByMessageId: _messageAttachmentsById,
+    );
     return ColoredBox(
       color: AgentOperatingSystemTokens.background,
       child: Column(
@@ -91,6 +95,7 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
           _OperatingTopAppBar(
             pendingApprovals: _runtimeApprovalItems.length,
             webResearchActive: webResearchActive,
+            vaultUploadActive: vaultUploadActive,
           ),
           Expanded(
             child: FutureBuilder<List<Message>>(
@@ -196,10 +201,12 @@ final class _OperatingTopAppBar extends StatelessWidget {
   const _OperatingTopAppBar({
     required this.pendingApprovals,
     required this.webResearchActive,
+    required this.vaultUploadActive,
   });
 
   final int pendingApprovals;
   final bool webResearchActive;
+  final bool vaultUploadActive;
 
   @override
   Widget build(BuildContext context) {
@@ -216,64 +223,115 @@ final class _OperatingTopAppBar extends StatelessWidget {
           height: 56,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                if (!webResearchActive) ...[
-                  ClipOval(
-                    child: Image.asset(
-                      'assets/icon/tray_icon.png',
-                      width: 32,
-                      height: 32,
-                      fit: BoxFit.cover,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final showVaultUploadChip =
+                    vaultUploadActive && constraints.maxWidth >= 430;
+                return Row(
+                  children: [
+                    if (!webResearchActive) ...[
+                      ClipOval(
+                        child: Image.asset(
+                          'assets/icon/tray_icon.png',
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: Text(
+                        webResearchActive ? 'SecondLoop' : 'SecondLoop Agent',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AgentOperatingSystemTokens.headlineMd,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                ],
-                Expanded(
-                  child: Text(
-                    webResearchActive ? 'SecondLoop' : 'SecondLoop Agent',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AgentOperatingSystemTokens.headlineMd,
-                  ),
-                ),
-                if (webResearchActive) ...[
-                  const _OperatingPrimaryModeChip(),
-                  const SizedBox(width: 6),
-                  const _OperatingWebResearchModeChip(),
-                ] else
-                  const _OperatingModeChip(),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Notifications',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {
-                    final message = pendingApprovals == 0
-                        ? 'No pending approvals'
-                        : '$pendingApprovals pending approval(s)';
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(message)),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.notifications_none_rounded,
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
-                  ),
-                ),
-                if (webResearchActive) ...[
-                  const SizedBox(width: 4),
-                  ClipOval(
-                    child: Image.asset(
-                      'assets/icon/tray_icon.png',
-                      width: 32,
-                      height: 32,
-                      fit: BoxFit.cover,
+                    if (webResearchActive) ...[
+                      const _OperatingPrimaryModeChip(),
+                      const SizedBox(width: 6),
+                      const _OperatingWebResearchModeChip(),
+                    ] else ...[
+                      const _OperatingModeChip(),
+                      if (showVaultUploadChip) ...[
+                        const SizedBox(width: 6),
+                        const _OperatingVaultUploadModeChip(),
+                      ],
+                    ],
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Notifications',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                        final message = pendingApprovals == 0
+                            ? 'No pending approvals'
+                            : '$pendingApprovals pending approval(s)';
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(message)),
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.notifications_none_rounded,
+                        color: AgentOperatingSystemTokens.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                ],
-              ],
+                    if (webResearchActive) ...[
+                      const SizedBox(width: 4),
+                      ClipOval(
+                        child: Image.asset(
+                          'assets/icon/tray_icon.png',
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _OperatingVaultUploadModeChip extends StatelessWidget {
+  const _OperatingVaultUploadModeChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AgentOperatingSystemTokens.surfaceContainerHigh,
+        borderRadius:
+            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
+        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_upload_outlined,
+              size: 13,
+              color: AgentOperatingSystemTokens.secondary,
+            ),
+            SizedBox(width: 4),
+            Text(
+              'Vault Upload',
+              style: TextStyle(
+                color: AgentOperatingSystemTokens.onSurfaceVariant,
+                fontSize: 10,
+                height: 1.2,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -628,6 +686,16 @@ final class _OperatingMessageList extends StatelessWidget {
             onApprove: () => onApproveApproval(item),
             onReject: () => onRejectApproval(item),
           )
+        else if (item.kind == 'reminder_confirmation')
+          _OperatingReminderCandidateCard(
+            item: item,
+            onApprove: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onApproveApproval(item),
+            onReject: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onRejectApproval(item),
+          )
         else if (item.kind == 'recurring_reminder_confirmation')
           _OperatingRecurringReminderCandidateCard(
             item: item,
@@ -702,8 +770,25 @@ final class _OperatingMessageList extends StatelessWidget {
         messageAttachmentsById.values.any((items) => items.isNotEmpty);
     final hasCalendarApproval =
         approvalItems.any((item) => item.kind == 'calendar_event_confirmation');
+    final hasMediaResult = messageMediaResultsById.values.any(
+      (results) => results.any((result) => result.hasVisibleContent),
+    );
+    final hasMediaAttachment = messageAttachmentsById.values.any(
+      (items) => items.any(
+        (attachment) =>
+            attachment.isImage ||
+            attachment.mimeType.trim().toLowerCase() == 'application/pdf',
+      ),
+    );
     if (hasAttachments) {
-      labels.add('email-analysis');
+      if (hasCalendarApproval) {
+        labels.add('email-analysis');
+      } else if (hasMediaAttachment || hasMediaResult) {
+        labels.add('ocr');
+        labels.add('summarize');
+      } else {
+        labels.add('attachment-ingest');
+      }
     }
     if (taskRecords.isNotEmpty || todos.isNotEmpty) {
       labels.add('task-management');
@@ -717,8 +802,8 @@ final class _OperatingMessageList extends StatelessWidget {
     if (hasCalendarApproval) {
       labels.add('calendar-skill');
     }
-    if (taskRecords.isNotEmpty || hasMemoryContext) {
-      labels.add('vault write');
+    if (taskRecords.isNotEmpty || hasMemoryContext || hasMediaResult) {
+      labels.add(hasMediaResult ? 'source synced to Vault' : 'vault write');
     }
     return labels.length == 1 ? const <String>[] : labels;
   }
@@ -737,6 +822,23 @@ final class _OperatingMessageList extends StatelessWidget {
           record.kind == 'media_result',
     );
   }
+}
+
+bool _hasOperatingVaultUploadState({
+  required RuntimeAgentState? runtimeState,
+  required Map<String, List<_AgentMessageAttachmentView>>
+      attachmentsByMessageId,
+}) {
+  if (attachmentsByMessageId.values.any((items) => items.isNotEmpty)) {
+    return true;
+  }
+  return runtimeState?.workingSetRecords.any(
+        (record) =>
+            record.kind == 'file' ||
+            record.kind == 'attachment' ||
+            record.kind == 'media_result',
+      ) ??
+      false;
 }
 
 final class _OperatingActionCardGrid extends StatelessWidget {

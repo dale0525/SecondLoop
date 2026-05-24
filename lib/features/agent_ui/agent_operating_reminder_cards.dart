@@ -338,6 +338,128 @@ final class _OperatingRecurringReminderCandidateCard extends StatelessWidget {
   }
 }
 
+final class _OperatingReminderCandidateCard extends StatelessWidget {
+  const _OperatingReminderCandidateCard({
+    required this.item,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final SecretaryRuntimeApprovalItem item;
+  final VoidCallback? onApprove;
+  final VoidCallback? onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final record = item.record ?? const <String, Object?>{};
+    final title = _firstOperatingString([
+          record['title'],
+          record['text'],
+          record['content'],
+          item.title,
+        ]) ??
+        item.title;
+    final description = _firstOperatingString([
+          record['description'],
+          record['summary'],
+          record['body'],
+          item.reason,
+        ]) ??
+        item.reason;
+    final due = _firstOperatingString([
+          record['due_label'],
+          record['dueLabel'],
+          record['schedule_label'],
+          record['scheduleLabel'],
+          record['next_trigger_label'],
+          record['nextTriggerLabel'],
+        ]) ??
+        agentTaskDueLabelFromMs(_runtimeDueAtMs(record));
+    final source = _firstOperatingString([
+          record['source'],
+          record['source_label'],
+          record['sourceLabel'],
+          record['source_id'],
+          record['sourceId'],
+        ]) ??
+        'runtime';
+
+    return KeyedSubtree(
+      key: ValueKey('agent_operating_reminder_candidate_${item.id}'),
+      child: _OperatingCard(
+        header: const Row(
+          children: [
+            Icon(
+              Icons.alarm_add_rounded,
+              color: AgentOperatingSystemTokens.muted,
+              size: 18,
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Reminder Candidate',
+                style: AgentOperatingSystemTokens.labelLg,
+              ),
+            ),
+            _OperatingStatusBadge(
+              label: 'Pending Approval',
+              background: AgentOperatingSystemTokens.secondary,
+              foreground: AgentOperatingSystemTokens.onSecondaryContainer,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: AgentOperatingSystemTokens.headlineSm.copyWith(
+                color: AgentOperatingSystemTokens.onSurface,
+              ),
+            ),
+            if (description.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                description,
+                style: AgentOperatingSystemTokens.bodySm.copyWith(
+                  color: AgentOperatingSystemTokens.onSurfaceVariant,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            _OperatingDetailRow(label: 'Due:', value: due),
+            const SizedBox(height: 5),
+            _OperatingDetailRow(label: 'Source:', value: source),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _OperatingFooterTextButton(
+                    key:
+                        ValueKey('agent_operating_reminder_approve_${item.id}'),
+                    label: 'Approve',
+                    primary: true,
+                    onPressed: onApprove,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _OperatingFooterTextButton(
+                    key:
+                        ValueKey('agent_operating_reminder_dismiss_${item.id}'),
+                    label: 'Dismiss',
+                    onPressed: onReject,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 final class _OperatingFooterTextButton extends StatelessWidget {
   const _OperatingFooterTextButton({
     required super.key,

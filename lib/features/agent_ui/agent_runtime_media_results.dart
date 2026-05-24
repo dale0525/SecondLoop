@@ -5,8 +5,12 @@ final class _AgentMessageMediaResultView {
     required this.id,
     required this.title,
     required this.mediaType,
+    this.ocrText,
     this.transcript,
     this.summary,
+    this.sourceId,
+    this.confidenceLabel,
+    this.savedToVaultLabel,
     this.decisions = const <String>[],
     this.actionItems = const <String>[],
     this.sources = const <String>[],
@@ -15,19 +19,29 @@ final class _AgentMessageMediaResultView {
   final String id;
   final String title;
   final String mediaType;
+  final String? ocrText;
   final String? transcript;
   final String? summary;
+  final String? sourceId;
+  final String? confidenceLabel;
+  final String? savedToVaultLabel;
   final List<String> decisions;
   final List<String> actionItems;
   final List<String> sources;
 
   bool get hasVisibleContent {
-    return (transcript?.trim().isNotEmpty ?? false) ||
+    return (ocrText?.trim().isNotEmpty ?? false) ||
+        (transcript?.trim().isNotEmpty ?? false) ||
         (summary?.trim().isNotEmpty ?? false) ||
+        (sourceId?.trim().isNotEmpty ?? false) ||
+        (confidenceLabel?.trim().isNotEmpty ?? false) ||
+        (savedToVaultLabel?.trim().isNotEmpty ?? false) ||
         decisions.isNotEmpty ||
         actionItems.isNotEmpty ||
         sources.isNotEmpty;
   }
+
+  bool get isOcrResult => ocrText?.trim().isNotEmpty ?? false;
 }
 
 List<RuntimeWorkingSetRecord> _runtimeMediaResultRecordsForState(
@@ -218,17 +232,15 @@ _AgentMessageMediaResultView? _agentMessageMediaResultViewFromRecord(
   required _RuntimeMediaInlineLabels labels,
 }) {
   final raw = record.raw;
-  final transcript = _firstRuntimeMediaString([
-    raw['transcript'],
-    raw['transcript_text'],
-    raw['transcriptText'],
-    raw['transcript_full'],
-    raw['transcriptFull'],
-    raw['transcription'],
-    raw['ocr_text'],
-    raw['ocrText'],
-    record.text,
-  ]);
+  final mediaType = _firstRuntimeMediaString([
+        raw['media_type'],
+        raw['mediaType'],
+        attachment?.mediaType,
+      ]) ??
+      'file';
+  final ocrText = _runtimeMediaOcrText(raw, record: record);
+  final transcript = _runtimeMediaTranscript(raw, mediaType: mediaType);
+  final primaryText = ocrText ?? transcript;
   final rawSummary = _firstRuntimeMediaString([
     raw['meeting_minutes'],
     raw['meetingMinutes'],
@@ -241,7 +253,7 @@ _AgentMessageMediaResultView? _agentMessageMediaResultViewFromRecord(
     record.summary,
     record.body,
   ]);
-  final summary = _sameRuntimeMediaText(rawSummary, transcript)
+  final summary = _sameRuntimeMediaText(rawSummary, primaryText)
       ? null
       : _runtimeMediaPreviewText(rawSummary);
   final title = _firstRuntimeMediaString([
@@ -253,19 +265,17 @@ _AgentMessageMediaResultView? _agentMessageMediaResultViewFromRecord(
       ]) ??
       record.title.ifNotBlank ??
       record.id;
-  final mediaType = _firstRuntimeMediaString([
-        raw['media_type'],
-        raw['mediaType'],
-        attachment?.mediaType,
-      ]) ??
-      'file';
 
   return _AgentMessageMediaResultView(
     id: record.id,
     title: title,
     mediaType: mediaType,
+    ocrText: _runtimeMediaPreviewText(ocrText),
     transcript: _runtimeMediaPreviewText(transcript),
     summary: summary,
+    sourceId: _runtimeMediaSourceId(raw),
+    confidenceLabel: _runtimeMediaConfidenceLabel(raw),
+    savedToVaultLabel: _runtimeMediaSavedToVaultLabel(raw),
     decisions: _runtimeMediaStringList(
       _firstRuntimeMediaValue([
         raw['decisions'],
@@ -289,6 +299,116 @@ _AgentMessageMediaResultView? _agentMessageMediaResultViewFromRecord(
     ),
     sources: _runtimeMediaSources(raw, attachment: attachment),
   );
+}
+
+String? _runtimeMediaOcrText(
+  Map<String, Object?> raw, {
+  required RuntimeWorkingSetRecord record,
+}) {
+  return _firstRuntimeMediaString([
+    raw['ocr_text'],
+    raw['ocrText'],
+    raw['ocr_text_full'],
+    raw['ocrTextFull'],
+    raw['ocr_text_excerpt'],
+    raw['ocrTextExcerpt'],
+    raw['readable_text_full'],
+    raw['readableTextFull'],
+    raw['readable_text_excerpt'],
+    raw['readableTextExcerpt'],
+    record.text,
+  ]);
+}
+
+String? _runtimeMediaTranscript(
+  Map<String, Object?> raw, {
+  required String mediaType,
+}) {
+  final normalized = mediaType.trim().toLowerCase();
+  if (normalized != 'audio' && normalized != 'video') return null;
+  return _firstRuntimeMediaString([
+    raw['transcript'],
+    raw['transcript_text'],
+    raw['transcriptText'],
+    raw['transcript_full'],
+    raw['transcriptFull'],
+    raw['transcription'],
+  ]);
+}
+
+String? _runtimeMediaSourceId(Map<String, Object?> raw) {
+  return _firstRuntimeMediaString([
+    raw['source_id'],
+    raw['sourceId'],
+    raw['source_attachment_id'],
+    raw['sourceAttachmentId'],
+    raw['attachment_id'],
+    raw['attachmentId'],
+    raw['blob_id'],
+    raw['blobId'],
+    raw['sha256'],
+  ]);
+}
+
+String? _runtimeMediaConfidenceLabel(Map<String, Object?> raw) {
+  final value = _firstRuntimeMediaValue([
+    raw['confidence_label'],
+    raw['confidenceLabel'],
+    raw['confidence_percent'],
+    raw['confidencePercent'],
+    raw['confidence'],
+    raw['confidence_score'],
+    raw['confidenceScore'],
+    raw['ocr_confidence'],
+    raw['ocrConfidence'],
+  ]);
+  if (value == null) return null;
+  if (value is num) {
+    final percent = value > 0 && value <= 1 ? value * 100 : value;
+    return '${percent.round()}%';
+  }
+  final text = '$value'.trim();
+  if (text.isEmpty || text == 'null') return null;
+  final parsed = double.tryParse(text);
+  if (parsed != null) {
+    final percent = parsed > 0 && parsed <= 1 ? parsed * 100 : parsed;
+    return '${percent.round()}%';
+  }
+  return text;
+}
+
+String? _runtimeMediaSavedToVaultLabel(Map<String, Object?> raw) {
+  final explicit = _firstRuntimeMediaValue([
+    raw['saved_to_vault'],
+    raw['savedToVault'],
+    raw['vault_saved'],
+    raw['vaultSaved'],
+    raw['synced_to_vault'],
+    raw['syncedToVault'],
+  ]);
+  if (explicit is bool) return explicit ? 'Yes' : 'No';
+  if (explicit is String) {
+    final normalized = explicit.trim().toLowerCase();
+    if (normalized == 'true' || normalized == 'yes' || normalized == 'synced') {
+      return 'Yes';
+    }
+    if (normalized == 'false' || normalized == 'no') return 'No';
+  }
+
+  final status = _firstRuntimeMediaString([
+    raw['vault_status'],
+    raw['vaultStatus'],
+    raw['source_sync_status'],
+    raw['sourceSyncStatus'],
+    raw['status'],
+  ])?.toLowerCase();
+  if (status == null) return null;
+  if (status.contains('vault') && status.contains('sync')) return 'Yes';
+  if (status == 'synced' || status == 'saved' || status == 'saved_to_vault') {
+    return 'Yes';
+  }
+  if (status.contains('failed')) return 'No';
+  return null;
 }
 
 List<String> _runtimeMediaSources(
@@ -552,11 +672,11 @@ final class _AssistantRuntimeMediaResult extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.summarize_outlined, size: 18),
+            const Icon(Icons.analytics_outlined, size: 18),
             const SizedBox(width: AgentDesignTokens.gapSm),
             Flexible(
               child: Text(
-                result.title,
+                'Media Result',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: _AgentConversationPageState._ink,
                       fontWeight: FontWeight.w800,
@@ -565,6 +685,22 @@ final class _AssistantRuntimeMediaResult extends StatelessWidget {
             ),
           ],
         ),
+        if (result.title.trim().isNotEmpty) ...[
+          const SizedBox(height: AgentDesignTokens.gapSm),
+          Text(
+            result.title,
+            style: AgentOperatingSystemTokens.labelLg.copyWith(
+              color: AgentOperatingSystemTokens.onSurfaceVariant,
+            ),
+          ),
+        ],
+        if (result.ocrText != null)
+          _RuntimeMediaResultTextSection(
+            title: 'OCR TEXT',
+            body: result.ocrText!,
+            labelStyle: labelStyle,
+            highlighted: true,
+          ),
         if (result.transcript != null)
           _RuntimeMediaResultTextSection(
             title: labels.transcript,
@@ -576,8 +712,14 @@ final class _AssistantRuntimeMediaResult extends StatelessWidget {
             title: _runtimeMediaSummaryLabel(
               result.mediaType,
               labels: labels,
+              ocr: result.isOcrResult,
             ),
             body: result.summary!,
+            labelStyle: labelStyle,
+          ),
+        if (_runtimeMediaMetadataRows(result).isNotEmpty)
+          _RuntimeMediaResultMetadataRows(
+            rows: _runtimeMediaMetadataRows(result),
             labelStyle: labelStyle,
           ),
         if (result.decisions.isNotEmpty)
@@ -612,11 +754,13 @@ final class _RuntimeMediaResultTextSection extends StatelessWidget {
     required this.title,
     required this.body,
     required this.labelStyle,
+    this.highlighted = false,
   });
 
   final String title;
   final String body;
   final TextStyle? labelStyle;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
@@ -628,18 +772,107 @@ final class _RuntimeMediaResultTextSection extends StatelessWidget {
         children: [
           Text(title, style: labelStyle),
           const SizedBox(height: AgentDesignTokens.gapXs),
-          Text(
-            body,
-            style: const TextStyle(
-              color: _AgentConversationPageState._ink,
-              fontWeight: FontWeight.w600,
-              height: 1.45,
+          DecoratedBox(
+            decoration: highlighted
+                ? BoxDecoration(
+                    color: AgentOperatingSystemTokens.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(
+                      AgentOperatingSystemTokens.radiusSm,
+                    ),
+                    border: Border.all(
+                      color: AgentOperatingSystemTokens.outlineVariant,
+                    ),
+                  )
+                : const BoxDecoration(),
+            child: Padding(
+              padding: highlighted
+                  ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+                  : EdgeInsets.zero,
+              child: Text(
+                body,
+                style: TextStyle(
+                  color: highlighted
+                      ? AgentOperatingSystemTokens.secondary
+                      : _AgentConversationPageState._ink,
+                  fontFamily: highlighted ? 'monospace' : null,
+                  fontWeight: FontWeight.w600,
+                  height: 1.45,
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+final class _RuntimeMediaResultMetadataRows extends StatelessWidget {
+  const _RuntimeMediaResultMetadataRows({
+    required this.rows,
+    required this.labelStyle,
+  });
+
+  final List<(String, String)> rows;
+  final TextStyle? labelStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AgentDesignTokens.gapMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < rows.length; index++)
+            Padding(
+              padding: EdgeInsets.only(
+                bottom: index == rows.length - 1 ? 0 : AgentDesignTokens.gapXs,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 112,
+                    child: Text(rows[index].$1, style: labelStyle),
+                  ),
+                  Expanded(
+                    child: Text(
+                      rows[index].$2,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: _AgentConversationPageState._ink,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+List<(String, String)> _runtimeMediaMetadataRows(
+  _AgentMessageMediaResultView result,
+) {
+  final rows = <(String, String)>[];
+  if (result.sourceId?.trim().isNotEmpty ?? false) {
+    rows.add(('Source ID:', result.sourceId!.trim()));
+  }
+  if (result.confidenceLabel?.trim().isNotEmpty ?? false) {
+    rows.add(('Confidence:', result.confidenceLabel!.trim()));
+  }
+  final savedLabel = result.savedToVaultLabel?.trim();
+  if (savedLabel != null && savedLabel.isNotEmpty) {
+    rows.add(('Saved to Vault:', savedLabel));
+  } else if (result.isOcrResult) {
+    rows.add(('Saved to Vault:', 'Not reported'));
+  }
+  return rows;
 }
 
 final class _RuntimeMediaResultListSection extends StatelessWidget {
@@ -690,7 +923,9 @@ final class _RuntimeMediaResultListSection extends StatelessWidget {
 String _runtimeMediaSummaryLabel(
   String mediaType, {
   required _RuntimeMediaInlineLabels labels,
+  required bool ocr,
 }) {
+  if (ocr) return 'SUMMARY';
   final normalized = mediaType.trim().toLowerCase();
   return normalized == 'audio' ? labels.meetingMinutes : labels.summary;
 }
