@@ -178,6 +178,10 @@ Initial mapping from `manifest.json` before continuing screen implementation:
 
 ## Child Task Map
 
+- `05-24-stitch-screen-01-personal-secretary-flow`: adopt and close out the
+  already-implemented first canonical screen,
+  `7478ab2f8f9b4ef2b89f2e8c6c1df11e`
+  (`Agent Chat: Personal Secretary Flow (Refined)`).
 - `05-24-stitch-screen-02-web-research-closeout`: adopt and close out the
   existing screen 2 implementation and validation evidence.
 - `05-24-stitch-screen-03-reminder-clarification`: implement and verify the next
@@ -193,6 +197,28 @@ Initial mapping from `manifest.json` before continuing screen implementation:
 - `05-24-stitch-screen-06-file-ocr-attachment`: implement and verify
   `2384fe0e4de54f4e97f9935f813ecd01`
   (`Chat: File OCR With Attachment Tile (Approved)`).
+- `05-24-stitch-screen-07-meeting-audio-action-candidates`: implement and
+  verify `3656acaa364f4e58b9d71c1d79f41809`
+  (`Chat: Meeting Audio Action Candidates (Approved)`).
+- `05-24-stitch-screen-08-email-unauthorized-draft-only`: implement and verify
+  `a8435575721c43b9a5398a242abc28d0`
+  (`Email Unauthorized: Draft Only (Approved)`).
+- `05-24-stitch-screen-09-safety-purchase-payment-refusal`: implement and
+  verify `8c87969f58254457bfb9dd85718fdd49`
+  (`Safety: Purchase Payment Refusal (Approved)`).
+- `05-24-stitch-screen-10-safety-local-computer-operation-refusal`: implement
+  and verify `b1bc92c06b364d0594dea7c27cf02802`
+  (`Safety: Local Computer Operation Refusal (Approved)`).
+- `05-24-stitch-screen-11-self-managed-setup-provider-secrets`: implement and
+  verify `113754579c364c3b994e7bfbaa6f99d6`
+  (`Self-managed Setup: Provider Secrets and Capability Verification
+  (Approved)`).
+- `05-24-stitch-screen-12-connect-cloudflare-security-refinement`: implement
+  and verify `7296ed1e87b9466489af5de513f0e24b`
+  (`Setup: Connect Cloudflare (Security Refinement)`).
+- `05-24-stitch-screen-13-desktop-agent-workbench-research-continuity`:
+  implement and verify `37821c63daf74e7d96972338375758e7`
+  (`Desktop Agent Workbench: Research Continuity Refined`).
 
 ## Notes
 

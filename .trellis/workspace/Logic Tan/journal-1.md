@@ -289,3 +289,37 @@ Validation completed before finish-work:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Stitch screen 08 email unauthorized draft-only
+
+**Date**: 2026-05-24
+**Task**: Stitch screen 08 email unauthorized draft-only
+**Branch**: `main`
+
+### Summary
+
+Implemented the canonical unauthorized-email screen with runtime-backed draft-only and fail-closed guardrail cards, verified with widget tests, analyze, verify-changed, and Computer Use manual QA.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7ed2679b` | (see git log) |
+| `a62457e8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -19,11 +19,19 @@
   "pr_url": null,
   "subtasks": [],
   "children": [
+    "05-24-stitch-screen-01-personal-secretary-flow",
     "05-24-stitch-screen-02-web-research-closeout",
     "05-24-stitch-screen-03-reminder-clarification",
     "05-24-stitch-screen-04-task-mutation-approval",
     "05-24-stitch-screen-05-calendar-email-approval",
-    "05-24-stitch-screen-06-file-ocr-attachment"
+    "05-24-stitch-screen-06-file-ocr-attachment",
+    "05-24-stitch-screen-07-meeting-audio-action-candidates",
+    "05-24-stitch-screen-08-email-unauthorized-draft-only",
+    "05-24-stitch-screen-09-safety-purchase-payment-refusal",
+    "05-24-stitch-screen-10-safety-local-computer-operation-refusal",
+    "05-24-stitch-screen-11-self-managed-setup-provider-secrets",
+    "05-24-stitch-screen-12-connect-cloudflare-security-refinement",
+    "05-24-stitch-screen-13-desktop-agent-workbench-research-continuity"
   ],
   "parent": null,
   "relatedFiles": [],
