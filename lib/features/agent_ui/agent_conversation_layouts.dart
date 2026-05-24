@@ -88,6 +88,8 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
       runtimeState: _runtimeAgentState,
       attachmentsByMessageId: _messageAttachmentsById,
     );
+    final emailUnavailableActive =
+        _hasOperatingEmailUnavailableState(_runtimeAgentState);
     return ColoredBox(
       color: AgentOperatingSystemTokens.background,
       child: Column(
@@ -96,6 +98,7 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
             pendingApprovals: _runtimeApprovalItems.length,
             webResearchActive: webResearchActive,
             vaultUploadActive: vaultUploadActive,
+            emailUnavailableActive: emailUnavailableActive,
           ),
           Expanded(
             child: FutureBuilder<List<Message>>(
@@ -202,11 +205,13 @@ final class _OperatingTopAppBar extends StatelessWidget {
     required this.pendingApprovals,
     required this.webResearchActive,
     required this.vaultUploadActive,
+    required this.emailUnavailableActive,
   });
 
   final int pendingApprovals;
   final bool webResearchActive;
   final bool vaultUploadActive;
+  final bool emailUnavailableActive;
 
   @override
   Widget build(BuildContext context) {
@@ -227,6 +232,8 @@ final class _OperatingTopAppBar extends StatelessWidget {
               builder: (context, constraints) {
                 final showVaultUploadChip =
                     vaultUploadActive && constraints.maxWidth >= 430;
+                final showEmailUnavailableChip =
+                    emailUnavailableActive && constraints.maxWidth >= 560;
                 return Row(
                   children: [
                     if (!webResearchActive) ...[
@@ -257,6 +264,10 @@ final class _OperatingTopAppBar extends StatelessWidget {
                       if (showVaultUploadChip) ...[
                         const SizedBox(width: 6),
                         const _OperatingVaultUploadModeChip(),
+                      ],
+                      if (showEmailUnavailableChip) ...[
+                        const SizedBox(width: 6),
+                        const _OperatingEmailUnavailableModeChip(),
                       ],
                     ],
                     const SizedBox(width: 8),
@@ -564,10 +575,16 @@ final class _OperatingMessageList extends StatelessWidget {
         );
         final createdTaskCards =
             _createdTaskCards(sourceUserMessageId, message.id);
+        final emailRuntimeCards = _emailRuntimeCards(
+          context: context,
+          sourceUserMessageId: sourceUserMessageId,
+          assistantMessageId: message.id,
+        );
         sourceUserMessageId = null;
         if (_isLatestAssistantMessage(index)) {
           final actionCards = <Widget>[
             ...createdTaskCards,
+            ...emailRuntimeCards,
             ..._approvalCards(context),
           ];
           if (actionCards.isNotEmpty) {
@@ -578,7 +595,7 @@ final class _OperatingMessageList extends StatelessWidget {
             children.add(_OperatingContextStrip(state: runtimeState));
           }
         } else {
-          children.addAll(createdTaskCards);
+          children.addAll([...createdTaskCards, ...emailRuntimeCards]);
         }
       } else {
         children.add(
@@ -674,6 +691,43 @@ final class _OperatingMessageList extends StatelessWidget {
           onOpen: () => onOpenTask(record),
         ),
     ];
+  }
+
+  List<Widget> _emailRuntimeCards({
+    required BuildContext context,
+    required String? sourceUserMessageId,
+    required String assistantMessageId,
+  }) {
+    final state = runtimeState;
+    if (state == null) return const <Widget>[];
+    final sourceIds = {
+      assistantMessageId,
+      if (sourceUserMessageId != null) sourceUserMessageId,
+    };
+    return _operatingEmailRuntimeCards(
+      state: state,
+      sourceIds: sourceIds,
+      onSaveDraft: () => _showEmailDraftUnavailable(context),
+      onConnectEmail: () => _showEmailConnectorUnavailable(context),
+    );
+  }
+
+  void _showEmailDraftUnavailable(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Draft is available locally; sending stays blocked until Email is connected.',
+        ),
+      ),
+    );
+  }
+
+  void _showEmailConnectorUnavailable(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Email setup is unavailable from this screen.'),
+      ),
+    );
   }
 
   List<Widget> _approvalCards(BuildContext context) {
@@ -844,6 +898,7 @@ final class _OperatingMessageList extends StatelessWidget {
     final state = runtimeState;
     if (taskRecords.isNotEmpty || todos.isNotEmpty) return true;
     if (state == null) return false;
+    if (_isOperatingEmailOnlyDegradedState(state)) return false;
     if (state.recentEntityRefs.isNotEmpty || state.memoryRecords.isNotEmpty) {
       return true;
     }

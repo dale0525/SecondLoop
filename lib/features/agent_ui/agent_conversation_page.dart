@@ -77,6 +77,7 @@ part 'agent_desktop_workbench_primitives.dart';
 part 'agent_operating_research_cards.dart';
 part 'agent_operating_reminder_cards.dart';
 part 'agent_operating_action_candidate_cards.dart';
+part 'agent_operating_email_cards.dart';
 part 'agent_operating_message_bubbles.dart';
 part 'agent_operating_system_cards.dart';
 part 'agent_conversation_widgets.dart';
