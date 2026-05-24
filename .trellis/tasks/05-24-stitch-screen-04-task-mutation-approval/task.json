@@ -1,9 +1,9 @@
 {
-  "id": "stitch-canonical-screen-continuation",
-  "name": "stitch-canonical-screen-continuation",
-  "title": "Stitch canonical screen continuation",
+  "id": "stitch-screen-04-task-mutation-approval",
+  "name": "stitch-screen-04-task-mutation-approval",
+  "title": "Stitch screen 04 task mutation approval",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -18,12 +18,8 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "05-24-stitch-screen-02-web-research-closeout",
-    "05-24-stitch-screen-03-reminder-clarification",
-    "05-24-stitch-screen-04-task-mutation-approval"
-  ],
-  "parent": null,
+  "children": [],
+  "parent": "05-24-stitch-canonical-screen-continuation",
   "relatedFiles": [],
   "notes": "",
   "meta": {}

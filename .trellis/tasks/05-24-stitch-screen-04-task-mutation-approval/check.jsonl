@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Check frontend UI, state, type-safety, and quality rules before completion."}
+{"file": "docs/qa/final-product-acceptance.md", "reason": "Verify QA-TASK-REL behavior remains represented and testable."}
+{"file": "docs/product/final-product-shape.md", "reason": "Verify runtime-first boundaries and approval semantics before reporting completion."}
+{"file": "docs/stitch-export/secondloop-operating-system/manifest.json", "reason": "Verify screen 04 dimensions and canonical source paths for manual review."}

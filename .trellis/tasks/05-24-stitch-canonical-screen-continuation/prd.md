@@ -100,8 +100,13 @@ loop.
   - Purchase/payment/local shell/local computer operation must be refused or
     safely degraded.
   - Managed pro and self-managed expose the same user-facing capabilities.
-- After each screen, perform Computer Use manual review and run fresh relevant
-  checks before reporting completion.
+- After each screen, perform Computer Use manual review at the manifest/canonical
+  width and run fresh relevant checks before reporting completion.
+- Each screen-specific widget test should include a lightweight responsive width
+  matrix that covers narrow mobile, the manifest/canonical width, and desktop
+  width. Add extra Computer Use spot checks for non-canonical widths only when
+  the automated width matrix catches a layout issue or the screen includes
+  layout-sensitive controls.
 - Do not delete or revert user changes. Do not track `docs/` unless explicitly
   requested. Do not modify Stitch export source HTML/screenshots.
 - If a canonical screen requires server behavior that is absent in the app's
@@ -145,7 +150,11 @@ Initial mapping from `manifest.json` before continuing screen implementation:
       represented by a real degraded state.
 - [ ] Visual implementation is reviewed against manifest dimensions and local
       screenshot/HTML baselines.
-- [ ] Computer Use manual review is performed for each completed screen.
+- [ ] Each screen has automated responsive coverage for narrow mobile,
+      manifest/canonical, and desktop widths, with any discovered overflow fixed.
+- [ ] Computer Use manual review is performed for each completed screen at the
+      manifest/canonical width, with targeted non-canonical spot checks when the
+      automated width matrix exposes a responsive risk.
 - [ ] Relevant Flutter tests, analyze/typecheck, and changed-file verification
       run with fresh evidence.
 - [ ] Completion output for each screen includes:

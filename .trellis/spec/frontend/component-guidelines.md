@@ -61,6 +61,12 @@ Reference files:
   the shared approval decision path, and editable recurring reminder titles
   should use the runtime approval patch path only when `editableFields` contains
   `title`.
+- Treat `task_mutation_confirmation` as a family of mutation approvals, not as
+  a single title-change shape. Render the title-diff approval card only when
+  the runtime item explicitly advertises title editing (`editableFields`
+  contains `title`) or provides title-specific fields such as `current_title`,
+  `proposed_title`, `new_title`, or `target_title`. Due-time/status mutations
+  must keep a due/status approval preview instead of showing a false title diff.
 - Candidate-only flows should not render empty chrome. Suppress processing
   strips and context strips when the only available state is pending approvals
   and every context value would be `none`, `none yet`, or `0 files`.
