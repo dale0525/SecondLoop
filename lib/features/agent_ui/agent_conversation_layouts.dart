@@ -116,6 +116,7 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
                       const <RuntimeWorkingSetRecord>[],
                   todos: todos,
                   approvalItems: _runtimeApprovalItems,
+                  busyApprovalIds: _busyApprovalIds,
                   thinking: _thinking,
                   acceptanceCards: acceptanceCards,
                   pendingUserContent: _pendingUserContent,
@@ -410,6 +411,7 @@ final class _OperatingMessageList extends StatelessWidget {
     required this.taskRecords,
     required this.todos,
     required this.approvalItems,
+    required this.busyApprovalIds,
     required this.thinking,
     required this.acceptanceCards,
     required this.pendingUserContent,
@@ -431,6 +433,7 @@ final class _OperatingMessageList extends StatelessWidget {
   final List<RuntimeWorkingSetRecord> taskRecords;
   final List<Todo> todos;
   final List<SecretaryRuntimeApprovalItem> approvalItems;
+  final Set<String> busyApprovalIds;
   final bool thinking;
   final List<Widget> acceptanceCards;
   final String? pendingUserContent;
@@ -507,7 +510,7 @@ final class _OperatingMessageList extends StatelessWidget {
         if (_isLatestAssistantMessage(index)) {
           final actionCards = <Widget>[
             ...createdTaskCards,
-            ..._approvalCards(),
+            ..._approvalCards(context),
           ];
           if (actionCards.isNotEmpty) {
             children.add(_OperatingActionCardGrid(children: actionCards));
@@ -615,7 +618,7 @@ final class _OperatingMessageList extends StatelessWidget {
     ];
   }
 
-  List<Widget> _approvalCards() {
+  List<Widget> _approvalCards(BuildContext context) {
     if (approvalItems.isEmpty) return acceptanceCards;
     return [
       for (final item in approvalItems)
@@ -634,11 +637,46 @@ final class _OperatingMessageList extends StatelessWidget {
                 ? (title) => onEditApprovalTitle(item, title)
                 : null,
           )
+        else if (item.kind == 'task_mutation_confirmation' &&
+            isTaskTitleMutationApproval(item))
+          TaskMutationApprovalCard(
+            item: item,
+            taskRecords: taskRecords,
+            contextSnapshot: runtimeState?.latestContextSnapshot,
+            auditRefs:
+                runtimeState?.auditRefs ?? const <Map<String, Object?>>[],
+            recentEntityRefs: runtimeState?.recentEntityRefs ??
+                const <Map<String, Object?>>[],
+            busy: busyApprovalIds.contains(item.id),
+            onApprove: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onApproveApproval(item),
+            onReject: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onRejectApproval(item),
+            onEditTitle: item.editableFields.contains('title')
+                ? (title) => onEditApprovalTitle(item, title)
+                : null,
+          )
+        else if (item.kind == 'task_mutation_confirmation')
+          ApprovalPreviewCard(
+            change: _approvalPreviewChange(context, item),
+            onApprove: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onApproveApproval(item),
+            onReject: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onRejectApproval(item),
+          )
         else
           _RuntimeCandidateApprovalCard(
             item: item,
-            onApprove: () => onApproveApproval(item),
-            onReject: () => onRejectApproval(item),
+            onApprove: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onApproveApproval(item),
+            onReject: busyApprovalIds.contains(item.id)
+                ? null
+                : () => onRejectApproval(item),
           ),
     ];
   }
@@ -900,15 +938,16 @@ final class _OperatingProcessingStrip extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               const Icon(
                 Icons.settings_input_component_rounded,
                 size: 14,
                 color: AgentOperatingSystemTokens.secondary,
               ),
-              const SizedBox(width: 8),
               for (var index = 0; index < labels.length; index++) ...[
                 Text(
                   labels[index],
