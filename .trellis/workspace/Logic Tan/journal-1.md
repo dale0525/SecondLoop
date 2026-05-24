@@ -323,3 +323,37 @@ Implemented the canonical unauthorized-email screen with runtime-backed draft-on
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Stitch screen 09 purchase payment safety refusal
+
+**Date**: 2026-05-24
+**Task**: Stitch screen 09 purchase payment safety refusal
+**Branch**: `main`
+
+### Summary
+
+Implemented the canonical purchase/payment safety refusal screen, added runtime-backed safety cards and responsive widget coverage, manually reviewed the 780px screen, and recorded the frontend safety-card contract.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0fb3cf74` | (see git log) |
+| `3671f327` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
