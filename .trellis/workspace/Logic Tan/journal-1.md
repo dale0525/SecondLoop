@@ -357,3 +357,36 @@ Implemented the canonical purchase/payment safety refusal screen, added runtime-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: Stitch screen 10 local computer safety refusal
+
+**Date**: 2026-05-25
+**Task**: Stitch screen 10 local computer safety refusal
+**Branch**: `main`
+
+### Summary
+
+Implemented the canonical local-computer safety refusal screen with runtime-backed no-side-effect cards, safe manual checklist follow-up, responsive widget coverage, Computer Use review, and frontend safety spec update.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ae40d7e5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
