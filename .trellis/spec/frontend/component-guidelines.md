@@ -88,11 +88,22 @@ Reference files:
   and `kind == external_tool_block`, `external_side_effect_blocked`,
   `email_authorization_block`, or `tool_blocked` records for fail-closed
   metadata (`reason`, `connector`, `blocked_action`, `status_label`, `risk`,
-  `audit_id`, `tool`). The UI must not render a send/approve action for this
-  state; `Save Draft` and connector actions must either call a real local path
-  or show an honest unavailable/configuration result. Suppress empty context
-  strips when the only available runtime state is an email draft plus its
-  guardrail record.
+  `audit_id`, `tool`). Generic external block kinds such as
+  `external_side_effect_blocked` must still be confirmed as email-specific via
+  `tool` or `blocked_action` before rendering an email guardrail; purchase,
+  payment, local-computer, or other safety blocks belong to their own card
+  families. The UI must not render a send/approve action for this state; `Save
+  Draft` and connector actions must either call a real local path or show an
+  honest unavailable/configuration result. Suppress empty context strips when
+  the only available runtime state is an email draft plus its guardrail record.
+- Purchase/payment safety refusal cards must render from machine-readable
+  runtime records, not assistant prose. Match `purchase-payment-safety` /
+  `external_side_effect_blocked` records through explicit source or assistant
+  turn ids, display the blocked action, no-external-action status, audit/source
+  ids, and tool trace, and do not create an approval path for the transaction.
+  Safe alternatives may prefill or create research, checklist, or reminder
+  follow-ups, but must never initiate buying, booking, payment, transfer, or
+  signing.
 - Runtime media result cards must project `kind == media_result` records from
   `RuntimeAgentState.workingSetRecords` or the context snapshot working set,
   then associate them to assistant turns with explicit assistant/source ids

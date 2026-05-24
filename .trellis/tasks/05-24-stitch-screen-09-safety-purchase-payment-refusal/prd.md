@@ -46,6 +46,9 @@ book, pay, or call external transaction tools.
   but each control must be real or explicitly degraded.
 - Do not add a purchase, payment, ticket-booking, or hidden external-action
   tool path.
+- If backend work becomes necessary, do not persist backend repository paths,
+  deployment triggers, credentials, secrets, or environment-specific operational
+  details in tracked task artifacts.
 - Keep responsive automated coverage for narrow mobile, manifest width, and
   desktop width.
 
