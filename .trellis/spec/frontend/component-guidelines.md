@@ -81,6 +81,23 @@ Reference files:
   source/tool metadata, audit/context refs, and approval status). Edit controls
   should be visibly unavailable unless a real approval patch path is wired for
   the advertised editable field.
+- Runtime media result cards must project `kind == media_result` records from
+  `RuntimeAgentState.workingSetRecords` or the context snapshot working set,
+  then associate them to assistant turns with explicit assistant/source ids
+  before falling back to attachment matching. Keep the typed projection in
+  `agent_runtime_media_results.dart`, not inline in the page dispatcher.
+- OCR/image media results must keep extracted text separate from summaries.
+  Read OCR text from fields such as `ocr_text` / `ocrText` / `text`, read
+  summary from fields such as `summary` / `llm_summary`, and label the display
+  as `OCR TEXT`. Do not reuse transcript or meeting-minutes labels for image
+  OCR.
+- Media metadata such as `source_id`, `confidence_percent`, and
+  `saved_to_vault` must come from runtime fields or render as honest degraded
+  values. The UI must not claim Vault save/sync just because an attachment or
+  media card exists.
+- When adding image/OCR attachment fixtures, use decodable image bytes and test
+  both the chat tile and attachment detail surface. A tile navigation test
+  should fail if the viewer renders a codec error instead of the image preview.
 - Candidate-only flows should not render empty chrome. Suppress processing
   strips and context strips when the only available state is pending approvals
   and every context value would be `none`, `none yet`, or `0 files`.
@@ -94,6 +111,7 @@ Reference files:
 - `lib/features/agent_ui/agent_operating_system_cards.dart`
 - `lib/features/agent_ui/agent_operating_reminder_cards.dart`
 - `test/agent_conversation_stitch_third_screen_test.dart`
+- `test/agent_conversation_stitch_sixth_screen_test.dart`
 
 ## User-Facing Copy
 

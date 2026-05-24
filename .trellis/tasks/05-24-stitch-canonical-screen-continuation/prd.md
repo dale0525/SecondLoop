@@ -184,6 +184,15 @@ Initial mapping from `manifest.json` before continuing screen implementation:
   canonical screen,
   `2584c8e54d014209adbd37b562e3ced1`
   (`Chat: Recurring Reminder Clarification (Approved)`).
+- `05-24-stitch-screen-04-task-mutation-approval`: implement and verify
+  `0632921a825a4f1b9e91c2f66a4c97e3`
+  (`Task Mutation Approval: Recent Reference (Approved)`).
+- `05-24-stitch-screen-05-calendar-email-approval`: implement and verify
+  `585ce0f7d36b4f55a8511bea0e2ef655`
+  (`Calendar Approval: Email Extraction (Approved)`).
+- `05-24-stitch-screen-06-file-ocr-attachment`: implement and verify
+  `2384fe0e4de54f4e97f9935f813ecd01`
+  (`Chat: File OCR With Attachment Tile (Approved)`).
 
 ## Notes
 
