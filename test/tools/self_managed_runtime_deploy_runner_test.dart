@@ -38,6 +38,51 @@ void main() {
     expect(result.verification?.ok, isTrue);
   });
 
+  test('manual Cloudflare token is session input and bypasses OAuth helper',
+      () async {
+    var oauthCalled = false;
+    String? capturedCloudflareToken;
+    SelfManagedSetupRequest? capturedRequest;
+    final runner = SelfManagedRuntimeDeployRunner(
+      cloudflareAuth: SelfManagedCloudflareAuth(
+        authorize: (_) async {
+          oauthCalled = true;
+          return 'unexpected-oauth-token';
+        },
+      ),
+      deployResources: (request, cloudflareToken, _) async {
+        capturedRequest = request;
+        capturedCloudflareToken = cloudflareToken;
+        return 'https://manual-runtime.example/';
+      },
+      runHealthCheck: (_) async {},
+      verifyModelCapabilities: (_, __) async => _successfulVerificationResult,
+    );
+
+    final result = await runner.run(
+      const SelfManagedSetupRequest(
+        cloudflareAccountLabel: 'legacy-label',
+        provider: 'openai',
+        apiKey: 'sk-test',
+        embeddingApiKey: 'emb-test',
+        multimodalApiKey: 'mm-test',
+        cloudflareAuthorizationMethod:
+            SelfManagedCloudflareAuthorizationMethod.manual,
+        cloudflareAccountId: 'acct-manual',
+        cloudflareApiToken: 'cf-session-token',
+      ),
+      onProgress: (_) {},
+    );
+
+    expect(oauthCalled, isFalse);
+    expect(capturedCloudflareToken, 'cf-session-token');
+    expect(capturedRequest?.cloudflareDeploymentAccountId, 'acct-manual');
+    expect(result.manifest.apiBaseUrl, 'https://manual-runtime.example/');
+    expect(result.manifest.toJson().toString().contains('cf-session-token'),
+        isFalse);
+    expect(result.authToken.contains('cf-session-token'), isFalse);
+  });
+
   test('deploy runner rejects failed model capability verification', () async {
     final runner = SelfManagedRuntimeDeployRunner(
       cloudflareAuth: SelfManagedCloudflareAuth(
@@ -171,12 +216,5 @@ void main() {
   });
 }
 
-const _successfulVerificationResult = ModelCapabilityVerificationResult(
-  ok: true,
-  checks: [
-    ModelCapabilityCheckResult(
-      code: 'structured_output',
-      passed: true,
-    ),
-  ],
-);
+const _successfulVerificationResult =
+    ModelCapabilityVerificationResult.allRequiredPassed;

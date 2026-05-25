@@ -7,6 +7,44 @@ final class ModelCapabilityVerificationResult {
     required this.checks,
   });
 
+  static const allRequiredPassed = ModelCapabilityVerificationResult(
+    ok: true,
+    checks: [
+      ModelCapabilityCheckResult(
+        code: ModelCapabilityRequiredChecks.structuredOutput,
+        passed: true,
+      ),
+      ModelCapabilityCheckResult(
+        code: ModelCapabilityRequiredChecks.secretaryMetadata,
+        passed: true,
+      ),
+      ModelCapabilityCheckResult(
+        code: ModelCapabilityRequiredChecks.toolProposalDiscipline,
+        passed: true,
+      ),
+      ModelCapabilityCheckResult(
+        code: ModelCapabilityRequiredChecks.multimodalUnderstanding,
+        passed: true,
+      ),
+      ModelCapabilityCheckResult(
+        code: ModelCapabilityRequiredChecks.chineseIntentHandling,
+        passed: true,
+      ),
+      ModelCapabilityCheckResult(
+        code: ModelCapabilityRequiredChecks.contextWindowLatency,
+        passed: true,
+      ),
+      ModelCapabilityCheckResult(
+        code: ModelCapabilityRequiredChecks.clarificationBehavior,
+        passed: true,
+      ),
+      ModelCapabilityCheckResult(
+        code: ModelCapabilityRequiredChecks.sideEffectDiscipline,
+        passed: true,
+      ),
+    ],
+  );
+
   final bool ok;
   final List<ModelCapabilityCheckResult> checks;
 
@@ -44,6 +82,42 @@ final class ModelCapabilityVerificationResult {
       'failure_code': firstFailureCode,
       'checks': checks.map((check) => check.toJson()).toList(growable: false),
     };
+  }
+}
+
+final class ModelCapabilityRequiredChecks {
+  const ModelCapabilityRequiredChecks._();
+
+  static const structuredOutput = 'structured_output';
+  static const secretaryMetadata = 'secretary_metadata';
+  static const toolProposalDiscipline = 'tool_proposal_discipline';
+  static const multimodalUnderstanding = 'multimodal_understanding';
+  static const chineseIntentHandling = 'chinese_intent_handling';
+  static const contextWindowLatency = 'context_window_latency';
+  static const clarificationBehavior = 'clarification_behavior';
+  static const sideEffectDiscipline = 'side_effect_discipline';
+
+  static const all = <String>[
+    structuredOutput,
+    secretaryMetadata,
+    toolProposalDiscipline,
+    multimodalUnderstanding,
+    chineseIntentHandling,
+    contextWindowLatency,
+    clarificationBehavior,
+    sideEffectDiscipline,
+  ];
+
+  static String? firstMissingFrom(
+    Iterable<ModelCapabilityCheckResult> checks,
+  ) {
+    final reported = checks.map((check) => check.code).toSet();
+    for (final code in all) {
+      if (!reported.contains(code)) {
+        return code;
+      }
+    }
+    return null;
   }
 }
 

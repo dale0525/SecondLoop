@@ -17,5 +17,7 @@ CloudRuntimeManifest buildSelfManagedRuntimeManifest({
     authMode: CloudRuntimeAuthMode.runtimeToken,
     capabilities: capabilities,
     skills: skills,
+    vaultBinding: 'CF_D1_PRIMARY_VAULT',
+    providerCostOwner: 'you (local key)',
   );
 }

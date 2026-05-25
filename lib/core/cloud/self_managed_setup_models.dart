@@ -8,10 +8,16 @@ export 'model_capability_verification.dart';
 enum SelfManagedSetupStep {
   idle,
   authorizing,
+  cloudflareReady,
   deploying,
   verifying,
   ready,
   failed,
+}
+
+enum SelfManagedCloudflareAuthorizationMethod {
+  oauth,
+  manual,
 }
 
 @immutable
@@ -23,6 +29,10 @@ class SelfManagedSetupRequest {
     this.embeddingApiKey = '',
     this.multimodalApiKey = '',
     this.requiresMultimodalLlm = true,
+    this.cloudflareAuthorizationMethod =
+        SelfManagedCloudflareAuthorizationMethod.oauth,
+    this.cloudflareAccountId = '',
+    this.cloudflareApiToken = '',
   });
 
   final String cloudflareAccountLabel;
@@ -31,6 +41,9 @@ class SelfManagedSetupRequest {
   final String embeddingApiKey;
   final String multimodalApiKey;
   final bool requiresMultimodalLlm;
+  final SelfManagedCloudflareAuthorizationMethod cloudflareAuthorizationMethod;
+  final String cloudflareAccountId;
+  final String cloudflareApiToken;
 
   bool get hasRequiredAiProviderConfig {
     final hasLlm = apiKey.trim().isNotEmpty;
@@ -38,6 +51,33 @@ class SelfManagedSetupRequest {
     final hasMultimodal =
         !requiresMultimodalLlm || multimodalApiKey.trim().isNotEmpty || hasLlm;
     return hasLlm && hasEmbeddings && hasMultimodal;
+  }
+
+  bool get usesManualCloudflareCredentials =>
+      cloudflareAuthorizationMethod ==
+      SelfManagedCloudflareAuthorizationMethod.manual;
+
+  String get cloudflareDeploymentAccountId {
+    if (usesManualCloudflareCredentials) {
+      return cloudflareAccountId.trim();
+    }
+    return cloudflareAccountLabel.trim();
+  }
+
+  String? get firstMissingCloudflareAuthorizationField {
+    if (usesManualCloudflareCredentials) {
+      if (cloudflareAccountId.trim().isEmpty) {
+        return 'missing_cloudflare_account_id';
+      }
+      if (cloudflareApiToken.trim().isEmpty) {
+        return 'missing_cloudflare_api_token';
+      }
+      return null;
+    }
+    if (cloudflareAccountLabel.trim().isEmpty) {
+      return 'missing_cloudflare_account_label';
+    }
+    return null;
   }
 }
 
@@ -91,6 +131,11 @@ class SelfManagedSetupState {
   final ModelCapabilityVerificationResult? verification;
 
   bool get isReady => step == SelfManagedSetupStep.ready;
+  bool get isCloudflareReady =>
+      step == SelfManagedSetupStep.cloudflareReady ||
+      step == SelfManagedSetupStep.deploying ||
+      step == SelfManagedSetupStep.verifying ||
+      step == SelfManagedSetupStep.ready;
   bool get hasError => step == SelfManagedSetupStep.failed;
 
   SelfManagedSetupState copyWith({

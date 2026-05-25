@@ -6,7 +6,6 @@ import 'package:secondloop/core/cloud/runtime_profile.dart';
 import 'package:secondloop/core/cloud/self_managed_setup_controller.dart';
 import 'package:secondloop/core/cloud/self_managed_setup_models.dart';
 import 'package:secondloop/features/settings/self_managed_setup_page.dart';
-import 'package:secondloop/features/settings/settings_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_i18n.dart';
@@ -34,18 +33,19 @@ void main() {
               apiBaseUrl: 'https://user-runtime.example/',
               authMode: CloudRuntimeAuthMode.runtimeToken,
               capabilities: CloudRuntimeRequiredCapabilities.all,
-            ),
-            authToken: 'runtime-token-1',
-            capabilityManifestId: 'manifest-self-1',
-            verification: ModelCapabilityVerificationResult(
-              ok: true,
-              checks: [
-                ModelCapabilityCheckResult(
-                  code: 'structured_output',
-                  passed: true,
+              vaultBinding: 'CF_D1_PRIMARY_VAULT',
+              providerCostOwner: 'you (local key)',
+              skills: [
+                CloudRuntimeSkillAvailability(
+                  id: 'web-research',
+                  status: 'ready',
+                  provider: 'configured',
                 ),
               ],
             ),
+            authToken: 'runtime-token-1',
+            capabilityManifestId: 'manifest-self-1',
+            verification: ModelCapabilityVerificationResult.allRequiredPassed,
           );
         },
       ),
@@ -59,11 +59,8 @@ void main() {
       ),
     );
 
-    expect(find.byType(SettingsPageShell), findsOneWidget);
-    await tester.enterText(
-      find.byKey(const ValueKey('self_managed_cloudflare_account')),
-      'acct-1',
-    );
+    expect(find.text('Infrastructure Connection'), findsOneWidget);
+    await _prepareManualCloudflareConnection(tester);
     await tester.enterText(
       find.byKey(const ValueKey('self_managed_api_key')),
       'sk-test',
@@ -76,9 +73,228 @@ void main() {
       find.byKey(const ValueKey('self_managed_multimodal_api_key')),
       'mm-test',
     );
-    await tester.tap(find.byKey(const ValueKey('self_managed_deploy')));
-    await tester.pumpAndSettle();
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_write_secrets')),
+    );
 
     expect(find.text('https://user-runtime.example/'), findsOneWidget);
+    expect(find.text('CF_D1_PRIMARY_VAULT'), findsOneWidget);
+    expect(find.text('1/1 active'), findsOneWidget);
+    expect(find.text('you (local key)'), findsOneWidget);
+  });
+
+  testWidgets('manual Cloudflare connection validates missing fields',
+      (tester) async {
+    await _pumpSelfManagedSetup(tester, SelfManagedSetupController());
+
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_manual_toggle')),
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_verify_connection')),
+    );
+
+    expect(
+      find.text(
+          'Enter the Cloudflare account id before verifying manual setup.'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('self_managed_cloudflare_account_id')),
+      'acct-1',
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_verify_connection')),
+    );
+
+    expect(
+      find.text(
+        'Enter a session-scoped Cloudflare API token before verifying manual setup.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Provider Secrets'), findsNothing);
+  });
+
+  testWidgets('OAuth action reports unavailable handoff instead of faking auth',
+      (tester) async {
+    await _pumpSelfManagedSetup(tester, SelfManagedSetupController());
+
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_cloudflare_oauth')),
+    );
+
+    expect(
+      find.textContaining('Cloudflare OAuth handoff is not available'),
+      findsOneWidget,
+    );
+    expect(find.text('Provider Secrets'), findsNothing);
+  });
+
+  testWidgets('side-effect verification failure blocks continue',
+      (tester) async {
+    final controller = SelfManagedSetupController(
+      helperProcess: LocalRuntimeHelperProcess(
+        runner: (_, __) async {
+          return const SelfManagedSetupResult(
+            manifest: CloudRuntimeManifest(
+              manifestVersion: 1,
+              runtimeMode: CloudRuntimeMode.selfManaged,
+              apiBaseUrl: 'https://user-runtime.example/',
+              authMode: CloudRuntimeAuthMode.runtimeToken,
+              capabilities: CloudRuntimeRequiredCapabilities.all,
+            ),
+            authToken: 'runtime-token-1',
+            capabilityManifestId: 'manifest-self-1',
+            verification: _sideEffectDisciplineFailure,
+          );
+        },
+      ),
+    );
+
+    await _pumpSelfManagedSetup(tester, controller);
+    await _prepareManualCloudflareConnection(tester);
+    await _fillRequiredProviderFields(tester);
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_write_secrets')),
+    );
+
+    expect(find.text('RETRY_REQUIRED'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey('self_managed_capability_side_effect_discipline'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Provider Secrets'), findsWidgets);
+  });
+
+  testWidgets(
+      'screen layout renders across narrow, manifest, and desktop width',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final size in const [
+      Size(390, 900),
+      Size(780, 1200),
+      Size(1280, 900),
+    ]) {
+      await tester.binding.setSurfaceSize(size);
+      await _pumpSelfManagedSetup(tester, SelfManagedSetupController());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('self_managed_setup_root')),
+          findsOneWidget);
+      expect(find.text('Infrastructure Connection'), findsOneWidget);
+      expect(find.text('Cloudflare Integration Required'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('self_managed_cloudflare_oauth')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('self_managed_verify_connection')),
+        findsOneWidget,
+      );
+    }
   });
 }
+
+Future<void> _pumpSelfManagedSetup(
+  WidgetTester tester,
+  SelfManagedSetupController controller,
+) {
+  return tester.pumpWidget(
+    wrapWithI18n(
+      MaterialApp(
+        home: SelfManagedSetupPage(controller: controller),
+      ),
+    ),
+  );
+}
+
+Future<void> _fillRequiredProviderFields(WidgetTester tester) async {
+  await tester.enterText(
+    find.byKey(const ValueKey('self_managed_api_key')),
+    'sk-test',
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey('self_managed_embedding_api_key')),
+    'emb-test',
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey('self_managed_multimodal_api_key')),
+    'mm-test',
+  );
+}
+
+Future<void> _prepareManualCloudflareConnection(WidgetTester tester) async {
+  await _tapVisible(
+    tester,
+    find.byKey(const ValueKey('self_managed_manual_toggle')),
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey('self_managed_cloudflare_account_id')),
+    'acct-1',
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey('self_managed_cloudflare_api_token')),
+    'cf-session-token',
+  );
+  await _tapVisible(
+    tester,
+    find.byKey(const ValueKey('self_managed_verify_connection')),
+  );
+  expect(find.text('Provider Secrets'), findsWidgets);
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+const _sideEffectDisciplineFailure = ModelCapabilityVerificationResult(
+  ok: false,
+  checks: [
+    ModelCapabilityCheckResult(
+      code: ModelCapabilityRequiredChecks.structuredOutput,
+      passed: true,
+    ),
+    ModelCapabilityCheckResult(
+      code: ModelCapabilityRequiredChecks.secretaryMetadata,
+      passed: true,
+    ),
+    ModelCapabilityCheckResult(
+      code: ModelCapabilityRequiredChecks.toolProposalDiscipline,
+      passed: true,
+    ),
+    ModelCapabilityCheckResult(
+      code: ModelCapabilityRequiredChecks.multimodalUnderstanding,
+      passed: true,
+    ),
+    ModelCapabilityCheckResult(
+      code: ModelCapabilityRequiredChecks.chineseIntentHandling,
+      passed: true,
+    ),
+    ModelCapabilityCheckResult(
+      code: ModelCapabilityRequiredChecks.contextWindowLatency,
+      passed: true,
+    ),
+    ModelCapabilityCheckResult(
+      code: ModelCapabilityRequiredChecks.clarificationBehavior,
+      passed: true,
+    ),
+    ModelCapabilityCheckResult(
+      code: ModelCapabilityRequiredChecks.sideEffectDiscipline,
+      passed: false,
+      failureCode: 'retry_required',
+    ),
+  ],
+);

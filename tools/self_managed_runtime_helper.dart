@@ -19,6 +19,12 @@ Future<Map<String, Object?>> runSelfManagedRuntimeHelper({
     requiresMultimodalLlm: input['requires_multimodal_llm'] is bool
         ? input['requires_multimodal_llm'] as bool
         : true,
+    cloudflareAuthorizationMethod:
+        '${input['cloudflare_authorization_method'] ?? 'oauth'}' == 'manual'
+            ? SelfManagedCloudflareAuthorizationMethod.manual
+            : SelfManagedCloudflareAuthorizationMethod.oauth,
+    cloudflareAccountId: '${input['cloudflare_account_id'] ?? ''}',
+    cloudflareApiToken: '${input['cloudflare_api_token'] ?? ''}',
   );
   final runner = deployRunner ?? SelfManagedRuntimeDeployRunner();
   final result = await runner.run(

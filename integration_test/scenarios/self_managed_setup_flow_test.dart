@@ -41,15 +41,7 @@ void main() {
             ),
             authToken: 'runtime-test-token',
             capabilityManifestId: 'manifest-self-managed',
-            verification: ModelCapabilityVerificationResult(
-              ok: true,
-              checks: [
-                ModelCapabilityCheckResult(
-                  code: 'structured_output',
-                  passed: true,
-                ),
-              ],
-            ),
+            verification: ModelCapabilityVerificationResult.allRequiredPassed,
           );
         },
       ),
@@ -67,19 +59,46 @@ void main() {
       find.byKey(TestSemanticsIds.key(TestSemanticsIds.selfManagedSetupRoot)),
       findsOneWidget,
     );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_manual_toggle')),
+    );
     await tester.enterText(
-      find.byKey(const ValueKey('self_managed_cloudflare_account')),
+      find.byKey(const ValueKey('self_managed_cloudflare_account_id')),
       'acct-runtime-test',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('self_managed_cloudflare_api_token')),
+      'cf-runtime-session-token',
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(TestSemanticsIds.key(TestSemanticsIds.selfManagedDeploy)),
     );
     await tester.enterText(
       find.byKey(const ValueKey('self_managed_api_key')),
       'sk-runtime-test',
     );
-    await tester.tap(
-      find.byKey(TestSemanticsIds.key(TestSemanticsIds.selfManagedDeploy)),
+    await tester.enterText(
+      find.byKey(const ValueKey('self_managed_embedding_api_key')),
+      'emb-runtime-test',
     );
-    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('self_managed_multimodal_api_key')),
+      'mm-runtime-test',
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_write_secrets')),
+    );
 
     expect(find.text('https://self-managed-runtime.example/'), findsOneWidget);
   });
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
 }

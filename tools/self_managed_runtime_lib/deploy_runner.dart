@@ -51,6 +51,11 @@ final class SelfManagedRuntimeDeployRunner {
     required void Function(SelfManagedSetupProgress event) onProgress,
   }) async {
     try {
+      final missingCloudflare =
+          request.firstMissingCloudflareAuthorizationField;
+      if (missingCloudflare != null) {
+        throw StateError(missingCloudflare);
+      }
       if (!request.hasRequiredAiProviderConfig) {
         throw StateError('missing_ai_provider_config');
       }
@@ -60,8 +65,9 @@ final class SelfManagedRuntimeDeployRunner {
           message: 'authorizing',
         ),
       );
-      final cloudflareToken =
-          await _cloudflareAuth.authorize(request.cloudflareAccountLabel);
+      final cloudflareToken = request.usesManualCloudflareCredentials
+          ? request.cloudflareApiToken.trim()
+          : await _cloudflareAuth.authorize(request.cloudflareAccountLabel);
       onProgress(
         const SelfManagedSetupProgress(
           step: SelfManagedSetupStep.deploying,
@@ -104,7 +110,7 @@ Future<String> _defaultDeployResources(
   String cloudflareToken,
   SelfManagedRuntimeResourcePlan plan,
 ) async {
-  return 'https://${request.cloudflareAccountLabel}.runtime.example/';
+  return 'https://${request.cloudflareDeploymentAccountId}.runtime.example/';
 }
 
 Future<void> _defaultHealthCheck(String apiBaseUrl) async {
@@ -124,7 +130,7 @@ Future<ModelCapabilityVerificationResult> _defaultVerifyModelCapabilities(
       fragment: null,
     );
     final decoded = await postJson(route, <String, Object?>{
-      'vault_id': request.cloudflareAccountLabel,
+      'vault_id': request.cloudflareDeploymentAccountId,
       'runtime_mode': 'self_managed',
       'provider': request.provider,
     });

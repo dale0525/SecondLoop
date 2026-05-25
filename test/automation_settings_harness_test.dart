@@ -64,7 +64,7 @@ void main() {
     await harness.openSelfManagedSetup();
 
     expect(
-      find.byKey(const ValueKey('self_managed_deploy')),
+      find.byKey(const ValueKey('self_managed_verify_connection')),
       findsOneWidget,
     );
   });

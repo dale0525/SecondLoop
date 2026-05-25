@@ -29,7 +29,58 @@ final class SelfManagedSetupController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void reportCloudflareOAuthUnavailable() {
+    _state = _state.copyWith(
+      step: SelfManagedSetupStep.failed,
+      statusMessage: 'tool_unavailable:cloudflare_oauth',
+      errorCode: 'tool_unavailable:cloudflare_oauth',
+    );
+    notifyListeners();
+  }
+
+  bool prepareManualCloudflareAuthorization({
+    required String accountId,
+    required String apiToken,
+  }) {
+    final request = SelfManagedSetupRequest(
+      cloudflareAccountLabel: accountId.trim(),
+      provider: '',
+      apiKey: '',
+      cloudflareAuthorizationMethod:
+          SelfManagedCloudflareAuthorizationMethod.manual,
+      cloudflareAccountId: accountId,
+      cloudflareApiToken: apiToken,
+    );
+    final missing = request.firstMissingCloudflareAuthorizationField;
+    if (missing != null) {
+      _state = _state.copyWith(
+        step: SelfManagedSetupStep.failed,
+        statusMessage: missing,
+        errorCode: missing,
+      );
+      notifyListeners();
+      return false;
+    }
+    _state = _state.copyWith(
+      step: SelfManagedSetupStep.cloudflareReady,
+      statusMessage: 'manual_cloudflare_credentials_ready',
+      errorCode: null,
+    );
+    notifyListeners();
+    return true;
+  }
+
   Future<void> deploy(SelfManagedSetupRequest request) async {
+    final missingCloudflare = request.firstMissingCloudflareAuthorizationField;
+    if (missingCloudflare != null) {
+      _state = _state.copyWith(
+        step: SelfManagedSetupStep.failed,
+        statusMessage: missingCloudflare,
+        errorCode: missingCloudflare,
+      );
+      notifyListeners();
+      return;
+    }
     beginCloudflareAuthorization();
     try {
       final result = await _helperProcess.runSetup(
@@ -51,6 +102,18 @@ final class SelfManagedSetupController extends ChangeNotifier {
           step: SelfManagedSetupStep.failed,
           statusMessage: failureCode,
           errorCode: failureCode,
+          verification: verification,
+        );
+        notifyListeners();
+        return;
+      }
+      final missingCheck =
+          ModelCapabilityRequiredChecks.firstMissingFrom(verification.checks);
+      if (missingCheck != null) {
+        _state = _state.copyWith(
+          step: SelfManagedSetupStep.failed,
+          statusMessage: missingCheck,
+          errorCode: 'missing_model_capability_check:$missingCheck',
           verification: verification,
         );
         notifyListeners();
