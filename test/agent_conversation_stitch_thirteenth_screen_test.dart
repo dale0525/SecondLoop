@@ -15,6 +15,9 @@ import 'package:secondloop/core/quick_capture/quick_capture_controller.dart';
 import 'package:secondloop/core/quick_capture/quick_capture_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
+import 'package:secondloop/features/agent_ui/desktop_approvals_workbench_page.dart';
+import 'package:secondloop/features/agent_ui/desktop_connectors_workbench_page.dart';
+import 'package:secondloop/features/agent_ui/desktop_memory_workbench_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -126,15 +129,17 @@ void main() {
     await tester.pump();
     expect(find.textContaining('tool_unavailable'), findsOneWidget);
 
-    await tester.tap(find.text('Connectors'));
-    await tester.pump();
-    expect(find.textContaining('needs_configuration'), findsOneWidget);
-
     await tester.tap(find.widgetWithText(FilledButton, 'Approve'));
     await tester.pumpAndSettle();
     expect(harness.sender.decisions, [
       ('uid_1', 'approval-task-title', 'approve'),
     ]);
+
+    await tester.tap(find.text('Connectors'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('desktop_connectors_workbench_page')),
+        findsOneWidget);
+    expect(find.text('Email Binding'), findsOneWidget);
   });
 
   testWidgets('desktop tool trace fails closed when citations are absent',
@@ -211,6 +216,19 @@ Future<_WorkbenchHarness> _pumpWorkbench(
                   notesTabBuilder: (_, __) => const SizedBox(),
                   memoryTabBuilder: (_, __) => const SizedBox(),
                   settingsTabBuilder: (_, __) => const SizedBox(),
+                  desktopMemoryBuilder: (_, __) => DesktopMemoryWorkbenchPage(
+                    runtimeAgentStateRepository: repository,
+                    approvalSender: sender,
+                  ),
+                  desktopApprovalsBuilder: (_, __) =>
+                      DesktopApprovalsWorkbenchPage(
+                    runtimeAgentStateRepository: repository,
+                    approvalSender: sender,
+                  ),
+                  desktopConnectorsBuilder: (_, __) =>
+                      DesktopConnectorsWorkbenchPage(
+                    runtimeAgentStateRepository: repository,
+                  ),
                 ),
               ),
             ),

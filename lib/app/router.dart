@@ -7,8 +7,9 @@ import 'app_shell_default_pages_stub.dart'
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
 import '../core/update/update_badge_prefs.dart';
-import '../features/memory/memory_page.dart';
-import '../features/review/review_page.dart';
+import '../features/agent_ui/desktop_approvals_workbench_page.dart';
+import '../features/agent_ui/desktop_connectors_workbench_page.dart';
+import '../features/agent_ui/desktop_memory_workbench_page.dart';
 import 'app_shell_style.dart';
 import 'theme.dart';
 
@@ -45,6 +46,9 @@ class AppShell extends StatefulWidget {
     this.memoryTabBuilder,
     this.reviewTabBuilder,
     this.settingsTabBuilder,
+    this.desktopMemoryBuilder,
+    this.desktopApprovalsBuilder,
+    this.desktopConnectorsBuilder,
   });
 
   final AppTab initialTab;
@@ -56,6 +60,12 @@ class AppShell extends StatefulWidget {
   final Widget Function(BuildContext context, bool isActive)? reviewTabBuilder;
   final Widget Function(BuildContext context, bool isActive)?
       settingsTabBuilder;
+  final Widget Function(BuildContext context, bool isActive)?
+      desktopMemoryBuilder;
+  final Widget Function(BuildContext context, bool isActive)?
+      desktopApprovalsBuilder;
+  final Widget Function(BuildContext context, bool isActive)?
+      desktopConnectorsBuilder;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -64,6 +74,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   late int _selectedIndex = widget.initialTab.index;
   late final Set<int> _loadedIndexes = <int>{_selectedIndex};
+  _DesktopNavAction? _selectedDesktopAction;
   QuickCaptureController? _quickCaptureController;
 
   @override
@@ -106,14 +117,23 @@ class _AppShellState extends State<AppShell> {
     if (oldWidget.initialTab != widget.initialTab) {
       _selectedIndex = widget.initialTab.index;
       _loadedIndexes.add(_selectedIndex);
+      _selectedDesktopAction = null;
     }
   }
 
   void _selectTab(int index) {
-    if (_selectedIndex == index) return;
+    if (_selectedIndex == index && _selectedDesktopAction == null) return;
     setState(() {
       _selectedIndex = index;
       _loadedIndexes.add(index);
+      _selectedDesktopAction = null;
+    });
+  }
+
+  void _selectDesktopAction(_DesktopNavAction action) {
+    if (_selectedDesktopAction == action) return;
+    setState(() {
+      _selectedDesktopAction = action;
     });
   }
 
@@ -182,6 +202,29 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  Widget _buildDesktopAction(
+    BuildContext context,
+    _DesktopNavAction action, {
+    required bool isActive,
+  }) {
+    switch (action) {
+      case _DesktopNavAction.memory:
+        final builder = widget.desktopMemoryBuilder;
+        if (builder != null) return builder(context, isActive);
+        return const DesktopMemoryWorkbenchPage();
+      case _DesktopNavAction.approvals:
+        final builder = widget.desktopApprovalsBuilder;
+        if (builder != null) return builder(context, isActive);
+        return const DesktopApprovalsWorkbenchPage();
+      case _DesktopNavAction.connectors:
+        final builder = widget.desktopConnectorsBuilder;
+        if (builder != null) return builder(context, isActive);
+        return DesktopConnectorsWorkbenchPage(
+          onOpenSettings: () => _selectTab(AppTab.settings.index),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final parentTheme = Theme.of(context);
@@ -195,7 +238,7 @@ class _AppShellState extends State<AppShell> {
               final useCollapsedShell = constraints.maxHeight < 180;
               final useRail = !useCollapsedShell && constraints.maxWidth >= 960;
               final useBottomNav = !useCollapsedShell && !useRail;
-              final content = useRail || useBottomNav
+              final tabContent = useRail || useBottomNav
                   ? IndexedStack(
                       index: _selectedIndex,
                       children: [
@@ -216,6 +259,23 @@ class _AppShellState extends State<AppShell> {
                       AppTab.settings =>
                         _buildSettingsTab(context, isActive: true),
                     };
+              final desktopAction = useRail ? _selectedDesktopAction : null;
+              final content = desktopAction == null
+                  ? tabContent
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Offstage(
+                          offstage: true,
+                          child: tabContent,
+                        ),
+                        _buildDesktopAction(
+                          context,
+                          desktopAction,
+                          isActive: true,
+                        ),
+                      ],
+                    );
               final scopedContent = AppShellLayoutScope(
                 desktopWorkbench: useRail,
                 child: content,
@@ -229,7 +289,9 @@ class _AppShellState extends State<AppShell> {
                     : useRail
                         ? _AppShellDesktopWorkbench(
                             selectedIndex: _selectedIndex,
+                            selectedDesktopAction: _selectedDesktopAction,
                             onSelect: _selectTab,
+                            onSelectDesktopAction: _selectDesktopAction,
                             child: scopedContent,
                           )
                         : ColoredBox(
@@ -258,12 +320,16 @@ class _AppShellState extends State<AppShell> {
 final class _AppShellDesktopWorkbench extends StatelessWidget {
   const _AppShellDesktopWorkbench({
     required this.selectedIndex,
+    required this.selectedDesktopAction,
     required this.onSelect,
+    required this.onSelectDesktopAction,
     required this.child,
   });
 
   final int selectedIndex;
+  final _DesktopNavAction? selectedDesktopAction;
   final ValueChanged<int> onSelect;
+  final ValueChanged<_DesktopNavAction> onSelectDesktopAction;
   final Widget child;
 
   @override
@@ -281,7 +347,9 @@ final class _AppShellDesktopWorkbench extends StatelessWidget {
                   children: [
                     _AppShellDesktopSideNav(
                       selectedIndex: selectedIndex,
+                      selectedDesktopAction: selectedDesktopAction,
                       onSelect: onSelect,
+                      onSelectDesktopAction: onSelectDesktopAction,
                     ),
                     Expanded(child: child),
                   ],
@@ -482,11 +550,15 @@ final class _RuntimeSyncedDot extends StatelessWidget {
 final class _AppShellDesktopSideNav extends StatelessWidget {
   const _AppShellDesktopSideNav({
     required this.selectedIndex,
+    required this.selectedDesktopAction,
     required this.onSelect,
+    required this.onSelectDesktopAction,
   });
 
   final int selectedIndex;
+  final _DesktopNavAction? selectedDesktopAction;
   final ValueChanged<int> onSelect;
+  final ValueChanged<_DesktopNavAction> onSelectDesktopAction;
 
   static const _destinations = [
     _DesktopNavDestination.tab(AppTab.review),
@@ -524,20 +596,13 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
     }
     switch (destination.action) {
       case _DesktopNavAction.memory:
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const MemoryPage()),
-        );
+        onSelectDesktopAction(_DesktopNavAction.memory);
         break;
       case _DesktopNavAction.approvals:
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const ReviewPage()),
-        );
+        onSelectDesktopAction(_DesktopNavAction.approvals);
         break;
       case _DesktopNavAction.connectors:
-        _showDesktopWorkbenchSnack(
-          context,
-          'Connectors require provider configuration. (needs_configuration)',
-        );
+        onSelectDesktopAction(_DesktopNavAction.connectors);
         break;
       case null:
         break;
@@ -561,8 +626,10 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
               for (final destination in _destinations)
                 _AppShellDesktopNavItem(
                   destination: destination,
-                  selected: destination.tab != null &&
-                      selectedIndex == destination.tab!.index,
+                  selected: destination.tab != null
+                      ? selectedDesktopAction == null &&
+                          selectedIndex == destination.tab!.index
+                      : selectedDesktopAction == destination.action,
                   onTap: () => _activateDestination(context, destination),
                 ),
               const Spacer(),
@@ -570,7 +637,8 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
               const SizedBox(height: 12),
               _AppShellDesktopNavItem(
                 destination: const _DesktopNavDestination.tab(AppTab.settings),
-                selected: selectedIndex == AppTab.settings.index,
+                selected: selectedDesktopAction == null &&
+                    selectedIndex == AppTab.settings.index,
                 onTap: () => onSelect(AppTab.settings.index),
               ),
             ],
