@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 16
+- **Total Sessions**: 17
 - **Last Active**: 2026-05-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~559 | Active |
+| `journal-1.md` | ~592 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 17 | 2026-05-25 | Restore desktop auxiliary workbenches | `e837f968` | `main` |
 | 16 | 2026-05-25 | Archive Stitch canonical screen parent task | - | `main` |
 | 15 | 2026-05-25 | Stitch screen 2-8 functional alignment | `5bfafb80`, `92bf0808` | `main` |
 | 14 | 2026-05-25 | Stitch screen 13 desktop workbench | `e26e9617`, `5858106f` | `main` |

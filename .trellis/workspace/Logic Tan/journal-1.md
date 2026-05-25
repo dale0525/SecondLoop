@@ -557,3 +557,36 @@ Archived the completed Stitch canonical screen continuation parent task after ve
 ### Next Steps
 
 - None - task complete
+
+
+## Session 17: Restore desktop auxiliary workbenches
+
+**Date**: 2026-05-25
+**Task**: Restore desktop auxiliary workbenches
+**Branch**: `main`
+
+### Summary
+
+Restored the desktop Memory, Approvals, and Connectors workbenches from canonical Stitch designs with runtime-backed state, honest degraded actions, focused tests, and Computer Use QA.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e837f968` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
