@@ -590,3 +590,36 @@ Restored the desktop Memory, Approvals, and Connectors workbenches from canonica
 ### Next Steps
 
 - None - task complete
+
+
+## Session 18: Restore desktop Approvals workbench
+
+**Date**: 2026-05-25
+**Task**: Restore desktop Approvals workbench
+**Branch**: `main`
+
+### Summary
+
+Restored the desktop Approvals workbench behavior with runtime-backed queue filtering, fail-closed blocked/configuration states, decision wiring tests, manual desktop review, and frontend spec guidance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `98d73e27` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
