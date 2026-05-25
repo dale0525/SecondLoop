@@ -492,3 +492,37 @@ Implemented and verified the canonical desktop agent workbench screen with runti
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: Stitch screen 2-8 functional alignment
+
+**Date**: 2026-05-25
+**Task**: Stitch screen 2-8 functional alignment
+**Branch**: `main`
+
+### Summary
+
+Completed functional alignment for canonical Stitch screens 2-8. Added App runtime send-refresh coverage, documented the runtime Stitch testing contract, and pushed Server runtime contract implementation a3dae9c to origin/main for staging.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5bfafb80` | (see git log) |
+| `92bf0808` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
