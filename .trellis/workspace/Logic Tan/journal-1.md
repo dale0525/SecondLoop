@@ -656,3 +656,36 @@ Restored the desktop Connectors workbench behavior by splitting connector view m
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: Managed Pro local QA fixes
+
+**Date**: 2026-05-26
+**Task**: Managed Pro local QA fixes
+**Branch**: `main`
+
+### Summary
+
+Fixed Managed Pro desktop workbench rendering, stable acceptance navigation/login handles, QA asset/server-root handling, task-card source attachment, and recorded acceptance privacy guidance. Verified full managed-pro acceptance and manual live QA.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `94d284f6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
