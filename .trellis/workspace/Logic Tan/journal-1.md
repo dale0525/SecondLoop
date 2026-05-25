@@ -390,3 +390,37 @@ Implemented the canonical local-computer safety refusal screen with runtime-back
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Screen 12 Cloudflare setup finish
+
+**Date**: 2026-05-25
+**Task**: Screen 12 Cloudflare setup finish
+**Branch**: `main`
+
+### Summary
+
+Implemented and recorded the canonical screen 12 Cloudflare connection setup flow, including manual session-only authorization, OAuth unavailable degradation, provider-secret continuation, validation coverage, and Trellis/spec updates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85c54ea3` | (see git log) |
+| `16e14cc5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
