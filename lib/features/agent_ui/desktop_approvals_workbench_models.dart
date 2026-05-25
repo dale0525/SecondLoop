@@ -66,7 +66,14 @@ final class _ApprovalView {
         'pending_approval';
     final refused = desktopRuntimeLooksLikeKind(
       item,
-      const ['refused', 'purchase', 'payment', 'local_computer'],
+      const [
+        'refused',
+        'purchase',
+        'payment',
+        'local_computer',
+        'local-computer',
+        'local computer',
+      ],
     );
     final needsConfig = desktopRuntimeLooksLikeKind(
       item,

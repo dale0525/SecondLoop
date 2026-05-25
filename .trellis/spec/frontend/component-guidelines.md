@@ -74,6 +74,12 @@ Reference files:
   the shared approval decision path, and editable recurring reminder titles
   should use the runtime approval patch path only when `editableFields` contains
   `title`.
+- Desktop approval queues must keep fail-closed runtime items visible in the
+  default attention view. Treat `needs_configuration`, `tool_unavailable`,
+  `refused`, purchase/payment safety refusals, and local-computer safety
+  refusals as queue items even when they cannot be approved; disable approve /
+  reject controls for those states and show configure, retry, or unavailable
+  messaging only when backed by a real path or honest degraded behavior.
 - Treat `task_mutation_confirmation` as a family of mutation approvals, not as
   a single title-change shape. Render the title-diff approval card only when
   the runtime item explicitly advertises title editing (`editableFields`

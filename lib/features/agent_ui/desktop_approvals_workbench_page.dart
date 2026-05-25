@@ -183,9 +183,10 @@ final class _DesktopApprovalsWorkbenchPageState
     final filtered = _filterApprovals(approvals);
     final selected = _selectedApprovalId == null
         ? filtered.firstOrNull
-        : approvals
-            .where((approval) => approval.id == _selectedApprovalId)
-            .firstOrNull;
+        : filtered
+                .where((approval) => approval.id == _selectedApprovalId)
+                .firstOrNull ??
+            filtered.firstOrNull;
 
     return DesktopWorkbenchPageShell(
       key: const ValueKey('desktop_approvals_workbench_page'),
@@ -258,6 +259,12 @@ final class _DesktopApprovalsWorkbenchPageState
                       approval: selected,
                       state: state,
                       error: _error,
+                      loading: _loading,
+                      onConfigure: () => showDesktopWorkbenchMessage(
+                        context,
+                        'needs_configuration: connector configuration is not available from this panel yet',
+                      ),
+                      onRetry: _loading ? null : () => unawaited(_refresh()),
                     ),
                   ),
                 ],
@@ -271,7 +278,10 @@ final class _DesktopApprovalsWorkbenchPageState
   List<_ApprovalView> _filterApprovals(List<_ApprovalView> approvals) {
     if (_filter == 'pending') {
       return approvals
-          .where((item) => item.status.contains('pending'))
+          .where((item) =>
+              item.status.contains('pending') ||
+              item.needsConfig ||
+              item.refused)
           .toList(growable: false);
     }
     if (_filter == 'needs_config') {
@@ -283,6 +293,11 @@ final class _DesktopApprovalsWorkbenchPageState
       return approvals.where((item) => item.risk == 'High Risk').toList(
             growable: false,
           );
+    }
+    if (_filter == 'rejected') {
+      return approvals
+          .where((item) => item.status.contains('reject') || item.refused)
+          .toList(growable: false);
     }
     return approvals
         .where((item) => item.status.contains(_filter))
@@ -521,6 +536,7 @@ final class _ApprovalDetail extends StatelessWidget {
                   _CodePair(label: 'type', value: approval.kind),
                   _CodePair(label: 'target', value: approval.targetId),
                   _CodePair(label: 'source', value: approval.sourceId),
+                  DesktopWorkbenchBadge(label: 'Risk: ${approval.risk}'),
                 ],
               ),
             ),
@@ -630,7 +646,9 @@ final class _ApprovalDetail extends StatelessWidget {
                 const SizedBox(width: 12),
                 OutlinedButton(
                   key: const ValueKey('desktop_approval_reject'),
-                  onPressed: busy || onReject == null ? null : onReject,
+                  onPressed: busy || !approval.canSubmitDecision('reject')
+                      ? null
+                      : onReject,
                   child: const Text('Reject'),
                 ),
                 const SizedBox(width: 12),
@@ -660,15 +678,25 @@ final class _ApprovalAuditPanel extends StatelessWidget {
     required this.approval,
     required this.state,
     required this.error,
+    required this.loading,
+    required this.onConfigure,
+    required this.onRetry,
   });
 
   final _ApprovalView? approval;
   final RuntimeAgentState? state;
   final String? error;
+  final bool loading;
+  final VoidCallback onConfigure;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
     final approval = this.approval;
+    final notice = _systemNoticeFor(state, approval, error);
+    final showConfigurationActions = notice.contains('tool_unavailable') ||
+        notice.contains('needs_configuration') ||
+        error != null;
     return ListView(
       children: [
         for (final label in approval?.guardrailLabels ??
@@ -793,13 +821,30 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  error ??
-                      approval?.systemNotice ??
-                      'approval_required: Runtime will apply mutations only after an explicit decision.',
+                  notice,
                   style: AgentOperatingSystemTokens.bodySm.copyWith(
                     color: AgentOperatingSystemTokens.onSurfaceVariant,
                   ),
                 ),
+                if (showConfigurationActions) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton(
+                        key: const ValueKey('desktop_approval_configure'),
+                        onPressed: onConfigure,
+                        child: const Text('Configure'),
+                      ),
+                      OutlinedButton(
+                        key: const ValueKey('desktop_approval_retry'),
+                        onPressed: loading ? null : onRetry,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -807,6 +852,24 @@ final class _ApprovalAuditPanel extends StatelessWidget {
       ],
     );
   }
+}
+
+String _systemNoticeFor(
+  RuntimeAgentState? state,
+  _ApprovalView? approval,
+  String? error,
+) {
+  if (error != null) return error;
+  if (approval?.needsConfig ?? false) return approval!.systemNotice;
+  final approvals =
+      state == null ? const <_ApprovalView>[] : _approvalsFromState(state);
+  final needsConfig = approvals.where((item) => item.needsConfig).firstOrNull;
+  if (needsConfig != null) return needsConfig.systemNotice;
+  if (approval?.refused ?? false) return approval!.systemNotice;
+  final refused = approvals.where((item) => item.refused).firstOrNull;
+  if (refused != null) return refused.systemNotice;
+  return approval?.systemNotice ??
+      'approval_required: Runtime will apply mutations only after an explicit decision.';
 }
 
 final class _StatusRow extends StatelessWidget {
