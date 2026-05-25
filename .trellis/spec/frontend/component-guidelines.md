@@ -56,6 +56,19 @@ Reference files:
   `SecretaryRuntimeApprovalItem.kind` for approval candidates. Do not parse
   assistant message text to decide whether to create pending intents, reminders,
   memories, tasks, or approvals.
+- Desktop workbench shell controls are product controls, not decorative
+  chrome. App-tab destinations should select real `AppTab` entries; non-tab
+  destinations such as Memory, Approvals, or Connectors must either open a real
+  page/sheet or surface an explicit degraded state such as
+  `needs_configuration` or `tool_unavailable`. Floating Quick Capture buttons
+  must call `QuickCaptureController` when a `QuickCaptureScope` exists, and
+  otherwise render an honest unavailable state.
+- Desktop workbench tool traces must fail closed. Show successful labels such
+  as `web-research: executed`, `skill_result_response`, or
+  `CITATIONS: PRESENT` only when the runtime state provides trace metadata and
+  assistant citation evidence. If trace fields or citations are absent, render
+  `not reported`, `tool_unavailable`, or `CITATIONS: MISSING` rather than
+  defaulting to success copy.
 - Keep approval controls wired to runtime callbacks. For example,
   `memory_confirmation` and `recurring_reminder_confirmation` cards should call
   the shared approval decision path, and editable recurring reminder titles
