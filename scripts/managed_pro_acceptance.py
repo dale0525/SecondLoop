@@ -433,7 +433,7 @@ def run_acceptance(
 ) -> dict[str, object]:
     app_root = _app_root()
     workspace_root = app_root.parent
-    server_root = _server_root(workspace_root)
+    server_root = _server_root()
     artifact_dir = output_dir or _default_output_dir(app_root)
     logs_dir = artifact_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -467,7 +467,11 @@ def run_acceptance(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "workspace_root": str(workspace_root),
         "app_commit": _git_short_head(app_root),
-        "server_commit": _git_short_head(server_root) if server_root.exists() else None,
+        "server_commit": (
+            _git_short_head(server_root)
+            if server_root is not None and server_root.exists()
+            else None
+        ),
         "overall_status": overall_status,
         "commands": {
             command_id: dataclasses.asdict(result)
@@ -493,7 +497,7 @@ def _run_command(
     command: EvidenceCommand,
     *,
     app_root: Path,
-    server_root: Path,
+    server_root: Path | None,
     workspace_root: Path,
     logs_dir: Path,
     dry_run: bool,
@@ -526,7 +530,7 @@ def _run_command(
             reason="dry run",
         )
     if command.kind == "qa_assets":
-        return _run_asset_check(command, workspace_root, start)
+        return _run_asset_check(command, app_root, start)
     if command.kind == "live_account":
         return _run_live_account_command(command, app_root, logs_dir, start)
     if command.kind == "report":
@@ -537,7 +541,14 @@ def _run_command(
             duration_seconds=_duration(start),
         )
 
-    cwd = app_root if command.cwd == "app" else server_root
+    if command.cwd == "server" and server_root is None:
+        return CommandResult(
+            command_id=command.command_id,
+            status="BLOCKED",
+            description=command.description,
+            duration_seconds=_duration(start),
+            reason="server root not configured; set SECONDLOOP_SERVER_ROOT",
+        )
     if command.cwd == "server" and not server_root.is_dir():
         return CommandResult(
             command_id=command.command_id,
@@ -546,6 +557,7 @@ def _run_command(
             duration_seconds=_duration(start),
             reason=f"server root not found: {server_root}",
         )
+    cwd = app_root if command.cwd == "app" else server_root
     log_path = logs_dir / f"{command.command_id}.log"
     status = _run_process(command.argv, cwd=cwd, log_path=log_path)
     screenshot_path = None
@@ -664,10 +676,10 @@ def _resolve_cloud_gateway_base_url(values: dict[str, str]) -> str:
 
 def _run_asset_check(
     command: EvidenceCommand,
-    workspace_root: Path,
+    app_root: Path,
     start: float,
 ) -> CommandResult:
-    asset_dir = workspace_root / "docs" / "qa-assets"
+    asset_dir = app_root / "docs" / "qa-assets"
     missing: list[str] = []
     mismatched: list[str] = []
     invalid_type: list[str] = []
@@ -811,11 +823,11 @@ def _app_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def _server_root(workspace_root: Path) -> Path:
+def _server_root() -> Path | None:
     override = os.environ.get("SECONDLOOP_SERVER_ROOT")
     if override:
         return Path(override).resolve()
-    return workspace_root / "SecondLoopServer"
+    return None
 
 
 def _default_output_dir(app_root: Path) -> Path:

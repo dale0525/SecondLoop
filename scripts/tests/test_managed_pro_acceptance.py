@@ -164,7 +164,7 @@ class ManagedProAcceptanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             app_root = root / "SecondLoop"
-            server_root = root / "SecondLoopServer"
+            server_root = root / "runtime-server"
             logs_dir = root / "logs"
             app_root.mkdir()
             server_root.mkdir()
@@ -183,6 +183,21 @@ class ManagedProAcceptanceTests(unittest.TestCase):
 
         self.assertEqual(result.status, "BLOCKED")
         self.assertIn("SECONDLOOP_LIVE_MANAGED_PRO_ACCEPTANCE", result.reason)
+
+    def test_server_root_is_explicit_environment_only(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            configured = Path(temp_dir) / "runtime-server"
+            with mock.patch.dict(os.environ, {}, clear=True):
+                self.assertIsNone(managed_pro_acceptance._server_root())
+            with mock.patch.dict(
+                os.environ,
+                {"SECONDLOOP_SERVER_ROOT": configured.as_posix()},
+                clear=True,
+            ):
+                self.assertEqual(
+                    managed_pro_acceptance._server_root(),
+                    configured.resolve(),
+                )
 
     def test_dry_run_writes_machine_and_human_readable_reports(self):
         with tempfile.TemporaryDirectory() as temp_dir:

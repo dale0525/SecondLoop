@@ -922,8 +922,8 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
               final shellDesktopWorkbench =
                   AppShellLayoutScope.desktopWorkbenchOf(context);
               final useDesktopWorkbench = shellDesktopWorkbench == null
-                  ? constraints.maxWidth >= 1280
-                  : shellDesktopWorkbench && constraints.maxWidth >= 1120;
+                  ? constraints.maxWidth >= 960
+                  : shellDesktopWorkbench && constraints.maxWidth >= 720;
               if (!useDesktopWorkbench) {
                 return _buildOperatingSystemMobileShell(
                   context,

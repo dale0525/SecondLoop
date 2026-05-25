@@ -4,6 +4,13 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 
+if [[ -f .env.local ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env.local
+  set +a
+fi
+
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 output_dir="${SECONDLOOP_MANAGED_PRO_ACCEPTANCE_OUTPUT_DIR:-build/managed_pro_acceptance/${timestamp}}"
 device_id="${SECONDLOOP_FLUTTER_TEST_DEVICE_ID:-macos}"
@@ -17,6 +24,13 @@ require_env() {
     exit 1
   fi
 }
+
+if [[ -z "${SECONDLOOP_MANAGED_PRO_EMAIL:-}" && -n "${SECONDLOOP_LIVE_MANAGED_PRO_EMAIL:-}" ]]; then
+  export SECONDLOOP_MANAGED_PRO_EMAIL="${SECONDLOOP_LIVE_MANAGED_PRO_EMAIL}"
+fi
+if [[ -z "${SECONDLOOP_MANAGED_PRO_PASSWORD:-}" && -n "${SECONDLOOP_LIVE_MANAGED_PRO_PASSWORD:-}" ]]; then
+  export SECONDLOOP_MANAGED_PRO_PASSWORD="${SECONDLOOP_LIVE_MANAGED_PRO_PASSWORD}"
+fi
 
 require_env SECONDLOOP_MANAGED_PRO_EMAIL
 require_env SECONDLOOP_MANAGED_PRO_PASSWORD

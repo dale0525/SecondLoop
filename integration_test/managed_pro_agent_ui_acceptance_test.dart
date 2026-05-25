@@ -105,7 +105,7 @@ void main() {
       name: '02-conversation-media-fields',
     );
 
-    await tester.tap(find.text('Review').first);
+    await tester.tap(find.byKey(const ValueKey('app_shell_nav_review')));
     await tester.pumpAndSettle();
     expect(find.text('Needs your OK queue'), findsOneWidget);
     await tester.tap(find.text('Approve'));
@@ -117,16 +117,20 @@ void main() {
       name: '03-review-approve-flow',
     );
 
-    await tester.tap(find.text('Memory').first);
+    await tester
+        .tap(find.byKey(const ValueKey('app_shell_nav_desktop_memory')));
     await tester.pumpAndSettle();
-    expect(find.text('Preferences'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('desktop_memory_workbench_page')),
+      findsOneWidget,
+    );
     await _writeScreenshot(
       rootKey: screenshotKey,
       outputDir: outputDir,
       name: '04-memory-preferences',
     );
 
-    await tester.tap(find.text('Settings').first);
+    await tester.tap(find.byKey(const ValueKey('app_shell_nav_settings')));
     await tester.pumpAndSettle();
     expect(find.text('Account'), findsOneWidget);
     await _writeScreenshot(
@@ -153,10 +157,14 @@ void main() {
 }
 
 _ManagedProCredentials _managedProCredentials() {
-  final email =
-      (Platform.environment['SECONDLOOP_MANAGED_PRO_EMAIL'] ?? '').trim();
-  final password =
-      Platform.environment['SECONDLOOP_MANAGED_PRO_PASSWORD'] ?? '';
+  final email = _managedProEnv(
+    'SECONDLOOP_MANAGED_PRO_EMAIL',
+    fallback: 'SECONDLOOP_LIVE_MANAGED_PRO_EMAIL',
+  ).trim();
+  final password = _managedProEnv(
+    'SECONDLOOP_MANAGED_PRO_PASSWORD',
+    fallback: 'SECONDLOOP_LIVE_MANAGED_PRO_PASSWORD',
+  );
   expect(
     email,
     isNotEmpty,
@@ -170,6 +178,12 @@ _ManagedProCredentials _managedProCredentials() {
   return _ManagedProCredentials(email: email, password: password);
 }
 
+String _managedProEnv(String primary, {required String fallback}) {
+  final value = Platform.environment[primary] ?? '';
+  if (value.trim().isNotEmpty) return value;
+  return Platform.environment[fallback] ?? '';
+}
+
 Future<void> _signInManagedProAccount({
   required WidgetTester tester,
   required GlobalKey rootKey,
@@ -178,10 +192,14 @@ Future<void> _signInManagedProAccount({
   required CloudAuthControllerImpl cloudAuthController,
   required CloudSubscriptionController subscriptionController,
 }) async {
-  final cloudAccountLink = find.text('Open Cloud account').first;
-  await tester.ensureVisible(cloudAccountLink);
-  await tester.tap(cloudAccountLink);
-  await tester.pumpAndSettle();
+  if (find.byKey(const ValueKey('cloud_sign_in')).evaluate().isEmpty) {
+    final cloudAccountLink = find.text('Open Cloud account');
+    if (cloudAccountLink.evaluate().isNotEmpty) {
+      await tester.ensureVisible(cloudAccountLink.first);
+      await tester.tap(cloudAccountLink.first);
+      await tester.pumpAndSettle();
+    }
+  }
   expect(find.byKey(const ValueKey('cloud_sign_in')), findsOneWidget);
   await _writeScreenshot(
     rootKey: rootKey,
@@ -189,10 +207,14 @@ Future<void> _signInManagedProAccount({
     name: '06-managed-pro-cloud-account-form',
   );
 
-  final fields = find.byType(TextField);
-  expect(fields, findsNWidgets(2));
-  await tester.enterText(fields.at(0), credentials.email);
-  await tester.enterText(fields.at(1), credentials.password);
+  await tester.enterText(
+    find.byKey(const ValueKey('cloud_email_field')),
+    credentials.email,
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey('cloud_password_field')),
+    credentials.password,
+  );
   await tester.tap(find.byKey(const ValueKey('cloud_sign_in')));
   await _pumpUntil(
     tester,
@@ -283,8 +305,10 @@ Future<void> _writeReport(
     'schema': 'managed_pro_agent_ui_acceptance_v1',
     'appId': Platform.environment['SECONDLOOP_APP_ID'],
     'appName': Platform.environment['SECONDLOOP_APP_NAME'],
-    'managedProEmailSet':
-        (Platform.environment['SECONDLOOP_MANAGED_PRO_EMAIL'] ?? '').isNotEmpty,
+    'managedProEmailSet': _managedProEnv(
+      'SECONDLOOP_MANAGED_PRO_EMAIL',
+      fallback: 'SECONDLOOP_LIVE_MANAGED_PRO_EMAIL',
+    ).isNotEmpty,
     'conversationPath': {
       'usesDefaultAppShell': true,
       'usesAgentConversationPage': true,

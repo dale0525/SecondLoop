@@ -42,6 +42,7 @@ class CloudAccountAuthSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextField(
+                key: const ValueKey('cloud_email_field'),
                 controller: emailController,
                 decoration: InputDecoration(labelText: emailLabel),
                 keyboardType: TextInputType.emailAddress,
@@ -50,6 +51,7 @@ class CloudAccountAuthSection extends StatelessWidget {
               ),
               const SizedBox(height: AgentDesignTokens.gapMd),
               TextField(
+                key: const ValueKey('cloud_password_field'),
                 controller: passwordController,
                 decoration: InputDecoration(labelText: passwordLabel),
                 obscureText: true,

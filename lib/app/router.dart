@@ -34,6 +34,14 @@ enum AppTab {
         AppTab.memory => 'Tasks',
         AppTab.settings => 'Settings',
       };
+
+  String get navKey => switch (this) {
+        AppTab.review => 'app_shell_nav_review',
+        AppTab.conversation => 'app_shell_nav_conversation',
+        AppTab.notes => 'app_shell_nav_notes',
+        AppTab.memory => 'app_shell_nav_memory',
+        AppTab.settings => 'app_shell_nav_settings',
+      };
 }
 
 class AppShell extends StatefulWidget {
@@ -678,6 +686,17 @@ final class _DesktopNavDestination {
     if (tab != null) return selected ? tab.selectedIcon : tab.icon;
     return selected ? selectedIcon! : icon!;
   }
+
+  String get navKey {
+    final tab = this.tab;
+    if (tab != null) return tab.navKey;
+    return switch (action) {
+      _DesktopNavAction.memory => 'app_shell_nav_desktop_memory',
+      _DesktopNavAction.approvals => 'app_shell_nav_desktop_approvals',
+      _DesktopNavAction.connectors => 'app_shell_nav_desktop_connectors',
+      null => 'app_shell_nav_unknown',
+    };
+  }
 }
 
 final class _AppShellDesktopNavItem extends StatelessWidget {
@@ -695,6 +714,7 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = destination.resolvedLabel(context);
     return Semantics(
+      key: ValueKey(destination.navKey),
       button: true,
       selected: selected,
       label: label,
@@ -844,6 +864,7 @@ final class _AppShellBottomNavItem extends StatelessWidget {
     final foreground =
         selected ? const Color(0xFFFEFCFF) : const Color(0xFF45464D);
     return Semantics(
+      key: ValueKey(tab.navKey),
       button: true,
       selected: selected,
       label: tab.label(context),

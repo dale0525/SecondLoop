@@ -37,17 +37,20 @@ final class _DesktopPanel extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
-                    Text(
-                      title,
-                      style: AgentOperatingSystemTokens.labelLg.copyWith(
-                        fontWeight: FontWeight.w800,
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AgentOperatingSystemTokens.labelLg.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                     if (count != null) ...[
                       const SizedBox(width: 8),
                       _DesktopCountBadge(count: count!),
                     ],
-                    const Spacer(),
                     if (trailing != null)
                       Text(
                         trailing!,
@@ -135,36 +138,6 @@ final class _DesktopPanelDivider extends StatelessWidget {
       child: Divider(
         height: 1,
         color: AgentOperatingSystemTokens.outlineVariant,
-      ),
-    );
-  }
-}
-
-final class _DesktopFactRow extends StatelessWidget {
-  const _DesktopFactRow({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: AgentOperatingSystemTokens.labelMd.copyWith(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Text(value, style: AgentOperatingSystemTokens.code),
-        ],
       ),
     );
   }

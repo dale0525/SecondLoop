@@ -19,6 +19,7 @@ extension _AgentDesktopWorkbenchLayout on _AgentConversationPageState {
             runtimeState: state,
             taskRecords: state?.tasks ?? const <RuntimeWorkingSetRecord>[],
             todos: todos,
+            acceptanceCards: acceptanceCards,
             pendingUserContent: _pendingUserContent,
             pendingUserAttachments: _pendingUserAttachments,
             messageAttachmentsById: _messageAttachmentsById,
@@ -26,6 +27,8 @@ extension _AgentDesktopWorkbenchLayout on _AgentConversationPageState {
             streamingAnswer: _streamingAnswer,
             thinking: _thinking,
             askError: _askError,
+            scrollController: _scrollController,
+            bottomKey: _messageListBottomKey,
             controller: _controller,
             focusNode: _focusNode,
             busy: _sending || _thinking,
@@ -66,6 +69,7 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
     required this.runtimeState,
     required this.taskRecords,
     required this.todos,
+    required this.acceptanceCards,
     required this.pendingUserContent,
     required this.pendingUserAttachments,
     required this.messageAttachmentsById,
@@ -73,6 +77,8 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
     required this.streamingAnswer,
     required this.thinking,
     required this.askError,
+    required this.scrollController,
+    required this.bottomKey,
     required this.controller,
     required this.focusNode,
     required this.busy,
@@ -87,6 +93,7 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
   final RuntimeAgentState? runtimeState;
   final List<RuntimeWorkingSetRecord> taskRecords;
   final List<Todo> todos;
+  final List<Widget> acceptanceCards;
   final String? pendingUserContent;
   final List<_AgentMessageAttachmentView> pendingUserAttachments;
   final Map<String, List<_AgentMessageAttachmentView>> messageAttachmentsById;
@@ -94,6 +101,8 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
   final String streamingAnswer;
   final bool thinking;
   final String? askError;
+  final ScrollController scrollController;
+  final Key bottomKey;
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
@@ -113,9 +122,10 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
         children.add(
           _DesktopAssistantTurn(
             message: message,
-            taskCards: _createdTaskCards(sourceUserMessageId, message.id),
+            createdTasks: _createdTasks(sourceUserMessageId, message.id),
             mediaResults: messageMediaResultsById[message.id] ??
                 const <_AgentMessageMediaResultView>[],
+            onTaskViewed: onTaskViewed,
           ),
         );
         sourceUserMessageId = null;
@@ -129,6 +139,10 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
         );
         sourceUserMessageId = message.id;
       }
+    }
+
+    if (acceptanceCards.isNotEmpty) {
+      children.add(_AcceptanceCardStack(cards: acceptanceCards));
     }
 
     final pendingText = pendingUserContent?.trim();
@@ -152,8 +166,9 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
             createdAtMs: 0,
             isMemory: true,
           ),
-          taskCards: const <Widget>[],
+          createdTasks: const <Todo>[],
           mediaResults: const <_AgentMessageMediaResultView>[],
+          onTaskViewed: onTaskViewed,
         ),
       );
     } else if (thinking) {
@@ -172,6 +187,7 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
         ),
       );
     }
+    children.add(SizedBox(key: bottomKey, height: 1));
 
     return ColoredBox(
       key: const ValueKey('desktop_workbench_chat_column'),
@@ -180,6 +196,7 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
         children: [
           Expanded(
             child: ListView.separated(
+              controller: scrollController,
               padding: const EdgeInsets.all(32),
               itemCount: children.length,
               separatorBuilder: (_, __) => const SizedBox(height: 32),
@@ -200,8 +217,11 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
     );
   }
 
-  List<Widget> _createdTaskCards(String? userMessageId, String assistantId) {
-    final sourceIds = {assistantId, if (userMessageId != null) userMessageId};
+  List<Todo> _createdTasks(String? userMessageId, String assistantId) {
+    final sourceIds = {
+      assistantId.trim(),
+      if (userMessageId?.trim().isNotEmpty ?? false) userMessageId!.trim(),
+    }..remove('');
     final records = taskRecords.where((record) {
       final sourceId = _firstOperatingString([
         record.raw['source_message_id'],
@@ -209,18 +229,50 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
         record.raw['source_entry_id'],
         record.raw['sourceEntryId'],
       ]);
-      return sourceId == null || sourceIds.contains(sourceId);
+      if (sourceId != null) return sourceIds.contains(sourceId);
+      return _taskRecordHasRecentEntityRef(record, sourceIds);
     }).toList(growable: false);
     return [
-      for (final record in records)
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 390),
-          child: _DesktopTaskCard(
-            record: record,
-            onOpen: () => onTaskViewed(agentTodoFromRuntimeTask(record)),
-          ),
-        ),
+      for (final record in records) agentTodoFromRuntimeTask(record),
     ];
+  }
+
+  bool _taskRecordHasRecentEntityRef(
+    RuntimeWorkingSetRecord record,
+    Set<String> sourceIds,
+  ) {
+    final recordId = record.id.trim();
+    if (recordId.isEmpty || sourceIds.isEmpty) return false;
+    final refs =
+        runtimeState?.recentEntityRefs ?? const <Map<String, Object?>>[];
+    return refs.any((ref) {
+      final type = _firstOperatingString([
+        ref['entity_type'],
+        ref['entityType'],
+        ref['kind'],
+      ])?.toLowerCase();
+      if (type != 'task') return false;
+      final entityId = _firstOperatingString([
+        ref['entity_id'],
+        ref['entityId'],
+        ref['record_id'],
+        ref['recordId'],
+        ref['id'],
+      ]);
+      if (entityId != recordId) return false;
+      final sourceId = _firstOperatingString([
+        ref['turn_id'],
+        ref['turnId'],
+        ref['source_turn_id'],
+        ref['sourceTurnId'],
+        ref['source_message_id'],
+        ref['sourceMessageId'],
+        ref['source_entry_id'],
+        ref['sourceEntryId'],
+        ref['source'],
+      ]);
+      return sourceId != null && sourceIds.contains(sourceId);
+    });
   }
 }
 
@@ -282,263 +334,25 @@ final class _DesktopUserTurn extends StatelessWidget {
 final class _DesktopAssistantTurn extends StatelessWidget {
   const _DesktopAssistantTurn({
     required this.message,
-    required this.taskCards,
+    required this.createdTasks,
     required this.mediaResults,
+    required this.onTaskViewed,
   });
 
   final Message message;
-  final List<Widget> taskCards;
+  final List<Todo> createdTasks;
   final List<_AgentMessageMediaResultView> mediaResults;
+  final ValueChanged<Todo> onTaskViewed;
 
   @override
   Widget build(BuildContext context) {
-    final evidence = parseChatAnswerEvidence(message.citationsJson);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.psychology_rounded,
-              color: AgentOperatingSystemTokens.secondary,
-              size: 20,
-            ),
-            SizedBox(width: 8),
-            Text(
-              'SecondLoop Agent',
-              style: AgentOperatingSystemTokens.labelLg,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        DecoratedBox(
-          decoration: const BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: AgentOperatingSystemTokens.secondary,
-                width: 4,
-              ),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.only(left: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  message.content,
-                  style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                    color: AgentOperatingSystemTokens.onSurface,
-                  ),
-                ),
-                for (final card in taskCards) ...[
-                  const SizedBox(height: 12),
-                  card,
-                ],
-                if (evidence?.hasEvidence ?? false) ...[
-                  const SizedBox(height: 16),
-                  _DesktopCitationsCard(evidence: evidence!),
-                ],
-                if (mediaResults.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  KeyedSubtree(
-                    key: ValueKey(
-                      'agent_assistant_media_results_${message.id}',
-                    ),
-                    child: _AssistantRuntimeMediaResults(
-                      results: mediaResults,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-final class _DesktopTaskCard extends StatelessWidget {
-  const _DesktopTaskCard({
-    required this.record,
-    required this.onOpen,
-  });
-
-  final RuntimeWorkingSetRecord record;
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final auditId = _firstOperatingString([
-          record.raw['audit_id'],
-          record.raw['auditId'],
-        ]) ??
-        'not recorded';
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
-        borderRadius:
-            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12000000),
-            blurRadius: 3,
-            offset: Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    record.title,
-                    style: AgentOperatingSystemTokens.headlineSm.copyWith(
-                      color: AgentOperatingSystemTokens.onSurface,
-                    ),
-                  ),
-                ),
-                const _DesktopBadge(
-                  label: 'Applied',
-                  background: Color(0xFFD1FAE5),
-                  foreground: Color(0xFF065F46),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _DesktopFactRow(label: 'Audit ID', value: auditId),
-            _DesktopFactRow(
-              label: 'Created',
-              value: _desktopDate(record.updatedAtMs),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.open_in_new_rounded, size: 16),
-              label: const Text('Open Task'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-final class _DesktopCitationsCard extends StatelessWidget {
-  const _DesktopCitationsCard({required this.evidence});
-
-  final ChatAnswerEvidence evidence;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surfaceContainerLow,
-        borderRadius:
-            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.list_alt_rounded,
-                  color: AgentOperatingSystemTokens.onSurfaceVariant,
-                  size: 16,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'Citations from web-research',
-                  style: AgentOperatingSystemTokens.labelLg,
-                ),
-              ],
-            ),
-          ),
-          const Divider(
-            height: 1,
-            color: AgentOperatingSystemTokens.outlineVariant,
-          ),
-          for (var i = 0; i < evidence.directSources.length; i++)
-            _DesktopCitationRow(
-              index: i + 1,
-              source: evidence.directSources[i],
-              last: i == evidence.directSources.length - 1,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-final class _DesktopCitationRow extends StatelessWidget {
-  const _DesktopCitationRow({
-    required this.index,
-    required this.source,
-    required this.last,
-  });
-
-  final int index;
-  final ChatAnswerEvidenceDirectSource source;
-  final bool last;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
-        border: last
-            ? null
-            : const Border(
-                bottom: BorderSide(
-                  color: AgentOperatingSystemTokens.outlineVariant,
-                ),
-              ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 4,
-              child: Text(
-                source.displayTitle,
-                style: AgentOperatingSystemTokens.bodySm,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 5,
-              child: Text(
-                source.displaySnippet,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AgentOperatingSystemTokens.bodySm.copyWith(
-                  color: AgentOperatingSystemTokens.onSurfaceVariant,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Sources [$index]',
-              style: AgentOperatingSystemTokens.code.copyWith(
-                color: AgentOperatingSystemTokens.secondary,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return _AssistantTextMessage(
+      content: message.content,
+      time: context.t.chat.agentConversation.done,
+      sourceMessage: message.id == 'streaming' ? null : message,
+      createdTasks: createdTasks,
+      mediaResults: mediaResults,
+      onTaskViewed: (todo) async => onTaskViewed(todo),
     );
   }
 }
@@ -574,6 +388,7 @@ final class _DesktopWorkbenchSidePanels extends StatelessWidget {
             child: _DesktopRuntimeContext(
               state: state,
               contextSnapshot: contextSnapshot,
+              openTasksCount: openTasksCount,
             ),
           ),
           const SizedBox(height: 24),
@@ -612,10 +427,12 @@ final class _DesktopRuntimeContext extends StatelessWidget {
   const _DesktopRuntimeContext({
     required this.state,
     required this.contextSnapshot,
+    required this.openTasksCount,
   });
 
   final RuntimeAgentState? state;
   final ConversationContextSnapshot contextSnapshot;
+  final int openTasksCount;
 
   @override
   Widget build(BuildContext context) {
@@ -624,6 +441,15 @@ final class _DesktopRuntimeContext extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        SizedBox(
+          height: 220,
+          child: ConversationContextRail(
+            snapshot: contextSnapshot,
+            compact: true,
+            openTasksCount: openTasksCount,
+          ),
+        ),
+        const _DesktopPanelDivider(),
         _DesktopLabeledValue(
           label: 'recent_turns',
           value: _firstOperatingString([packet['recent_turns']]) ??

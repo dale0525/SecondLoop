@@ -101,6 +101,115 @@ void main() {
   );
 
   testWidgets(
+    'managed pro desktop task cards stay attached to their runtime source turn',
+    (tester) async {
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'uid_1',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [
+            {
+              'turn_id': 'turn-create-user',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'user',
+              'content': '帮我创建一个任务：完成周报。',
+              'created_at_ms': 1700000000000,
+            },
+            {
+              'turn_id': 'turn-create-assistant',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'assistant',
+              'content': '好的，已经为您创建了任务：完成周报。',
+              'created_at_ms': 1700000000100,
+            },
+            {
+              'turn_id': 'turn-memory-user',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'user',
+              'content': '记住：任务回复请使用中文。',
+              'created_at_ms': 1700000000200,
+            },
+            {
+              'turn_id': 'turn-memory-assistant',
+              'conversation_id': 'loop_home',
+              'vault_id': 'uid_1',
+              'role': 'assistant',
+              'content': '好的，我已经为您准备好了这条记忆。',
+              'created_at_ms': 1700000000300,
+            },
+          ],
+          'working_set_records': [],
+          'tasks': [
+            {
+              'id': 'task-weekly',
+              'kind': 'task',
+              'title': '完成周报',
+              'status': 'open',
+            }
+          ],
+          'memory_records': [],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [
+            {
+              'entity_type': 'task',
+              'entity_id': 'task-weekly',
+              'title': '完成周报',
+              'turn_id': 'turn-create-user',
+            }
+          ],
+          'latest_context_snapshot': null,
+          'audit_refs': [],
+        }),
+      );
+
+      await tester.binding.setSurfaceSize(const Size(1012, 701));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: _ThrowingLocalStoreBackend(),
+              child: CloudAuthScope(
+                controller: _CloudAuthController(),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.example.test',
+                  modelName: 'cloud',
+                ),
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeAgentStateRepository: repository,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('agent_created_task_card_task-weekly')),
+        findsOneWidget,
+      );
+      expect(find.text('好的，我已经为您准备好了这条记忆。'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'managed pro conversation right rail merges runtime memory when context snapshot is stale',
     (tester) async {
       final repository = _FakeRuntimeAgentStateRepository(
