@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 12
+- **Total Sessions**: 13
 - **Last Active**: 2026-05-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~426 | Active |
+| `journal-1.md` | ~460 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 13 | 2026-05-25 | Screen 11 self-managed setup finish | `85c54ea3`, `16e14cc5` | `main` |
 | 12 | 2026-05-25 | Screen 12 Cloudflare setup finish | `85c54ea3`, `16e14cc5` | `main` |
 | 11 | 2026-05-25 | Stitch screen 10 local computer safety refusal | `ae40d7e5` | `main` |
 | 10 | 2026-05-24 | Stitch screen 09 purchase payment safety refusal | `0fb3cf74`, `3671f327` | `main` |

@@ -424,3 +424,37 @@ Implemented and recorded the canonical screen 12 Cloudflare connection setup flo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: Screen 11 self-managed setup finish
+
+**Date**: 2026-05-25
+**Task**: Screen 11 self-managed setup finish
+**Branch**: `main`
+
+### Summary
+
+Closed the canonical screen 11 self-managed provider secrets work that was implemented with the shared Cloudflare setup flow: provider secret continuation, capability verification rows, runtime manifest display, responsive coverage, and Trellis records.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85c54ea3` | (see git log) |
+| `16e14cc5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
