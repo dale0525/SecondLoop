@@ -7,6 +7,8 @@ import 'app_shell_default_pages_stub.dart'
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
 import '../core/update/update_badge_prefs.dart';
+import '../features/memory/memory_page.dart';
+import '../features/review/review_page.dart';
 import 'app_shell_style.dart';
 import 'theme.dart';
 
@@ -269,19 +271,28 @@ final class _AppShellDesktopWorkbench extends StatelessWidget {
     return ColoredBox(
       key: const ValueKey('app_shell_desktop_workbench'),
       color: const Color(0xFFF7F9FB),
-      child: Column(
+      child: Stack(
         children: [
-          const _AppShellDesktopTopNav(),
-          Expanded(
-            child: Row(
-              children: [
-                _AppShellDesktopSideNav(
-                  selectedIndex: selectedIndex,
-                  onSelect: onSelect,
+          Column(
+            children: [
+              const _AppShellDesktopTopNav(),
+              Expanded(
+                child: Row(
+                  children: [
+                    _AppShellDesktopSideNav(
+                      selectedIndex: selectedIndex,
+                      onSelect: onSelect,
+                    ),
+                    Expanded(child: child),
+                  ],
                 ),
-                Expanded(child: child),
-              ],
-            ),
+              ),
+            ],
+          ),
+          const Positioned(
+            right: 32,
+            bottom: 32,
+            child: _AppShellDesktopQuickCaptureButton(),
           ),
         ],
       ),
@@ -356,6 +367,12 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                   width: 256,
                   height: 34,
                   child: TextField(
+                    key: const ValueKey('app_shell_desktop_vault_search'),
+                    readOnly: true,
+                    onTap: () => _showDesktopWorkbenchSnack(
+                      context,
+                      'Operational vault search needs runtime search configuration. (tool_unavailable)',
+                    ),
                     decoration: InputDecoration(
                       hintText: 'Search operational vault...',
                       prefixIcon: const Icon(Icons.search_rounded, size: 18),
@@ -386,12 +403,18 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                 const SizedBox(width: 16),
                 IconButton(
                   tooltip: 'Sync',
-                  onPressed: () {},
+                  onPressed: () => _showDesktopWorkbenchSnack(
+                    context,
+                    'Runtime sync is automatic for managed pro.',
+                  ),
                   icon: const Icon(Icons.sync_rounded),
                 ),
                 IconButton(
                   tooltip: 'Account',
-                  onPressed: () {},
+                  onPressed: () => _showDesktopWorkbenchSnack(
+                    context,
+                    'Account controls are available from Settings.',
+                  ),
                   icon: const Icon(Icons.account_circle_outlined),
                 ),
               ],
@@ -466,19 +489,60 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
   final ValueChanged<int> onSelect;
 
   static const _destinations = [
-    _DesktopNavDestination(
-      tab: AppTab.review,
+    _DesktopNavDestination.tab(AppTab.review),
+    _DesktopNavDestination.tab(AppTab.conversation),
+    _DesktopNavDestination.tab(AppTab.notes),
+    _DesktopNavDestination.tab(AppTab.memory),
+    _DesktopNavDestination.action(
+      label: 'Memory',
+      icon: Icons.psychology_outlined,
+      selectedIcon: Icons.psychology,
+      action: _DesktopNavAction.memory,
     ),
-    _DesktopNavDestination(
-      tab: AppTab.conversation,
+    _DesktopNavDestination.action(
+      label: 'Approvals',
+      icon: Icons.rule_outlined,
+      selectedIcon: Icons.rule,
+      action: _DesktopNavAction.approvals,
     ),
-    _DesktopNavDestination(
-      tab: AppTab.notes,
-    ),
-    _DesktopNavDestination(
-      tab: AppTab.memory,
+    _DesktopNavDestination.action(
+      label: 'Connectors',
+      icon: Icons.hub_outlined,
+      selectedIcon: Icons.hub,
+      action: _DesktopNavAction.connectors,
     ),
   ];
+
+  void _activateDestination(
+    BuildContext context,
+    _DesktopNavDestination destination,
+  ) {
+    final tab = destination.tab;
+    if (tab != null) {
+      onSelect(tab.index);
+      return;
+    }
+    switch (destination.action) {
+      case _DesktopNavAction.memory:
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const MemoryPage()),
+        );
+        break;
+      case _DesktopNavAction.approvals:
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const ReviewPage()),
+        );
+        break;
+      case _DesktopNavAction.connectors:
+        _showDesktopWorkbenchSnack(
+          context,
+          'Connectors require provider configuration. (needs_configuration)',
+        );
+        break;
+      case null:
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -497,16 +561,15 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
               for (final destination in _destinations)
                 _AppShellDesktopNavItem(
                   destination: destination,
-                  selected: selectedIndex == destination.tab.index,
-                  onTap: () => onSelect(destination.tab.index),
+                  selected: destination.tab != null &&
+                      selectedIndex == destination.tab!.index,
+                  onTap: () => _activateDestination(context, destination),
                 ),
               const Spacer(),
               const Divider(color: Color(0xFFC6C6CD), height: 1),
               const SizedBox(height: 12),
               _AppShellDesktopNavItem(
-                destination: const _DesktopNavDestination(
-                  tab: AppTab.settings,
-                ),
+                destination: const _DesktopNavDestination.tab(AppTab.settings),
                 selected: selectedIndex == AppTab.settings.index,
                 onTap: () => onSelect(AppTab.settings.index),
               ),
@@ -518,12 +581,35 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
   }
 }
 
-final class _DesktopNavDestination {
-  const _DesktopNavDestination({
-    required this.tab,
-  });
+enum _DesktopNavAction { memory, approvals, connectors }
 
-  final AppTab tab;
+final class _DesktopNavDestination {
+  const _DesktopNavDestination.tab(this.tab)
+      : label = null,
+        icon = null,
+        selectedIcon = null,
+        action = null;
+
+  const _DesktopNavDestination.action({
+    required this.label,
+    required this.icon,
+    required this.selectedIcon,
+    required this.action,
+  }) : tab = null;
+
+  final AppTab? tab;
+  final String? label;
+  final IconData? icon;
+  final IconData? selectedIcon;
+  final _DesktopNavAction? action;
+
+  String resolvedLabel(BuildContext context) => tab?.label(context) ?? label!;
+
+  IconData resolvedIcon({required bool selected}) {
+    final tab = this.tab;
+    if (tab != null) return selected ? tab.selectedIcon : tab.icon;
+    return selected ? selectedIcon! : icon!;
+  }
 }
 
 final class _AppShellDesktopNavItem extends StatelessWidget {
@@ -539,7 +625,7 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = destination.tab.label(context);
+    final label = destination.resolvedLabel(context);
     return Semantics(
       button: true,
       selected: selected,
@@ -565,9 +651,7 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  selected
-                      ? destination.tab.selectedIcon
-                      : destination.tab.icon,
+                  destination.resolvedIcon(selected: selected),
                   size: 20,
                   color: selected
                       ? const Color(0xFF0051D5)
@@ -596,6 +680,43 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
       ),
     );
   }
+}
+
+final class _AppShellDesktopQuickCaptureButton extends StatelessWidget {
+  const _AppShellDesktopQuickCaptureButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      key: const ValueKey('app_shell_desktop_quick_capture'),
+      dimension: 56,
+      child: FloatingActionButton(
+        tooltip: 'Quick Capture',
+        backgroundColor: const Color(0xFF000000),
+        foregroundColor: const Color(0xFFFFFFFF),
+        onPressed: () {
+          final controller = QuickCaptureScope.maybeOf(context);
+          if (controller != null) {
+            controller.show();
+            return;
+          }
+          _showDesktopWorkbenchSnack(
+            context,
+            'Quick Capture is unavailable in this context. (tool_unavailable)',
+          );
+        },
+        child: const Icon(Icons.add_rounded, size: 28),
+      ),
+    );
+  }
+}
+
+void _showDesktopWorkbenchSnack(BuildContext context, String message) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+  messenger
+    ..clearSnackBars()
+    ..showSnackBar(SnackBar(content: Text(message)));
 }
 
 final class _AppShellBottomNav extends StatelessWidget {

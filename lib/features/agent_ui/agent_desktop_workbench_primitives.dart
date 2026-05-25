@@ -336,7 +336,103 @@ Map<String, Object?> _latestToolTrace(RuntimeAgentState? state) {
       return trace.map((key, value) => MapEntry('$key', value as Object?));
     }
   }
+  final snapshotTrace = state.latestContextSnapshot?.packet['tool_trace'] ??
+      state.latestContextSnapshot?.packet['toolTrace'];
+  if (snapshotTrace is Map) {
+    return snapshotTrace.map(
+      (key, value) => MapEntry('$key', value as Object?),
+    );
+  }
   return const <String, Object?>{};
+}
+
+String _desktopToolTraceTitle(Map<String, Object?> trace) {
+  final skill = _firstOperatingString([
+    trace['skill'],
+    trace['skill_id'],
+    trace['skillId'],
+    trace['runtime_skill'],
+    trace['runtimeSkill'],
+    trace['tool'],
+  ]);
+  if (skill == null) return 'tool trace unavailable';
+  final status = _firstOperatingString([
+        trace['status'],
+        trace['state'],
+        trace['result'],
+      ]) ??
+      'reported';
+  return '$skill: $status';
+}
+
+String? _desktopCitationBadgeLabel({
+  required Map<String, Object?> trace,
+  required bool hasCitations,
+}) {
+  if (hasCitations) return 'CITATIONS: PRESENT';
+  final skill = _firstOperatingString([
+        trace['skill'],
+        trace['skill_id'],
+        trace['runtime_skill'],
+        trace['tool'],
+      ]) ??
+      '';
+  final currentFacts = _firstOperatingString([
+        trace['current_facts'],
+        trace['currentFacts'],
+      ]) ??
+      '';
+  final needsWebResearch =
+      ('$skill $currentFacts').toLowerCase().contains('web-research');
+  return needsWebResearch ? 'CITATIONS: MISSING' : null;
+}
+
+String? _desktopToolTraceFooter(
+  RuntimeAgentState? state,
+  Map<String, Object?> trace,
+) {
+  if (trace.isEmpty) return null;
+  final parts = <String>[];
+  final latencyMs = _firstOperatingInt([
+    trace['latency_ms'],
+    trace['latencyMs'],
+    trace['duration_ms'],
+    trace['durationMs'],
+  ]);
+  if (latencyMs != null) {
+    parts.add('Latency: ${(latencyMs / 1000).toStringAsFixed(2)}s');
+  }
+  final createdAtMs = _firstOperatingInt([
+        trace['created_at_ms'],
+        trace['createdAtMs'],
+        trace['completed_at_ms'],
+        trace['completedAtMs'],
+      ]) ??
+      _latestTraceTurnCreatedAtMs(state);
+  if (createdAtMs != null && createdAtMs > 0) {
+    parts.add(_desktopDate(createdAtMs));
+  }
+  return parts.isEmpty ? null : parts.join(' • ');
+}
+
+int? _latestTraceTurnCreatedAtMs(RuntimeAgentState? state) {
+  if (state == null) return null;
+  for (final turn in state.conversationTurns.reversed) {
+    if (turn.raw['tool_trace'] is Map) return turn.createdAtMs;
+  }
+  return null;
+}
+
+int? _firstOperatingInt(Iterable<Object?> values) {
+  for (final value in values) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final parsed = int.tryParse(value.trim());
+      if (parsed != null) return parsed;
+    }
+  }
+  return null;
 }
 
 bool _latestAssistantHasCitations(RuntimeAgentState? state) {

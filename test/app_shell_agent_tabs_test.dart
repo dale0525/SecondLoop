@@ -16,7 +16,7 @@ void main() {
     UpdateBadgePrefs.resetForTests();
   });
 
-  testWidgets('desktop AppShell exposes the five agent destinations',
+  testWidgets('desktop AppShell exposes the canonical workbench destinations',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -48,9 +48,11 @@ void main() {
     expect(find.text('Vault'), findsOneWidget);
     expect(find.text('Tasks'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Memory'), findsNothing);
-    expect(find.text('Approvals'), findsNothing);
-    expect(find.text('Connectors'), findsNothing);
+    expect(find.text('Memory'), findsOneWidget);
+    expect(find.text('Approvals'), findsOneWidget);
+    expect(find.text('Connectors'), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_shell_desktop_quick_capture')),
+        findsOneWidget);
   });
 
   testWidgets('mobile AppShell exposes the five agent destinations',

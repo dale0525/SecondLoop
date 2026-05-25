@@ -656,6 +656,11 @@ final class _DesktopToolTrace extends StatelessWidget {
   Widget build(BuildContext context) {
     final trace = _latestToolTrace(state);
     final hasCitations = _latestAssistantHasCitations(state);
+    final citationBadge = _desktopCitationBadgeLabel(
+      trace: trace,
+      hasCitations: hasCitations,
+    );
+    final traceFooter = _desktopToolTraceFooter(state, trace);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -675,17 +680,21 @@ final class _DesktopToolTrace extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'web-research: executed',
+                      _desktopToolTraceTitle(trace),
                       style: AgentOperatingSystemTokens.labelLg,
                     ),
                   ),
-                  if (hasCitations)
-                    const _DesktopBadge(
-                      label: 'CITATIONS: PRESENT',
-                      background: Color(0xFFECFDF5),
-                      foreground: Color(0xFF059669),
+                  if (citationBadge != null)
+                    _DesktopBadge(
+                      label: citationBadge,
+                      background: hasCitations
+                          ? const Color(0xFFECFDF5)
+                          : const Color(0xFFFFF1F2),
+                      foreground: hasCitations
+                          ? const Color(0xFF059669)
+                          : const Color(0xFFE11D48),
                     ),
                 ],
               ),
@@ -710,7 +719,7 @@ final class _DesktopToolTrace extends StatelessWidget {
                               trace['postprocess'],
                               trace['post_process'],
                             ]) ??
-                            'skill_result_response',
+                            'not reported',
                       ),
                       const SizedBox(height: 8),
                       _DesktopTraceRow(
@@ -719,12 +728,23 @@ final class _DesktopToolTrace extends StatelessWidget {
                               trace['current_facts'],
                               trace['currentFacts'],
                             ]) ??
-                            'web-research required',
+                            (trace.isEmpty
+                                ? 'tool_unavailable'
+                                : 'not reported'),
                       ),
                     ],
                   ),
                 ),
               ),
+              if (traceFooter != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  traceFooter,
+                  style: AgentOperatingSystemTokens.labelMd.copyWith(
+                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
