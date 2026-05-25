@@ -7,6 +7,8 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_models.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_repository.dart';
+import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart';
+import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
@@ -109,6 +111,79 @@ void main() {
             .onPressed,
         isNotNull,
       );
+    },
+  );
+
+  testWidgets(
+    'second canonical screen sends follow-up through runtime and refreshes cited state',
+    (tester) async {
+      final repository = _MutableFakeRuntimeAgentStateRepository(
+        RuntimeAgentState.empty(
+          vaultId: 'uid_1',
+          conversationId: 'loop_home',
+        ),
+      );
+      final sender = _WebResearchContinuitySender(repository);
+
+      await tester.binding.setSurfaceSize(const Size(780, 2770));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: TestAppBackend(),
+              child: CloudAuthScope(
+                controller: _CloudAuthController(),
+                gatewayConfig: const CloudGatewayConfig(
+                  baseUrl: 'https://gateway.example.test',
+                  modelName: 'cloud',
+                ),
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: AgentConversationPage(
+                    conversation: const Conversation(
+                      id: 'loop_home',
+                      title: 'Loop',
+                      createdAtMs: 0,
+                      updatedAtMs: 0,
+                    ),
+                    isTabActive: true,
+                    runtimeConversationSender: sender,
+                    runtimeAgentStateRepository: repository,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('chat_input')),
+        '介绍一下新的手机产品参数。',
+      );
+      await tester.pump();
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('chat_send')))
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
+      await tester.pumpAndSettle();
+
+      expect(sender.sentMessages, ['介绍一下新的手机产品参数。']);
+      expect(repository.requests.length, greaterThanOrEqualTo(2));
+      expect(find.text('VERIFIED SOURCES'), findsOneWidget);
+      expect(find.text('web_research'), findsOneWidget);
+      expect(
+        find.text('Context used: previous turn + recent_turns + web research'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Trace ID: SRCH-2026-05-12'), findsOneWidget);
     },
   );
 }
@@ -231,6 +306,76 @@ final class _FakeRuntimeAgentStateRepository
     String? turnOrder,
   }) async {
     return state;
+  }
+}
+
+final class _MutableFakeRuntimeAgentStateRepository
+    implements RuntimeAgentStateRepository {
+  _MutableFakeRuntimeAgentStateRepository(this.state);
+
+  RuntimeAgentState state;
+  final List<(String, String)> requests = <(String, String)>[];
+
+  @override
+  Future<RuntimeAgentState> fetchAgentState({
+    required String vaultId,
+    required String conversationId,
+    int? turnLimit,
+    String? turnBefore,
+    String? turnOrder,
+  }) async {
+    requests.add((vaultId, conversationId));
+    return state;
+  }
+}
+
+final class _WebResearchContinuitySender
+    implements ChatRuntimeConversationSender {
+  _WebResearchContinuitySender(this.repository);
+
+  final _MutableFakeRuntimeAgentStateRepository repository;
+  final List<String> sentMessages = <String>[];
+
+  @override
+  Future<SecretaryRuntimeConversationResult> send({
+    required String vaultId,
+    required String conversationId,
+    required String message,
+  }) async {
+    sentMessages.add(message);
+    repository.state = _secondScreenState();
+    return SecretaryRuntimeConversationResult.fromJson({
+      'run_id': 'run-web-research-follow-up',
+      'conversation_id': conversationId,
+      'assistant': const {
+        'role': 'assistant',
+        'content': '以下是 iPhone 16 Pro 的核心参数摘要：',
+      },
+      'metadata': {
+        'run_id': 'run-web-research-follow-up',
+        'turn_id': 'turn-assistant-2',
+        'conversation_id': conversationId,
+        'vault_id': vaultId,
+        'response_type': 'web_research_draft',
+        'run_status': 'completed',
+        'approval_required': false,
+        'approval_items': const [],
+        'media_results': const [],
+        'web_research_drafts': const [
+          {
+            'query': 'iPhone 16 Pro specs',
+            'summary': 'A18 Pro, ProMotion OLED, and camera details.',
+            'citations': [
+              {
+                'title': 'iPhone 16 Pro - Apple',
+                'url': 'https://www.apple.com/iphone-16-pro/',
+                'domain': 'apple.com',
+              },
+            ],
+          },
+        ],
+      },
+    });
   }
 }
 
