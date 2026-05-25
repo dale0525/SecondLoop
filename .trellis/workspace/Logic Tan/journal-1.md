@@ -623,3 +623,36 @@ Restored the desktop Approvals workbench behavior with runtime-backed queue filt
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: Restore desktop Connectors workbench
+
+**Date**: 2026-05-25
+**Task**: Restore desktop Connectors workbench
+**Branch**: `main`
+
+### Summary
+
+Restored the desktop Connectors workbench behavior by splitting connector view models out of the page, showing runtime audit/capability state, surfacing fail-closed capability check errors, and adding focused widget coverage for selection, refresh, degraded actions, and mobile nav isolation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9b6bb567` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

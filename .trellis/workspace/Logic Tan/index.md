@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 18
+- **Total Sessions**: 19
 - **Last Active**: 2026-05-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~625 | Active |
+| `journal-1.md` | ~658 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 19 | 2026-05-25 | Restore desktop Connectors workbench | `9b6bb567` | `main` |
 | 18 | 2026-05-25 | Restore desktop Approvals workbench | `98d73e27` | `main` |
 | 17 | 2026-05-25 | Restore desktop auxiliary workbenches | `e837f968` | `main` |
 | 16 | 2026-05-25 | Archive Stitch canonical screen parent task | - | `main` |
