@@ -458,3 +458,37 @@ Closed the canonical screen 11 self-managed provider secrets work that was imple
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: Stitch screen 13 desktop workbench
+
+**Date**: 2026-05-25
+**Task**: Stitch screen 13 desktop workbench
+**Branch**: `main`
+
+### Summary
+
+Implemented and verified the canonical desktop agent workbench screen with runtime-backed context, approvals, tool trace evidence, desktop shell controls, and screen-specific tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e26e9617` | (see git log) |
+| `5858106f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
