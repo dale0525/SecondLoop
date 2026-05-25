@@ -112,6 +112,70 @@ void main() {
     expect(find.text('Approvals'), findsNothing);
     expect(find.text('Connectors'), findsNothing);
   });
+
+  testWidgets(
+      'desktop Connectors exposes audit state and refreshes runtime capability',
+      (tester) async {
+    final repository = _MutableRuntimeAgentStateRepository(_desktopState());
+
+    await _pumpConnectorsPage(tester, repository: repository);
+
+    expect(find.text('Email Binding'), findsOneWidget);
+    expect(
+        find.text('BYOK secrets are written only to user runtime secrets, '
+            'not stored in app config.'),
+        findsOneWidget);
+    expect(find.text('Audit Trail'), findsOneWidget);
+    expect(find.text('AUD-1'), findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('desktop_connector_web_research')));
+    await tester.pumpAndSettle();
+    expect(find.text('Web Research Binding'), findsOneWidget);
+    expect(find.text('citation_required'), findsOneWidget);
+
+    final fetchCountBeforeRefresh = repository.fetchCount;
+    await tester.tap(
+      find.byKey(const ValueKey('desktop_connectors_capability_check')),
+    );
+    await tester.pumpAndSettle();
+    expect(repository.fetchCount, greaterThan(fetchCountBeforeRefresh));
+
+    await tester
+        .tap(find.byKey(const ValueKey('desktop_connector_files_media')));
+    await tester.pumpAndSettle();
+    expect(find.text('Files & Media Binding'), findsOneWidget);
+    expect(find.text('budget_confirmation_required'), findsWidgets);
+
+    await tester.tap(
+      find.byKey(const ValueKey('desktop_connector_revoke_access')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+        find.textContaining('connector revocation endpoint'), findsOneWidget);
+  });
+
+  testWidgets(
+      'desktop Connectors capability check fails closed without runtime config',
+      (tester) async {
+    await _pumpConnectorsPage(tester);
+
+    expect(find.text('tool_unavailable'), findsWidgets);
+    expect(find.text('not reported'), findsWidgets);
+
+    await tester.tap(
+      find.byKey(const ValueKey('desktop_connectors_capability_check')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('runtime capability state is not configured'),
+        findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('desktop_connector_web_research')));
+    await tester.pumpAndSettle();
+    expect(find.text('Web Research Binding'), findsOneWidget);
+    expect(find.text('Capability unknown'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpShell(
@@ -158,6 +222,28 @@ Future<void> _tapSidebar(WidgetTester tester, String label) async {
     matching: find.text(label),
   );
   await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pumpConnectorsPage(
+  WidgetTester tester, {
+  _MutableRuntimeAgentStateRepository? repository,
+}) async {
+  await tester.binding.setSurfaceSize(const Size(2560, 2048));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+
+  await tester.pumpWidget(
+    wrapWithI18n(
+      MaterialApp(
+        home: Scaffold(
+          body: DesktopConnectorsWorkbenchPage(
+            runtimeAgentStateRepository: repository,
+            vaultId: repository == null ? null : 'uid_1',
+          ),
+        ),
+      ),
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
