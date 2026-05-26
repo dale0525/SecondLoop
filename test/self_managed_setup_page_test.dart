@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/cloud/local_runtime_helper_process.dart';
 import 'package:secondloop/core/cloud/runtime_manifest.dart';
@@ -82,6 +84,105 @@ void main() {
     expect(find.text('CF_D1_PRIMARY_VAULT'), findsOneWidget);
     expect(find.text('1/1 active'), findsOneWidget);
     expect(find.text('you (local key)'), findsOneWidget);
+  });
+
+  testWidgets('accessibility setText updates provider secrets before deploy',
+      (tester) async {
+    final semanticsHandle = tester.ensureSemantics();
+    try {
+      SelfManagedSetupRequest? capturedRequest;
+      final controller = SelfManagedSetupController(
+        helperProcess: LocalRuntimeHelperProcess(
+          runner: (request, _) async {
+            capturedRequest = request;
+            return _readySetupResult;
+          },
+        ),
+      );
+
+      await _pumpSelfManagedSetup(tester, controller);
+      await _prepareManualCloudflareConnection(tester);
+      await _setSemanticsText(
+        tester,
+        const ValueKey('self_managed_api_key_semantics'),
+        'sk-a11y',
+      );
+      await _setSemanticsText(
+        tester,
+        const ValueKey('self_managed_embedding_api_key_semantics'),
+        'emb-a11y',
+      );
+      await _setSemanticsText(
+        tester,
+        const ValueKey('self_managed_multimodal_api_key_semantics'),
+        'mm-a11y',
+      );
+
+      await _tapVisible(
+        tester,
+        find.byKey(const ValueKey('self_managed_write_secrets')),
+      );
+
+      expect(capturedRequest?.apiKey, 'sk-a11y');
+      expect(capturedRequest?.embeddingApiKey, 'emb-a11y');
+      expect(capturedRequest?.multimodalApiKey, 'mm-a11y');
+      expect(controller.state.errorCode, isNull);
+    } finally {
+      semanticsHandle.dispose();
+    }
+  });
+
+  testWidgets('paste buttons update provider secrets before deploy',
+      (tester) async {
+    var clipboardText = '';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.getData') {
+        return <String, Object?>{'text': clipboardText};
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    SelfManagedSetupRequest? capturedRequest;
+    final controller = SelfManagedSetupController(
+      helperProcess: LocalRuntimeHelperProcess(
+        runner: (request, _) async {
+          capturedRequest = request;
+          return _readySetupResult;
+        },
+      ),
+    );
+
+    await _pumpSelfManagedSetup(tester, controller);
+    await _prepareManualCloudflareConnection(tester);
+    clipboardText = 'sk-paste';
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_api_key_paste')),
+    );
+    clipboardText = 'emb-paste';
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_embedding_api_key_paste')),
+    );
+    clipboardText = 'mm-paste';
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_multimodal_api_key_paste')),
+    );
+
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_write_secrets')),
+    );
+
+    expect(capturedRequest?.apiKey, 'sk-paste');
+    expect(capturedRequest?.embeddingApiKey, 'emb-paste');
+    expect(capturedRequest?.multimodalApiKey, 'mm-paste');
+    expect(controller.state.errorCode, isNull);
   });
 
   testWidgets('manual Cloudflare connection validates missing fields',
@@ -354,6 +455,27 @@ Future<void> _fillRequiredProviderFields(WidgetTester tester) async {
     find.byKey(const ValueKey('self_managed_multimodal_api_key')),
     'mm-test',
   );
+}
+
+Future<void> _setSemanticsText(
+  WidgetTester tester,
+  Key key,
+  String text,
+) async {
+  final finder = find.byKey(key);
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  final node = tester.getSemantics(finder);
+  expect(
+    node.getSemanticsData().hasAction(SemanticsAction.setText),
+    isTrue,
+  );
+  tester.binding.pipelineOwner.semanticsOwner!.performAction(
+    node.id,
+    SemanticsAction.setText,
+    text,
+  );
+  await tester.pumpAndSettle();
 }
 
 Future<void> _prepareManualCloudflareConnection(WidgetTester tester) async {

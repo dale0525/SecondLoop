@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/cloud/self_managed_setup_models.dart';
 
@@ -7,6 +9,31 @@ import '../../tools/self_managed_runtime_lib/deploy_runner.dart';
 import '../../tools/self_managed_runtime_lib/uninstall_runner.dart';
 
 void main() {
+  test('pixi helper task bypasses the FVM wrapper for stdin safety', () {
+    final pixi = File('pixi.toml').readAsStringSync();
+
+    expect(
+      pixi,
+      contains(
+        'self-managed-runtime-helper = ".fvm/flutter_sdk/bin/dart run tools/self_managed_runtime_helper.dart"',
+      ),
+    );
+    expect(
+      pixi,
+      contains(
+        'self-managed-runtime-helper = ".fvm\\\\flutter_sdk\\\\bin\\\\dart.bat run tools/self_managed_runtime_helper.dart"',
+      ),
+    );
+    expect(
+      pixi,
+      isNot(
+        contains(
+          'self-managed-runtime-helper = "dart pub global run fvm:main',
+        ),
+      ),
+    );
+  });
+
   test('helper emits manifest payload and progress events', () async {
     final events = <Map<String, Object?>>[];
     final output = await runSelfManagedRuntimeHelper(

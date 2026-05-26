@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/cloud/runtime_manifest.dart';
 import '../../core/cloud/self_managed_setup_controller.dart';
@@ -224,6 +225,10 @@ class _ProviderSecretsCard extends StatelessWidget {
             builder: (context, value, _) {
               return _SecretTextField(
                 fieldKey: const ValueKey('self_managed_api_key'),
+                semanticsKey: const ValueKey(
+                  'self_managed_api_key_semantics',
+                ),
+                pasteKey: const ValueKey('self_managed_api_key_paste'),
                 controller: apiKeyController,
                 label: _primaryKeyLabel(value.text),
               );
@@ -232,12 +237,24 @@ class _ProviderSecretsCard extends StatelessWidget {
           const SizedBox(height: 12),
           _SecretTextField(
             fieldKey: const ValueKey('self_managed_embedding_api_key'),
+            semanticsKey: const ValueKey(
+              'self_managed_embedding_api_key_semantics',
+            ),
+            pasteKey: const ValueKey(
+              'self_managed_embedding_api_key_paste',
+            ),
             controller: embeddingApiKeyController,
             label: 'Embedding Runtime Secret',
           ),
           const SizedBox(height: 12),
           _SecretTextField(
             fieldKey: const ValueKey('self_managed_multimodal_api_key'),
+            semanticsKey: const ValueKey(
+              'self_managed_multimodal_api_key_semantics',
+            ),
+            pasteKey: const ValueKey(
+              'self_managed_multimodal_api_key_paste',
+            ),
             controller: multimodalApiKeyController,
             label: 'Multimodal Runtime Secret',
           ),
@@ -392,12 +409,16 @@ class _ProviderSegment extends StatelessWidget {
 class _SecretTextField extends StatelessWidget {
   const _SecretTextField({
     this.fieldKey,
+    this.semanticsKey,
+    this.pasteKey,
     required this.controller,
     required this.label,
     this.obscure = true,
   });
 
   final Key? fieldKey;
+  final Key? semanticsKey;
+  final Key? pasteKey;
   final TextEditingController controller;
   final String label;
   final bool obscure;
@@ -418,40 +439,110 @@ class _SecretTextField extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        TextField(
-          key: fieldKey,
-          controller: controller,
-          obscureText: obscure,
-          enableSuggestions: !obscure,
-          autocorrect: false,
-          maxLines: 1,
-          style: const TextStyle(
-            color: _SetupColors.onSurface,
-            fontSize: 13,
-            height: 18 / 13,
-            letterSpacing: 0,
-          ),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: _SetupColors.surfaceLow,
-            isDense: true,
-            suffixIcon: obscure
-                ? const Tooltip(
-                    message: 'Secret value stays hidden',
-                    child: Icon(
-                      Icons.visibility_off_outlined,
-                      size: 20,
-                      color: _SetupColors.onSurfaceVariant,
-                    ),
-                  )
-                : null,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 12,
+        Semantics(
+          key: semanticsKey,
+          label: label,
+          textField: true,
+          obscured: obscure,
+          value: obscure ? _obscuredSemanticsValue : controller.text,
+          onSetText: _replaceText,
+          onPaste: obscure ? _pasteFromClipboard : null,
+          child: TextField(
+            key: fieldKey,
+            controller: controller,
+            obscureText: obscure,
+            enableSuggestions: !obscure,
+            autocorrect: false,
+            maxLines: 1,
+            style: const TextStyle(
+              color: _SetupColors.onSurface,
+              fontSize: 13,
+              height: 18 / 13,
+              letterSpacing: 0,
             ),
-            enabledBorder: _outlineBorder(_SetupColors.outlineVariant),
-            focusedBorder: _outlineBorder(_SetupColors.secondary),
-            border: _outlineBorder(_SetupColors.outlineVariant),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: _SetupColors.surfaceLow,
+              isDense: true,
+              suffixIcon: obscure
+                  ? _SecretFieldSuffix(
+                      pasteKey: pasteKey,
+                      onPaste: _pasteFromClipboard,
+                    )
+                  : null,
+              suffixIconConstraints: obscure
+                  ? const BoxConstraints(minHeight: 40, minWidth: 76)
+                  : null,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              enabledBorder: _outlineBorder(_SetupColors.outlineVariant),
+              focusedBorder: _outlineBorder(_SetupColors.secondary),
+              border: _outlineBorder(_SetupColors.outlineVariant),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String get _obscuredSemanticsValue {
+    if (controller.text.isEmpty) return '';
+    return 'secret value entered';
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null || text.isEmpty) return;
+    _replaceText(text);
+  }
+
+  void _replaceText(String text) {
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
+class _SecretFieldSuffix extends StatelessWidget {
+  const _SecretFieldSuffix({
+    required this.pasteKey,
+    required this.onPaste,
+  });
+
+  final Key? pasteKey;
+  final VoidCallback onPaste;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          key: pasteKey,
+          tooltip: 'Paste secret',
+          onPressed: onPaste,
+          icon: const Icon(
+            Icons.content_paste_rounded,
+            size: 18,
+            color: _SetupColors.onSurfaceVariant,
+          ),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+          visualDensity: VisualDensity.compact,
+        ),
+        const Padding(
+          padding: EdgeInsets.only(right: 10),
+          child: Tooltip(
+            message: 'Secret value stays hidden',
+            child: Icon(
+              Icons.visibility_off_outlined,
+              size: 20,
+              color: _SetupColors.onSurfaceVariant,
+            ),
           ),
         ),
       ],

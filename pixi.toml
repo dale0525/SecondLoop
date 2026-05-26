@@ -29,9 +29,11 @@ dart = { cmd = "dart pub global run fvm:main dart {{ command }} {{ command_args 
 # - init-env: creates .env.local (idempotent, no-op when file exists)
 # - install-git-hooks: installs local fast pre-commit and full pre-push hooks
 # - bootstrap-shared-worktree-env: link .tool/.pixi/envs to git-common-dir shared storage and link .fvm/flutter_sdk + .env.local + Android signing files from primary worktree
+# - self-managed-runtime-helper: stdin-safe helper entry point for local runtime deploy/uninstall JSON
 init-env = "bash scripts/init_env.sh"
 install-git-hooks = "bash scripts/install_git_hooks.sh"
 bootstrap-shared-worktree-env = "bash scripts/bootstrap_shared_worktree_env.sh"
+self-managed-runtime-helper = ".fvm/flutter_sdk/bin/dart run tools/self_managed_runtime_helper.dart"
 
 # Release helpers (maintainers).
 # - release / release-app: auto-compute app tag with LLM and publish (triggers app release workflow)
@@ -129,6 +131,7 @@ init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env
 setup-flutter = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_flutter_windows.ps1"
 flutter = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_fvm_tool.ps1 -Tool flutter -Command {{ command }} {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
 dart = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_fvm_tool.ps1 -Tool dart -Command {{ command }} {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
+self-managed-runtime-helper = ".fvm\\flutter_sdk\\bin\\dart.bat run tools/self_managed_runtime_helper.dart"
 run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1 -UseFlutterRun", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }
 msi-dev = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env"] }
 uninstall-dev-msi = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall_windows_msi.ps1 -ProductName 'SecondLoop Dev' -InstallDirName 'SecondLoop Dev' -Quiet" }
