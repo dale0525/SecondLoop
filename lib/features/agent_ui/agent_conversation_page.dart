@@ -11,6 +11,8 @@ import '../../core/backend/app_backend.dart';
 import '../../core/backend/secretary_backend.dart';
 import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/runtime_agent_state_repository.dart';
+import '../../core/cloud/runtime_connection_store.dart';
+import '../../core/cloud/runtime_profile.dart';
 import '../../core/cloud/runtime_secretary_app_service.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/secretary_runtime_client.dart';
@@ -67,6 +69,7 @@ part 'agent_assistant_text_message.dart';
 part 'agent_conversation_attachments.dart';
 part 'agent_conversation_attachment_widgets.dart';
 part 'agent_conversation_runtime_pagination.dart';
+part 'agent_conversation_runtime_connection.dart';
 part 'agent_conversation_runtime_helpers.dart';
 part 'agent_operating_top_app_bar.dart';
 part 'agent_runtime_media_results.dart';
@@ -120,6 +123,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
   Future<List<Todo>>? _tasksFuture;
   Future<List<MemoryPageRecord>>? _memoryPagesFuture;
   Future<RuntimeAgentState>? _runtimeAgentStateFuture;
+  Future<CloudRuntimeConnection?>? _runtimeConnectionLoadFuture;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
   QuickCaptureController? _quickCaptureController;
@@ -159,6 +163,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _ensureRuntimeConnectionLoaded();
     if (_usesRuntimeAgentState) {
       _runtimeAgentStateFuture ??= _loadRuntimeAgentState();
       _messagesFuture =
@@ -170,6 +175,18 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
     }
     _attachSyncEngine();
     _attachQuickCaptureController();
+  }
+
+  void _activateRuntimeStateAfterConnectionLoad() {
+    setState(() {
+      _runtimeAgentStateFuture = _loadRuntimeAgentState();
+      _messagesFuture =
+          _runtimeAgentStateFuture!.then((_) => List<Message>.from(_messages));
+    });
+  }
+
+  void _rebuildAfterRuntimeConnectionLoad() {
+    setState(() {});
   }
 
   @override
@@ -198,32 +215,11 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
     return messages;
   }
 
-  bool get _usesRuntimeAgentState {
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
-    return cloudAuthScope != null &&
-        vaultId.isNotEmpty &&
-        (widget.runtimeAgentStateRepository != null ||
-            widget.runtimeConversationSender == null);
-  }
-
-  RuntimeAgentStateRepository? _runtimeStateRepository() {
-    final configured = widget.runtimeAgentStateRepository;
-    if (configured != null) return configured;
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    if (cloudAuthScope == null) return null;
-    return SecretaryRuntimeAgentStateRepository.hostedManagedPro(
-      apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
-      hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
-    );
-  }
-
   Future<RuntimeAgentState> _loadRuntimeAgentState({
     String? turnBefore,
     bool prependOlderTurns = false,
   }) async {
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
+    final vaultId = _activeRuntimeVaultId();
     final repository = _runtimeStateRepository();
     if (repository == null || vaultId.isEmpty) {
       return RuntimeAgentState.empty(
@@ -270,7 +266,6 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
       final attachmentsByMessageId = await _hydrateRuntimeAttachmentBytes(
         projection.attachmentsByMessageId,
         vaultId: vaultId,
-        cloudAuthScope: cloudAuthScope,
       );
       if (!mounted) return state;
       setState(() {
@@ -788,23 +783,18 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
     setState(() => _busyApprovalIds.add(item.id));
 
     try {
-      final cloudAuthScope = CloudAuthScope.maybeOf(context);
-      final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
-      if (cloudAuthScope == null || vaultId.isEmpty) {
-        throw StateError('managed_pro_vault_id_required');
-      }
+      final vaultId = _activeRuntimeVaultId();
+      if (vaultId.isEmpty) throw StateError('runtime_vault_id_required');
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
-      final sender = widget.runtimeConversationSender ??
-          SecretaryRuntimeConversationSender.hostedManagedPro(
-            apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
-            hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
-          );
+      final sender = _runtimeConversationSender();
+      if (sender == null) throw StateError('runtime_sender_required');
       final service = RuntimeSecretaryAppService(
         sender: sender,
         backend: backend,
         sessionKey: sessionKey,
       );
+      final approvalCountBeforeDecision = _runtimeApprovalItems.length;
       if (approve) {
         await service.approveApprovalItem(
           item,
@@ -825,8 +815,23 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
       SyncEngineScope.maybeOf(context)?.notifyExternalChange();
       await _refreshVisibleState();
       if (!mounted) return;
+      List<SecretaryRuntimeApprovalItem>? refreshedApprovalItems;
+      try {
+        final fetchedApprovalItems = _validApprovalItems(
+          await service.fetchApprovalItems(vaultId: vaultId),
+        );
+        if (fetchedApprovalItems.isNotEmpty ||
+            approvalCountBeforeDecision <= 1 ||
+            _runtimeApprovalItems.length <= 1) {
+          refreshedApprovalItems = fetchedApprovalItems;
+        }
+      } catch (_) {
+        refreshedApprovalItems = null;
+      }
       setState(() {
-        _runtimeApprovalItems = _runtimeApprovalItems
+        final currentApprovalItems =
+            refreshedApprovalItems ?? _runtimeApprovalItems;
+        _runtimeApprovalItems = currentApprovalItems
             .where((candidate) => candidate.id != item.id)
             .toList(growable: false);
         _askError = null;
@@ -850,16 +855,10 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
     setState(() => _busyApprovalIds.add(item.id));
 
     try {
-      final cloudAuthScope = CloudAuthScope.maybeOf(context);
-      final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
-      if (cloudAuthScope == null || vaultId.isEmpty) {
-        throw StateError('managed_pro_vault_id_required');
-      }
-      final sender = widget.runtimeConversationSender ??
-          SecretaryRuntimeConversationSender.hostedManagedPro(
-            apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
-            hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
-          );
+      final vaultId = _activeRuntimeVaultId();
+      if (vaultId.isEmpty) throw StateError('runtime_vault_id_required');
+      final sender = _runtimeConversationSender();
+      if (sender == null) throw StateError('runtime_sender_required');
       final service = RuntimeSecretaryAppService(
         sender: sender,
         backend: AppBackendScope.of(context),
@@ -899,9 +898,11 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
       ),
     );
     final acceptanceController = AgentUiAcceptanceScope.maybeOf(context);
-    final acceptanceCards = <Widget>[
-      ..._buildAcceptanceCards(acceptanceController),
-      ..._buildRuntimeApprovalCards(context),
+    final acceptanceCards = _buildAcceptanceCards(acceptanceController);
+    final runtimeApprovalCards = _buildRuntimeApprovalCards(context);
+    final mobileAcceptanceCards = <Widget>[
+      ...acceptanceCards,
+      ...runtimeApprovalCards,
     ];
     final runtimeAgentState = _runtimeAgentState;
     final contextSnapshot = acceptanceController?.contextSnapshot ??
@@ -923,17 +924,20 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
                   AppShellLayoutScope.desktopWorkbenchOf(context);
               final useDesktopWorkbench = shellDesktopWorkbench == null
                   ? constraints.maxWidth >= 960
-                  : shellDesktopWorkbench && constraints.maxWidth >= 720;
+                  : shellDesktopWorkbench && constraints.maxWidth >= 960;
               if (!useDesktopWorkbench) {
                 return _buildOperatingSystemMobileShell(
                   context,
-                  acceptanceCards: acceptanceCards,
+                  acceptanceCards: mobileAcceptanceCards,
                   todos: _todos,
                 );
               }
+              final desktopAcceptanceCards = runtimeAgentState == null
+                  ? mobileAcceptanceCards
+                  : acceptanceCards;
               return _buildOperatingSystemDesktopWorkbench(
                 context,
-                acceptanceCards: acceptanceCards,
+                acceptanceCards: desktopAcceptanceCards,
                 todos: _todos,
                 contextSnapshot: contextSnapshot,
                 openTasksCount: openTasksCount,

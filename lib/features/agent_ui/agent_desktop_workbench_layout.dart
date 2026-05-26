@@ -9,6 +9,9 @@ extension _AgentDesktopWorkbenchLayout on _AgentConversationPageState {
     required int openTasksCount,
   }) {
     final state = _runtimeAgentState;
+    final sidePanelApprovalItems = state == null
+        ? const <SecretaryRuntimeApprovalItem>[]
+        : _runtimeApprovalItems;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -27,6 +30,8 @@ extension _AgentDesktopWorkbenchLayout on _AgentConversationPageState {
             streamingAnswer: _streamingAnswer,
             thinking: _thinking,
             askError: _askError,
+            hasMoreBefore: _conversationTurnPage.hasMoreBefore,
+            loadingOlderTurns: _loadingOlderRuntimeTurns,
             scrollController: _scrollController,
             bottomKey: _messageListBottomKey,
             controller: _controller,
@@ -36,6 +41,7 @@ extension _AgentDesktopWorkbenchLayout on _AgentConversationPageState {
             onAttach: () => unawaited(_pickAttachments()),
             onRemoveAttachment: _removePendingAttachment,
             onSend: _send,
+            onLoadOlderTurns: _loadOlderRuntimeTurns,
             onTaskViewed: _recordTaskFocus,
           ),
         ),
@@ -47,7 +53,7 @@ extension _AgentDesktopWorkbenchLayout on _AgentConversationPageState {
           flex: 5,
           child: _DesktopWorkbenchSidePanels(
             state: state,
-            approvalItems: _runtimeApprovalItems,
+            approvalItems: sidePanelApprovalItems,
             contextSnapshot: contextSnapshot,
             openTasksCount: openTasksCount,
             onApprove: (item) => unawaited(
@@ -77,6 +83,8 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
     required this.streamingAnswer,
     required this.thinking,
     required this.askError,
+    required this.hasMoreBefore,
+    required this.loadingOlderTurns,
     required this.scrollController,
     required this.bottomKey,
     required this.controller,
@@ -86,6 +94,7 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
     required this.onAttach,
     required this.onRemoveAttachment,
     required this.onSend,
+    required this.onLoadOlderTurns,
     required this.onTaskViewed,
   });
 
@@ -101,6 +110,8 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
   final String streamingAnswer;
   final bool thinking;
   final String? askError;
+  final bool hasMoreBefore;
+  final bool loadingOlderTurns;
   final ScrollController scrollController;
   final Key bottomKey;
   final TextEditingController controller;
@@ -110,24 +121,46 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
   final VoidCallback onAttach;
   final ValueChanged<String> onRemoveAttachment;
   final VoidCallback onSend;
+  final Future<void> Function() onLoadOlderTurns;
   final ValueChanged<Todo> onTaskViewed;
 
   @override
   Widget build(BuildContext context) {
     final children = <Widget>[];
     String? sourceUserMessageId;
+    var renderedWebResearch = false;
+    final turnsById = <String, RuntimeConversationTurn>{
+      for (final turn in runtimeState?.conversationTurns ??
+          const <RuntimeConversationTurn>[])
+        if (turn.turnId.trim().isNotEmpty) turn.turnId: turn,
+    };
     for (var index = 0; index < messages.length; index++) {
       final message = messages[index];
       if (message.role == 'assistant') {
+        final runtimeTurn = turnsById[message.id];
+        final isWebResearch =
+            _isOperatingWebResearchMessage(message, runtimeTurn);
         children.add(
-          _DesktopAssistantTurn(
-            message: message,
-            createdTasks: _createdTasks(sourceUserMessageId, message.id),
-            mediaResults: messageMediaResultsById[message.id] ??
-                const <_AgentMessageMediaResultView>[],
-            onTaskViewed: onTaskViewed,
-          ),
+          isWebResearch
+              ? _OperatingAssistantResponse(
+                  message: message,
+                  runtimeTurn: runtimeTurn,
+                  contextSnapshot: runtimeState?.latestContextSnapshot,
+                  isFollowUpResearch: renderedWebResearch,
+                  mediaResults: messageMediaResultsById[message.id] ??
+                      const <_AgentMessageMediaResultView>[],
+                )
+              : _DesktopAssistantTurn(
+                  message: message,
+                  createdTasks: _createdTasks(sourceUserMessageId, message.id),
+                  mediaResults: messageMediaResultsById[message.id] ??
+                      const <_AgentMessageMediaResultView>[],
+                  onTaskViewed: onTaskViewed,
+                ),
         );
+        if (isWebResearch) {
+          renderedWebResearch = true;
+        }
         sourceUserMessageId = null;
       } else {
         children.add(
@@ -194,6 +227,11 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
       color: AgentOperatingSystemTokens.background,
       child: Column(
         children: [
+          if (hasMoreBefore)
+            _LoadEarlierRuntimeTurnsButton(
+              loading: loadingOlderTurns,
+              onPressed: onLoadOlderTurns,
+            ),
           Expanded(
             child: ListView.separated(
               controller: scrollController,

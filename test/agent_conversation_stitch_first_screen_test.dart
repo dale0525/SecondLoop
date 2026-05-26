@@ -7,17 +7,26 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_models.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_repository.dart';
+import 'package:secondloop/core/cloud/runtime_connection_store.dart';
+import 'package:secondloop/core/cloud/runtime_manifest.dart';
+import 'package:secondloop/core/cloud/runtime_profile.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_client.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    RuntimeConnectionStore.resetCacheForTests();
+  });
+
   testWidgets('798px shell uses final Stitch mobile navigation order',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(798, 1057));
@@ -128,6 +137,44 @@ void main() {
         find.byKey(const ValueKey('agent_operating_memory_approve_mem-pref')));
     await tester.pumpAndSettle();
     expect(sender.decisions, [('uid_1', 'mem-pref', 'approve')]);
+  });
+
+  testWidgets('chat top bar labels stored self-managed runtime',
+      (tester) async {
+    await RuntimeConnectionStore().saveConnection(_selfManagedConnection);
+    final repository = _FakeRuntimeAgentStateRepository(_firstScreenState());
+
+    await tester.binding.setSurfaceSize(const Size(798, 1057));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: TestAppBackend(),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: AgentConversationPage(
+                conversation: const Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+                isTabActive: true,
+                runtimeConversationSender: _ApprovalRecordingSender(),
+                runtimeAgentStateRepository: repository,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Self-managed'), findsOneWidget);
+    expect(find.text('Managed Pro'), findsNothing);
   });
 
   testWidgets('bottom-nav widths keep the Stitch chat shell', (tester) async {
@@ -644,6 +691,25 @@ final class _ApprovalRecordingSender
     required String title,
   }) async {}
 }
+
+const _selfManagedConnection = CloudRuntimeConnection(
+  profile: CloudRuntimeProfile(
+    runtimeMode: CloudRuntimeMode.selfManaged,
+    apiBaseUrl: 'https://user-runtime.example/',
+    authMode: CloudRuntimeAuthMode.runtimeToken,
+    authToken: 'runtime-token-1',
+    capabilityManifestId: 'manifest-self-1',
+    manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+    vaultId: 'acct-1',
+  ),
+  manifest: CloudRuntimeManifest(
+    manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+    runtimeMode: CloudRuntimeMode.selfManaged,
+    apiBaseUrl: 'https://user-runtime.example/',
+    authMode: CloudRuntimeAuthMode.runtimeToken,
+    capabilities: CloudRuntimeRequiredCapabilities.all,
+  ),
+);
 
 final class _CloudAuthController extends ChangeNotifier
     implements CloudAuthController {

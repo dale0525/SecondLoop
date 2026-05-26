@@ -8,6 +8,7 @@ final class TestSemanticsIds {
   static const String runtimeModeStatusTitle = 'runtime_mode_status_title';
   static const String runtimeModePageRoot = 'runtime_mode_page_root';
   static const String selfManagedSetupRoot = 'self_managed_setup_root';
+  static const String selfManagedClose = 'self_managed_close_setup';
   static const String selfManagedAuthorize = 'self_managed_cloudflare_oauth';
   static const String selfManagedDeploy = 'self_managed_verify_connection';
   static const String selfManagedRetry = 'self_managed_retry';

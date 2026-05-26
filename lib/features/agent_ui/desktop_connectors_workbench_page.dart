@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/runtime_agent_state_repository.dart';
+import '../../core/cloud/runtime_connection_helpers.dart';
 import 'agent_desktop_runtime_helpers.dart';
 import 'agent_desktop_workbench_widgets.dart';
 import 'agent_operating_system_tokens.dart';
@@ -61,6 +62,9 @@ final class _DesktopConnectorsWorkbenchPageState
     if (widget.runtimeAgentStateRepository != null) {
       return widget.runtimeAgentStateRepository;
     }
+    if (cachedSelfManagedRuntimeConnection() != null) {
+      return SecretaryRuntimeAgentStateRepository();
+    }
     final scope = CloudAuthScope.maybeOf(context);
     final vaultId = scope?.controller.uid?.trim() ?? '';
     if (scope == null || vaultId.isEmpty) return null;
@@ -73,10 +77,20 @@ final class _DesktopConnectorsWorkbenchPageState
   String _vaultId() {
     final explicit = widget.vaultId?.trim() ?? '';
     if (explicit.isNotEmpty) return explicit;
+    final selfManagedVaultId =
+        cachedSelfManagedRuntimeConnection()?.profile.vaultId.trim() ?? '';
+    if (selfManagedVaultId.isNotEmpty) return selfManagedVaultId;
     return CloudAuthScope.maybeOf(context)?.controller.uid?.trim() ?? '';
   }
 
   Future<void> _refresh({bool announceUnavailable = false}) async {
+    final needsSavedRuntimeConnection =
+        widget.runtimeAgentStateRepository == null &&
+            (widget.vaultId?.trim().isEmpty ?? true);
+    if (needsSavedRuntimeConnection) {
+      await loadRuntimeConnectionSafely();
+      if (!mounted) return;
+    }
     final repository = _repository();
     final vaultId = _vaultId();
     if (repository == null || vaultId.isEmpty) {
@@ -159,10 +173,17 @@ final class _DesktopConnectorsWorkbenchPageState
                 onPressed: _loading
                     ? null
                     : () {
-                        showDesktopWorkbenchMessage(
-                          context,
-                          'Refreshing runtime capability state...',
-                        );
+                        if (_repository() == null || _vaultId().isEmpty) {
+                          showDesktopWorkbenchMessage(
+                            context,
+                            'tool_unavailable: runtime capability state is not configured',
+                          );
+                        } else {
+                          showDesktopWorkbenchMessage(
+                            context,
+                            'Refreshing runtime capability state...',
+                          );
+                        }
                         unawaited(_refresh(announceUnavailable: true));
                       },
                 icon: const Icon(Icons.play_circle_outline_rounded, size: 18),

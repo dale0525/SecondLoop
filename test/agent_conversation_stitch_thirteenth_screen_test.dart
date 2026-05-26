@@ -54,11 +54,11 @@ void main() {
       expect(find.text('介绍一下新的手机产品参数。'), findsOneWidget);
       expect(find.textContaining('previous Apple launch research context'),
           findsOneWidget);
-      expect(find.text('Citations from web-research'), findsOneWidget);
+      expect(find.text('SEARCH RESULT'), findsOneWidget);
+      expect(find.text('VERIFIED SOURCES'), findsOneWidget);
       expect(find.text('Phone product from cited result'), findsOneWidget);
-      expect(find.text('Display / chip / camera / battery fields available'),
-          findsOneWidget);
-      expect(find.text('Sources [1]'), findsOneWidget);
+      expect(find.text('Availability details'), findsOneWidget);
+      expect(find.text('web_research'), findsOneWidget);
 
       expect(find.text('Runtime Context'), findsOneWidget);
       expect(find.text('previous Apple launch research'), findsOneWidget);
@@ -78,7 +78,7 @@ void main() {
       expect(find.text('Tool Trace'), findsOneWidget);
       expect(find.text('web-research: executed'), findsOneWidget);
       expect(find.text('CITATIONS: PRESENT'), findsOneWidget);
-      expect(find.text('skill_result_response'), findsOneWidget);
+      expect(find.text('skill_result_response'), findsWidgets);
       expect(find.text('web-research required'), findsOneWidget);
       expect(find.textContaining('Latency: 1.24s'), findsOneWidget);
 

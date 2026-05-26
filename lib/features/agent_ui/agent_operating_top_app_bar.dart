@@ -174,25 +174,31 @@ final class _OperatingPrimaryModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius:
-            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Text(
-          'Managed Pro',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            height: 1.2,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0,
+    return FutureBuilder<CloudRuntimeConnection?>(
+      future: _loadRuntimeModeChipConnection(),
+      initialData: RuntimeConnectionStore.cachedConnection,
+      builder: (context, snapshot) {
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius:
+                BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
           ),
-        ),
-      ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Text(
+              _operatingRuntimeModeLabel(snapshot.data),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                height: 1.2,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -242,35 +248,56 @@ final class _OperatingModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surfaceContainer,
-        borderRadius:
-            BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _OperatingStatusDot(),
-            SizedBox(width: 6),
-            Text(
-              'Managed Pro',
-              style: TextStyle(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
-                fontSize: 10,
-                height: 1.2,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0,
-              ),
+    return FutureBuilder<CloudRuntimeConnection?>(
+      future: _loadRuntimeModeChipConnection(),
+      initialData: RuntimeConnectionStore.cachedConnection,
+      builder: (context, snapshot) {
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: AgentOperatingSystemTokens.surfaceContainer,
+            borderRadius:
+                BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
+            border:
+                Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _OperatingStatusDot(),
+                const SizedBox(width: 6),
+                Text(
+                  _operatingRuntimeModeLabel(snapshot.data),
+                  style: const TextStyle(
+                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    fontSize: 10,
+                    height: 1.2,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
+}
+
+Future<CloudRuntimeConnection?> _loadRuntimeModeChipConnection() async {
+  try {
+    return await RuntimeConnectionStore().loadConnection();
+  } catch (_) {
+    return RuntimeConnectionStore.cachedConnection;
+  }
+}
+
+String _operatingRuntimeModeLabel(CloudRuntimeConnection? connection) {
+  return connection?.profile.runtimeMode == CloudRuntimeMode.selfManaged
+      ? 'Self-managed'
+      : 'Managed Pro';
 }
 
 final class _OperatingStatusDot extends StatelessWidget {

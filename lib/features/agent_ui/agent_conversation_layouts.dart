@@ -121,41 +121,53 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
                     subtitle: '${snapshot.error}',
                   );
                 }
-                return _OperatingMessageList(
-                  controller: _scrollController,
-                  bottomKey: _messageListBottomKey,
-                  messages: _messages,
-                  runtimeState: _runtimeAgentState,
-                  taskRecords: _runtimeAgentState?.tasks ??
-                      const <RuntimeWorkingSetRecord>[],
-                  todos: todos,
-                  approvalItems: _runtimeApprovalItems,
-                  busyApprovalIds: _busyApprovalIds,
-                  thinking: _thinking,
-                  acceptanceCards: acceptanceCards,
-                  pendingUserContent: _pendingUserContent,
-                  streamingAnswer: _streamingAnswer,
-                  askError: _askError,
-                  pendingUserAttachments: _pendingUserAttachments,
-                  messageAttachmentsById: _messageAttachmentsById,
-                  messageMediaResultsById: _messageMediaResultsById,
-                  onApproveApproval: (item) => unawaited(
-                    _resolveRuntimeApproval(item, approve: true),
-                  ),
-                  onRejectApproval: (item) => unawaited(
-                    _resolveRuntimeApproval(item, approve: false),
-                  ),
-                  onEditApprovalTitle: (item, title) => unawaited(
-                    _patchRuntimeApprovalTitle(item, title),
-                  ),
-                  onOpenTask: (record) => unawaited(
-                    showAgentTaskDetailSheet(
-                      context: context,
-                      todo: agentTodoFromRuntimeTask(record),
-                      onTaskViewed: _recordTaskFocus,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_conversationTurnPage.hasMoreBefore)
+                      _LoadEarlierRuntimeTurnsButton(
+                        loading: _loadingOlderRuntimeTurns,
+                        onPressed: _loadOlderRuntimeTurns,
+                      ),
+                    Expanded(
+                      child: _OperatingMessageList(
+                        controller: _scrollController,
+                        bottomKey: _messageListBottomKey,
+                        messages: _messages,
+                        runtimeState: _runtimeAgentState,
+                        taskRecords: _runtimeAgentState?.tasks ??
+                            const <RuntimeWorkingSetRecord>[],
+                        todos: todos,
+                        approvalItems: _runtimeApprovalItems,
+                        busyApprovalIds: _busyApprovalIds,
+                        thinking: _thinking,
+                        acceptanceCards: acceptanceCards,
+                        pendingUserContent: _pendingUserContent,
+                        streamingAnswer: _streamingAnswer,
+                        askError: _askError,
+                        pendingUserAttachments: _pendingUserAttachments,
+                        messageAttachmentsById: _messageAttachmentsById,
+                        messageMediaResultsById: _messageMediaResultsById,
+                        onApproveApproval: (item) => unawaited(
+                          _resolveRuntimeApproval(item, approve: true),
+                        ),
+                        onRejectApproval: (item) => unawaited(
+                          _resolveRuntimeApproval(item, approve: false),
+                        ),
+                        onEditApprovalTitle: (item, title) => unawaited(
+                          _patchRuntimeApprovalTitle(item, title),
+                        ),
+                        onOpenTask: (record) => unawaited(
+                          showAgentTaskDetailSheet(
+                            context: context,
+                            todo: agentTodoFromRuntimeTask(record),
+                            onTaskViewed: _recordTaskFocus,
+                          ),
+                        ),
+                        onSafeFollowUpSelected: _selectSafeFollowUp,
+                      ),
                     ),
-                  ),
-                  onSafeFollowUpSelected: _selectSafeFollowUp,
+                  ],
                 );
               },
             ),
@@ -198,18 +210,9 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
     final conversationId = widget.conversation.id.trim();
     if (entityId.isEmpty || conversationId.isEmpty) return;
 
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
-    if (cloudAuthScope == null || vaultId.isEmpty) return;
-
-    final Object? configuredSender = widget.runtimeConversationSender;
-    final ChatRuntimeEntityFocusSender sender =
-        configuredSender is ChatRuntimeEntityFocusSender
-            ? configuredSender
-            : SecretaryRuntimeConversationSender.hostedManagedPro(
-                apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
-                hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
-              );
+    final vaultId = _activeRuntimeVaultId();
+    final sender = _runtimeEntityFocusSender();
+    if (vaultId.isEmpty || sender == null) return;
     try {
       await sender.recordEntityFocus(
         vaultId: vaultId,

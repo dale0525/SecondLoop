@@ -65,8 +65,19 @@ void main() {
 
       await _pumpRuntimeConversation(tester, repository);
 
-      expect(find.text('Newest runtime answer.'), findsOneWidget);
-      expect(find.text('Older runtime question.'), findsNothing);
+      final chatColumn =
+          find.byKey(const ValueKey('desktop_workbench_chat_column'));
+      final newestRuntimeAnswer = find.descendant(
+        of: chatColumn,
+        matching: find.text('Newest runtime answer.'),
+      );
+      final olderRuntimeQuestion = find.descendant(
+        of: chatColumn,
+        matching: find.text('Older runtime question.'),
+      );
+
+      expect(newestRuntimeAnswer, findsOneWidget);
+      expect(olderRuntimeQuestion, findsNothing);
 
       await tester.tap(
         find.byKey(const ValueKey('agent_conversation_load_older_turns')),
@@ -74,21 +85,93 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.requests.last.turnBefore, 'turn-newest-page-start');
-      expect(find.text('Older runtime question.'), findsOneWidget);
-      expect(find.text('Newest runtime answer.'), findsOneWidget);
+      expect(olderRuntimeQuestion, findsOneWidget);
+      expect(newestRuntimeAnswer, findsOneWidget);
       expect(
-        tester.getTopLeft(find.text('Older runtime question.')).dy,
-        lessThan(tester.getTopLeft(find.text('Newest runtime answer.')).dy),
+        tester.getTopLeft(olderRuntimeQuestion).dy,
+        lessThan(tester.getTopLeft(newestRuntimeAnswer).dy),
       );
+    },
+  );
+
+  testWidgets(
+    'operating shell prepends older runtime turns',
+    (tester) async {
+      final repository = _PagedRuntimeAgentStateRepository(
+        latestPage: _runtimeStateWithTurns(
+          turns: const [
+            {
+              'turn_id': 'turn-newest-page-start',
+              'role': 'assistant',
+              'content': 'Newest operating answer.',
+              'created_at_ms': 1700000002000,
+            },
+          ],
+          page: const {
+            'limit': 1,
+            'has_more_before': true,
+            'next_before_turn_id': 'turn-newest-page-start',
+            'oldest_turn_id': 'turn-newest-page-start',
+            'newest_turn_id': 'turn-newest-page-start',
+            'total_known_turns': 2,
+          },
+        ),
+        olderPage: _runtimeStateWithTurns(
+          turns: const [
+            {
+              'turn_id': 'turn-older',
+              'role': 'user',
+              'content': 'Older operating question.',
+              'created_at_ms': 1700000001000,
+            },
+            {
+              'turn_id': 'turn-newest-page-start',
+              'role': 'assistant',
+              'content': 'Newest operating answer.',
+              'created_at_ms': 1700000002000,
+            },
+          ],
+          page: const {
+            'limit': 2,
+            'has_more_before': false,
+            'next_before_turn_id': null,
+            'oldest_turn_id': 'turn-older',
+            'newest_turn_id': 'turn-newest-page-start',
+            'total_known_turns': 2,
+          },
+        ),
+      );
+
+      await _pumpRuntimeConversation(
+        tester,
+        repository,
+        surfaceSize: const Size(820, 701),
+      );
+
+      expect(find.text('Newest operating answer.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('agent_conversation_load_older_turns')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('agent_conversation_load_older_turns')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.requests.last.turnBefore, 'turn-newest-page-start');
+      expect(find.text('Older operating question.'), findsOneWidget);
+      expect(find.text('Newest operating answer.'), findsOneWidget);
     },
   );
 }
 
 Future<void> _pumpRuntimeConversation(
   WidgetTester tester,
-  RuntimeAgentStateRepository repository,
-) async {
-  await tester.binding.setSurfaceSize(const Size(1012, 701));
+  RuntimeAgentStateRepository repository, {
+  Size surfaceSize = const Size(1012, 701),
+}) async {
+  await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     wrapWithI18n(

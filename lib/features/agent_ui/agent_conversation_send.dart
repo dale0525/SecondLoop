@@ -6,6 +6,8 @@ import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_capability_auth.dart';
+import '../../core/cloud/runtime_connection_store.dart';
+import '../../core/cloud/runtime_profile.dart';
 import '../../core/cloud/runtime_secretary_app_service.dart';
 import '../../core/cloud/secretary_runtime_client.dart';
 import '../../core/cloud/secretary_runtime_conversation_sender.dart';
@@ -68,16 +70,27 @@ Future<AgentConversationSendResult> sendAgentConversationMessage({
     );
 
     if (route.route == AskAiRouteKind.cloudGateway) {
-      final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
-      if (cloudAuthScope == null || vaultId.isEmpty) {
-        throw StateError('managed_pro_vault_id_required');
+      final selfManaged = route.runtimeConnection?.profile.runtimeMode ==
+          CloudRuntimeMode.selfManaged;
+      final vaultId = selfManaged
+          ? route.runtimeConnection?.profile.vaultId.trim() ?? ''
+          : cloudAuthScope?.controller.uid?.trim() ?? '';
+      if (vaultId.isEmpty) {
+        throw StateError(
+          selfManaged
+              ? 'self_managed_vault_id_required'
+              : 'managed_pro_vault_id_required',
+        );
       }
 
       final sender = runtimeConversationSender ??
-          SecretaryRuntimeConversationSender.hostedManagedPro(
-            apiBaseUrl: route.cloudGatewayConfig.baseUrl,
-            hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
-          );
+          (selfManaged
+              ? SecretaryRuntimeConversationSender()
+              : SecretaryRuntimeConversationSender.hostedManagedPro(
+                  apiBaseUrl: route.cloudGatewayConfig.baseUrl,
+                  hostedSessionTokenGetter:
+                      cloudAuthScope!.controller.getIdToken,
+                ));
       final service = RuntimeSecretaryAppService(
         sender: sender,
         backend: backend,
@@ -122,6 +135,8 @@ Future<
       AskAiRouteKind route,
       String? cloudIdToken,
       CloudGatewayConfig cloudGatewayConfig,
+      CloudRuntimeConnection? runtimeConnection,
+      String? vaultId,
     })> resolveAgentConversationRoute({
   required BuildContext context,
   required AppBackend backend,
@@ -132,7 +147,19 @@ Future<
       cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
   final subscriptionStatus =
       SubscriptionScope.maybeOf(context)?.status ?? SubscriptionStatus.unknown;
-
+  final runtimeConnection = await _loadStoredRuntimeConnection();
+  if (runtimeConnection?.profile.runtimeMode == CloudRuntimeMode.selfManaged) {
+    final vaultId = runtimeConnection!.profile.vaultId.trim();
+    if (vaultId.isNotEmpty) {
+      return (
+        route: AskAiRouteKind.cloudGateway,
+        cloudIdToken: null,
+        cloudGatewayConfig: cloudGatewayConfig,
+        runtimeConnection: runtimeConnection,
+        vaultId: vaultId,
+      );
+    }
+  }
   final cloudIdToken = await readCloudCapabilityIdToken(
     cloudAuthScope?.controller,
     mode: CloudCapabilityAuthMode.interactive,
@@ -150,7 +177,17 @@ Future<
     route: defaultRoute,
     cloudIdToken: cloudIdToken,
     cloudGatewayConfig: cloudGatewayConfig,
+    runtimeConnection: runtimeConnection,
+    vaultId: cloudAuthScope?.controller.uid?.trim(),
   );
+}
+
+Future<CloudRuntimeConnection?> _loadStoredRuntimeConnection() async {
+  try {
+    return await RuntimeConnectionStore().loadConnection();
+  } catch (_) {
+    return null;
+  }
 }
 
 List<SecretaryRuntimeApprovalItem> _validApprovalItems(

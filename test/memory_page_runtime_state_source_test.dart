@@ -4,11 +4,20 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_models.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_repository.dart';
+import 'package:secondloop/core/cloud/runtime_connection_store.dart';
+import 'package:secondloop/core/cloud/runtime_manifest.dart';
+import 'package:secondloop/core/cloud/runtime_profile.dart';
 import 'package:secondloop/features/memory/memory_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_i18n.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    RuntimeConnectionStore.resetCacheForTests();
+  });
+
   testWidgets(
     'managed pro MemoryPage reads approved memories from runtime state',
     (tester) async {
@@ -52,6 +61,52 @@ void main() {
 
       expect(repository.requests, [('uid_1', 'loop_home')]);
       expect(find.text('任务回复请使用中文'), findsWidgets);
+      expect(find.text('No knowledge pages yet.'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'self-managed MemoryPage reads approved memories from saved runtime state',
+    (tester) async {
+      await RuntimeConnectionStore().saveConnection(
+        _selfManagedConnection(vaultId: 'CF_D1_PRIMARY_VAULT_APP_QA'),
+      );
+      final repository = _FakeRuntimeAgentStateRepository(
+        RuntimeAgentState.fromJson(const {
+          'vault_id': 'CF_D1_PRIMARY_VAULT_APP_QA',
+          'conversation_id': 'loop_home',
+          'conversation_turns': [],
+          'working_set_records': [],
+          'tasks': [],
+          'memory_records': [
+            {
+              'id': 'memory-meeting',
+              'kind': 'memory',
+              'title': '我上午 9 点前不开会',
+              'text': '我上午 9 点前不开会',
+              'state': 'active',
+            }
+          ],
+          'recurring_reminder_rules': [],
+          'approval_items': [],
+          'recent_entity_refs': [],
+          'latest_context_snapshot': null,
+          'audit_refs': [],
+        }),
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: MemoryPage(runtimeAgentStateRepository: repository),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+          repository.requests, [('CF_D1_PRIMARY_VAULT_APP_QA', 'loop_home')]);
+      expect(find.text('我上午 9 点前不开会'), findsWidgets);
       expect(find.text('No knowledge pages yet.'), findsNothing);
     },
   );
@@ -110,6 +165,27 @@ void main() {
       expect(find.text('下午 4 点后再安排深度会议'), findsWidgets);
       expect(find.text('No knowledge pages yet.'), findsNothing);
     },
+  );
+}
+
+CloudRuntimeConnection _selfManagedConnection({required String vaultId}) {
+  return CloudRuntimeConnection(
+    profile: CloudRuntimeProfile(
+      runtimeMode: CloudRuntimeMode.selfManaged,
+      apiBaseUrl: 'https://user-runtime.example/',
+      authMode: CloudRuntimeAuthMode.runtimeToken,
+      authToken: 'runtime-token',
+      capabilityManifestId: 'manifest-self-1',
+      manifestVersion: 1,
+      vaultId: vaultId,
+    ),
+    manifest: const CloudRuntimeManifest(
+      manifestVersion: 1,
+      runtimeMode: CloudRuntimeMode.selfManaged,
+      apiBaseUrl: 'https://user-runtime.example/',
+      authMode: CloudRuntimeAuthMode.runtimeToken,
+      capabilities: [CloudRuntimeCapability('chat')],
+    ),
   );
 }
 

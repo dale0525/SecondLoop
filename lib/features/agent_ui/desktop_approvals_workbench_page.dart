@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/runtime_agent_state_repository.dart';
+import '../../core/cloud/runtime_connection_helpers.dart';
 import '../../core/cloud/secretary_runtime_conversation_sender.dart';
 import 'agent_desktop_runtime_helpers.dart';
 import 'agent_desktop_workbench_widgets.dart';
@@ -64,6 +65,9 @@ final class _DesktopApprovalsWorkbenchPageState
     if (widget.runtimeAgentStateRepository != null) {
       return widget.runtimeAgentStateRepository;
     }
+    if (cachedSelfManagedRuntimeConnection() != null) {
+      return SecretaryRuntimeAgentStateRepository();
+    }
     final scope = CloudAuthScope.maybeOf(context);
     final vaultId = scope?.controller.uid?.trim() ?? '';
     if (scope == null || vaultId.isEmpty) return null;
@@ -75,6 +79,9 @@ final class _DesktopApprovalsWorkbenchPageState
 
   ChatRuntimeApprovalSender? _approvalSender() {
     if (widget.approvalSender != null) return widget.approvalSender;
+    if (cachedSelfManagedRuntimeConnection() != null) {
+      return SecretaryRuntimeConversationSender();
+    }
     final scope = CloudAuthScope.maybeOf(context);
     final vaultId = scope?.controller.uid?.trim() ?? '';
     if (scope == null || vaultId.isEmpty) return null;
@@ -87,10 +94,18 @@ final class _DesktopApprovalsWorkbenchPageState
   String _vaultId() {
     final explicit = widget.vaultId?.trim() ?? '';
     if (explicit.isNotEmpty) return explicit;
+    final selfManagedVaultId =
+        cachedSelfManagedRuntimeConnection()?.profile.vaultId.trim() ?? '';
+    if (selfManagedVaultId.isNotEmpty) return selfManagedVaultId;
     return CloudAuthScope.maybeOf(context)?.controller.uid?.trim() ?? '';
   }
 
   Future<void> _refresh() async {
+    if (widget.runtimeAgentStateRepository == null &&
+        (widget.vaultId?.trim().isEmpty ?? true)) {
+      await loadRuntimeConnectionSafely();
+      if (!mounted) return;
+    }
     final repository = _repository();
     final vaultId = _vaultId();
     if (repository == null || vaultId.isEmpty) {

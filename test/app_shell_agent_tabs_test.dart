@@ -5,6 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/app/router.dart';
+import 'package:secondloop/core/cloud/runtime_connection_store.dart';
+import 'package:secondloop/core/cloud/runtime_manifest.dart';
+import 'package:secondloop/core/cloud/runtime_profile.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
 import 'package:secondloop/ui/sl_tokens.dart';
 
@@ -138,6 +141,36 @@ void main() {
     expect(shellWidth - sidebarWidth, greaterThan(1600));
   });
 
+  testWidgets('desktop AppShell labels stored self-managed runtime',
+      (tester) async {
+    await RuntimeConnectionStore().saveConnection(_selfManagedConnection);
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppShell(
+            conversationTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_conversation_tab')),
+            notesTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_notes_tab')),
+            memoryTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_memory_tab')),
+            reviewTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_review_tab')),
+            settingsTabBuilder: (_, __) =>
+                const SizedBox(key: ValueKey('agent_settings_tab')),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Self-managed'), findsOneWidget);
+    expect(find.text('Managed Pro'), findsNothing);
+  });
+
   testWidgets('AppShell keeps agent workspace on the light agent palette',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
@@ -181,3 +214,22 @@ void main() {
     expect(probe.color, const Color(0xFFFFFFFF));
   });
 }
+
+const _selfManagedConnection = CloudRuntimeConnection(
+  profile: CloudRuntimeProfile(
+    runtimeMode: CloudRuntimeMode.selfManaged,
+    apiBaseUrl: 'https://user-runtime.example/',
+    authMode: CloudRuntimeAuthMode.runtimeToken,
+    authToken: 'runtime-token-1',
+    capabilityManifestId: 'manifest-self-1',
+    manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+    vaultId: 'acct-1',
+  ),
+  manifest: CloudRuntimeManifest(
+    manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+    runtimeMode: CloudRuntimeMode.selfManaged,
+    apiBaseUrl: 'https://user-runtime.example/',
+    authMode: CloudRuntimeAuthMode.runtimeToken,
+    capabilities: CloudRuntimeRequiredCapabilities.all,
+  ),
+);

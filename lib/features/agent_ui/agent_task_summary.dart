@@ -6,6 +6,8 @@ import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/runtime_agent_state_repository.dart';
+import '../../core/cloud/runtime_connection_store.dart';
+import '../../core/cloud/runtime_profile.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import 'package:secondloop/core/models/app_models.dart';
@@ -604,46 +606,72 @@ final class AgentTasksPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
-    final repository = runtimeAgentStateRepository ??
-        (cloudAuthScope == null || vaultId.isEmpty
-            ? null
-            : SecretaryRuntimeAgentStateRepository.hostedManagedPro(
-                apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
-                hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
-              ));
-    final Future<List<Todo>> tasksFuture = repository == null
-        ? backend.listTodos(sessionKey)
-        : repository
-            .fetchAgentState(
-              vaultId: vaultId,
-              conversationId: conversationId,
-            )
-            .then(agentTodosFromRuntimeState);
-    return Scaffold(
-      appBar: AppBar(title: Text(t.chat.agentTasks.allTasks)),
-      body: FutureBuilder<List<Todo>>(
-        future: tasksFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done &&
-              !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-                child: Text(t.errors.loadFailed(error: '${snapshot.error}')));
-          }
-          return _AgentTasksList(
-            todos: snapshot.data ?? const <Todo>[],
-            onOpenTask: (todo) => showAgentTaskDetailSheet(
-              context: context,
-              todo: todo,
-            ),
-          );
-        },
-      ),
+    return FutureBuilder<CloudRuntimeConnection?>(
+      future: _loadTaskRuntimeConnection(),
+      initialData: RuntimeConnectionStore.cachedConnection,
+      builder: (context, connectionSnapshot) {
+        final cloudAuthScope = CloudAuthScope.maybeOf(context);
+        final selfManagedConnection =
+            connectionSnapshot.data?.profile.runtimeMode ==
+                    CloudRuntimeMode.selfManaged
+                ? connectionSnapshot.data
+                : null;
+        final vaultId = selfManagedConnection?.profile.vaultId.trim() ??
+            cloudAuthScope?.controller.uid?.trim() ??
+            '';
+        final repository = runtimeAgentStateRepository ??
+            (selfManagedConnection != null
+                ? SecretaryRuntimeAgentStateRepository()
+                : cloudAuthScope == null || vaultId.isEmpty
+                    ? null
+                    : SecretaryRuntimeAgentStateRepository.hostedManagedPro(
+                        apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
+                        hostedSessionTokenGetter:
+                            cloudAuthScope.controller.getIdToken,
+                      ));
+        final Future<List<Todo>> tasksFuture =
+            repository == null || vaultId.isEmpty
+                ? backend.listTodos(sessionKey)
+                : repository
+                    .fetchAgentState(
+                      vaultId: vaultId,
+                      conversationId: conversationId,
+                    )
+                    .then(agentTodosFromRuntimeState);
+        return Scaffold(
+          appBar: AppBar(title: Text(t.chat.agentTasks.allTasks)),
+          body: FutureBuilder<List<Todo>>(
+            future: tasksFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text(t.errors.loadFailed(error: '${snapshot.error}')),
+                );
+              }
+              return _AgentTasksList(
+                todos: snapshot.data ?? const <Todo>[],
+                onOpenTask: (todo) => showAgentTaskDetailSheet(
+                  context: context,
+                  todo: todo,
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
+  }
+}
+
+Future<CloudRuntimeConnection?> _loadTaskRuntimeConnection() async {
+  try {
+    return await RuntimeConnectionStore().loadConnection();
+  } catch (_) {
+    return RuntimeConnectionStore.cachedConnection;
   }
 }
 

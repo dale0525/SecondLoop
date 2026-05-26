@@ -10,6 +10,7 @@ import '../core/update/update_badge_prefs.dart';
 import '../features/agent_ui/desktop_approvals_workbench_page.dart';
 import '../features/agent_ui/desktop_connectors_workbench_page.dart';
 import '../features/agent_ui/desktop_memory_workbench_page.dart';
+import 'app_shell_runtime_status_pill.dart';
 import 'app_shell_style.dart';
 import 'theme.dart';
 
@@ -406,11 +407,7 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 24),
-                const _DesktopStatusPill(
-                  label: 'Managed Pro',
-                  background: Color(0xFF316BF3),
-                  foreground: Color(0xFFFEFCFF),
-                ),
+                const AppShellRuntimeStatusPill(),
                 const SizedBox(width: 12),
                 DecoratedBox(
                   decoration: BoxDecoration(
@@ -481,7 +478,7 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                   tooltip: 'Sync',
                   onPressed: () => _showDesktopWorkbenchSnack(
                     context,
-                    'Runtime sync is automatic for managed pro.',
+                    'Runtime sync follows the active runtime connection.',
                   ),
                   icon: const Icon(Icons.sync_rounded),
                 ),
@@ -495,41 +492,6 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _DesktopStatusPill extends StatelessWidget {
-  const _DesktopStatusPill({
-    required this.label,
-    required this.background,
-    required this.foreground,
-  });
-
-  final String label;
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: foreground,
-            fontSize: 11,
-            height: 14 / 11,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0,
           ),
         ),
       ),

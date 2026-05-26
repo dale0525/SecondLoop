@@ -74,10 +74,9 @@ extension _AgentConversationAttachmentHydration on _AgentConversationPageState {
       _hydrateRuntimeAttachmentBytes(
     Map<String, List<_AgentMessageAttachmentView>> attachmentsByMessageId, {
     required String vaultId,
-    required CloudAuthScope? cloudAuthScope,
   }) async {
     if (attachmentsByMessageId.isEmpty) return attachmentsByMessageId;
-    final fetcher = _runtimeAttachmentContentFetcher(cloudAuthScope);
+    final fetcher = _runtimeAttachmentContentFetcher();
     if (fetcher == null) return attachmentsByMessageId;
 
     final hydrated = <String, List<_AgentMessageAttachmentView>>{};
@@ -109,22 +108,6 @@ extension _AgentConversationAttachmentHydration on _AgentConversationPageState {
     }
     return Map<String, List<_AgentMessageAttachmentView>>.unmodifiable(
       hydrated,
-    );
-  }
-
-  ChatRuntimeAttachmentContentFetcher? _runtimeAttachmentContentFetcher(
-    CloudAuthScope? cloudAuthScope,
-  ) {
-    final Object? configured = widget.runtimeConversationSender;
-    if (configured is ChatRuntimeAttachmentContentFetcher) {
-      return configured;
-    }
-    final normalizedBaseUrl =
-        cloudAuthScope?.gatewayConfig.baseUrl.trim() ?? '';
-    if (cloudAuthScope == null || normalizedBaseUrl.isEmpty) return null;
-    return SecretaryRuntimeConversationSender.hostedManagedPro(
-      apiBaseUrl: normalizedBaseUrl,
-      hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
     );
   }
 }

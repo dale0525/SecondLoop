@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/secretary_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/runtime_connection_helpers.dart';
 import '../../core/cloud/runtime_agent_state_repository.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
@@ -50,15 +51,26 @@ final class _MemoryPageState extends State<MemoryPage> {
   }
 
   Future<MemoryDemoData> _loadData() async {
+    final selfManagedConnection = selfManagedRuntimeConnection(
+      await loadRuntimeConnectionSafely(),
+    );
+    if (!mounted) return MemoryDemoData.empty();
     final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final vaultId = cloudAuthScope?.controller.uid?.trim() ?? '';
+    final selfManagedVaultId =
+        selfManagedConnection?.profile.vaultId.trim() ?? '';
+    final vaultId = selfManagedVaultId.isNotEmpty
+        ? selfManagedVaultId
+        : cloudAuthScope?.controller.uid?.trim() ?? '';
     final repository = widget.runtimeAgentStateRepository ??
-        (cloudAuthScope == null || vaultId.isEmpty
-            ? null
-            : SecretaryRuntimeAgentStateRepository.hostedManagedPro(
-                apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
-                hostedSessionTokenGetter: cloudAuthScope.controller.getIdToken,
-              ));
+        (selfManagedConnection != null
+            ? SecretaryRuntimeAgentStateRepository()
+            : cloudAuthScope == null || vaultId.isEmpty
+                ? null
+                : SecretaryRuntimeAgentStateRepository.hostedManagedPro(
+                    apiBaseUrl: cloudAuthScope.gatewayConfig.baseUrl,
+                    hostedSessionTokenGetter:
+                        cloudAuthScope.controller.getIdToken,
+                  ));
     if (repository != null && vaultId.isNotEmpty) {
       final state = await repository.fetchAgentState(
         vaultId: vaultId,

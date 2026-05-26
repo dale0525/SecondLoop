@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/runtime_agent_state_repository.dart';
+import '../../core/cloud/runtime_connection_helpers.dart';
 import '../../core/cloud/secretary_runtime_conversation_sender.dart';
 import 'agent_desktop_runtime_helpers.dart';
 import 'agent_desktop_workbench_widgets.dart';
 import 'agent_operating_system_tokens.dart';
 
 part 'desktop_memory_workbench_models.dart';
+part 'desktop_memory_workbench_candidate_tile.dart';
 
 final class DesktopMemoryWorkbenchPage extends StatefulWidget {
   const DesktopMemoryWorkbenchPage({
@@ -83,6 +85,9 @@ final class _DesktopMemoryWorkbenchPageState
     if (widget.runtimeAgentStateRepository != null) {
       return widget.runtimeAgentStateRepository;
     }
+    if (cachedSelfManagedRuntimeConnection() != null) {
+      return SecretaryRuntimeAgentStateRepository();
+    }
     final scope = CloudAuthScope.maybeOf(context);
     final vaultId = scope?.controller.uid?.trim() ?? '';
     if (scope == null || vaultId.isEmpty) return null;
@@ -94,6 +99,9 @@ final class _DesktopMemoryWorkbenchPageState
 
   ChatRuntimeApprovalSender? _approvalSender() {
     if (widget.approvalSender != null) return widget.approvalSender;
+    if (cachedSelfManagedRuntimeConnection() != null) {
+      return SecretaryRuntimeConversationSender();
+    }
     final scope = CloudAuthScope.maybeOf(context);
     final vaultId = scope?.controller.uid?.trim() ?? '';
     if (scope == null || vaultId.isEmpty) return null;
@@ -106,10 +114,18 @@ final class _DesktopMemoryWorkbenchPageState
   String _vaultId() {
     final explicit = widget.vaultId?.trim() ?? '';
     if (explicit.isNotEmpty) return explicit;
+    final selfManagedVaultId =
+        cachedSelfManagedRuntimeConnection()?.profile.vaultId.trim() ?? '';
+    if (selfManagedVaultId.isNotEmpty) return selfManagedVaultId;
     return CloudAuthScope.maybeOf(context)?.controller.uid?.trim() ?? '';
   }
 
   Future<void> _refresh() async {
+    if (widget.runtimeAgentStateRepository == null &&
+        (widget.vaultId?.trim().isEmpty ?? true)) {
+      await loadRuntimeConnectionSafely();
+      if (!mounted) return;
+    }
     final repository = _repository();
     final vaultId = _vaultId();
     if (repository == null || vaultId.isEmpty) {
@@ -922,71 +938,6 @@ final class _MemoryBottomArea extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-final class _MemoryCandidateTile extends StatelessWidget {
-  const _MemoryCandidateTile({
-    required this.candidate,
-    required this.busy,
-    required this.onApprove,
-    required this.onDismiss,
-  });
-
-  final _MemoryCandidate candidate;
-  final bool busy;
-  final VoidCallback onApprove;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.lightbulb_rounded,
-              size: 18,
-              color: AgentOperatingSystemTokens.secondary,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                candidate.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AgentOperatingSystemTokens.bodySm.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            OutlinedButton(
-              key: ValueKey('desktop_memory_candidate_dismiss_${candidate.id}'),
-              onPressed: busy ? null : onDismiss,
-              child: const Text('Dismiss'),
-            ),
-            const SizedBox(width: 8),
-            FilledButton(
-              key: ValueKey('desktop_memory_candidate_approve_${candidate.id}'),
-              onPressed: busy ? null : onApprove,
-              child: busy
-                  ? const SizedBox.square(
-                      dimension: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Approve'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
