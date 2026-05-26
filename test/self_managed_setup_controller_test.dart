@@ -138,6 +138,7 @@ void main() {
     expect(controller.state.verification?.ok, isTrue);
     final connection = await store.loadConnection();
     expect(connection?.profile.authToken, 'runtime-token-1');
+    expect(connection?.profile.vaultId, 'acct-1');
     expect(connection?.profile.authToken.contains('sk-test'), isFalse);
     expect(connection?.manifest.capabilities,
         contains(CloudRuntimeRequiredCapabilities.workingSet));
@@ -422,6 +423,7 @@ const _selfManagedConnection = CloudRuntimeConnection(
     authToken: 'runtime-token-1',
     capabilityManifestId: 'manifest-self-1',
     manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+    vaultId: 'acct-1',
   ),
   manifest: CloudRuntimeManifest(
     manifestVersion: RuntimeConnectionStore.supportedManifestVersion,

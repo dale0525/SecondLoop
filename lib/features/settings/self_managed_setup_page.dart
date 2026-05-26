@@ -6,6 +6,8 @@ import '../../core/cloud/runtime_connection_store.dart';
 import '../../ui/sl_tokens.dart';
 import 'self_managed_setup_sections.dart';
 
+part 'self_managed_setup_cloudflare_oauth_button.dart';
+
 class SelfManagedSetupPage extends StatefulWidget {
   const SelfManagedSetupPage({
     super.key,
@@ -334,21 +336,7 @@ class _CloudflareConnectionCard extends StatelessWidget {
                 children: [
                   const _CloudflareInfoBox(),
                   const SizedBox(height: 24),
-                  FilledButton.icon(
-                    key: const ValueKey('self_managed_cloudflare_oauth'),
-                    onPressed: onOAuth,
-                    icon: const Icon(Icons.link_rounded, size: 20),
-                    label: const Text('Connect / Reconnect Cloudflare Account'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      backgroundColor: _SetupColors.secondary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      textStyle: _SetupTextStyles.button,
-                    ),
-                  ),
+                  _CloudflareOAuthButton(state: state, onOAuth: onOAuth),
                   const SizedBox(height: 12),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),

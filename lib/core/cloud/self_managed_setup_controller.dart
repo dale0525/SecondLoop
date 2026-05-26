@@ -192,6 +192,7 @@ final class SelfManagedSetupController extends ChangeNotifier {
             authToken: result.authToken,
             capabilityManifestId: result.capabilityManifestId,
             manifestVersion: result.manifest.manifestVersion,
+            vaultId: request.cloudflareDeploymentAccountId,
           ),
           manifest: result.manifest,
         ),

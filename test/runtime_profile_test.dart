@@ -13,6 +13,7 @@ void main() {
       authToken: 'runtime-token-1',
       capabilityManifestId: 'manifest-self-1',
       manifestVersion: 1,
+      vaultId: 'acct-1',
     );
 
     expect(profile.toJson(), <String, Object?>{
@@ -22,6 +23,7 @@ void main() {
       'auth_token': 'runtime-token-1',
       'capability_manifest_id': 'manifest-self-1',
       'manifest_version': 1,
+      'vault_id': 'acct-1',
     });
 
     expect(

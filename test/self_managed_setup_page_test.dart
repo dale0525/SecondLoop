@@ -151,7 +151,8 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Connect / Reconnect Cloudflare Account'), findsOneWidget);
+    expect(find.text('Cloudflare Connected - Reconnect'), findsOneWidget);
+    expect(find.text('Connect / Reconnect Cloudflare Account'), findsNothing);
     expect(find.text('Provider Secrets'), findsWidgets);
 
     await _tapVisible(

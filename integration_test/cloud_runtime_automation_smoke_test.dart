@@ -55,8 +55,14 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.pageBack();
+    await tester.tap(
+      find.byKey(TestSemanticsIds.key(TestSemanticsIds.selfManagedClose)),
+    );
     await tester.pumpAndSettle();
+    await harness.pumpUntilFound(
+      find.byKey(TestSemanticsIds.key(TestSemanticsIds.runtimeModeManagedPro)),
+      description: 'runtime mode options after closing self-managed setup',
+    );
     await tester.tap(
       find.byKey(TestSemanticsIds.key(TestSemanticsIds.runtimeModeManagedPro)),
     );

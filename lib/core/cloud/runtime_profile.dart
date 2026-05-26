@@ -19,6 +19,7 @@ class CloudRuntimeProfile {
     required this.authToken,
     required this.capabilityManifestId,
     required this.manifestVersion,
+    this.vaultId = '',
   });
 
   final CloudRuntimeMode runtimeMode;
@@ -27,6 +28,7 @@ class CloudRuntimeProfile {
   final String authToken;
   final String capabilityManifestId;
   final int manifestVersion;
+  final String vaultId;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -36,6 +38,7 @@ class CloudRuntimeProfile {
       'auth_token': authToken,
       'capability_manifest_id': capabilityManifestId,
       'manifest_version': manifestVersion,
+      if (vaultId.trim().isNotEmpty) 'vault_id': vaultId,
     };
   }
 
@@ -47,6 +50,7 @@ class CloudRuntimeProfile {
       authToken: (json['auth_token'] as String?) ?? '',
       capabilityManifestId: (json['capability_manifest_id'] as String?) ?? '',
       manifestVersion: (json['manifest_version'] as num?)?.toInt() ?? 0,
+      vaultId: (json['vault_id'] as String?) ?? '',
     );
   }
 
@@ -58,7 +62,8 @@ class CloudRuntimeProfile {
         other.authMode == authMode &&
         other.authToken == authToken &&
         other.capabilityManifestId == capabilityManifestId &&
-        other.manifestVersion == manifestVersion;
+        other.manifestVersion == manifestVersion &&
+        other.vaultId == vaultId;
   }
 
   @override
@@ -69,6 +74,7 @@ class CloudRuntimeProfile {
         authToken,
         capabilityManifestId,
         manifestVersion,
+        vaultId,
       );
 }
 
