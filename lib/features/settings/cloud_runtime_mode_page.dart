@@ -70,9 +70,16 @@ class CloudRuntimeModePanel extends StatelessWidget {
                   showChevron: true,
                   onTap: onOpenSelfManaged ??
                       () {
+                        final selfManagedConnection =
+                            connection?.profile.runtimeMode ==
+                                    CloudRuntimeMode.selfManaged
+                                ? connection
+                                : null;
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => const SelfManagedSetupPage(),
+                            builder: (_) => SelfManagedSetupPage(
+                              initialConnection: selfManagedConnection,
+                            ),
                           ),
                         );
                       },

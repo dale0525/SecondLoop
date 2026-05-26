@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 
 import 'runtime_profile.dart';
 
@@ -181,8 +181,8 @@ class CloudRuntimeManifest {
         other.runtimeMode == runtimeMode &&
         other.apiBaseUrl == apiBaseUrl &&
         other.authMode == authMode &&
-        listEquals(other.capabilities, capabilities) &&
-        listEquals(other.skills, skills) &&
+        _listEquals(other.capabilities, capabilities) &&
+        _listEquals(other.skills, skills) &&
         other.vaultBinding == vaultBinding &&
         other.providerCostOwner == providerCostOwner;
   }
@@ -204,4 +204,13 @@ String? _parseString(Object? value) {
   if (value is! String) return null;
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
+}
+
+bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i += 1) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }

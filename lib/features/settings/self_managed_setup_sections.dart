@@ -16,7 +16,9 @@ class SelfManagedSetupSections extends StatelessWidget {
     required this.embeddingApiKeyController,
     required this.multimodalApiKeyController,
     required this.isBusy,
+    required this.isUninstallBusy,
     required this.onWriteSecrets,
+    required this.onUninstallRuntime,
   });
 
   final SelfManagedSetupController controller;
@@ -26,7 +28,9 @@ class SelfManagedSetupSections extends StatelessWidget {
   final TextEditingController embeddingApiKeyController;
   final TextEditingController multimodalApiKeyController;
   final bool isBusy;
+  final bool isUninstallBusy;
   final VoidCallback onWriteSecrets;
+  final Future<void> Function() onUninstallRuntime;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +59,16 @@ class SelfManagedSetupSections extends StatelessWidget {
             _CapabilityVerificationCard(verification: state.verification),
             const SizedBox(height: 24),
             _RuntimeManifestCard(manifest: state.manifest),
+            if (state.manifest != null ||
+                state.isReady ||
+                state.isUninstalled) ...[
+              const SizedBox(height: 24),
+              _RuntimeManagementCard(
+                state: state,
+                isBusy: isUninstallBusy,
+                onUninstallRuntime: onUninstallRuntime,
+              ),
+            ],
           ],
         );
       },

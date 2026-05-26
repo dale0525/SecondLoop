@@ -315,6 +315,112 @@ class _RuntimeManifestCard extends StatelessWidget {
   }
 }
 
+class _RuntimeManagementCard extends StatelessWidget {
+  const _RuntimeManagementCard({
+    required this.state,
+    required this.isBusy,
+    required this.onUninstallRuntime,
+  });
+
+  final SelfManagedSetupState state;
+  final bool isBusy;
+  final Future<void> Function() onUninstallRuntime;
+
+  @override
+  Widget build(BuildContext context) {
+    final uninstalled = state.isUninstalled;
+    return _SetupCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle(
+            title: 'Runtime Management',
+            subtitle: 'Remove the self-managed runtime from your account.',
+          ),
+          const SizedBox(height: 12),
+          if (uninstalled)
+            const _InlineNote(
+              icon: Icons.check_circle_outline_rounded,
+              text: 'Self-managed runtime connection removed.',
+            )
+          else ...[
+            const _InlineNote(
+              icon: Icons.warning_amber_rounded,
+              text:
+                  'This removes workers, bindings, and runtime secrets owned by your Cloudflare account.',
+              tone: _InlineNoteTone.warning,
+            ),
+            if (state.hasError) ...[
+              const SizedBox(height: 10),
+              _InlineNote(
+                icon: Icons.error_outline_rounded,
+                text: state.errorCode ?? state.statusMessage,
+                tone: _InlineNoteTone.warning,
+              ),
+            ],
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              key: const ValueKey('self_managed_uninstall_runtime'),
+              onPressed: isBusy ? null : () => _confirmUninstall(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _SetupColors.warningForeground,
+                minimumSize: const Size(0, 38),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                side: const BorderSide(
+                  color: _SetupColors.warningForeground,
+                ),
+              ),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              label: Text(isBusy ? 'Uninstalling...' : 'Uninstall runtime'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmUninstall(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => const _UninstallRuntimeDialog(),
+    );
+    if (confirmed == true) {
+      await onUninstallRuntime();
+    }
+  }
+}
+
+class _UninstallRuntimeDialog extends StatelessWidget {
+  const _UninstallRuntimeDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const ValueKey('self_managed_confirm_uninstall_dialog'),
+      title: const Text('Uninstall self-managed runtime?'),
+      content: const Text(
+        'SecondLoop will use your session Cloudflare credentials to remove the runtime resources and then clear the saved connection.',
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('self_managed_cancel_uninstall'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          key: const ValueKey('self_managed_confirm_uninstall'),
+          onPressed: () => Navigator.of(context).pop(true),
+          icon: const Icon(Icons.delete_outline_rounded, size: 18),
+          label: const Text('Uninstall'),
+        ),
+      ],
+    );
+  }
+}
+
 class _ManifestField {
   const _ManifestField(
     this.label,

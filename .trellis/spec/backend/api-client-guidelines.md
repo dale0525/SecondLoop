@@ -76,8 +76,8 @@ driven by machine-readable metadata and approved runtime/vault responses.
 ### 1. Scope / Trigger
 
 - Trigger: self-managed setup spans Flutter UI state, `SelfManagedSetupRequest`,
-  local setup-helper process input, deployment runner behavior, and persisted
-  runtime connection metadata.
+  `SelfManagedRuntimeUninstallRequest`, local setup-helper process input,
+  deploy/uninstall runner behavior, and persisted runtime connection metadata.
 - Treat Cloudflare management authorization as setup-helper session data, not a
   saved app/runtime business configuration.
 
@@ -85,10 +85,17 @@ driven by machine-readable metadata and approved runtime/vault responses.
 
 - Dart request owner:
   `SelfManagedSetupRequest(cloudflareAuthorizationMethod, cloudflareAccountId, cloudflareApiToken, cloudflareAccountLabel, provider, apiKey, embeddingApiKey, multimodalApiKey)`.
+- Dart uninstall request owner:
+  `SelfManagedRuntimeUninstallRequest(cloudflareAuthorizationMethod, cloudflareAccountId, cloudflareApiToken, cloudflareAccountLabel, runtimeId)`.
 - Helper JSON input fields:
   `cloudflare_authorization_method`, `cloudflare_account_id`,
   `cloudflare_api_token`, `cloudflare_account_label`, `provider`, `api_key`,
   `embedding_api_key`, `multimodal_api_key`.
+- Helper uninstall JSON input adds `action == "uninstall"` and optional
+  `runtime_id`.
+- Helper uninstall JSON output:
+  `ok`, `runtime_mode`, `cloudflare_account_id`, `removed_workers`,
+  `removed_bindings`, `removed_secrets`.
 - Persisted output remains `CloudRuntimeConnection(profile, manifest)` plus
   runtime auth token and capability manifest id. It must not include the
   Cloudflare management token.
@@ -98,6 +105,13 @@ driven by machine-readable metadata and approved runtime/vault responses.
 - `cloudflare_authorization_method == "oauth"` means the helper owns the
   authorization handoff. If no OAuth handoff is wired, UI must show
   `tool_unavailable:cloudflare_oauth`.
+- The desktop/local helper bridge may satisfy OAuth by launching the helper
+  process and Wrangler OAuth handoff. The app receives only account metadata
+  (`cloudflare_account_id`, account name/email when available); it must not
+  receive or persist the OAuth access token.
+- Helper-owned Wrangler OAuth cache lives under ignored local tooling state
+  such as `.tool/self-managed-cloudflare-oauth`. Treat it as setup-helper
+  session state, not app business configuration.
 - `cloudflare_authorization_method == "manual"` requires both
   `cloudflare_account_id` and `cloudflare_api_token`.
 - `cloudflare_api_token` is only passed to setup-helper deployment automation.
@@ -106,10 +120,19 @@ driven by machine-readable metadata and approved runtime/vault responses.
 - Runtime BYOK/provider secrets are written by the helper to the user's own
   Cloudflare runtime secrets and should be represented in app state only as
   setup progress or capability results.
+- Uninstall uses the same session-scoped Cloudflare authorization boundary as
+  deploy. The app clears saved `CloudRuntimeConnection` only after helper
+  uninstall returns `ok == true`.
+- Uninstall output may list resource names from the self-managed resource plan,
+  but it must not include the Cloudflare management token, provider secrets, or
+  runtime auth token.
 
 ### 4. Validation & Error Matrix
 
 - OAuth path unavailable -> `tool_unavailable:cloudflare_oauth`.
+- OAuth login/consent not completed -> `cloudflare_oauth_failed`.
+- Multiple Cloudflare accounts without a resolvable label/id ->
+  `cloudflare_account_selection_required`.
 - Manual method with empty account id -> `missing_cloudflare_account_id`.
 - Manual method with empty API token -> `missing_cloudflare_api_token`.
 - Missing provider secret inputs during deploy -> `missing_ai_provider_config`.
@@ -117,24 +140,40 @@ driven by machine-readable metadata and approved runtime/vault responses.
   runtime connection.
 - Runtime manifest missing required capabilities -> fail setup and do not save
   runtime connection.
+- Uninstall helper unavailable -> `self_managed_uninstall_helper_unavailable`.
+- Uninstall returns `ok != true` -> `self_managed_runtime_uninstall_failed` and
+  do not clear the saved runtime connection.
 
 ### 5. Good/Base/Bad Cases
 
 - Good: manual account id and token validate locally, helper receives token for
   deployment, verification passes, app saves only runtime profile/manifest.
+- Good: manual account id and token validate locally, uninstall helper receives
+  token for deletion, returns `ok == true`, and app clears only the saved runtime
+  connection metadata.
+- Good: OAuth authorization launches through the helper, returns account
+  metadata, deploys and uninstalls Cloudflare resources, and never stores the
+  Cloudflare OAuth token in app metadata.
 - Base: OAuth button is clicked in a local build without a handoff; app renders
   a degraded unavailable state and does not reveal fake connected UI.
 - Bad: app stores Cloudflare API token in preferences, secure blobs, runtime
   profile, manifest, logs, or a long-lived settings card.
+- Bad: uninstall UI clears the saved runtime connection before helper deletion
+  succeeds, or leaks the Cloudflare token in the uninstall summary.
 
 ### 6. Tests Required
 
-- Controller/unit tests: OAuth unavailable state, missing manual account id,
-  missing manual token, and helper-not-called when validation fails.
+- Controller/unit tests: OAuth success and unavailable states, missing manual
+  account id, missing manual token, helper-not-called when validation fails,
+  successful uninstall clears saved runtime connection only after helper
+  `ok == true`.
 - Helper/deploy runner tests: manual token bypasses OAuth helper, is passed to
   deployment resources, and is absent from result manifest/profile strings.
+- Helper/uninstall runner tests: manual token bypasses OAuth helper, is passed
+  to uninstall resources, and is absent from uninstall output.
 - Widget tests: setup screen renders at narrow, manifest-width, and desktop
-  sizes; manual validation errors and OAuth degraded state are visible.
+  sizes; manual validation errors, OAuth degraded state, ready-state uninstall
+  confirmation, and missing uninstall token errors are visible.
 
 ### 7. Wrong vs Correct
 
@@ -154,4 +193,13 @@ final cloudflareToken = request.usesManualCloudflareCredentials
     : await cloudflareAuth.authorize(request.cloudflareAccountLabel);
 await deployResources(request, cloudflareToken, plan);
 // Save only runtime connection returned after deployment and verification.
+```
+
+#### Correct
+
+```dart
+final result = await helperProcess.runUninstall(request, onProgress: report);
+if (result.ok) {
+  await connectionStore.clearConnection();
+}
 ```

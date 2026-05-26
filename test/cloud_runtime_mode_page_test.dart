@@ -81,6 +81,32 @@ void main() {
     expect(find.byType(CloudAccountPage), findsOneWidget);
   });
 
+  testWidgets('self-managed connection opens setup with runtime management',
+      (tester) async {
+    final store = RuntimeConnectionStore();
+    await store.saveConnection(_selfManagedConnection);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: CloudRuntimeModePage(connectionStore: store),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Self-managed runtime connected'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('runtime_mode_self_managed')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SelfManagedSetupPage), findsOneWidget);
+    expect(find.text('https://user-runtime.example/'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('self_managed_uninstall_runtime')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('signed-in managed pro session is shown as connected',
       (tester) async {
     await tester.pumpWidget(
@@ -148,3 +174,23 @@ final class _FakeCloudAuthController implements CloudAuthController {
   @override
   Future<void> signOut() async {}
 }
+
+const _selfManagedConnection = CloudRuntimeConnection(
+  profile: CloudRuntimeProfile(
+    runtimeMode: CloudRuntimeMode.selfManaged,
+    apiBaseUrl: 'https://user-runtime.example/',
+    authMode: CloudRuntimeAuthMode.runtimeToken,
+    authToken: 'runtime-token-1',
+    capabilityManifestId: 'manifest-self-1',
+    manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+  ),
+  manifest: CloudRuntimeManifest(
+    manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+    runtimeMode: CloudRuntimeMode.selfManaged,
+    apiBaseUrl: 'https://user-runtime.example/',
+    authMode: CloudRuntimeAuthMode.runtimeToken,
+    capabilities: CloudRuntimeRequiredCapabilities.all,
+    vaultBinding: 'CF_D1_PRIMARY_VAULT',
+    providerCostOwner: 'you (local key)',
+  ),
+);

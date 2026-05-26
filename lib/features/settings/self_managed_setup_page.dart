@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/cloud/self_managed_setup_controller.dart';
 import '../../core/cloud/self_managed_setup_models.dart';
+import '../../core/cloud/runtime_connection_store.dart';
 import '../../ui/sl_tokens.dart';
 import 'self_managed_setup_sections.dart';
 
@@ -9,10 +10,12 @@ class SelfManagedSetupPage extends StatefulWidget {
   const SelfManagedSetupPage({
     super.key,
     this.controller,
+    this.initialConnection,
     this.initialCloudflareAccountLabel = 'personal-vault',
   });
 
   final SelfManagedSetupController? controller;
+  final CloudRuntimeConnection? initialConnection;
   final String initialCloudflareAccountLabel;
 
   @override
@@ -29,8 +32,10 @@ class _SelfManagedSetupPageState extends State<SelfManagedSetupPage> {
   final _embeddingApiKeyController = TextEditingController();
   final _multimodalApiKeyController = TextEditingController();
   var _busy = false;
+  var _uninstallBusy = false;
   var _manualExpanded = false;
   var _showSetupDetails = false;
+  var _oauthAuthorized = false;
 
   @override
   void initState() {
@@ -39,6 +44,11 @@ class _SelfManagedSetupPageState extends State<SelfManagedSetupPage> {
     _cloudflareAccountController = TextEditingController(
       text: widget.initialCloudflareAccountLabel,
     );
+    final initialConnection = widget.initialConnection;
+    if (initialConnection != null) {
+      _controller.restoreConnection(initialConnection);
+      _showSetupDetails = true;
+    }
   }
 
   @override
@@ -56,14 +66,36 @@ class _SelfManagedSetupPageState extends State<SelfManagedSetupPage> {
     super.dispose();
   }
 
-  void _startCloudflareOAuth() {
-    setState(() => _showSetupDetails = false);
-    _controller.reportCloudflareOAuthUnavailable();
+  Future<void> _startCloudflareOAuth() async {
+    if (_busy || _uninstallBusy) return;
+    setState(() {
+      _busy = true;
+      _showSetupDetails = false;
+    });
+    try {
+      final result = await _controller.authorizeCloudflareOAuth(
+        accountLabel: _cloudflareAccountController.text.trim(),
+      );
+      if (!mounted || result == null) return;
+      _cloudflareAccountController.text = result.cloudflareAccountId;
+      _cloudflareAccountIdController.text = result.cloudflareAccountId;
+      _cloudflareApiTokenController.clear();
+      _manualExpanded = false;
+      _oauthAuthorized = true;
+      setState(() => _showSetupDetails = true);
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
   }
 
   void _verifyCloudflareConnection() {
     if (!_manualExpanded) {
-      _startCloudflareOAuth();
+      if (!_controller.state.isCloudflareReady) {
+        _startCloudflareOAuth();
+      }
+      setState(() => _showSetupDetails = true);
       return;
     }
     final ok = _controller.prepareManualCloudflareAuthorization(
@@ -73,30 +105,70 @@ class _SelfManagedSetupPageState extends State<SelfManagedSetupPage> {
     if (!ok) return;
     _cloudflareAccountController.text =
         _cloudflareAccountIdController.text.trim();
+    _oauthAuthorized = false;
     setState(() => _showSetupDetails = true);
   }
 
   Future<void> _runSetup() async {
-    if (_busy) return;
+    if (_busy || _uninstallBusy) return;
     setState(() => _busy = true);
-    await _controller.deploy(
-      SelfManagedSetupRequest(
-        cloudflareAccountLabel: _cloudflareAccountController.text.trim(),
-        provider: _providerController.text.trim(),
-        apiKey: _apiKeyController.text.trim(),
-        embeddingApiKey: _embeddingApiKeyController.text.trim(),
-        multimodalApiKey: _multimodalApiKeyController.text.trim(),
-        cloudflareAuthorizationMethod:
-            _cloudflareAccountIdController.text.trim().isNotEmpty ||
-                    _cloudflareApiTokenController.text.trim().isNotEmpty
-                ? SelfManagedCloudflareAuthorizationMethod.manual
-                : SelfManagedCloudflareAuthorizationMethod.oauth,
-        cloudflareAccountId: _cloudflareAccountIdController.text.trim(),
-        cloudflareApiToken: _cloudflareApiTokenController.text.trim(),
-      ),
-    );
-    if (!mounted) return;
-    setState(() => _busy = false);
+    try {
+      final usesManualCloudflareCredentials = !_oauthAuthorized &&
+          (_cloudflareAccountIdController.text.trim().isNotEmpty ||
+              _cloudflareApiTokenController.text.trim().isNotEmpty);
+      await _controller.deploy(
+        SelfManagedSetupRequest(
+          cloudflareAccountLabel: _cloudflareAccountController.text.trim(),
+          provider: _providerController.text.trim(),
+          apiKey: _apiKeyController.text.trim(),
+          embeddingApiKey: _embeddingApiKeyController.text.trim(),
+          multimodalApiKey: _multimodalApiKeyController.text.trim(),
+          cloudflareAuthorizationMethod: usesManualCloudflareCredentials
+              ? SelfManagedCloudflareAuthorizationMethod.manual
+              : SelfManagedCloudflareAuthorizationMethod.oauth,
+          cloudflareAccountId: usesManualCloudflareCredentials
+              ? _cloudflareAccountIdController.text.trim()
+              : '',
+          cloudflareApiToken: usesManualCloudflareCredentials
+              ? _cloudflareApiTokenController.text.trim()
+              : '',
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _runUninstall() async {
+    if (_busy || _uninstallBusy) return;
+    setState(() => _uninstallBusy = true);
+    try {
+      final usesManualCloudflareCredentials = !_oauthAuthorized;
+      await _controller.uninstall(
+        SelfManagedRuntimeUninstallRequest(
+          cloudflareAccountLabel: _cloudflareAccountController.text.trim(),
+          cloudflareAuthorizationMethod: usesManualCloudflareCredentials
+              ? SelfManagedCloudflareAuthorizationMethod.manual
+              : SelfManagedCloudflareAuthorizationMethod.oauth,
+          cloudflareAccountId: usesManualCloudflareCredentials
+              ? _cloudflareAccountIdController.text.trim()
+              : '',
+          cloudflareApiToken: usesManualCloudflareCredentials
+              ? _cloudflareApiTokenController.text.trim()
+              : '',
+        ),
+      );
+      if (_controller.state.isUninstalled) {
+        _cloudflareApiTokenController.clear();
+        _oauthAuthorized = false;
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _uninstallBusy = false);
+      }
+    }
   }
 
   @override
@@ -161,7 +233,9 @@ class _SelfManagedSetupPageState extends State<SelfManagedSetupPage> {
                                   multimodalApiKeyController:
                                       _multimodalApiKeyController,
                                   isBusy: _busy,
+                                  isUninstallBusy: _uninstallBusy,
                                   onWriteSecrets: _runSetup,
+                                  onUninstallRuntime: _runUninstall,
                                 ),
                               ],
                             ],
@@ -264,7 +338,7 @@ class _CloudflareConnectionCard extends StatelessWidget {
                     key: const ValueKey('self_managed_cloudflare_oauth'),
                     onPressed: onOAuth,
                     icon: const Icon(Icons.link_rounded, size: 20),
-                    label: const Text('Connect Cloudflare Account'),
+                    label: const Text('Connect / Reconnect Cloudflare Account'),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
                       backgroundColor: _SetupColors.secondary,
@@ -636,7 +710,7 @@ class _ConnectionStatusMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     final success = state.isCloudflareReady && !state.hasError;
     final message = success
-        ? 'Manual credentials are ready for the setup helper. Deployment will verify them against Cloudflare before saving runtime metadata.'
+        ? 'Cloudflare authorization is ready. Fill Provider Secrets below, then write secrets to deploy and verify the runtime before metadata is saved.'
         : _errorMessage(state.errorCode ?? state.statusMessage);
     return DecoratedBox(
       key: const ValueKey('self_managed_connection_status'),
@@ -685,6 +759,10 @@ class _ConnectionStatusMessage extends StatelessWidget {
     return switch (code) {
       'tool_unavailable:cloudflare_oauth' =>
         'Cloudflare OAuth handoff is not available in this local build yet. Use manual configuration or retry after the setup helper is configured.',
+      'cloudflare_account_selection_required' =>
+        'Multiple Cloudflare accounts are available. Enter the target account id or name before retrying OAuth.',
+      'cloudflare_oauth_failed' =>
+        'Cloudflare OAuth authorization did not finish. Retry and complete the browser approval.',
       'missing_cloudflare_account_id' =>
         'Enter the Cloudflare account id before verifying manual setup.',
       'missing_cloudflare_api_token' =>

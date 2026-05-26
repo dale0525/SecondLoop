@@ -1,7 +1,20 @@
 import 'self_managed_setup_models.dart';
+import 'local_runtime_helper_process_runner.dart';
 
 typedef LocalRuntimeSetupRunner = Future<SelfManagedSetupResult> Function(
   SelfManagedSetupRequest request,
+  void Function(SelfManagedSetupProgress event) onProgress,
+);
+
+typedef LocalRuntimeUninstallRunner = Future<SelfManagedRuntimeUninstallResult>
+    Function(
+  SelfManagedRuntimeUninstallRequest request,
+  void Function(SelfManagedSetupProgress event) onProgress,
+);
+
+typedef LocalRuntimeCloudflareAuthorizationRunner
+    = Future<SelfManagedCloudflareAuthorizationResult> Function(
+  String accountLabel,
   void Function(SelfManagedSetupProgress event) onProgress,
 );
 
@@ -15,9 +28,17 @@ class LocalRuntimeHelperException implements Exception {
 final class LocalRuntimeHelperProcess {
   LocalRuntimeHelperProcess({
     LocalRuntimeSetupRunner? runner,
-  }) : _runner = runner ?? _defaultRunner;
+    LocalRuntimeCloudflareAuthorizationRunner? cloudflareAuthorizationRunner,
+    LocalRuntimeUninstallRunner? uninstallRunner,
+  })  : _runner = runner ?? _defaultRunner,
+        _cloudflareAuthorizationRunner =
+            cloudflareAuthorizationRunner ?? _defaultCloudflareAuthorization,
+        _uninstallRunner = uninstallRunner ?? _defaultUninstallRunner;
 
   final LocalRuntimeSetupRunner _runner;
+  final LocalRuntimeCloudflareAuthorizationRunner
+      _cloudflareAuthorizationRunner;
+  final LocalRuntimeUninstallRunner _uninstallRunner;
 
   Future<SelfManagedSetupResult> runSetup(
     SelfManagedSetupRequest request, {
@@ -25,14 +46,40 @@ final class LocalRuntimeHelperProcess {
   }) {
     return _runner(request, onProgress);
   }
+
+  Future<SelfManagedCloudflareAuthorizationResult> runCloudflareAuthorization(
+    String accountLabel, {
+    required void Function(SelfManagedSetupProgress event) onProgress,
+  }) {
+    return _cloudflareAuthorizationRunner(accountLabel, onProgress);
+  }
+
+  Future<SelfManagedRuntimeUninstallResult> runUninstall(
+    SelfManagedRuntimeUninstallRequest request, {
+    required void Function(SelfManagedSetupProgress event) onProgress,
+  }) {
+    return _uninstallRunner(request, onProgress);
+  }
 }
 
 Future<SelfManagedSetupResult> _defaultRunner(
   SelfManagedSetupRequest request,
   void Function(SelfManagedSetupProgress event) onProgress,
 ) async {
-  throw const LocalRuntimeHelperException(
-    'self_managed_helper_unavailable',
-    'Self-managed runtime helper is not available.',
-  );
+  return runLocalRuntimeSetupHelper(request, onProgress);
+}
+
+Future<SelfManagedCloudflareAuthorizationResult>
+    _defaultCloudflareAuthorization(
+  String accountLabel,
+  void Function(SelfManagedSetupProgress event) onProgress,
+) async {
+  return runLocalRuntimeCloudflareAuthorizationHelper(accountLabel, onProgress);
+}
+
+Future<SelfManagedRuntimeUninstallResult> _defaultUninstallRunner(
+  SelfManagedRuntimeUninstallRequest request,
+  void Function(SelfManagedSetupProgress event) onProgress,
+) async {
+  return runLocalRuntimeUninstallHelper(request, onProgress);
 }

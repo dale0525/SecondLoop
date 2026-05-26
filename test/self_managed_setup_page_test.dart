@@ -121,20 +121,46 @@ void main() {
     expect(find.text('Provider Secrets'), findsNothing);
   });
 
-  testWidgets('OAuth action reports unavailable handoff instead of faking auth',
+  testWidgets('OAuth action authorizes Cloudflare before provider secrets',
       (tester) async {
-    await _pumpSelfManagedSetup(tester, SelfManagedSetupController());
+    var authorizationCalls = 0;
+    final controller = SelfManagedSetupController(
+      helperProcess: LocalRuntimeHelperProcess(
+        cloudflareAuthorizationRunner: (_, __) async {
+          authorizationCalls += 1;
+          return const SelfManagedCloudflareAuthorizationResult(
+            cloudflareAccountId: 'acct-1',
+            cloudflareAccountName: 'Personal Account',
+            cloudflareUserEmail: 'user@example.test',
+          );
+        },
+      ),
+    );
+    await _pumpSelfManagedSetup(tester, controller);
 
     await _tapVisible(
       tester,
       find.byKey(const ValueKey('self_managed_cloudflare_oauth')),
     );
 
+    expect(controller.state.step, SelfManagedSetupStep.cloudflareReady);
+    expect(authorizationCalls, 1);
     expect(
-      find.textContaining('Cloudflare OAuth handoff is not available'),
+      find.text(
+        'Cloudflare authorization is ready. Fill Provider Secrets below, then write secrets to deploy and verify the runtime before metadata is saved.',
+      ),
       findsOneWidget,
     );
-    expect(find.text('Provider Secrets'), findsNothing);
+    expect(find.text('Connect / Reconnect Cloudflare Account'), findsOneWidget);
+    expect(find.text('Provider Secrets'), findsWidgets);
+
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_verify_connection')),
+    );
+
+    expect(authorizationCalls, 1);
+    expect(find.text('Provider Secrets'), findsWidgets);
   });
 
   testWidgets('side-effect verification failure blocks continue',
@@ -174,6 +200,102 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Provider Secrets'), findsWidgets);
+  });
+
+  testWidgets('ready runtime exposes confirmed uninstall action',
+      (tester) async {
+    var uninstallCalled = false;
+    final controller = SelfManagedSetupController(
+      helperProcess: LocalRuntimeHelperProcess(
+        runner: (_, __) async => _readySetupResult,
+        uninstallRunner: (request, onProgress) async {
+          uninstallCalled = true;
+          expect(request.cloudflareDeploymentAccountId, 'acct-1');
+          expect(request.cloudflareApiToken, 'cf-session-token');
+          onProgress(
+            const SelfManagedSetupProgress(
+              step: SelfManagedSetupStep.uninstalling,
+              message: 'uninstalling',
+            ),
+          );
+          return const SelfManagedRuntimeUninstallResult(
+            ok: true,
+            runtimeMode: 'self_managed',
+            cloudflareAccountId: 'acct-1',
+            removedWorkers: ['secretary-runtime'],
+            removedBindings: ['D1'],
+            removedSecrets: ['LLM_API_KEY'],
+          );
+        },
+      ),
+    );
+
+    await _pumpSelfManagedSetup(tester, controller);
+    await _prepareManualCloudflareConnection(tester);
+    await _fillRequiredProviderFields(tester);
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_write_secrets')),
+    );
+
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_uninstall_runtime')),
+    );
+    expect(
+      find.byKey(const ValueKey('self_managed_confirm_uninstall_dialog')),
+      findsOneWidget,
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_confirm_uninstall')),
+    );
+
+    expect(uninstallCalled, isTrue);
+    expect(controller.state.isUninstalled, isTrue);
+    expect(
+      find.text('Self-managed runtime connection removed.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('uninstall blocks missing manual Cloudflare token',
+      (tester) async {
+    var uninstallCalled = false;
+    final controller = SelfManagedSetupController(
+      helperProcess: LocalRuntimeHelperProcess(
+        runner: (_, __) async => _readySetupResult,
+        uninstallRunner: (_, __) async {
+          uninstallCalled = true;
+          throw const LocalRuntimeHelperException('unexpected', 'unexpected');
+        },
+      ),
+    );
+
+    await _pumpSelfManagedSetup(tester, controller);
+    await _prepareManualCloudflareConnection(tester);
+    await _fillRequiredProviderFields(tester);
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_write_secrets')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('self_managed_cloudflare_api_token')),
+      '',
+    );
+
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_uninstall_runtime')),
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('self_managed_confirm_uninstall')),
+    );
+
+    expect(uninstallCalled, isFalse);
+    expect(controller.state.errorCode, 'missing_cloudflare_api_token');
+    expect(find.text('missing_cloudflare_api_token'), findsWidgets);
   });
 
   testWidgets(
@@ -256,6 +378,19 @@ Future<void> _prepareManualCloudflareConnection(WidgetTester tester) async {
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
+  final center = tester.getCenter(finder);
+  final rootSize = tester.binding.renderView.size;
+  if (center.dx < 0 ||
+      center.dy < 0 ||
+      center.dx > rootSize.width ||
+      center.dy > rootSize.height) {
+    await tester.scrollUntilVisible(
+      finder,
+      360,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+  }
   await tester.tap(finder);
   await tester.pumpAndSettle();
 }
@@ -297,4 +432,26 @@ const _sideEffectDisciplineFailure = ModelCapabilityVerificationResult(
       failureCode: 'retry_required',
     ),
   ],
+);
+
+const _readySetupResult = SelfManagedSetupResult(
+  manifest: CloudRuntimeManifest(
+    manifestVersion: 1,
+    runtimeMode: CloudRuntimeMode.selfManaged,
+    apiBaseUrl: 'https://user-runtime.example/',
+    authMode: CloudRuntimeAuthMode.runtimeToken,
+    capabilities: CloudRuntimeRequiredCapabilities.all,
+    vaultBinding: 'CF_D1_PRIMARY_VAULT',
+    providerCostOwner: 'you (local key)',
+    skills: [
+      CloudRuntimeSkillAvailability(
+        id: 'web-research',
+        status: 'ready',
+        provider: 'configured',
+      ),
+    ],
+  ),
+  authToken: 'runtime-token-1',
+  capabilityManifestId: 'manifest-self-1',
+  verification: ModelCapabilityVerificationResult.allRequiredPassed,
 );

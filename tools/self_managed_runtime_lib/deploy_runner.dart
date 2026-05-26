@@ -5,12 +5,13 @@ import 'package:secondloop/core/cloud/local_runtime_helper_process.dart';
 import 'package:secondloop/core/cloud/self_managed_setup_models.dart';
 
 import 'cloudflare_auth.dart';
+import 'cloudflare_runtime_resources.dart';
 import 'manifest.dart';
 import 'resource_plan.dart';
 
 typedef DeployResourcesFn = Future<String> Function(
   SelfManagedSetupRequest request,
-  String cloudflareToken,
+  SelfManagedCloudflareAuthorization cloudflareAuthorization,
   SelfManagedRuntimeResourcePlan plan,
 );
 
@@ -65,8 +66,12 @@ final class SelfManagedRuntimeDeployRunner {
           message: 'authorizing',
         ),
       );
-      final cloudflareToken = request.usesManualCloudflareCredentials
-          ? request.cloudflareApiToken.trim()
+      final cloudflareAuthorization = request.usesManualCloudflareCredentials
+          ? SelfManagedCloudflareAuthorization(
+              accessToken: request.cloudflareApiToken.trim(),
+              accountId: request.cloudflareDeploymentAccountId,
+              accountName: request.cloudflareDeploymentAccountId,
+            )
           : await _cloudflareAuth.authorize(request.cloudflareAccountLabel);
       onProgress(
         const SelfManagedSetupProgress(
@@ -76,7 +81,7 @@ final class SelfManagedRuntimeDeployRunner {
       );
       final apiBaseUrl = await _deployResources(
         request,
-        cloudflareToken,
+        cloudflareAuthorization,
         buildSelfManagedRuntimeResourcePlan(),
       );
       await _runHealthCheck(apiBaseUrl);
@@ -107,10 +112,17 @@ final class SelfManagedRuntimeDeployRunner {
 
 Future<String> _defaultDeployResources(
   SelfManagedSetupRequest request,
-  String cloudflareToken,
+  SelfManagedCloudflareAuthorization cloudflareAuthorization,
   SelfManagedRuntimeResourcePlan plan,
 ) async {
-  return 'https://${request.cloudflareDeploymentAccountId}.runtime.example/';
+  if (!cloudflareAuthorization.canManageResources) {
+    return 'https://${request.cloudflareDeploymentAccountId}.runtime.example/';
+  }
+  final client = CloudflareRuntimeResourcesClient(
+    accountId: cloudflareAuthorization.accountId,
+    apiToken: cloudflareAuthorization.accessToken,
+  );
+  return client.deployLocalQaRuntime(request, plan);
 }
 
 Future<void> _defaultHealthCheck(String apiBaseUrl) async {
