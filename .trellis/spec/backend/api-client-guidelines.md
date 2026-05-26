@@ -71,6 +71,86 @@ Reference files:
 Avoid parsing assistant text to infer state changes. Product behavior should be
 driven by machine-readable metadata and approved runtime/vault responses.
 
+## Scenario: Self-Managed Local QA Worker Runtime Parity
+
+### 1. Scope / Trigger
+
+- Trigger: app-side manual QA or smoke tests exercise a generated
+  self-managed runtime worker from `tools/self_managed_runtime_lib/`.
+- The generated worker is a deterministic runtime fixture. It must model the
+  same machine-readable contracts that the app expects from managed runtime
+  responses, not just plausible assistant text.
+
+### 2. Signatures
+
+- Dart generator entry point: `buildLocalQaWorkerScript() -> String`.
+- Runtime route family: `/v1/runtime/vaults/<vault_id>/...`.
+- Conversation route shape includes:
+  `/v1/runtime/vaults/<vault_id>/conversations`,
+  `/v1/runtime/vaults/<vault_id>/agent-state`, and blob upload/read routes.
+
+### 3. Contracts
+
+- Assistant turns that create or mutate app-visible state must include
+  machine-readable metadata such as `response_type`, `approval_required`,
+  `approval_items`, `proposed_mutations`, `referenced_entities`, or
+  `working_set_records`.
+- Approval-required side effects must remain pending until the user approves
+  the approval item. Refusal or disconnected-connector cases must record a
+  blocked/draft-only working-set item instead of pretending a live side effect
+  happened.
+- Media and recall QA cases should write stable working-set records so later
+  turns can cite attachment ids, OCR text, transcript summaries, and action
+  candidates.
+
+### 4. Validation & Error Matrix
+
+- Missing runtime route -> app shows runtime route failure; do not count the QA
+  case as passed from local fallback UI alone.
+- Assistant text present but missing metadata -> fail the contract test because
+  the app cannot reliably render cards, approvals, citations, or state changes.
+- Connector unauthorized -> return draft-only or authorization-block metadata;
+  do not mark the live email/calendar action complete.
+- Purchase/payment or destructive local shell request -> return explicit
+  blocked metadata and no external/local side effect.
+
+### 5. Good/Base/Bad Cases
+
+- Good: task creation returns `response_type: "task_created"` plus a task card
+  source that appears in agent state.
+- Good: email send and calendar creation proposals return pending approval
+  items, with no live send/create until connector authorization and approval.
+- Base: disconnected email creates an email draft-only record and explains that
+  sending still requires connector authorization and approval.
+- Bad: a QA worker says "sent" or "created" in assistant prose while no
+  `approval_items`, `working_set_records`, or live connector evidence exists.
+
+### 6. Tests Required
+
+- Deploy-runner or helper tests should assert that the generated script exposes
+  the expected runtime routes and response metadata strings for each manual QA
+  family being covered.
+- Add focused regression assertions whenever a manual QA gap is fixed:
+  clarification, reminders, media OCR/audio, attachment recall, connector
+  draft/approval, briefings, and safety refusal response types.
+- Re-run the affected manual QA case against the deployed self-managed worker
+  before marking the case complete.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```dart
+expect(script, contains('已创建任务'));
+```
+
+#### Correct
+
+```dart
+expect(script, contains('response_type: "task_created"'));
+expect(script, contains('working_set_records'));
+```
+
 ## Scenario: Self-Managed Setup Helper Authorization
 
 ### 1. Scope / Trigger

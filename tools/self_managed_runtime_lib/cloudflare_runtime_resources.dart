@@ -3,9 +3,9 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:secondloop/core/cloud/local_runtime_helper_process.dart';
-import 'package:secondloop/core/cloud/runtime_manifest.dart';
 import 'package:secondloop/core/cloud/self_managed_setup_models.dart';
 
+import 'local_qa_worker_script.dart';
 import 'resource_plan.dart';
 
 final class CloudflareRuntimeResourceNames {
@@ -286,7 +286,7 @@ final class CloudflareRuntimeResourcesClient {
     await _uploadMultipartWorker(
       workerName,
       metadata: metadata,
-      script: _localQaWorkerScript(),
+      script: buildLocalQaWorkerScript(),
     );
     await _enableWorkerSubdomain(workerName);
   }
@@ -473,70 +473,6 @@ List<int> _multipartBody({
   write(script);
   write('\r\n--$boundary--\r\n');
   return bytes;
-}
-
-String _localQaWorkerScript() {
-  final checks = [
-    ModelCapabilityRequiredChecks.structuredOutput,
-    ModelCapabilityRequiredChecks.secretaryMetadata,
-    ModelCapabilityRequiredChecks.toolProposalDiscipline,
-    ModelCapabilityRequiredChecks.multimodalUnderstanding,
-    ModelCapabilityRequiredChecks.chineseIntentHandling,
-    ModelCapabilityRequiredChecks.contextWindowLatency,
-    ModelCapabilityRequiredChecks.clarificationBehavior,
-    ModelCapabilityRequiredChecks.sideEffectDiscipline,
-  ];
-  final capabilities = [
-    ...CloudRuntimeRequiredCapabilities.all.map((capability) => capability.id),
-    'deployment_test_api',
-    'runtime_test_api',
-  ];
-  return '''
-const checks = ${jsonEncode(checks)};
-const capabilities = ${jsonEncode(capabilities)};
-
-function json(body, init = {}) {
-  return new Response(JSON.stringify(body), {
-    ...init,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      ...(init.headers || {})
-    }
-  });
-}
-
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    if (url.pathname === "/" || url.pathname === "/health") {
-      return json({
-        ok: true,
-        runtime_mode: "self_managed",
-        artifact: "secondloop-local-qa-runtime",
-        capabilities
-      });
-    }
-    if (url.pathname === "/v1/runtime/model/verify-capabilities") {
-      return json({
-        ok: true,
-        checks: checks.map((code) => ({ code, passed: true }))
-      });
-    }
-    if (url.pathname === "/v1/runtime/capabilities") {
-      return json({
-        ok: true,
-        runtime_mode: "self_managed",
-        capabilities
-      });
-    }
-    return json({
-      ok: false,
-      error: "local_qa_runtime_route_not_implemented",
-      path: url.pathname
-    }, { status: 501 });
-  }
-};
-''';
 }
 
 String? _stringField(Map<dynamic, dynamic> source, List<String> keys) {

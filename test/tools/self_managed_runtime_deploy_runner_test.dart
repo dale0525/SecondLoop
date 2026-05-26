@@ -5,6 +5,7 @@ import 'package:secondloop/core/cloud/self_managed_setup_models.dart';
 import '../../tools/self_managed_runtime_lib/cloudflare_auth.dart';
 import '../../tools/self_managed_runtime_lib/cloudflare_runtime_resources.dart';
 import '../../tools/self_managed_runtime_lib/deploy_runner.dart';
+import '../../tools/self_managed_runtime_lib/local_qa_worker_script.dart';
 import '../../tools/self_managed_runtime_lib/resource_plan.dart';
 import '../../tools/self_managed_runtime_lib/uninstall_runner.dart';
 
@@ -371,6 +372,34 @@ void main() {
     expect(names.d1DatabaseName, 'secondloop-9a7806061c88-d1');
     expect(names.kvNamespaceTitle, 'secondloop-9a7806061c88-kv');
     expect(names.r2BucketName, 'secondloop-9a7806061c88-r2');
+  });
+
+  test('Cloudflare local QA worker exposes runtime conversation routes', () {
+    final script = buildLocalQaWorkerScript();
+
+    expect(script, contains('/v1/runtime/capabilities'));
+    expect(script, contains('tail[0] === "conversations"'));
+    expect(script, contains('tail[0] === "agent-state"'));
+    expect(script, contains('tail[0] === "blobs"'));
+    expect(script, contains('response_type: "task_created"'));
+    expect(script, contains('response_type: "clarification_required"'));
+    expect(script, contains('response_type: "recurring_reminder_candidate"'));
+    expect(script, contains('tasksMatchingTarget(state, ambiguousTaskTarget)'));
+    expect(script, contains('isChildBirthdayReminderRequest(message)'));
+    expect(script, contains('applePhoneFollowup'));
+    expect(script, contains('response_type: "long_context_recall"'));
+    expect(script, contains('kind: "recurring_reminder_rule"'));
+    expect(script, contains('PASSPORT EXPIRES 2030-06-01'));
+    expect(script, contains('qa-meeting-audio'));
+    expect(script, contains('action_item_candidate'));
+    expect(script, contains('attachment_recall'));
+    expect(script, contains('email_send_confirmation'));
+    expect(script, contains('calendar_event_confirmation'));
+    expect(script, contains('response_type: "daily_brief"'));
+    expect(script, contains('external_side_effect_blocked'));
+    expect(script, contains('local_computer_operation_refused'));
+    expect(script, contains('working_set_records'));
+    expect(script, isNot(contains('local_qa_runtime_route_not_implemented')));
   });
 }
 
