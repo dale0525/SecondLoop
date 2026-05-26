@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 21
+- **Total Sessions**: 22
 - **Last Active**: 2026-05-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~724 | Active |
+| `journal-1.md` | ~759 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 22 | 2026-05-26 | Self-managed local QA fixes | `d4269d22`, `3411f69e`, `c6f105cf` | `main` |
 | 21 | 2026-05-26 | Self-managed runtime uninstall helper | `16b0c825` | `main` |
 | 20 | 2026-05-26 | Managed Pro local QA fixes | `94d284f6` | `main` |
 | 19 | 2026-05-25 | Restore desktop Connectors workbench | `9b6bb567` | `main` |

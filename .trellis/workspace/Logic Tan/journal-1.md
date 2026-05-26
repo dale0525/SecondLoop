@@ -722,3 +722,38 @@ Added the self-managed deploy/uninstall helper bridge, Cloudflare OAuth handoff,
 ### Next Steps
 
 - None - task complete
+
+
+## Session 22: Self-managed local QA fixes
+
+**Date**: 2026-05-26
+**Task**: Self-managed local QA fixes
+**Branch**: `main`
+
+### Summary
+
+Fixed self-managed runtime connection/workbench handling, completed local QA worker parity fixes, redeployed and verified manual QA with changed-files gate.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d4269d22` | (see git log) |
+| `3411f69e` | (see git log) |
+| `c6f105cf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
