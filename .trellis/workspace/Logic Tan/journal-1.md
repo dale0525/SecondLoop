@@ -689,3 +689,36 @@ Fixed Managed Pro desktop workbench rendering, stable acceptance navigation/logi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 21: Self-managed runtime uninstall helper
+
+**Date**: 2026-05-26
+**Task**: Self-managed runtime uninstall helper
+**Branch**: `main`
+
+### Summary
+
+Added the self-managed deploy/uninstall helper bridge, Cloudflare OAuth handoff, local-QA Cloudflare resource automation, UI uninstall entry, focused tests, and live OAuth deploy/uninstall verification.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `16b0c825` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
