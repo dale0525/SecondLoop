@@ -790,3 +790,36 @@ Unified the SecondLoop app visual baseline, removed legacy palette selection, pr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 24: Restore settings page migration
+
+**Date**: 2026-05-27
+**Task**: Restore settings page migration
+**Branch**: `main`
+
+### Summary
+
+Restored legacy app-level settings into the new AgentSettingsPage General tab after Stitch visual audit, added focused widget coverage, updated frontend specs, and verified with pixi.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1aea6f69` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
