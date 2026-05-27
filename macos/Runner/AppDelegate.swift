@@ -178,6 +178,17 @@ class AppDelegate: FlutterAppDelegate {
     return false
   }
 
+  override func applicationShouldHandleReopen(
+    _ sender: NSApplication,
+    hasVisibleWindows flag: Bool
+  ) -> Bool {
+    if !flag {
+      mainFlutterWindow?.makeKeyAndOrderFront(nil)
+    }
+    sender.activate(ignoringOtherApps: true)
+    return true
+  }
+
   private func handleTranscodeToM4a(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let inputPathRaw = args["input_path"] as? String,

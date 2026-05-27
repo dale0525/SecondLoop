@@ -15,4 +15,14 @@ void main() {
 
     expect(pattern.hasMatch(content), isTrue);
   });
+
+  test('macOS dock reopen restores hidden main window', () {
+    final file = File('macos/Runner/AppDelegate.swift');
+    expect(file.existsSync(), isTrue);
+
+    final content = file.readAsStringSync();
+    expect(content, contains('applicationShouldHandleReopen'));
+    expect(content, contains('mainFlutterWindow?.makeKeyAndOrderFront(nil)'));
+    expect(content, contains('sender.activate(ignoringOtherApps: true)'));
+  });
 }
