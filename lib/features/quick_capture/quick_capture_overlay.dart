@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/app_shell_style.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/quick_capture/quick_capture_controller.dart';
 import '../../core/quick_capture/quick_capture_scope.dart';
@@ -114,13 +115,8 @@ final class _QuickCaptureDialog extends StatefulWidget {
 }
 
 class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
-  static const _blue = Color(0xFF0B5CF6);
-  static const _ink = Color(0xFF101936);
-  static const _muted = Color(0xFF63708A);
-  static const _line = Color(0xFFE1E7F0);
-  static const _panel = Color(0xFFFFFFFF);
-  static const _disabledAction = Color(0xFFEAF1FF);
   static const _danger = Color(0xFFB42318);
+  static const _darkDanger = Color(0xFFFFB4AB);
 
   final _textController = TextEditingController();
   bool _busy = false;
@@ -179,6 +175,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
     final conversationText = context.t.chat.agentConversation;
     final statusText = _error?.trim();
     final hasError = statusText != null && statusText.isNotEmpty;
+    final colors = _QuickCaptureColors.of(context);
 
     return Shortcuts(
       shortcuts: {
@@ -219,13 +216,13 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                           child: DecoratedBox(
                             key: const ValueKey('quick_capture_panel'),
                             decoration: BoxDecoration(
-                              color: _panel,
+                              color: colors.panel,
                               borderRadius: BorderRadius.circular(
                                   AgentDesignTokens.radiusLg),
-                              border: Border.all(color: _line),
+                              border: Border.all(color: colors.line),
                               boxShadow: [
                                 BoxShadow(
-                                  color: _blue.withOpacity(0.08),
+                                  color: colors.shadow,
                                   blurRadius: 18,
                                   offset: const Offset(0, 8),
                                 ),
@@ -255,12 +252,11 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: const TextStyle(
-                                                  color: _ink,
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w800,
                                                   letterSpacing: 0,
                                                   height: 1.1,
-                                                ),
+                                                ).copyWith(color: colors.ink),
                                               ),
                                             ),
                                             const SizedBox(
@@ -277,8 +273,8 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                                                 overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                   color: hasError
-                                                      ? _danger
-                                                      : _muted,
+                                                      ? colors.danger
+                                                      : colors.muted,
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w700,
                                                   letterSpacing: 0,
@@ -309,12 +305,13 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                                             isDense: true,
                                             contentPadding: EdgeInsets.zero,
                                             hintStyle: TextStyle(
-                                              color: _muted.withOpacity(0.78),
+                                              color: colors.muted
+                                                  .withOpacity(0.78),
                                               fontWeight: FontWeight.w700,
                                             ),
                                           ),
-                                          style: const TextStyle(
-                                            color: _ink,
+                                          style: TextStyle(
+                                            color: colors.ink,
                                             fontWeight: FontWeight.w700,
                                           ),
                                           onChanged: (_) {
@@ -342,12 +339,13 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                                         onPressed: enabled ? _submit : null,
                                         style: IconButton.styleFrom(
                                           fixedSize: const Size(40, 40),
-                                          backgroundColor: _blue,
-                                          foregroundColor: _panel,
+                                          backgroundColor: colors.action,
+                                          foregroundColor:
+                                              colors.actionForeground,
                                           disabledBackgroundColor:
-                                              _disabledAction,
+                                              colors.disabledAction,
                                           disabledForegroundColor:
-                                              _muted.withOpacity(0.56),
+                                              colors.muted.withOpacity(0.56),
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(
                                               AgentDesignTokens.radiusMd,
@@ -360,7 +358,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                                                 child:
                                                     CircularProgressIndicator(
                                                   strokeWidth: 2,
-                                                  color: _panel,
+                                                  color: AppShellPalette.panel,
                                                 ),
                                               )
                                             : const Icon(
@@ -401,22 +399,76 @@ final class _QuickCaptureBrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _QuickCaptureColors.of(context);
     return DecoratedBox(
       key: const ValueKey('quick_capture_brand_mark'),
       decoration: BoxDecoration(
-        color: _QuickCaptureDialogState._blue,
+        color: colors.action,
         borderRadius: BorderRadius.circular(radius),
       ),
-      child: const SizedBox.square(
+      child: SizedBox.square(
         dimension: 32,
         child: Icon(
           Icons.all_inclusive_rounded,
-          color: _QuickCaptureDialogState._panel,
+          color: colors.actionForeground,
           size: 20,
         ),
       ),
     );
   }
+}
+
+@immutable
+final class _QuickCaptureColors {
+  const _QuickCaptureColors({
+    required this.panel,
+    required this.ink,
+    required this.muted,
+    required this.line,
+    required this.action,
+    required this.actionForeground,
+    required this.disabledAction,
+    required this.danger,
+    required this.shadow,
+  });
+
+  final Color panel;
+  final Color ink;
+  final Color muted;
+  final Color line;
+  final Color action;
+  final Color actionForeground;
+  final Color disabledAction;
+  final Color danger;
+  final Color shadow;
+
+  static _QuickCaptureColors of(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark ? dark : light;
+  }
+
+  static const light = _QuickCaptureColors(
+    panel: AppShellPalette.panel,
+    ink: AppShellPalette.ink,
+    muted: AppShellPalette.muted,
+    line: AppShellPalette.line,
+    action: AppShellPalette.blue,
+    actionForeground: AppShellPalette.panel,
+    disabledAction: AppShellPalette.selected,
+    danger: _QuickCaptureDialogState._danger,
+    shadow: Color(0x140B5CF6),
+  );
+
+  static const dark = _QuickCaptureColors(
+    panel: AppShellPalette.darkPanel,
+    ink: AppShellPalette.darkInk,
+    muted: AppShellPalette.darkMuted,
+    line: AppShellPalette.darkLine,
+    action: AppShellPalette.darkBlue,
+    actionForeground: AppShellPalette.darkSoft,
+    disabledAction: AppShellPalette.darkSurface,
+    danger: _QuickCaptureDialogState._darkDanger,
+    shadow: Color(0x66000000),
+  );
 }
 
 final class _QuickCaptureStatusDot extends StatelessWidget {

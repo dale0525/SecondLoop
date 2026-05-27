@@ -8,6 +8,7 @@ extension _AgentDesktopWorkbenchLayout on _AgentConversationPageState {
     required ConversationContextSnapshot contextSnapshot,
     required int openTasksCount,
   }) {
+    final colors = AgentOperatingSystemTokens.of(context);
     final state = _runtimeAgentState;
     final sidePanelApprovalItems = state == null
         ? const <SecretaryRuntimeApprovalItem>[]
@@ -45,9 +46,9 @@ extension _AgentDesktopWorkbenchLayout on _AgentConversationPageState {
             onTaskViewed: _recordTaskFocus,
           ),
         ),
-        const VerticalDivider(
+        VerticalDivider(
           width: 1,
-          color: AgentOperatingSystemTokens.outlineVariant,
+          color: colors.outlineVariant,
         ),
         Expanded(
           flex: 5,
@@ -126,6 +127,7 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     final children = <Widget>[];
     String? sourceUserMessageId;
     var renderedWebResearch = false;
@@ -224,7 +226,7 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
 
     return ColoredBox(
       key: const ValueKey('desktop_workbench_chat_column'),
-      color: AgentOperatingSystemTokens.background,
+      color: colors.background,
       child: Column(
         children: [
           if (hasMoreBefore)
@@ -325,22 +327,24 @@ final class _DesktopUserTurn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return Align(
       alignment: Alignment.centerRight,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: AgentOperatingSystemTokens.surfaceContainerHigh,
+            color: colors.surfaceContainerHigh,
             borderRadius:
                 BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
-            border:
-                Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-            boxShadow: const [
+            border: Border.all(color: colors.outlineVariant),
+            boxShadow: [
               BoxShadow(
-                color: Color(0x12000000),
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0x33000000)
+                    : const Color(0x12000000),
                 blurRadius: 3,
-                offset: Offset(0, 1),
+                offset: const Offset(0, 1),
               ),
             ],
           ),
@@ -353,7 +357,7 @@ final class _DesktopUserTurn extends StatelessWidget {
                 Text(
                   content,
                   style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                    color: AgentOperatingSystemTokens.onSurface,
+                    color: colors.onSurface,
                   ),
                 ),
                 if (attachments.isNotEmpty) ...[
@@ -414,9 +418,10 @@ final class _DesktopWorkbenchSidePanels extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return ColoredBox(
       key: const ValueKey('desktop_workbench_side_panels'),
-      color: AgentOperatingSystemTokens.background,
+      color: colors.background,
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -518,6 +523,7 @@ final class _DesktopToolTrace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     final trace = _latestToolTrace(state);
     final hasCitations = _latestAssistantHasCitations(state);
     final citationBadge = _desktopCitationBadgeLabel(
@@ -532,8 +538,8 @@ final class _DesktopToolTrace extends StatelessWidget {
           width: 6,
           height: 6,
           margin: const EdgeInsets.only(top: 8),
-          decoration: const BoxDecoration(
-            color: AgentOperatingSystemTokens.secondary,
+          decoration: BoxDecoration(
+            color: colors.secondary,
             shape: BoxShape.circle,
           ),
         ),
@@ -565,13 +571,11 @@ final class _DesktopToolTrace extends StatelessWidget {
               const SizedBox(height: 10),
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: AgentOperatingSystemTokens.surface,
+                  color: colors.surface,
                   borderRadius: BorderRadius.circular(
                     AgentOperatingSystemTokens.radiusSm,
                   ),
-                  border: Border.all(
-                    color: AgentOperatingSystemTokens.outlineVariant,
-                  ),
+                  border: Border.all(color: colors.outlineVariant),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
@@ -605,7 +609,7 @@ final class _DesktopToolTrace extends StatelessWidget {
                 Text(
                   traceFooter,
                   style: AgentOperatingSystemTokens.labelMd.copyWith(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -630,6 +634,7 @@ final class _DesktopApprovalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     final record = item.record ?? const <String, Object?>{};
     final taskTitle = _firstOperatingString([
           record['task_title'],
@@ -651,10 +656,10 @@ final class _DesktopApprovalCard extends StatelessWidget {
         item.title;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         borderRadius:
             BorderRadius.circular(AgentOperatingSystemTokens.radiusMd),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -664,23 +669,28 @@ final class _DesktopApprovalCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.title, style: AgentOperatingSystemTokens.labelLg),
+                Text(
+                  item.title,
+                  style: AgentOperatingSystemTokens.labelLg.copyWith(
+                    color: colors.onSurface,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   "Change requested for '$taskTitle'",
                   style: AgentOperatingSystemTokens.bodySm.copyWith(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(
+          Divider(
             height: 1,
-            color: AgentOperatingSystemTokens.outlineVariant,
+            color: colors.outlineVariant,
           ),
           ColoredBox(
-            color: Colors.white,
+            color: colors.surfaceContainerLow,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -749,11 +759,12 @@ final class _DesktopComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+      decoration: BoxDecoration(
+        color: colors.surface,
         border: Border(
-          top: BorderSide(color: AgentOperatingSystemTokens.outlineVariant),
+          top: BorderSide(color: colors.outlineVariant),
         ),
       ),
       child: Padding(
@@ -764,12 +775,10 @@ final class _DesktopComposer extends StatelessWidget {
             child: DecoratedBox(
               key: const ValueKey('desktop_workbench_composer_box'),
               decoration: BoxDecoration(
-                color: AgentOperatingSystemTokens.surface,
+                color: colors.surface,
                 borderRadius:
                     BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
-                border: Border.all(
-                  color: AgentOperatingSystemTokens.outlineVariant,
-                ),
+                border: Border.all(color: colors.outlineVariant),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(8),

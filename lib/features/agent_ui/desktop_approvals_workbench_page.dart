@@ -404,16 +404,15 @@ final class _ApprovalQueueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return InkWell(
       onTap: onTap,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AgentOperatingSystemTokens.surface,
+          color: colors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected
-                ? AgentOperatingSystemTokens.secondary
-                : AgentOperatingSystemTokens.outlineVariant,
+            color: selected ? colors.secondary : colors.outlineVariant,
           ),
           boxShadow: selected
               ? const [
@@ -437,8 +436,8 @@ final class _ApprovalQueueCard extends StatelessWidget {
                       approval.typeLabel,
                       style: AgentOperatingSystemTokens.labelMd.copyWith(
                         color: selected
-                            ? AgentOperatingSystemTokens.secondary
-                            : AgentOperatingSystemTokens.onSurfaceVariant,
+                            ? colors.secondary
+                            : colors.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -447,10 +446,10 @@ final class _ApprovalQueueCard extends StatelessWidget {
                     label: approval.risk,
                     background: approval.risk == 'High Risk'
                         ? const Color(0xFFFFDAD6)
-                        : AgentOperatingSystemTokens.surfaceContainerHigh,
+                        : colors.surfaceContainerHigh,
                     foreground: approval.risk == 'High Risk'
                         ? const Color(0xFF93000A)
-                        : AgentOperatingSystemTokens.onSurfaceVariant,
+                        : colors.onSurfaceVariant,
                   ),
                 ],
               ),
@@ -461,8 +460,8 @@ final class _ApprovalQueueCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: AgentOperatingSystemTokens.bodySm.copyWith(
                   color: approval.refused
-                      ? AgentOperatingSystemTokens.onSurfaceVariant
-                      : AgentOperatingSystemTokens.onSurface,
+                      ? colors.onSurfaceVariant
+                      : colors.onSurface,
                   decoration:
                       approval.refused ? TextDecoration.lineThrough : null,
                   fontWeight: FontWeight.w600,
@@ -518,6 +517,7 @@ final class _ApprovalDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final approval = this.approval;
     if (approval == null) {
       return const DesktopWorkbenchPanel(
@@ -532,15 +532,15 @@ final class _ApprovalDetail extends StatelessWidget {
     }
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ColoredBox(
-            color: AgentOperatingSystemTokens.surfaceContainerLow,
+            color: colors.surfaceContainerLow,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Wrap(
@@ -565,22 +565,20 @@ final class _ApprovalDetail extends StatelessWidget {
                   Text(
                     'Proposed Change',
                     style: AgentOperatingSystemTokens.headlineSm.copyWith(
-                      color: AgentOperatingSystemTokens.onSurface,
+                      color: colors.onSurface,
                     ),
                   ),
                   const SizedBox(height: 16),
                   DecoratedBox(
                     decoration: BoxDecoration(
-                      border: Border.all(
-                        color: AgentOperatingSystemTokens.outlineVariant,
-                      ),
+                      border: Border.all(color: colors.outlineVariant),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         ColoredBox(
-                          color: AgentOperatingSystemTokens.surfaceContainerLow,
+                          color: colors.surfaceContainerLow,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -590,8 +588,7 @@ final class _ApprovalDetail extends StatelessWidget {
                               approval.targetLabel,
                               style:
                                   AgentOperatingSystemTokens.labelMd.copyWith(
-                                color:
-                                    AgentOperatingSystemTokens.onSurfaceVariant,
+                                color: colors.onSurfaceVariant,
                               ),
                             ),
                           ),
@@ -609,7 +606,7 @@ final class _ApprovalDetail extends StatelessWidget {
                               const SizedBox(height: 8),
                               _DiffLine(
                                 icon: Icons.add_rounded,
-                                color: AgentOperatingSystemTokens.secondary,
+                                color: colors.secondary,
                                 background: const Color(0x1A0051D5),
                                 text: approval.after,
                               ),
@@ -621,10 +618,10 @@ final class _ApprovalDetail extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   DecoratedBox(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       border: Border(
                         left: BorderSide(
-                          color: AgentOperatingSystemTokens.secondary,
+                          color: colors.secondary,
                           width: 2,
                         ),
                       ),
@@ -634,7 +631,7 @@ final class _ApprovalDetail extends StatelessWidget {
                       child: Text(
                         approval.reason,
                         style: AgentOperatingSystemTokens.bodySm.copyWith(
-                          color: AgentOperatingSystemTokens.onSurfaceVariant,
+                          color: colors.onSurfaceVariant,
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -644,9 +641,9 @@ final class _ApprovalDetail extends StatelessWidget {
               ),
             ),
           ),
-          const Divider(
+          Divider(
             height: 1,
-            color: AgentOperatingSystemTokens.outlineVariant,
+            color: colors.outlineVariant,
           ),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -707,6 +704,7 @@ final class _ApprovalAuditPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final approval = this.approval;
     final notice = _systemNoticeFor(state, approval, error);
     final showConfigurationActions = notice.contains('tool_unavailable') ||
@@ -723,10 +721,9 @@ final class _ApprovalAuditPanel extends StatelessWidget {
         const SizedBox(height: 8),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: AgentOperatingSystemTokens.surface,
+            color: colors.surface,
             borderRadius: BorderRadius.circular(8),
-            border:
-                Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+            border: Border.all(color: colors.outlineVariant),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -736,30 +733,32 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                 Text(
                   'Audit Trace',
                   style: AgentOperatingSystemTokens.labelLg.copyWith(
-                    color: AgentOperatingSystemTokens.onSurface,
+                    color: colors.onSurface,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const Divider(
-                  color: AgentOperatingSystemTokens.outlineVariant,
+                Divider(
+                  color: colors.outlineVariant,
                   height: 20,
                 ),
                 Text(
                   'Source Message Excerpt'.toUpperCase(),
                   style: AgentOperatingSystemTokens.labelMd.copyWith(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   approval?.sourceExcerpt ?? 'No source excerpt reported.',
-                  style: AgentOperatingSystemTokens.bodySm,
+                  style: AgentOperatingSystemTokens.bodySm.copyWith(
+                    color: colors.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'Recent Entity Refs'.toUpperCase(),
                   style: AgentOperatingSystemTokens.labelMd.copyWith(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -785,13 +784,13 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                 Text(
                   'Tool Trace Log'.toUpperCase(),
                   style: AgentOperatingSystemTokens.labelMd.copyWith(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 6),
                 DecoratedBox(
                   decoration: BoxDecoration(
-                    color: AgentOperatingSystemTokens.onSurface,
+                    color: colors.onSurface,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Padding(
@@ -800,7 +799,7 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                       approval?.traceText ??
                           '> guardrail status... not reported',
                       style: AgentOperatingSystemTokens.code.copyWith(
-                        color: AgentOperatingSystemTokens.surfaceContainerHigh,
+                        color: colors.surfaceContainerHigh,
                       ),
                     ),
                   ),
@@ -812,10 +811,9 @@ final class _ApprovalAuditPanel extends StatelessWidget {
         const SizedBox(height: 16),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: AgentOperatingSystemTokens.surface,
+            color: colors.surface,
             borderRadius: BorderRadius.circular(8),
-            border:
-                Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+            border: Border.all(color: colors.outlineVariant),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -838,7 +836,7 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                 Text(
                   notice,
                   style: AgentOperatingSystemTokens.bodySm.copyWith(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
                 if (showConfigurationActions) ...[
@@ -894,20 +892,21 @@ final class _StatusRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Row(
           children: [
-            const Icon(
+            Icon(
               Icons.check_circle_rounded,
               size: 16,
-              color: AgentOperatingSystemTokens.secondary,
+              color: colors.secondary,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -928,18 +927,19 @@ final class _CodePair extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Text.rich(
       TextSpan(
         children: [
           TextSpan(
             text: '$label: ',
-            style: const TextStyle(color: AgentOperatingSystemTokens.outline),
+            style: TextStyle(color: colors.outline),
           ),
           TextSpan(text: value),
         ],
       ),
       style: AgentOperatingSystemTokens.code.copyWith(
-        color: AgentOperatingSystemTokens.onSurfaceVariant,
+        color: colors.onSurfaceVariant,
       ),
     );
   }

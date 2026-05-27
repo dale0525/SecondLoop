@@ -19,11 +19,12 @@ final class _OperatingTopAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AgentOperatingSystemTokens.background,
+      decoration: BoxDecoration(
+        color: colors.background,
         border: Border(
-          bottom: BorderSide(color: AgentOperatingSystemTokens.outlineVariant),
+          bottom: BorderSide(color: colors.outlineVariant),
         ),
       ),
       child: SafeArea(
@@ -102,9 +103,9 @@ final class _OperatingTopAppBar extends StatelessWidget {
                           SnackBar(content: Text(message)),
                         );
                       },
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.notifications_none_rounded,
-                        color: AgentOperatingSystemTokens.onSurfaceVariant,
+                        color: colors.onSurfaceVariant,
                       ),
                     ),
                     if (webResearchActive) ...[
@@ -134,28 +135,29 @@ final class _OperatingVaultUploadModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surfaceContainerHigh,
+        color: colors.surfaceContainerHigh,
         borderRadius:
             BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.cloud_upload_outlined,
               size: 13,
-              color: AgentOperatingSystemTokens.secondary,
+              color: colors.secondary,
             ),
-            SizedBox(width: 4),
+            const SizedBox(width: 4),
             Text(
               'Vault Upload',
               style: TextStyle(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
+                color: colors.onSurfaceVariant,
                 fontSize: 10,
                 height: 1.2,
                 fontWeight: FontWeight.w500,
@@ -208,28 +210,29 @@ final class _OperatingWebResearchModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surfaceContainerHigh,
+        color: colors.surfaceContainerHigh,
         borderRadius:
             BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.public_rounded,
               size: 13,
-              color: AgentOperatingSystemTokens.onSurfaceVariant,
+              color: colors.onSurfaceVariant,
             ),
-            SizedBox(width: 4),
+            const SizedBox(width: 4),
             Text(
               'web-research',
               style: TextStyle(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
+                color: colors.onSurfaceVariant,
                 fontSize: 10,
                 height: 1.2,
                 fontWeight: FontWeight.w500,
@@ -252,13 +255,13 @@ final class _OperatingModeChip extends StatelessWidget {
       future: _loadRuntimeModeChipConnection(),
       initialData: RuntimeConnectionStore.cachedConnection,
       builder: (context, snapshot) {
+        final colors = AgentOperatingSystemTokens.of(context);
         return DecoratedBox(
           decoration: BoxDecoration(
-            color: AgentOperatingSystemTokens.surfaceContainer,
+            color: colors.surfaceContainer,
             borderRadius:
                 BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-            border:
-                Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+            border: Border.all(color: colors.outlineVariant),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -269,8 +272,8 @@ final class _OperatingModeChip extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   _operatingRuntimeModeLabel(snapshot.data),
-                  style: const TextStyle(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
                     fontSize: 10,
                     height: 1.2,
                     fontWeight: FontWeight.w600,
@@ -305,12 +308,13 @@ final class _OperatingStatusDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
+    final colors = AgentOperatingSystemTokens.of(context);
+    return SizedBox(
       width: 8,
       height: 8,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AgentOperatingSystemTokens.secondary,
+          color: colors.secondary,
           shape: BoxShape.circle,
         ),
       ),

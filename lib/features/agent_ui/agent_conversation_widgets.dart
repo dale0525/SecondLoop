@@ -5,14 +5,15 @@ final class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final t = context.t.chat.agentConversation;
     return Row(
       children: [
         Expanded(
           child: Text(
             context.t.app.tabs.conversation,
-            style: const TextStyle(
-              color: _AgentConversationPageState._ink,
+            style: TextStyle(
+              color: colors.onSurface,
               fontSize: 28,
               fontWeight: FontWeight.w800,
               letterSpacing: 0,
@@ -23,8 +24,8 @@ final class _Header extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           t.ready,
-          style: const TextStyle(
-            color: _AgentConversationPageState._ink,
+          style: TextStyle(
+            color: colors.onSurface,
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),
@@ -220,6 +221,7 @@ final class _UserMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final t = context.t.chat.agentConversation;
     return _MessageFrame(
       author: t.you,
@@ -230,9 +232,9 @@ final class _UserMessage extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 620),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xFFEAF1FF),
+              color: colors.secondaryContainer.withOpacity(0.28),
               borderRadius: BorderRadius.circular(AgentDesignTokens.radiusMd),
-              border: Border.all(color: const Color(0xFFBFD2FF)),
+              border: Border.all(color: colors.secondary.withOpacity(0.45)),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(
@@ -246,8 +248,8 @@ final class _UserMessage extends StatelessWidget {
                   if (content.trim().isNotEmpty)
                     Text(
                       content,
-                      style: const TextStyle(
-                        color: _AgentConversationPageState._ink,
+                      style: TextStyle(
+                        color: colors.onSurface,
                         fontWeight: FontWeight.w700,
                         height: 1.45,
                       ),
@@ -274,6 +276,7 @@ final class _ThinkingMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final t = context.t.chat.agentConversation;
     final trimmedReasoning = reasoning.trim();
     final visibleReasoning = trimmedReasoning.length > 520
@@ -287,9 +290,9 @@ final class _ThinkingMessage extends StatelessWidget {
         time: t.thinking,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xFFF7F9FC),
+            color: colors.surfaceContainerLow,
             borderRadius: BorderRadius.circular(AgentDesignTokens.radiusMd),
-            border: Border.all(color: _AgentConversationPageState._line),
+            border: Border.all(color: colors.outlineVariant),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(
@@ -302,8 +305,8 @@ final class _ThinkingMessage extends StatelessWidget {
               children: [
                 Text(
                   t.thinking,
-                  style: const TextStyle(
-                    color: _AgentConversationPageState._ink,
+                  style: TextStyle(
+                    color: colors.onSurface,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -311,8 +314,8 @@ final class _ThinkingMessage extends StatelessWidget {
                 if (visibleReasoning.isEmpty)
                   Text(
                     t.thinkingBody,
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._muted,
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                     ),
                   )
@@ -322,8 +325,8 @@ final class _ThinkingMessage extends StatelessWidget {
                     key: const ValueKey('agent_thinking_reasoning_text'),
                     maxLines: 4,
                     overflow: TextOverflow.fade,
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._muted,
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                       height: 1.45,
                     ),
@@ -350,6 +353,7 @@ final class _MessageFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -363,16 +367,16 @@ final class _MessageFrame extends StatelessWidget {
                 children: [
                   Text(
                     author,
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._ink,
+                    style: TextStyle(
+                      color: colors.onSurface,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(width: AgentDesignTokens.gapMd),
                   Text(
                     time,
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._muted,
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -394,11 +398,12 @@ final class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Container(
       width: 34,
       height: 34,
-      decoration: const BoxDecoration(
-        color: _AgentConversationPageState._blue,
+      decoration: BoxDecoration(
+        color: colors.secondary,
         shape: BoxShape.circle,
       ),
       child: const Center(
@@ -709,15 +714,16 @@ final class _Composer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final t = context.t.chat.agentConversation;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: _AgentConversationPageState._panel,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _AgentConversationPageState._line),
+        border: Border.all(color: colors.outlineVariant),
         boxShadow: [
           BoxShadow(
-            color: _AgentConversationPageState._blue.withOpacity(0.08),
+            color: colors.secondary.withOpacity(0.08),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -751,8 +757,8 @@ final class _Composer extends StatelessWidget {
                       border: InputBorder.none,
                       isDense: true,
                     ),
-                    style: const TextStyle(
-                      color: _AgentConversationPageState._ink,
+                    style: TextStyle(
+                      color: colors.onSurface,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -834,18 +840,23 @@ final class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: AgentDesignTokens.gapSm),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _AgentConversationPageState._muted,
-            ),
+            style: TextStyle(color: colors.onSurfaceVariant),
           ),
         ],
       ),

@@ -374,10 +374,11 @@ final class _MemoryFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: AgentOperatingSystemTokens.outlineVariant),
+          bottom: BorderSide(color: colors.outlineVariant),
         ),
       ),
       child: Padding(
@@ -401,8 +402,8 @@ final class _MemoryFilterBar extends StatelessWidget {
                       desktopRuntimeTitleCase(filter),
                       style: AgentOperatingSystemTokens.labelMd.copyWith(
                         color: selected == filter
-                            ? AgentOperatingSystemTokens.onSurface
-                            : AgentOperatingSystemTokens.onSurfaceVariant,
+                            ? colors.onSurface
+                            : colors.onSurfaceVariant,
                         fontWeight: selected == filter
                             ? FontWeight.w800
                             : FontWeight.w600,
@@ -428,14 +429,12 @@ final class _MemoryFilterBar extends StatelessWidget {
                   ),
                   isDense: true,
                   filled: true,
-                  fillColor: AgentOperatingSystemTokens.surfaceContainerLow,
+                  fillColor: colors.surfaceContainerLow,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
-                    borderSide: const BorderSide(
-                      color: AgentOperatingSystemTokens.outlineVariant,
-                    ),
+                    borderSide: BorderSide(color: colors.outlineVariant),
                   ),
                 ),
               ),
@@ -499,14 +498,15 @@ final class _MemoryTableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
+    final colors = AgentOperatingSystemTokens.of(context);
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         border: Border(
-          bottom: BorderSide(color: AgentOperatingSystemTokens.outlineVariant),
+          bottom: BorderSide(color: colors.outlineVariant),
         ),
       ),
-      child: Padding(
+      child: const Padding(
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           children: [
@@ -533,10 +533,11 @@ final class _HeaderText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return Text(
       label.toUpperCase(),
       style: AgentOperatingSystemTokens.labelMd.copyWith(
-        color: AgentOperatingSystemTokens.onSurfaceVariant,
+        color: colors.onSurfaceVariant,
         fontWeight: FontWeight.w700,
       ),
     );
@@ -557,24 +558,21 @@ final class _MemoryRecordRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     final statusColor = desktopStatusColor(record.status);
     return InkWell(
       onTap: onTap,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0x33DAE2FD)
-              : AgentOperatingSystemTokens.surface,
+              ? colors.secondaryContainer.withOpacity(0.28)
+              : colors.surface,
           border: Border(
             left: BorderSide(
-              color: selected
-                  ? AgentOperatingSystemTokens.secondary
-                  : Colors.transparent,
+              color: selected ? colors.secondary : Colors.transparent,
               width: 2,
             ),
-            bottom: const BorderSide(
-              color: AgentOperatingSystemTokens.outlineVariant,
-            ),
+            bottom: BorderSide(color: colors.outlineVariant),
           ),
         ),
         child: Padding(
@@ -589,8 +587,8 @@ final class _MemoryRecordRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AgentOperatingSystemTokens.bodySm.copyWith(
                     color: record.status == 'archived'
-                        ? AgentOperatingSystemTokens.onSurfaceVariant
-                        : AgentOperatingSystemTokens.onSurface,
+                        ? colors.onSurfaceVariant
+                        : colors.onSurface,
                     decoration: record.status == 'archived'
                         ? TextDecoration.lineThrough
                         : null,
@@ -604,7 +602,7 @@ final class _MemoryRecordRow extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: DesktopWorkbenchBadge(
                     label: desktopRuntimeTitleCase(record.status),
-                    background: AgentOperatingSystemTokens.surfaceContainerHigh,
+                    background: colors.surfaceContainerHigh,
                     foreground: statusColor,
                   ),
                 ),
@@ -616,7 +614,7 @@ final class _MemoryRecordRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AgentOperatingSystemTokens.bodySm.copyWith(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -626,7 +624,7 @@ final class _MemoryRecordRow extends StatelessWidget {
                   record.age,
                   textAlign: TextAlign.right,
                   style: AgentOperatingSystemTokens.bodySm.copyWith(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -655,6 +653,7 @@ final class _MemoryDetailsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     final record = this.record;
     if (record == null) {
       return const DesktopWorkbenchPanel(
@@ -685,25 +684,25 @@ final class _MemoryDetailsPanel extends StatelessWidget {
           Text(
             record.id,
             style: AgentOperatingSystemTokens.bodySm.copyWith(
-              color: AgentOperatingSystemTokens.onSurfaceVariant,
+              color: colors.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 24),
           Text(
             'Extracted Instruction'.toUpperCase(),
             style: AgentOperatingSystemTokens.labelMd.copyWith(
-              color: AgentOperatingSystemTokens.onSurfaceVariant,
+              color: colors.onSurfaceVariant,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
           DecoratedBox(
             decoration: BoxDecoration(
-              color: AgentOperatingSystemTokens.surfaceContainerLow,
+              color: colors.surfaceContainerLow,
               borderRadius: BorderRadius.circular(6),
-              border: const Border(
+              border: Border(
                 left: BorderSide(
-                  color: AgentOperatingSystemTokens.secondary,
+                  color: colors.secondary,
                   width: 2,
                 ),
               ),
@@ -713,7 +712,7 @@ final class _MemoryDetailsPanel extends StatelessWidget {
               child: Text(
                 record.detail,
                 style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                  color: AgentOperatingSystemTokens.onSurface,
+                  color: colors.onSurface,
                 ),
               ),
             ),
@@ -739,7 +738,7 @@ final class _MemoryDetailsPanel extends StatelessWidget {
             ],
           ),
           const Spacer(),
-          const Divider(color: AgentOperatingSystemTokens.outlineVariant),
+          Divider(color: colors.outlineVariant),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -791,27 +790,30 @@ final class _MemoryMetaBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label.toUpperCase(),
           style: AgentOperatingSystemTokens.labelMd.copyWith(
-            color: AgentOperatingSystemTokens.onSurfaceVariant,
+            color: colors.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 6),
         Row(
           children: [
-            Icon(icon, size: 16, color: AgentOperatingSystemTokens.secondary),
+            Icon(icon, size: 16, color: colors.secondary),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 value,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AgentOperatingSystemTokens.bodySm,
+                style: AgentOperatingSystemTokens.bodySm.copyWith(
+                  color: colors.onSurface,
+                ),
               ),
             ),
           ],
@@ -840,17 +842,16 @@ final class _MemoryBottomArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: AgentOperatingSystemTokens.surface,
+              color: colors.surface,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: AgentOperatingSystemTokens.outlineVariant,
-              ),
+              border: Border.all(color: colors.outlineVariant),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -860,7 +861,7 @@ final class _MemoryBottomArea extends StatelessWidget {
                   Text(
                     'Pending Candidates (${candidates.length})',
                     style: AgentOperatingSystemTokens.labelMd.copyWith(
-                      color: AgentOperatingSystemTokens.onSurfaceVariant,
+                      color: colors.onSurfaceVariant,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -870,8 +871,7 @@ final class _MemoryBottomArea extends StatelessWidget {
                         ? Text(
                             'No memory candidates waiting for approval.',
                             style: AgentOperatingSystemTokens.bodySm.copyWith(
-                              color:
-                                  AgentOperatingSystemTokens.onSurfaceVariant,
+                              color: colors.onSurfaceVariant,
                             ),
                           )
                         : ListView.separated(
@@ -898,10 +898,9 @@ final class _MemoryBottomArea extends StatelessWidget {
         const SizedBox(height: 12),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: AgentOperatingSystemTokens.surfaceContainerLow,
+            color: colors.surfaceContainerLow,
             borderRadius: BorderRadius.circular(8),
-            border:
-                Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+            border: Border.all(color: colors.outlineVariant),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -923,14 +922,14 @@ final class _MemoryBottomArea extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AgentOperatingSystemTokens.labelMd.copyWith(
-                      color: AgentOperatingSystemTokens.onSurfaceVariant,
+                      color: colors.onSurfaceVariant,
                     ),
                   ),
                 ),
                 Text(
                   loading ? 'Syncing...' : 'Last synced: Just now',
                   style: AgentOperatingSystemTokens.labelMd.copyWith(
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                   ),
                 ),
               ],

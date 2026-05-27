@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 
 import 'package:secondloop/core/quick_capture/quick_capture_scope.dart';
@@ -245,49 +244,6 @@ void main() {
         tester.getRect(find.byKey(const ValueKey('quick_capture_panel')));
     expect(panelRect.width, lessThanOrEqualTo(560));
     expect(panelRect.height, lessThanOrEqualTo(72));
-  });
-
-  testWidgets('Quick capture panel keeps agent light surface in dark theme',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({
-      'welcome_guide_seen_v1': true,
-    });
-    final backend = _UnlockedBackend();
-    final controller = QuickCaptureController();
-    final navigatorKey = GlobalKey<NavigatorState>();
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: QuickCaptureScope(
-              controller: controller,
-              child: MaterialApp(
-                theme: AppTheme.dark(),
-                navigatorKey: navigatorKey,
-                home: QuickCaptureOverlay(
-                  navigatorKey: navigatorKey,
-                  child: const Scaffold(body: SizedBox.shrink()),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    controller.show();
-    await tester.pumpAndSettle();
-
-    final panel = tester.widget<DecoratedBox>(
-      find.byKey(const ValueKey('quick_capture_panel')),
-    );
-    final decoration = panel.decoration as BoxDecoration;
-    expect(decoration.color, const Color(0xFFFFFFFF));
   });
 
   testWidgets(

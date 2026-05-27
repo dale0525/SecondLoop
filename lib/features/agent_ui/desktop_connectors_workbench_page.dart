@@ -300,18 +300,15 @@ final class _ConnectorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return InkWell(
       onTap: onTap,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: selected
-              ? AgentOperatingSystemTokens.surfaceContainerLow
-              : AgentOperatingSystemTokens.surface,
+          color: selected ? colors.surfaceContainerLow : colors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected
-                ? AgentOperatingSystemTokens.secondary
-                : AgentOperatingSystemTokens.outlineVariant,
+            color: selected ? colors.secondary : colors.outlineVariant,
             width: selected ? 2 : 1,
           ),
         ),
@@ -324,7 +321,7 @@ final class _ConnectorCard extends StatelessWidget {
                 children: [
                   Icon(
                     connector.icon,
-                    color: connector.statusColor,
+                    color: connector.statusColor(context),
                     size: 20,
                   ),
                   const SizedBox(width: 8),
@@ -332,15 +329,15 @@ final class _ConnectorCard extends StatelessWidget {
                     child: Text(
                       connector.label,
                       style: AgentOperatingSystemTokens.labelLg.copyWith(
-                        color: AgentOperatingSystemTokens.onSurface,
+                        color: colors.onSurface,
                       ),
                     ),
                   ),
                   DesktopWorkbenchBadge(
                     label: connector.statusLabel,
-                    background: connector.statusBackground,
-                    foreground: connector.statusColor,
-                    border: connector.statusBorder,
+                    background: connector.statusBackground(context),
+                    foreground: connector.statusColor(context),
+                    border: connector.statusBorder(context),
                   ),
                 ],
               ),
@@ -380,6 +377,7 @@ final class _ConnectorDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return DesktopWorkbenchPanel(
       title: connector.detailTitle,
       trailing: ConstrainedBox(
@@ -387,7 +385,11 @@ final class _ConnectorDetail extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.circle, color: connector.statusColor, size: 10),
+            Icon(
+              Icons.circle,
+              color: connector.statusColor(context),
+              size: 10,
+            ),
             const SizedBox(width: 6),
             Flexible(
               child: Text(
@@ -395,7 +397,7 @@ final class _ConnectorDetail extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AgentOperatingSystemTokens.bodySm.copyWith(
-                  color: connector.statusColor,
+                  color: connector.statusColor(context),
                 ),
               ),
             ),
@@ -407,9 +409,9 @@ final class _ConnectorDetail extends StatelessWidget {
         children: [
           DecoratedBox(
             decoration: BoxDecoration(
-              color: connector.noticeBackground,
+              color: connector.noticeBackground(context),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: connector.statusBorder),
+              border: Border.all(color: connector.statusBorder(context)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -419,14 +421,14 @@ final class _ConnectorDetail extends StatelessWidget {
                   Text(
                     connector.authTitle,
                     style: AgentOperatingSystemTokens.labelLg.copyWith(
-                      color: AgentOperatingSystemTokens.onSurface,
+                      color: colors.onSurface,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     connector.authMessage,
                     style: AgentOperatingSystemTokens.bodySm.copyWith(
-                      color: AgentOperatingSystemTokens.onSurfaceVariant,
+                      color: colors.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -443,15 +445,14 @@ final class _ConnectorDetail extends StatelessWidget {
           Text(
             'Tool Matrix',
             style: AgentOperatingSystemTokens.labelLg.copyWith(
-              color: AgentOperatingSystemTokens.onSurface,
+              color: colors.onSurface,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 12),
           DecoratedBox(
             decoration: BoxDecoration(
-              border:
-                  Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+              border: Border.all(color: colors.outlineVariant),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -507,14 +508,15 @@ final class _ConnectorToolRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         border: last
             ? null
-            : const Border(
+            : Border(
                 bottom: BorderSide(
-                  color: AgentOperatingSystemTokens.outlineVariant,
+                  color: colors.outlineVariant,
                 ),
               ),
       ),
@@ -560,6 +562,7 @@ final class _ConnectorRuntimePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return ListView(
       children: [
         _SidePanelCard(
@@ -615,22 +618,23 @@ final class _ConnectorRuntimePanel extends StatelessWidget {
         const SizedBox(height: 16),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: AgentOperatingSystemTokens.surfaceContainerLow,
+            color: colors.surfaceContainerLow,
             borderRadius: BorderRadius.circular(8),
-            border:
-                Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+            border: Border.all(color: colors.outlineVariant),
           ),
-          child: const Padding(
-            padding: EdgeInsets.all(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.lock_outline_rounded, size: 20),
-                SizedBox(width: 12),
+                const Icon(Icons.lock_outline_rounded, size: 20),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'BYOK secrets are written only to user runtime secrets, not stored in app config.',
-                    style: AgentOperatingSystemTokens.bodySm,
+                    style: AgentOperatingSystemTokens.bodySm.copyWith(
+                      color: colors.onSurface,
+                    ),
                   ),
                 ),
               ],
@@ -653,11 +657,12 @@ final class _SidePanelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -667,7 +672,7 @@ final class _SidePanelCard extends StatelessWidget {
             Text(
               title,
               style: AgentOperatingSystemTokens.headlineSm.copyWith(
-                color: AgentOperatingSystemTokens.onSurface,
+                color: colors.onSurface,
               ),
             ),
             const SizedBox(height: 14),
@@ -690,6 +695,7 @@ final class _MetricRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -698,11 +704,16 @@ final class _MetricRow extends StatelessWidget {
             child: Text(
               label,
               style: AgentOperatingSystemTokens.labelMd.copyWith(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
+                color: colors.onSurfaceVariant,
               ),
             ),
           ),
-          Text(value, style: AgentOperatingSystemTokens.bodySm),
+          Text(
+            value,
+            style: AgentOperatingSystemTokens.bodySm.copyWith(
+              color: colors.onSurface,
+            ),
+          ),
         ],
       ),
     );
@@ -716,11 +727,12 @@ final class _ConnectorTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -730,7 +742,7 @@ final class _ConnectorTimeline extends StatelessWidget {
             Text(
               'Recent Connector Events'.toUpperCase(),
               style: AgentOperatingSystemTokens.labelMd.copyWith(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
+                color: colors.onSurfaceVariant,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -753,7 +765,7 @@ final class _ConnectorTimeline extends StatelessWidget {
                               child: Icon(
                                 Icons.circle,
                                 size: 8,
-                                color: connector.statusColor,
+                                color: connector.statusColor(context),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -764,9 +776,8 @@ final class _ConnectorTimeline extends StatelessWidget {
                                 style:
                                     AgentOperatingSystemTokens.bodySm.copyWith(
                                   color: connector.statusLabel == 'Available'
-                                      ? AgentOperatingSystemTokens.onSurface
-                                      : AgentOperatingSystemTokens
-                                          .onSurfaceVariant,
+                                      ? colors.onSurface
+                                      : colors.onSurfaceVariant,
                                 ),
                               ),
                             ),

@@ -14,12 +14,13 @@ final class DesktopWorkbenchPageShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     final content = Padding(
       padding: const EdgeInsets.all(32),
       child: child,
     );
     return ColoredBox(
-      color: AgentOperatingSystemTokens.background,
+      color: colors.background,
       child: maxWidth == null
           ? content
           : Center(
@@ -48,6 +49,7 @@ final class DesktopWorkbenchHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -61,18 +63,17 @@ final class DesktopWorkbenchHeader extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      color: AgentOperatingSystemTokens.onSurface,
                       fontSize: 28,
                       height: 34 / 28,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0,
-                    ),
+                    ).copyWith(color: colors.onSurface),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
                     style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                      color: AgentOperatingSystemTokens.onSurfaceVariant,
+                      color: colors.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -109,11 +110,12 @@ final class DesktopWorkbenchPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
@@ -121,7 +123,7 @@ final class DesktopWorkbenchPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ColoredBox(
-              color: AgentOperatingSystemTokens.surfaceContainerLow,
+              color: colors.surfaceContainerLow,
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -133,7 +135,7 @@ final class DesktopWorkbenchPanel extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AgentOperatingSystemTokens.headlineSm.copyWith(
-                          color: AgentOperatingSystemTokens.onSurface,
+                          color: colors.onSurface,
                         ),
                       ),
                     ),
@@ -150,9 +152,9 @@ final class DesktopWorkbenchPanel extends StatelessWidget {
                 ),
               ),
             ),
-            const Divider(
+            Divider(
               height: 1,
-              color: AgentOperatingSystemTokens.outlineVariant,
+              color: colors.outlineVariant,
             ),
             Expanded(
               child: Padding(
@@ -170,22 +172,23 @@ final class DesktopWorkbenchPanel extends StatelessWidget {
 final class DesktopWorkbenchBadge extends StatelessWidget {
   const DesktopWorkbenchBadge({
     required this.label,
-    this.background = AgentOperatingSystemTokens.surfaceContainerHigh,
-    this.foreground = AgentOperatingSystemTokens.onSurfaceVariant,
+    this.background,
+    this.foreground,
     this.border,
     super.key,
   });
 
   final String label;
-  final Color background;
-  final Color foreground;
+  final Color? background;
+  final Color? foreground;
   final Color? border;
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: background,
+        color: background ?? colors.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(4),
         border: border == null ? null : Border.all(color: border!),
       ),
@@ -196,7 +199,7 @@ final class DesktopWorkbenchBadge extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AgentOperatingSystemTokens.labelMd.copyWith(
-            color: foreground,
+            color: foreground ?? colors.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -219,6 +222,7 @@ final class DesktopWorkbenchEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 360),
@@ -227,21 +231,23 @@ final class DesktopWorkbenchEmptyState extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: AgentOperatingSystemTokens.onSurfaceVariant,
+              color: colors.onSurfaceVariant,
               size: 28,
             ),
             const SizedBox(height: 12),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: AgentOperatingSystemTokens.headlineSm,
+              style: AgentOperatingSystemTokens.headlineSm.copyWith(
+                color: colors.onSurface,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
               message,
               textAlign: TextAlign.center,
               style: AgentOperatingSystemTokens.bodySm.copyWith(
-                color: AgentOperatingSystemTokens.onSurfaceVariant,
+                color: colors.onSurfaceVariant,
               ),
             ),
           ],

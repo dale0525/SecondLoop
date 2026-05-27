@@ -259,6 +259,7 @@ final class _AssistantTextMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final parsed = parseAssistantMessageActions(content);
     final displayText = parsed.displayText.trim();
     final message = sourceMessage;
@@ -269,8 +270,8 @@ final class _AssistantTextMessage extends StatelessWidget {
       parseChatAnswerEvidence(message?.citationsJson),
     );
     final evidence = citationController.evidence;
-    const textStyle = TextStyle(
-      color: _AgentConversationPageState._ink,
+    final textStyle = TextStyle(
+      color: colors.onSurface,
       fontWeight: FontWeight.w600,
       height: 1.5,
     );
@@ -288,10 +289,10 @@ final class _AssistantTextMessage extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 680),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: _AgentConversationPageState._panel,
+                  color: colors.surface,
                   borderRadius:
                       BorderRadius.circular(AgentDesignTokens.radiusMd),
-                  border: Border.all(color: _AgentConversationPageState._line),
+                  border: Border.all(color: colors.outlineVariant),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(

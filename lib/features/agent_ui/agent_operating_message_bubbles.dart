@@ -13,6 +13,7 @@ final class _OperatingUserBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Align(
       alignment: Alignment.centerRight,
       child: Column(
@@ -23,12 +24,10 @@ final class _OperatingUserBubble extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 620),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: AgentOperatingSystemTokens.surface,
+                color: colors.surface,
                 borderRadius:
                     BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
-                border: Border.all(
-                  color: AgentOperatingSystemTokens.outlineVariant,
-                ),
+                border: Border.all(color: colors.outlineVariant),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x14000000),
@@ -47,7 +46,7 @@ final class _OperatingUserBubble extends StatelessWidget {
                     Text(
                       content,
                       style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                        color: AgentOperatingSystemTokens.onSurface,
+                        color: colors.onSurface,
                       ),
                     ),
                     if (attachments.isNotEmpty) ...[
@@ -84,6 +83,7 @@ final class _OperatingAssistantBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Align(
       alignment: Alignment.centerLeft,
       child: Column(
@@ -94,12 +94,10 @@ final class _OperatingAssistantBubble extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 620),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: AgentOperatingSystemTokens.surface,
+                color: colors.surface,
                 borderRadius:
                     BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
-                border: Border.all(
-                  color: AgentOperatingSystemTokens.outlineVariant,
-                ),
+                border: Border.all(color: colors.outlineVariant),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x14000000),
@@ -112,12 +110,12 @@ final class _OperatingAssistantBubble extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(
+                    SizedBox(
                       width: 3,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: AgentOperatingSystemTokens.secondary,
-                          borderRadius: BorderRadius.horizontal(
+                          color: colors.secondary,
+                          borderRadius: const BorderRadius.horizontal(
                             left: Radius.circular(
                               AgentOperatingSystemTokens.radiusLg,
                             ),
@@ -138,7 +136,7 @@ final class _OperatingAssistantBubble extends StatelessWidget {
                             Text(
                               content,
                               style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                                color: AgentOperatingSystemTokens.onSurface,
+                                color: colors.onSurface,
                               ),
                             ),
                             if (mediaResults.isNotEmpty) ...[
@@ -178,13 +176,14 @@ final class _OperatingProcessingStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Center(
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AgentOperatingSystemTokens.surfaceContainerLow,
+          color: colors.surfaceContainerLow,
           borderRadius:
               BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
-          border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+          border: Border.all(color: colors.outlineVariant),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -193,30 +192,30 @@ final class _OperatingProcessingStrip extends StatelessWidget {
             runSpacing: 4,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.settings_input_component_rounded,
                 size: 14,
-                color: AgentOperatingSystemTokens.secondary,
+                color: colors.secondary,
               ),
               for (var index = 0; index < labels.length; index++) ...[
                 Text(
                   labels[index],
                   style: AgentOperatingSystemTokens.code.copyWith(
                     color: labels[index].toLowerCase().contains('vault')
-                        ? AgentOperatingSystemTokens.secondary
-                        : AgentOperatingSystemTokens.onSurfaceVariant,
+                        ? colors.secondary
+                        : colors.onSurfaceVariant,
                     fontWeight: labels[index].toLowerCase().contains('vault')
                         ? FontWeight.w800
                         : FontWeight.w500,
                   ),
                 ),
                 if (index < labels.length - 1)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 5),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
                     child: Text(
                       '/',
                       style: TextStyle(
-                        color: AgentOperatingSystemTokens.outlineVariant,
+                        color: colors.outlineVariant,
                         fontSize: 11,
                         height: 1,
                       ),

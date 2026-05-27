@@ -26,6 +26,7 @@ final class _MessageAttachmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final previewBytes = attachment.bytes;
     final isImage = attachment.isImage && previewBytes != null;
     final isAudio = attachment.isAudio && !isImage;
@@ -81,8 +82,8 @@ final class _MessageAttachmentTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: _AgentConversationPageState._ink,
+                          style: TextStyle(
+                            color: colors.onSurface,
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             height: 1.25,
@@ -95,8 +96,8 @@ final class _MessageAttachmentTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: _AgentConversationPageState._muted,
+                            style: TextStyle(
+                              color: colors.onSurfaceVariant,
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               height: 1.2,
@@ -143,21 +144,21 @@ final class _AudioMessageAttachmentTileBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final secondary = attachment.secondaryLabel;
     return Row(
       children: [
         DecoratedBox(
           decoration: BoxDecoration(
-            color:
-                AgentOperatingSystemTokens.secondaryContainer.withOpacity(0.12),
+            color: colors.secondaryContainer.withOpacity(0.12),
             borderRadius: BorderRadius.circular(AgentDesignTokens.radiusSm),
           ),
           child: SizedBox.square(
             key: ValueKey('agent_message_attachment_audio_${attachment.id}'),
             dimension: 42,
-            child: const Icon(
+            child: Icon(
               Icons.play_circle_fill_rounded,
-              color: AgentOperatingSystemTokens.secondary,
+              color: colors.secondary,
               size: 26,
             ),
           ),
@@ -172,8 +173,8 @@ final class _AudioMessageAttachmentTileBody extends StatelessWidget {
                 attachment.filename,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _AgentConversationPageState._ink,
+                style: TextStyle(
+                  color: colors.onSurface,
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   height: 1.25,
@@ -185,8 +186,8 @@ final class _AudioMessageAttachmentTileBody extends StatelessWidget {
                   secondary,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _AgentConversationPageState._muted,
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     height: 1.2,

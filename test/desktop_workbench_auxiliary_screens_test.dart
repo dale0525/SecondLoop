@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/app/app_shell_style.dart';
 import 'package:secondloop/app/router.dart';
+import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_models.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_repository.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_client.dart';
@@ -77,6 +79,35 @@ void main() {
         .tap(find.byKey(const ValueKey('desktop_connector_test_draft')));
     await tester.pumpAndSettle();
     expect(find.textContaining('draft-only'), findsOneWidget);
+  });
+
+  testWidgets('desktop auxiliary screens follow dark app theme',
+      (tester) async {
+    final repository = _MutableRuntimeAgentStateRepository(_desktopState());
+    final sender = _ApprovalSenderProbe();
+
+    await _pumpShell(
+      tester,
+      repository: repository,
+      sender: sender,
+      themeMode: ThemeMode.dark,
+    );
+
+    await _tapSidebar(tester, 'Memory');
+    _expectDarkWorkbench(
+        tester, const ValueKey('desktop_memory_workbench_page'));
+
+    await _tapSidebar(tester, 'Approvals');
+    _expectDarkWorkbench(
+      tester,
+      const ValueKey('desktop_approvals_workbench_page'),
+    );
+
+    await _tapSidebar(tester, 'Connectors');
+    _expectDarkWorkbench(
+      tester,
+      const ValueKey('desktop_connectors_workbench_page'),
+    );
   });
 
   testWidgets('mobile bottom nav remains the five canonical entries',
@@ -182,6 +213,7 @@ Future<void> _pumpShell(
   WidgetTester tester, {
   required _MutableRuntimeAgentStateRepository repository,
   required _ApprovalSenderProbe sender,
+  ThemeMode? themeMode,
 }) async {
   await tester.binding.setSurfaceSize(const Size(2560, 2048));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -189,6 +221,9 @@ Future<void> _pumpShell(
   await tester.pumpWidget(
     wrapWithI18n(
       MaterialApp(
+        theme: themeMode == null ? null : AppTheme.light(),
+        darkTheme: themeMode == null ? null : AppTheme.dark(),
+        themeMode: themeMode,
         home: AppShell(
           conversationTabBuilder: (_, __) => const SizedBox(),
           reviewTabBuilder: (_, __) => const SizedBox(),
@@ -214,6 +249,29 @@ Future<void> _pumpShell(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+void _expectDarkWorkbench(WidgetTester tester, ValueKey<String> pageKey) {
+  final pageFinder = find.byKey(pageKey);
+  final pageContext = tester.element(pageFinder);
+  expect(Theme.of(pageContext).brightness, Brightness.dark);
+
+  final coloredBoxes = tester.widgetList<ColoredBox>(
+    find.descendant(of: pageFinder, matching: find.byType(ColoredBox)),
+  );
+  expect(
+      coloredBoxes.map((box) => box.color), contains(AppShellPalette.darkSoft));
+
+  final darkPanels = tester
+      .widgetList<DecoratedBox>(
+    find.descendant(of: pageFinder, matching: find.byType(DecoratedBox)),
+  )
+      .where((box) {
+    final decoration = box.decoration;
+    return decoration is BoxDecoration &&
+        decoration.color == AppShellPalette.darkPanel;
+  });
+  expect(darkPanels, isNotEmpty);
 }
 
 Future<void> _tapSidebar(WidgetTester tester, String label) async {

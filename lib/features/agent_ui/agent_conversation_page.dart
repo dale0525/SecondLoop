@@ -24,6 +24,7 @@ import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../app/app_shell_style.dart';
+import '../../app/theme.dart';
 import '../../i18n/strings.g.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import '../../ui/sl_surface.dart';
@@ -108,13 +109,6 @@ final class AgentConversationPage extends StatefulWidget {
 
 final class _AgentConversationPageState extends State<AgentConversationPage>
     with _AgentConversationRuntimePagination {
-  static const _blue = AppShellPalette.blue;
-  static const _ink = AppShellPalette.ink;
-  static const _muted = AppShellPalette.muted;
-  static const _line = AppShellPalette.line;
-  static const _soft = AppShellPalette.soft;
-  static const _panel = AppShellPalette.panel;
-
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   final _scrollController = ScrollController();
@@ -889,14 +883,12 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeData(
-      useMaterial3: true,
-      fontFamily: 'Inter',
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: _blue,
-        brightness: Brightness.light,
-      ),
-    );
+    final parentTheme = Theme.of(context);
+    final locale = Localizations.maybeLocaleOf(context);
+    final theme = parentTheme.brightness == Brightness.dark
+        ? AppTheme.dark(locale: locale, platform: parentTheme.platform)
+        : AppTheme.light(locale: locale, platform: parentTheme.platform);
+    final colors = AgentOperatingSystemTokens.of(context);
     final acceptanceController = AgentUiAcceptanceScope.maybeOf(context);
     final acceptanceCards = _buildAcceptanceCards(acceptanceController);
     final runtimeApprovalCards = _buildRuntimeApprovalCards(context);
@@ -914,10 +906,10 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
     return Theme(
       data: theme,
       child: Material(
-        color: _soft,
+        color: colors.background,
         child: ColoredBox(
           key: const ValueKey('agent_conversation_workspace'),
-          color: _soft,
+          color: colors.background,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final shellDesktopWorkbench =

@@ -39,8 +39,9 @@ final class _AssistantRuntimeMediaResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     final labelStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: _AgentConversationPageState._muted,
+          color: colors.onSurfaceVariant,
           fontWeight: FontWeight.w800,
         );
     return Column(
@@ -61,7 +62,7 @@ final class _AssistantRuntimeMediaResult extends StatelessWidget {
               child: Text(
                 result.isAudioResult ? 'Meeting Audio Result' : 'Media Result',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: _AgentConversationPageState._ink,
+                      color: colors.onSurface,
                       fontWeight: FontWeight.w800,
                     ),
               ),
@@ -73,7 +74,7 @@ final class _AssistantRuntimeMediaResult extends StatelessWidget {
           Text(
             result.title,
             style: AgentOperatingSystemTokens.labelLg.copyWith(
-              color: AgentOperatingSystemTokens.onSurfaceVariant,
+              color: colors.onSurfaceVariant,
             ),
           ),
         ],
@@ -147,6 +148,7 @@ final class _RuntimeMediaResultTextSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Padding(
       padding: const EdgeInsets.only(top: AgentDesignTokens.gapMd),
       child: Column(
@@ -158,12 +160,12 @@ final class _RuntimeMediaResultTextSection extends StatelessWidget {
           DecoratedBox(
             decoration: highlighted
                 ? BoxDecoration(
-                    color: AgentOperatingSystemTokens.surfaceContainerLow,
+                    color: colors.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(
                       AgentOperatingSystemTokens.radiusSm,
                     ),
                     border: Border.all(
-                      color: AgentOperatingSystemTokens.outlineVariant,
+                      color: colors.outlineVariant,
                     ),
                   )
                 : const BoxDecoration(),
@@ -174,9 +176,7 @@ final class _RuntimeMediaResultTextSection extends StatelessWidget {
               child: Text(
                 body,
                 style: TextStyle(
-                  color: highlighted
-                      ? AgentOperatingSystemTokens.secondary
-                      : _AgentConversationPageState._ink,
+                  color: highlighted ? colors.secondary : colors.onSurface,
                   fontFamily: highlighted ? 'monospace' : null,
                   fontWeight: FontWeight.w600,
                   height: 1.45,
@@ -201,6 +201,7 @@ final class _RuntimeMediaResultMetadataRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Padding(
       padding: const EdgeInsets.only(top: AgentDesignTokens.gapMd),
       child: Column(
@@ -223,8 +224,8 @@ final class _RuntimeMediaResultMetadataRows extends StatelessWidget {
                     child: Text(
                       rows[index].$2,
                       textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: _AgentConversationPageState._ink,
+                      style: TextStyle(
+                        color: colors.onSurface,
                         fontWeight: FontWeight.w700,
                         height: 1.35,
                       ),
@@ -281,6 +282,7 @@ final class _RuntimeMediaResultListSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return Padding(
       padding: const EdgeInsets.only(top: AgentDesignTokens.gapMd),
       child: Column(
@@ -296,8 +298,8 @@ final class _RuntimeMediaResultListSection extends StatelessWidget {
               ),
               child: Text(
                 compact ? item : listItem(item),
-                style: const TextStyle(
-                  color: _AgentConversationPageState._ink,
+                style: TextStyle(
+                  color: colors.onSurface,
                   fontWeight: FontWeight.w600,
                   height: 1.45,
                 ),

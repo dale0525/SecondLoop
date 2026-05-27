@@ -94,8 +94,9 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
         _hasOperatingPurchasePaymentSafetyState(_runtimeAgentState);
     final localComputerSafetyActive =
         _hasOperatingLocalComputerSafetyState(_runtimeAgentState);
+    final colors = AgentOperatingSystemTokens.of(context);
     return ColoredBox(
-      color: AgentOperatingSystemTokens.background,
+      color: colors.background,
       child: Column(
         children: [
           _OperatingTopAppBar(

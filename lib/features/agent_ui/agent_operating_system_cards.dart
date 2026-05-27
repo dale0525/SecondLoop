@@ -540,6 +540,7 @@ final class _OperatingComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     if (followUpMode) {
       return _OperatingFollowUpComposer(
         controller: controller,
@@ -556,16 +557,19 @@ final class _OperatingComposer extends StatelessWidget {
       top: false,
       minimum: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       child: DecoratedBox(
+        key: const ValueKey('operating_composer_box'),
         decoration: BoxDecoration(
-          color: AgentOperatingSystemTokens.surface,
+          color: colors.surface,
           borderRadius:
               BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
-          border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
-          boxShadow: const [
+          border: Border.all(color: colors.outlineVariant),
+          boxShadow: [
             BoxShadow(
-              color: Color(0x22000000),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0x66000000)
+                  : const Color(0x22000000),
               blurRadius: 18,
-              offset: Offset(0, 8),
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -587,6 +591,10 @@ final class _OperatingComposer extends StatelessWidget {
                     key: const ValueKey('chat_attach'),
                     tooltip: 'Attach',
                     onPressed: busy ? null : onAttach,
+                    style: IconButton.styleFrom(
+                      foregroundColor: colors.onSurfaceVariant,
+                      disabledForegroundColor: colors.muted.withOpacity(0.5),
+                    ),
                     icon: const Icon(Icons.attach_file_rounded),
                   ),
                   Expanded(
@@ -601,9 +609,12 @@ final class _OperatingComposer extends StatelessWidget {
                         hintText: placeholder ?? 'Type a message or command...',
                         border: InputBorder.none,
                         isDense: true,
+                        hintStyle: AgentOperatingSystemTokens.bodyMd.copyWith(
+                          color: colors.muted,
+                        ),
                       ),
                       style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                        color: AgentOperatingSystemTokens.onSurface,
+                        color: colors.onSurface,
                       ),
                     ),
                   ),
@@ -619,11 +630,12 @@ final class _OperatingComposer extends StatelessWidget {
                           key: const ValueKey('chat_send'),
                           style: FilledButton.styleFrom(
                             padding: EdgeInsets.zero,
-                            backgroundColor:
-                                AgentOperatingSystemTokens.primaryContainer,
-                            foregroundColor: Colors.white,
+                            backgroundColor: colors.primaryContainer,
+                            foregroundColor: colors.onSecondaryContainer,
                             disabledBackgroundColor:
-                                AgentOperatingSystemTokens.surfaceContainerHigh,
+                                colors.surfaceContainerHigh,
+                            disabledForegroundColor:
+                                colors.onSurfaceVariant.withOpacity(0.45),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(
                                 AgentOperatingSystemTokens.radiusMd,
@@ -669,11 +681,13 @@ final class _OperatingFollowUpComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentOs;
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+      key: const ValueKey('operating_follow_up_composer_box'),
+      decoration: BoxDecoration(
+        color: colors.surface,
         border: Border(
-          top: BorderSide(color: AgentOperatingSystemTokens.outlineVariant),
+          top: BorderSide(color: colors.outlineVariant),
         ),
       ),
       child: SafeArea(
@@ -695,21 +709,22 @@ final class _OperatingFollowUpComposer extends StatelessWidget {
                   key: const ValueKey('chat_attach'),
                   tooltip: 'Attach',
                   onPressed: busy ? null : onAttach,
-                  icon: const Icon(
-                    Icons.add_circle_outline_rounded,
-                    color: AgentOperatingSystemTokens.onSurfaceVariant,
+                  style: IconButton.styleFrom(
+                    foregroundColor: colors.onSurfaceVariant,
+                    disabledForegroundColor: colors.muted.withOpacity(0.5),
                   ),
+                  icon: const Icon(Icons.add_circle_outline_rounded),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: AgentOperatingSystemTokens.surfaceContainerLow,
+                      color: colors.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(
                         AgentOperatingSystemTokens.radiusLg,
                       ),
                       border: Border.all(
-                        color: AgentOperatingSystemTokens.outlineVariant,
+                        color: colors.outlineVariant,
                       ),
                     ),
                     child: Row(
@@ -730,9 +745,13 @@ final class _OperatingFollowUpComposer extends StatelessWidget {
                                 horizontal: 16,
                                 vertical: 12,
                               ),
+                              hintStyle:
+                                  AgentOperatingSystemTokens.bodyMd.copyWith(
+                                color: colors.muted,
+                              ),
                             ),
                             style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                              color: AgentOperatingSystemTokens.onSurface,
+                              color: colors.onSurface,
                             ),
                           ),
                         ),
@@ -750,12 +769,13 @@ final class _OperatingFollowUpComposer extends StatelessWidget {
                                   key: const ValueKey('chat_send'),
                                   style: FilledButton.styleFrom(
                                     padding: EdgeInsets.zero,
-                                    backgroundColor:
-                                        AgentOperatingSystemTokens.secondary,
-                                    foregroundColor: Colors.white,
+                                    backgroundColor: colors.secondary,
+                                    foregroundColor: colors.background,
                                     disabledBackgroundColor:
-                                        AgentOperatingSystemTokens
-                                            .surfaceContainerHigh,
+                                        colors.surfaceContainerHigh,
+                                    disabledForegroundColor: colors
+                                        .onSurfaceVariant
+                                        .withOpacity(0.45),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(
                                         AgentOperatingSystemTokens.radiusLg,

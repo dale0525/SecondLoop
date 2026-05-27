@@ -1,5 +1,44 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_shell_style.dart';
+
+@immutable
+final class AgentOperatingSystemPalette {
+  const AgentOperatingSystemPalette({
+    required this.background,
+    required this.surface,
+    required this.surfaceContainer,
+    required this.surfaceContainerLow,
+    required this.surfaceContainerHigh,
+    required this.surfaceContainerHighest,
+    required this.outlineVariant,
+    required this.outline,
+    required this.onSurface,
+    required this.onSurfaceVariant,
+    required this.muted,
+    required this.primaryContainer,
+    required this.secondary,
+    required this.secondaryContainer,
+    required this.onSecondaryContainer,
+  });
+
+  final Color background;
+  final Color surface;
+  final Color surfaceContainer;
+  final Color surfaceContainerLow;
+  final Color surfaceContainerHigh;
+  final Color surfaceContainerHighest;
+  final Color outlineVariant;
+  final Color outline;
+  final Color onSurface;
+  final Color onSurfaceVariant;
+  final Color muted;
+  final Color primaryContainer;
+  final Color secondary;
+  final Color secondaryContainer;
+  final Color onSecondaryContainer;
+}
+
 abstract final class AgentOperatingSystemTokens {
   static const background = Color(0xFFF7F9FB);
   static const surface = Color(0xFFFFFFFF);
@@ -16,6 +55,46 @@ abstract final class AgentOperatingSystemTokens {
   static const secondary = Color(0xFF0051D5);
   static const secondaryContainer = Color(0xFF316BF3);
   static const onSecondaryContainer = Color(0xFFFEFCFF);
+
+  static const light = AgentOperatingSystemPalette(
+    background: background,
+    surface: surface,
+    surfaceContainer: surfaceContainer,
+    surfaceContainerLow: surfaceContainerLow,
+    surfaceContainerHigh: surfaceContainerHigh,
+    surfaceContainerHighest: surfaceContainerHighest,
+    outlineVariant: outlineVariant,
+    outline: outline,
+    onSurface: onSurface,
+    onSurfaceVariant: onSurfaceVariant,
+    muted: muted,
+    primaryContainer: primaryContainer,
+    secondary: secondary,
+    secondaryContainer: secondaryContainer,
+    onSecondaryContainer: onSecondaryContainer,
+  );
+
+  static const dark = AgentOperatingSystemPalette(
+    background: AppShellPalette.darkSoft,
+    surface: AppShellPalette.darkPanel,
+    surfaceContainer: Color(0xFF1B2A40),
+    surfaceContainerLow: AppShellPalette.darkSurface,
+    surfaceContainerHigh: Color(0xFF20314A),
+    surfaceContainerHighest: Color(0xFF2A3D5A),
+    outlineVariant: AppShellPalette.darkLine,
+    outline: Color(0xFF41516A),
+    onSurface: AppShellPalette.darkInk,
+    onSurfaceVariant: AppShellPalette.darkMuted,
+    muted: Color(0xFF7F8FA8),
+    primaryContainer: AppShellPalette.darkSelected,
+    secondary: AppShellPalette.darkBlue,
+    secondaryContainer: AppShellPalette.darkSelected,
+    onSecondaryContainer: Color(0xFFD8E7FF),
+  );
+
+  static AgentOperatingSystemPalette of(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark ? dark : light;
+  }
 
   static const marginMobile = 16.0;
   static const gutter = 16.0;
@@ -65,4 +144,9 @@ abstract final class AgentOperatingSystemTokens {
     fontWeight: FontWeight.w500,
     letterSpacing: 0,
   );
+}
+
+extension AgentOperatingSystemPaletteContext on BuildContext {
+  AgentOperatingSystemPalette get agentOs =>
+      AgentOperatingSystemTokens.of(this);
 }

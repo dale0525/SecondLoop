@@ -15,20 +15,21 @@ final class _MemoryCandidateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            const Icon(
+            Icon(
               Icons.lightbulb_rounded,
               size: 18,
-              color: AgentOperatingSystemTokens.secondary,
+              color: colors.secondary,
             ),
             const SizedBox(width: 10),
             Expanded(

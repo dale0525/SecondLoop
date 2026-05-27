@@ -17,12 +17,13 @@ final class _DesktopPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentOperatingSystemTokens.surface,
+        color: colors.surface,
         borderRadius:
             BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-        border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: ClipRRect(
         borderRadius:
@@ -31,7 +32,7 @@ final class _DesktopPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ColoredBox(
-              color: AgentOperatingSystemTokens.surfaceContainerLow,
+              color: colors.surfaceContainerLow,
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -55,7 +56,7 @@ final class _DesktopPanel extends StatelessWidget {
                       Text(
                         trailing!,
                         style: AgentOperatingSystemTokens.code.copyWith(
-                          color: AgentOperatingSystemTokens.onSurfaceVariant,
+                          color: colors.onSurfaceVariant,
                           fontSize: 10,
                         ),
                       )
@@ -63,15 +64,15 @@ final class _DesktopPanel extends StatelessWidget {
                       Icon(
                         trailingIcon,
                         size: 16,
-                        color: AgentOperatingSystemTokens.onSurfaceVariant,
+                        color: colors.onSurfaceVariant,
                       ),
                   ],
                 ),
               ),
             ),
-            const Divider(
+            Divider(
               height: 1,
-              color: AgentOperatingSystemTokens.outlineVariant,
+              color: colors.outlineVariant,
             ),
             Padding(
               padding: const EdgeInsets.all(16),
@@ -97,10 +98,11 @@ final class _DesktopLabeledValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     final valueWidget = Text(
       value,
       style: AgentOperatingSystemTokens.bodySm.copyWith(
-        color: AgentOperatingSystemTokens.onSurface,
+        color: colors.onSurface,
       ),
     );
     return Column(
@@ -109,7 +111,7 @@ final class _DesktopLabeledValue extends StatelessWidget {
         Text(
           label,
           style: AgentOperatingSystemTokens.labelMd.copyWith(
-            color: AgentOperatingSystemTokens.onSurfaceVariant,
+            color: colors.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 4),
@@ -118,7 +120,7 @@ final class _DesktopLabeledValue extends StatelessWidget {
         else
           Row(
             children: [
-              Icon(icon, size: 14, color: AgentOperatingSystemTokens.secondary),
+              Icon(icon, size: 14, color: colors.secondary),
               const SizedBox(width: 8),
               Expanded(child: valueWidget),
             ],
@@ -133,11 +135,12 @@ final class _DesktopPanelDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 12),
+    final colors = AgentOperatingSystemTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Divider(
         height: 1,
-        color: AgentOperatingSystemTokens.outlineVariant,
+        color: colors.outlineVariant,
       ),
     );
   }
@@ -154,6 +157,7 @@ final class _DesktopTraceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return Row(
       children: [
         SizedBox(
@@ -161,7 +165,7 @@ final class _DesktopTraceRow extends StatelessWidget {
           child: Text(
             label,
             style: AgentOperatingSystemTokens.code.copyWith(
-              color: AgentOperatingSystemTokens.onSurfaceVariant,
+              color: colors.onSurfaceVariant,
               fontSize: 11,
             ),
           ),
@@ -255,19 +259,20 @@ final class _DesktopCountBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return SizedBox(
       width: 20,
       height: 20,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AgentOperatingSystemTokens.secondaryContainer,
+        decoration: BoxDecoration(
+          color: colors.secondaryContainer,
           shape: BoxShape.circle,
         ),
         child: Center(
           child: Text(
             '$count',
             style: AgentOperatingSystemTokens.labelMd.copyWith(
-              color: AgentOperatingSystemTokens.onSecondaryContainer,
+              color: colors.onSecondaryContainer,
             ),
           ),
         ),
@@ -283,14 +288,15 @@ final class _DesktopToolStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AgentOperatingSystemTokens.of(context);
     return Align(
       alignment: Alignment.centerLeft,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AgentOperatingSystemTokens.surfaceContainerLow,
+          color: colors.surfaceContainerLow,
           borderRadius:
               BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
-          border: Border.all(color: AgentOperatingSystemTokens.outlineVariant),
+          border: Border.all(color: colors.outlineVariant),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

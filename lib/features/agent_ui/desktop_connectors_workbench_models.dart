@@ -199,31 +199,35 @@ final class _ConnectorView {
   final String eventLabel;
   final List<_ConnectorTool> tools;
 
-  Color get statusColor {
+  Color statusColor(BuildContext context) {
+    final colors = context.agentOs;
     final normalized = statusLabel.toLowerCase();
     if (normalized.contains('need')) return const Color(0xFFBA1A1A);
     if (normalized.contains('partial') || normalized.contains('unknown')) {
-      return AgentOperatingSystemTokens.onSurfaceVariant;
+      return colors.onSurfaceVariant;
     }
-    return AgentOperatingSystemTokens.secondary;
+    return colors.secondary;
   }
 
-  Color get statusBackground {
+  Color statusBackground(BuildContext context) {
+    final colors = context.agentOs;
     final normalized = statusLabel.toLowerCase();
     if (normalized.contains('need')) return const Color(0xFFFFDAD6);
-    return AgentOperatingSystemTokens.surfaceContainer;
+    return colors.surfaceContainer;
   }
 
-  Color get statusBorder {
+  Color statusBorder(BuildContext context) {
+    final colors = context.agentOs;
     final normalized = statusLabel.toLowerCase();
     if (normalized.contains('need')) return const Color(0xFFBA1A1A);
-    return AgentOperatingSystemTokens.outlineVariant;
+    return colors.outlineVariant;
   }
 
-  Color get noticeBackground {
+  Color noticeBackground(BuildContext context) {
+    final colors = context.agentOs;
     final normalized = statusLabel.toLowerCase();
     if (normalized.contains('need')) return const Color(0x1AFFDAD6);
-    return AgentOperatingSystemTokens.surfaceContainerLow;
+    return colors.surfaceContainerLow;
   }
 }
 
