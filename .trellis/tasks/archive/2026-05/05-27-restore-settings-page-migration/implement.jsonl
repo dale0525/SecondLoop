@@ -1,0 +1,11 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec index for relevant settings UI guidance."}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Settings implementation should stay in feature-local Flutter files and app shell wiring."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Requires Settings UI primitives, stable keys, i18n, and current settings surface ownership."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Preference loading, local busy state, dialogs, and inherited scopes follow Flutter-native state patterns."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Widget test and verification expectations for settings UI changes."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "SharedPreferences-backed preference rules and tests for local settings persistence."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "UI settings failures should surface localized snackbars and check mounted after awaits."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Use pixi verification and enforce the 1000-line source-file limit."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Avoid duplicating legacy SettingsPage behavior when migrating controls."}
+{"file": ".trellis/tasks/archive/2026-05/05-27-unify-app-visual-system/prd.md", "reason": "Previous visual-system task defines the current SecondLoop settings visual baseline and constraints."}
+{"file": ".trellis/tasks/archive/2026-05/05-27-unify-app-visual-system/design.md", "reason": "Previous design notes establish the settings visual contract and palette direction."}

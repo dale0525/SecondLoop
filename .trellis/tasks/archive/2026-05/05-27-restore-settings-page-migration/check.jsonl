@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Check that the new settings surface uses existing settings primitives and preserves app-shell ownership."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check widget tests, stable keys, responsive sizes, and pixi verification."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check preference persistence behavior and SharedPreferences test setup."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Check async error recovery, mounted guards, and snackbar surfacing."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check pixi commands and the 1000-line file-size limit."}
+{"file": ".trellis/tasks/archive/2026-05/05-27-unify-app-visual-system/design.md", "reason": "Check visual consistency against the prior unified visual-system constraints."}
