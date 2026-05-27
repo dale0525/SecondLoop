@@ -1,6 +1,6 @@
 {
   "title": "Welcome to SecondLoop",
-  "subtitle": "Choose how SecondLoop runs, then review system permissions.",
+  "subtitle": "Connect the AI runtime that fits you, then enable the permissions SecondLoop needs.",
   "runtime": {
     "managedPro": {
       "title": "SecondLoop Pro",
@@ -31,7 +31,7 @@
   },
   "permissions": {
     "title": "Permissions",
-    "description": "Review system permissions shortcuts.",
+    "description": "Enable the system permissions needed for voice, reminders, and background work.",
     "statusNeedsReview": "Needs review",
     "microphone": "Microphone",
     "speech": "Speech",
@@ -44,6 +44,6 @@
   },
   "reopen": {
     "title": "Reopen welcome guide",
-    "subtitle": "Review runtime mode and permissions setup links again"
+    "subtitle": "Reopen this when you want to switch AI connection options or finish permissions."
   }
 }

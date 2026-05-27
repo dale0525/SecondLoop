@@ -102,7 +102,7 @@
   },
   "askAiSetup": {
     "title": "AI 对话需要先配置",
-    "body": "要使用「AI 对话」，请在运行时模式中选择 managed pro，或连接 self-managed runtime。",
+    "body": "要使用「AI 对话」，请在运行时模式中选择托管 Pro，或连接自托管运行时。",
     "actions": {
       "subscribe": "订阅",
       "configureByok": "打开运行时模式"
@@ -112,13 +112,13 @@
     "emailNotVerified": "邮箱未验证。验证邮箱后才能使用托管运行时。",
     "fallback": {
       "auth": "Cloud 登录已失效，请打开运行时模式重新登录。",
-      "entitlement": "需要 managed pro 订阅，请打开运行时模式继续。",
+      "entitlement": "需要托管 Pro 订阅，请打开运行时模式继续。",
       "rateLimited": "托管运行时正忙，请稍后重试。",
       "generic": "托管运行时请求失败，请稍后重试。"
     },
     "errors": {
       "auth": "Cloud 登录已失效，请在 Cloud 账号页重新登录。",
-      "entitlement": "需要 managed pro 订阅，请打开运行时模式继续。",
+      "entitlement": "需要托管 Pro 订阅，请打开运行时模式继续。",
       "rateLimited": "Cloud 触发限速，请稍后再试。",
       "generic": "Cloud 请求失败。"
     }

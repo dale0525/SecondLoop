@@ -328,7 +328,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(SelfManagedSetupPage), findsOneWidget);
 
-    await tester.pageBack();
+    await tester.tap(find.byKey(const ValueKey('self_managed_close_setup')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('welcome_guide_card_permissions')),

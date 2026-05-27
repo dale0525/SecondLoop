@@ -77,20 +77,20 @@
   },
   "runtimeMode": {
     "title": "云运行时",
-    "subtitle": "选择 self-managed 或 managed pro 运行时",
+    "subtitle": "选择托管 Pro 或自托管运行时",
     "status": {
       "notConfigured": "未配置",
-      "selfManagedReady": "已连接 self-managed 运行时",
-      "managedProReady": "已连接 managed pro 运行时"
+      "selfManagedReady": "已连接自托管运行时",
+      "managedProReady": "已连接托管 Pro 运行时"
     },
     "options": {
       "selfManaged": {
-        "title": "Self-managed",
+        "title": "自托管",
         "description": "使用你自己的 Cloudflare 账号和模型密钥部署运行时。"
       },
       "managedPro": {
-        "title": "Managed Pro",
-        "description": "无需 Cloudflare 配置或 BYOK，直接使用托管运行时。"
+        "title": "托管 Pro",
+        "description": "无需 Cloudflare 配置或自带密钥，直接使用托管运行时。"
       }
     },
     "details": {
@@ -99,7 +99,7 @@
       "manifestVersion": "Manifest 版本",
       "manifestVersionValue": "$value",
       "managedSession": "托管会话",
-      "selfManagedConnection": "自管连接"
+      "selfManagedConnection": "自托管连接"
     },
     "actions": {
       "openSetup": "打开配置",
@@ -108,13 +108,13 @@
     }
   },
   "selfManagedSetup": {
-    "title": "Self-managed 配置",
-    "subtitle": "完成 Cloudflare 授权，填写必需的 LLM 和 embedding API Key，并部署运行时。",
+    "title": "自托管配置",
+    "subtitle": "完成 Cloudflare 授权，填写必需的大语言模型与嵌入 API 密钥，并部署运行时。",
     "fields": {
-      "providerLabel": "提供商",
-      "apiKeyLabel": "API Key",
-      "embeddingApiKeyLabel": "Embedding API Key",
-      "multimodalApiKeyLabel": "多模态 LLM API Key",
+      "providerLabel": "模型服务商",
+      "apiKeyLabel": "API 密钥",
+      "embeddingApiKeyLabel": "嵌入 API 密钥",
+      "multimodalApiKeyLabel": "多模态模型 API 密钥",
       "accountLabel": "Cloudflare 账号"
     },
     "status": {
@@ -230,22 +230,22 @@
       "status": {
         "loading": "正在检查当前使用来源...",
         "cloud": "当前使用：SecondLoop Cloud",
-        "byok": "当前使用：API 密钥（BYOK）",
-        "notConfigured": "需要配置 managed pro 或多模态 LLM API Key 才能使用媒体理解。",
+        "byok": "当前使用：自带 API 密钥",
+        "notConfigured": "需要配置托管 Pro 或多模态模型 API 密钥才能使用媒体理解。",
         "local": "当前使用：本机能力（系统自带）"
       },
       "preference": {
         "auto": {
           "title": "自动",
-          "description": "自动选择：优先 Cloud，其次 API 密钥（BYOK）；两者都不可用时需要先完成配置。"
+          "description": "自动选择：优先 Cloud，其次自带 API 密钥；两者都不可用时需要先完成配置。"
         },
         "cloud": {
           "title": "SecondLoop Cloud",
           "description": "优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥。"
         },
         "byok": {
-          "title": "API 密钥（BYOK）",
-          "description": "优先使用你配置的多模态 LLM API Key。"
+          "title": "自带 API 密钥",
+          "description": "优先使用你配置的多模态模型 API 密钥。"
         },
         "local": {
           "title": "本地能力",
@@ -265,7 +265,7 @@
     "routingGuide": {
       "title": "先选择 AI 来源",
       "pro": "Pro 且已登录：默认使用 SecondLoop Cloud。",
-      "byok": "免费/BYOK：请先在「AI 对话」里添加 OpenAI-compatible 配置档，并设为当前使用。"
+      "byok": "免费/自带密钥：请先在「AI 对话」里添加 OpenAI 兼容配置档，并设为当前使用。"
     },
     "documentOcr": {
       "title": "文档 OCR",
@@ -326,7 +326,7 @@
         },
         "descriptions": {
           "platformNative": "完全在设备端完成识别，不上传内容。",
-          "multimodalLlm": "使用你配置的 OpenAI-compatible API 识别文字。"
+          "multimodalLlm": "使用你配置的 OpenAI 兼容 API 识别文字。"
         },
         "subtitles": {
           "proCloudEnabled": "Pro 订阅用户可使用 SecondLoop Cloud，云端 OCR 用量计入 Ask AI。",
@@ -347,7 +347,7 @@
         "notAvailable": "不可用",
         "labels": {
           "whisper": "Whisper",
-          "multimodalLlm": "多模态 LLM",
+          "multimodalLlm": "多模态模型",
           "auto": "自动"
         },
         "descriptions": {
@@ -360,10 +360,10 @@
       },
       "configureApi": {
         "title": "配置转写 API",
-        "subtitle": "Pro 用户可用 SecondLoop Cloud；免费用户可用「AI 对话」中的 OpenAI-compatible API Key 配置档。",
-        "body": "音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“AI 对话”里的 OpenAI-compatible API Key 配置档。",
+        "subtitle": "Pro 用户可用 SecondLoop Cloud；免费用户可用「AI 对话」中的 OpenAI 兼容 API 密钥配置档。",
+        "body": "音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“AI 对话”里的 OpenAI 兼容 API 密钥配置档。",
         "openCloud": "打开 Cloud 账号",
-        "openApiKeys": "打开 API Key"
+        "openApiKeys": "打开 API 密钥"
       },
       "whisperModel": {
         "downloaded": "已下载 $modelLabel 模型，可用于本地转写。",
@@ -381,7 +381,7 @@
         }
       },
       "apiProfile": {
-        "followActiveSubtitle": "默认跟随当前激活的 API profile，可改为已有 OpenAI-compatible API profile。"
+        "followActiveSubtitle": "默认跟随当前激活的 API 配置档，可改为已有 OpenAI 兼容 API 配置档。"
       },
       "localRuntime": {
         "title": "本地能力",
@@ -407,9 +407,9 @@
     },
     "localCapability": {
       "title": "本地能力引擎",
-      "descriptionMacos": "macOS 默认优先使用系统原生 STT；此处展示共享 runtime 状态（与 OCR 共用）。",
-      "descriptionWindows": "此处仅展示本地 OCR runtime 状态。Windows 音频转写走系统原生 STT，不依赖这里的 runtime。",
-      "descriptionDesktop": "本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。",
+      "descriptionMacos": "macOS 默认优先使用系统原生语音转文字；此处展示与 OCR 共用的共享运行时状态。",
+      "descriptionWindows": "此处仅展示本地 OCR 运行时状态。Windows 音频转写走系统原生语音转文字，不依赖这里的运行时。",
+      "descriptionDesktop": "本地转写与 OCR 共用同一套桌面运行时，可在此修复或清理。",
       "runtimeStatusTitle": "运行时状态",
       "actions": {
         "repairInstall": "修复安装",
@@ -425,7 +425,7 @@
       },
       "statusDetails": {
         "repairing": "正在修复运行时...",
-        "unavailable": "当前无法读取本地 runtime 状态。可先尝试“修复安装”。",
+        "unavailable": "当前无法读取本地运行时状态。可先尝试“修复安装”。",
         "runtimeMissing": "运行时缺失",
         "runtimeIncomplete": "运行时文件不完整，请点击“修复安装”重新安装。",
         "runtimeMissingReason": "运行时缺失（$reason）",
@@ -434,8 +434,8 @@
       },
       "confirmDelete": {
         "title": "清除本地运行时",
-        "bodyWindows": "清除后会删除本地 OCR runtime 文件。Windows 音频转写仍走系统原生 STT。",
-        "bodyDesktop": "清除后会删除本地 OCR/转写共用的桌面 runtime 文件。",
+        "bodyWindows": "清除后会删除本地 OCR 运行时文件。Windows 音频转写仍走系统原生语音转文字。",
+        "bodyDesktop": "清除后会删除本地 OCR/转写共用的桌面运行时文件。",
         "confirm": "确认清除"
       }
     },
@@ -452,8 +452,8 @@
         "cloudUnavailable": "当前构建未启用 SecondLoop Cloud。",
         "cloudRequiresPro": "SecondLoop Cloud 需要 Pro。",
         "cloudSignIn": "请先登录 SecondLoop Cloud。",
-        "byokOpenAiCompatible": "请先添加 OpenAI-compatible 的 API Key 配置档。",
-        "followAskAi": "“AI 对话”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。"
+        "byokOpenAiCompatible": "请先添加 OpenAI 兼容的 API 密钥配置档。",
+        "followAskAi": "“AI 对话”需要使用 OpenAI 兼容配置档，或在高级设置里选择其它多模态模型。"
       }
     },
     "annotateEnabled": {
@@ -478,12 +478,12 @@
       "labels": {
         "followAskAi": "跟随 AI 对话",
         "cloudGateway": "SecondLoop Cloud",
-        "byokProfile": "API Key（配置档）"
+        "byokProfile": "API 密钥配置档"
       },
       "descriptions": {
         "followAskAi": "使用与“AI 对话”相同的设置（推荐）。",
         "cloudGateway": "优先使用 SecondLoop Cloud（需要 Pro，且需可用）。",
-        "byokProfile": "使用指定的 API Key 配置档（仅支持 OpenAI-compatible）。"
+        "byokProfile": "使用指定的 API 密钥配置档（仅支持 OpenAI 兼容）。"
       }
     },
     "cloudModelName": {
@@ -493,11 +493,11 @@
       "followAskAi": "跟随 AI 对话"
     },
     "byokProfile": {
-      "title": "API Key 配置档",
+      "title": "API 密钥配置档",
       "subtitle": "选择图片注释使用哪个配置档。",
       "unset": "未设置",
       "missingBackend": "当前构建不可用。",
-      "noOpenAiCompatibleProfiles": "没有可用的 OpenAI-compatible 配置档，请先在“API Key（AI 对话）”里添加。"
+      "noOpenAiCompatibleProfiles": "没有可用的 OpenAI 兼容配置档，请先在“API 密钥（AI 对话）”里添加。"
     },
     "allowCellular": {
       "title": "允许蜂窝网络",
@@ -509,7 +509,7 @@
     },
     "urlFetch": {
       "title": "链接内容理解",
-      "description": "先在本地抓取并清洗网页文本，再按你选择的来源（Cloud/BYOK/本地）做智能提炼。"
+      "description": "先在本地抓取并清洗网页文本，再按你选择的来源（Cloud/自带密钥/本地）做智能提炼。"
     },
     "legacyEntry": {
       "title": "智能化（旧版入口）",
@@ -517,7 +517,7 @@
       "useSecondLoopCloudTitle": "使用 SecondLoop Cloud",
       "useSecondLoopCloudSubtitle": "开启后相关媒体数据会上传到 SecondLoop Cloud 处理。我们采用传输加密、严格访问控制与最小化保留策略。",
       "wifiOnlyTitle": "仅 Wi-Fi",
-      "wifiOnlySubtitle": "仅在 Wi-Fi 下执行云端/BYOK 处理，本地能力不受影响。"
+      "wifiOnlySubtitle": "仅在 Wi-Fi 下执行云端/自带密钥处理，本地能力不受影响。"
     }
   },
   "cloudAccount": {
@@ -526,7 +526,7 @@
     "signedInAs": "已登录：$email",
     "onboarding": {
       "title": "SecondLoop Pro",
-      "subscriptionRequiredBody": "需要 SecondLoop Pro 才能继续。当前账号已登录，但 Pro 订阅尚未生效。订阅后即可使用托管 runtime，不需要 Cloudflare 账号、Workers Paid plan、provider API Key 或自部署维护。"
+      "subscriptionRequiredBody": "需要 SecondLoop Pro 才能继续。当前账号已登录，但 Pro 订阅尚未生效。订阅后即可使用托管运行时，不需要 Cloudflare 账号、Workers Paid plan、模型服务商 API 密钥或自部署维护。"
     },
     "benefits": {
       "title": "创建 Cloud 账号以购买订阅",
@@ -690,7 +690,7 @@
   "diagnostics": {
     "title": "诊断信息",
     "subtitle": "导出诊断信息以便支持排查",
-    "privacyNote": "该报告不会包含你的记录正文或 API Key。",
+    "privacyNote": "该报告不会包含你的记录正文或 API 密钥。",
     "loading": "正在加载诊断信息…",
     "messages": {
       "copied": "诊断信息已复制",
@@ -699,7 +699,7 @@
     }
   },
   "byokUsage": {
-    "title": "API Key 用量",
+    "title": "API 密钥用量",
     "subtitle": "当前配置 • 请求数与 Token（如可获取）",
     "loading": "加载中…",
     "noData": "暂无数据",
@@ -831,7 +831,7 @@
     },
     "connection": {
       "runtimeMode": "运行模式",
-      "runtimeModeBody": "托管 Pro 或自托管 runtime 设置。",
+      "runtimeModeBody": "托管 Pro 或自托管运行时设置。",
       "connectionHealth": "连接健康度",
       "connectionHealthBody": "同步、鉴权和 vault 可达性。"
     },

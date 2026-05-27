@@ -74,12 +74,12 @@
   },
   "localData": {
     "button": "删除本地数据",
-    "subtitle": "删除当前设备上所有会参与同步的本地数据，包括消息、附件和 embedding。同步设置会保留；之后点击“下载”会再次用远端数据完整替换本地。",
+    "subtitle": "删除当前设备上所有会参与同步的本地数据，包括消息、附件和向量索引。同步设置会保留；之后点击“下载”会再次用远端数据完整替换本地。",
     "deleted": "已删除本地同步数据",
     "failed": "删除失败：$error",
     "dialog": {
       "title": "删除本地数据？",
-      "message": "这会删除当前设备上所有会参与同步的本地数据，包括消息、附件和 embedding。你的同步设置会保留；之后点击“下载”会再次用远端数据完整替换本地。",
+      "message": "这会删除当前设备上所有会参与同步的本地数据，包括消息、附件和向量索引。你的同步设置会保留；之后点击“下载”会再次用远端数据完整替换本地。",
       "confirm": "删除"
     },
     "secondDialog": {
@@ -135,10 +135,10 @@
       "confirm": "切换"
     },
     "aiFeatureGuideDialog": {
-      "title": "Cloud runtime 已可用",
-      "message": "你的 Pro 订阅可以使用托管 runtime。现在查看 managed pro 或 self-managed 选项，或稍后在“设置 > 连接”里处理。",
+      "title": "托管运行时已可用",
+      "message": "你的 Pro 订阅可以使用托管运行时。现在查看托管 Pro 或自托管选项，或稍后在“设置 > 连接”里处理。",
       "cancel": "稍后",
-      "confirm": "查看 runtime"
+      "confirm": "查看运行时"
     },
     "setPassphraseDialog": {
       "title": "设置恢复口令（高级）",

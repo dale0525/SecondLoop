@@ -240,12 +240,9 @@ class _WelcomeComparisonList extends StatelessWidget {
         const SizedBox(height: AgentDesignTokens.gapSm),
         for (final item in items) ...[
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Icon(icon, color: iconColor, size: 18),
-              ),
+              Icon(icon, color: iconColor, size: 18),
               const SizedBox(width: AgentDesignTokens.gapSm),
               Expanded(
                 child: Text(

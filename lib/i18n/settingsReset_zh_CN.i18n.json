@@ -1,13 +1,13 @@
 {
   "resetLocalDataThisDeviceOnly": {
     "dialogTitle": "重置本地数据？",
-    "dialogBody": "这将删除本设备上的本地消息。不会删除你的 AI 或 runtime 设置。",
+    "dialogBody": "这将删除本设备上的本地消息。不会删除你的 AI 或运行时设置。",
     "failed": "重置失败：$error",
     "cleanupFailedAfterCommit": "数据已重置，但部分本地文件清理失败：$error"
   },
   "resetLocalDataRuntimeHostedDataUnchanged": {
     "dialogTitle": "重置本地数据？",
-    "dialogBody": "这将删除本设备上的本地消息。runtime 托管的数据不会在这里清空。",
+    "dialogBody": "这将删除本设备上的本地消息。运行时托管的数据不会在这里清空。",
     "failed": "重置失败：$error",
     "cleanupFailedAfterCommit": "数据已重置，但部分本地文件清理失败：$error"
   },
@@ -17,6 +17,6 @@
   },
   "debugResetLocalDataRuntimeHostedDataUnchanged": {
     "title": "调试：重置本地数据",
-    "subtitle": "删除本地消息；runtime 托管数据不受影响"
+    "subtitle": "删除本地消息；运行时托管数据不受影响"
   }
 }
