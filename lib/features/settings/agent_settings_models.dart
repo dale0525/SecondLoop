@@ -1,4 +1,5 @@
 enum AgentSettingsTab {
+  general('general'),
   account('account'),
   connection('connection'),
   permissions('permissions'),

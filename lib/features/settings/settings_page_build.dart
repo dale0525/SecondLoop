@@ -167,8 +167,10 @@ extension _SettingsPageBuild on _SettingsPageState {
                 valueListenable: DesktopQuickCaptureHotkeyPrefs.value,
                 builder: (context, override, child) {
                   final hotKey = override ??
-                      _defaultQuickCaptureHotKey(defaultTargetPlatform);
-                  return Text(_formatHotKey(hotKey));
+                      defaultSettingsQuickCaptureHotKey(defaultTargetPlatform);
+                  return Text(
+                    formatSettingsHotKey(hotKey, defaultTargetPlatform),
+                  );
                 },
               ),
               showChevron: true,

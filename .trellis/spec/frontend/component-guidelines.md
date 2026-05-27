@@ -34,6 +34,17 @@ Reference files:
   appearance controls such as light/dark/system must use
   `SettingsThemeModeRow` or another reusable settings primitive so both
   surfaces stay consistent.
+- `AgentSettingsPage` owns production app-level preferences in its first
+  `General` tab: appearance, language, app reminder preferences, desktop boot
+  behavior, Quick Capture hotkey, About / update, welcome guide, and
+  diagnostics. Account, Connection, Permissions, Memory, and Activity tabs
+  should keep their domain-specific settings instead of absorbing these
+  app-level rows.
+- When legacy `SettingsPage` and `AgentSettingsPage` need the same behavior
+  (for example language labels/dialogs or Quick Capture hotkey validation),
+  extract feature-local helpers under `lib/features/settings/` and call them
+  from both surfaces. Do not copy dialog or validation logic between the two
+  pages.
 - Treat dark mode as a first-class token mapping, not a generated inversion of
   the light theme. Shared widgets should read `Theme.of(context).colorScheme`
   or `SlTokens.of(context)` so they pick up `AppShellPalette.dark*` values

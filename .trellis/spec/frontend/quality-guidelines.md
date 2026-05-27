@@ -14,6 +14,11 @@ manual inspection when existing test seams can verify the flow.
 - Set a fixed surface size for responsive shell or workbench tests and reset it
   in `addTearDown`.
 - Interact through stable `ValueKey` values where available.
+- When testing horizontally scrollable tab bars such as `AgentTabBar`, call
+  `tester.ensureVisible(find.text(label))` before tapping tabs that may sit
+  outside the default 800px widget-test viewport. This keeps the test aligned
+  with the real scrollable UI instead of depending on a wider artificial
+  surface.
 
 ## Runtime Stitch Screen Functional Tests
 

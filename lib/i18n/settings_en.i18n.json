@@ -829,11 +829,22 @@
   },
   "agentUi": {
     "tabs": {
+      "general": "General",
       "account": "Account",
       "connection": "Connection",
       "permissions": "Permissions",
       "memory": "Memory",
       "activity": "Activity"
+    },
+    "general": {
+      "title": "General",
+      "subtitle": "App preferences, reminders, desktop behavior, and updates.",
+      "sections": {
+        "appearance": "Appearance",
+        "reminders": "Reminders",
+        "desktop": "Desktop",
+        "support": "Support"
+      }
     },
     "account": {
       "profile": "Profile",

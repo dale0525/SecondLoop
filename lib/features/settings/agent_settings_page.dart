@@ -4,12 +4,12 @@ import '../../i18n/strings.g.dart';
 import '../agent_ui/agent_design_tokens.dart';
 import '../agent_ui/agent_tab_bar.dart';
 import 'agent_digest_settings_page.dart';
+import 'agent_general_settings_panel.dart';
 import 'agent_settings_models.dart';
 import 'cloud_account_page.dart';
 import 'cloud_runtime_mode_page.dart';
 import 'diagnostics_page.dart';
 import 'settings_ui.dart';
-import 'settings_theme_mode_row.dart';
 
 final class AgentSettingsPage extends StatefulWidget {
   const AgentSettingsPage({super.key});
@@ -19,22 +19,19 @@ final class AgentSettingsPage extends StatefulWidget {
 }
 
 final class _AgentSettingsPageState extends State<AgentSettingsPage> {
-  AgentSettingsTab _selectedTab = AgentSettingsTab.account;
+  AgentSettingsTab _selectedTab = AgentSettingsTab.general;
 
   @override
   Widget build(BuildContext context) {
     final t = context.t.settings.agentUi;
     return SettingsPageShell(
       children: [
-        SettingsSection(
-          title: context.t.settings.sections.appearance,
-          children: const [
-            SettingsThemeModeRow(),
-          ],
-        ),
-        const SizedBox(height: AgentDesignTokens.gapLg),
         AgentTabBar(
           tabs: [
+            AgentTabItem(
+              id: AgentSettingsTab.general.id,
+              label: t.tabs.general,
+            ),
             AgentTabItem(
               id: AgentSettingsTab.account.id,
               label: t.tabs.account,
@@ -73,6 +70,7 @@ final class _AgentSettingsPageState extends State<AgentSettingsPage> {
 
   Widget _buildSelectedTab() {
     return switch (_selectedTab) {
+      AgentSettingsTab.general => const AgentGeneralSettingsPanel(),
       AgentSettingsTab.account => const CloudAccountSettingsHost(),
       AgentSettingsTab.connection => CloudRuntimeModePanel(
           onOpenManagedPro: () {

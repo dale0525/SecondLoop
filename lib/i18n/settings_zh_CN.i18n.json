@@ -829,11 +829,22 @@
   },
   "agentUi": {
     "tabs": {
+      "general": "通用",
       "account": "账号",
       "connection": "连接",
       "permissions": "权限",
       "memory": "记忆",
       "activity": "活动"
+    },
+    "general": {
+      "title": "通用",
+      "subtitle": "应用偏好、提醒、桌面行为与更新。",
+      "sections": {
+        "appearance": "外观",
+        "reminders": "提醒",
+        "desktop": "桌面",
+        "support": "支持"
+      }
     },
     "account": {
       "profile": "个人资料",
