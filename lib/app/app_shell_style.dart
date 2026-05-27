@@ -15,6 +15,15 @@ abstract final class AppShellPalette {
   static const panel = Color(0xFFFFFFFF);
   static const soft = Color(0xFFF7F9FC);
   static const selected = Color(0xFFEAF1FF);
+
+  static const darkBlue = Color(0xFF6EA8FF);
+  static const darkInk = Color(0xFFEAF1FF);
+  static const darkMuted = Color(0xFF9AA8BD);
+  static const darkLine = Color(0xFF26364D);
+  static const darkPanel = Color(0xFF101A2B);
+  static const darkSurface = Color(0xFF162235);
+  static const darkSoft = Color(0xFF08111F);
+  static const darkSelected = Color(0xFF123A6E);
 }
 
 final class AppShellLayoutScope extends InheritedWidget {

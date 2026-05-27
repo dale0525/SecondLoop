@@ -35,6 +35,8 @@ void main() {
       'new-user@example.com',
     );
     await tester.enterText(find.byType(TextField).last, 'password123');
+    await tester.tap(find.byKey(const ValueKey('cloud_terms_consent')));
+    await tester.pumpAndSettle();
     final signUpButton = find.byKey(const ValueKey('cloud_sign_up')).first;
     await tester.drag(find.byType(ListView).first, const Offset(0, -220));
     await tester.pumpAndSettle();
@@ -70,6 +72,8 @@ void main() {
     await tester.enterText(
         find.byType(TextField).first, 'new-user@example.com');
     await tester.enterText(find.byType(TextField).last, 'password123');
+    await tester.tap(find.byKey(const ValueKey('cloud_terms_consent')));
+    await tester.pumpAndSettle();
     final signUpButton = find.byKey(const ValueKey('cloud_sign_up')).first;
     await tester.drag(find.byType(ListView).first, const Offset(0, -220));
     await tester.pumpAndSettle();
@@ -142,6 +146,8 @@ void main() {
       'forgot@example.com',
     );
 
+    await tester.tap(find.byKey(const ValueKey('cloud_terms_consent')));
+    await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView).first, const Offset(0, -220));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('cloud_forgot_password')));
@@ -149,6 +155,68 @@ void main() {
 
     expect(cloudAuth.sendPasswordResetCalls, 1);
     expect(cloudAuth.lastPasswordResetEmail, 'forgot@example.com');
+  });
+
+  testWidgets('sign-in and sign-up require legal agreement before use',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: CloudAuthScope(
+            controller: _MutableCloudAuthController(),
+            child: const CloudAccountPage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('cloud_sign_in')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const ValueKey('cloud_sign_up')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<TextButton>(
+              find.byKey(const ValueKey('cloud_forgot_password')))
+          .onPressed,
+      isNotNull,
+    );
+    expect(find.textContaining('Privacy Policy', findRichText: true),
+        findsOneWidget);
+    expect(find.textContaining('Terms of Service', findRichText: true),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('cloud_terms_consent')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('cloud_sign_in')))
+          .onPressed,
+      isNotNull,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const ValueKey('cloud_sign_up')))
+          .onPressed,
+      isNotNull,
+    );
+    expect(
+      tester
+          .widget<TextButton>(
+              find.byKey(const ValueKey('cloud_forgot_password')))
+          .onPressed,
+      isNotNull,
+    );
   });
 }
 

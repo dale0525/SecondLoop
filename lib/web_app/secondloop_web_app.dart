@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app/theme_mode_prefs.dart';
 import '../app/theme_palette_prefs.dart';
@@ -58,14 +57,6 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
     }
     await AppThemeModePrefs.ensureInitialized();
     await AppThemePalettePrefs.ensureInitialized();
-
-    final prefs = await SharedPreferences.getInstance();
-    if (!prefs.containsKey(AppThemeModePrefs.prefsKey)) {
-      AppThemeModePrefs.value.value = ThemeMode.light;
-    }
-    if (!prefs.containsKey(AppThemePalettePrefs.prefsKey)) {
-      AppThemePalettePrefs.value.value = AppThemePalette.monochrome;
-    }
   }
 
   Future<WebAppBootstrapData> _bootstrap() async {
@@ -132,19 +123,26 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
       child: Builder(
         builder: (context) {
           final locale = TranslationProvider.of(context).flutterLocale;
-          return MaterialApp(
-            locale: locale,
-            supportedLocales: AppLocaleUtils.supportedLocales,
-            localizationsDelegates: GlobalMaterialLocalizations.delegates,
-            title: context.t.app.web.title,
-            theme: buildSecondLoopWebTheme(locale: locale),
-            themeMode: ThemeMode.light,
-            builder: (context, child) {
-              return SecondLoopWebAppFrame(
-                child: child ?? const SizedBox.shrink(),
+          return ValueListenableBuilder<ThemeMode>(
+            valueListenable: AppThemeModePrefs.value,
+            builder: (context, themeMode, child) {
+              return MaterialApp(
+                locale: locale,
+                supportedLocales: AppLocaleUtils.supportedLocales,
+                localizationsDelegates: GlobalMaterialLocalizations.delegates,
+                title: context.t.app.web.title,
+                theme: buildSecondLoopWebTheme(locale: locale),
+                darkTheme: buildSecondLoopWebDarkTheme(locale: locale),
+                themeMode: themeMode,
+                builder: (context, child) {
+                  return SecondLoopWebAppFrame(
+                    child: child ?? const SizedBox.shrink(),
+                  );
+                },
+                home: child,
               );
             },
-            home: FutureBuilder<WebAppBootstrapData>(
+            child: FutureBuilder<WebAppBootstrapData>(
               future: _bootstrapFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {

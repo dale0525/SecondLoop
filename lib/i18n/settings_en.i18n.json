@@ -528,6 +528,15 @@
       "title": "SecondLoop Pro",
       "subscriptionRequiredBody": "SecondLoop Pro is required to continue. This account is signed in, but Pro is not active yet. Subscribe to use the hosted runtime. No Cloudflare account, Workers Paid plan, provider keys, or deployment work is needed."
     },
+    "auth": {
+      "title": "Sign in to workspace",
+      "subtitle": "Use your cloud account to unlock the hosted runtime and synced vault.",
+      "contextTitle": "Managed Pro benefits",
+      "badges": {
+        "managedPro": "Managed Pro",
+        "hostedRuntime": "Hosted runtime"
+      }
+    },
     "benefits": {
       "title": "Create a cloud account to subscribe",
       "items": {
@@ -554,6 +563,13 @@
       "sent": "Password reset email sent. Please check your inbox.",
       "missingEmail": "Please enter your email first.",
       "notSupported": "Password recovery is not supported in this environment."
+    },
+    "legalAgreement": {
+      "lead": "I have read and agree to",
+      "privacyPolicy": "Privacy Policy",
+      "termsOfService": "Terms of Service",
+      "join": "and",
+      "openFailed": "Could not open the agreement page."
     },
     "emailVerification": {
       "title": "Email verification",

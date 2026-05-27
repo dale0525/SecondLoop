@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/app/app_shell_style.dart';
 import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/cloud/runtime_connection_store.dart';
 import 'package:secondloop/core/cloud/runtime_manifest.dart';
 import 'package:secondloop/core/cloud/runtime_profile.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
+import 'package:secondloop/features/settings/cloud_runtime_mode_page.dart';
 import 'package:secondloop/ui/sl_tokens.dart';
 
 import 'test_i18n.dart';
@@ -171,8 +173,7 @@ void main() {
     expect(find.text('Managed Pro'), findsNothing);
   });
 
-  testWidgets('AppShell keeps agent workspace on the light agent palette',
-      (tester) async {
+  testWidgets('AppShell follows the active dark app theme', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -207,11 +208,39 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('light'), findsOneWidget);
+    expect(find.text('dark'), findsOneWidget);
     final probe = tester.widget<ColoredBox>(find.byKey(const ValueKey(
       'agent_shell_palette_probe',
     )));
-    expect(probe.color, const Color(0xFFFFFFFF));
+    expect(probe.color, AppShellPalette.darkPanel);
+  });
+
+  testWidgets('runtime mode tab inherits AppShell dark theme', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.dark,
+          home: AppShell(
+            initialTab: AppTab.settings,
+            conversationTabBuilder: (_, __) => const SizedBox.shrink(),
+            notesTabBuilder: (_, __) => const SizedBox.shrink(),
+            memoryTabBuilder: (_, __) => const SizedBox.shrink(),
+            reviewTabBuilder: (_, __) => const SizedBox.shrink(),
+            settingsTabBuilder: (_, __) => const CloudRuntimeModePage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final runtimeContext =
+        tester.element(find.byKey(const ValueKey('runtime_mode_page_root')));
+    expect(Theme.of(runtimeContext).brightness, Brightness.dark);
   });
 }
 

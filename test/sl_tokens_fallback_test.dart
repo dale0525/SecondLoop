@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/app/app_shell_style.dart';
 import 'package:secondloop/ui/sl_tokens.dart';
 
 void main() {
-  testWidgets('SlTokens fallback uses the light agent palette', (tester) async {
+  testWidgets('SlTokens fallback uses the light SecondLoop palette',
+      (tester) async {
     late SlTokens tokens;
 
     await tester.pumpWidget(
@@ -18,9 +20,10 @@ void main() {
       ),
     );
 
-    expect(tokens.background, const Color(0xFFF7F9FC));
-    expect(tokens.surface, Colors.white);
-    expect(tokens.surface2, const Color(0xFFF1F5F9));
-    expect(tokens.borderSubtle, const Color(0xFFE1E7F0));
+    expect(tokens.background, AppShellPalette.soft);
+    expect(tokens.surface, AppShellPalette.panel);
+    expect(tokens.surface2, AppShellPalette.soft);
+    expect(tokens.borderSubtle, AppShellPalette.line);
+    expect(tokens.ring, AppShellPalette.blue);
   });
 }

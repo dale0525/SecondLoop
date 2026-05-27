@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'app_shell_style.dart';
 import 'theme_palette_prefs.dart';
 import 'theme_specs.dart';
 import '../ui/sl_tokens.dart';
@@ -9,18 +10,18 @@ class AppTheme {
   @visibleForTesting
   static bool disableInkSparkleForTests = false;
 
-  static const _primary = Color(0xFF6366F1); // Indigo
-  static const _accent = Color(0xFFA78BFA); // Violet
+  static const _primary = AppShellPalette.blue;
+  static const _accent = Color(0xFF315B86);
 
-  static const _lightBackground = Color(0xFFF6F7FB); // Paper
-  static const _lightSurface = Color(0xFFFFFFFF);
-  static const _lightSurface2 = Color(0xFFF1F3F9);
-  static const _lightBorder = Color(0xFFE6E8F0);
+  static const _lightBackground = AppShellPalette.soft;
+  static const _lightSurface = AppShellPalette.panel;
+  static const _lightSurface2 = AppShellPalette.soft;
+  static const _lightBorder = AppShellPalette.line;
 
-  static const _darkBackground = Color(0xFF0B0B0F);
-  static const _darkSurface = Color(0xFF12121A);
-  static const _darkSurface2 = Color(0xFF171724);
-  static const _darkBorder = Color(0xFF24243A);
+  static const _darkBackground = AppShellPalette.darkSoft;
+  static const _darkSurface = AppShellPalette.darkPanel;
+  static const _darkSurface2 = AppShellPalette.darkSurface;
+  static const _darkBorder = AppShellPalette.darkLine;
 
   static dynamic _cardThemeForThemeData({
     required Color surface,
@@ -116,12 +117,13 @@ class AppTheme {
     final fontFamily = _primaryFontFamily(effectivePlatform);
     final fontFamilyFallback =
         _fontFamilyFallbackFor(locale, effectivePlatform);
-    final spec = _specForPalette(palette);
+    final effectivePalette = _effectivePalette(palette);
+    final spec = _specForPalette(effectivePalette);
     final radii = spec.corners;
 
     final scheme = isDark
-        ? _darkScheme(palette: palette, spec: spec)
-        : _lightScheme(palette: palette, spec: spec);
+        ? _darkScheme(palette: effectivePalette, spec: spec)
+        : _lightScheme(palette: effectivePalette, spec: spec);
     final tokens = _tokens(
       brightness: brightness,
       scheme: scheme,
@@ -296,47 +298,47 @@ class AppTheme {
 
   static const ColorScheme _studioDarkScheme = ColorScheme(
     brightness: Brightness.dark,
-    primary: _primary,
-    onPrimary: Colors.white,
-    primaryContainer: Color(0xFF1B1B2E),
-    onPrimaryContainer: Color(0xFFE7E7F0),
-    secondary: _accent,
-    onSecondary: _darkBackground,
-    secondaryContainer: Color(0xFF25213A),
-    onSecondaryContainer: Color(0xFFEDE9FE),
-    tertiary: Color(0xFF22D3EE),
-    onTertiary: Color(0xFF001216),
-    tertiaryContainer: Color(0xFF0B2A33),
-    onTertiaryContainer: Color(0xFFCFFAFE),
+    primary: AppShellPalette.darkBlue,
+    onPrimary: Color(0xFF061A33),
+    primaryContainer: AppShellPalette.darkSelected,
+    onPrimaryContainer: Color(0xFFD8E7FF),
+    secondary: Color(0xFF9DB2D0),
+    onSecondary: Color(0xFF0B1627),
+    secondaryContainer: Color(0xFF1B2A40),
+    onSecondaryContainer: Color(0xFFD7E2F2),
+    tertiary: Color(0xFF6ED8B5),
+    onTertiary: Color(0xFF002117),
+    tertiaryContainer: Color(0xFF10382C),
+    onTertiaryContainer: Color(0xFFC8F7E6),
     error: Color(0xFFF87171),
     onError: Color(0xFF2B0000),
     errorContainer: Color(0xFF3A0B0B),
     onErrorContainer: Color(0xFFFEE2E2),
     background: _darkBackground,
-    onBackground: Color(0xFFE7E7F0),
+    onBackground: AppShellPalette.darkInk,
     surface: _darkSurface,
-    onSurface: Color(0xFFE7E7F0),
+    onSurface: AppShellPalette.darkInk,
     surfaceVariant: _darkSurface2,
-    onSurfaceVariant: Color(0xFFB9B9CE),
-    outline: Color(0xFF2F2F4A),
+    onSurfaceVariant: AppShellPalette.darkMuted,
+    outline: Color(0xFF41516A),
     outlineVariant: _darkBorder,
     shadow: Colors.black,
     scrim: Colors.black,
-    inverseSurface: Color(0xFFE7E7F0),
-    onInverseSurface: Color(0xFF101018),
-    inversePrimary: Color(0xFF4F46E5),
+    inverseSurface: AppShellPalette.darkInk,
+    onInverseSurface: AppShellPalette.ink,
+    inversePrimary: AppShellPalette.blue,
   );
 
   static const ColorScheme _studioLightScheme = ColorScheme(
     brightness: Brightness.light,
     primary: _primary,
     onPrimary: Colors.white,
-    primaryContainer: Color(0xFFE0E7FF),
-    onPrimaryContainer: Color(0xFF1E1B4B),
-    secondary: Color(0xFF7C3AED),
+    primaryContainer: AppShellPalette.selected,
+    onPrimaryContainer: AppShellPalette.ink,
+    secondary: _accent,
     onSecondary: Colors.white,
-    secondaryContainer: Color(0xFFF3E8FF),
-    onSecondaryContainer: Color(0xFF3B0764),
+    secondaryContainer: Color(0xFFE8EEF7),
+    onSecondaryContainer: Color(0xFF13233A),
     tertiary: Color(0xFF0891B2),
     onTertiary: Colors.white,
     tertiaryContainer: Color(0xFFCFFAFE),
@@ -346,19 +348,23 @@ class AppTheme {
     errorContainer: Color(0xFFFEE2E2),
     onErrorContainer: Color(0xFF450A0A),
     background: _lightBackground,
-    onBackground: Color(0xFF0F172A),
+    onBackground: AppShellPalette.ink,
     surface: _lightSurface,
-    onSurface: Color(0xFF0F172A),
+    onSurface: AppShellPalette.ink,
     surfaceVariant: _lightSurface2,
-    onSurfaceVariant: Color(0xFF475569),
-    outline: Color(0xFFD0D4E0),
+    onSurfaceVariant: AppShellPalette.muted,
+    outline: Color(0xFFCAD4E3),
     outlineVariant: _lightBorder,
     shadow: Colors.black,
     scrim: Colors.black,
-    inverseSurface: Color(0xFF0F172A),
+    inverseSurface: AppShellPalette.ink,
     onInverseSurface: Color(0xFFF8FAFC),
-    inversePrimary: Color(0xFF4F46E5),
+    inversePrimary: AppShellPalette.darkBlue,
   );
+
+  static AppThemePalette _effectivePalette(AppThemePalette _) {
+    return AppThemePalette.studio;
+  }
 
   static AppThemeStyleSpec _specForPalette(AppThemePalette palette) {
     return kAppThemeStyleSpecs[palette] ??
@@ -522,7 +528,7 @@ class AppTheme {
       surface2: surface2,
       border: border,
       borderSubtle: borderSubtle,
-      ring: spec.ring,
+      ring: scheme.primary,
       sidebarBackground: sidebarBackground,
       sidebarBorder: sidebarBorder,
       sidebarItemHover: sidebarItemHover,

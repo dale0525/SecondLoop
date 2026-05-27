@@ -7,12 +7,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_shell_style.dart';
 import '../../app/theme.dart';
-import '../../app/theme_palette_prefs.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../features/settings/cloud_account_page.dart';
 import '../../features/settings/self_managed_setup_page.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
+import '../../ui/sl_tokens.dart';
 import '../agent_ui/agent_design_tokens.dart';
 import 'welcome_status.dart';
 
@@ -475,23 +475,26 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: _welcomeLightTheme(context),
+      data: _welcomeTheme(context),
       child: Builder(
         builder: _buildContent,
       ),
     );
   }
 
-  ThemeData _welcomeLightTheme(BuildContext context) {
-    return AppTheme.light(
-      locale: Localizations.localeOf(context),
-      platform: Theme.of(context).platform,
-      palette: AppThemePalettePrefs.value.value,
-    );
+  ThemeData _welcomeTheme(BuildContext context) {
+    final theme = Theme.of(context);
+    final locale = Localizations.localeOf(context);
+    final platform = theme.platform;
+    if (theme.brightness == Brightness.dark) {
+      return AppTheme.dark(locale: locale, platform: platform);
+    }
+    return AppTheme.light(locale: locale, platform: platform);
   }
 
   Widget _buildContent(BuildContext context) {
     final t = context.t.welcomeGuide;
+    final colors = _WelcomeShellColors.of(context);
     final managedProReady =
         _status.runtimeMode == WelcomeGuideRuntimeMode.managedPro;
     final selfManagedReady =
@@ -583,7 +586,7 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
 
     return Scaffold(
       key: const ValueKey('welcome_guide_page'),
-      backgroundColor: AppShellPalette.soft,
+      backgroundColor: colors.background,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final pane = _WelcomeContentPane(
@@ -600,7 +603,7 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
                 t.title,
                 key: const ValueKey('welcome_guide_header_title'),
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: AppShellPalette.ink,
+                      color: colors.text,
                       fontWeight: FontWeight.w800,
                     ),
               ),
@@ -609,7 +612,7 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
                 t.subtitle,
                 key: const ValueKey('welcome_guide_header_subtitle'),
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppShellPalette.muted,
+                      color: colors.muted,
                     ),
               ),
               const SizedBox(height: AgentDesignTokens.gapXl),
@@ -621,8 +624,8 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
             padding: const EdgeInsets.all(AppShellStyle.desktopShellMargin),
             child: SlSurface(
               key: const ValueKey('welcome_guide_workspace'),
-              color: AppShellPalette.panel,
-              borderColor: AppShellPalette.line,
+              color: colors.surface,
+              borderColor: colors.border,
               borderRadius: BorderRadius.circular(
                 AppShellStyle.desktopShellRadius,
               ),

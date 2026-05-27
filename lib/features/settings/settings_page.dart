@@ -6,8 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../app/theme_palette_prefs.dart';
-import '../../app/theme_mode_prefs.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
@@ -34,10 +32,10 @@ import 'diagnostics_page.dart';
 import 'about_page.dart';
 import '../welcome/welcome_page.dart';
 import 'settings_ui.dart';
+import 'settings_theme_mode_row.dart';
 
 part 'settings_page_build.dart';
 part 'settings_page_reset_actions.dart';
-part 'settings_page_theme.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});

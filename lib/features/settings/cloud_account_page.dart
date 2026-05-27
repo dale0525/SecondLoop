@@ -11,6 +11,7 @@ import '../../i18n/strings.g.dart';
 import '../../web_app/web_formal_settings_scope.dart';
 import 'cloud_account_entry_mode.dart';
 import 'cloud_account_panel.dart';
+import 'cloud_account_visual_theme.dart';
 import 'settings_ui.dart';
 
 export 'cloud_account_entry_mode.dart';
@@ -42,21 +43,23 @@ class CloudAccountPage extends StatelessWidget {
     final title = entryMode == CloudAccountEntryMode.onboarding
         ? context.t.settings.cloudAccount.onboarding.title
         : context.t.settings.cloudAccount.title;
-    return SettingsPageShell(
-      key: const ValueKey('cloud_account_page_root'),
-      title: title,
-      children: [
-        CloudAccountSettingsHost(
-          billingClient: billingClient,
-          cloudUsageClient: cloudUsageClient,
-          vaultUsageClient: vaultUsageClient,
-          vaultAttachmentsClient: vaultAttachmentsClient,
-          vaultConfigStore: vaultConfigStore,
-          isWebOverride: isWebOverride,
-          entryMode: entryMode,
-          onEntitled: onEntitled,
-        ),
-      ],
+    return CloudAccountVisualTheme(
+      child: SettingsPageShell(
+        key: const ValueKey('cloud_account_page_root'),
+        title: title,
+        children: [
+          CloudAccountSettingsHost(
+            billingClient: billingClient,
+            cloudUsageClient: cloudUsageClient,
+            vaultUsageClient: vaultUsageClient,
+            vaultAttachmentsClient: vaultAttachmentsClient,
+            vaultConfigStore: vaultConfigStore,
+            isWebOverride: isWebOverride,
+            entryMode: entryMode,
+            onEntitled: onEntitled,
+          ),
+        ],
+      ),
     );
   }
 }

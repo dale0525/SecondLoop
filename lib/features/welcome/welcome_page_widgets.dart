@@ -1,5 +1,48 @@
 part of 'welcome_page.dart';
 
+final class _WelcomeShellColors {
+  const _WelcomeShellColors({
+    required this.background,
+    required this.surface,
+    required this.surface2,
+    required this.border,
+    required this.borderSubtle,
+    required this.text,
+    required this.muted,
+    required this.accent,
+    required this.onAccent,
+    required this.selected,
+  });
+
+  final Color background;
+  final Color surface;
+  final Color surface2;
+  final Color border;
+  final Color borderSubtle;
+  final Color text;
+  final Color muted;
+  final Color accent;
+  final Color onAccent;
+  final Color selected;
+
+  static _WelcomeShellColors of(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return _WelcomeShellColors(
+      background: tokens.background,
+      surface: tokens.surface,
+      surface2: tokens.surface2,
+      border: tokens.border,
+      borderSubtle: tokens.borderSubtle,
+      text: scheme.onSurface,
+      muted: scheme.onSurfaceVariant,
+      accent: scheme.primary,
+      onAccent: scheme.onPrimary,
+      selected: scheme.primaryContainer,
+    );
+  }
+}
+
 class _WelcomeContentPane extends StatelessWidget {
   const _WelcomeContentPane({
     required this.children,
@@ -11,8 +54,9 @@ class _WelcomeContentPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _WelcomeShellColors.of(context);
     return ColoredBox(
-      color: AppShellPalette.panel,
+      color: colors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -112,14 +156,13 @@ class _WelcomeGuideCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        ready ? AppShellPalette.blue.withOpacity(0.28) : AppShellPalette.line;
-    final iconBackground =
-        ready ? AppShellPalette.selected : AppShellPalette.soft;
+    final colors = _WelcomeShellColors.of(context);
+    final borderColor = ready ? colors.accent.withOpacity(0.28) : colors.border;
+    final iconBackground = ready ? colors.selected : colors.surface2;
 
     return SlSurface(
       key: cardKey,
-      color: AppShellPalette.panel,
+      color: colors.surface,
       borderColor: borderColor,
       borderRadius: BorderRadius.circular(AgentDesignTokens.radiusMd),
       child: Padding(
@@ -137,11 +180,11 @@ class _WelcomeGuideCard extends StatelessWidget {
                     color: iconBackground,
                     borderRadius:
                         BorderRadius.circular(AgentDesignTokens.radiusSm),
-                    border: Border.all(color: AppShellPalette.line),
+                    border: Border.all(color: colors.border),
                   ),
                   child: Icon(
                     icon,
-                    color: AppShellPalette.blue,
+                    color: colors.accent,
                     size: 24,
                   ),
                 ),
@@ -160,7 +203,7 @@ class _WelcomeGuideCard extends StatelessWidget {
                                   .textTheme
                                   .titleMedium
                                   ?.copyWith(
-                                    color: AppShellPalette.ink,
+                                    color: colors.text,
                                     fontWeight: FontWeight.w800,
                                   ),
                             ),
@@ -177,7 +220,7 @@ class _WelcomeGuideCard extends StatelessWidget {
                       Text(
                         description,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppShellPalette.muted,
+                              color: colors.muted,
                             ),
                       ),
                     ],
@@ -221,10 +264,11 @@ class _WelcomeComparisonList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _WelcomeShellColors.of(context);
     final icon = positive
         ? Icons.check_circle_rounded
         : Icons.radio_button_unchecked_rounded;
-    final iconColor = positive ? AppShellPalette.blue : AppShellPalette.muted;
+    final iconColor = positive ? colors.accent : colors.muted;
 
     return Column(
       key: listKey,
@@ -233,7 +277,7 @@ class _WelcomeComparisonList extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: AppShellPalette.ink,
+                color: colors.text,
                 fontWeight: FontWeight.w800,
               ),
         ),
@@ -248,7 +292,7 @@ class _WelcomeComparisonList extends StatelessWidget {
                 child: Text(
                   item,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppShellPalette.muted,
+                        color: colors.muted,
                         height: 1.35,
                       ),
                 ),
@@ -286,13 +330,14 @@ class _PermissionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _WelcomeShellColors.of(context);
     final permissionsReady =
         statusLabel.toLowerCase() == 'enabled' || statusLabel == '已开启';
 
     return SlSurface(
       key: const ValueKey('welcome_guide_card_permissions'),
-      color: AppShellPalette.panel,
-      borderColor: AppShellPalette.line,
+      color: colors.surface,
+      borderColor: colors.border,
       borderRadius: BorderRadius.circular(AgentDesignTokens.radiusMd),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -310,7 +355,7 @@ class _PermissionPanel extends StatelessWidget {
                         title,
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: AppShellPalette.ink,
+                                  color: colors.text,
                                   fontWeight: FontWeight.w800,
                                 ),
                       ),
@@ -318,7 +363,7 @@ class _PermissionPanel extends StatelessWidget {
                       Text(
                         description,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppShellPalette.muted,
+                              color: colors.muted,
                             ),
                       ),
                     ],
@@ -346,7 +391,7 @@ class _PermissionPanel extends StatelessWidget {
                 child: Text(
                   unavailableHint,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppShellPalette.muted,
+                        color: colors.muted,
                       ),
                 ),
               ),
@@ -396,6 +441,7 @@ class _PermissionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _WelcomeShellColors.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -408,7 +454,7 @@ class _PermissionTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, color: AppShellPalette.muted, size: 20),
+              Icon(icon, color: colors.muted, size: 20),
               const SizedBox(width: AgentDesignTokens.gapMd),
               Expanded(
                 child: Column(
@@ -417,7 +463,7 @@ class _PermissionTile extends StatelessWidget {
                     Text(
                       label,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: AppShellPalette.ink,
+                            color: colors.text,
                             fontWeight: FontWeight.w700,
                           ),
                     ),
@@ -425,7 +471,7 @@ class _PermissionTile extends StatelessWidget {
                     Text(
                       reason,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppShellPalette.muted,
+                            color: colors.muted,
                           ),
                     ),
                   ],
@@ -438,9 +484,9 @@ class _PermissionTile extends StatelessWidget {
                 ready: ready,
               ),
               const SizedBox(width: AgentDesignTokens.gapSm),
-              const Icon(
+              Icon(
                 Icons.open_in_new_rounded,
-                color: AppShellPalette.muted,
+                color: colors.muted,
                 size: 18,
               ),
             ],
@@ -513,20 +559,19 @@ class _WelcomeShellButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = primary ? Colors.white : AppShellPalette.blue;
+    final colors = _WelcomeShellColors.of(context);
+    final foreground = primary ? colors.onAccent : colors.accent;
     final background = primary
-        ? AppShellPalette.blue
+        ? colors.accent
         : outlined
-            ? AppShellPalette.panel
-            : AppShellPalette.selected;
-    final side = outlined
-        ? const BorderSide(color: AppShellPalette.line)
-        : BorderSide.none;
+            ? colors.surface
+            : colors.selected;
+    final side = outlined ? BorderSide(color: colors.border) : BorderSide.none;
     final style = FilledButton.styleFrom(
       backgroundColor: background,
       foregroundColor: foreground,
-      disabledBackgroundColor: AppShellPalette.line,
-      disabledForegroundColor: AppShellPalette.muted,
+      disabledBackgroundColor: colors.borderSubtle,
+      disabledForegroundColor: colors.muted,
       minimumSize: const Size(0, 44),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       shape: RoundedRectangleBorder(
@@ -568,11 +613,12 @@ class _WelcomeStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _WelcomeShellColors.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: ready ? AppShellPalette.selected : AppShellPalette.soft,
+        color: ready ? colors.selected : colors.surface2,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppShellPalette.line),
+        border: Border.all(color: colors.border),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -580,7 +626,7 @@ class _WelcomeStatusBadge extends StatelessWidget {
           label,
           key: badgeKey,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: ready ? AppShellPalette.blue : AppShellPalette.muted,
+                color: ready ? colors.accent : colors.muted,
                 fontWeight: FontWeight.w800,
               ),
         ),
@@ -596,10 +642,11 @@ class _WelcomeShellDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _WelcomeShellColors.of(context);
     return SizedBox(
       width: horizontal ? double.infinity : 1,
       height: horizontal ? 1 : double.infinity,
-      child: const ColoredBox(color: AppShellPalette.line),
+      child: ColoredBox(color: colors.border),
     );
   }
 }

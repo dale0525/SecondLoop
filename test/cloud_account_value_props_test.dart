@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/app/app_shell_style.dart';
+import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_ui_acceptance_driver.dart';
 import 'package:secondloop/features/settings/cloud_account_page.dart';
+import 'package:secondloop/ui/sl_tokens.dart';
 
 import 'test_i18n.dart';
 
@@ -68,6 +71,100 @@ void main() {
         find.byKey(const ValueKey('cloud_account_value_props')), findsNothing);
     expect(find.byKey(const ValueKey('cloud_subscription_value_props')),
         findsNothing);
+    expect(find.byKey(const ValueKey('cloud_sign_in')), findsOneWidget);
+    expect(find.byKey(const ValueKey('cloud_sign_up')), findsOneWidget);
+  });
+
+  testWidgets('Onboarding auth controls use the app shell palette',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: const CloudAccountPage(
+            entryMode: CloudAccountEntryMode.onboarding,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final pageContext =
+        tester.element(find.byKey(const ValueKey('cloud_account_page_root')));
+    final fieldContext =
+        tester.element(find.byKey(const ValueKey('cloud_email_field')));
+    final signInContext =
+        tester.element(find.byKey(const ValueKey('cloud_sign_in')));
+
+    expect(Theme.of(pageContext).colorScheme.primary, AppShellPalette.blue);
+    expect(SlTokens.of(pageContext).background, AppShellPalette.soft);
+    expect(
+      Theme.of(fieldContext).colorScheme.primary,
+      AppShellPalette.blue,
+    );
+    expect(
+      Theme.of(fieldContext).colorScheme.onSurfaceVariant,
+      AppShellPalette.muted,
+    );
+    expect(SlTokens.of(fieldContext).surface2, AppShellPalette.soft);
+    expect(SlTokens.of(fieldContext).borderSubtle, AppShellPalette.line);
+    expect(
+      Theme.of(signInContext).colorScheme.primary,
+      AppShellPalette.ink,
+    );
+  });
+
+  testWidgets('Onboarding auth controls adapt to the dark shell palette',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.dark,
+          home: const CloudAccountPage(
+            entryMode: CloudAccountEntryMode.onboarding,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final pageContext =
+        tester.element(find.byKey(const ValueKey('cloud_account_page_root')));
+    final fieldContext =
+        tester.element(find.byKey(const ValueKey('cloud_email_field')));
+    final signInContext =
+        tester.element(find.byKey(const ValueKey('cloud_sign_in')));
+
+    expect(Theme.of(pageContext).colorScheme.primary, AppShellPalette.darkBlue);
+    expect(SlTokens.of(pageContext).background, AppShellPalette.darkSoft);
+    expect(
+      Theme.of(fieldContext).colorScheme.onSurfaceVariant,
+      AppShellPalette.darkMuted,
+    );
+    expect(SlTokens.of(fieldContext).surface2, AppShellPalette.darkSurface);
+    expect(
+      Theme.of(signInContext).colorScheme.primary,
+      AppShellPalette.darkInk,
+    );
+  });
+
+  testWidgets('Onboarding cloud account page fits narrow screens',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: CloudAccountPage(entryMode: CloudAccountEntryMode.onboarding),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('cloud_sign_in')), findsOneWidget);
     expect(find.byKey(const ValueKey('cloud_sign_up')), findsOneWidget);
   });

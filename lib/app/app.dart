@@ -61,6 +61,7 @@ class SecondLoopApp extends StatefulWidget {
 class _SecondLoopAppState extends State<SecondLoopApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   InheritedScopeCapture? _sessionScopedCapture;
+  late final Future<void> _uiPrefsReady;
   late final QuickCaptureController _quickCaptureController =
       widget._quickCaptureController ?? QuickCaptureController();
   late final CloudAuthControllerImpl _cloudAuthController =
@@ -84,13 +85,17 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
   @override
   void initState() {
     super.initState();
-    unawaited(AppLocaleBootstrap.ensureInitialized());
-    unawaited(AppThemeModePrefs.ensureInitialized());
-    unawaited(AppThemePalettePrefs.ensureInitialized());
-    unawaited(UpdateBadgePrefs.ensureInitialized());
+    _uiPrefsReady = _initializeUiPrefs();
     _cloudAuthController.addListener(_onCloudAuthChanged);
     unawaited(_warmCloudAuthOnStartup());
     unawaited(_subscriptionController.refresh());
+  }
+
+  Future<void> _initializeUiPrefs() async {
+    await AppLocaleBootstrap.ensureInitialized();
+    await AppThemeModePrefs.ensureInitialized();
+    await AppThemePalettePrefs.ensureInitialized();
+    await UpdateBadgePrefs.ensureInitialized();
   }
 
   void _onCloudAuthChanged() {
@@ -301,60 +306,78 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                       SelectionChangedCause.keyboard,
                                     ),
                                   },
-                                  child: SlBackground(
-                                    child: AppBootstrap(
-                                      child: DesktopBackgroundService(
-                                        silentStartupRequested: widget
-                                            .launchArgs.silentStartupRequested,
-                                        onOpenSettingsRequested: () async {
-                                          final navigator =
-                                              _navigatorKey.currentState;
-                                          if (navigator == null) return;
-                                          var capturedScopes =
-                                              resolveRootSettingsInheritedScopes(
-                                            _sessionScopedCapture,
-                                          );
-                                          if (capturedScopes == null) {
-                                            await WidgetsBinding
-                                                .instance.endOfFrame;
-                                            capturedScopes =
-                                                resolveRootSettingsInheritedScopes(
-                                              _sessionScopedCapture,
-                                            );
-                                          }
-                                          await pushPageWithCapturedInheritedScopesOrFallback(
-                                            navigator,
-                                            null,
-                                            const SettingsPage(),
-                                            capturedScopes: capturedScopes,
-                                          );
-                                        },
-                                        child: DesktopQuickCaptureService(
-                                          child: SessionBootstrap(
-                                            child: Builder(
-                                              builder: (sessionScopedContext) {
-                                                _sessionScopedCapture =
-                                                    captureInheritedScopes(
-                                                  sessionScopedContext,
+                                  child: FutureBuilder<void>(
+                                    future: _uiPrefsReady,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState !=
+                                          ConnectionState.done) {
+                                        return const Scaffold(
+                                          body: Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                        );
+                                      }
+                                      return SlBackground(
+                                        child: AppBootstrap(
+                                          child: DesktopBackgroundService(
+                                            silentStartupRequested: widget
+                                                .launchArgs
+                                                .silentStartupRequested,
+                                            onOpenSettingsRequested: () async {
+                                              final navigator =
+                                                  _navigatorKey.currentState;
+                                              if (navigator == null) return;
+                                              var capturedScopes =
+                                                  resolveRootSettingsInheritedScopes(
+                                                _sessionScopedCapture,
+                                              );
+                                              if (capturedScopes == null) {
+                                                await WidgetsBinding
+                                                    .instance.endOfFrame;
+                                                capturedScopes =
+                                                    resolveRootSettingsInheritedScopes(
+                                                  _sessionScopedCapture,
                                                 );
-                                                return ReviewReminderNotificationsGate(
-                                                  navigatorKey: _navigatorKey,
-                                                  child: QuickCaptureOverlay(
-                                                    navigatorKey: _navigatorKey,
-                                                    child:
-                                                        FirstLaunchWelcomeGate(
-                                                      child: child ??
-                                                          const SizedBox
-                                                              .shrink(),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
+                                              }
+                                              await pushPageWithCapturedInheritedScopesOrFallback(
+                                                navigator,
+                                                null,
+                                                const SettingsPage(),
+                                                capturedScopes: capturedScopes,
+                                              );
+                                            },
+                                            child: DesktopQuickCaptureService(
+                                              child: SessionBootstrap(
+                                                child: Builder(
+                                                  builder:
+                                                      (sessionScopedContext) {
+                                                    _sessionScopedCapture =
+                                                        captureInheritedScopes(
+                                                      sessionScopedContext,
+                                                    );
+                                                    return ReviewReminderNotificationsGate(
+                                                      navigatorKey:
+                                                          _navigatorKey,
+                                                      child:
+                                                          QuickCaptureOverlay(
+                                                        navigatorKey:
+                                                            _navigatorKey,
+                                                        child:
+                                                            FirstLaunchWelcomeGate(
+                                                          child: child ??
+                                                              const SizedBox
+                                                                  .shrink(),
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ),
+                                      );
+                                    },
                                   ),
                                 ),
                               ),

@@ -2,6 +2,8 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 
+import '../app/app_shell_style.dart';
+
 @immutable
 class SlTokens extends ThemeExtension<SlTokens> {
   const SlTokens({
@@ -45,18 +47,18 @@ class SlTokens extends ThemeExtension<SlTokens> {
       Theme.of(context).extension<SlTokens>() ?? _fallback;
 
   static const _fallback = SlTokens(
-    background: Color(0xFFF7F9FC),
-    surface: Color(0xFFFFFFFF),
-    surface2: Color(0xFFF1F5F9),
-    border: Color(0xFFD7DFEA),
-    borderSubtle: Color(0xFFE1E7F0),
-    ring: Color(0xFF0B5CF6),
-    sidebarBackground: Color(0xFFFFFFFF),
-    sidebarBorder: Color(0xFFE1E7F0),
-    sidebarItemHover: Color(0xFFF1F5F9),
-    sidebarItemActive: Color(0xFFEAF1FF),
-    sidebarItemForeground: Color(0xFF63708A),
-    sidebarItemActiveForeground: Color(0xFF101936),
+    background: AppShellPalette.soft,
+    surface: AppShellPalette.panel,
+    surface2: AppShellPalette.soft,
+    border: AppShellPalette.line,
+    borderSubtle: AppShellPalette.line,
+    ring: AppShellPalette.blue,
+    sidebarBackground: AppShellPalette.panel,
+    sidebarBorder: AppShellPalette.line,
+    sidebarItemHover: AppShellPalette.soft,
+    sidebarItemActive: AppShellPalette.selected,
+    sidebarItemForeground: AppShellPalette.muted,
+    sidebarItemActiveForeground: AppShellPalette.ink,
     radiusSm: 8,
     radiusMd: 12,
     radiusLg: 16,

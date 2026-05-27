@@ -528,6 +528,15 @@
       "title": "SecondLoop Pro",
       "subscriptionRequiredBody": "需要 SecondLoop Pro 才能继续。当前账号已登录，但 Pro 订阅尚未生效。订阅后即可使用托管运行时，不需要 Cloudflare 账号、Workers Paid plan、模型服务商 API 密钥或自部署维护。"
     },
+    "auth": {
+      "title": "登录工作区",
+      "subtitle": "使用 Cloud 账号解锁托管运行时与同步 Vault。",
+      "contextTitle": "托管 Pro 权益",
+      "badges": {
+        "managedPro": "托管 Pro",
+        "hostedRuntime": "托管运行时"
+      }
+    },
     "benefits": {
       "title": "创建 Cloud 账号以购买订阅",
       "items": {
@@ -554,6 +563,13 @@
       "sent": "重置密码邮件已发送，请检查邮箱。",
       "missingEmail": "请先输入邮箱地址。",
       "notSupported": "当前环境暂不支持密码找回，请稍后再试。"
+    },
+    "legalAgreement": {
+      "lead": "我已阅读并同意",
+      "privacyPolicy": "隐私政策",
+      "termsOfService": "用户协议",
+      "join": "和",
+      "openFailed": "无法打开协议页面。"
     },
     "emailVerification": {
       "title": "邮箱验证",

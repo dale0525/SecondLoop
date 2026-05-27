@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/app/app_shell_style.dart';
+import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/core/cloud/runtime_connection_store.dart';
 import 'package:secondloop/core/cloud/runtime_manifest.dart';
 import 'package:secondloop/core/cloud/runtime_profile.dart';
@@ -9,6 +11,7 @@ import 'package:secondloop/features/settings/cloud_account_page.dart';
 import 'package:secondloop/features/settings/self_managed_setup_page.dart';
 import 'package:secondloop/features/welcome/first_launch_welcome_gate.dart';
 import 'package:secondloop/features/welcome/welcome_page.dart';
+import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
 
@@ -69,6 +72,75 @@ void main() {
 
     expect(find.byType(WelcomePage), findsOneWidget);
     expect(find.text('app shell child'), findsNothing);
+  });
+
+  testWidgets('welcome shown from app builder inherits dark theme',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.dark,
+          home: const Scaffold(
+            body: Center(child: Text('app shell child')),
+          ),
+          builder: (context, child) {
+            return FirstLaunchWelcomeGate(
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final welcomeContext = tester.element(find.byType(WelcomePage));
+    expect(Theme.of(welcomeContext).brightness, Brightness.dark);
+    final welcomeScaffold = tester.widget<Scaffold>(
+      find.byKey(const ValueKey('welcome_guide_page')),
+    );
+    expect(welcomeScaffold.backgroundColor, AppShellPalette.darkSoft);
+    final welcomeWorkspace = tester.widget<SlSurface>(
+      find.byKey(const ValueKey('welcome_guide_workspace')),
+    );
+    expect(welcomeWorkspace.color, AppShellPalette.darkPanel);
+    expect(welcomeWorkspace.borderColor, AppShellPalette.darkLine);
+  });
+
+  testWidgets('welcome shown from app builder follows dark platform by default',
+      (tester) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.system,
+          home: const Scaffold(
+            body: Center(child: Text('app shell child')),
+          ),
+          builder: (context, child) {
+            return FirstLaunchWelcomeGate(
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final welcomeContext = tester.element(find.byType(WelcomePage));
+    expect(Theme.of(welcomeContext).brightness, Brightness.dark);
+    final welcomeScaffold = tester.widget<Scaffold>(
+      find.byKey(const ValueKey('welcome_guide_page')),
+    );
+    expect(welcomeScaffold.backgroundColor, AppShellPalette.darkSoft);
   });
 
   testWidgets('shows child when first launch flag is already seen',

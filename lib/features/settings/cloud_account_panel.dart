@@ -694,28 +694,36 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (uid == null) ...[
-          if (!isOnboarding) ...[
-            CloudAccountBenefitsSection(
-              surfaceKey: const ValueKey('cloud_account_value_props'),
-              title: t.settings.cloudAccount.benefits.title,
-              benefits: [purchaseBenefit],
-            ),
-            const SizedBox(height: 16),
-            CloudAccountBenefitsSection(
-              title: t.settings.subscription.benefits.title,
-              benefits: subscriptionBenefits,
-            ),
-            const SizedBox(height: 16),
-          ],
           CloudAccountAuthSection(
             emailController: _emailController,
             passwordController: _passwordController,
             busy: _busy,
+            title: t.settings.cloudAccount.auth.title,
+            subtitle: t.settings.cloudAccount.auth.subtitle,
+            primaryBadgeLabel: t.settings.cloudAccount.auth.badges.managedPro,
+            secondaryBadgeLabel:
+                t.settings.cloudAccount.auth.badges.hostedRuntime,
+            contextTitle: t.settings.cloudAccount.auth.contextTitle,
+            contextBenefits: isOnboarding
+                ? subscriptionBenefits
+                : [purchaseBenefit, ...subscriptionBenefits],
+            contextKey: isOnboarding
+                ? null
+                : const ValueKey('cloud_account_value_props'),
+            errorMessage: _error,
             emailLabel: t.settings.cloudAccount.fields.email,
             passwordLabel: t.settings.cloudAccount.fields.password,
             signInLabel: t.settings.cloudAccount.actions.signIn,
             signUpLabel: t.settings.cloudAccount.actions.signUp,
             forgotPasswordLabel: _forgotPasswordLabel(context),
+            agreementLeadLabel: t.settings.cloudAccount.legalAgreement.lead,
+            privacyPolicyLabel:
+                t.settings.cloudAccount.legalAgreement.privacyPolicy,
+            termsOfServiceLabel:
+                t.settings.cloudAccount.legalAgreement.termsOfService,
+            agreementJoinLabel: t.settings.cloudAccount.legalAgreement.join,
+            openAgreementFailedMessage:
+                t.settings.cloudAccount.legalAgreement.openFailed,
             onSignIn: _signIn,
             onSignUp: _signUp,
             onForgotPassword: _forgotPassword,
@@ -795,7 +803,7 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
             ),
           ],
         ],
-        if (_error != null) ...[
+        if (_error != null && uid != null) ...[
           const SizedBox(height: 16),
           SettingsInlineMessage(
             message: _error!,

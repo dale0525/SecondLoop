@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_shell_style.dart';
 import 'theme_palette_prefs.dart';
 
 @immutable
@@ -73,17 +74,17 @@ final class AppThemeStyleSpec {
 
 const kAppThemeStyleSpecs = <AppThemePalette, AppThemeStyleSpec>{
   AppThemePalette.studio: AppThemeStyleSpec(
-    seed: Color(0xFF6366F1),
-    ring: Color(0xFFA78BFA),
-    lightBackground: Color(0xFFF6F7FB),
-    lightSurface: Color(0xFFFFFFFF),
-    lightSurface2: Color(0xFFF1F3F9),
-    lightBorder: Color(0xFFE6E8F0),
-    darkBackground: Color(0xFF0B0B0F),
-    darkSurface: Color(0xFF12121A),
-    darkSurface2: Color(0xFF171724),
-    darkBorder: Color(0xFF24243A),
-    corners: AppThemeCornerSpec(sm: 10, md: 14, lg: 18),
+    seed: AppShellPalette.blue,
+    ring: AppShellPalette.blue,
+    lightBackground: AppShellPalette.soft,
+    lightSurface: AppShellPalette.panel,
+    lightSurface2: AppShellPalette.soft,
+    lightBorder: AppShellPalette.line,
+    darkBackground: AppShellPalette.darkSoft,
+    darkSurface: AppShellPalette.darkPanel,
+    darkSurface2: AppShellPalette.darkSurface,
+    darkBorder: AppShellPalette.darkLine,
+    corners: AppThemeCornerSpec(sm: 8, md: 12, lg: 16),
     lightCardBorderOpacity: 0.9,
     darkCardBorderOpacity: 0.65,
     lightIndicatorOpacity: 0.12,

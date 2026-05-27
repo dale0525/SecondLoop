@@ -34,7 +34,7 @@ final class AppThemePalettePrefs {
     final raw = prefs.getString(prefsKey);
 
     final decoded = _decode(raw);
-    if (decoded == null) {
+    if (decoded == null || raw != null) {
       await prefs.remove(prefsKey);
       value.value = AppThemePalette.studio;
       return;
@@ -54,15 +54,9 @@ final class AppThemePalettePrefs {
     return null;
   }
 
-  static Future<void> setPalette(AppThemePalette palette) async {
+  static Future<void> setPalette(AppThemePalette _) async {
     final prefs = await SharedPreferences.getInstance();
-
-    if (palette == AppThemePalette.studio) {
-      await prefs.remove(prefsKey);
-    } else {
-      await prefs.setString(prefsKey, palette.storageValue);
-    }
-
-    value.value = palette;
+    await prefs.remove(prefsKey);
+    value.value = AppThemePalette.studio;
   }
 }

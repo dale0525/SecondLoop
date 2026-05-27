@@ -21,42 +21,7 @@ extension _SettingsPageBuild on _SettingsPageState {
             title: context.t.settings.sections.appearance,
             children: [
               if (showsAppearancePreferences)
-                SettingsRow(
-                  title: context.t.settings.theme.title,
-                  body: context.t.settings.theme.subtitle,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ValueListenableBuilder(
-                        valueListenable: AppThemeModePrefs.value,
-                        builder: (context, mode, child) {
-                          return Text(_themeModeLabel(context, mode));
-                        },
-                      ),
-                    ],
-                  ),
-                  showChevron: true,
-                  onTap: _busy ? null : _selectThemeMode,
-                ),
-              if (showsAppearancePreferences)
-                SettingsRow(
-                  key: const ValueKey('settings_theme_palette'),
-                  title: _themePaletteTitle(context),
-                  body: _themePaletteSubtitle(context),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ValueListenableBuilder(
-                        valueListenable: AppThemePalettePrefs.value,
-                        builder: (context, palette, child) {
-                          return Text(_themePaletteLabel(context, palette));
-                        },
-                      ),
-                    ],
-                  ),
-                  showChevron: true,
-                  onTap: _busy ? null : _selectThemePalette,
-                ),
+                SettingsThemeModeRow(enabled: !_busy),
               SettingsRow(
                 title: context.t.settings.language.title,
                 body: context.t.settings.language.subtitle,

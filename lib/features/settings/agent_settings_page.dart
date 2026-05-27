@@ -9,6 +9,7 @@ import 'cloud_account_page.dart';
 import 'cloud_runtime_mode_page.dart';
 import 'diagnostics_page.dart';
 import 'settings_ui.dart';
+import 'settings_theme_mode_row.dart';
 
 final class AgentSettingsPage extends StatefulWidget {
   const AgentSettingsPage({super.key});
@@ -25,6 +26,13 @@ final class _AgentSettingsPageState extends State<AgentSettingsPage> {
     final t = context.t.settings.agentUi;
     return SettingsPageShell(
       children: [
+        SettingsSection(
+          title: context.t.settings.sections.appearance,
+          children: const [
+            SettingsThemeModeRow(),
+          ],
+        ),
+        const SizedBox(height: AgentDesignTokens.gapLg),
         AgentTabBar(
           tabs: [
             AgentTabItem(

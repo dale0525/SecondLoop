@@ -238,12 +238,16 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final parentTheme = Theme.of(context);
     final locale = Localizations.maybeLocaleOf(context);
+    final shellTheme = parentTheme.brightness == Brightness.dark
+        ? AppTheme.dark(locale: locale, platform: parentTheme.platform)
+        : AppTheme.light(locale: locale, platform: parentTheme.platform);
     return Theme(
-      data: AppTheme.light(locale: locale, platform: parentTheme.platform),
+      data: shellTheme,
       child: Builder(
         builder: (context) {
           return LayoutBuilder(
             builder: (context, constraints) {
+              final colors = _AppShellChromeColors.of(context);
               final useCollapsedShell = constraints.maxHeight < 180;
               final useRail = !useCollapsedShell && constraints.maxWidth >= 960;
               final useBottomNav = !useCollapsedShell && !useRail;
@@ -291,7 +295,7 @@ class _AppShellState extends State<AppShell> {
               );
 
               return Scaffold(
-                backgroundColor: AppShellPalette.soft,
+                backgroundColor: colors.background,
                 resizeToAvoidBottomInset: false,
                 body: useCollapsedShell
                     ? const SizedBox.shrink()
@@ -304,7 +308,7 @@ class _AppShellState extends State<AppShell> {
                             child: scopedContent,
                           )
                         : ColoredBox(
-                            color: AppShellPalette.soft,
+                            color: colors.background,
                             child: MediaQuery.removePadding(
                               context: context,
                               removeTop: true,
@@ -343,9 +347,10 @@ final class _AppShellDesktopWorkbench extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _AppShellChromeColors.of(context);
     return ColoredBox(
       key: const ValueKey('app_shell_desktop_workbench'),
-      color: const Color(0xFFF7F9FB),
+      color: colors.background,
       child: Stack(
         children: [
           Column(
@@ -382,11 +387,12 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _AppShellChromeColors.of(context);
     return DecoratedBox(
       key: const ValueKey('app_shell_desktop_top_nav'),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF7F9FB),
-        border: Border(bottom: BorderSide(color: Color(0xFFC6C6CD))),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: SafeArea(
         bottom: false,
@@ -396,10 +402,10 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Row(
               children: [
-                const Text(
+                Text(
                   'SecondLoop',
                   style: TextStyle(
-                    color: Color(0xFF000000),
+                    color: colors.text,
                     fontSize: 20,
                     height: 28 / 20,
                     fontWeight: FontWeight.w600,
@@ -411,20 +417,21 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                 const SizedBox(width: 12),
                 DecoratedBox(
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFC6C6CD)),
+                    border: Border.all(color: colors.border),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _RuntimeSyncedDot(),
-                        SizedBox(width: 6),
+                        const _RuntimeSyncedDot(),
+                        const SizedBox(width: 6),
                         Text(
                           'Runtime Synced',
                           style: TextStyle(
-                            color: Color(0xFF45464D),
+                            color: colors.muted,
                             fontSize: 11,
                             height: 14 / 11,
                             fontWeight: FontWeight.w500,
@@ -451,22 +458,22 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                       prefixIcon: const Icon(Icons.search_rounded, size: 18),
                       isDense: true,
                       filled: true,
-                      fillColor: const Color(0xFFF2F4F6),
+                      fillColor: colors.field,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 8,
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(4),
-                        borderSide: const BorderSide(color: Color(0xFFC6C6CD)),
+                        borderSide: BorderSide(color: colors.border),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(4),
-                        borderSide: const BorderSide(color: Color(0xFF0051D5)),
+                        borderSide: BorderSide(color: colors.accent),
                       ),
                     ),
-                    style: const TextStyle(
-                      color: Color(0xFF191C1E),
+                    style: TextStyle(
+                      color: colors.text,
                       fontSize: 14,
                       height: 20 / 14,
                       letterSpacing: 0,
@@ -513,6 +520,66 @@ final class _RuntimeSyncedDot extends StatelessWidget {
           shape: BoxShape.circle,
         ),
       ),
+    );
+  }
+}
+
+final class _AppShellChromeColors {
+  const _AppShellChromeColors({
+    required this.background,
+    required this.field,
+    required this.border,
+    required this.text,
+    required this.muted,
+    required this.accent,
+    required this.onAccent,
+    required this.selected,
+    required this.hover,
+    required this.quickCaptureBackground,
+    required this.quickCaptureForeground,
+  });
+
+  final Color background;
+  final Color field;
+  final Color border;
+  final Color text;
+  final Color muted;
+  final Color accent;
+  final Color onAccent;
+  final Color selected;
+  final Color hover;
+  final Color quickCaptureBackground;
+  final Color quickCaptureForeground;
+
+  static _AppShellChromeColors of(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    if (dark) {
+      return const _AppShellChromeColors(
+        background: AppShellPalette.darkSoft,
+        field: AppShellPalette.darkSurface,
+        border: AppShellPalette.darkLine,
+        text: AppShellPalette.darkInk,
+        muted: AppShellPalette.darkMuted,
+        accent: AppShellPalette.darkBlue,
+        onAccent: Color(0xFF061A33),
+        selected: AppShellPalette.darkSelected,
+        hover: AppShellPalette.darkSurface,
+        quickCaptureBackground: AppShellPalette.darkBlue,
+        quickCaptureForeground: Color(0xFF061A33),
+      );
+    }
+    return const _AppShellChromeColors(
+      background: AppShellPalette.soft,
+      field: Color(0xFFF2F4F6),
+      border: Color(0xFFC6C6CD),
+      text: Color(0xFF000000),
+      muted: Color(0xFF45464D),
+      accent: Color(0xFF0051D5),
+      onAccent: Color(0xFFFEFCFF),
+      selected: Color(0xFFECEEF0),
+      hover: Color(0xFFE6E8EA),
+      quickCaptureBackground: Color(0xFF000000),
+      quickCaptureForeground: Color(0xFFFFFFFF),
     );
   }
 }
@@ -581,10 +648,11 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _AppShellChromeColors.of(context);
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF7F9FB),
-        border: Border(right: BorderSide(color: Color(0xFFC6C6CD))),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(right: BorderSide(color: colors.border)),
       ),
       child: SizedBox(
         key: const ValueKey('app_shell_sidebar'),
@@ -603,7 +671,7 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
                   onTap: () => _activateDestination(context, destination),
                 ),
               const Spacer(),
-              const Divider(color: Color(0xFFC6C6CD), height: 1),
+              Divider(color: colors.border, height: 1),
               const SizedBox(height: 12),
               _AppShellDesktopNavItem(
                 destination: const _DesktopNavDestination.tab(AppTab.settings),
@@ -675,6 +743,7 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = destination.resolvedLabel(context);
+    final colors = _AppShellChromeColors.of(context);
     return Semantics(
       key: ValueKey(destination.navKey),
       button: true,
@@ -684,16 +753,15 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          hoverColor: const Color(0xFFE6E8EA),
+          hoverColor: colors.hover,
           child: Container(
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: selected ? const Color(0xFFECEEF0) : Colors.transparent,
+              color: selected ? colors.selected : Colors.transparent,
               border: Border(
                 right: BorderSide(
-                  color:
-                      selected ? const Color(0xFF0051D5) : Colors.transparent,
+                  color: selected ? colors.accent : Colors.transparent,
                   width: 2,
                 ),
               ),
@@ -703,9 +771,7 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
                 Icon(
                   destination.resolvedIcon(selected: selected),
                   size: 20,
-                  color: selected
-                      ? const Color(0xFF0051D5)
-                      : const Color(0xFF45464D),
+                  color: selected ? colors.accent : colors.muted,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -713,9 +779,7 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
                     label,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: selected
-                          ? const Color(0xFF0051D5)
-                          : const Color(0xFF45464D),
+                      color: selected ? colors.accent : colors.muted,
                       fontSize: 12,
                       height: 16 / 12,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
@@ -737,13 +801,14 @@ final class _AppShellDesktopQuickCaptureButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _AppShellChromeColors.of(context);
     return SizedBox.square(
       key: const ValueKey('app_shell_desktop_quick_capture'),
       dimension: 56,
       child: FloatingActionButton(
         tooltip: 'Quick Capture',
-        backgroundColor: const Color(0xFF000000),
-        foregroundColor: const Color(0xFFFFFFFF),
+        backgroundColor: colors.quickCaptureBackground,
+        foregroundColor: colors.quickCaptureForeground,
         onPressed: () {
           final controller = QuickCaptureScope.maybeOf(context);
           if (controller != null) {
@@ -780,11 +845,12 @@ final class _AppShellBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = _AppShellChromeColors.of(context);
     return DecoratedBox(
       key: const ValueKey('app_shell_bottom_nav'),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF7F9FB),
-        border: Border(top: BorderSide(color: Color(0xFFC6C6CD))),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(top: BorderSide(color: colors.border)),
       ),
       child: SafeArea(
         top: false,
@@ -823,8 +889,8 @@ final class _AppShellBottomNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground =
-        selected ? const Color(0xFFFEFCFF) : const Color(0xFF45464D);
+    final colors = _AppShellChromeColors.of(context);
+    final foreground = selected ? colors.onAccent : colors.muted;
     return Semantics(
       key: ValueKey(tab.navKey),
       button: true,
@@ -842,7 +908,7 @@ final class _AppShellBottomNavItem extends StatelessWidget {
               vertical: selected ? 6 : 4,
             ),
             decoration: BoxDecoration(
-              color: selected ? const Color(0xFF316BF3) : Colors.transparent,
+              color: selected ? colors.accent : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(

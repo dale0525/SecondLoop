@@ -24,6 +24,30 @@ Reference files:
 - Use existing tokens and primitives before adding new styling systems:
   `AppShellPalette`, `AgentDesignTokens`, `SlButton`, `SettingsSection`,
   `SettingsActionBar`, and `SettingsInlineMessage`.
+- The root app palette is a single SecondLoop product palette. App-wide light
+  and dark colors live in `AppShellPalette`, `AppTheme`, `AppThemeStyleSpec`,
+  and `SlTokens`; do not add user-facing palette/style selectors or make
+  `AppThemePalettePrefs` change visible app colors. Keep only the
+  light/dark/system appearance mode selector wired through `AppThemeModePrefs`.
+- The production app shell Settings tab is `AgentSettingsPage`; legacy
+  `SettingsPage` still exists for deeper/native settings flows. Shared
+  appearance controls such as light/dark/system must use
+  `SettingsThemeModeRow` or another reusable settings primitive so both
+  surfaces stay consistent.
+- Treat dark mode as a first-class token mapping, not a generated inversion of
+  the light theme. Shared widgets should read `Theme.of(context).colorScheme`
+  or `SlTokens.of(context)` so they pick up `AppShellPalette.dark*` values
+  automatically.
+- The app shell itself must follow the active app brightness. Do not wrap
+  `AppShell`, Settings, runtime mode, or onboarding surfaces in
+  `AppTheme.light(...)` unless the surface is deliberately locked and tested as
+  a light-only artifact.
+- First-launch and onboarding routes must be created after UI preferences
+  (`AppThemeModePrefs` and palette normalization) are initialized. Onboarding
+  widgets that install a local `Theme` must still read backgrounds, panels,
+  borders, dividers, and text from `Theme.of(context).colorScheme` or
+  `SlTokens.of(context)`; switching to `AppTheme.dark(...)` is not enough if
+  descendants keep hard-coded light `AppShellPalette` constants.
 - Use Material icons and `IconButton`/`FilledButton.icon` where the existing UI
   already uses them.
 - Keep settings pages composed from settings sections and action bars rather

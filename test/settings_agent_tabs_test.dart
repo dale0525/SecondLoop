@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/app/theme_mode_prefs.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/agent_settings_page.dart';
@@ -15,6 +16,8 @@ import 'test_i18n.dart';
 void main() {
   Future<void> pumpSettingsPage(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
+    AppThemeModePrefs.resetForTests();
+    await AppThemeModePrefs.ensureInitialized();
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
@@ -38,6 +41,7 @@ void main() {
 
     expect(find.byType(SettingsPageShell), findsOneWidget);
     expect(find.byType(SettingsSection), findsWidgets);
+    expect(find.byKey(const ValueKey('settings_theme_mode')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent_settings_open_cloud_account')),
         findsNothing);
     expect(find.byKey(const ValueKey('agent_settings_open_runtime_mode')),
@@ -52,6 +56,24 @@ void main() {
     expect(find.text('Memory'), findsOneWidget);
     expect(find.text('Activity'), findsOneWidget);
     expect(find.byKey(const ValueKey('settings_side_tab_list')), findsNothing);
+  });
+
+  testWidgets('AgentSettingsPage theme mode row persists selection',
+      (tester) async {
+    await pumpSettingsPage(tester);
+
+    expect(find.byKey(const ValueKey('settings_theme_mode')), findsOneWidget);
+    expect(AppThemeModePrefs.value.value, ThemeMode.system);
+
+    await tester.tap(find.byKey(const ValueKey('settings_theme_mode')));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('settings_theme_mode_option_dark')));
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(AppThemeModePrefs.prefsKey), 'dark');
+    expect(AppThemeModePrefs.value.value, ThemeMode.dark);
   });
 
   testWidgets('Account tab owns profile plan billing and security only',

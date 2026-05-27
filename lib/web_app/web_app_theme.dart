@@ -204,6 +204,13 @@ ThemeData buildSecondLoopWebTheme({required Locale locale}) {
   );
 }
 
+ThemeData buildSecondLoopWebDarkTheme({required Locale locale}) {
+  return AppTheme.dark(
+    locale: locale,
+    palette: AppThemePalette.studio,
+  );
+}
+
 class SecondLoopWebAppFrame extends StatelessWidget {
   const SecondLoopWebAppFrame({
     required this.child,
@@ -214,25 +221,28 @@ class SecondLoopWebAppFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ColoredBox(
-      color: _webBackground,
+      color: tokens.background,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          const _WebBackdropGlow(
+          _WebBackdropGlow(
             alignment: Alignment.topLeft,
-            color: _webLavenderGlow,
+            color: isDark ? const Color(0x331E6BFF) : _webLavenderGlow,
             radius: 0.78,
           ),
-          const _WebBackdropGlow(
+          _WebBackdropGlow(
             alignment: Alignment.topRight,
-            color: _webPeachGlow,
+            color: isDark ? const Color(0x2629C7AC) : _webPeachGlow,
             radius: 0.68,
           ),
-          const IgnorePointer(
+          IgnorePointer(
             child: CustomPaint(
               painter: _BackdropGridPainter(
-                color: Color(0x080F1418),
+                color:
+                    isDark ? const Color(0x14D7E7FF) : const Color(0x080F1418),
                 step: 28,
               ),
             ),

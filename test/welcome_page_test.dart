@@ -168,7 +168,7 @@ void main() {
     );
   });
 
-  testWidgets('uses the light onboarding theme even inside a dark app theme',
+  testWidgets('follows the dark SecondLoop theme inside a dark app theme',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -184,12 +184,13 @@ void main() {
 
     final shellContext =
         tester.element(find.byKey(const ValueKey('welcome_guide_workspace')));
-    final expectedLightTokens = AppTheme.light().extension<SlTokens>()!;
+    final expectedDarkTokens = AppTheme.dark().extension<SlTokens>()!;
 
-    expect(Theme.of(shellContext).brightness, Brightness.light);
+    expect(Theme.of(shellContext).brightness, Brightness.dark);
+    expect(SlTokens.of(shellContext).background, expectedDarkTokens.background);
+    expect(SlTokens.of(shellContext).surface, expectedDarkTokens.surface);
     expect(
-        SlTokens.of(shellContext).background, expectedLightTokens.background);
-    expect(SlTokens.of(shellContext).surface, expectedLightTokens.surface);
+        Theme.of(shellContext).colorScheme.primary, AppShellPalette.darkBlue);
   });
 
   testWidgets('fires callbacks from the permissions step', (tester) async {

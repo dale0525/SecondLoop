@@ -148,7 +148,7 @@ final class _ProjectsListPanel extends StatelessWidget {
       title: 'Q2 Productivity Tools Research',
       body: 'Research tools to improve team productivity',
       updated: 'Updated May 20, 2025',
-      color: Color(0xFF7C3AED),
+      color: Color(0xFF315B86),
       selected: false,
     ),
     (
@@ -707,7 +707,7 @@ final class _ProjectsMobileList extends StatelessWidget {
           _ProjectMobileListRow(
             'Q2 Productivity Tools Research',
             'Research tools to improve team productivity',
-            Color(0xFF7C3AED),
+            Color(0xFF315B86),
           ),
           _ProjectMobileListRow(
             'Client Demo Prep',

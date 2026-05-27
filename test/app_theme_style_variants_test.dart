@@ -1,55 +1,84 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/app/app_shell_style.dart';
 import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/app/theme_palette_prefs.dart';
+import 'package:secondloop/app/theme_specs.dart';
 import 'package:secondloop/ui/sl_tokens.dart';
 
 void main() {
-  test('Theme styles change structural surfaces and radii', () {
-    final studioLight = AppTheme.light(palette: AppThemePalette.studio);
-    final oceanLight = AppTheme.light(palette: AppThemePalette.ocean);
+  const legacyStudioColors = <Color>[
+    Color.fromARGB(0xFF, 0x63, 0x66, 0xF1),
+    Color.fromARGB(0xFF, 0xA7, 0x8B, 0xFA),
+    Color.fromARGB(0xFF, 0x7C, 0x3A, 0xED),
+    Color.fromARGB(0xFF, 0x4F, 0x46, 0xE5),
+  ];
 
-    final studioTokens = studioLight.extension<SlTokens>()!;
-    final oceanTokens = oceanLight.extension<SlTokens>()!;
+  test('Default light theme uses the SecondLoop shell palette', () {
+    final theme = AppTheme.light();
+    final tokens = theme.extension<SlTokens>()!;
+    final spec = kAppThemeStyleSpecs[AppThemePalette.studio]!;
 
+    expect(theme.colorScheme.primary, AppShellPalette.blue);
+    expect(theme.colorScheme.background, AppShellPalette.soft);
+    expect(theme.colorScheme.surface, AppShellPalette.panel);
+    expect(theme.colorScheme.outlineVariant, AppShellPalette.line);
+    expect(tokens.background, AppShellPalette.soft);
+    expect(tokens.surface, AppShellPalette.panel);
+    expect(tokens.border, AppShellPalette.line);
+    expect(tokens.ring, AppShellPalette.blue);
+    expect(spec.seed, AppShellPalette.blue);
+    expect(spec.ring, AppShellPalette.blue);
+    expect(legacyStudioColors.contains(theme.colorScheme.primary), isFalse);
+    expect(legacyStudioColors.contains(theme.colorScheme.secondary), isFalse);
     expect(
-        oceanLight.colorScheme.primary, isNot(studioLight.colorScheme.primary));
-    expect(
-        oceanLight.colorScheme.surface, isNot(studioLight.colorScheme.surface));
-    expect(oceanTokens.background, isNot(studioTokens.background));
-    expect(oceanTokens.radiusLg, isNot(studioTokens.radiusLg));
-  });
-
-  test('Theme style affects dark-mode structural layers', () {
-    final studioDark = AppTheme.dark(palette: AppThemePalette.studio);
-    final forestDark = AppTheme.dark(palette: AppThemePalette.forest);
-
-    final studioTokens = studioDark.extension<SlTokens>()!;
-    final forestTokens = forestDark.extension<SlTokens>()!;
-
-    expect(
-        forestDark.colorScheme.surface, isNot(studioDark.colorScheme.surface));
-    expect(
-      forestDark.colorScheme.background,
-      isNot(studioDark.colorScheme.background),
+      legacyStudioColors.contains(theme.colorScheme.primaryContainer),
+      isFalse,
     );
-    expect(forestTokens.surface2, isNot(studioTokens.surface2));
-    expect(forestTokens.radiusMd, isNot(studioTokens.radiusMd));
+    expect(
+      legacyStudioColors.contains(theme.colorScheme.secondaryContainer),
+      isFalse,
+    );
   });
 
-  test('Monochrome style keeps grayscale visual intent', () {
-    final monochromeLight = AppTheme.light(palette: AppThemePalette.monochrome);
-    final monochromeDark = AppTheme.dark(palette: AppThemePalette.monochrome);
+  test('Default dark theme uses a SecondLoop-derived dark palette', () {
+    final theme = AppTheme.dark();
+    final tokens = theme.extension<SlTokens>()!;
 
-    final lightTokens = monochromeLight.extension<SlTokens>()!;
-    final darkTokens = monochromeDark.extension<SlTokens>()!;
+    expect(theme.colorScheme.primary, AppShellPalette.darkBlue);
+    expect(theme.colorScheme.background, AppShellPalette.darkSoft);
+    expect(theme.colorScheme.surface, AppShellPalette.darkPanel);
+    expect(theme.colorScheme.outlineVariant, AppShellPalette.darkLine);
+    expect(tokens.background, AppShellPalette.darkSoft);
+    expect(tokens.surface, AppShellPalette.darkPanel);
+    expect(tokens.surface2, AppShellPalette.darkSurface);
+    expect(tokens.ring, AppShellPalette.darkBlue);
+    expect(legacyStudioColors.contains(theme.colorScheme.primary), isFalse);
+    expect(legacyStudioColors.contains(theme.colorScheme.secondary), isFalse);
+    expect(
+        legacyStudioColors.contains(theme.colorScheme.inversePrimary), isFalse);
+  });
 
-    expect(monochromeLight.colorScheme.primary.red,
-        monochromeLight.colorScheme.primary.green);
-    expect(monochromeLight.colorScheme.primary.green,
-        monochromeLight.colorScheme.primary.blue);
-    expect(monochromeDark.colorScheme.primary.red,
-        monochromeDark.colorScheme.primary.green);
-    expect(lightTokens.background.red, lightTokens.background.green);
-    expect(darkTokens.background.red, darkTokens.background.blue);
+  test('Legacy palette arguments no longer alter the product theme', () {
+    final studioLight = AppTheme.light();
+    final studioDark = AppTheme.dark();
+
+    for (final palette in AppThemePalette.values) {
+      final light = AppTheme.light(palette: palette);
+      final dark = AppTheme.dark(palette: palette);
+      final lightTokens = light.extension<SlTokens>()!;
+      final darkTokens = dark.extension<SlTokens>()!;
+
+      expect(light.colorScheme.primary, studioLight.colorScheme.primary);
+      expect(light.colorScheme.surface, studioLight.colorScheme.surface);
+      expect(lightTokens.background,
+          studioLight.extension<SlTokens>()!.background);
+      expect(lightTokens.radiusLg, studioLight.extension<SlTokens>()!.radiusLg);
+      expect(dark.colorScheme.primary, studioDark.colorScheme.primary);
+      expect(dark.colorScheme.surface, studioDark.colorScheme.surface);
+      expect(
+          darkTokens.background, studioDark.extension<SlTokens>()!.background);
+      expect(darkTokens.radiusMd, studioDark.extension<SlTokens>()!.radiusMd);
+    }
   });
 }

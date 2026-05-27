@@ -14,8 +14,11 @@ void main() {
     AppThemePalettePrefs.resetForTests();
   });
 
-  testWidgets('SecondLoopWebApp defaults to light monochrome styling on web',
+  testWidgets('SecondLoopWebApp defaults to system SecondLoop styling on web',
       (tester) async {
+    await AppThemeModePrefs.ensureInitialized();
+    await AppThemePalettePrefs.ensureInitialized();
+
     await tester.pumpWidget(
       SecondLoopWebApp(
         bootstrapLoader: () => Completer<WebAppBootstrapData>().future,
@@ -25,10 +28,35 @@ void main() {
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
 
-    expect(materialApp.themeMode, ThemeMode.light);
+    expect(materialApp.themeMode, ThemeMode.system);
+    expect(materialApp.darkTheme, isNotNull);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(AppThemeModePrefs.prefsKey), isNull);
     expect(
       AppThemePalettePrefs.value.value,
-      AppThemePalette.monochrome,
+      AppThemePalette.studio,
     );
+  });
+
+  testWidgets('SecondLoopWebApp honors persisted theme mode on web',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      AppThemeModePrefs.prefsKey: 'dark',
+    });
+    AppThemeModePrefs.resetForTests();
+    AppThemePalettePrefs.resetForTests();
+    await AppThemeModePrefs.ensureInitialized();
+    await AppThemePalettePrefs.ensureInitialized();
+
+    await tester.pumpWidget(
+      SecondLoopWebApp(
+        bootstrapLoader: () => Completer<WebAppBootstrapData>().future,
+      ),
+    );
+    await tester.pump();
+
+    final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+
+    expect(materialApp.themeMode, ThemeMode.dark);
   });
 }
