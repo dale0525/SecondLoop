@@ -757,3 +757,36 @@ Fixed self-managed runtime connection/workbench handling, completed local QA wor
 ### Next Steps
 
 - None - task complete
+
+
+## Session 23: Unify app visual system
+
+**Date**: 2026-05-27
+**Task**: Unify app visual system
+**Branch**: `main`
+
+### Summary
+
+Unified the SecondLoop app visual baseline, removed legacy palette selection, preserved light/dark/system mode, made onboarding and app shell follow dark/system theme, and verified focused Flutter regressions plus verify-changed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c930c963` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

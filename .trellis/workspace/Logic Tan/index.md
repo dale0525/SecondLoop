@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 22
-- **Last Active**: 2026-05-26
+- **Total Sessions**: 23
+- **Last Active**: 2026-05-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~759 | Active |
+| `journal-1.md` | ~792 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 23 | 2026-05-27 | Unify app visual system | `c930c963` | `main` |
 | 22 | 2026-05-26 | Self-managed local QA fixes | `d4269d22`, `3411f69e`, `c6f105cf` | `main` |
 | 21 | 2026-05-26 | Self-managed runtime uninstall helper | `16b0c825` | `main` |
 | 20 | 2026-05-26 | Managed Pro local QA fixes | `94d284f6` | `main` |
