@@ -537,7 +537,7 @@ final class _ConnectorToolRow extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  tool.status,
+                  _connectorCapabilityLabel(context, tool.status),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.right,
@@ -553,6 +553,32 @@ final class _ConnectorToolRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _connectorCapabilityLabel(BuildContext context, String status) {
+  final labels =
+      context.t.chat.operating.desktopWorkbench.connectors.capabilityLabels;
+  final parts = status
+      .split('+')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.length > 1) {
+    return parts
+        .map((part) => _connectorCapabilityLabel(context, part))
+        .join(labels.separator);
+  }
+  return switch (status.trim().toLowerCase()) {
+    'available' => labels.available,
+    'unknown' => labels.unknown,
+    'tool_unavailable' => labels.toolUnavailable,
+    'approval_required' => labels.approvalRequired,
+    'needs_configuration' => labels.needsConfiguration,
+    'citation_required' => labels.citationRequired,
+    'budget_confirmation_required' => labels.budgetConfirmationRequired,
+    'runtime_secrets_only' => labels.runtimeSecretsOnly,
+    _ => labels.runtimeCapability,
+  };
 }
 
 final class _ConnectorRuntimePanel extends StatelessWidget {
@@ -576,15 +602,15 @@ final class _ConnectorRuntimePanel extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              for (final skill in const [
-                'web-research',
-                'citation-policy',
-                'media-understanding',
-                'document-ocr',
-                'audio-meeting',
-                'email',
-                'calendar',
-                'approval-guardrail',
+              for (final skill in [
+                t.skillLabels.webResearch,
+                t.skillLabels.citationPolicy,
+                t.skillLabels.mediaUnderstanding,
+                t.skillLabels.documentOcr,
+                t.skillLabels.audioMeeting,
+                t.skillLabels.email,
+                t.skillLabels.calendar,
+                t.skillLabels.approvalGuardrail,
               ])
                 DesktopWorkbenchBadge(label: skill),
             ],
@@ -597,7 +623,9 @@ final class _ConnectorRuntimePanel extends StatelessWidget {
             children: [
               _MetricRow(
                 label: t.smokeTestStatus,
-                value: error == null ? t.passed : 'tool_unavailable',
+                value: error == null
+                    ? t.passed
+                    : t.capabilityLabels.toolUnavailable,
               ),
               _MetricRow(
                 label: t.lastCheck,

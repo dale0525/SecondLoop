@@ -325,7 +325,7 @@
         "none": "无",
         "entityFallback": "实体",
         "traceFallback": "> 保护状态... 未报告",
-        "traceChecking": "> 正在检查保护规则... approval_required",
+        "traceChecking": "> 正在检查保护规则... 需要审批",
         "typeLabels": {
           "taskMutation": "任务变更审批",
           "memory": "记忆审批",
@@ -339,6 +339,28 @@
           "low": "低风险",
           "prefix": "风险：$risk"
         },
+        "statusLabels": {
+          "pendingApproval": "待审批",
+          "approved": "已批准",
+          "rejected": "已拒绝",
+          "needsConfiguration": "需要配置",
+          "refused": "已拒绝",
+          "approvalRequired": "需要审批",
+          "unknown": "运行时状态"
+        },
+        "guardrailLabels": {
+          "approvalRequired": "需要审批",
+          "auditRefsRequired": "需要审计证据",
+          "targetResolved": "目标已解析",
+          "auditRefsPresent": "审计证据已提供",
+          "sideEffectGuarded": "副作用已受保护",
+          "needsConfiguration": "需要配置",
+          "toolUnavailable": "工具不可用",
+          "approvalBlocked": "审批已阻止",
+          "sideEffectRefused": "副作用已拒绝",
+          "noExternalAction": "未执行外部操作",
+          "runtimeGuardrail": "运行时保护规则"
+        },
         "fallbacks": {
           "previousValue": "未报告上一值",
           "proposedValue": "未报告拟议值",
@@ -347,19 +369,19 @@
           "reason": "运行时未报告代理洞察。"
         },
         "messages": {
-          "stateUnavailable": "tool_unavailable: 运行时状态尚未配置",
-          "runtimeUnavailable": "tool_unavailable: $error",
+          "stateUnavailable": "运行时状态尚未配置。",
+          "runtimeUnavailable": "运行时不可用：$error",
           "cannotSubmit": "$status：该审批无法在应用内执行“$decision”。",
-          "senderUnavailable": "tool_unavailable: 运行时审批发送器尚未配置",
+          "senderUnavailable": "运行时审批发送器尚未配置。",
           "decisionSubmitted": "审批决定已提交",
-          "requestChangesUnavailable": "tool_unavailable: 暂不支持从应用内提交审批修改请求",
-          "configureUnavailable": "needs_configuration: 暂不支持从此面板配置连接器"
+          "requestChangesUnavailable": "暂不支持从应用内提交审批修改请求。",
+          "configureUnavailable": "暂不支持从此面板配置连接器。"
         },
         "systemNotice": {
-          "configured": "approval_required: 运行时只会在明确决定后应用变更。",
-          "needsConfig": "tool_unavailable: 相关连接器需要先配置，才能审批对应变更。",
-          "refused": "refused: 购买、支付或本地电脑副作用不能被审批。",
-          "waitingDecision": "approval_required: 运行时不会在做出决定前应用此变更。"
+          "configured": "运行时只会在明确决定后应用变更。",
+          "needsConfig": "相关连接器需要先配置，才能审批对应变更。",
+          "refused": "购买、支付或本地电脑副作用不能被审批。",
+          "waitingDecision": "运行时不会在做出决定前应用此变更。"
         }
       },
       "connectors": {
@@ -385,11 +407,42 @@
         "standard": "标准",
         "notReported": "未报告",
         "refreshing": "正在刷新运行时能力状态...",
-        "unavailableState": "tool_unavailable: 运行时能力状态尚未配置",
-        "runtimeUnavailable": "tool_unavailable: $error",
-        "needsConfiguration": "needs_configuration: 启用 $connector 前需要先配置此连接器",
-        "draftOnly": "draft-only: 草稿生成无需外部发送权限即可运行",
-        "revokeUnavailable": "tool_unavailable: 当前构建尚未提供连接器撤销端点",
+        "unavailableState": "运行时能力状态尚未配置。",
+        "runtimeUnavailable": "运行时不可用：$error",
+        "needsConfiguration": "启用 $connector 前需要先配置此连接器。",
+        "draftOnly": "草稿生成无需外部发送权限即可运行。",
+        "revokeUnavailable": "当前构建尚未提供连接器撤销能力。",
+        "capabilityLabels": {
+          "available": "可用",
+          "unknown": "未知",
+          "toolUnavailable": "工具不可用",
+          "approvalRequired": "需要审批",
+          "needsConfiguration": "需要配置",
+          "citationRequired": "需要引用",
+          "budgetConfirmationRequired": "需要预算确认",
+          "runtimeSecretsOnly": "仅运行时密钥",
+          "runtimeCapability": "运行时能力",
+          "separator": "；"
+        },
+        "tagLabels": {
+          "citationsVerified": "引用已验证",
+          "draftOnly": "仅草稿",
+          "approvalRequired": "需要审批",
+          "budgetConfirmationRequired": "需要预算确认",
+          "structuredOutputVerified": "结构化输出已验证",
+          "chineseIntentVerified": "中文意图已验证",
+          "sideEffectDisciplineVerified": "副作用约束已验证"
+        },
+        "skillLabels": {
+          "webResearch": "网页研究",
+          "citationPolicy": "引用策略",
+          "mediaUnderstanding": "媒体理解",
+          "documentOcr": "文档 OCR",
+          "audioMeeting": "会议音频",
+          "email": "邮件",
+          "calendar": "日历",
+          "approvalGuardrail": "审批保护规则"
+        },
         "statuses": {
           "available": "可用",
           "unknown": "未知",

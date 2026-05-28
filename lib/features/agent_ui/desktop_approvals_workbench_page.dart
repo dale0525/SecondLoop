@@ -165,7 +165,7 @@ final class _DesktopApprovalsWorkbenchPageState
       showDesktopWorkbenchMessage(
         context,
         text.messages.cannotSubmit(
-          status: approval.status,
+          status: approval.statusLabel,
           decision: decision,
         ),
       );
@@ -500,7 +500,7 @@ final class _ApprovalQueueCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      approval.status,
+                      approval.statusLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AgentOperatingSystemTokens.labelMd.copyWith(
@@ -727,19 +727,27 @@ final class _ApprovalAuditPanel extends StatelessWidget {
     final colors = context.agentOs;
     final t = context.t.chat.operating.desktopWorkbench.approvals;
     final approval = this.approval;
+    final copy = _approvalWorkbenchCopy(context);
+    final approvals = state == null
+        ? const <_ApprovalView>[]
+        : _approvalsFromState(state!, copy);
     final notice = _systemNoticeFor(
       state,
       approval,
       error,
-      _approvalWorkbenchCopy(context),
+      copy,
     );
-    final showConfigurationActions = notice.contains('tool_unavailable') ||
-        notice.contains('needs_configuration') ||
-        error != null;
+    final showConfigurationActions = error != null ||
+        (approval?.needsConfig ?? false) ||
+        approvals.any((item) => item.needsConfig);
+    final guardrailLabels = approval?.guardrailLabels ??
+        [
+          copy.guardrailApprovalRequired,
+          copy.guardrailAuditRefsRequired,
+        ];
     return ListView(
       children: [
-        for (final label in approval?.guardrailLabels ??
-            const ['approval_required', 'audit_refs_required'])
+        for (final label in guardrailLabels)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _StatusRow(label: label),
@@ -936,7 +944,10 @@ final class _StatusRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(label, style: AgentOperatingSystemTokens.code),
+              child: Text(
+                label,
+                style: AgentOperatingSystemTokens.labelMd,
+              ),
             ),
           ],
         ),

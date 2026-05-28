@@ -28,7 +28,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('needs_configuration'), findsWidgets);
+      expect(find.text('Needs configuration'), findsWidgets);
       expect(_approveButton(tester).onPressed, isNull);
       expect(_rejectButton(tester).onPressed, isNull);
 
@@ -37,7 +37,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('refused'), findsWidgets);
+      expect(find.text('Refused'), findsWidgets);
       expect(_approveButton(tester).onPressed, isNull);
       expect(_rejectButton(tester).onPressed, isNull);
       expect(sender.decisions, isEmpty);

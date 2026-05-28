@@ -25,6 +25,24 @@ final class _ApprovalWorkbenchCopy {
     required this.highRisk,
     required this.mediumRisk,
     required this.lowRisk,
+    required this.statusPendingApproval,
+    required this.statusApproved,
+    required this.statusRejected,
+    required this.statusNeedsConfiguration,
+    required this.statusRefused,
+    required this.statusApprovalRequired,
+    required this.statusUnknown,
+    required this.guardrailApprovalRequired,
+    required this.guardrailAuditRefsRequired,
+    required this.guardrailTargetResolved,
+    required this.guardrailAuditRefsPresent,
+    required this.guardrailSideEffectGuarded,
+    required this.guardrailNeedsConfiguration,
+    required this.guardrailToolUnavailable,
+    required this.guardrailApprovalBlocked,
+    required this.guardrailSideEffectRefused,
+    required this.guardrailNoExternalAction,
+    required this.guardrailRuntimeGuardrail,
     required this.taskMutationType,
     required this.memoryType,
     required this.emailDraftType,
@@ -46,6 +64,24 @@ final class _ApprovalWorkbenchCopy {
   final String highRisk;
   final String mediumRisk;
   final String lowRisk;
+  final String statusPendingApproval;
+  final String statusApproved;
+  final String statusRejected;
+  final String statusNeedsConfiguration;
+  final String statusRefused;
+  final String statusApprovalRequired;
+  final String statusUnknown;
+  final String guardrailApprovalRequired;
+  final String guardrailAuditRefsRequired;
+  final String guardrailTargetResolved;
+  final String guardrailAuditRefsPresent;
+  final String guardrailSideEffectGuarded;
+  final String guardrailNeedsConfiguration;
+  final String guardrailToolUnavailable;
+  final String guardrailApprovalBlocked;
+  final String guardrailSideEffectRefused;
+  final String guardrailNoExternalAction;
+  final String guardrailRuntimeGuardrail;
   final String taskMutationType;
   final String memoryType;
   final String emailDraftType;
@@ -63,6 +99,7 @@ final class _ApprovalView {
     required this.typeLabel,
     required this.title,
     required this.status,
+    required this.statusLabel,
     required this.risk,
     required this.riskLevel,
     required this.targetId,
@@ -84,6 +121,7 @@ final class _ApprovalView {
   final String typeLabel;
   final String title;
   final String status;
+  final String statusLabel;
   final String risk;
   final _ApprovalRiskLevel riskLevel;
   final String targetId;
@@ -155,17 +193,19 @@ final class _ApprovalView {
         ]) ??
         copy.proposedValue;
     final riskLevel = _riskLevel(item, record);
+    final displayStatus = refused
+        ? 'refused'
+        : needsConfig
+            ? 'needs_configuration'
+            : status;
     return _ApprovalView(
       id: desktopRuntimeString([item['id'], item['approval_id']]) ?? '',
       kind: kind,
       typeLabel: _approvalTypeLabel(kind, copy),
       title: desktopRuntimeString([item['title'], record['title']]) ??
           copy.runtimeApproval,
-      status: refused
-          ? 'refused'
-          : needsConfig
-              ? 'needs_configuration'
-              : status,
+      status: displayStatus,
+      statusLabel: _approvalStatusLabel(displayStatus, copy),
       risk: _riskLabel(riskLevel, copy),
       riskLevel: riskLevel,
       targetId: desktopRuntimeString([
@@ -214,7 +254,7 @@ final class _ApprovalView {
           : refused
               ? copy.refusedNotice
               : copy.defaultNotice,
-      guardrailLabels: _guardrailLabels(record, needsConfig, refused),
+      guardrailLabels: _guardrailLabels(record, needsConfig, refused, copy),
       needsConfig: needsConfig,
       refused: refused,
     );
@@ -245,6 +285,21 @@ String _riskLabel(_ApprovalRiskLevel riskLevel, _ApprovalWorkbenchCopy copy) {
   };
 }
 
+String _approvalStatusLabel(String status, _ApprovalWorkbenchCopy copy) {
+  final normalized = status.toLowerCase();
+  if (normalized.contains('needs_configuration')) {
+    return copy.statusNeedsConfiguration;
+  }
+  if (normalized.contains('refused')) return copy.statusRefused;
+  if (normalized.contains('reject')) return copy.statusRejected;
+  if (normalized.contains('approved')) return copy.statusApproved;
+  if (normalized.contains('approval_required')) {
+    return copy.statusApprovalRequired;
+  }
+  if (normalized.contains('pending')) return copy.statusPendingApproval;
+  return copy.statusUnknown;
+}
+
 String _approvalTypeLabel(String kind, _ApprovalWorkbenchCopy copy) {
   final normalized = kind.toLowerCase();
   if (normalized.contains('task_mutation')) return copy.taskMutationType;
@@ -271,6 +326,24 @@ _ApprovalWorkbenchCopy _approvalWorkbenchCopy(BuildContext context) {
     highRisk: t.risk.high,
     mediumRisk: t.risk.medium,
     lowRisk: t.risk.low,
+    statusPendingApproval: t.statusLabels.pendingApproval,
+    statusApproved: t.statusLabels.approved,
+    statusRejected: t.statusLabels.rejected,
+    statusNeedsConfiguration: t.statusLabels.needsConfiguration,
+    statusRefused: t.statusLabels.refused,
+    statusApprovalRequired: t.statusLabels.approvalRequired,
+    statusUnknown: t.statusLabels.unknown,
+    guardrailApprovalRequired: t.guardrailLabels.approvalRequired,
+    guardrailAuditRefsRequired: t.guardrailLabels.auditRefsRequired,
+    guardrailTargetResolved: t.guardrailLabels.targetResolved,
+    guardrailAuditRefsPresent: t.guardrailLabels.auditRefsPresent,
+    guardrailSideEffectGuarded: t.guardrailLabels.sideEffectGuarded,
+    guardrailNeedsConfiguration: t.guardrailLabels.needsConfiguration,
+    guardrailToolUnavailable: t.guardrailLabels.toolUnavailable,
+    guardrailApprovalBlocked: t.guardrailLabels.approvalBlocked,
+    guardrailSideEffectRefused: t.guardrailLabels.sideEffectRefused,
+    guardrailNoExternalAction: t.guardrailLabels.noExternalAction,
+    guardrailRuntimeGuardrail: t.guardrailLabels.runtimeGuardrail,
     taskMutationType: t.typeLabels.taskMutation,
     memoryType: t.typeLabels.memory,
     emailDraftType: t.typeLabels.emailDraft,
@@ -286,30 +359,51 @@ List<String> _guardrailLabels(
   Map<String, Object?> record,
   bool needsConfig,
   bool refused,
+  _ApprovalWorkbenchCopy copy,
 ) {
   if (refused) {
-    return const [
-      'side_effect_refused',
-      'no_external_action',
-      'audit_refs_present',
+    return [
+      copy.guardrailSideEffectRefused,
+      copy.guardrailNoExternalAction,
+      copy.guardrailAuditRefsPresent,
     ];
   }
   if (needsConfig) {
-    return const [
-      'needs_configuration',
-      'tool_unavailable',
-      'approval_blocked',
+    return [
+      copy.guardrailNeedsConfiguration,
+      copy.guardrailToolUnavailable,
+      copy.guardrailApprovalBlocked,
     ];
   }
   final raw = desktopRuntimeObjectList(record['guardrails'])
       .map((item) => desktopRuntimeString([item['label'], item['id']]))
       .whereType<String>()
       .toList(growable: false);
-  if (raw.isNotEmpty) return raw;
-  return const [
-    'approval_required',
-    'target_resolved',
-    'audit_refs_present',
-    'side_effect_guarded',
+  if (raw.isNotEmpty) {
+    return raw
+        .map((label) => _guardrailLabel(label, copy))
+        .toList(growable: false);
+  }
+  return [
+    copy.guardrailApprovalRequired,
+    copy.guardrailTargetResolved,
+    copy.guardrailAuditRefsPresent,
+    copy.guardrailSideEffectGuarded,
   ];
+}
+
+String _guardrailLabel(String label, _ApprovalWorkbenchCopy copy) {
+  return switch (label.trim().toLowerCase()) {
+    'approval_required' => copy.guardrailApprovalRequired,
+    'audit_refs_required' => copy.guardrailAuditRefsRequired,
+    'target_resolved' => copy.guardrailTargetResolved,
+    'audit_refs_present' => copy.guardrailAuditRefsPresent,
+    'side_effect_guarded' => copy.guardrailSideEffectGuarded,
+    'needs_configuration' => copy.guardrailNeedsConfiguration,
+    'tool_unavailable' => copy.guardrailToolUnavailable,
+    'approval_blocked' => copy.guardrailApprovalBlocked,
+    'side_effect_refused' => copy.guardrailSideEffectRefused,
+    'no_external_action' => copy.guardrailNoExternalAction,
+    _ => copy.guardrailRuntimeGuardrail,
+  };
 }

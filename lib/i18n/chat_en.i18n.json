@@ -325,7 +325,7 @@
         "none": "none",
         "entityFallback": "entity",
         "traceFallback": "> guardrail status... not reported",
-        "traceChecking": "> checking guardrails... approval_required",
+        "traceChecking": "> checking guardrails... approval required",
         "typeLabels": {
           "taskMutation": "Task Mutation Approval",
           "memory": "Memory Approval",
@@ -339,6 +339,28 @@
           "low": "Low Risk",
           "prefix": "Risk: $risk"
         },
+        "statusLabels": {
+          "pendingApproval": "Pending approval",
+          "approved": "Approved",
+          "rejected": "Rejected",
+          "needsConfiguration": "Needs configuration",
+          "refused": "Refused",
+          "approvalRequired": "Approval required",
+          "unknown": "Runtime status"
+        },
+        "guardrailLabels": {
+          "approvalRequired": "Approval required",
+          "auditRefsRequired": "Audit evidence required",
+          "targetResolved": "Target resolved",
+          "auditRefsPresent": "Audit evidence present",
+          "sideEffectGuarded": "Side effect guarded",
+          "needsConfiguration": "Configuration required",
+          "toolUnavailable": "Tool unavailable",
+          "approvalBlocked": "Approval blocked",
+          "sideEffectRefused": "Side effect refused",
+          "noExternalAction": "No external action",
+          "runtimeGuardrail": "Runtime guardrail"
+        },
         "fallbacks": {
           "previousValue": "previous value not reported",
           "proposedValue": "proposed value not reported",
@@ -347,19 +369,19 @@
           "reason": "Agent insight was not reported by runtime."
         },
         "messages": {
-          "stateUnavailable": "tool_unavailable: runtime state is not configured",
-          "runtimeUnavailable": "tool_unavailable: $error",
+          "stateUnavailable": "Runtime state is not configured.",
+          "runtimeUnavailable": "Runtime unavailable: $error",
           "cannotSubmit": "$status: this approval cannot be ${decision}d from the app.",
-          "senderUnavailable": "tool_unavailable: runtime approval sender is not configured",
+          "senderUnavailable": "Runtime approval sender is not configured.",
           "decisionSubmitted": "approval decision submitted",
-          "requestChangesUnavailable": "tool_unavailable: approval edit requests are not available yet",
-          "configureUnavailable": "needs_configuration: connector configuration is not available from this panel yet"
+          "requestChangesUnavailable": "Approval edit requests are not available yet.",
+          "configureUnavailable": "Connector configuration is not available from this panel yet."
         },
         "systemNotice": {
-          "configured": "approval_required: Runtime will apply mutations only after an explicit decision.",
-          "needsConfig": "tool_unavailable: Connector requires configuration before related mutations can be approved.",
-          "refused": "refused: Purchase, payment, or local-computer side effects cannot be approved.",
-          "waitingDecision": "approval_required: Runtime will not apply this mutation before a decision."
+          "configured": "Runtime will apply mutations only after an explicit decision.",
+          "needsConfig": "Connector requires configuration before related mutations can be approved.",
+          "refused": "Purchase, payment, or local-computer side effects cannot be approved.",
+          "waitingDecision": "Runtime will not apply this mutation before a decision."
         }
       },
       "connectors": {
@@ -385,11 +407,42 @@
         "standard": "Standard",
         "notReported": "not reported",
         "refreshing": "Refreshing runtime capability state...",
-        "unavailableState": "tool_unavailable: runtime capability state is not configured",
-        "runtimeUnavailable": "tool_unavailable: $error",
-        "needsConfiguration": "needs_configuration: configure $connector before enabling this connector",
-        "draftOnly": "draft-only: draft generation can run without external send permissions",
-        "revokeUnavailable": "tool_unavailable: connector revocation endpoint is not available in this build",
+        "unavailableState": "Runtime capability state is not configured.",
+        "runtimeUnavailable": "Runtime unavailable: $error",
+        "needsConfiguration": "Configure $connector before enabling this connector.",
+        "draftOnly": "Draft generation can run without external send permissions.",
+        "revokeUnavailable": "Connector revocation is not available in this build.",
+        "capabilityLabels": {
+          "available": "Available",
+          "unknown": "Unknown",
+          "toolUnavailable": "Tool unavailable",
+          "approvalRequired": "Approval required",
+          "needsConfiguration": "Needs configuration",
+          "citationRequired": "Citation required",
+          "budgetConfirmationRequired": "Budget confirmation required",
+          "runtimeSecretsOnly": "Runtime secrets only",
+          "runtimeCapability": "Runtime capability",
+          "separator": "; "
+        },
+        "tagLabels": {
+          "citationsVerified": "Citations verified",
+          "draftOnly": "Draft only",
+          "approvalRequired": "Approval required",
+          "budgetConfirmationRequired": "Budget confirmation required",
+          "structuredOutputVerified": "Structured output verified",
+          "chineseIntentVerified": "Chinese intent verified",
+          "sideEffectDisciplineVerified": "Side-effect discipline verified"
+        },
+        "skillLabels": {
+          "webResearch": "Web research",
+          "citationPolicy": "Citation policy",
+          "mediaUnderstanding": "Media understanding",
+          "documentOcr": "Document OCR",
+          "audioMeeting": "Meeting audio",
+          "email": "Email",
+          "calendar": "Calendar",
+          "approvalGuardrail": "Approval guardrail"
+        },
         "statuses": {
           "available": "Available",
           "unknown": "Unknown",

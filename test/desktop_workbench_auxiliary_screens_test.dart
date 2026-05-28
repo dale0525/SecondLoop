@@ -64,7 +64,7 @@ void main() {
     expect(find.byKey(const ValueKey('desktop_connectors_workbench_page')),
         findsOneWidget);
     expect(find.text('Email Binding'), findsOneWidget);
-    expect(find.text('draft_only'), findsOneWidget);
+    expect(find.text('Draft only'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('desktop_connector_calendar')));
     await tester.pumpAndSettle();
@@ -74,12 +74,12 @@ void main() {
       find.byKey(const ValueKey('desktop_connector_primary_calendar')),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('configure Calendar'), findsOneWidget);
+    expect(find.textContaining('Configure Calendar'), findsOneWidget);
 
     await tester
         .tap(find.byKey(const ValueKey('desktop_connector_test_draft')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('draft-only'), findsOneWidget);
+    expect(find.textContaining('Draft generation'), findsOneWidget);
   });
 
   testWidgets('desktop auxiliary screens follow dark app theme',
@@ -196,7 +196,7 @@ void main() {
         .tap(find.byKey(const ValueKey('desktop_connector_web_research')));
     await tester.pumpAndSettle();
     expect(find.text('Web Research Binding'), findsOneWidget);
-    expect(find.text('citation_required'), findsOneWidget);
+    expect(find.text('Citation required'), findsOneWidget);
 
     final fetchCountBeforeRefresh = repository.fetchCount;
     await tester.tap(
@@ -209,14 +209,13 @@ void main() {
         .tap(find.byKey(const ValueKey('desktop_connector_files_media')));
     await tester.pumpAndSettle();
     expect(find.text('Files & Media Binding'), findsOneWidget);
-    expect(find.text('budget_confirmation_required'), findsWidgets);
+    expect(find.text('Budget confirmation required'), findsWidgets);
 
     await tester.tap(
       find.byKey(const ValueKey('desktop_connector_revoke_access')),
     );
     await tester.pumpAndSettle();
-    expect(
-        find.textContaining('connector revocation endpoint'), findsOneWidget);
+    expect(find.textContaining('Connector revocation'), findsOneWidget);
   });
 
   testWidgets(
@@ -224,14 +223,14 @@ void main() {
       (tester) async {
     await _pumpConnectorsPage(tester);
 
-    expect(find.text('tool_unavailable'), findsWidgets);
+    expect(find.text('Tool unavailable'), findsWidgets);
     expect(find.text('not reported'), findsWidgets);
 
     await tester.tap(
       find.byKey(const ValueKey('desktop_connectors_capability_check')),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('runtime capability state is not configured'),
+    expect(find.textContaining('Runtime capability state is not configured'),
         findsOneWidget);
 
     await tester

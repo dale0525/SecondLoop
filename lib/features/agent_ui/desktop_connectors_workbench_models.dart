@@ -8,6 +8,7 @@ List<_ConnectorView> _connectorCatalog(
   final text = context.t.chat.operating.desktopWorkbench.connectors;
   final catalog = text.catalog;
   final statuses = text.statuses;
+  final tagLabels = text.tagLabels;
   final runtimeManaged = state != null && error == null;
   final hasWebResearch =
       _stateMentions(state, 'web-research') || runtimeManaged;
@@ -20,7 +21,7 @@ List<_ConnectorView> _connectorCatalog(
       statusTone: hasWebResearch
           ? _ConnectorStatusTone.available
           : _ConnectorStatusTone.unknown,
-      tags: const ['citation_verified'],
+      tags: [tagLabels.citationsVerified],
       detailTitle: catalog.webResearch.detailTitle,
       detailStatus:
           hasWebResearch ? statuses.available : statuses.capabilityUnknown,
@@ -51,7 +52,7 @@ List<_ConnectorView> _connectorCatalog(
       icon: Icons.mail_outline_rounded,
       statusLabel: statuses.needsConfig,
       statusTone: _ConnectorStatusTone.needsConfig,
-      tags: ['draft_only'],
+      tags: [tagLabels.draftOnly],
       detailTitle: catalog.email.detailTitle,
       detailStatus: statuses.emailDraftOnly,
       authTitle: catalog.email.authTitle,
@@ -74,7 +75,7 @@ List<_ConnectorView> _connectorCatalog(
       icon: Icons.calendar_today_outlined,
       statusLabel: statuses.needsConfig,
       statusTone: _ConnectorStatusTone.needsConfig,
-      tags: ['approval_required'],
+      tags: [tagLabels.approvalRequired],
       detailTitle: catalog.calendar.detailTitle,
       detailStatus: statuses.needsConfiguration,
       authTitle: catalog.calendar.authTitle,
@@ -99,7 +100,7 @@ List<_ConnectorView> _connectorCatalog(
       icon: Icons.folder_open_rounded,
       statusLabel: statuses.partial,
       statusTone: _ConnectorStatusTone.partial,
-      tags: ['budget_confirmation_required'],
+      tags: [tagLabels.budgetConfirmationRequired],
       detailTitle: catalog.filesMedia.detailTitle,
       detailStatus: statuses.partialAvailability,
       authTitle: catalog.filesMedia.authTitle,
@@ -125,9 +126,9 @@ List<_ConnectorView> _connectorCatalog(
       statusLabel: statuses.available,
       statusTone: _ConnectorStatusTone.available,
       tags: [
-        'structured_output_verified',
-        'Chinese_intent_verified',
-        'side_effect_discipline_verified',
+        tagLabels.structuredOutputVerified,
+        tagLabels.chineseIntentVerified,
+        tagLabels.sideEffectDisciplineVerified,
       ],
       detailTitle: catalog.modelProvider.detailTitle,
       detailStatus: statuses.runtimeVerified,
