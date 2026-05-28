@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 24
-- **Last Active**: 2026-05-27
+- **Total Sessions**: 25
+- **Last Active**: 2026-05-28
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~825 | Active |
+| `journal-1.md` | ~858 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 25 | 2026-05-28 | Fix UI i18n and desktop app shell | `7864f88b` | `main` |
 | 24 | 2026-05-27 | Restore settings page migration | `1aea6f69` | `main` |
 | 23 | 2026-05-27 | Unify app visual system | `c930c963` | `main` |
 | 22 | 2026-05-26 | Self-managed local QA fixes | `d4269d22`, `3411f69e`, `c6f105cf` | `main` |

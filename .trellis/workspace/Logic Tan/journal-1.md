@@ -823,3 +823,36 @@ Restored legacy app-level settings into the new AgentSettingsPage General tab af
 ### Next Steps
 
 - None - task complete
+
+
+## Session 25: Fix UI i18n and desktop app shell
+
+**Date**: 2026-05-28
+**Task**: Fix UI i18n and desktop app shell
+**Branch**: `main`
+
+### Summary
+
+Localized migrated UI surfaces, aligned English typography to Inter, removed the in-app desktop Quick Capture launcher, and refreshed focused verification.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7864f88b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
