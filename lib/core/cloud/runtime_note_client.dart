@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
-import 'http_json_client.dart';
+import 'runtime_api_client.dart';
 
 @immutable
 class RuntimeNote {
@@ -34,18 +33,29 @@ final class RuntimeNoteConflictException implements Exception {
   }
 }
 
+final class RuntimeNoteHttpException implements Exception {
+  const RuntimeNoteHttpException({
+    required this.statusCode,
+    required this.body,
+  });
+
+  final int statusCode;
+  final String body;
+
+  @override
+  String toString() {
+    final normalizedBody = body.trim();
+    if (normalizedBody.isEmpty) return 'HTTP $statusCode';
+    return 'HTTP $statusCode: $normalizedBody';
+  }
+}
+
 final class RuntimeNoteClient {
   RuntimeNoteClient({
-    required String managedVaultBaseUrl,
-    required String idToken,
-    http.Client? httpClient,
-  })  : _managedVaultBaseUrl = managedVaultBaseUrl,
-        _idToken = idToken,
-        _httpClient = HttpJsonClient(client: httpClient);
+    RuntimeApiClient? apiClient,
+  }) : _apiClient = apiClient ?? RuntimeApiClient();
 
-  final String _managedVaultBaseUrl;
-  final String _idToken;
-  final HttpJsonClient _httpClient;
+  final RuntimeApiClient _apiClient;
 
   Future<RuntimeNote> saveNote({
     required String vaultId,
@@ -54,15 +64,10 @@ final class RuntimeNoteClient {
     required String body,
     required String? baseRevision,
   }) async {
-    final uri = _resolveVaultUri(
-      _managedVaultBaseUrl,
-      '/v1/vaults/${Uri.encodeComponent(vaultId)}/notes/'
-      '${Uri.encodeComponent(noteId)}',
-    );
-    final response = await _httpClient.putJson(
-      uri,
+    final response = await _apiClient.requestJson(
+      method: 'PUT',
+      path: _notePath(vaultId: vaultId, noteId: noteId),
       headers: <String, String>{
-        'authorization': 'Bearer $_idToken',
         'accept': 'application/json',
         'content-type': 'application/json',
       },
@@ -84,9 +89,7 @@ final class RuntimeNoteClient {
       throw const FormatException('invalid_runtime_note_conflict');
     }
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
-    }
+    _throwIfHttpError(response);
 
     if (decoded == null) {
       throw const FormatException('invalid_runtime_note_response');
@@ -98,22 +101,15 @@ final class RuntimeNoteClient {
     required String vaultId,
     required String noteId,
   }) async {
-    final uri = _resolveVaultUri(
-      _managedVaultBaseUrl,
-      '/v1/vaults/${Uri.encodeComponent(vaultId)}/notes/'
-      '${Uri.encodeComponent(noteId)}',
-    );
-    final response = await _httpClient.get(
-      uri,
+    final response = await _apiClient.requestJson(
+      method: 'GET',
+      path: _notePath(vaultId: vaultId, noteId: noteId),
       headers: <String, String>{
-        'authorization': 'Bearer $_idToken',
         'accept': 'application/json',
       },
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
-    }
+    _throwIfHttpError(response);
 
     final decoded = response.tryDecodeObject();
     if (decoded == null) {
@@ -126,21 +122,15 @@ final class RuntimeNoteClient {
     required String vaultId,
     int limit = 100,
   }) async {
-    final uri = _resolveVaultUri(
-      _managedVaultBaseUrl,
-      '/v1/vaults/${Uri.encodeComponent(vaultId)}/notes?limit=$limit',
-    );
-    final response = await _httpClient.get(
-      uri,
+    final response = await _apiClient.requestJson(
+      method: 'GET',
+      path: _noteListPath(vaultId: vaultId, limit: limit),
       headers: <String, String>{
-        'authorization': 'Bearer $_idToken',
         'accept': 'application/json',
       },
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
-    }
+    _throwIfHttpError(response);
 
     final decoded = response.tryDecodeObject();
     final rawItems = decoded?['items'];
@@ -160,18 +150,16 @@ final class RuntimeNoteClient {
     required String noteId,
     required String? baseRevision,
   }) async {
-    final query = baseRevision == null
-        ? ''
-        : '?base_revision=${Uri.encodeQueryComponent(baseRevision)}';
-    final uri = _resolveVaultUri(
-      _managedVaultBaseUrl,
-      '/v1/vaults/${Uri.encodeComponent(vaultId)}/notes/'
-      '${Uri.encodeComponent(noteId)}$query',
-    );
-    final response = await _httpClient.delete(
-      uri,
+    final response = await _apiClient.requestJson(
+      method: 'DELETE',
+      path: _notePath(
+        vaultId: vaultId,
+        noteId: noteId,
+        queryParameters: <String, String>{
+          if (baseRevision != null) 'base_revision': baseRevision,
+        },
+      ),
       headers: <String, String>{
-        'authorization': 'Bearer $_idToken',
         'accept': 'application/json',
       },
     );
@@ -187,14 +175,20 @@ final class RuntimeNoteClient {
       throw const FormatException('invalid_runtime_note_conflict');
     }
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
-    }
+    _throwIfHttpError(response);
   }
 
   void dispose() {
-    _httpClient.close();
+    _apiClient.dispose();
   }
+}
+
+void _throwIfHttpError(RuntimeApiJsonResponse response) {
+  if (response.statusCode >= 200 && response.statusCode < 300) return;
+  throw RuntimeNoteHttpException(
+    statusCode: response.statusCode,
+    body: response.body,
+  );
 }
 
 RuntimeNote _noteFromJson(Map<String, Object?> json) {
@@ -215,18 +209,32 @@ RuntimeNote _noteFromJson(Map<String, Object?> json) {
   );
 }
 
-Uri _resolveVaultUri(String baseUrl, String path) {
-  try {
-    return Uri.parse(baseUrl).resolve(path);
-  } catch (_) {
-    throw FormatException('invalid_managed_vault_base_url', baseUrl);
-  }
-}
-
 String _requiredString(Map<String, Object?> json, String key) {
   final value = json[key];
   if (value is String) return value;
   throw const FormatException('invalid_runtime_note_fields');
+}
+
+String _noteListPath({
+  required String vaultId,
+  required int limit,
+}) {
+  final query = Uri(queryParameters: <String, String>{
+    'limit': '$limit',
+  }).query;
+  return '/v1/runtime/vaults/${Uri.encodeComponent(vaultId)}/notes?$query';
+}
+
+String _notePath({
+  required String vaultId,
+  required String noteId,
+  Map<String, String> queryParameters = const <String, String>{},
+}) {
+  final query = queryParameters.isEmpty
+      ? ''
+      : '?${Uri(queryParameters: queryParameters).query}';
+  return '/v1/runtime/vaults/${Uri.encodeComponent(vaultId)}/notes/'
+      '${Uri.encodeComponent(noteId)}$query';
 }
 
 int _requiredInt(Map<String, Object?> json, String key) {

@@ -24,6 +24,32 @@ final class CloudRuntimeApiException implements Exception {
   }
 }
 
+final class RuntimeApiJsonResponse {
+  const RuntimeApiJsonResponse({
+    required this.uri,
+    required this.statusCode,
+    required this.body,
+  });
+
+  final Uri uri;
+  final int statusCode;
+  final String body;
+
+  Map<String, dynamic>? tryDecodeObject() {
+    if (body.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(body) as Object?;
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) {
+        return decoded.map((key, value) => MapEntry('$key', value));
+      }
+    } on FormatException {
+      return null;
+    }
+    return null;
+  }
+}
+
 final class RuntimeApiClient {
   RuntimeApiClient({
     RuntimeConnectionStore? connectionStore,
@@ -71,6 +97,38 @@ final class RuntimeApiClient {
       path: path,
       body: body,
       headers: headers,
+    );
+  }
+
+  Future<RuntimeApiJsonResponse> requestJson({
+    required String method,
+    required String path,
+    Map<String, Object?>? body,
+    Map<String, String>? headers,
+  }) async {
+    final connection =
+        await (_connectionLoader ?? _connectionStore.loadConnection)();
+    if (connection == null) {
+      throw StateError('missing_cloud_runtime_connection');
+    }
+
+    final uri = Uri.parse(connection.manifest.apiBaseUrl).resolve(path);
+    final request = http.Request(method, uri);
+    request.headers.addAll(_buildHeaders(connection.profile));
+    if (headers != null) {
+      request.headers.addAll(headers);
+    }
+    if (body != null) {
+      request.headers['content-type'] = 'application/json';
+      request.body = jsonEncode(body);
+    }
+
+    final streamed = await _httpClient.send(request);
+    final response = await http.Response.fromStream(streamed);
+    return RuntimeApiJsonResponse(
+      uri: uri,
+      statusCode: response.statusCode,
+      body: utf8.decode(response.bodyBytes),
     );
   }
 
@@ -149,38 +207,24 @@ final class RuntimeApiClient {
     Map<String, Object?>? body,
     Map<String, String>? headers,
   }) async {
-    final connection =
-        await (_connectionLoader ?? _connectionStore.loadConnection)();
-    if (connection == null) {
-      throw StateError('missing_cloud_runtime_connection');
-    }
-
-    final uri = Uri.parse(connection.manifest.apiBaseUrl).resolve(path);
-    final request = http.Request(method, uri);
-    request.headers.addAll(_buildHeaders(connection.profile));
-    if (headers != null) {
-      request.headers.addAll(headers);
-    }
-    if (body != null) {
-      request.headers['content-type'] = 'application/json';
-      request.body = jsonEncode(body);
-    }
-
-    final streamed = await _httpClient.send(request);
-    final response = await http.Response.fromStream(streamed);
-    final responseBody = utf8.decode(response.bodyBytes);
+    final response = await requestJson(
+      method: method,
+      path: path,
+      body: body,
+      headers: headers,
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw CloudRuntimeApiException(
-        uri: uri,
+        uri: response.uri,
         statusCode: response.statusCode,
-        responseBody: responseBody,
+        responseBody: response.body,
       );
     }
 
-    if (responseBody.trim().isEmpty) {
+    if (response.body.trim().isEmpty) {
       return null;
     }
-    final decoded = jsonDecode(responseBody);
+    final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('invalid_cloud_runtime_response');
     }

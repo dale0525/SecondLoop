@@ -2,13 +2,17 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/runtime_api_client.dart';
+import '../../core/cloud/runtime_connection_store.dart';
+import '../../core/cloud/runtime_manifest.dart';
 import '../../core/cloud/runtime_note_client.dart';
+import '../../core/cloud/runtime_profile.dart';
 import '../../core/offline_edit/local_edit_store.dart';
 import '../../core/offline_edit/local_edit_sync_service.dart';
-import '../../core/sync/sync_config_store.dart';
 import '../../i18n/strings.g.dart';
 import 'note_editor_controller.dart';
 import 'note_editor_page.dart';
@@ -18,14 +22,16 @@ class NotesHomePage extends StatefulWidget {
   const NotesHomePage({
     super.key,
     this.store,
-    this.configStore,
+    this.connectionStore,
     this.connectivity,
+    this.noteHttpClient,
     this.nowMs,
   });
 
   final LocalEditStore? store;
-  final SyncConfigStore? configStore;
+  final RuntimeConnectionStore? connectionStore;
   final Connectivity? connectivity;
+  final http.Client? noteHttpClient;
   final int Function()? nowMs;
 
   @override
@@ -34,7 +40,7 @@ class NotesHomePage extends StatefulWidget {
 
 class _NotesHomePageState extends State<NotesHomePage> {
   LocalEditStore? _store;
-  SyncConfigStore? _configStore;
+  late final RuntimeConnectionStore _connectionStore;
   RuntimeNoteClient? _noteClient;
   Future<_NotesLoadResult>? _loadFuture;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
@@ -43,7 +49,7 @@ class _NotesHomePageState extends State<NotesHomePage> {
   @override
   void initState() {
     super.initState();
-    _configStore = widget.configStore ?? SyncConfigStore();
+    _connectionStore = widget.connectionStore ?? RuntimeConnectionStore();
     _connectivitySub =
         (widget.connectivity ?? Connectivity()).onConnectivityChanged.listen(
       (results) {
@@ -69,7 +75,7 @@ class _NotesHomePageState extends State<NotesHomePage> {
     if (widget.store == null) {
       unawaited(_store?.close());
     }
-    _noteClient?.dispose();
+    _disposeNoteClient();
     super.dispose();
   }
 
@@ -98,35 +104,60 @@ class _NotesHomePageState extends State<NotesHomePage> {
 
   Future<_NotesRuntimeTarget?> _resolveRuntimeTarget() async {
     final cloudScope = CloudAuthScope.maybeOf(context);
-    final uid = cloudScope?.controller.uid?.trim() ?? '';
-    final idToken = await readCloudAuthIdToken(
-      cloudScope?.controller,
-      mode: CloudAuthAccessMode.interactive,
+    final storedConnection = await _connectionStore.loadConnection();
+    final storedTarget = await _targetFromStoredConnection(
+      storedConnection,
+      cloudScope,
     );
-    final baseUrl = await _configStore?.resolveManagedVaultBaseUrl();
-    if (uid.isEmpty || idToken == null || idToken.trim().isEmpty) {
-      return null;
+    if (storedTarget != null) return storedTarget;
+    return _managedProTargetFromCloudScope(cloudScope);
+  }
+
+  Future<_NotesRuntimeTarget?> _targetFromStoredConnection(
+    CloudRuntimeConnection? connection,
+    CloudAuthScope? cloudScope,
+  ) async {
+    if (connection == null) return null;
+    final vaultId = _vaultIdForConnection(connection, cloudScope);
+    if (vaultId.isEmpty) return null;
+    if (connection.profile.runtimeMode == CloudRuntimeMode.selfManaged) {
+      return _NotesRuntimeTarget(
+        vaultId: vaultId,
+        loadConnection: () async => connection,
+      );
     }
-    final normalizedBaseUrl = baseUrl?.trim() ?? '';
-    if (normalizedBaseUrl.isEmpty) return null;
+
+    final runtimeConnection = await _managedProConnectionWithToken(
+      connection,
+      cloudScope,
+    );
+    if (runtimeConnection == null) return null;
     return _NotesRuntimeTarget(
-      managedVaultBaseUrl: normalizedBaseUrl,
-      vaultId: uid,
-      idToken: idToken,
+      vaultId: vaultId,
+      loadConnection: () => _managedProConnectionWithToken(
+        connection,
+        cloudScope,
+      ),
     );
   }
 
   RuntimeNoteClient _replaceNoteClient(_NotesRuntimeTarget target) {
-    final current = _noteClient;
-    if (current != null) {
-      current.dispose();
-    }
+    _disposeNoteClient();
     final client = RuntimeNoteClient(
-      managedVaultBaseUrl: target.managedVaultBaseUrl,
-      idToken: target.idToken,
+      apiClient: RuntimeApiClient(
+        connectionLoader: target.loadConnection,
+        httpClient: widget.noteHttpClient,
+      ),
     );
     _noteClient = client;
     return client;
+  }
+
+  void _disposeNoteClient() {
+    final current = _noteClient;
+    if (current == null) return;
+    current.dispose();
+    _noteClient = null;
   }
 
   Future<void> _flushPendingAndReload() async {
@@ -254,14 +285,12 @@ class _NotesHomePageState extends State<NotesHomePage> {
 
 final class _NotesRuntimeTarget {
   const _NotesRuntimeTarget({
-    required this.managedVaultBaseUrl,
     required this.vaultId,
-    required this.idToken,
+    required this.loadConnection,
   });
 
-  final String managedVaultBaseUrl;
   final String vaultId;
-  final String idToken;
+  final Future<CloudRuntimeConnection?> Function() loadConnection;
 }
 
 final class _NotesLoadResult {
@@ -277,4 +306,116 @@ final class _NotesLoadResult {
 bool _isOffline(List<ConnectivityResult> results) {
   return results.isEmpty ||
       results.every((result) => result == ConnectivityResult.none);
+}
+
+String _vaultIdForConnection(
+  CloudRuntimeConnection connection,
+  CloudAuthScope? cloudScope,
+) {
+  final profileVaultId = connection.profile.vaultId.trim();
+  if (profileVaultId.isNotEmpty) return profileVaultId;
+  final manifestVaultId = connection.manifest.vaultBinding?.trim() ?? '';
+  if (manifestVaultId.isNotEmpty) return manifestVaultId;
+  if (connection.profile.runtimeMode == CloudRuntimeMode.managedPro) {
+    return cloudScope?.controller.uid?.trim() ?? '';
+  }
+  return '';
+}
+
+Future<_NotesRuntimeTarget?> _managedProTargetFromCloudScope(
+  CloudAuthScope? cloudScope,
+) async {
+  final uid = cloudScope?.controller.uid?.trim() ?? '';
+  final baseUrl = cloudScope?.gatewayConfig.baseUrl.trim() ?? '';
+  if (uid.isEmpty || baseUrl.isEmpty) return null;
+  final connection = await _managedProConnectionFromCloudScope(cloudScope);
+  if (connection == null) return null;
+  return _NotesRuntimeTarget(
+    vaultId: uid,
+    loadConnection: () => _managedProConnectionFromCloudScope(cloudScope),
+  );
+}
+
+Future<CloudRuntimeConnection?> _managedProConnectionWithToken(
+  CloudRuntimeConnection connection,
+  CloudAuthScope? cloudScope,
+) async {
+  final baseUrl = connection.manifest.apiBaseUrl.trim().isNotEmpty
+      ? connection.manifest.apiBaseUrl.trim()
+      : connection.profile.apiBaseUrl.trim().isNotEmpty
+          ? connection.profile.apiBaseUrl.trim()
+          : cloudScope?.gatewayConfig.baseUrl.trim() ?? '';
+  final token = connection.profile.authToken.trim().isNotEmpty
+      ? connection.profile.authToken.trim()
+      : (await readCloudAuthIdToken(
+            cloudScope?.controller,
+            mode: CloudAuthAccessMode.interactive,
+          ))
+              ?.trim() ??
+          '';
+  if (baseUrl.isEmpty || token.isEmpty) return null;
+  return _copyRuntimeConnection(
+    connection,
+    apiBaseUrl: baseUrl,
+    authToken: token,
+  );
+}
+
+Future<CloudRuntimeConnection?> _managedProConnectionFromCloudScope(
+  CloudAuthScope? cloudScope,
+) async {
+  final baseUrl = cloudScope?.gatewayConfig.baseUrl.trim() ?? '';
+  final token = (await readCloudAuthIdToken(
+        cloudScope?.controller,
+        mode: CloudAuthAccessMode.interactive,
+      ))
+          ?.trim() ??
+      '';
+  if (baseUrl.isEmpty || token.isEmpty) return null;
+  return CloudRuntimeConnection(
+    profile: CloudRuntimeProfile(
+      runtimeMode: CloudRuntimeMode.managedPro,
+      apiBaseUrl: baseUrl,
+      authMode: CloudRuntimeAuthMode.hostedSession,
+      authToken: token,
+      capabilityManifestId: 'managed-pro-runtime',
+      manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+    ),
+    manifest: CloudRuntimeManifest(
+      manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+      runtimeMode: CloudRuntimeMode.managedPro,
+      apiBaseUrl: baseUrl,
+      authMode: CloudRuntimeAuthMode.hostedSession,
+      capabilities: CloudRuntimeRequiredCapabilities.all,
+      skills: CloudRuntimeKnownSkills.all,
+    ),
+  );
+}
+
+CloudRuntimeConnection _copyRuntimeConnection(
+  CloudRuntimeConnection connection, {
+  required String apiBaseUrl,
+  required String authToken,
+}) {
+  return CloudRuntimeConnection(
+    profile: CloudRuntimeProfile(
+      runtimeMode: connection.profile.runtimeMode,
+      apiBaseUrl: apiBaseUrl,
+      authMode: connection.profile.authMode,
+      authToken: authToken,
+      capabilityManifestId: connection.profile.capabilityManifestId,
+      manifestVersion: connection.profile.manifestVersion,
+      vaultId: connection.profile.vaultId,
+    ),
+    manifest: CloudRuntimeManifest(
+      manifestVersion: connection.manifest.manifestVersion,
+      runtimeMode: connection.manifest.runtimeMode,
+      apiBaseUrl: apiBaseUrl,
+      authMode: connection.manifest.authMode,
+      capabilities: connection.manifest.capabilities,
+      skills: connection.manifest.skills,
+      vaultBinding: connection.manifest.vaultBinding,
+      providerCostOwner: connection.manifest.providerCostOwner,
+    ),
+  );
 }

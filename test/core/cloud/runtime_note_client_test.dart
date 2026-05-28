@@ -3,7 +3,11 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:secondloop/core/cloud/runtime_api_client.dart';
+import 'package:secondloop/core/cloud/runtime_connection_store.dart';
+import 'package:secondloop/core/cloud/runtime_manifest.dart';
 import 'package:secondloop/core/cloud/runtime_note_client.dart';
+import 'package:secondloop/core/cloud/runtime_profile.dart';
 
 void main() {
   test('saveNote sends PUT bearer request and parses success', () async {
@@ -11,9 +15,9 @@ void main() {
       expect(request.method, 'PUT');
       expect(
         request.url.toString(),
-        'https://vault.test/v1/vaults/vault-1/notes/note-1',
+        'https://runtime.test/v1/runtime/vaults/vault-1/notes/note-1',
       );
-      expect(request.headers['authorization'], 'Bearer token-1');
+      expect(request.headers['authorization'], 'Bearer runtime-token-1');
       expect(request.headers['accept'], 'application/json');
 
       final body = jsonDecode(request.body) as Map<String, dynamic>;
@@ -33,11 +37,7 @@ void main() {
       );
     });
 
-    final client = RuntimeNoteClient(
-      managedVaultBaseUrl: 'https://vault.test',
-      idToken: 'token-1',
-      httpClient: httpClient,
-    );
+    final client = _runtimeNoteClient(httpClient);
 
     final note = await client.saveNote(
       vaultId: 'vault-1',
@@ -58,7 +58,7 @@ void main() {
     final httpClient = MockClient((request) async {
       expect(
         request.url.toString(),
-        'https://vault.test/v1/vaults/vault%2Fwith%20space/notes/'
+        'https://runtime.test/v1/runtime/vaults/vault%2Fwith%20space/notes/'
         'note%2Fwith%20space',
       );
       return http.Response(
@@ -73,11 +73,7 @@ void main() {
       );
     });
 
-    final client = RuntimeNoteClient(
-      managedVaultBaseUrl: 'https://vault.test',
-      idToken: 'token-1',
-      httpClient: httpClient,
-    );
+    final client = _runtimeNoteClient(httpClient);
 
     final note = await client.saveNote(
       vaultId: 'vault/with space',
@@ -104,11 +100,7 @@ void main() {
       );
     });
 
-    final client = RuntimeNoteClient(
-      managedVaultBaseUrl: 'https://vault.test',
-      idToken: 'token-1',
-      httpClient: httpClient,
-    );
+    final client = _runtimeNoteClient(httpClient);
 
     await expectLater(
       client.saveNote(
@@ -137,11 +129,7 @@ void main() {
         );
       });
 
-      final client = RuntimeNoteClient(
-        managedVaultBaseUrl: 'https://vault.test',
-        idToken: 'token-1',
-        httpClient: httpClient,
-      );
+      final client = _runtimeNoteClient(httpClient);
 
       await expectLater(
         client.saveNote(
@@ -173,11 +161,7 @@ void main() {
       );
     });
 
-    final client = RuntimeNoteClient(
-      managedVaultBaseUrl: 'https://vault.test',
-      idToken: 'token-1',
-      httpClient: httpClient,
-    );
+    final client = _runtimeNoteClient(httpClient);
 
     await expectLater(
       client.saveNote(
@@ -209,9 +193,9 @@ void main() {
       expect(request.method, 'GET');
       expect(
         request.url.toString(),
-        'https://vault.test/v1/vaults/vault-1/notes/note-1',
+        'https://runtime.test/v1/runtime/vaults/vault-1/notes/note-1',
       );
-      expect(request.headers['authorization'], 'Bearer token-1');
+      expect(request.headers['authorization'], 'Bearer runtime-token-1');
       return http.Response(
         jsonEncode({
           'id': 'note-1',
@@ -224,11 +208,7 @@ void main() {
       );
     });
 
-    final client = RuntimeNoteClient(
-      managedVaultBaseUrl: 'https://vault.test',
-      idToken: 'token-1',
-      httpClient: httpClient,
-    );
+    final client = _runtimeNoteClient(httpClient);
 
     final note = await client.fetchNote(vaultId: 'vault-1', noteId: 'note-1');
 
@@ -242,9 +222,9 @@ void main() {
       expect(request.method, 'GET');
       expect(
         request.url.toString(),
-        'https://vault.test/v1/vaults/vault-1/notes?limit=50',
+        'https://runtime.test/v1/runtime/vaults/vault-1/notes?limit=50',
       );
-      expect(request.headers['authorization'], 'Bearer token-1');
+      expect(request.headers['authorization'], 'Bearer runtime-token-1');
       return http.Response(
         jsonEncode({
           'items': [
@@ -269,11 +249,7 @@ void main() {
       );
     });
 
-    final client = RuntimeNoteClient(
-      managedVaultBaseUrl: 'https://vault.test',
-      idToken: 'token-1',
-      httpClient: httpClient,
-    );
+    final client = _runtimeNoteClient(httpClient);
 
     final notes = await client.listNotes(vaultId: 'vault-1', limit: 50);
 
@@ -282,23 +258,36 @@ void main() {
     expect(notes.first.revision, 'rev-2');
   });
 
+  test('listNotes throws typed HTTP exception for non-success response',
+      () async {
+    final httpClient = MockClient((request) async {
+      return http.Response('not found', 404);
+    });
+    final client = _runtimeNoteClient(httpClient);
+
+    await expectLater(
+      client.listNotes(vaultId: 'vault-1'),
+      throwsA(
+        isA<RuntimeNoteHttpException>()
+            .having((error) => error.statusCode, 'statusCode', 404)
+            .having((error) => error.body, 'body', 'not found'),
+      ),
+    );
+  });
+
   test('deleteNote sends DELETE with encoded base revision', () async {
     final httpClient = MockClient((request) async {
       expect(request.method, 'DELETE');
       expect(
         request.url.toString(),
-        'https://vault.test/v1/vaults/vault-1/notes/note-1'
+        'https://runtime.test/v1/runtime/vaults/vault-1/notes/note-1'
         '?base_revision=rev%2F1',
       );
-      expect(request.headers['authorization'], 'Bearer token-1');
+      expect(request.headers['authorization'], 'Bearer runtime-token-1');
       return http.Response('', 204);
     });
 
-    final client = RuntimeNoteClient(
-      managedVaultBaseUrl: 'https://vault.test',
-      idToken: 'token-1',
-      httpClient: httpClient,
-    );
+    final client = _runtimeNoteClient(httpClient);
 
     await client.deleteNote(
       vaultId: 'vault-1',
@@ -307,3 +296,31 @@ void main() {
     );
   });
 }
+
+RuntimeNoteClient _runtimeNoteClient(http.Client httpClient) {
+  return RuntimeNoteClient(
+    apiClient: RuntimeApiClient(
+      connectionLoader: () async => _runtimeConnection,
+      httpClient: httpClient,
+    ),
+  );
+}
+
+const _runtimeConnection = CloudRuntimeConnection(
+  profile: CloudRuntimeProfile(
+    runtimeMode: CloudRuntimeMode.selfManaged,
+    apiBaseUrl: 'https://runtime.test/',
+    authMode: CloudRuntimeAuthMode.runtimeToken,
+    authToken: 'runtime-token-1',
+    capabilityManifestId: 'manifest-self-1',
+    manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+    vaultId: 'vault-1',
+  ),
+  manifest: CloudRuntimeManifest(
+    manifestVersion: RuntimeConnectionStore.supportedManifestVersion,
+    runtimeMode: CloudRuntimeMode.selfManaged,
+    apiBaseUrl: 'https://runtime.test/',
+    authMode: CloudRuntimeAuthMode.runtimeToken,
+    capabilities: [CloudRuntimeCapability('chat')],
+  ),
+);
