@@ -149,14 +149,15 @@ void main() {
     expect(find.text('CITATIONS: PRESENT'), findsNothing);
   });
 
-  testWidgets('non-workbench breakpoint keeps the responsive chat shell',
+  testWidgets('bottom-nav breakpoint keeps the responsive chat shell',
       (tester) async {
     await _pumpWorkbench(
       tester,
-      size: const Size(1199, 1057),
+      size: const Size(900, 1057),
     );
 
-    expect(find.byKey(const ValueKey('app_shell_sidebar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_shell_bottom_nav')), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_shell_sidebar')), findsNothing);
     expect(find.byKey(const ValueKey('desktop_workbench_chat_column')),
         findsNothing);
     expect(find.byKey(const ValueKey('agent_operating_message_list')),

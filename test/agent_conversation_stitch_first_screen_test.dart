@@ -231,7 +231,7 @@ void main() {
     expect(find.text('Memory Candidate'), findsOneWidget);
   });
 
-  testWidgets('intermediate desktop widths keep the Stitch chat surface',
+  testWidgets('intermediate desktop widths render the Stitch agent workbench',
       (tester) async {
     final repository = _FakeRuntimeAgentStateRepository(_firstScreenState());
 
@@ -280,11 +280,12 @@ void main() {
     expect(find.byKey(const ValueKey('app_shell_bottom_nav')), findsNothing);
     expect(find.byKey(const ValueKey('app_shell_sidebar')), findsOneWidget);
     expect(find.byKey(const ValueKey('desktop_workbench_chat_column')),
-        findsNothing);
-    expect(find.byKey(const ValueKey('agent_operating_message_list')),
         findsOneWidget);
-    expect(find.text('SecondLoop Agent'), findsOneWidget);
-    expect(find.text('Task Created'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent_operating_message_list')),
+        findsNothing);
+    expect(find.text('SecondLoop Agent'), findsNothing);
+    expect(find.textContaining('长期记忆候选'), findsOneWidget);
+    expect(find.text('Pending Approvals'), findsOneWidget);
   });
 
   testWidgets('desktop widths render the Stitch agent workbench',

@@ -914,9 +914,8 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
             builder: (context, constraints) {
               final shellDesktopWorkbench =
                   AppShellLayoutScope.desktopWorkbenchOf(context);
-              final useDesktopWorkbench = shellDesktopWorkbench == null
-                  ? constraints.maxWidth >= 960
-                  : shellDesktopWorkbench && constraints.maxWidth >= 960;
+              final useDesktopWorkbench =
+                  shellDesktopWorkbench ?? (constraints.maxWidth >= 960);
               if (!useDesktopWorkbench) {
                 return _buildOperatingSystemMobileShell(
                   context,
