@@ -10,11 +10,16 @@ import 'package:secondloop/core/cloud/runtime_agent_state_repository.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_task_summary.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
+  setUp(() {
+    LocaleSettings.setLocale(AppLocale.en);
+  });
+
   testWidgets(
     'managed pro AgentTasksPage reads tasks from runtime state',
     (tester) async {
@@ -67,8 +72,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.requests, [('uid_1', 'loop_home')]);
+      expect(
+        find.text(AppLocale.en.translations.chat.agentTasks.allTasks),
+        findsOneWidget,
+      );
       expect(find.text('完成周报'), findsOneWidget);
-      expect(find.text('No open tasks yet.'), findsNothing);
+      expect(
+        find.text(AppLocale.en.translations.chat.agentTasks.empty),
+        findsNothing,
+      );
     },
   );
 
@@ -126,10 +138,104 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.requests, [('uid_1', 'loop_home')]);
+      expect(
+        find.text(AppLocale.en.translations.chat.agentTasks.allTasks),
+        findsOneWidget,
+      );
       expect(find.text('给孩子买生日礼物'), findsOneWidget);
-      expect(find.text('No open tasks yet.'), findsNothing);
+      expect(
+        find.text(AppLocale.en.translations.chat.agentTasks.empty),
+        findsNothing,
+      );
     },
   );
+
+  testWidgets('AgentTasksPage localizes empty task state in English',
+      (tester) async {
+    final repository = _FakeRuntimeAgentStateRepository(_emptyRuntimeState());
+
+    await tester.pumpWidget(_agentTasksPageWithRepository(repository));
+    await tester.pumpAndSettle();
+
+    expect(repository.requests, [('uid_1', 'loop_home')]);
+    expect(
+      find.text(AppLocale.en.translations.chat.agentTasks.allTasks),
+      findsOneWidget,
+    );
+    expect(
+      find.text(AppLocale.en.translations.chat.agentTasks.empty),
+      findsOneWidget,
+    );
+    expect(
+      find.text(AppLocale.zhCn.translations.chat.agentTasks.empty),
+      findsNothing,
+    );
+  });
+
+  testWidgets('AgentTasksPage localizes empty task state in zh-CN',
+      (tester) async {
+    LocaleSettings.setLocale(AppLocale.zhCn);
+    final repository = _FakeRuntimeAgentStateRepository(_emptyRuntimeState());
+
+    await tester.pumpWidget(_agentTasksPageWithRepository(repository));
+    await tester.pumpAndSettle();
+
+    expect(repository.requests, [('uid_1', 'loop_home')]);
+    expect(
+      find.text(AppLocale.zhCn.translations.chat.agentTasks.allTasks),
+      findsOneWidget,
+    );
+    expect(
+      find.text(AppLocale.zhCn.translations.chat.agentTasks.empty),
+      findsOneWidget,
+    );
+    expect(
+      find.text(AppLocale.en.translations.chat.agentTasks.empty),
+      findsNothing,
+    );
+  });
+}
+
+Widget _agentTasksPageWithRepository(
+  RuntimeAgentStateRepository repository,
+) {
+  return wrapWithI18n(
+    MaterialApp(
+      home: AppBackendScope(
+        backend: _ThrowingTodoBackend(),
+        child: CloudAuthScope(
+          controller: _CloudAuthController(),
+          gatewayConfig: const CloudGatewayConfig(
+            baseUrl: 'https://gateway.example.test',
+            modelName: 'cloud',
+          ),
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: AgentTasksPage(
+              runtimeAgentStateRepository: repository,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+RuntimeAgentState _emptyRuntimeState() {
+  return RuntimeAgentState.fromJson(const {
+    'vault_id': 'uid_1',
+    'conversation_id': 'loop_home',
+    'conversation_turns': [],
+    'working_set_records': [],
+    'tasks': [],
+    'memory_records': [],
+    'recurring_reminder_rules': [],
+    'approval_items': [],
+    'recent_entity_refs': [],
+    'latest_context_snapshot': null,
+    'audit_refs': [],
+  });
 }
 
 final class _FakeRuntimeAgentStateRepository

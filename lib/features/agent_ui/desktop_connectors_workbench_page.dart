@@ -6,6 +6,7 @@ import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/runtime_agent_state_repository.dart';
 import '../../core/cloud/runtime_connection_helpers.dart';
+import '../../i18n/strings.g.dart';
 import 'agent_desktop_runtime_helpers.dart';
 import 'agent_desktop_workbench_widgets.dart';
 import 'agent_operating_system_tokens.dart';
@@ -94,8 +95,8 @@ final class _DesktopConnectorsWorkbenchPageState
     final repository = _repository();
     final vaultId = _vaultId();
     if (repository == null || vaultId.isEmpty) {
-      const message =
-          'tool_unavailable: runtime capability state is not configured';
+      final message =
+          context.t.chat.operating.desktopWorkbench.connectors.unavailableState;
       setState(() {
         _loading = false;
         _error = message;
@@ -126,7 +127,8 @@ final class _DesktopConnectorsWorkbenchPageState
       });
     } catch (error) {
       if (!mounted) return;
-      final message = 'tool_unavailable: $error';
+      final message = context.t.chat.operating.desktopWorkbench.connectors
+          .runtimeUnavailable(error: '$error');
       setState(() {
         _loading = false;
         _error = message;
@@ -151,7 +153,8 @@ final class _DesktopConnectorsWorkbenchPageState
 
   @override
   Widget build(BuildContext context) {
-    final connectors = _connectorCatalog(_state, _error);
+    final t = context.t.chat.operating.desktopWorkbench.connectors;
+    final connectors = _connectorCatalog(context, _state, _error);
     final selected = connectors
             .where((connector) => connector.id == _selectedConnectorId)
             .firstOrNull ??
@@ -164,9 +167,8 @@ final class _DesktopConnectorsWorkbenchPageState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DesktopWorkbenchHeader(
-            title: 'Connectors',
-            subtitle:
-                'Runtime bindings, provider availability, and safe degraded states',
+            title: t.title,
+            subtitle: t.subtitle,
             actions: [
               FilledButton.icon(
                 key: const ValueKey('desktop_connectors_capability_check'),
@@ -176,18 +178,18 @@ final class _DesktopConnectorsWorkbenchPageState
                         if (_repository() == null || _vaultId().isEmpty) {
                           showDesktopWorkbenchMessage(
                             context,
-                            'tool_unavailable: runtime capability state is not configured',
+                            t.unavailableState,
                           );
                         } else {
                           showDesktopWorkbenchMessage(
                             context,
-                            'Refreshing runtime capability state...',
+                            t.refreshing,
                           );
                         }
                         unawaited(_refresh(announceUnavailable: true));
                       },
                 icon: const Icon(Icons.play_circle_outline_rounded, size: 18),
-                label: const Text('Run capability check'),
+                label: Text(t.runCapabilityCheck),
               ),
             ],
           ),
@@ -213,15 +215,15 @@ final class _DesktopConnectorsWorkbenchPageState
                     connector: selected,
                     loading: _loading,
                     onConnect: () => _openSettingsOrDegrade(
-                      'needs_configuration: configure ${selected.label} before enabling this connector',
+                      t.needsConfiguration(connector: selected.label),
                     ),
                     onDraftTest: () => showDesktopWorkbenchMessage(
                       context,
-                      'draft-only: draft generation can run without external send permissions',
+                      t.draftOnly,
                     ),
                     onRevoke: () => showDesktopWorkbenchMessage(
                       context,
-                      'tool_unavailable: connector revocation endpoint is not available in this build',
+                      t.revokeUnavailable,
                     ),
                     onRetry: _loading
                         ? null
@@ -265,8 +267,9 @@ final class _ConnectorCatalogue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = context.t.chat.operating.desktopWorkbench.connectors;
     return DesktopWorkbenchPanel(
-      title: 'Catalogue',
+      title: text.catalogue,
       trailing: const Icon(Icons.filter_list_rounded, size: 18),
       padding: const EdgeInsets.all(16),
       child: ListView.separated(
@@ -378,6 +381,7 @@ final class _ConnectorDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentOs;
+    final t = context.t.chat.operating.desktopWorkbench.connectors;
     return DesktopWorkbenchPanel(
       title: connector.detailTitle,
       trailing: ConstrainedBox(
@@ -443,7 +447,7 @@ final class _ConnectorDetail extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'Tool Matrix',
+            t.toolMatrix,
             style: AgentOperatingSystemTokens.labelLg.copyWith(
               color: colors.onSurface,
               fontWeight: FontWeight.w800,
@@ -473,7 +477,7 @@ final class _ConnectorDetail extends StatelessWidget {
               OutlinedButton(
                 key: const ValueKey('desktop_connector_test_draft'),
                 onPressed: onDraftTest,
-                child: const Text('Test draft generation'),
+                child: Text(t.testDraftGeneration),
               ),
               OutlinedButton(
                 key: const ValueKey('desktop_connector_revoke_access'),
@@ -481,13 +485,13 @@ final class _ConnectorDetail extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFBA1A1A),
                 ),
-                child: const Text('Revoke access'),
+                child: Text(t.revokeAccess),
               ),
               OutlinedButton.icon(
                 key: const ValueKey('desktop_connector_retry_health'),
                 onPressed: loading ? null : onRetry,
                 icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text('Retry health check'),
+                label: Text(t.retryHealthCheck),
               ),
             ],
           ),
@@ -563,10 +567,11 @@ final class _ConnectorRuntimePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentOs;
+    final t = context.t.chat.operating.desktopWorkbench.connectors;
     return ListView(
       children: [
         _SidePanelCard(
-          title: 'Skill Packages',
+          title: t.skillPackages,
           child: Wrap(
             spacing: 6,
             runSpacing: 6,
@@ -587,30 +592,30 @@ final class _ConnectorRuntimePanel extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _SidePanelCard(
-          title: 'Runtime Metrics',
+          title: t.runtimeMetrics,
           child: Column(
             children: [
               _MetricRow(
-                label: 'Smoke Test Status',
-                value: error == null ? 'Passed' : 'tool_unavailable',
+                label: t.smokeTestStatus,
+                value: error == null ? t.passed : 'tool_unavailable',
               ),
               _MetricRow(
-                label: 'Last Check',
-                value: _lastRuntimeCheckLabel(state),
+                label: t.lastCheck,
+                value: _lastRuntimeCheckLabel(state, t.notReported),
               ),
-              const _MetricRow(label: 'Cost Policy', value: 'Strict Budget'),
-              const _MetricRow(label: 'Approval Policy', value: 'Standard'),
+              _MetricRow(label: t.costPolicy, value: t.strictBudget),
+              _MetricRow(label: t.approvalPolicy, value: t.standard),
             ],
           ),
         ),
         const SizedBox(height: 16),
         _SidePanelCard(
-          title: 'Audit Trail',
+          title: t.auditTrail,
           child: Wrap(
             spacing: 6,
             runSpacing: 6,
             children: [
-              for (final label in _auditLabelsFromState(state))
+              for (final label in _auditLabelsFromState(state, t.notReported))
                 DesktopWorkbenchBadge(label: label),
             ],
           ),
@@ -631,7 +636,7 @@ final class _ConnectorRuntimePanel extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'BYOK secrets are written only to user runtime secrets, not stored in app config.',
+                    t.byokSecretsNotice,
                     style: AgentOperatingSystemTokens.bodySm.copyWith(
                       color: colors.onSurface,
                     ),
@@ -740,7 +745,9 @@ final class _ConnectorTimeline extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Recent Connector Events'.toUpperCase(),
+              context.t.chat.operating.desktopWorkbench.connectors
+                  .recentConnectorEvents
+                  .toUpperCase(),
               style: AgentOperatingSystemTokens.labelMd.copyWith(
                 color: colors.onSurfaceVariant,
                 fontWeight: FontWeight.w800,
@@ -775,7 +782,8 @@ final class _ConnectorTimeline extends StatelessWidget {
                                 softWrap: true,
                                 style:
                                     AgentOperatingSystemTokens.bodySm.copyWith(
-                                  color: connector.statusLabel == 'Available'
+                                  color: connector.statusTone ==
+                                          _ConnectorStatusTone.available
                                       ? colors.onSurface
                                       : colors.onSurfaceVariant,
                                 ),

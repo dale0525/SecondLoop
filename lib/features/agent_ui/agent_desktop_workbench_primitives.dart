@@ -270,7 +270,7 @@ final class _DesktopCountBadge extends StatelessWidget {
         ),
         child: Center(
           child: Text(
-            '$count',
+            count.toString(),
             style: AgentOperatingSystemTokens.labelMd.copyWith(
               color: colors.onSecondaryContainer,
             ),

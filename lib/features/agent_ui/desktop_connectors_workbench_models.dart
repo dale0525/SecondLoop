@@ -1,154 +1,188 @@
 part of 'desktop_connectors_workbench_page.dart';
 
 List<_ConnectorView> _connectorCatalog(
+  BuildContext context,
   RuntimeAgentState? state,
   String? error,
 ) {
+  final text = context.t.chat.operating.desktopWorkbench.connectors;
+  final catalog = text.catalog;
+  final statuses = text.statuses;
   final runtimeManaged = state != null && error == null;
   final hasWebResearch =
       _stateMentions(state, 'web-research') || runtimeManaged;
   return [
     _ConnectorView(
       id: 'web_research',
-      label: 'Web Research',
+      label: catalog.webResearch.label,
       icon: Icons.language_rounded,
-      statusLabel: hasWebResearch ? 'Available' : 'Unknown',
+      statusLabel: hasWebResearch ? statuses.available : statuses.unknown,
+      statusTone: hasWebResearch
+          ? _ConnectorStatusTone.available
+          : _ConnectorStatusTone.unknown,
       tags: const ['citation_verified'],
-      detailTitle: 'Web Research Binding',
-      detailStatus: hasWebResearch ? 'Available' : 'Capability unknown',
-      authTitle: 'Runtime Skill State',
-      authMessage:
-          'Current facts must flow through web-research and return citations before the app marks them successful.',
-      primaryActionLabel: 'Open research policy',
+      detailTitle: catalog.webResearch.detailTitle,
+      detailStatus:
+          hasWebResearch ? statuses.available : statuses.capabilityUnknown,
+      authTitle: catalog.webResearch.authTitle,
+      authMessage: catalog.webResearch.authMessage,
+      primaryActionLabel: catalog.webResearch.primaryAction,
       eventLabel: hasWebResearch
-          ? 'Web research verified with citations'
-          : 'Web research capability not reported',
+          ? catalog.webResearch.eventVerified
+          : catalog.webResearch.eventMissing,
       tools: [
-        _ConnectorTool('Search Web', hasWebResearch ? 'available' : 'unknown'),
         _ConnectorTool(
-          'Verify Citations',
+          catalog.webResearch.tools.search,
           hasWebResearch ? 'available' : 'unknown',
         ),
-        const _ConnectorTool('Answer Current Facts', 'citation_required'),
-      ],
-    ),
-    const _ConnectorView(
-      id: 'email',
-      label: 'Email',
-      icon: Icons.mail_outline_rounded,
-      statusLabel: 'Needs Config',
-      tags: ['draft_only'],
-      detailTitle: 'Email Binding',
-      detailStatus: 'Degraded State (Draft Only)',
-      authTitle: 'Authentication State',
-      authMessage:
-          'OAuth token expired, revoked, or not configured. Draft generation remains available, but read/send tools are unavailable.',
-      primaryActionLabel: 'Connect Email',
-      eventLabel: 'Email connector needs configuration',
-      tools: [
-        _ConnectorTool('Read Email', 'tool_unavailable'),
-        _ConnectorTool('Summarize Email', 'tool_unavailable'),
-        _ConnectorTool('Create Draft', 'available'),
-        _ConnectorTool('Send Email', 'approval_required + needs_configuration'),
-      ],
-    ),
-    const _ConnectorView(
-      id: 'calendar',
-      label: 'Calendar',
-      icon: Icons.calendar_today_outlined,
-      statusLabel: 'Needs Config',
-      tags: ['approval_required'],
-      detailTitle: 'Calendar Binding',
-      detailStatus: 'Degraded State (Needs Configuration)',
-      authTitle: 'OAuth State',
-      authMessage:
-          'Calendar tools are unavailable until configured. Event creation and invitation changes remain approval-required.',
-      primaryActionLabel: 'Connect Calendar',
-      eventLabel: 'Calendar OAuth pending',
-      tools: [
-        _ConnectorTool('Read Calendar', 'tool_unavailable'),
         _ConnectorTool(
-          'Create Event',
+          catalog.webResearch.tools.verify,
+          hasWebResearch ? 'available' : 'unknown',
+        ),
+        _ConnectorTool(
+          catalog.webResearch.tools.currentFacts,
+          'citation_required',
+        ),
+      ],
+    ),
+    _ConnectorView(
+      id: 'email',
+      label: catalog.email.label,
+      icon: Icons.mail_outline_rounded,
+      statusLabel: statuses.needsConfig,
+      statusTone: _ConnectorStatusTone.needsConfig,
+      tags: ['draft_only'],
+      detailTitle: catalog.email.detailTitle,
+      detailStatus: statuses.emailDraftOnly,
+      authTitle: catalog.email.authTitle,
+      authMessage: catalog.email.authMessage,
+      primaryActionLabel: catalog.email.primaryAction,
+      eventLabel: catalog.email.event,
+      tools: [
+        _ConnectorTool(catalog.email.tools.read, 'tool_unavailable'),
+        _ConnectorTool(catalog.email.tools.summarize, 'tool_unavailable'),
+        _ConnectorTool(catalog.email.tools.draft, 'available'),
+        _ConnectorTool(
+          catalog.email.tools.send,
+          'approval_required + needs_configuration',
+        ),
+      ],
+    ),
+    _ConnectorView(
+      id: 'calendar',
+      label: catalog.calendar.label,
+      icon: Icons.calendar_today_outlined,
+      statusLabel: statuses.needsConfig,
+      statusTone: _ConnectorStatusTone.needsConfig,
+      tags: ['approval_required'],
+      detailTitle: catalog.calendar.detailTitle,
+      detailStatus: statuses.needsConfiguration,
+      authTitle: catalog.calendar.authTitle,
+      authMessage: catalog.calendar.authMessage,
+      primaryActionLabel: catalog.calendar.primaryAction,
+      eventLabel: catalog.calendar.event,
+      tools: [
+        _ConnectorTool(catalog.calendar.tools.read, 'tool_unavailable'),
+        _ConnectorTool(
+          catalog.calendar.tools.create,
           'approval_required + needs_configuration',
         ),
         _ConnectorTool(
-            'Send Invite', 'approval_required + needs_configuration'),
+          catalog.calendar.tools.invite,
+          'approval_required + needs_configuration',
+        ),
       ],
     ),
-    const _ConnectorView(
+    _ConnectorView(
       id: 'files_media',
-      label: 'Files & Media',
+      label: catalog.filesMedia.label,
       icon: Icons.folder_open_rounded,
-      statusLabel: 'Partial',
+      statusLabel: statuses.partial,
+      statusTone: _ConnectorStatusTone.partial,
       tags: ['budget_confirmation_required'],
-      detailTitle: 'Files & Media Binding',
-      detailStatus: 'Partial Availability',
-      authTitle: 'Media Job State',
-      authMessage:
-          'Vault attachments can be referenced, while high-cost OCR, transcription, or media understanding requires budget confirmation.',
-      primaryActionLabel: 'Review budget policy',
-      eventLabel: 'Media provider budget confirmation required',
+      detailTitle: catalog.filesMedia.detailTitle,
+      detailStatus: statuses.partialAvailability,
+      authTitle: catalog.filesMedia.authTitle,
+      authMessage: catalog.filesMedia.authMessage,
+      primaryActionLabel: catalog.filesMedia.primaryAction,
+      eventLabel: catalog.filesMedia.event,
       tools: [
-        _ConnectorTool('Vault Attachment Read', 'available'),
-        _ConnectorTool('Document OCR', 'budget_confirmation_required'),
-        _ConnectorTool('Audio Transcription', 'budget_confirmation_required'),
+        _ConnectorTool(catalog.filesMedia.tools.vaultRead, 'available'),
+        _ConnectorTool(
+          catalog.filesMedia.tools.documentOcr,
+          'budget_confirmation_required',
+        ),
+        _ConnectorTool(
+          catalog.filesMedia.tools.audioTranscription,
+          'budget_confirmation_required',
+        ),
       ],
     ),
-    const _ConnectorView(
+    _ConnectorView(
       id: 'model_provider',
-      label: 'Model Provider',
+      label: catalog.modelProvider.label,
       icon: Icons.memory_rounded,
-      statusLabel: 'Available',
+      statusLabel: statuses.available,
+      statusTone: _ConnectorStatusTone.available,
       tags: [
         'structured_output_verified',
         'Chinese_intent_verified',
         'side_effect_discipline_verified',
       ],
-      detailTitle: 'Model Provider Binding',
-      detailStatus: 'Runtime Verified',
-      authTitle: 'Provider State',
-      authMessage:
-          'Managed Pro and self-managed modes expose the same user capability set; deployment and secret ownership differ.',
-      primaryActionLabel: 'Run provider check',
-      eventLabel: 'Model provider smoke tests passed',
+      detailTitle: catalog.modelProvider.detailTitle,
+      detailStatus: statuses.runtimeVerified,
+      authTitle: catalog.modelProvider.authTitle,
+      authMessage: catalog.modelProvider.authMessage,
+      primaryActionLabel: catalog.modelProvider.primaryAction,
+      eventLabel: catalog.modelProvider.event,
       tools: [
-        _ConnectorTool('Structured Output', 'available'),
-        _ConnectorTool('Chinese Intent Handling', 'available'),
-        _ConnectorTool('Side-effect Discipline', 'available'),
+        _ConnectorTool(
+            catalog.modelProvider.tools.structuredOutput, 'available'),
+        _ConnectorTool(catalog.modelProvider.tools.chineseIntent, 'available'),
+        _ConnectorTool(catalog.modelProvider.tools.sideEffect, 'available'),
       ],
     ),
-    const _ConnectorView(
+    _ConnectorView(
       id: 'cloudflare_runtime',
-      label: 'Cloudflare Runtime',
+      label: catalog.cloudflareRuntime.label,
       icon: Icons.cloud_outlined,
-      statusLabel: 'Runtime',
-      tags: ['hosted_runtime (Managed Pro)', 'Setup CTA (Self-managed)'],
-      detailTitle: 'Cloudflare Runtime',
-      detailStatus: 'Hosted Runtime (Managed Pro)',
-      authTitle: 'Runtime Deployment',
-      authMessage:
-          'Self-managed setup writes BYOK secrets only to the user runtime. Managed Pro uses hosted runtime controls.',
-      primaryActionLabel: 'Open runtime settings',
-      eventLabel: 'Runtime manifest loaded',
+      statusLabel: statuses.runtime,
+      statusTone: _ConnectorStatusTone.runtime,
+      tags: [
+        catalog.cloudflareRuntime.tags.hostedRuntime,
+        catalog.cloudflareRuntime.tags.selfManagedSetup,
+      ],
+      detailTitle: catalog.cloudflareRuntime.detailTitle,
+      detailStatus: statuses.hostedRuntime,
+      authTitle: catalog.cloudflareRuntime.authTitle,
+      authMessage: catalog.cloudflareRuntime.authMessage,
+      primaryActionLabel: catalog.cloudflareRuntime.primaryAction,
+      eventLabel: catalog.cloudflareRuntime.event,
       tools: [
-        _ConnectorTool('Agent Runtime', 'available'),
-        _ConnectorTool('Vault Service', 'available'),
-        _ConnectorTool('Secret Storage', 'runtime_secrets_only'),
+        _ConnectorTool(
+            catalog.cloudflareRuntime.tools.agentRuntime, 'available'),
+        _ConnectorTool(
+            catalog.cloudflareRuntime.tools.vaultService, 'available'),
+        _ConnectorTool(
+          catalog.cloudflareRuntime.tools.secretStorage,
+          'runtime_secrets_only',
+        ),
       ],
     ),
   ];
 }
 
-String _lastRuntimeCheckLabel(RuntimeAgentState? state) {
+String _lastRuntimeCheckLabel(RuntimeAgentState? state, String notReported) {
   final generatedAtMs = state?.latestContextSnapshot?.generatedAtMs ?? 0;
   if (generatedAtMs > 0) return desktopRuntimeDateLabel(generatedAtMs);
   final lastTurn = state?.conversationTurns.lastOrNull;
   if (lastTurn != null) return desktopRuntimeDateLabel(lastTurn.createdAtMs);
-  return 'not reported';
+  return notReported;
 }
 
-List<String> _auditLabelsFromState(RuntimeAgentState? state) {
-  if (state == null || state.auditRefs.isEmpty) return const ['not reported'];
+List<String> _auditLabelsFromState(
+    RuntimeAgentState? state, String notReported) {
+  if (state == null || state.auditRefs.isEmpty) return [notReported];
   return state.auditRefs
       .map(
           (ref) => '${ref['id'] ?? ref['audit_id'] ?? ref['ref'] ?? ''}'.trim())
@@ -170,12 +204,15 @@ bool _stateMentions(RuntimeAgentState? state, String token) {
   return false;
 }
 
+enum _ConnectorStatusTone { available, needsConfig, partial, unknown, runtime }
+
 final class _ConnectorView {
   const _ConnectorView({
     required this.id,
     required this.label,
     required this.icon,
     required this.statusLabel,
+    required this.statusTone,
     required this.tags,
     required this.detailTitle,
     required this.detailStatus,
@@ -190,6 +227,7 @@ final class _ConnectorView {
   final String label;
   final IconData icon;
   final String statusLabel;
+  final _ConnectorStatusTone statusTone;
   final List<String> tags;
   final String detailTitle;
   final String detailStatus;
@@ -201,33 +239,36 @@ final class _ConnectorView {
 
   Color statusColor(BuildContext context) {
     final colors = context.agentOs;
-    final normalized = statusLabel.toLowerCase();
-    if (normalized.contains('need')) return const Color(0xFFBA1A1A);
-    if (normalized.contains('partial') || normalized.contains('unknown')) {
-      return colors.onSurfaceVariant;
-    }
-    return colors.secondary;
+    return switch (statusTone) {
+      _ConnectorStatusTone.needsConfig => const Color(0xFFBA1A1A),
+      _ConnectorStatusTone.partial ||
+      _ConnectorStatusTone.unknown =>
+        colors.onSurfaceVariant,
+      _ConnectorStatusTone.available ||
+      _ConnectorStatusTone.runtime =>
+        colors.secondary,
+    };
   }
 
   Color statusBackground(BuildContext context) {
     final colors = context.agentOs;
-    final normalized = statusLabel.toLowerCase();
-    if (normalized.contains('need')) return const Color(0xFFFFDAD6);
-    return colors.surfaceContainer;
+    return statusTone == _ConnectorStatusTone.needsConfig
+        ? const Color(0xFFFFDAD6)
+        : colors.surfaceContainer;
   }
 
   Color statusBorder(BuildContext context) {
     final colors = context.agentOs;
-    final normalized = statusLabel.toLowerCase();
-    if (normalized.contains('need')) return const Color(0xFFBA1A1A);
-    return colors.outlineVariant;
+    return statusTone == _ConnectorStatusTone.needsConfig
+        ? const Color(0xFFBA1A1A)
+        : colors.outlineVariant;
   }
 
   Color noticeBackground(BuildContext context) {
     final colors = context.agentOs;
-    final normalized = statusLabel.toLowerCase();
-    if (normalized.contains('need')) return const Color(0x1AFFDAD6);
-    return colors.surfaceContainerLow;
+    return statusTone == _ConnectorStatusTone.needsConfig
+        ? const Color(0x1AFFDAD6)
+        : colors.surfaceContainerLow;
   }
 }
 

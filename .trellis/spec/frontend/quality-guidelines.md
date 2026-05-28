@@ -13,6 +13,11 @@ manual inspection when existing test seams can verify the flow.
   translations.
 - Set a fixed surface size for responsive shell or workbench tests and reset it
   in `addTearDown`.
+- If a widget test touches runtime connection preferences or hosted/self-managed
+  runtime routing, call `RuntimeConnectionStore.resetCacheForTests()` and
+  `SharedPreferences.setMockInitialValues(...)` in `setUp`; the store has a
+  static cache that otherwise leaks across tests and can bypass fake runtime
+  senders.
 - Interact through stable `ValueKey` values where available.
 - When testing horizontally scrollable tab bars such as `AgentTabBar`, call
   `tester.ensureVisible(find.text(label))` before tapping tabs that may sit

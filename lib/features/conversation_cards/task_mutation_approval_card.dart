@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/secretary_runtime_client.dart';
+import '../../i18n/strings.g.dart';
 import '../agent_ui/agent_design_tokens.dart';
 import '../agent_ui/agent_operating_system_tokens.dart';
 import 'task_mutation_approval_details.dart';
@@ -133,6 +134,7 @@ final class _TaskMutationHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.taskMutationApproval;
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: AgentOperatingSystemTokens.surfaceContainerLow,
@@ -155,7 +157,7 @@ final class _TaskMutationHeader extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Task Title Change Approval',
+                t.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: AgentOperatingSystemTokens.headlineSm.copyWith(
@@ -179,8 +181,9 @@ final class _SystemContext extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.taskMutationApproval;
     return _LabeledSurface(
-      label: 'System Context',
+      label: t.systemContext,
       child: Text(
         details.systemContext,
         style: AgentOperatingSystemTokens.bodySm.copyWith(
@@ -198,8 +201,9 @@ final class _CurrentStatePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.taskMutationApproval;
     return _LabeledSurface(
-      label: 'Current State (Awaiting Approval)',
+      label: t.currentStateAwaitingApproval,
       trailing: const Icon(
         Icons.lock_outline_rounded,
         size: 16,
@@ -255,12 +259,13 @@ final class _TargetAndResolver extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.taskMutationApproval;
     return LayoutBuilder(
       builder: (context, constraints) {
         final useColumns = constraints.maxWidth >= 520;
         final children = [
           _InfoBlock(
-            label: 'Target Entity',
+            label: t.targetEntity,
             child: Wrap(
               spacing: 8,
               runSpacing: 6,
@@ -280,7 +285,7 @@ final class _TargetAndResolver extends StatelessWidget {
             ),
           ),
           _InfoBlock(
-            label: 'Resolver Detail',
+            label: t.resolverDetail,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -337,8 +342,9 @@ final class _ProposedTitleDiff extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.taskMutationApproval;
     return _LabeledSurface(
-      label: 'Proposed Change',
+      label: t.proposedChange,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -355,7 +361,7 @@ final class _ProposedTitleDiff extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
-                  'Change title from',
+                  t.changeTitleFrom,
                   style: AgentOperatingSystemTokens.bodyMd.copyWith(
                     color: AgentOperatingSystemTokens.onSurface,
                   ),
@@ -366,7 +372,7 @@ final class _ProposedTitleDiff extends StatelessWidget {
                   tone: _DiffTone.remove,
                 ),
                 Text(
-                  'to',
+                  t.to,
                   style: AgentOperatingSystemTokens.bodyMd.copyWith(
                     color: AgentOperatingSystemTokens.onSurface,
                   ),
@@ -392,11 +398,12 @@ final class _TaskMutationMetadataGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.taskMutationApproval;
     final items = [
-      ('Source', details.source),
-      ('Audit ID', details.auditId),
-      ('Context Snapshot', details.contextSnapshotId),
-      ('Runtime Tool', details.runtimeTool),
+      (t.source, details.source),
+      (t.auditId, details.auditId),
+      (t.contextSnapshot, details.contextSnapshotId),
+      (t.runtimeTool, details.runtimeTool),
     ];
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -475,6 +482,8 @@ final class _TaskMutationActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.taskMutationApproval;
+    final commonActions = context.t.common.actions;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -494,7 +503,7 @@ final class _TaskMutationActions extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.check_circle_outline_rounded, size: 18),
-          label: Text(busy ? 'Processing...' : 'Approve Change'),
+          label: Text(busy ? t.processing : t.approveChange),
         ),
         const SizedBox(height: AgentDesignTokens.gapSm),
         OutlinedButton.icon(
@@ -502,7 +511,9 @@ final class _TaskMutationActions extends StatelessWidget {
           onPressed:
               busy || onEditTitle == null ? null : () => _showEditor(context),
           icon: const Icon(Icons.edit_outlined, size: 18),
-          label: Text(onEditTitle == null ? 'Edit unavailable' : 'Edit'),
+          label: Text(
+            onEditTitle == null ? t.editUnavailable : commonActions.edit,
+          ),
         ),
         const SizedBox(height: AgentDesignTokens.gapSm),
         OutlinedButton.icon(
@@ -513,7 +524,7 @@ final class _TaskMutationActions extends StatelessWidget {
             side: BorderSide(color: Colors.red.shade200),
           ),
           icon: const Icon(Icons.close_rounded, size: 18),
-          label: const Text('Reject'),
+          label: Text(commonActions.reject),
         ),
       ],
     );
@@ -537,19 +548,20 @@ final class _FooterEvidence extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.taskMutationApproval;
     return LayoutBuilder(
       builder: (context, constraints) {
         final cards = <Widget>[
           if (details.lastApprovedChange.isNotEmpty)
             _EvidenceCard(
               icon: Icons.history_rounded,
-              label: 'Last Approved Change',
+              label: t.lastApprovedChange,
               value: details.lastApprovedChange,
             ),
           if (details.confidenceLabel.isNotEmpty)
             _EvidenceCard(
               icon: Icons.bolt_rounded,
-              label: 'Automation Confidence',
+              label: t.automationConfidence,
               value: details.confidenceLabel,
             ),
         ];
@@ -616,8 +628,10 @@ final class _TaskMutationTitleDialogState
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.taskMutationApproval;
+    final commonActions = context.t.common.actions;
     return AlertDialog(
-      title: const Text('Edit proposed title'),
+      title: Text(t.editProposedTitle),
       content: TextField(
         key: ValueKey('task_mutation_title_field_${widget.item.id}'),
         controller: _controller,
@@ -628,12 +642,12 @@ final class _TaskMutationTitleDialogState
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(commonActions.cancel),
         ),
         FilledButton(
           key: ValueKey('task_mutation_save_title_${widget.item.id}'),
           onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: const Text('Save'),
+          child: Text(commonActions.save),
         ),
       ],
     );

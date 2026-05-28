@@ -442,7 +442,7 @@ void main() {
     expect(sidePanels.width, closeTo(959, 1));
     expect(composer.width, 896);
     expect(find.byKey(const ValueKey('app_shell_desktop_quick_capture')),
-        findsOneWidget);
+        findsNothing);
   });
 }
 

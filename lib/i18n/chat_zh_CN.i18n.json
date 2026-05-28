@@ -230,9 +230,375 @@
     "decisions": "决策",
     "actionItems": "行动项",
     "sources": "来源",
+    "meetingAudioResult": "会议音频结果",
+    "mediaResult": "媒体结果",
     "listItem": "- $value",
     "owner": "负责人：$value",
     "due": "截止：$value"
+  },
+  "operating": {
+    "snackbars": {
+      "safeFollowUpPrepared": "已准备安全后续请求，请在发送到运行时前检查。",
+      "emailDraftUnavailable": "草稿已在本地可用；连接邮箱前仍会阻止发送。",
+      "emailSetupUnavailable": "当前页面无法打开邮箱设置。"
+    },
+    "topBar": {
+      "brandAgent": "SecondLoop 助手",
+      "notifications": "通知",
+      "vaultUpload": "资料库上传",
+      "noPendingApprovals": "暂无待审批",
+      "pendingApprovals": "$count 项待审批"
+    },
+    "localComputerSafety": {
+      "modeChip": "本地操作已阻止",
+      "defaultBody": "我不能执行终端命令或修改本地文件。未执行任何操作。",
+      "protocol": "安全协议：本地电脑操作拒绝（已批准）",
+      "safetyProtocol": "安全协议",
+      "auditAndSafety": "审计与安全",
+      "alternativeAction": "替代操作",
+      "checklistTitle": "下载目录清理清单",
+      "checklist": {
+        "openDownloads": "打开 Finder 并前往 Downloads",
+        "locateFolder": "找到名为“test”的文件夹",
+        "reviewBeforeDeletion": "删除前检查内容"
+      },
+      "saveToVault": "保存到资料库"
+    },
+    "purchasePaymentSafety": {
+      "modeChip": "外部交易已阻止",
+      "defaultBody": "我不能代你直接购买或进行金融付款。未发起任何交易。",
+      "protocolActive": "安全协议已启用",
+      "transactionSafetyProtocol": "交易安全协议",
+      "safeAlternatives": "安全替代方案",
+      "actionsAvailable": "可用 3 个操作"
+    },
+    "email": {
+      "notConnected": "邮箱未连接",
+      "draftTitle": "邮件草稿",
+      "guardrailTitle": "邮件已阻止：需要授权",
+      "bodyLabel": "正文：",
+      "draftFallback": "邮件草稿",
+      "noSubject": "无主题",
+      "bodyUnavailable": "草稿正文不可用",
+      "runtimeDraft": "运行时草稿"
+    },
+    "desktopWorkbench": {
+      "pendingApprovals": "待审批",
+      "toolTrace": "工具轨迹",
+      "runtimeContext": "运行时上下文",
+      "runtimeProcessing": "运行时处理中",
+      "contextStatus": "上下文状态",
+      "activeMemory": "活跃记忆",
+      "postprocessLabel": "后处理：",
+      "currentFactsLabel": "当前事实：",
+      "none": "无",
+      "contextSnapshotReady": "上下文快照已就绪",
+      "notReported": "未报告",
+      "previousValue": "上一值",
+      "noPendingApprovals": "暂无待审批",
+      "changeRequestedFor": "已请求更改“$title”",
+      "attach": "附件",
+      "inputHint": "输入给助手的指令...",
+      "approvals": {
+        "title": "审批",
+        "subtitle": "在变更影响你的资料库或外部系统前先审核受保护的操作",
+        "refreshTooltip": "刷新审批",
+        "proposedChange": "拟议更改",
+        "selectApproval": "选择一项审批",
+        "selectApprovalMessage": "选择一个项目以检查变更差异和审计轨迹。",
+        "requestChanges": "请求修改",
+        "auditTrace": "审计轨迹",
+        "systemStateNotice": "系统状态通知",
+        "sourceMessageExcerpt": "来源消息摘录",
+        "recentEntityRefs": "最近实体引用",
+        "toolTraceLog": "工具轨迹日志",
+        "filters": {
+          "pending": "待处理",
+          "approved": "已批准",
+          "rejected": "已拒绝",
+          "needsConfig": "需配置",
+          "highRisk": "高风险"
+        },
+        "emptyTitle": "没有匹配的审批",
+        "emptyMessage": "当运行时变更需要审批时，会显示在这里。",
+        "noSourceExcerpt": "未报告来源摘录。",
+        "none": "无",
+        "entityFallback": "实体",
+        "traceFallback": "> 保护状态... 未报告",
+        "traceChecking": "> 正在检查保护规则... approval_required",
+        "typeLabels": {
+          "taskMutation": "任务变更审批",
+          "memory": "记忆审批",
+          "emailDraft": "邮件草稿审批",
+          "paymentRefusal": "支付拒绝",
+          "runtimeApproval": "运行时审批"
+        },
+        "risk": {
+          "high": "高风险",
+          "medium": "中风险",
+          "low": "低风险",
+          "prefix": "风险：$risk"
+        },
+        "fallbacks": {
+          "previousValue": "未报告上一值",
+          "proposedValue": "未报告拟议值",
+          "runtimeApproval": "运行时审批",
+          "runtimeTarget": "运行时目标",
+          "reason": "运行时未报告代理洞察。"
+        },
+        "messages": {
+          "stateUnavailable": "tool_unavailable: 运行时状态尚未配置",
+          "runtimeUnavailable": "tool_unavailable: $error",
+          "cannotSubmit": "$status：该审批无法在应用内执行“$decision”。",
+          "senderUnavailable": "tool_unavailable: 运行时审批发送器尚未配置",
+          "decisionSubmitted": "审批决定已提交",
+          "requestChangesUnavailable": "tool_unavailable: 暂不支持从应用内提交审批修改请求",
+          "configureUnavailable": "needs_configuration: 暂不支持从此面板配置连接器"
+        },
+        "systemNotice": {
+          "configured": "approval_required: 运行时只会在明确决定后应用变更。",
+          "needsConfig": "tool_unavailable: 相关连接器需要先配置，才能审批对应变更。",
+          "refused": "refused: 购买、支付或本地电脑副作用不能被审批。",
+          "waitingDecision": "approval_required: 运行时不会在做出决定前应用此变更。"
+        }
+      },
+      "connectors": {
+        "title": "连接器",
+        "subtitle": "运行时绑定、服务可用性和安全降级状态",
+        "runCapabilityCheck": "运行能力检查",
+        "toolMatrix": "工具矩阵",
+        "testDraftGeneration": "测试草稿生成",
+        "revokeAccess": "撤销访问",
+        "retryHealthCheck": "重试健康检查",
+        "byokSecretsNotice": "BYOK 密钥只会写入用户自己的运行时密钥，不会存入应用配置。",
+        "recentConnectorEvents": "最近连接器事件",
+        "catalogue": "目录",
+        "skillPackages": "技能包",
+        "runtimeMetrics": "运行时指标",
+        "auditTrail": "审计记录",
+        "smokeTestStatus": "冒烟测试状态",
+        "lastCheck": "上次检查",
+        "costPolicy": "成本策略",
+        "approvalPolicy": "审批策略",
+        "passed": "已通过",
+        "strictBudget": "严格预算",
+        "standard": "标准",
+        "notReported": "未报告",
+        "refreshing": "正在刷新运行时能力状态...",
+        "unavailableState": "tool_unavailable: 运行时能力状态尚未配置",
+        "runtimeUnavailable": "tool_unavailable: $error",
+        "needsConfiguration": "needs_configuration: 启用 $connector 前需要先配置此连接器",
+        "draftOnly": "draft-only: 草稿生成无需外部发送权限即可运行",
+        "revokeUnavailable": "tool_unavailable: 当前构建尚未提供连接器撤销端点",
+        "statuses": {
+          "available": "可用",
+          "unknown": "未知",
+          "needsConfig": "需配置",
+          "partial": "部分可用",
+          "runtime": "运行时",
+          "capabilityUnknown": "能力未知",
+          "emailDraftOnly": "降级状态（仅草稿）",
+          "needsConfiguration": "降级状态（需配置）",
+          "partialAvailability": "部分可用",
+          "runtimeVerified": "运行时已验证",
+          "hostedRuntime": "托管运行时（Managed Pro）"
+        },
+        "catalog": {
+          "webResearch": {
+            "label": "网页研究",
+            "detailTitle": "网页研究绑定",
+            "authTitle": "运行时技能状态",
+            "authMessage": "当前事实必须经过 web-research 并返回引用后，应用才会标记为成功。",
+            "primaryAction": "打开研究策略",
+            "eventVerified": "网页研究已带引用验证",
+            "eventMissing": "运行时未报告网页研究能力",
+            "tools": {
+              "search": "搜索网页",
+              "verify": "验证引用",
+              "currentFacts": "回答当前事实"
+            }
+          },
+          "email": {
+            "label": "邮件",
+            "detailTitle": "邮件绑定",
+            "authTitle": "认证状态",
+            "authMessage": "OAuth token 已过期、被撤销或未配置。草稿生成仍可用，但读取和发送工具不可用。",
+            "primaryAction": "连接邮件",
+            "event": "邮件连接器需要配置",
+            "tools": {
+              "read": "读取邮件",
+              "summarize": "总结邮件",
+              "draft": "创建草稿",
+              "send": "发送邮件"
+            }
+          },
+          "calendar": {
+            "label": "日历",
+            "detailTitle": "日历绑定",
+            "authTitle": "OAuth 状态",
+            "authMessage": "日历工具需配置后才可用。创建事件和更改邀请仍然需要审批。",
+            "primaryAction": "连接日历",
+            "event": "日历 OAuth 待处理",
+            "tools": {
+              "read": "读取日历",
+              "create": "创建事件",
+              "invite": "发送邀请"
+            }
+          },
+          "filesMedia": {
+            "label": "文件与媒体",
+            "detailTitle": "文件与媒体绑定",
+            "authTitle": "媒体任务状态",
+            "authMessage": "可以引用资料库附件；高成本 OCR、转录或媒体理解需要预算确认。",
+            "primaryAction": "查看预算策略",
+            "event": "媒体提供方需要预算确认",
+            "tools": {
+              "vaultRead": "读取资料库附件",
+              "documentOcr": "文档 OCR",
+              "audioTranscription": "音频转录"
+            }
+          },
+          "modelProvider": {
+            "label": "模型提供方",
+            "detailTitle": "模型提供方绑定",
+            "authTitle": "提供方状态",
+            "authMessage": "Managed Pro 和自托管模式暴露相同的用户能力集；部署和密钥归属不同。",
+            "primaryAction": "运行提供方检查",
+            "event": "模型提供方冒烟测试已通过",
+            "tools": {
+              "structuredOutput": "结构化输出",
+              "chineseIntent": "中文意图处理",
+              "sideEffect": "副作用约束"
+            }
+          },
+          "cloudflareRuntime": {
+            "label": "Cloudflare 运行时",
+            "detailTitle": "Cloudflare 运行时",
+            "authTitle": "运行时部署",
+            "authMessage": "自托管设置只会把 BYOK 密钥写入用户运行时。Managed Pro 使用托管运行时控制。",
+            "primaryAction": "打开运行时设置",
+            "event": "运行时 manifest 已加载",
+            "tags": {
+              "hostedRuntime": "托管运行时（Managed Pro）",
+              "selfManagedSetup": "自托管设置"
+            },
+            "tools": {
+              "agentRuntime": "代理运行时",
+              "vaultService": "资料库服务",
+              "secretStorage": "密钥存储"
+            }
+          }
+        }
+      },
+      "memory": {
+        "title": "记忆",
+        "subtitle": "管理个人上下文和代理指令",
+        "reviewPending": "审核待处理（$count）",
+        "pendingCandidatesMessage": "$count 条记忆候选待处理",
+        "addEntry": "添加条目",
+        "searchHint": "搜索记忆...",
+        "refreshTooltip": "刷新记忆状态",
+        "editProposal": "编辑提案",
+        "requestRemoval": "请求移除",
+        "pendingCandidates": "待处理候选（$count）",
+        "emptyCandidates": "暂无等待审批的记忆候选。",
+        "runtimeConnectionStable": "运行时连接稳定",
+        "syncing": "同步中...",
+        "lastSyncedJustNow": "刚刚同步",
+        "record": "记录",
+        "status": "状态",
+        "source": "来源",
+        "age": "时间",
+        "extractedInstruction": "提取的指令",
+        "filters": {
+          "all": "全部",
+          "active": "活跃",
+          "pending": "待处理",
+          "archived": "已归档",
+          "dismissed": "已忽略"
+        },
+        "recordsTitle": "记忆记录",
+        "emptyRecordsTitle": "暂无记忆记录",
+        "emptyRecordsMessage": "代理创建可审计记录后，已批准的运行时记忆会显示在这里。",
+        "detailsTitle": "记录详情",
+        "selectTitle": "选择一条记忆",
+        "selectMessage": "选择一条运行时记忆记录，以查看它的来源和注入状态。",
+        "confidence": "置信度：$value",
+        "statusMeta": "状态",
+        "sourceReference": "来源引用",
+        "injected": "已注入（$contextId）",
+        "untitledMemory": "未命名记忆",
+        "defaultSource": "运行时",
+        "notReported": "未报告",
+        "notRecorded": "未记录",
+        "candidateFallback": "记忆候选",
+        "messages": {
+          "stateUnavailable": "tool_unavailable: 运行时状态尚未配置",
+          "runtimeUnavailable": "tool_unavailable: $error",
+          "approvalSenderUnavailable": "tool_unavailable: 运行时审批发送器尚未配置",
+          "approvalSubmitted": "记忆候选已批准",
+          "rejectionSubmitted": "记忆候选已拒绝",
+          "mutationUnavailable": "$action 需要运行时记忆变更端点。（approval_required）"
+        }
+      }
+    },
+    "actionCandidate": {
+      "title": "行动项候选",
+      "metadataIncomplete": "运行时元数据不完整",
+      "create": "创建"
+    },
+    "operatingSystem": {
+      "taskCreated": "任务已创建",
+      "openTask": "打开任务",
+      "memoryCandidate": "记忆候选",
+      "factToBeCommitted": "即将提交的事实："
+    },
+    "reminder": {
+      "pendingIntent": "待处理意图",
+      "recurringCandidate": "重复提醒候选",
+      "recurringInactive": "重复提醒需批准后才会生效。",
+      "candidate": "提醒候选"
+    },
+    "researchRuntime": {
+      "webResearch": "web-research",
+      "searchResult": "搜索结果",
+      "verifiedSources": "已验证来源",
+      "extractedEvidence": "提取的证据",
+      "traceSnapshot": "Trace ID：$traceId | Snapshot：$snapshotId",
+      "citationsRequired": "需要引用",
+      "skillResultResponse": "skill_result_response"
+    },
+    "calendarApproval": {
+      "title": "日历事件审批",
+      "proposedEvent": "拟议事件",
+      "auditTrail": "审计记录",
+      "syncPriority": "同步优先级",
+      "contextSnapshot": "上下文快照",
+      "status": "状态",
+      "processing": "处理中...",
+      "approveEvent": "批准事件",
+      "editUnavailable": "无法编辑"
+    },
+    "taskMutationApproval": {
+      "title": "任务标题变更审批",
+      "systemContext": "系统上下文",
+      "currentStateAwaitingApproval": "当前状态（等待批准）",
+      "targetEntity": "目标实体",
+      "resolverDetail": "解析详情",
+      "proposedChange": "拟议变更",
+      "changeTitleFrom": "标题从",
+      "to": "改为",
+      "source": "来源",
+      "auditId": "审计 ID",
+      "contextSnapshot": "上下文快照",
+      "runtimeTool": "运行时工具",
+      "processing": "处理中...",
+      "approveChange": "批准更改",
+      "editUnavailable": "无法编辑",
+      "editProposedTitle": "编辑拟议标题",
+      "lastApprovedChange": "上次批准的变更",
+      "automationConfidence": "自动化置信度"
+    }
   },
   "dailyBrief": {
     "topPriorities": "优先事项",
@@ -252,6 +618,7 @@
     "thinkingBody": "正在准备可审核的变更，尚未保存任何内容。",
     "loadEarlierMessages": "加载更早消息",
     "composerHint": "提问、记录、搜索或添加文件…",
+    "followUpComposerHint": "继续追问…",
     "attach": "添加附件",
     "record": "录音",
     "working": "处理中",

@@ -207,7 +207,11 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
         ),
       );
     } else if (thinking) {
-      children.add(const _DesktopToolStatus(label: 'runtime: processing'));
+      children.add(
+        _DesktopToolStatus(
+          label: context.t.chat.operating.desktopWorkbench.runtimeProcessing,
+        ),
+      );
     }
     final error = askError?.trim();
     if (error != null && error.isNotEmpty) {
@@ -419,6 +423,7 @@ final class _DesktopWorkbenchSidePanels extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AgentOperatingSystemTokens.of(context);
+    final t = context.t.chat.operating.desktopWorkbench;
     return ColoredBox(
       key: const ValueKey('desktop_workbench_side_panels'),
       color: colors.background,
@@ -426,7 +431,7 @@ final class _DesktopWorkbenchSidePanels extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         children: [
           _DesktopPanel(
-            title: 'Runtime Context',
+            title: t.runtimeContext,
             trailing: 'v4.11.0',
             child: _DesktopRuntimeContext(
               state: state,
@@ -436,10 +441,10 @@ final class _DesktopWorkbenchSidePanels extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           _DesktopPanel(
-            title: 'Pending Approvals',
+            title: t.pendingApprovals,
             count: approvalItems.length,
             child: approvalItems.isEmpty
-                ? const Text('No pending approvals')
+                ? Text(t.noPendingApprovals)
                 : Column(
                     children: [
                       for (final item in approvalItems) ...[
@@ -456,7 +461,7 @@ final class _DesktopWorkbenchSidePanels extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           _DesktopPanel(
-            title: 'Tool Trace',
+            title: t.toolTrace,
             trailingIcon: Icons.history_rounded,
             child: _DesktopToolTrace(state: state),
           ),
@@ -497,17 +502,17 @@ final class _DesktopRuntimeContext extends StatelessWidget {
           label: 'recent_turns',
           value: _firstOperatingString([packet['recent_turns']]) ??
               _latestUserTurn(state) ??
-              'none',
+              context.t.chat.operating.desktopWorkbench.none,
         ),
         const _DesktopPanelDivider(),
         _DesktopLabeledValue(
-          label: 'Context Status',
+          label: context.t.chat.operating.desktopWorkbench.contextStatus,
           value: _firstOperatingString([packet['context_status']]) ??
-              'context snapshot ready',
+              context.t.chat.operating.desktopWorkbench.contextSnapshotReady,
         ),
         const _DesktopPanelDivider(),
         _DesktopLabeledValue(
-          label: 'Active Memory',
+          label: context.t.chat.operating.desktopWorkbench.activeMemory,
           value: _activeMemoryLabel(state, contextSnapshot),
           icon: Icons.translate_rounded,
         ),
@@ -526,6 +531,7 @@ final class _DesktopToolTrace extends StatelessWidget {
     final colors = AgentOperatingSystemTokens.of(context);
     final trace = _latestToolTrace(state);
     final hasCitations = _latestAssistantHasCitations(state);
+    final t = context.t.chat.operating.desktopWorkbench;
     final citationBadge = _desktopCitationBadgeLabel(
       trace: trace,
       hasCitations: hasCitations,
@@ -582,23 +588,23 @@ final class _DesktopToolTrace extends StatelessWidget {
                   child: Column(
                     children: [
                       _DesktopTraceRow(
-                        label: 'postprocess:',
+                        label: t.postprocessLabel,
                         value: _firstOperatingString([
                               trace['postprocess'],
                               trace['post_process'],
                             ]) ??
-                            'not reported',
+                            t.notReported,
                       ),
                       const SizedBox(height: 8),
                       _DesktopTraceRow(
-                        label: 'current facts:',
+                        label: t.currentFactsLabel,
                         value: _firstOperatingString([
                               trace['current_facts'],
                               trace['currentFacts'],
                             ]) ??
                             (trace.isEmpty
                                 ? 'tool_unavailable'
-                                : 'not reported'),
+                                : t.notReported),
                       ),
                     ],
                   ),
@@ -635,6 +641,7 @@ final class _DesktopApprovalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AgentOperatingSystemTokens.of(context);
+    final t = context.t.chat.operating.desktopWorkbench;
     final record = item.record ?? const <String, Object?>{};
     final taskTitle = _firstOperatingString([
           record['task_title'],
@@ -647,7 +654,7 @@ final class _DesktopApprovalCard extends StatelessWidget {
           record['old_title'],
           record['oldTitle'],
         ]) ??
-        'previous value';
+        t.previousValue;
     final after = _firstOperatingString([
           record['after'],
           record['new_title'],
@@ -677,7 +684,7 @@ final class _DesktopApprovalCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Change requested for '$taskTitle'",
+                  t.changeRequestedFor(title: taskTitle),
                   style: AgentOperatingSystemTokens.bodySm.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
@@ -719,14 +726,14 @@ final class _DesktopApprovalCard extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: onApprove,
-                    child: const Text('Approve'),
+                    child: Text(context.t.common.actions.approve),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: onReject,
-                    child: const Text('Reject'),
+                    child: Text(context.t.common.actions.reject),
                   ),
                 ),
               ],
@@ -760,6 +767,7 @@ final class _DesktopComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AgentOperatingSystemTokens.of(context);
+    final t = context.t.chat.operating.desktopWorkbench;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surface,
@@ -796,7 +804,7 @@ final class _DesktopComposer extends StatelessWidget {
                       children: [
                         IconButton(
                           key: const ValueKey('chat_attach'),
-                          tooltip: 'Attach',
+                          tooltip: t.attach,
                           onPressed: busy ? null : onAttach,
                           icon: const Icon(Icons.attach_file_rounded),
                         ),
@@ -807,8 +815,8 @@ final class _DesktopComposer extends StatelessWidget {
                             focusNode: focusNode,
                             minLines: 1,
                             maxLines: 4,
-                            decoration: const InputDecoration(
-                              hintText: 'Input instructions for the agent...',
+                            decoration: InputDecoration(
+                              hintText: t.inputHint,
                               border: InputBorder.none,
                               isDense: true,
                             ),

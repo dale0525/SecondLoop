@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/secretary_runtime_client.dart';
+import '../../i18n/strings.g.dart';
 import '../agent_ui/agent_design_tokens.dart';
 import '../agent_ui/agent_operating_system_tokens.dart';
 import 'calendar_event_approval_details.dart';
@@ -92,6 +93,7 @@ final class _CalendarApprovalHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.calendarApproval;
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: AgentOperatingSystemTokens.surfaceContainerLow,
@@ -114,7 +116,7 @@ final class _CalendarApprovalHeader extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Calendar Event Approval',
+                t.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: AgentOperatingSystemTokens.headlineSm.copyWith(
@@ -138,12 +140,13 @@ final class _CalendarEventSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.calendarApproval;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Proposed Event'.toUpperCase(),
+          t.proposedEvent.toUpperCase(),
           style: AgentOperatingSystemTokens.labelMd.copyWith(
             color: AgentOperatingSystemTokens.outline,
             fontWeight: FontWeight.w800,
@@ -263,11 +266,12 @@ final class _CalendarMetadataGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.calendarApproval;
     final items = [
-      ('Audit Trail', details.auditId),
-      ('Sync Priority', details.syncPriority),
-      ('Context Snapshot', details.contextSnapshotId),
-      ('Status', details.statusLabel),
+      (t.auditTrail, details.auditId),
+      (t.syncPriority, details.syncPriority),
+      (t.contextSnapshot, details.contextSnapshotId),
+      (t.status, details.statusLabel),
     ];
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -357,6 +361,8 @@ final class _CalendarApprovalActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.calendarApproval;
+    final commonActions = context.t.common.actions;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -376,14 +382,14 @@ final class _CalendarApprovalActions extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.check_circle_outline_rounded, size: 18),
-          label: Text(busy ? 'Processing...' : 'Approve Event'),
+          label: Text(busy ? t.processing : t.approveEvent),
         ),
         const SizedBox(height: AgentDesignTokens.gapSm),
         OutlinedButton.icon(
           key: ValueKey('calendar_event_edit_${item.id}'),
           onPressed: busy || !editAvailable ? null : onEdit,
           icon: const Icon(Icons.edit_outlined, size: 18),
-          label: Text(editAvailable ? 'Edit' : 'Edit unavailable'),
+          label: Text(editAvailable ? commonActions.edit : t.editUnavailable),
         ),
         const SizedBox(height: AgentDesignTokens.gapSm),
         OutlinedButton.icon(
@@ -394,7 +400,7 @@ final class _CalendarApprovalActions extends StatelessWidget {
             side: BorderSide(color: Colors.red.shade200),
           ),
           icon: const Icon(Icons.close_rounded, size: 18),
-          label: const Text('Reject'),
+          label: Text(commonActions.reject),
         ),
       ],
     );

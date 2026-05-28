@@ -255,13 +255,13 @@ class SecondLoopWebAppFrame extends StatelessWidget {
 }
 
 TextTheme _buildTextTheme(TextTheme base, ColorScheme colorScheme) {
-  TextStyle? heading(TextStyle? style, {double? letterSpacing}) {
+  TextStyle? heading(TextStyle? style) {
     final weight = style?.fontWeight ?? FontWeight.w600;
     return style?.copyWith(
-      fontFamily: 'Sora',
+      fontFamily: 'Inter',
       fontVariations: _wght(weight),
       color: colorScheme.onSurface,
-      letterSpacing: letterSpacing ?? -0.4,
+      letterSpacing: 0,
       height: 1.1,
     );
   }
@@ -272,23 +272,24 @@ TextTheme _buildTextTheme(TextTheme base, ColorScheme colorScheme) {
       fontFamily: 'Inter',
       fontVariations: _wght(weight),
       color: colorScheme.onSurface,
+      letterSpacing: 0,
       height: 1.45,
     );
   }
 
   return base.copyWith(
-    displayLarge: heading(base.displayLarge, letterSpacing: -1.4),
-    displayMedium: heading(base.displayMedium, letterSpacing: -1.2),
-    displaySmall: heading(base.displaySmall, letterSpacing: -1),
-    headlineLarge: heading(base.headlineLarge, letterSpacing: -0.9),
-    headlineMedium: heading(base.headlineMedium, letterSpacing: -0.8),
-    headlineSmall: heading(base.headlineSmall, letterSpacing: -0.7),
-    titleLarge: heading(base.titleLarge, letterSpacing: -0.5),
-    titleMedium: heading(base.titleMedium, letterSpacing: -0.3)?.copyWith(
+    displayLarge: heading(base.displayLarge),
+    displayMedium: heading(base.displayMedium),
+    displaySmall: heading(base.displaySmall),
+    headlineLarge: heading(base.headlineLarge),
+    headlineMedium: heading(base.headlineMedium),
+    headlineSmall: heading(base.headlineSmall),
+    titleLarge: heading(base.titleLarge),
+    titleMedium: heading(base.titleMedium)?.copyWith(
       fontWeight: FontWeight.w600,
       fontVariations: _wght(FontWeight.w600),
     ),
-    titleSmall: heading(base.titleSmall, letterSpacing: -0.2)?.copyWith(
+    titleSmall: heading(base.titleSmall)?.copyWith(
       fontWeight: FontWeight.w600,
       fontVariations: _wght(FontWeight.w600),
     ),

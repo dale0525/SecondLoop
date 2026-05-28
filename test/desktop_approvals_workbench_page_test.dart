@@ -7,6 +7,8 @@ import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
 import 'package:secondloop/features/agent_ui/desktop_approvals_workbench_page.dart';
 
+import 'test_i18n.dart';
+
 void main() {
   testWidgets(
     'pending queue keeps actionable blocked and configuration items visible',
@@ -126,12 +128,14 @@ Future<void> _pumpApprovals(
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
   await tester.pumpWidget(
-    MaterialApp(
-      home: Scaffold(
-        body: DesktopApprovalsWorkbenchPage(
-          runtimeAgentStateRepository: repository,
-          approvalSender: sender,
-          vaultId: 'uid_1',
+    wrapWithI18n(
+      MaterialApp(
+        home: Scaffold(
+          body: DesktopApprovalsWorkbenchPage(
+            runtimeAgentStateRepository: repository,
+            approvalSender: sender,
+            vaultId: 'uid_1',
+          ),
         ),
       ),
     ),

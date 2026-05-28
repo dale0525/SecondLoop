@@ -11,6 +11,7 @@ import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart
 import 'package:secondloop/features/agent_ui/desktop_approvals_workbench_page.dart';
 import 'package:secondloop/features/agent_ui/desktop_connectors_workbench_page.dart';
 import 'package:secondloop/features/agent_ui/desktop_memory_workbench_page.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 
 import 'test_i18n.dart';
 
@@ -110,6 +111,36 @@ void main() {
     );
   });
 
+  testWidgets('desktop auxiliary sidebar localizes action labels in zh-CN',
+      (tester) async {
+    LocaleSettings.setLocale(AppLocale.zhCn);
+    addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
+    final repository = _MutableRuntimeAgentStateRepository(_desktopState());
+    final sender = _ApprovalSenderProbe();
+
+    await _pumpShell(tester, repository: repository, sender: sender);
+
+    expect(find.text(AppLocale.zhCn.translations.app.shell.desktop.memory),
+        findsOneWidget);
+    expect(find.text(AppLocale.zhCn.translations.app.shell.desktop.approvals),
+        findsOneWidget);
+    expect(find.text(AppLocale.zhCn.translations.app.shell.desktop.connectors),
+        findsOneWidget);
+    expect(find.text(AppLocale.en.translations.app.shell.desktop.memory),
+        findsNothing);
+    expect(find.text(AppLocale.en.translations.app.shell.desktop.approvals),
+        findsNothing);
+    expect(find.text(AppLocale.en.translations.app.shell.desktop.connectors),
+        findsNothing);
+
+    await _tapSidebar(
+      tester,
+      AppLocale.zhCn.translations.app.shell.desktop.connectors,
+    );
+    expect(find.text('自托管设置'), findsOneWidget);
+    expect(find.text('Setup CTA (Self-managed)'), findsNothing);
+  });
+
   testWidgets('mobile bottom nav remains the five canonical entries',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -152,6 +183,8 @@ void main() {
     await _pumpConnectorsPage(tester, repository: repository);
 
     expect(find.text('Email Binding'), findsOneWidget);
+    expect(find.text('Self-managed setup'), findsOneWidget);
+    expect(find.text('Setup CTA (Self-managed)'), findsNothing);
     expect(
         find.text('BYOK secrets are written only to user runtime secrets, '
             'not stored in app config.'),

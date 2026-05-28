@@ -177,7 +177,9 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
             controller: _controller,
             focusNode: _focusNode,
             busy: _sending || _thinking,
-            placeholder: webResearchActive ? 'Ask a follow-up...' : null,
+            placeholder: webResearchActive
+                ? context.t.chat.agentConversation.followUpComposerHint
+                : null,
             followUpMode: webResearchActive,
             attachments: _pendingAttachmentDrafts,
             onAttach: () => unawaited(_pickAttachments()),
@@ -198,10 +200,8 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
     );
     _focusNode.requestFocus();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Safe follow-up prepared. Review it before sending to runtime.',
-        ),
+      SnackBar(
+        content: Text(context.t.chat.operating.snackbars.safeFollowUpPrepared),
       ),
     );
   }
@@ -514,18 +514,16 @@ final class _OperatingMessageList extends StatelessWidget {
 
   void _showEmailDraftUnavailable(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Draft is available locally; sending stays blocked until Email is connected.',
-        ),
+      SnackBar(
+        content: Text(context.t.chat.operating.snackbars.emailDraftUnavailable),
       ),
     );
   }
 
   void _showEmailConnectorUnavailable(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Email setup is unavailable from this screen.'),
+      SnackBar(
+        content: Text(context.t.chat.operating.snackbars.emailSetupUnavailable),
       ),
     );
   }

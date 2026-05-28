@@ -14,12 +14,14 @@ import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart
 import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
   setUp(() {
+    LocaleSettings.setLocale(AppLocale.en);
     SharedPreferences.setMockInitialValues({});
   });
 
@@ -105,7 +107,11 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Active Reminder'), findsNothing);
-      expect(find.text('Type a message or command...'), findsOneWidget);
+      expect(
+        find.text(
+            AppLocale.en.translations.chat.agentConversation.composerHint),
+        findsOneWidget,
+      );
       expect(
           find.byKey(const ValueKey('app_shell_bottom_nav')), findsOneWidget);
 

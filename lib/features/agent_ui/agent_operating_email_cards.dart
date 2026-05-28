@@ -61,6 +61,7 @@ final class _OperatingEmailUnavailableModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.email;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFFFFEDEC),
@@ -68,20 +69,20 @@ final class _OperatingEmailUnavailableModeChip extends StatelessWidget {
             BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
         border: Border.all(color: const Color(0xFFFFB4AB)),
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            const Icon(
               Icons.warning_amber_rounded,
               size: 13,
               color: Color(0xFFBA1A1A),
             ),
-            SizedBox(width: 4),
+            const SizedBox(width: 4),
             Text(
-              'Email Not Connected',
-              style: TextStyle(
+              t.notConnected,
+              style: const TextStyle(
                 color: Color(0xFFBA1A1A),
                 fontSize: 10,
                 height: 1.2,
@@ -172,6 +173,7 @@ final class _OperatingEmailDraftCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.email;
     final raw = record.raw;
     final title = _firstOperatingString([
           raw['display_title'],
@@ -179,14 +181,14 @@ final class _OperatingEmailDraftCard extends StatelessWidget {
           raw['title'],
           record.title,
         ]) ??
-        'Draft Email';
+        t.draftFallback;
     final recipients = _operatingEmailRecipients(raw);
     final subject = _firstOperatingString([
           raw['subject'],
           raw['email_subject'],
           raw['emailSubject'],
         ]) ??
-        'No subject';
+        t.noSubject;
     final body = _firstOperatingString([
           raw['body'],
           raw['preview'],
@@ -194,13 +196,13 @@ final class _OperatingEmailDraftCard extends StatelessWidget {
           record.body,
           record.summary,
         ]) ??
-        'Draft body unavailable';
+        t.bodyUnavailable;
     final source = _firstOperatingString([
           raw['source'],
           raw['source_label'],
           raw['sourceLabel'],
         ]) ??
-        'Runtime draft';
+        t.runtimeDraft;
     final auditId = _firstOperatingString([
           raw['audit_id'],
           raw['auditId'],
@@ -213,21 +215,21 @@ final class _OperatingEmailDraftCard extends StatelessWidget {
     return KeyedSubtree(
       key: ValueKey('agent_operating_email_draft_${record.id}'),
       child: _OperatingCard(
-        header: const Row(
+        header: Row(
           children: [
-            Icon(
+            const Icon(
               Icons.drafts_outlined,
               color: AgentOperatingSystemTokens.onSurfaceVariant,
               size: 18,
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Email Draft',
+                t.draftTitle,
                 style: AgentOperatingSystemTokens.labelLg,
               ),
             ),
-            _OperatingStatusBadge(
+            const _OperatingStatusBadge(
               label: 'Draft Only',
               background: AgentOperatingSystemTokens.surfaceContainerHigh,
               foreground: AgentOperatingSystemTokens.onSurfaceVariant,
@@ -293,6 +295,7 @@ final class _OperatingEmailGuardrailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.email;
     final raw = record.raw;
     final reason = _firstOperatingString([
           raw['reason'],
@@ -342,17 +345,17 @@ final class _OperatingEmailGuardrailCard extends StatelessWidget {
     return KeyedSubtree(
       key: ValueKey('agent_operating_email_guardrail_${record.id}'),
       child: _OperatingCard(
-        header: const Row(
+        header: Row(
           children: [
-            Icon(
+            const Icon(
               Icons.security_rounded,
               color: Color(0xFFBA1A1A),
               size: 18,
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Email Blocked: Authorization Required',
+                t.guardrailTitle,
                 style: AgentOperatingSystemTokens.labelLg,
               ),
             ),
@@ -451,11 +454,12 @@ final class _OperatingEmailBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.email;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Body:',
+          t.bodyLabel,
           style: AgentOperatingSystemTokens.labelMd.copyWith(
             color: AgentOperatingSystemTokens.onSurfaceVariant,
             fontWeight: FontWeight.w700,

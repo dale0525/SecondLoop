@@ -19,8 +19,8 @@ void main() {
     expect(theme.colorScheme.primary, const Color(0xFF101418));
     expect(theme.colorScheme.background, const Color(0xFFFCFBF8));
     expect(theme.textTheme.bodyLarge?.fontFamily, 'Inter');
-    expect(theme.textTheme.titleLarge?.fontFamily, 'Sora');
-    expect(theme.textTheme.titleLarge?.letterSpacing, -0.5);
+    expect(theme.textTheme.titleLarge?.fontFamily, 'Inter');
+    expect(theme.textTheme.titleLarge?.letterSpacing, 0);
     expect(
       theme.textTheme.bodyLarge?.fontVariations?.first.axis,
       'wght',

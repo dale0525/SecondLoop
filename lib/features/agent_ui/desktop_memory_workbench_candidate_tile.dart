@@ -46,7 +46,7 @@ final class _MemoryCandidateTile extends StatelessWidget {
             OutlinedButton(
               key: ValueKey('desktop_memory_candidate_dismiss_${candidate.id}'),
               onPressed: busy ? null : onDismiss,
-              child: const Text('Dismiss'),
+              child: Text(context.t.common.actions.dismiss),
             ),
             const SizedBox(width: 8),
             FilledButton(
@@ -57,7 +57,7 @@ final class _MemoryCandidateTile extends StatelessWidget {
                       dimension: 14,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Approve'),
+                  : Text(context.t.common.actions.approve),
             ),
           ],
         ),

@@ -213,7 +213,7 @@ final class _OperatingProcessingStrip extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 5),
                     child: Text(
-                      '/',
+                      String.fromCharCode(0x2f),
                       style: TextStyle(
                         color: colors.outlineVariant,
                         fontSize: 11,

@@ -75,6 +75,7 @@ final class _OperatingPendingIntentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.reminder;
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
@@ -92,7 +93,7 @@ final class _OperatingPendingIntentCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Pending Intent',
+                    t.pendingIntent,
                     style: AgentOperatingSystemTokens.labelLg.copyWith(
                       color: AgentOperatingSystemTokens.onSurfaceVariant,
                     ),
@@ -150,6 +151,7 @@ final class _OperatingRecurringReminderCandidateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.reminder;
     final record = item.record ?? const <String, Object?>{};
     final title = _firstOperatingString([
           record['title'],
@@ -195,21 +197,21 @@ final class _OperatingRecurringReminderCandidateCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _OperatingCard(
-            header: const Row(
+            header: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.event_repeat_rounded,
                   color: AgentOperatingSystemTokens.muted,
                   size: 18,
                 ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Recurring Reminder Candidate',
+                    t.recurringCandidate,
                     style: AgentOperatingSystemTokens.labelLg,
                   ),
                 ),
-                _OperatingStatusBadge(
+                const _OperatingStatusBadge(
                   label: 'Pending Approval',
                   background: AgentOperatingSystemTokens.surfaceContainerHigh,
                   foreground: AgentOperatingSystemTokens.onSurfaceVariant,
@@ -282,7 +284,7 @@ final class _OperatingRecurringReminderCandidateCard extends StatelessWidget {
                         key: ValueKey(
                           'agent_operating_recurring_approve_${item.id}',
                         ),
-                        label: 'Approve',
+                        label: context.t.common.actions.approve,
                         primary: true,
                         onPressed: onApprove,
                       ),
@@ -293,7 +295,7 @@ final class _OperatingRecurringReminderCandidateCard extends StatelessWidget {
                         key: ValueKey(
                           'agent_operating_recurring_edit_${item.id}',
                         ),
-                        label: 'Edit',
+                        label: context.t.common.actions.edit,
                         onPressed: onEditTitle == null
                             ? null
                             : () => _showTitleEditor(context),
@@ -305,7 +307,7 @@ final class _OperatingRecurringReminderCandidateCard extends StatelessWidget {
                         key: ValueKey(
                           'agent_operating_recurring_dismiss_${item.id}',
                         ),
-                        label: 'Dismiss',
+                        label: context.t.common.actions.dismiss,
                         onPressed: onReject,
                       ),
                     ),
@@ -316,7 +318,7 @@ final class _OperatingRecurringReminderCandidateCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'No recurring reminder is active until approved.',
+            t.recurringInactive,
             style: AgentOperatingSystemTokens.labelMd.copyWith(
               color: AgentOperatingSystemTokens.onSurfaceVariant,
               fontStyle: FontStyle.italic,
@@ -351,6 +353,7 @@ final class _OperatingReminderCandidateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.reminder;
     final record = item.record ?? const <String, Object?>{};
     final title = _firstOperatingString([
           record['title'],
@@ -387,21 +390,21 @@ final class _OperatingReminderCandidateCard extends StatelessWidget {
     return KeyedSubtree(
       key: ValueKey('agent_operating_reminder_candidate_${item.id}'),
       child: _OperatingCard(
-        header: const Row(
+        header: Row(
           children: [
-            Icon(
+            const Icon(
               Icons.alarm_add_rounded,
               color: AgentOperatingSystemTokens.muted,
               size: 18,
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Reminder Candidate',
+                t.candidate,
                 style: AgentOperatingSystemTokens.labelLg,
               ),
             ),
-            _OperatingStatusBadge(
+            const _OperatingStatusBadge(
               label: 'Pending Approval',
               background: AgentOperatingSystemTokens.secondary,
               foreground: AgentOperatingSystemTokens.onSecondaryContainer,
@@ -437,7 +440,7 @@ final class _OperatingReminderCandidateCard extends StatelessWidget {
                   child: _OperatingFooterTextButton(
                     key:
                         ValueKey('agent_operating_reminder_approve_${item.id}'),
-                    label: 'Approve',
+                    label: context.t.common.actions.approve,
                     primary: true,
                     onPressed: onApprove,
                   ),
@@ -447,7 +450,7 @@ final class _OperatingReminderCandidateCard extends StatelessWidget {
                   child: _OperatingFooterTextButton(
                     key:
                         ValueKey('agent_operating_reminder_dismiss_${item.id}'),
-                    label: 'Dismiss',
+                    label: context.t.common.actions.dismiss,
                     onPressed: onReject,
                   ),
                 ),

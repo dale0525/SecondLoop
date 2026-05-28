@@ -1,10 +1,59 @@
 part of 'desktop_approvals_workbench_page.dart';
 
-List<_ApprovalView> _approvalsFromState(RuntimeAgentState state) {
+List<_ApprovalView> _approvalsFromState(
+  RuntimeAgentState state,
+  _ApprovalWorkbenchCopy copy,
+) {
   return state.approvalItems
-      .map(_ApprovalView.fromRuntime)
+      .map((approval) => _ApprovalView.fromRuntime(approval, copy))
       .where((approval) => approval.id.isNotEmpty)
       .toList(growable: false);
+}
+
+enum _ApprovalRiskLevel { high, medium, low }
+
+final class _ApprovalWorkbenchCopy {
+  const _ApprovalWorkbenchCopy({
+    required this.notReported,
+    required this.previousValue,
+    required this.proposedValue,
+    required this.runtimeApproval,
+    required this.runtimeTarget,
+    required this.reason,
+    required this.noSourceExcerpt,
+    required this.traceChecking,
+    required this.highRisk,
+    required this.mediumRisk,
+    required this.lowRisk,
+    required this.taskMutationType,
+    required this.memoryType,
+    required this.emailDraftType,
+    required this.paymentRefusalType,
+    required this.runtimeApprovalType,
+    required this.needsConfigNotice,
+    required this.refusedNotice,
+    required this.defaultNotice,
+  });
+
+  final String notReported;
+  final String previousValue;
+  final String proposedValue;
+  final String runtimeApproval;
+  final String runtimeTarget;
+  final String reason;
+  final String noSourceExcerpt;
+  final String traceChecking;
+  final String highRisk;
+  final String mediumRisk;
+  final String lowRisk;
+  final String taskMutationType;
+  final String memoryType;
+  final String emailDraftType;
+  final String paymentRefusalType;
+  final String runtimeApprovalType;
+  final String needsConfigNotice;
+  final String refusedNotice;
+  final String defaultNotice;
 }
 
 final class _ApprovalView {
@@ -15,6 +64,7 @@ final class _ApprovalView {
     required this.title,
     required this.status,
     required this.risk,
+    required this.riskLevel,
     required this.targetId,
     required this.sourceId,
     required this.targetLabel,
@@ -35,6 +85,7 @@ final class _ApprovalView {
   final String title;
   final String status;
   final String risk;
+  final _ApprovalRiskLevel riskLevel;
   final String targetId;
   final String sourceId;
   final String targetLabel;
@@ -54,7 +105,10 @@ final class _ApprovalView {
     return id.isNotEmpty && status.contains('pending');
   }
 
-  factory _ApprovalView.fromRuntime(Map<String, Object?> item) {
+  factory _ApprovalView.fromRuntime(
+    Map<String, Object?> item,
+    _ApprovalWorkbenchCopy copy,
+  ) {
     final record = desktopRuntimeMap(item['record']);
     final kind = desktopRuntimeString([item['kind'], record['kind']]) ??
         'approval_required';
@@ -87,7 +141,7 @@ final class _ApprovalView {
           record['currentTitle'],
           record['from'],
         ]) ??
-        'previous value not reported';
+        copy.previousValue;
     final after = desktopRuntimeString([
           record['after'],
           record['new_value'],
@@ -99,19 +153,21 @@ final class _ApprovalView {
           record['to'],
           item['title'],
         ]) ??
-        'proposed value not reported';
+        copy.proposedValue;
+    final riskLevel = _riskLevel(item, record);
     return _ApprovalView(
       id: desktopRuntimeString([item['id'], item['approval_id']]) ?? '',
       kind: kind,
-      typeLabel: desktopRuntimeTitleCase(kind),
+      typeLabel: _approvalTypeLabel(kind, copy),
       title: desktopRuntimeString([item['title'], record['title']]) ??
-          'Runtime approval',
+          copy.runtimeApproval,
       status: refused
           ? 'refused'
           : needsConfig
               ? 'needs_configuration'
               : status,
-      risk: _riskLabel(item, record),
+      risk: _riskLabel(riskLevel, copy),
+      riskLevel: riskLevel,
       targetId: desktopRuntimeString([
             item['task_id'],
             record['target_id'],
@@ -119,14 +175,14 @@ final class _ApprovalView {
             record['task_id'],
             record['taskId'],
           ]) ??
-          'not reported',
+          copy.notReported,
       sourceId: desktopRuntimeString([
             item['source_intent_id'],
             record['source_message_id'],
             record['sourceMessageId'],
             record['source'],
           ]) ??
-          'not reported',
+          copy.notReported,
       targetLabel: desktopRuntimeString([
             record['target_label'],
             record['task_title'],
@@ -134,30 +190,30 @@ final class _ApprovalView {
             record['entity_title'],
             record['title'],
           ]) ??
-          'Runtime target',
+          copy.runtimeTarget,
       before: before,
       after: after,
       reason: desktopRuntimeString([item['reason'], record['reason']]) ??
-          'Agent insight was not reported by runtime.',
+          copy.reason,
       sourceExcerpt: desktopRuntimeString([
             record['source_excerpt'],
             record['sourceExcerpt'],
             record['message_excerpt'],
             record['messageExcerpt'],
           ]) ??
-          'No source excerpt reported.',
+          copy.noSourceExcerpt,
       traceText: desktopRuntimeString([
             record['tool_trace'],
             record['trace'],
             record['trace_text'],
             record['traceText'],
           ]) ??
-          '> checking guardrails... approval_required',
+          copy.traceChecking,
       systemNotice: needsConfig
-          ? 'tool_unavailable: Connector requires configuration before related mutations can be approved.'
+          ? copy.needsConfigNotice
           : refused
-              ? 'refused: Purchase, payment, or local-computer side effects cannot be approved.'
-              : 'approval_required: Runtime will not apply this mutation before a decision.',
+              ? copy.refusedNotice
+              : copy.defaultNotice,
       guardrailLabels: _guardrailLabels(record, needsConfig, refused),
       needsConfig: needsConfig,
       refused: refused,
@@ -165,7 +221,10 @@ final class _ApprovalView {
   }
 }
 
-String _riskLabel(Map<String, Object?> item, Map<String, Object?> record) {
+_ApprovalRiskLevel _riskLevel(
+  Map<String, Object?> item,
+  Map<String, Object?> record,
+) {
   final raw = desktopRuntimeString([
         record['risk'],
         record['risk_level'],
@@ -173,9 +232,54 @@ String _riskLabel(Map<String, Object?> item, Map<String, Object?> record) {
         item['risk'],
       ]) ??
       '';
-  if (raw.toLowerCase().contains('high')) return 'High Risk';
-  if (raw.toLowerCase().contains('low')) return 'Low Risk';
-  return 'Medium Risk';
+  if (raw.toLowerCase().contains('high')) return _ApprovalRiskLevel.high;
+  if (raw.toLowerCase().contains('low')) return _ApprovalRiskLevel.low;
+  return _ApprovalRiskLevel.medium;
+}
+
+String _riskLabel(_ApprovalRiskLevel riskLevel, _ApprovalWorkbenchCopy copy) {
+  return switch (riskLevel) {
+    _ApprovalRiskLevel.high => copy.highRisk,
+    _ApprovalRiskLevel.medium => copy.mediumRisk,
+    _ApprovalRiskLevel.low => copy.lowRisk,
+  };
+}
+
+String _approvalTypeLabel(String kind, _ApprovalWorkbenchCopy copy) {
+  final normalized = kind.toLowerCase();
+  if (normalized.contains('task_mutation')) return copy.taskMutationType;
+  if (normalized.contains('memory')) return copy.memoryType;
+  if (normalized.contains('email')) return copy.emailDraftType;
+  if (normalized.contains('purchase') || normalized.contains('payment')) {
+    return copy.paymentRefusalType;
+  }
+  return copy.runtimeApprovalType;
+}
+
+_ApprovalWorkbenchCopy _approvalWorkbenchCopy(BuildContext context) {
+  final t = context.t.chat.operating.desktopWorkbench.approvals;
+  final root = context.t.chat.operating.desktopWorkbench;
+  return _ApprovalWorkbenchCopy(
+    notReported: root.notReported,
+    previousValue: t.fallbacks.previousValue,
+    proposedValue: t.fallbacks.proposedValue,
+    runtimeApproval: t.fallbacks.runtimeApproval,
+    runtimeTarget: t.fallbacks.runtimeTarget,
+    reason: t.fallbacks.reason,
+    noSourceExcerpt: t.noSourceExcerpt,
+    traceChecking: t.traceChecking,
+    highRisk: t.risk.high,
+    mediumRisk: t.risk.medium,
+    lowRisk: t.risk.low,
+    taskMutationType: t.typeLabels.taskMutation,
+    memoryType: t.typeLabels.memory,
+    emailDraftType: t.typeLabels.emailDraft,
+    paymentRefusalType: t.typeLabels.paymentRefusal,
+    runtimeApprovalType: t.typeLabels.runtimeApproval,
+    needsConfigNotice: t.systemNotice.needsConfig,
+    refusedNotice: t.systemNotice.refused,
+    defaultNotice: t.systemNotice.waitingDecision,
+  );
 }
 
 List<String> _guardrailLabels(

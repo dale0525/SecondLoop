@@ -130,6 +130,10 @@ void main() {
         matching: find.byType(SelectableText),
       ),
     );
+    expect(diagnosticsJsonText.style?.fontFamily, 'Menlo');
+    expect(diagnosticsJsonText.style?.fontFamilyFallback, contains('Monaco'));
+    expect(diagnosticsJsonText.style?.letterSpacing, 0);
+
     final diagnosticsJson =
         jsonDecode(diagnosticsJsonText.data!) as Map<String, Object?>;
     final cloud = diagnosticsJson['cloud'] as Map<String, Object?>;

@@ -186,6 +186,7 @@ final class _OperatingPurchasePaymentSafetyModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.purchasePaymentSafety;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _operatingSafetyErrorContainer,
@@ -193,23 +194,23 @@ final class _OperatingPurchasePaymentSafetyModeChip extends StatelessWidget {
             BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
         border: Border.all(color: _operatingSafetyErrorOutline),
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.max,
           children: [
-            Icon(
+            const Icon(
               Icons.block_rounded,
               size: 13,
               color: _operatingSafetyError,
             ),
-            SizedBox(width: 4),
+            const SizedBox(width: 4),
             Flexible(
               child: Text(
-                'Blocked External Transaction',
+                t.modeChip,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   color: _operatingSafetyError,
                   fontSize: 10,
                   height: 1.2,
@@ -243,10 +244,8 @@ final class _OperatingPurchasePaymentSafetyAssistantBubble
 
   @override
   Widget build(BuildContext context) {
-    final body = content.trim().isEmpty
-        ? 'I cannot execute direct purchases or financial payments on your '
-            'behalf. No transaction has been initiated.'
-        : content.trim();
+    final t = context.t.chat.operating.purchasePaymentSafety;
+    final body = content.trim().isEmpty ? t.defaultBody : content.trim();
     return Align(
       alignment: Alignment.centerLeft,
       child: Column(
@@ -301,18 +300,18 @@ final class _OperatingPurchasePaymentSafetyAssistantBubble
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Row(
+                              Row(
                                 children: [
-                                  Icon(
+                                  const Icon(
                                     Icons.verified_user_outlined,
                                     color: AgentOperatingSystemTokens.secondary,
                                     size: 18,
                                   ),
-                                  SizedBox(width: 8),
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Security Protocol Active',
-                                      style: TextStyle(
+                                      t.protocolActive,
+                                      style: const TextStyle(
                                         color: AgentOperatingSystemTokens
                                             .secondary,
                                         fontSize: 12,
@@ -375,19 +374,20 @@ final class _OperatingPurchasePaymentSafetyAlternativesCard
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.purchasePaymentSafety;
     return KeyedSubtree(
       key: ValueKey('agent_operating_safety_alternatives_${record.id}'),
       child: _OperatingCard(
         header: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'Safe Alternatives',
+                t.safeAlternatives,
                 style: AgentOperatingSystemTokens.headlineSm,
               ),
             ),
             Text(
-              '3 Actions Available',
+              t.actionsAvailable,
               style: AgentOperatingSystemTokens.labelMd.copyWith(
                 color: AgentOperatingSystemTokens.onSurfaceVariant,
               ),
@@ -550,7 +550,9 @@ final class _OperatingPurchasePaymentSafetyMetadataCard
       key: ValueKey('agent_operating_safety_metadata_${record.id}'),
       child: _OperatingCard(
         header: Text(
-          'Transaction Safety Protocol'.toUpperCase(),
+          context
+              .t.chat.operating.purchasePaymentSafety.transactionSafetyProtocol
+              .toUpperCase(),
           style: AgentOperatingSystemTokens.labelLg.copyWith(
             color: AgentOperatingSystemTokens.onSurfaceVariant,
             fontWeight: FontWeight.w800,

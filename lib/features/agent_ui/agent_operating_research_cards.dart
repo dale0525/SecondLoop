@@ -78,18 +78,18 @@ final class _OperatingAssistantHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
+        const Icon(
           Icons.smart_toy_outlined,
           size: 20,
           color: AgentOperatingSystemTokens.secondary,
         ),
-        SizedBox(width: 8),
+        const SizedBox(width: 8),
         Text(
-          'SecondLoop Agent',
-          style: TextStyle(
+          context.t.chat.operating.topBar.brandAgent,
+          style: const TextStyle(
             color: AgentOperatingSystemTokens.secondary,
             fontSize: 12,
             height: 16 / 12,
@@ -268,6 +268,7 @@ final class _OperatingSearchResultHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.researchRuntime;
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: AgentOperatingSystemTokens.surfaceContainerLow,
@@ -281,7 +282,7 @@ final class _OperatingSearchResultHeader extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'SEARCH RESULT',
+                t.searchResult,
                 style: AgentOperatingSystemTokens.labelLg.copyWith(
                   color: AgentOperatingSystemTokens.onSurfaceVariant,
                   fontSize: 11,
@@ -357,6 +358,7 @@ final class _OperatingVerifiedSourcesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.researchRuntime;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AgentOperatingSystemTokens.surfaceContainerLow.withOpacity(0.5),
@@ -371,7 +373,7 @@ final class _OperatingVerifiedSourcesList extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'VERIFIED SOURCES',
+              t.verifiedSources,
               style: AgentOperatingSystemTokens.labelMd.copyWith(
                 color: AgentOperatingSystemTokens.onSurfaceVariant,
                 fontSize: 10,
@@ -483,7 +485,7 @@ final class _OperatingSourceRow extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     child: Text(
-                      '$index',
+                      index.toString(),
                       style: AgentOperatingSystemTokens.labelMd.copyWith(
                         color: AgentOperatingSystemTokens.onSurface,
                         fontWeight: FontWeight.w700,
@@ -521,6 +523,7 @@ final class _OperatingExtractedEvidenceSectionState
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.researchRuntime;
     final evidenceText = _operatingExtractedEvidenceText(
       widget.runtimeTurn,
       widget.evidence,
@@ -541,7 +544,7 @@ final class _OperatingExtractedEvidenceSectionState
                 children: [
                   Expanded(
                     child: Text(
-                      'Extracted Evidence',
+                      t.extractedEvidence,
                       style: AgentOperatingSystemTokens.labelMd.copyWith(
                         color: AgentOperatingSystemTokens.onSurfaceVariant,
                       ),
@@ -651,7 +654,10 @@ final class _OperatingResearchAuditFooter extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Trace ID: $traceId | Snapshot: $snapshotId',
+                context.t.chat.operating.researchRuntime.traceSnapshot(
+                  traceId: traceId,
+                  snapshotId: snapshotId,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AgentOperatingSystemTokens.code.copyWith(
@@ -685,19 +691,19 @@ final class _OperatingResearchFooterChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
+    return DecoratedBox(
+      decoration: const BoxDecoration(
         color: Color(0xFFE0E3E5),
       ),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         child: Wrap(
           spacing: 8,
           runSpacing: 6,
           children: [
             Text(
-              'citations required',
-              style: TextStyle(
+              context.t.chat.operating.researchRuntime.citationsRequired,
+              style: const TextStyle(
                 color: AgentOperatingSystemTokens.onSurfaceVariant,
                 fontSize: 10,
                 height: 14 / 10,
@@ -706,8 +712,8 @@ final class _OperatingResearchFooterChips extends StatelessWidget {
               ),
             ),
             Text(
-              'skill_result_response',
-              style: TextStyle(
+              context.t.chat.operating.researchRuntime.skillResultResponse,
+              style: const TextStyle(
                 color: AgentOperatingSystemTokens.onSurfaceVariant,
                 fontSize: 10,
                 height: 14 / 10,

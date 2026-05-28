@@ -230,9 +230,375 @@
     "decisions": "Decisions",
     "actionItems": "Action items",
     "sources": "Sources",
+    "meetingAudioResult": "Meeting Audio Result",
+    "mediaResult": "Media Result",
     "listItem": "- $value",
     "owner": "Owner: $value",
     "due": "Due: $value"
+  },
+  "operating": {
+    "snackbars": {
+      "safeFollowUpPrepared": "Safe follow-up prepared. Review it before sending to runtime.",
+      "emailDraftUnavailable": "Draft is available locally; sending stays blocked until Email is connected.",
+      "emailSetupUnavailable": "Email setup is unavailable from this screen."
+    },
+    "topBar": {
+      "brandAgent": "SecondLoop Agent",
+      "notifications": "Notifications",
+      "vaultUpload": "Vault Upload",
+      "noPendingApprovals": "No pending approvals",
+      "pendingApprovals": "$count pending approval(s)"
+    },
+      "localComputerSafety": {
+        "modeChip": "Local Operation Blocked",
+        "defaultBody": "I cannot execute terminal commands or modify local files. No action was taken.",
+        "protocol": "Security Protocol: Local Computer Operation Refusal (Approved)",
+        "safetyProtocol": "Safety Protocol",
+        "auditAndSafety": "Audit & Safety",
+        "alternativeAction": "ALTERNATIVE ACTION",
+        "checklistTitle": "Downloads cleanup checklist",
+      "checklist": {
+        "openDownloads": "Open Finder and navigate to Downloads",
+        "locateFolder": "Locate the folder named 'test'",
+        "reviewBeforeDeletion": "Review contents before deletion"
+      },
+      "saveToVault": "Save to Vault"
+    },
+      "purchasePaymentSafety": {
+        "modeChip": "Blocked External Transaction",
+        "defaultBody": "I cannot execute direct purchases or financial payments on your behalf. No transaction has been initiated.",
+        "protocolActive": "Security Protocol Active",
+        "transactionSafetyProtocol": "Transaction Safety Protocol",
+        "safeAlternatives": "Safe Alternatives",
+        "actionsAvailable": "3 Actions Available"
+    },
+    "email": {
+      "notConnected": "Email Not Connected",
+      "draftTitle": "Email Draft",
+      "guardrailTitle": "Email Blocked: Authorization Required",
+      "bodyLabel": "Body:",
+      "draftFallback": "Draft Email",
+      "noSubject": "No subject",
+      "bodyUnavailable": "Draft body unavailable",
+      "runtimeDraft": "Runtime draft"
+    },
+    "desktopWorkbench": {
+      "pendingApprovals": "Pending Approvals",
+      "toolTrace": "Tool Trace",
+      "runtimeContext": "Runtime Context",
+      "runtimeProcessing": "runtime: processing",
+      "contextStatus": "Context Status",
+      "activeMemory": "Active Memory",
+      "postprocessLabel": "postprocess:",
+      "currentFactsLabel": "current facts:",
+      "none": "none",
+      "contextSnapshotReady": "context snapshot ready",
+      "notReported": "not reported",
+      "previousValue": "previous value",
+      "noPendingApprovals": "No pending approvals",
+      "changeRequestedFor": "Change requested for '$title'",
+      "attach": "Attach",
+      "inputHint": "Input instructions for the agent...",
+      "approvals": {
+        "title": "Approvals",
+        "subtitle": "Review guarded mutations before they affect your vault or external systems",
+        "refreshTooltip": "Refresh approvals",
+        "proposedChange": "Proposed Change",
+        "selectApproval": "Select an approval",
+        "selectApprovalMessage": "Choose an item to inspect the mutation diff and audit trail.",
+        "requestChanges": "Request changes",
+        "auditTrace": "Audit Trace",
+        "systemStateNotice": "System State Notice",
+        "sourceMessageExcerpt": "Source Message Excerpt",
+        "recentEntityRefs": "Recent Entity Refs",
+        "toolTraceLog": "Tool Trace Log",
+        "filters": {
+          "pending": "Pending",
+          "approved": "Approved",
+          "rejected": "Rejected",
+          "needsConfig": "Needs config",
+          "highRisk": "High risk"
+        },
+        "emptyTitle": "No matching approvals",
+        "emptyMessage": "Guarded runtime mutations will appear here when approval is required.",
+        "noSourceExcerpt": "No source excerpt reported.",
+        "none": "none",
+        "entityFallback": "entity",
+        "traceFallback": "> guardrail status... not reported",
+        "traceChecking": "> checking guardrails... approval_required",
+        "typeLabels": {
+          "taskMutation": "Task Mutation Approval",
+          "memory": "Memory Approval",
+          "emailDraft": "Email Draft Approval",
+          "paymentRefusal": "Payment Refusal",
+          "runtimeApproval": "Runtime Approval"
+        },
+        "risk": {
+          "high": "High Risk",
+          "medium": "Medium Risk",
+          "low": "Low Risk",
+          "prefix": "Risk: $risk"
+        },
+        "fallbacks": {
+          "previousValue": "previous value not reported",
+          "proposedValue": "proposed value not reported",
+          "runtimeApproval": "Runtime approval",
+          "runtimeTarget": "Runtime target",
+          "reason": "Agent insight was not reported by runtime."
+        },
+        "messages": {
+          "stateUnavailable": "tool_unavailable: runtime state is not configured",
+          "runtimeUnavailable": "tool_unavailable: $error",
+          "cannotSubmit": "$status: this approval cannot be ${decision}d from the app.",
+          "senderUnavailable": "tool_unavailable: runtime approval sender is not configured",
+          "decisionSubmitted": "approval decision submitted",
+          "requestChangesUnavailable": "tool_unavailable: approval edit requests are not available yet",
+          "configureUnavailable": "needs_configuration: connector configuration is not available from this panel yet"
+        },
+        "systemNotice": {
+          "configured": "approval_required: Runtime will apply mutations only after an explicit decision.",
+          "needsConfig": "tool_unavailable: Connector requires configuration before related mutations can be approved.",
+          "refused": "refused: Purchase, payment, or local-computer side effects cannot be approved.",
+          "waitingDecision": "approval_required: Runtime will not apply this mutation before a decision."
+        }
+      },
+      "connectors": {
+        "title": "Connectors",
+        "subtitle": "Runtime bindings, provider availability, and safe degraded states",
+        "runCapabilityCheck": "Run capability check",
+        "toolMatrix": "Tool Matrix",
+        "testDraftGeneration": "Test draft generation",
+        "revokeAccess": "Revoke access",
+        "retryHealthCheck": "Retry health check",
+        "byokSecretsNotice": "BYOK secrets are written only to user runtime secrets, not stored in app config.",
+        "recentConnectorEvents": "Recent Connector Events",
+        "catalogue": "Catalogue",
+        "skillPackages": "Skill Packages",
+        "runtimeMetrics": "Runtime Metrics",
+        "auditTrail": "Audit Trail",
+        "smokeTestStatus": "Smoke Test Status",
+        "lastCheck": "Last Check",
+        "costPolicy": "Cost Policy",
+        "approvalPolicy": "Approval Policy",
+        "passed": "Passed",
+        "strictBudget": "Strict Budget",
+        "standard": "Standard",
+        "notReported": "not reported",
+        "refreshing": "Refreshing runtime capability state...",
+        "unavailableState": "tool_unavailable: runtime capability state is not configured",
+        "runtimeUnavailable": "tool_unavailable: $error",
+        "needsConfiguration": "needs_configuration: configure $connector before enabling this connector",
+        "draftOnly": "draft-only: draft generation can run without external send permissions",
+        "revokeUnavailable": "tool_unavailable: connector revocation endpoint is not available in this build",
+        "statuses": {
+          "available": "Available",
+          "unknown": "Unknown",
+          "needsConfig": "Needs Config",
+          "partial": "Partial",
+          "runtime": "Runtime",
+          "capabilityUnknown": "Capability unknown",
+          "emailDraftOnly": "Degraded State (Draft Only)",
+          "needsConfiguration": "Degraded State (Needs Configuration)",
+          "partialAvailability": "Partial Availability",
+          "runtimeVerified": "Runtime Verified",
+          "hostedRuntime": "Hosted Runtime (Managed Pro)"
+        },
+        "catalog": {
+          "webResearch": {
+            "label": "Web Research",
+            "detailTitle": "Web Research Binding",
+            "authTitle": "Runtime Skill State",
+            "authMessage": "Current facts must flow through web-research and return citations before the app marks them successful.",
+            "primaryAction": "Open research policy",
+            "eventVerified": "Web research verified with citations",
+            "eventMissing": "Web research capability not reported",
+            "tools": {
+              "search": "Search Web",
+              "verify": "Verify Citations",
+              "currentFacts": "Answer Current Facts"
+            }
+          },
+          "email": {
+            "label": "Email",
+            "detailTitle": "Email Binding",
+            "authTitle": "Authentication State",
+            "authMessage": "OAuth token expired, revoked, or not configured. Draft generation remains available, but read/send tools are unavailable.",
+            "primaryAction": "Connect Email",
+            "event": "Email connector needs configuration",
+            "tools": {
+              "read": "Read Email",
+              "summarize": "Summarize Email",
+              "draft": "Create Draft",
+              "send": "Send Email"
+            }
+          },
+          "calendar": {
+            "label": "Calendar",
+            "detailTitle": "Calendar Binding",
+            "authTitle": "OAuth State",
+            "authMessage": "Calendar tools are unavailable until configured. Event creation and invitation changes remain approval-required.",
+            "primaryAction": "Connect Calendar",
+            "event": "Calendar OAuth pending",
+            "tools": {
+              "read": "Read Calendar",
+              "create": "Create Event",
+              "invite": "Send Invite"
+            }
+          },
+          "filesMedia": {
+            "label": "Files & Media",
+            "detailTitle": "Files & Media Binding",
+            "authTitle": "Media Job State",
+            "authMessage": "Vault attachments can be referenced, while high-cost OCR, transcription, or media understanding requires budget confirmation.",
+            "primaryAction": "Review budget policy",
+            "event": "Media provider budget confirmation required",
+            "tools": {
+              "vaultRead": "Vault Attachment Read",
+              "documentOcr": "Document OCR",
+              "audioTranscription": "Audio Transcription"
+            }
+          },
+          "modelProvider": {
+            "label": "Model Provider",
+            "detailTitle": "Model Provider Binding",
+            "authTitle": "Provider State",
+            "authMessage": "Managed Pro and self-managed modes expose the same user capability set; deployment and secret ownership differ.",
+            "primaryAction": "Run provider check",
+            "event": "Model provider smoke tests passed",
+            "tools": {
+              "structuredOutput": "Structured Output",
+              "chineseIntent": "Chinese Intent Handling",
+              "sideEffect": "Side-effect Discipline"
+            }
+          },
+          "cloudflareRuntime": {
+            "label": "Cloudflare Runtime",
+            "detailTitle": "Cloudflare Runtime",
+            "authTitle": "Runtime Deployment",
+            "authMessage": "Self-managed setup writes BYOK secrets only to the user runtime. Managed Pro uses hosted runtime controls.",
+            "primaryAction": "Open runtime settings",
+            "event": "Runtime manifest loaded",
+            "tags": {
+              "hostedRuntime": "Hosted runtime (Managed Pro)",
+              "selfManagedSetup": "Self-managed setup"
+            },
+            "tools": {
+              "agentRuntime": "Agent Runtime",
+              "vaultService": "Vault Service",
+              "secretStorage": "Secret Storage"
+            }
+          }
+        }
+      },
+      "memory": {
+        "title": "Memory",
+        "subtitle": "Manage personal context and agent instructions",
+        "reviewPending": "Review pending ($count)",
+        "pendingCandidatesMessage": "$count pending memory candidates",
+        "addEntry": "Add Entry",
+        "searchHint": "Search Memory...",
+        "refreshTooltip": "Refresh memory state",
+        "editProposal": "Edit Proposal",
+        "requestRemoval": "Request Removal",
+        "pendingCandidates": "Pending Candidates ($count)",
+        "emptyCandidates": "No memory candidates waiting for approval.",
+        "runtimeConnectionStable": "Runtime Connection Stable",
+        "syncing": "Syncing...",
+        "lastSyncedJustNow": "Last synced: Just now",
+        "record": "Record",
+        "status": "Status",
+        "source": "Source",
+        "age": "Age",
+        "extractedInstruction": "Extracted Instruction",
+        "filters": {
+          "all": "All",
+          "active": "Active",
+          "pending": "Pending",
+          "archived": "Archived",
+          "dismissed": "Dismissed"
+        },
+        "recordsTitle": "Memory Records",
+        "emptyRecordsTitle": "No memory records",
+        "emptyRecordsMessage": "Approved runtime memory will appear here after the agent creates auditable records.",
+        "detailsTitle": "Record Details",
+        "selectTitle": "Select a memory",
+        "selectMessage": "Choose a runtime memory record to inspect its source and injection state.",
+        "confidence": "Confidence: $value",
+        "statusMeta": "Status",
+        "sourceReference": "Source Reference",
+        "injected": "Injected ($contextId)",
+        "untitledMemory": "Untitled memory",
+        "defaultSource": "Runtime",
+        "notReported": "not reported",
+        "notRecorded": "not recorded",
+        "candidateFallback": "Memory candidate",
+        "messages": {
+          "stateUnavailable": "tool_unavailable: runtime state is not configured",
+          "runtimeUnavailable": "tool_unavailable: $error",
+          "approvalSenderUnavailable": "tool_unavailable: runtime approval sender is not configured",
+          "approvalSubmitted": "approval submitted: memory candidate",
+          "rejectionSubmitted": "rejection submitted: memory candidate",
+          "mutationUnavailable": "$action requires a runtime memory mutation endpoint. (approval_required)"
+        }
+      }
+    },
+    "actionCandidate": {
+      "title": "Action Item Candidate",
+      "metadataIncomplete": "Runtime metadata incomplete",
+      "create": "Create"
+    },
+    "operatingSystem": {
+      "taskCreated": "Task Created",
+      "openTask": "Open Task",
+      "memoryCandidate": "Memory Candidate",
+      "factToBeCommitted": "FACT TO BE COMMITTED:"
+    },
+    "reminder": {
+      "pendingIntent": "Pending Intent",
+      "recurringCandidate": "Recurring Reminder Candidate",
+      "recurringInactive": "No recurring reminder is active until approved.",
+      "candidate": "Reminder Candidate"
+    },
+    "researchRuntime": {
+      "webResearch": "web-research",
+      "searchResult": "SEARCH RESULT",
+      "verifiedSources": "VERIFIED SOURCES",
+      "extractedEvidence": "Extracted Evidence",
+      "traceSnapshot": "Trace ID: $traceId | Snapshot: $snapshotId",
+      "citationsRequired": "citations required",
+      "skillResultResponse": "skill_result_response"
+    },
+    "calendarApproval": {
+      "title": "Calendar Event Approval",
+      "proposedEvent": "Proposed Event",
+      "auditTrail": "Audit Trail",
+      "syncPriority": "Sync Priority",
+      "contextSnapshot": "Context Snapshot",
+      "status": "Status",
+      "processing": "Processing...",
+      "approveEvent": "Approve Event",
+      "editUnavailable": "Edit unavailable"
+    },
+    "taskMutationApproval": {
+      "title": "Task Title Change Approval",
+      "systemContext": "System Context",
+      "currentStateAwaitingApproval": "Current State (Awaiting Approval)",
+      "targetEntity": "Target Entity",
+      "resolverDetail": "Resolver Detail",
+      "proposedChange": "Proposed Change",
+      "changeTitleFrom": "Change title from",
+      "to": "to",
+      "source": "Source",
+      "auditId": "Audit ID",
+      "contextSnapshot": "Context Snapshot",
+      "runtimeTool": "Runtime Tool",
+      "processing": "Processing...",
+      "approveChange": "Approve Change",
+      "editUnavailable": "Edit unavailable",
+      "editProposedTitle": "Edit proposed title",
+      "lastApprovedChange": "Last Approved Change",
+      "automationConfidence": "Automation Confidence"
+    }
   },
   "dailyBrief": {
     "topPriorities": "Top priorities",
@@ -252,6 +618,7 @@
     "thinkingBody": "Preparing a reviewable change. Nothing has been saved yet.",
     "loadEarlierMessages": "Load earlier messages",
     "composerHint": "Ask, capture, search, or attach a file...",
+    "followUpComposerHint": "Ask a follow-up...",
     "attach": "Attach",
     "record": "Record",
     "working": "Working",

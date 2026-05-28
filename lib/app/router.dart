@@ -10,6 +10,7 @@ import '../core/update/update_badge_prefs.dart';
 import '../features/agent_ui/desktop_approvals_workbench_page.dart';
 import '../features/agent_ui/desktop_connectors_workbench_page.dart';
 import '../features/agent_ui/desktop_memory_workbench_page.dart';
+import '../i18n/strings.g.dart';
 import 'app_shell_runtime_status_pill.dart';
 import 'app_shell_style.dart';
 import 'theme.dart';
@@ -29,11 +30,11 @@ enum AppTab {
   final IconData selectedIcon;
 
   String label(BuildContext context) => switch (this) {
-        AppTab.review => 'Briefing',
-        AppTab.conversation => 'Chat',
-        AppTab.notes => 'Vault',
-        AppTab.memory => 'Tasks',
-        AppTab.settings => 'Settings',
+        AppTab.review => context.t.app.shell.tabs.review,
+        AppTab.conversation => context.t.app.shell.tabs.conversation,
+        AppTab.notes => context.t.app.shell.tabs.notes,
+        AppTab.memory => context.t.app.shell.tabs.memory,
+        AppTab.settings => context.t.app.shell.tabs.settings,
       };
 
   String get navKey => switch (this) {
@@ -351,30 +352,21 @@ final class _AppShellDesktopWorkbench extends StatelessWidget {
     return ColoredBox(
       key: const ValueKey('app_shell_desktop_workbench'),
       color: colors.background,
-      child: Stack(
+      child: Column(
         children: [
-          Column(
-            children: [
-              const _AppShellDesktopTopNav(),
-              Expanded(
-                child: Row(
-                  children: [
-                    _AppShellDesktopSideNav(
-                      selectedIndex: selectedIndex,
-                      selectedDesktopAction: selectedDesktopAction,
-                      onSelect: onSelect,
-                      onSelectDesktopAction: onSelectDesktopAction,
-                    ),
-                    Expanded(child: child),
-                  ],
+          const _AppShellDesktopTopNav(),
+          Expanded(
+            child: Row(
+              children: [
+                _AppShellDesktopSideNav(
+                  selectedIndex: selectedIndex,
+                  selectedDesktopAction: selectedDesktopAction,
+                  onSelect: onSelect,
+                  onSelectDesktopAction: onSelectDesktopAction,
                 ),
-              ),
-            ],
-          ),
-          const Positioned(
-            right: 32,
-            bottom: 32,
-            child: _AppShellDesktopQuickCaptureButton(),
+                Expanded(child: child),
+              ],
+            ),
           ),
         ],
       ),
@@ -388,6 +380,7 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = _AppShellChromeColors.of(context);
+    final t = context.t.app.shell.desktop;
     return DecoratedBox(
       key: const ValueKey('app_shell_desktop_top_nav'),
       decoration: BoxDecoration(
@@ -403,7 +396,7 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  'SecondLoop',
+                  context.t.app.title,
                   style: TextStyle(
                     color: colors.text,
                     fontSize: 20,
@@ -429,7 +422,7 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                         const _RuntimeSyncedDot(),
                         const SizedBox(width: 6),
                         Text(
-                          'Runtime Synced',
+                          t.runtimeSynced,
                           style: TextStyle(
                             color: colors.muted,
                             fontSize: 11,
@@ -451,10 +444,10 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                     readOnly: true,
                     onTap: () => _showDesktopWorkbenchSnack(
                       context,
-                      'Operational vault search needs runtime search configuration. (tool_unavailable)',
+                      t.searchUnavailable,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Search operational vault...',
+                      hintText: t.searchHint,
                       prefixIcon: const Icon(Icons.search_rounded, size: 18),
                       isDense: true,
                       filled: true,
@@ -482,18 +475,18 @@ final class _AppShellDesktopTopNav extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
                 IconButton(
-                  tooltip: 'Sync',
+                  tooltip: t.syncTooltip,
                   onPressed: () => _showDesktopWorkbenchSnack(
                     context,
-                    'Runtime sync follows the active runtime connection.',
+                    t.syncStatus,
                   ),
                   icon: const Icon(Icons.sync_rounded),
                 ),
                 IconButton(
-                  tooltip: 'Account',
+                  tooltip: t.accountTooltip,
                   onPressed: () => _showDesktopWorkbenchSnack(
                     context,
-                    'Account controls are available from Settings.',
+                    t.accountControls,
                   ),
                   icon: const Icon(Icons.account_circle_outlined),
                 ),
@@ -535,8 +528,6 @@ final class _AppShellChromeColors {
     required this.onAccent,
     required this.selected,
     required this.hover,
-    required this.quickCaptureBackground,
-    required this.quickCaptureForeground,
   });
 
   final Color background;
@@ -548,8 +539,6 @@ final class _AppShellChromeColors {
   final Color onAccent;
   final Color selected;
   final Color hover;
-  final Color quickCaptureBackground;
-  final Color quickCaptureForeground;
 
   static _AppShellChromeColors of(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -564,8 +553,6 @@ final class _AppShellChromeColors {
         onAccent: Color(0xFF061A33),
         selected: AppShellPalette.darkSelected,
         hover: AppShellPalette.darkSurface,
-        quickCaptureBackground: AppShellPalette.darkBlue,
-        quickCaptureForeground: Color(0xFF061A33),
       );
     }
     return const _AppShellChromeColors(
@@ -578,8 +565,6 @@ final class _AppShellChromeColors {
       onAccent: Color(0xFFFEFCFF),
       selected: Color(0xFFECEEF0),
       hover: Color(0xFFE6E8EA),
-      quickCaptureBackground: Color(0xFF000000),
-      quickCaptureForeground: Color(0xFFFFFFFF),
     );
   }
 }
@@ -603,19 +588,16 @@ final class _AppShellDesktopSideNav extends StatelessWidget {
     _DesktopNavDestination.tab(AppTab.notes),
     _DesktopNavDestination.tab(AppTab.memory),
     _DesktopNavDestination.action(
-      label: 'Memory',
       icon: Icons.psychology_outlined,
       selectedIcon: Icons.psychology,
       action: _DesktopNavAction.memory,
     ),
     _DesktopNavDestination.action(
-      label: 'Approvals',
       icon: Icons.rule_outlined,
       selectedIcon: Icons.rule,
       action: _DesktopNavAction.approvals,
     ),
     _DesktopNavDestination.action(
-      label: 'Connectors',
       icon: Icons.hub_outlined,
       selectedIcon: Icons.hub,
       action: _DesktopNavAction.connectors,
@@ -691,25 +673,31 @@ enum _DesktopNavAction { memory, approvals, connectors }
 
 final class _DesktopNavDestination {
   const _DesktopNavDestination.tab(this.tab)
-      : label = null,
-        icon = null,
+      : icon = null,
         selectedIcon = null,
         action = null;
 
   const _DesktopNavDestination.action({
-    required this.label,
     required this.icon,
     required this.selectedIcon,
     required this.action,
   }) : tab = null;
 
   final AppTab? tab;
-  final String? label;
   final IconData? icon;
   final IconData? selectedIcon;
   final _DesktopNavAction? action;
 
-  String resolvedLabel(BuildContext context) => tab?.label(context) ?? label!;
+  String resolvedLabel(BuildContext context) {
+    final tab = this.tab;
+    if (tab != null) return tab.label(context);
+    return switch (action) {
+      _DesktopNavAction.memory => context.t.app.shell.desktop.memory,
+      _DesktopNavAction.approvals => context.t.app.shell.desktop.approvals,
+      _DesktopNavAction.connectors => context.t.app.shell.desktop.connectors,
+      null => '',
+    };
+  }
 
   IconData resolvedIcon({required bool selected}) {
     final tab = this.tab;
@@ -791,36 +779,6 @@ final class _AppShellDesktopNavItem extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-final class _AppShellDesktopQuickCaptureButton extends StatelessWidget {
-  const _AppShellDesktopQuickCaptureButton();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = _AppShellChromeColors.of(context);
-    return SizedBox.square(
-      key: const ValueKey('app_shell_desktop_quick_capture'),
-      dimension: 56,
-      child: FloatingActionButton(
-        tooltip: 'Quick Capture',
-        backgroundColor: colors.quickCaptureBackground,
-        foregroundColor: colors.quickCaptureForeground,
-        onPressed: () {
-          final controller = QuickCaptureScope.maybeOf(context);
-          if (controller != null) {
-            controller.show();
-            return;
-          }
-          _showDesktopWorkbenchSnack(
-            context,
-            'Quick Capture is unavailable in this context. (tool_unavailable)',
-          );
-        },
-        child: const Icon(Icons.add_rounded, size: 28),
       ),
     );
   }

@@ -11,6 +11,7 @@ final class _OperatingTaskCreatedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.operatingSystem;
     final mutationId = _firstOperatingString([
           record.raw['mutation_id'],
           record.raw['mutationId'],
@@ -22,21 +23,21 @@ final class _OperatingTaskCreatedCard extends StatelessWidget {
         ]) ??
         'not recorded';
     return _OperatingCard(
-      header: const Row(
+      header: Row(
         children: [
-          Icon(
+          const Icon(
             Icons.task_alt_rounded,
             color: AgentOperatingSystemTokens.secondary,
             size: 18,
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Task Created',
+              t.taskCreated,
               style: AgentOperatingSystemTokens.labelLg,
             ),
           ),
-          _OperatingStatusBadge(
+          const _OperatingStatusBadge(
             label: 'Applied',
             background: AgentOperatingSystemTokens.secondaryContainer,
             foreground: AgentOperatingSystemTokens.onSecondaryContainer,
@@ -77,7 +78,7 @@ final class _OperatingTaskCreatedCard extends StatelessWidget {
               ),
               onPressed: onOpen,
               icon: const Icon(Icons.open_in_new_rounded, size: 16),
-              label: const Text('Open Task'),
+              label: Text(t.openTask),
             ),
           ),
         ],
@@ -99,6 +100,7 @@ final class _OperatingMemoryCandidateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.operatingSystem;
     final record = item.record ?? const <String, Object?>{};
     final text = _firstOperatingString([
           record['text'],
@@ -121,21 +123,21 @@ final class _OperatingMemoryCandidateCard extends StatelessWidget {
     return KeyedSubtree(
       key: ValueKey('agent_operating_memory_candidate_${item.id}'),
       child: _OperatingCard(
-        header: const Row(
+        header: Row(
           children: [
-            Icon(
+            const Icon(
               Icons.psychology_alt_outlined,
               color: AgentOperatingSystemTokens.muted,
               size: 18,
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Memory Candidate',
+                t.memoryCandidate,
                 style: AgentOperatingSystemTokens.labelLg,
               ),
             ),
-            _OperatingStatusBadge(
+            const _OperatingStatusBadge(
               label: 'Pending Approval',
               background: AgentOperatingSystemTokens.surfaceContainerHigh,
               foreground: AgentOperatingSystemTokens.onSurfaceVariant,
@@ -160,7 +162,7 @@ final class _OperatingMemoryCandidateCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'FACT TO BE COMMITTED:',
+                      t.factToBeCommitted,
                       style: AgentOperatingSystemTokens.labelMd.copyWith(
                         color: AgentOperatingSystemTokens.onSurfaceVariant,
                       ),
@@ -546,7 +548,8 @@ final class _OperatingComposer extends StatelessWidget {
         controller: controller,
         focusNode: focusNode,
         busy: busy,
-        placeholder: placeholder ?? 'Ask a follow-up...',
+        placeholder: placeholder ??
+            context.t.chat.agentConversation.followUpComposerHint,
         attachments: attachments,
         onAttach: onAttach,
         onRemoveAttachment: onRemoveAttachment,
@@ -589,7 +592,7 @@ final class _OperatingComposer extends StatelessWidget {
                 children: [
                   IconButton(
                     key: const ValueKey('chat_attach'),
-                    tooltip: 'Attach',
+                    tooltip: context.t.chat.operating.desktopWorkbench.attach,
                     onPressed: busy ? null : onAttach,
                     style: IconButton.styleFrom(
                       foregroundColor: colors.onSurfaceVariant,
@@ -606,7 +609,8 @@ final class _OperatingComposer extends StatelessWidget {
                       maxLines: 4,
                       textInputAction: TextInputAction.newline,
                       decoration: InputDecoration(
-                        hintText: placeholder ?? 'Type a message or command...',
+                        hintText: placeholder ??
+                            context.t.chat.agentConversation.composerHint,
                         border: InputBorder.none,
                         isDense: true,
                         hintStyle: AgentOperatingSystemTokens.bodyMd.copyWith(
@@ -707,7 +711,7 @@ final class _OperatingFollowUpComposer extends StatelessWidget {
               children: [
                 IconButton(
                   key: const ValueKey('chat_attach'),
-                  tooltip: 'Attach',
+                  tooltip: context.t.chat.operating.desktopWorkbench.attach,
                   onPressed: busy ? null : onAttach,
                   style: IconButton.styleFrom(
                     foregroundColor: colors.onSurfaceVariant,

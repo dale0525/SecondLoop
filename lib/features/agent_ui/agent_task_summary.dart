@@ -604,6 +604,7 @@ final class AgentTasksPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = context.t;
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     return FutureBuilder<CloudRuntimeConnection?>(
@@ -639,7 +640,7 @@ final class AgentTasksPage extends StatelessWidget {
                     )
                     .then(agentTodosFromRuntimeState);
         return Scaffold(
-          appBar: AppBar(title: Text(t.chat.agentTasks.allTasks)),
+          appBar: AppBar(title: Text(text.chat.agentTasks.allTasks)),
           body: FutureBuilder<List<Todo>>(
             future: tasksFuture,
             builder: (context, snapshot) {
@@ -649,7 +650,9 @@ final class AgentTasksPage extends StatelessWidget {
               }
               if (snapshot.hasError) {
                 return Center(
-                  child: Text(t.errors.loadFailed(error: '${snapshot.error}')),
+                  child: Text(
+                    text.errors.loadFailed(error: '${snapshot.error}'),
+                  ),
                 );
               }
               return _AgentTasksList(
@@ -686,6 +689,7 @@ void showAgentTasksSheet({
     useSafeArea: true,
     isScrollControlled: true,
     builder: (context) {
+      final text = context.t;
       return FractionallySizedBox(
         key: const ValueKey('agent_tasks_sheet'),
         heightFactor: 0.82,
@@ -695,7 +699,7 @@ void showAgentTasksSheet({
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                t.chat.agentTasks.allTasks,
+                text.chat.agentTasks.allTasks,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: _ink,
                       fontWeight: FontWeight.w800,
@@ -731,9 +735,10 @@ final class _AgentTasksList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = context.t;
     final openTasks = agentOpenTasks(todos);
     if (openTasks.isEmpty) {
-      return Center(child: Text(t.chat.agentTasks.empty));
+      return Center(child: Text(text.chat.agentTasks.empty));
     }
     return ListView.separated(
       padding: const EdgeInsets.all(AgentDesignTokens.gapLg),

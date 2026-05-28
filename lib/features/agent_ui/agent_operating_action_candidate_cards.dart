@@ -32,6 +32,7 @@ final class _OperatingActionItemCandidateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.actionCandidate;
     final record = item.record ?? const <String, Object?>{};
     final title = _firstOperatingString([
           record['title'],
@@ -87,21 +88,21 @@ final class _OperatingActionItemCandidateCard extends StatelessWidget {
     return KeyedSubtree(
       key: ValueKey('agent_operating_action_candidate_${item.id}'),
       child: _OperatingCard(
-        header: const Row(
+        header: Row(
           children: [
-            Icon(
+            const Icon(
               Icons.add_task_rounded,
               color: AgentOperatingSystemTokens.secondary,
               size: 18,
             ),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Action Item Candidate',
+                t.title,
                 style: AgentOperatingSystemTokens.labelLg,
               ),
             ),
-            _OperatingStatusBadge(
+            const _OperatingStatusBadge(
               label: 'Pending Approval',
               background: AgentOperatingSystemTokens.surfaceContainerHigh,
               foreground: AgentOperatingSystemTokens.onSurfaceVariant,
@@ -146,7 +147,7 @@ final class _OperatingActionItemCandidateCard extends StatelessWidget {
               _OperatingDetailRow(label: 'Source:', value: source),
             if (due == null && sourceTime == null && source == null)
               Text(
-                'Runtime metadata incomplete',
+                t.metadataIncomplete,
                 style: AgentOperatingSystemTokens.bodySm.copyWith(
                   color: AgentOperatingSystemTokens.onSurfaceVariant,
                   fontStyle: FontStyle.italic,
@@ -167,7 +168,7 @@ final class _OperatingActionItemCandidateCard extends StatelessWidget {
                     key: ValueKey(
                       'agent_operating_action_candidate_create_${item.id}',
                     ),
-                    label: 'Create',
+                    label: t.create,
                     primary: true,
                     onPressed: onCreate,
                   ),
@@ -178,7 +179,7 @@ final class _OperatingActionItemCandidateCard extends StatelessWidget {
                     key: ValueKey(
                       'agent_operating_action_candidate_dismiss_${item.id}',
                     ),
-                    label: 'Dismiss',
+                    label: context.t.common.actions.dismiss,
                     onPressed: onDismiss,
                   ),
                 ),

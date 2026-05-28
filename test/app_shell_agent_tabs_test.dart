@@ -57,7 +57,7 @@ void main() {
     expect(find.text('Approvals'), findsOneWidget);
     expect(find.text('Connectors'), findsOneWidget);
     expect(find.byKey(const ValueKey('app_shell_desktop_quick_capture')),
-        findsOneWidget);
+        findsNothing);
   });
 
   testWidgets('mobile AppShell exposes the five agent destinations',

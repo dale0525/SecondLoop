@@ -60,7 +60,9 @@ final class _AssistantRuntimeMediaResult extends StatelessWidget {
             const SizedBox(width: AgentDesignTokens.gapSm),
             Flexible(
               child: Text(
-                result.isAudioResult ? 'Meeting Audio Result' : 'Media Result',
+                result.isAudioResult
+                    ? context.t.chat.runtimeMediaResult.meetingAudioResult
+                    : context.t.chat.runtimeMediaResult.mediaResult,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: colors.onSurface,
                       fontWeight: FontWeight.w800,

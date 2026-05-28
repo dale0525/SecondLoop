@@ -26,7 +26,7 @@ void main() {
   testWidgets(
     'thirteenth canonical Stitch screen renders the 2560 desktop workbench',
     (tester) async {
-      final harness = await _pumpWorkbench(
+      await _pumpWorkbench(
         tester,
         size: const Size(2560, 2048),
       );
@@ -103,13 +103,7 @@ void main() {
       expect(workspace.width, 2304);
       expect(composer.width, 896);
       expect(find.byKey(const ValueKey('app_shell_desktop_quick_capture')),
-          findsOneWidget);
-
-      await tester.tap(
-        find.byKey(const ValueKey('app_shell_desktop_quick_capture')),
-      );
-      await tester.pump();
-      expect(harness.quickCapture.visible, isTrue);
+          findsNothing);
     },
   );
 
@@ -241,7 +235,6 @@ Future<_WorkbenchHarness> _pumpWorkbench(
 
   return _WorkbenchHarness(
     sender: sender,
-    quickCapture: quickCapture,
   );
 }
 
@@ -354,11 +347,9 @@ RuntimeAgentState _desktopWorkbenchState({bool includeCitations = true}) {
 final class _WorkbenchHarness {
   const _WorkbenchHarness({
     required this.sender,
-    required this.quickCapture,
   });
 
   final _ApprovalRecordingSender sender;
-  final QuickCaptureController quickCapture;
 }
 
 final class _FakeRuntimeAgentStateRepository

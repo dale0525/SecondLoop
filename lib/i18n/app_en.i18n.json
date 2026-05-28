@@ -8,6 +8,27 @@
     "review": "Review",
     "settings": "Settings"
   },
+  "shell": {
+    "tabs": {
+      "review": "Briefing",
+      "conversation": "Chat",
+      "notes": "Vault",
+      "memory": "Tasks",
+      "settings": "Settings"
+    },
+    "desktop": {
+      "runtimeSynced": "Runtime Synced",
+      "searchHint": "Search operational vault...",
+      "searchUnavailable": "Operational vault search needs runtime search configuration. (tool_unavailable)",
+      "syncTooltip": "Sync",
+      "syncStatus": "Runtime sync follows the active runtime connection.",
+      "accountTooltip": "Account",
+      "accountControls": "Account controls are available from Settings.",
+      "memory": "Memory",
+      "approvals": "Approvals",
+      "connectors": "Connectors"
+    }
+  },
   "web": {
     "title": "SecondLoop Web",
     "bootstrapFailed": "Failed to start Web app: $error",

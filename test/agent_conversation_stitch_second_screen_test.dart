@@ -1,22 +1,31 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/app/router.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_models.dart';
 import 'package:secondloop/core/cloud/runtime_agent_state_repository.dart';
+import 'package:secondloop/core/cloud/runtime_connection_store.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_models.dart';
 import 'package:secondloop/core/cloud/secretary_runtime_conversation_sender.dart';
 import 'package:secondloop/core/models/app_models.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
+  setUp(() {
+    LocaleSettings.setLocale(AppLocale.en);
+    RuntimeConnectionStore.resetCacheForTests();
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets(
     'second canonical Stitch screen renders runtime web research continuity',
     (tester) async {
@@ -84,7 +93,12 @@ void main() {
       expect(find.text('Extracted Evidence'), findsOneWidget);
       expect(find.textContaining('Trace ID: SRCH-2026-05-12'), findsOneWidget);
       expect(find.text('Model Gateway: Post-processed'), findsOneWidget);
-      expect(find.text('Ask a follow-up...'), findsOneWidget);
+      expect(
+        find.text(
+          AppLocale.en.translations.chat.agentConversation.followUpComposerHint,
+        ),
+        findsOneWidget,
+      );
 
       await tester.tap(
         find.byKey(const ValueKey('agent_operating_extracted_evidence_toggle')),
@@ -166,13 +180,11 @@ void main() {
         '介绍一下新的手机产品参数。',
       );
       await tester.pump();
-      expect(
-        tester
-            .widget<FilledButton>(find.byKey(const ValueKey('chat_send')))
-            .onPressed,
-        isNotNull,
+      final sendButton = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('chat_send')),
       );
-      await tester.tap(find.byKey(const ValueKey('chat_send')));
+      expect(sendButton.onPressed, isNotNull);
+      sendButton.onPressed!();
       await tester.pumpAndSettle();
 
       expect(sender.sentMessages, ['介绍一下新的手机产品参数。']);

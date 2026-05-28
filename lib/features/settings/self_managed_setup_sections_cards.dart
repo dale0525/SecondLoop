@@ -3,43 +3,47 @@ part of 'self_managed_setup_sections.dart';
 class _CloudflareAuthorizationCard extends StatelessWidget {
   const _CloudflareAuthorizationCard();
 
-  static const _items = [
-    _SafetyItem(
-      Icons.construction_rounded,
-      'Setup helper only',
-      'Tokens are used solely for deployment automation.',
-    ),
-    _SafetyItem(
-      Icons.no_accounts_rounded,
-      'Not saved as business config',
-      'Credential lifetime limited to active session.',
-    ),
-    _SafetyItem(
-      Icons.history_rounded,
-      'Can be revoked after deployment',
-      'Remove API tokens once workers are live.',
-    ),
-    _SafetyItem(
-      Icons.folder_shared_rounded,
-      'Resources owned by you',
-      'Workers and KV stores stay in your account.',
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final t = context.t.settings.selfManagedSetup.cards;
+    final safety = t.safetyItems;
+    final items = [
+      _SafetyItem(
+        Icons.construction_rounded,
+        safety.setupHelperOnly.title,
+        safety.setupHelperOnly.body,
+      ),
+      _SafetyItem(
+        Icons.no_accounts_rounded,
+        safety.notSaved.title,
+        safety.notSaved.body,
+      ),
+      _SafetyItem(
+        Icons.history_rounded,
+        safety.revocable.title,
+        safety.revocable.body,
+      ),
+      _SafetyItem(
+        Icons.folder_shared_rounded,
+        safety.resourcesOwned.title,
+        safety.resourcesOwned.body,
+      ),
+    ];
     return _SetupCard(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.security_rounded, color: _SetupColors.secondary),
-              SizedBox(width: 8),
+              const Icon(
+                Icons.security_rounded,
+                color: _SetupColors.secondary,
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Cloudflare Authorization',
+                  t.cloudflareAuthorization,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: _SetupTextStyles.title,
@@ -58,7 +62,7 @@ class _CloudflareAuthorizationCard extends StatelessWidget {
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  for (final item in _items)
+                  for (final item in items)
                     SizedBox(
                       width: itemWidth,
                       child: _SafetyTile(item: item),
@@ -125,6 +129,8 @@ class _CapabilityVerificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.settings.selfManagedSetup.cards;
+    final specs = _capabilitySpecs(context);
     return _SetupCard(
       padding: EdgeInsets.zero,
       clip: Clip.antiAlias,
@@ -134,9 +140,9 @@ class _CapabilityVerificationCard extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Capability Verification',
+                    t.capabilityVerification,
                     style: _SetupTextStyles.title,
                   ),
                 ),
@@ -145,7 +151,7 @@ class _CapabilityVerificationCard extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, color: _SetupColors.outlineVariant),
-          for (final spec in _capabilitySpecs)
+          for (final spec in specs)
             _CapabilityRow(
               key: ValueKey('self_managed_capability_${spec.code}'),
               spec: spec,
@@ -164,6 +170,7 @@ class _VerificationRunChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.settings.selfManagedSetup.cards;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _SetupColors.surfaceContainer,
@@ -172,7 +179,7 @@ class _VerificationRunChip extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         child: Text(
-          verification == null ? 'Not run yet' : 'Last run: latest',
+          verification == null ? t.notRunYet : t.lastRunLatest,
           style: const TextStyle(
             color: _SetupColors.onSurfaceVariant,
             fontSize: 11,
@@ -198,7 +205,11 @@ class _CapabilityRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final presentation = _CapabilityPresentation.from(spec, verification);
+    final presentation = _CapabilityPresentation.from(
+      context,
+      spec,
+      verification,
+    );
     return DecoratedBox(
       decoration: BoxDecoration(color: presentation.background),
       child: Padding(
@@ -254,20 +265,25 @@ class _RuntimeManifestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.settings.selfManagedSetup.cards;
+    final manifestFields = t.manifestFields;
     final fields = [
       _ManifestField(
-        'Endpoint URL',
-        manifest?.apiBaseUrl ?? 'pending',
+        manifestFields.endpointUrl,
+        manifest?.apiBaseUrl ?? manifestFields.pending,
         accent: manifest?.apiBaseUrl.isNotEmpty == true,
       ),
-      _ManifestField('Vault Binding', manifest?.vaultBinding ?? 'pending'),
       _ManifestField(
-        'Skill Availability Report',
-        _skillAvailabilityLabel(manifest),
+        manifestFields.vaultBinding,
+        manifest?.vaultBinding ?? manifestFields.pending,
       ),
       _ManifestField(
-        'Provider Cost Owner',
-        manifest?.providerCostOwner ?? 'pending',
+        manifestFields.skillAvailabilityReport,
+        _skillAvailabilityLabel(context, manifest),
+      ),
+      _ManifestField(
+        manifestFields.providerCostOwner,
+        manifest?.providerCostOwner ?? manifestFields.pending,
         strong: manifest?.providerCostOwner != null,
       ),
     ];
@@ -276,7 +292,7 @@ class _RuntimeManifestCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Runtime Manifest', style: _SetupTextStyles.title),
+          Text(t.runtimeManifest, style: _SetupTextStyles.title),
           const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -302,16 +318,20 @@ class _RuntimeManifestCard extends StatelessWidget {
     );
   }
 
-  String _skillAvailabilityLabel(CloudRuntimeManifest? manifest) {
+  String _skillAvailabilityLabel(
+    BuildContext context,
+    CloudRuntimeManifest? manifest,
+  ) {
+    final t = context.t.settings.selfManagedSetup.cards.manifestFields;
     final skills = manifest?.skills ?? const <CloudRuntimeSkillAvailability>[];
-    if (skills.isEmpty) return 'pending';
+    if (skills.isEmpty) return t.pending;
     final active = skills
         .where((skill) =>
             skill.status == 'ready' ||
             skill.status == 'active' ||
             skill.status == 'available')
         .length;
-    return '$active/${skills.length} active';
+    return t.activeCount(active: active, total: skills.length);
   }
 }
 
@@ -328,27 +348,27 @@ class _RuntimeManagementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.settings.selfManagedSetup.runtimeManagement;
     final uninstalled = state.isUninstalled;
     return _SetupCard(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(
-            title: 'Runtime Management',
-            subtitle: 'Remove the self-managed runtime from your account.',
+          _SectionTitle(
+            title: t.title,
+            subtitle: t.subtitle,
           ),
           const SizedBox(height: 12),
           if (uninstalled)
-            const _InlineNote(
+            _InlineNote(
               icon: Icons.check_circle_outline_rounded,
-              text: 'Self-managed runtime connection removed.',
+              text: t.uninstalled,
             )
           else ...[
-            const _InlineNote(
+            _InlineNote(
               icon: Icons.warning_amber_rounded,
-              text:
-                  'This removes workers, bindings, and runtime secrets owned by your Cloudflare account.',
+              text: t.warning,
               tone: _InlineNoteTone.warning,
             ),
             if (state.hasError) ...[
@@ -374,7 +394,7 @@ class _RuntimeManagementCard extends StatelessWidget {
                 ),
               ),
               icon: const Icon(Icons.delete_outline_rounded, size: 18),
-              label: Text(isBusy ? 'Uninstalling...' : 'Uninstall runtime'),
+              label: Text(isBusy ? t.uninstalling : t.uninstallRuntime),
             ),
           ],
         ],
@@ -398,23 +418,22 @@ class _UninstallRuntimeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final setup = context.t.settings.selfManagedSetup;
     return AlertDialog(
       key: const ValueKey('self_managed_confirm_uninstall_dialog'),
-      title: const Text('Uninstall self-managed runtime?'),
-      content: const Text(
-        'SecondLoop will use your session Cloudflare credentials to remove the runtime resources and then clear the saved connection.',
-      ),
+      title: Text(setup.runtimeManagement.dialogTitle),
+      content: Text(setup.runtimeManagement.dialogBody),
       actions: [
         TextButton(
           key: const ValueKey('self_managed_cancel_uninstall'),
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(context.t.common.actions.cancel),
         ),
         FilledButton.icon(
           key: const ValueKey('self_managed_confirm_uninstall'),
           onPressed: () => Navigator.of(context).pop(true),
           icon: const Icon(Icons.delete_outline_rounded, size: 18),
-          label: const Text('Uninstall'),
+          label: Text(setup.runtimeManagement.uninstall),
         ),
       ],
     );
@@ -564,48 +583,51 @@ class _CapabilitySpec {
   final String successLabel;
 }
 
-const _capabilitySpecs = [
-  _CapabilitySpec(
-    ModelCapabilityRequiredChecks.structuredOutput,
-    'Structured Output',
-    'JSON_MODE=VALIDATED',
-  ),
-  _CapabilitySpec(
-    ModelCapabilityRequiredChecks.secretaryMetadata,
-    'Secretary Metadata',
-    'SCHEMA_V4_PASS',
-  ),
-  _CapabilitySpec(
-    ModelCapabilityRequiredChecks.toolProposalDiscipline,
-    'Tool Proposal Discipline',
-    'ZERO_SHOT_ACCURACY=98%',
-  ),
-  _CapabilitySpec(
-    ModelCapabilityRequiredChecks.multimodalUnderstanding,
-    'Multimodal Understanding',
-    'IMAGE_OCR_READY',
-  ),
-  _CapabilitySpec(
-    ModelCapabilityRequiredChecks.chineseIntentHandling,
-    'Chinese Intent Handling',
-    'LANG_ISO_ZH_TRUE',
-  ),
-  _CapabilitySpec(
-    ModelCapabilityRequiredChecks.contextWindowLatency,
-    'Context Window + Latency',
-    '128K_OK | 240MS_TTFT',
-  ),
-  _CapabilitySpec(
-    ModelCapabilityRequiredChecks.clarificationBehavior,
-    'Clarification Behavior',
-    'AMBIGUITY_TRAP_PASSED',
-  ),
-  _CapabilitySpec(
-    ModelCapabilityRequiredChecks.sideEffectDiscipline,
-    'Side-effect Discipline',
-    'SIDE_EFFECTS_GATED',
-  ),
-];
+List<_CapabilitySpec> _capabilitySpecs(BuildContext context) {
+  final t = context.t.settings.selfManagedSetup.cards.capabilities;
+  return [
+    _CapabilitySpec(
+      ModelCapabilityRequiredChecks.structuredOutput,
+      t.structuredOutput,
+      'JSON_MODE=VALIDATED',
+    ),
+    _CapabilitySpec(
+      ModelCapabilityRequiredChecks.secretaryMetadata,
+      t.secretaryMetadata,
+      'SCHEMA_V4_PASS',
+    ),
+    _CapabilitySpec(
+      ModelCapabilityRequiredChecks.toolProposalDiscipline,
+      t.toolProposalDiscipline,
+      'ZERO_SHOT_ACCURACY=98%',
+    ),
+    _CapabilitySpec(
+      ModelCapabilityRequiredChecks.multimodalUnderstanding,
+      t.multimodalUnderstanding,
+      'IMAGE_OCR_READY',
+    ),
+    _CapabilitySpec(
+      ModelCapabilityRequiredChecks.chineseIntentHandling,
+      t.chineseIntentHandling,
+      'LANG_ISO_ZH_TRUE',
+    ),
+    _CapabilitySpec(
+      ModelCapabilityRequiredChecks.contextWindowLatency,
+      t.contextWindowLatency,
+      '128K_OK | 240MS_TTFT',
+    ),
+    _CapabilitySpec(
+      ModelCapabilityRequiredChecks.clarificationBehavior,
+      t.clarificationBehavior,
+      'AMBIGUITY_TRAP_PASSED',
+    ),
+    _CapabilitySpec(
+      ModelCapabilityRequiredChecks.sideEffectDiscipline,
+      t.sideEffectDiscipline,
+      'SIDE_EFFECTS_GATED',
+    ),
+  ];
+}
 
 class _CapabilityPresentation {
   const _CapabilityPresentation({
@@ -627,6 +649,7 @@ class _CapabilityPresentation {
   final bool emphasized;
 
   static _CapabilityPresentation from(
+    BuildContext context,
     _CapabilitySpec spec,
     ModelCapabilityVerificationResult? verification,
   ) {
@@ -639,10 +662,10 @@ class _CapabilityPresentation {
       }
     }
     if (verification == null || check == null) {
-      return const _CapabilityPresentation(
+      return _CapabilityPresentation(
         icon: Icons.pending_outlined,
         iconColor: _SetupColors.outline,
-        status: 'PENDING',
+        status: context.t.settings.selfManagedSetup.cards.statuses.pending,
         statusColor: _SetupColors.onSurfaceVariant,
         foreground: _SetupColors.onSurface,
         background: Colors.transparent,

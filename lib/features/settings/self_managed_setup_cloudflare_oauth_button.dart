@@ -12,6 +12,7 @@ class _CloudflareOAuthButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ready = state.isCloudflareReady;
+    final t = context.t.settings.selfManagedSetup.cloudflare;
     return FilledButton.icon(
       key: const ValueKey('self_managed_cloudflare_oauth'),
       onPressed: onOAuth,
@@ -19,11 +20,7 @@ class _CloudflareOAuthButton extends StatelessWidget {
         ready ? Icons.check_circle_outline_rounded : Icons.link_rounded,
         size: 20,
       ),
-      label: Text(
-        ready
-            ? 'Cloudflare Connected - Reconnect'
-            : 'Connect / Reconnect Cloudflare Account',
-      ),
+      label: Text(ready ? t.oauthReady : t.oauthConnect),
       style: FilledButton.styleFrom(
         minimumSize: const Size.fromHeight(48),
         backgroundColor: _SetupColors.secondary,

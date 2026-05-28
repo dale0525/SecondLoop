@@ -7,11 +7,13 @@ import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/runtime_agent_state_repository.dart';
 import '../../core/cloud/runtime_connection_helpers.dart';
 import '../../core/cloud/secretary_runtime_conversation_sender.dart';
+import '../../i18n/strings.g.dart';
 import 'agent_desktop_runtime_helpers.dart';
 import 'agent_desktop_workbench_widgets.dart';
 import 'agent_operating_system_tokens.dart';
 
 part 'desktop_approvals_workbench_models.dart';
+part 'desktop_approvals_workbench_widgets.dart';
 
 final class DesktopApprovalsWorkbenchPage extends StatefulWidget {
   const DesktopApprovalsWorkbenchPage({
@@ -108,10 +110,11 @@ final class _DesktopApprovalsWorkbenchPageState
     }
     final repository = _repository();
     final vaultId = _vaultId();
+    final text = context.t.chat.operating.desktopWorkbench.approvals;
     if (repository == null || vaultId.isEmpty) {
       setState(() {
         _loading = false;
-        _error = 'tool_unavailable: runtime state is not configured';
+        _error = text.messages.stateUnavailable;
         _state = RuntimeAgentState.empty(
           vaultId: vaultId,
           conversationId: widget.conversationId,
@@ -130,7 +133,8 @@ final class _DesktopApprovalsWorkbenchPageState
         conversationId: widget.conversationId,
       );
       if (!mounted) return;
-      final approvals = _approvalsFromState(state);
+      final approvals =
+          _approvalsFromState(state, _approvalWorkbenchCopy(context));
       setState(() {
         _state = state;
         _loading = false;
@@ -143,7 +147,7 @@ final class _DesktopApprovalsWorkbenchPageState
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'tool_unavailable: $error';
+        _error = text.messages.runtimeUnavailable(error: '$error');
         _state ??= RuntimeAgentState.empty(
           vaultId: vaultId,
           conversationId: widget.conversationId,
@@ -157,18 +161,23 @@ final class _DesktopApprovalsWorkbenchPageState
     String decision,
   ) async {
     if (!approval.canSubmitDecision(decision)) {
+      final text = context.t.chat.operating.desktopWorkbench.approvals;
       showDesktopWorkbenchMessage(
         context,
-        '${approval.status}: this approval cannot be ${decision}d from the app.',
+        text.messages.cannotSubmit(
+          status: approval.status,
+          decision: decision,
+        ),
       );
       return;
     }
     final sender = _approvalSender();
     final vaultId = _vaultId();
+    final text = context.t.chat.operating.desktopWorkbench.approvals;
     if (sender == null || vaultId.isEmpty) {
       showDesktopWorkbenchMessage(
         context,
-        'tool_unavailable: runtime approval sender is not configured',
+        text.messages.senderUnavailable,
       );
       return;
     }
@@ -180,11 +189,14 @@ final class _DesktopApprovalsWorkbenchPageState
         decision: decision,
       );
       if (!mounted) return;
-      showDesktopWorkbenchMessage(context, 'approval decision submitted');
+      showDesktopWorkbenchMessage(context, text.messages.decisionSubmitted);
       await _refresh();
     } catch (error) {
       if (!mounted) return;
-      showDesktopWorkbenchMessage(context, 'tool_unavailable: $error');
+      showDesktopWorkbenchMessage(
+        context,
+        text.messages.runtimeUnavailable(error: '$error'),
+      );
     } finally {
       if (mounted) setState(() => _busyApprovalId = null);
     }
@@ -192,9 +204,12 @@ final class _DesktopApprovalsWorkbenchPageState
 
   @override
   Widget build(BuildContext context) {
+    final workbenchText = context.t.chat.operating.desktopWorkbench;
+    final copy = _approvalWorkbenchCopy(context);
     final state = _state;
-    final approvals =
-        state == null ? const <_ApprovalView>[] : _approvalsFromState(state);
+    final approvals = state == null
+        ? const <_ApprovalView>[]
+        : _approvalsFromState(state, copy);
     final filtered = _filterApprovals(approvals);
     final selected = _selectedApprovalId == null
         ? filtered.firstOrNull
@@ -209,13 +224,12 @@ final class _DesktopApprovalsWorkbenchPageState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DesktopWorkbenchHeader(
-            title: 'Approvals',
-            subtitle:
-                'Review guarded mutations before they affect your vault or external systems',
+            title: workbenchText.approvals.title,
+            subtitle: workbenchText.approvals.subtitle,
             actions: [
               IconButton.outlined(
                 key: const ValueKey('desktop_approvals_refresh'),
-                tooltip: 'Refresh approvals',
+                tooltip: workbenchText.approvals.refreshTooltip,
                 onPressed: _loading ? null : () => unawaited(_refresh()),
                 icon: const Icon(Icons.refresh_rounded),
               ),
@@ -253,7 +267,8 @@ final class _DesktopApprovalsWorkbenchPageState
                           _busyApprovalId == selected.id,
                       onRequestChanges: () => showDesktopWorkbenchMessage(
                         context,
-                        'tool_unavailable: approval edit requests are not available yet',
+                        workbenchText
+                            .approvals.messages.requestChangesUnavailable,
                       ),
                       onReject: selected == null
                           ? null
@@ -277,7 +292,7 @@ final class _DesktopApprovalsWorkbenchPageState
                       loading: _loading,
                       onConfigure: () => showDesktopWorkbenchMessage(
                         context,
-                        'needs_configuration: connector configuration is not available from this panel yet',
+                        workbenchText.approvals.messages.configureUnavailable,
                       ),
                       onRetry: _loading ? null : () => unawaited(_refresh()),
                     ),
@@ -305,7 +320,9 @@ final class _DesktopApprovalsWorkbenchPageState
           .toList(growable: false);
     }
     if (_filter == 'high_risk') {
-      return approvals.where((item) => item.risk == 'High Risk').toList(
+      return approvals
+          .where((item) => item.riskLevel == _ApprovalRiskLevel.high)
+          .toList(
             growable: false,
           );
     }
@@ -331,12 +348,13 @@ final class _ApprovalFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const filters = {
-      'pending': 'Pending',
-      'approved': 'Approved',
-      'rejected': 'Rejected',
-      'needs_config': 'Needs config',
-      'high_risk': 'High risk',
+    final text = context.t.chat.operating.desktopWorkbench.approvals.filters;
+    final filters = {
+      'pending': text.pending,
+      'approved': text.approved,
+      'rejected': text.rejected,
+      'needs_config': text.needsConfig,
+      'high_risk': text.highRisk,
     };
     return Wrap(
       spacing: 8,
@@ -366,10 +384,10 @@ final class _ApprovalQueue extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (approvals.isEmpty) {
-      return const DesktopWorkbenchEmptyState(
-        title: 'No matching approvals',
-        message:
-            'Guarded runtime mutations will appear here when approval is required.',
+      final text = context.t.chat.operating.desktopWorkbench.approvals;
+      return DesktopWorkbenchEmptyState(
+        title: text.emptyTitle,
+        message: text.emptyMessage,
         icon: Icons.verified_user_outlined,
       );
     }
@@ -444,10 +462,10 @@ final class _ApprovalQueueCard extends StatelessWidget {
                   ),
                   DesktopWorkbenchBadge(
                     label: approval.risk,
-                    background: approval.risk == 'High Risk'
+                    background: approval.riskLevel == _ApprovalRiskLevel.high
                         ? const Color(0xFFFFDAD6)
                         : colors.surfaceContainerHigh,
-                    foreground: approval.risk == 'High Risk'
+                    foreground: approval.riskLevel == _ApprovalRiskLevel.high
                         ? const Color(0xFF93000A)
                         : colors.onSurfaceVariant,
                   ),
@@ -518,14 +536,14 @@ final class _ApprovalDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentOs;
+    final t = context.t.chat.operating.desktopWorkbench.approvals;
     final approval = this.approval;
     if (approval == null) {
-      return const DesktopWorkbenchPanel(
-        title: 'Proposed Change',
+      return DesktopWorkbenchPanel(
+        title: t.proposedChange,
         child: DesktopWorkbenchEmptyState(
-          title: 'Select an approval',
-          message:
-              'Choose an item to inspect the mutation diff and audit trail.',
+          title: t.selectApproval,
+          message: t.selectApprovalMessage,
           icon: Icons.fact_check_outlined,
         ),
       );
@@ -551,7 +569,9 @@ final class _ApprovalDetail extends StatelessWidget {
                   _CodePair(label: 'type', value: approval.kind),
                   _CodePair(label: 'target', value: approval.targetId),
                   _CodePair(label: 'source', value: approval.sourceId),
-                  DesktopWorkbenchBadge(label: 'Risk: ${approval.risk}'),
+                  DesktopWorkbenchBadge(
+                    label: t.risk.prefix(risk: approval.risk),
+                  ),
                 ],
               ),
             ),
@@ -563,7 +583,7 @@ final class _ApprovalDetail extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Proposed Change',
+                    t.proposedChange,
                     style: AgentOperatingSystemTokens.headlineSm.copyWith(
                       color: colors.onSurface,
                     ),
@@ -653,7 +673,7 @@ final class _ApprovalDetail extends StatelessWidget {
                 OutlinedButton(
                   key: const ValueKey('desktop_approval_request_changes'),
                   onPressed: onRequestChanges,
-                  child: const Text('Request changes'),
+                  child: Text(t.requestChanges),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton(
@@ -661,7 +681,7 @@ final class _ApprovalDetail extends StatelessWidget {
                   onPressed: busy || !approval.canSubmitDecision('reject')
                       ? null
                       : onReject,
-                  child: const Text('Reject'),
+                  child: Text(context.t.common.actions.reject),
                 ),
                 const SizedBox(width: 12),
                 FilledButton(
@@ -674,7 +694,7 @@ final class _ApprovalDetail extends StatelessWidget {
                           dimension: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Approve'),
+                      : Text(context.t.common.actions.approve),
                 ),
               ],
             ),
@@ -705,8 +725,14 @@ final class _ApprovalAuditPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentOs;
+    final t = context.t.chat.operating.desktopWorkbench.approvals;
     final approval = this.approval;
-    final notice = _systemNoticeFor(state, approval, error);
+    final notice = _systemNoticeFor(
+      state,
+      approval,
+      error,
+      _approvalWorkbenchCopy(context),
+    );
     final showConfigurationActions = notice.contains('tool_unavailable') ||
         notice.contains('needs_configuration') ||
         error != null;
@@ -731,7 +757,7 @@ final class _ApprovalAuditPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Audit Trace',
+                  t.auditTrace,
                   style: AgentOperatingSystemTokens.labelLg.copyWith(
                     color: colors.onSurface,
                     fontWeight: FontWeight.w800,
@@ -742,21 +768,21 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                   height: 20,
                 ),
                 Text(
-                  'Source Message Excerpt'.toUpperCase(),
+                  t.sourceMessageExcerpt.toUpperCase(),
                   style: AgentOperatingSystemTokens.labelMd.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  approval?.sourceExcerpt ?? 'No source excerpt reported.',
+                  approval?.sourceExcerpt ?? t.noSourceExcerpt,
                   style: AgentOperatingSystemTokens.bodySm.copyWith(
                     color: colors.onSurface,
                   ),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Recent Entity Refs'.toUpperCase(),
+                  t.recentEntityRefs.toUpperCase(),
                   style: AgentOperatingSystemTokens.labelMd.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
@@ -774,15 +800,15 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                               ref['entity_id'],
                               ref['entityId'],
                             ]) ??
-                            'entity',
+                            t.entityFallback,
                       ),
                     if (state?.recentEntityRefs.isEmpty ?? true)
-                      const DesktopWorkbenchBadge(label: 'none'),
+                      DesktopWorkbenchBadge(label: t.none),
                   ],
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Tool Trace Log'.toUpperCase(),
+                  t.toolTraceLog.toUpperCase(),
                   style: AgentOperatingSystemTokens.labelMd.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
@@ -796,8 +822,7 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(10),
                     child: Text(
-                      approval?.traceText ??
-                          '> guardrail status... not reported',
+                      approval?.traceText ?? t.traceFallback,
                       style: AgentOperatingSystemTokens.code.copyWith(
                         color: colors.surfaceContainerHigh,
                       ),
@@ -825,7 +850,7 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                     const Icon(Icons.warning_amber_rounded, size: 18),
                     const SizedBox(width: 8),
                     Text(
-                      'System State Notice',
+                      t.systemStateNotice,
                       style: AgentOperatingSystemTokens.labelLg.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
@@ -848,12 +873,12 @@ final class _ApprovalAuditPanel extends StatelessWidget {
                       OutlinedButton(
                         key: const ValueKey('desktop_approval_configure'),
                         onPressed: onConfigure,
-                        child: const Text('Configure'),
+                        child: Text(context.t.common.actions.configure),
                       ),
                       OutlinedButton(
                         key: const ValueKey('desktop_approval_retry'),
                         onPressed: loading ? null : onRetry,
-                        child: const Text('Retry'),
+                        child: Text(context.t.common.actions.retry),
                       ),
                     ],
                   ),
@@ -871,18 +896,19 @@ String _systemNoticeFor(
   RuntimeAgentState? state,
   _ApprovalView? approval,
   String? error,
+  _ApprovalWorkbenchCopy copy,
 ) {
   if (error != null) return error;
   if (approval?.needsConfig ?? false) return approval!.systemNotice;
-  final approvals =
-      state == null ? const <_ApprovalView>[] : _approvalsFromState(state);
+  final approvals = state == null
+      ? const <_ApprovalView>[]
+      : _approvalsFromState(state, copy);
   final needsConfig = approvals.where((item) => item.needsConfig).firstOrNull;
   if (needsConfig != null) return needsConfig.systemNotice;
   if (approval?.refused ?? false) return approval!.systemNotice;
   final refused = approvals.where((item) => item.refused).firstOrNull;
   if (refused != null) return refused.systemNotice;
-  return approval?.systemNotice ??
-      'approval_required: Runtime will apply mutations only after an explicit decision.';
+  return approval?.systemNotice ?? copy.defaultNotice;
 }
 
 final class _StatusRow extends StatelessWidget {
@@ -911,72 +937,6 @@ final class _StatusRow extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(label, style: AgentOperatingSystemTokens.code),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-final class _CodePair extends StatelessWidget {
-  const _CodePair({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentOs;
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: '$label: ',
-            style: TextStyle(color: colors.outline),
-          ),
-          TextSpan(text: value),
-        ],
-      ),
-      style: AgentOperatingSystemTokens.code.copyWith(
-        color: colors.onSurfaceVariant,
-      ),
-    );
-  }
-}
-
-final class _DiffLine extends StatelessWidget {
-  const _DiffLine({
-    required this.icon,
-    required this.color,
-    required this.background,
-    required this.text,
-  });
-
-  final IconData icon;
-  final Color color;
-  final Color background;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                text,
-                style: AgentOperatingSystemTokens.code.copyWith(color: color),
-              ),
             ),
           ],
         ),

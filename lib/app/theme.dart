@@ -22,6 +22,7 @@ class AppTheme {
   static const _darkSurface = AppShellPalette.darkPanel;
   static const _darkSurface2 = AppShellPalette.darkSurface;
   static const _darkBorder = AppShellPalette.darkLine;
+  static const String _primaryFontFamily = 'Inter';
 
   static dynamic _cardThemeForThemeData({
     required Color surface,
@@ -114,7 +115,7 @@ class AppTheme {
   }) {
     final isDark = brightness == Brightness.dark;
     final effectivePlatform = platform ?? defaultTargetPlatform;
-    final fontFamily = _primaryFontFamily(effectivePlatform);
+    const fontFamily = _primaryFontFamily;
     final fontFamilyFallback =
         _fontFamilyFallbackFor(locale, effectivePlatform);
     final effectivePalette = _effectivePalette(palette);
@@ -145,10 +146,22 @@ class AppTheme {
       ],
     );
 
+    final textTheme = _normalizeTextTheme(
+      base.textTheme,
+      fontFamily: fontFamily,
+      fontFamilyFallback: fontFamilyFallback,
+    );
+    final primaryTextTheme = _normalizeTextTheme(
+      base.primaryTextTheme,
+      fontFamily: fontFamily,
+      fontFamilyFallback: fontFamilyFallback,
+    );
     final surface = scheme.surface;
     final outline = scheme.outlineVariant;
 
     return base.copyWith(
+      textTheme: textTheme,
+      primaryTextTheme: primaryTextTheme,
       scaffoldBackgroundColor: Colors.transparent,
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -541,15 +554,100 @@ class AppTheme {
     );
   }
 
-  static String _primaryFontFamily(TargetPlatform platform) {
-    return switch (platform) {
-      TargetPlatform.windows => 'Segoe UI',
-      TargetPlatform.macOS => '.SF NS Text',
-      TargetPlatform.iOS => '.SF Pro Text',
-      TargetPlatform.android => 'Roboto',
-      TargetPlatform.linux => 'Ubuntu',
-      TargetPlatform.fuchsia => 'Roboto',
-    };
+  static TextTheme _normalizeTextTheme(
+    TextTheme theme, {
+    required String fontFamily,
+    required List<String> fontFamilyFallback,
+  }) {
+    return theme.copyWith(
+      displayLarge: _normalizeTextStyle(
+        theme.displayLarge,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      displayMedium: _normalizeTextStyle(
+        theme.displayMedium,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      displaySmall: _normalizeTextStyle(
+        theme.displaySmall,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      headlineLarge: _normalizeTextStyle(
+        theme.headlineLarge,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      headlineMedium: _normalizeTextStyle(
+        theme.headlineMedium,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      headlineSmall: _normalizeTextStyle(
+        theme.headlineSmall,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      titleLarge: _normalizeTextStyle(
+        theme.titleLarge,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      titleMedium: _normalizeTextStyle(
+        theme.titleMedium,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      titleSmall: _normalizeTextStyle(
+        theme.titleSmall,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      bodyLarge: _normalizeTextStyle(
+        theme.bodyLarge,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      bodyMedium: _normalizeTextStyle(
+        theme.bodyMedium,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      bodySmall: _normalizeTextStyle(
+        theme.bodySmall,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      labelLarge: _normalizeTextStyle(
+        theme.labelLarge,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      labelMedium: _normalizeTextStyle(
+        theme.labelMedium,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+      labelSmall: _normalizeTextStyle(
+        theme.labelSmall,
+        fontFamily: fontFamily,
+        fontFamilyFallback: fontFamilyFallback,
+      ),
+    );
+  }
+
+  static TextStyle? _normalizeTextStyle(
+    TextStyle? style, {
+    required String fontFamily,
+    required List<String> fontFamilyFallback,
+  }) {
+    return style?.copyWith(
+      fontFamily: fontFamily,
+      fontFamilyFallback: fontFamilyFallback,
+      letterSpacing: 0,
+    );
   }
 
   static List<String> _fontFamilyFallbackFor(

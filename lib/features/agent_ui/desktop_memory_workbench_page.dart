@@ -7,6 +7,7 @@ import '../../core/cloud/runtime_agent_state_models.dart';
 import '../../core/cloud/runtime_agent_state_repository.dart';
 import '../../core/cloud/runtime_connection_helpers.dart';
 import '../../core/cloud/secretary_runtime_conversation_sender.dart';
+import '../../i18n/strings.g.dart';
 import 'agent_desktop_runtime_helpers.dart';
 import 'agent_desktop_workbench_widgets.dart';
 import 'agent_operating_system_tokens.dart';
@@ -128,10 +129,11 @@ final class _DesktopMemoryWorkbenchPageState
     }
     final repository = _repository();
     final vaultId = _vaultId();
+    final text = context.t.chat.operating.desktopWorkbench.memory;
     if (repository == null || vaultId.isEmpty) {
       setState(() {
         _loading = false;
-        _error = 'tool_unavailable: runtime state is not configured';
+        _error = text.messages.stateUnavailable;
         _state = RuntimeAgentState.empty(
           vaultId: vaultId,
           conversationId: widget.conversationId,
@@ -150,7 +152,7 @@ final class _DesktopMemoryWorkbenchPageState
         conversationId: widget.conversationId,
       );
       if (!mounted) return;
-      final records = _recordsFromState(state);
+      final records = _recordsFromState(state, _memoryWorkbenchCopy(context));
       setState(() {
         _state = state;
         _loading = false;
@@ -162,7 +164,7 @@ final class _DesktopMemoryWorkbenchPageState
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'tool_unavailable: $error';
+        _error = text.messages.runtimeUnavailable(error: '$error');
         _state ??= RuntimeAgentState.empty(
           vaultId: vaultId,
           conversationId: widget.conversationId,
@@ -177,10 +179,11 @@ final class _DesktopMemoryWorkbenchPageState
   ) async {
     final sender = _approvalSender();
     final vaultId = _vaultId();
+    final text = context.t.chat.operating.desktopWorkbench.memory;
     if (sender == null || vaultId.isEmpty) {
       showDesktopWorkbenchMessage(
         context,
-        'tool_unavailable: runtime approval sender is not configured',
+        text.messages.approvalSenderUnavailable,
       );
       return;
     }
@@ -195,33 +198,40 @@ final class _DesktopMemoryWorkbenchPageState
       showDesktopWorkbenchMessage(
         context,
         decision == 'approve'
-            ? 'approval submitted: memory candidate'
-            : 'rejection submitted: memory candidate',
+            ? text.messages.approvalSubmitted
+            : text.messages.rejectionSubmitted,
       );
       await _refresh();
     } catch (error) {
       if (!mounted) return;
-      showDesktopWorkbenchMessage(context, 'tool_unavailable: $error');
+      showDesktopWorkbenchMessage(
+        context,
+        text.messages.runtimeUnavailable(error: '$error'),
+      );
     } finally {
       if (mounted) setState(() => _busyApprovalId = null);
     }
   }
 
   void _showUnavailable(String action) {
+    final text = context.t.chat.operating.desktopWorkbench.memory;
     showDesktopWorkbenchMessage(
       context,
-      '$action requires a runtime memory mutation endpoint. (approval_required)',
+      text.messages.mutationUnavailable(action: action),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final text = context.t.chat.operating.desktopWorkbench.memory;
+    final copy = _memoryWorkbenchCopy(context);
     final state = _state;
-    final allRecords =
-        state == null ? const <_MemoryRecord>[] : _recordsFromState(state);
+    final allRecords = state == null
+        ? const <_MemoryRecord>[]
+        : _recordsFromState(state, copy);
     final candidates = state == null
         ? const <_MemoryCandidate>[]
-        : _candidatesFromState(state);
+        : _candidatesFromState(state, copy);
     final records = _filterRecords(allRecords);
     final selected = _selectedRecordId == null
         ? records.firstOrNull
@@ -236,8 +246,8 @@ final class _DesktopMemoryWorkbenchPageState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DesktopWorkbenchHeader(
-            title: 'Memory',
-            subtitle: 'Manage personal context and agent instructions',
+            title: text.title,
+            subtitle: text.subtitle,
             actions: [
               OutlinedButton.icon(
                 key: const ValueKey('desktop_memory_review_pending'),
@@ -245,15 +255,17 @@ final class _DesktopMemoryWorkbenchPageState
                     ? null
                     : () => showDesktopWorkbenchMessage(
                           context,
-                          '${candidates.length} pending memory candidates',
+                          text.pendingCandidatesMessage(
+                            count: candidates.length,
+                          ),
                         ),
                 icon: const Icon(Icons.pending_actions_rounded, size: 18),
-                label: Text('Review pending (${candidates.length})'),
+                label: Text(text.reviewPending(count: candidates.length)),
               ),
               FilledButton(
                 key: const ValueKey('desktop_memory_add_entry'),
-                onPressed: () => _showUnavailable('Add Entry'),
-                child: const Text('Add Entry'),
+                onPressed: () => _showUnavailable(text.addEntry),
+                child: Text(text.addEntry),
               ),
             ],
             bottom: _MemoryFilterBar(
@@ -289,9 +301,11 @@ final class _DesktopMemoryWorkbenchPageState
                             record: selected,
                             contextSnapshotId:
                                 state?.latestContextSnapshot?.id ?? '',
-                            onArchive: () => _showUnavailable('Archive'),
-                            onEdit: () => _showUnavailable('Edit Proposal'),
-                            onRemove: () => _showUnavailable('Request Removal'),
+                            onArchive: () => _showUnavailable(
+                                context.t.common.actions.archive),
+                            onEdit: () => _showUnavailable(text.editProposal),
+                            onRemove: () =>
+                                _showUnavailable(text.requestRemoval),
                           ),
                         ),
                       ],
@@ -316,9 +330,10 @@ final class _DesktopMemoryWorkbenchPageState
                           record: selected,
                           contextSnapshotId:
                               state?.latestContextSnapshot?.id ?? '',
-                          onArchive: () => _showUnavailable('Archive'),
-                          onEdit: () => _showUnavailable('Edit Proposal'),
-                          onRemove: () => _showUnavailable('Request Removal'),
+                          onArchive: () => _showUnavailable(
+                              context.t.common.actions.archive),
+                          onEdit: () => _showUnavailable(text.editProposal),
+                          onRemove: () => _showUnavailable(text.requestRemoval),
                         ),
                       ),
                     ],
@@ -359,6 +374,28 @@ final class _DesktopMemoryWorkbenchPageState
   }
 }
 
+_MemoryWorkbenchCopy _memoryWorkbenchCopy(BuildContext context) {
+  final text = context.t.chat.operating.desktopWorkbench.memory;
+  return _MemoryWorkbenchCopy(
+    untitledMemory: text.untitledMemory,
+    defaultSource: text.defaultSource,
+    notReported: text.notReported,
+    candidateFallback: text.candidateFallback,
+  );
+}
+
+String _memoryFilterLabel(BuildContext context, String filter) {
+  final filters = context.t.chat.operating.desktopWorkbench.memory.filters;
+  return switch (filter) {
+    'all' => filters.all,
+    'active' => filters.active,
+    'pending' => filters.pending,
+    'archived' => filters.archived,
+    'dismissed' => filters.dismissed,
+    _ => desktopRuntimeTitleCase(filter),
+  };
+}
+
 final class _MemoryFilterBar extends StatelessWidget {
   const _MemoryFilterBar({
     required this.selected,
@@ -375,6 +412,7 @@ final class _MemoryFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AgentOperatingSystemTokens.of(context);
+    final text = context.t.chat.operating.desktopWorkbench.memory;
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(
@@ -399,7 +437,7 @@ final class _MemoryFilterBar extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Text(
-                      desktopRuntimeTitleCase(filter),
+                      _memoryFilterLabel(context, filter),
                       style: AgentOperatingSystemTokens.labelMd.copyWith(
                         color: selected == filter
                             ? colors.onSurface
@@ -420,10 +458,10 @@ final class _MemoryFilterBar extends StatelessWidget {
                 key: const ValueKey('desktop_memory_search'),
                 controller: controller,
                 decoration: InputDecoration(
-                  hintText: 'Search Memory...',
+                  hintText: text.searchHint,
                   prefixIcon: const Icon(Icons.search_rounded, size: 18),
                   suffixIcon: IconButton(
-                    tooltip: 'Refresh memory state',
+                    tooltip: text.refreshTooltip,
                     onPressed: onRefresh,
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                   ),
@@ -459,15 +497,15 @@ final class _MemoryRecordsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = context.t.chat.operating.desktopWorkbench.memory;
     return DesktopWorkbenchPanel(
-      title: 'Memory Records',
+      title: text.recordsTitle,
       trailing: const Icon(Icons.filter_list_rounded, size: 18),
       padding: EdgeInsets.zero,
       child: records.isEmpty
-          ? const DesktopWorkbenchEmptyState(
-              title: 'No memory records',
-              message:
-                  'Approved runtime memory will appear here after the agent creates auditable records.',
+          ? DesktopWorkbenchEmptyState(
+              title: text.emptyRecordsTitle,
+              message: text.emptyRecordsMessage,
               icon: Icons.psychology_alt_outlined,
             )
           : Column(
@@ -499,6 +537,7 @@ final class _MemoryTableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AgentOperatingSystemTokens.of(context);
+    final t = context.t.chat.operating.desktopWorkbench.memory;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surface,
@@ -506,18 +545,18 @@ final class _MemoryTableHeader extends StatelessWidget {
           bottom: BorderSide(color: colors.outlineVariant),
         ),
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           children: [
-            Expanded(flex: 4, child: _HeaderText('Record')),
-            Expanded(flex: 2, child: _HeaderText('Status')),
-            Expanded(flex: 2, child: _HeaderText('Source')),
+            Expanded(flex: 4, child: _HeaderText(t.record)),
+            Expanded(flex: 2, child: _HeaderText(t.status)),
+            Expanded(flex: 2, child: _HeaderText(t.source)),
             SizedBox(
                 width: 72,
                 child: Align(
                   alignment: Alignment.centerRight,
-                  child: _HeaderText('Age'),
+                  child: _HeaderText(t.age),
                 )),
           ],
         ),
@@ -654,14 +693,14 @@ final class _MemoryDetailsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AgentOperatingSystemTokens.of(context);
+    final text = context.t.chat.operating.desktopWorkbench.memory;
     final record = this.record;
     if (record == null) {
-      return const DesktopWorkbenchPanel(
-        title: 'Record Details',
+      return DesktopWorkbenchPanel(
+        title: text.detailsTitle,
         child: DesktopWorkbenchEmptyState(
-          title: 'Select a memory',
-          message:
-              'Choose a runtime memory record to inspect its source and injection state.',
+          title: text.selectTitle,
+          message: text.selectMessage,
           icon: Icons.article_outlined,
         ),
       );
@@ -670,11 +709,11 @@ final class _MemoryDetailsPanel extends StatelessWidget {
         ? record.contextId
         : contextSnapshotId.isNotEmpty
             ? contextSnapshotId
-            : 'not recorded';
+            : text.notRecorded;
     return DesktopWorkbenchPanel(
-      title: 'Record Details',
+      title: text.detailsTitle,
       trailing: DesktopWorkbenchBadge(
-        label: 'Confidence: ${record.confidenceLabel}',
+        label: text.confidence(value: record.confidenceLabel),
         background: const Color(0xFFD3E4FE),
         foreground: const Color(0xFF38485D),
       ),
@@ -689,7 +728,9 @@ final class _MemoryDetailsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'Extracted Instruction'.toUpperCase(),
+            context
+                .t.chat.operating.desktopWorkbench.memory.extractedInstruction
+                .toUpperCase(),
             style: AgentOperatingSystemTokens.labelMd.copyWith(
               color: colors.onSurfaceVariant,
               fontWeight: FontWeight.w700,
@@ -722,15 +763,15 @@ final class _MemoryDetailsPanel extends StatelessWidget {
             children: [
               Expanded(
                 child: _MemoryMetaBlock(
-                  label: 'Status',
-                  value: 'Injected ($contextId)',
+                  label: text.statusMeta,
+                  value: text.injected(contextId: contextId),
                   icon: Icons.check_circle_rounded,
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _MemoryMetaBlock(
-                  label: 'Source Reference',
+                  label: text.sourceReference,
                   value: record.sourceRef,
                   icon: Icons.open_in_new_rounded,
                 ),
@@ -746,7 +787,7 @@ final class _MemoryDetailsPanel extends StatelessWidget {
                 child: OutlinedButton(
                   key: const ValueKey('desktop_memory_archive'),
                   onPressed: onArchive,
-                  child: const Text('Archive'),
+                  child: Text(context.t.common.actions.archive),
                 ),
               ),
               const SizedBox(width: 12),
@@ -754,7 +795,7 @@ final class _MemoryDetailsPanel extends StatelessWidget {
                 child: OutlinedButton(
                   key: const ValueKey('desktop_memory_edit_proposal'),
                   onPressed: onEdit,
-                  child: const Text('Edit Proposal'),
+                  child: Text(text.editProposal),
                 ),
               ),
             ],
@@ -764,7 +805,7 @@ final class _MemoryDetailsPanel extends StatelessWidget {
             key: const ValueKey('desktop_memory_request_removal'),
             onPressed: onRemove,
             icon: const Icon(Icons.delete_outline_rounded, size: 18),
-            label: const Text('Request Removal'),
+            label: Text(text.requestRemoval),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF93000A),
               side: const BorderSide(color: Color(0x33BA1A1A)),
@@ -843,6 +884,7 @@ final class _MemoryBottomArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AgentOperatingSystemTokens.of(context);
+    final text = context.t.chat.operating.desktopWorkbench.memory;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -859,7 +901,7 @@ final class _MemoryBottomArea extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Pending Candidates (${candidates.length})',
+                    text.pendingCandidates(count: candidates.length),
                     style: AgentOperatingSystemTokens.labelMd.copyWith(
                       color: colors.onSurfaceVariant,
                       fontWeight: FontWeight.w800,
@@ -869,7 +911,7 @@ final class _MemoryBottomArea extends StatelessWidget {
                   Expanded(
                     child: candidates.isEmpty
                         ? Text(
-                            'No memory candidates waiting for approval.',
+                            text.emptyCandidates,
                             style: AgentOperatingSystemTokens.bodySm.copyWith(
                               color: colors.onSurfaceVariant,
                             ),
@@ -918,7 +960,7 @@ final class _MemoryBottomArea extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    error ?? 'Runtime Connection Stable',
+                    error ?? text.runtimeConnectionStable,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AgentOperatingSystemTokens.labelMd.copyWith(
@@ -927,7 +969,7 @@ final class _MemoryBottomArea extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  loading ? 'Syncing...' : 'Last synced: Just now',
+                  loading ? text.syncing : text.lastSyncedJustNow,
                   style: AgentOperatingSystemTokens.labelMd.copyWith(
                     color: colors.onSurfaceVariant,
                   ),

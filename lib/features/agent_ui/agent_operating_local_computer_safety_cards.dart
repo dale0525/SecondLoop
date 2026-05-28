@@ -29,6 +29,7 @@ final class _OperatingLocalComputerSafetyModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.localComputerSafety;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFFFFF9EB),
@@ -36,23 +37,23 @@ final class _OperatingLocalComputerSafetyModeChip extends StatelessWidget {
             BorderRadius.circular(AgentOperatingSystemTokens.radiusSm),
         border: Border.all(color: const Color(0xFFFEE2B3)),
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.max,
           children: [
-            Icon(
+            const Icon(
               Icons.terminal_rounded,
               size: 13,
               color: Color(0xFF854D0E),
             ),
-            SizedBox(width: 4),
+            const SizedBox(width: 4),
             Flexible(
               child: Text(
-                'Local Operation Blocked',
+                t.modeChip,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   color: Color(0xFF854D0E),
                   fontSize: 10,
                   height: 1.2,
@@ -86,10 +87,8 @@ final class _OperatingLocalComputerSafetyAssistantBubble
 
   @override
   Widget build(BuildContext context) {
-    final body = content.trim().isEmpty
-        ? 'I cannot execute terminal commands or modify local files. No '
-            'action was taken.'
-        : content.trim();
+    final t = context.t.chat.operating.localComputerSafety;
+    final body = content.trim().isEmpty ? t.defaultBody : content.trim();
     return Align(
       alignment: Alignment.centerLeft,
       child: Column(
@@ -155,8 +154,7 @@ final class _OperatingLocalComputerSafetyAssistantBubble
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Security Protocol: Local Computer Operation '
-                                'Refusal (Approved)',
+                                t.protocol,
                                 style:
                                     AgentOperatingSystemTokens.bodySm.copyWith(
                                   color: AgentOperatingSystemTokens
@@ -202,6 +200,7 @@ final class _OperatingLocalComputerSafetyProtocolCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.localComputerSafety;
     return KeyedSubtree(
       key: ValueKey('agent_operating_local_safety_protocol_${record.id}'),
       child: _OperatingCard(
@@ -209,7 +208,7 @@ final class _OperatingLocalComputerSafetyProtocolCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Safety Protocol'.toUpperCase(),
+                t.safetyProtocol.toUpperCase(),
                 style: AgentOperatingSystemTokens.labelLg.copyWith(
                   color: AgentOperatingSystemTokens.onSurfaceVariant,
                   fontWeight: FontWeight.w800,
@@ -306,6 +305,7 @@ final class _OperatingLocalComputerSafetyAlternativeCard
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.localComputerSafety;
     return KeyedSubtree(
       key: ValueKey('agent_operating_local_safety_alternative_${record.id}'),
       child: _OperatingCard(
@@ -319,7 +319,7 @@ final class _OperatingLocalComputerSafetyAlternativeCard
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Alternative Action'.toUpperCase(),
+                t.alternativeAction,
                 style: AgentOperatingSystemTokens.labelLg.copyWith(
                   color: AgentOperatingSystemTokens.onSurfaceVariant,
                   fontWeight: FontWeight.w800,
@@ -331,21 +331,21 @@ final class _OperatingLocalComputerSafetyAlternativeCard
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Downloads cleanup checklist',
+            Text(
+              t.checklistTitle,
               style: AgentOperatingSystemTokens.headlineSm,
             ),
             const SizedBox(height: 12),
-            const _OperatingLocalComputerChecklistItem(
-              text: 'Open Finder and navigate to Downloads',
+            _OperatingLocalComputerChecklistItem(
+              text: t.checklist.openDownloads,
             ),
             const SizedBox(height: 10),
-            const _OperatingLocalComputerChecklistItem(
-              text: "Locate the folder named 'test'",
+            _OperatingLocalComputerChecklistItem(
+              text: t.checklist.locateFolder,
             ),
             const SizedBox(height: 10),
-            const _OperatingLocalComputerChecklistItem(
-              text: 'Review contents before deletion',
+            _OperatingLocalComputerChecklistItem(
+              text: t.checklist.reviewBeforeDeletion,
             ),
             const SizedBox(height: 16),
             OutlinedButton(
@@ -366,7 +366,7 @@ final class _OperatingLocalComputerSafetyAlternativeCard
                 minimumSize: const Size.fromHeight(36),
               ),
               onPressed: onSaveToVault,
-              child: const Text('Save to Vault'),
+              child: Text(t.saveToVault),
             ),
           ],
         ),
@@ -417,6 +417,7 @@ final class _OperatingLocalComputerSafetyMetadataCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.chat.operating.localComputerSafety;
     final raw = record.raw;
     final skill = _operatingSafetySkill(
       raw,
@@ -444,7 +445,7 @@ final class _OperatingLocalComputerSafetyMetadataCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Audit & Safety'.toUpperCase(),
+                t.auditAndSafety.toUpperCase(),
                 style: AgentOperatingSystemTokens.labelLg.copyWith(
                   color: AgentOperatingSystemTokens.onSurfaceVariant,
                   fontWeight: FontWeight.w800,

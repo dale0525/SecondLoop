@@ -390,10 +390,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: SelectableText(
-                      json,
-                      style: const TextStyle(fontFamily: 'monospace'),
-                    ),
+                    child: SelectableText(json, style: _diagnosticsJsonStyle),
                   ),
                 ],
               ),
@@ -478,10 +475,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: SelectableText(
-                    json,
-                    style: const TextStyle(fontFamily: 'monospace'),
-                  ),
+                  child: SelectableText(json, style: _diagnosticsJsonStyle),
                 ),
               ],
             ),
@@ -491,3 +485,14 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     );
   }
 }
+
+const _diagnosticsJsonStyle = TextStyle(
+  fontFamily: 'Menlo',
+  fontFamilyFallback: <String>[
+    'Monaco',
+    'Consolas',
+    'Courier New',
+    'monospace',
+  ],
+  letterSpacing: 0,
+);

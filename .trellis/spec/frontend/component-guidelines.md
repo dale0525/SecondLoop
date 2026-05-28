@@ -95,9 +95,13 @@ Reference files:
   chrome. App-tab destinations should select real `AppTab` entries; non-tab
   destinations such as Memory, Approvals, or Connectors must either open a real
   page/sheet or surface an explicit degraded state such as
-  `needs_configuration` or `tool_unavailable`. Floating Quick Capture buttons
-  must call `QuickCaptureController` when a `QuickCaptureScope` exists, and
-  otherwise render an honest unavailable state.
+  `needs_configuration` or `tool_unavailable`.
+- Quick Capture is a desktop hotkey/service affordance for capturing while the
+  app is out of focus, not an always-visible app-shell entry. Do not add a
+  desktop workbench FAB, plus button, or other persistent in-app Quick Capture
+  launcher. Keep `AppShell` listening to `QuickCaptureController` requests so
+  the desktop hotkey path can return to Chat when the overlay closes with
+  `openChat`.
 - Desktop workbench tool traces must fail closed. Show successful labels such
   as `web-research: executed`, `skill_result_response`, or
   `CITATIONS: PRESENT` only when the runtime state provides trace metadata and

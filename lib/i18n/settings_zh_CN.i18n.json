@@ -115,7 +115,15 @@
       "apiKeyLabel": "API 密钥",
       "embeddingApiKeyLabel": "嵌入 API 密钥",
       "multimodalApiKeyLabel": "多模态模型 API 密钥",
-      "accountLabel": "Cloudflare 账号"
+      "accountLabel": "Cloudflare 账号",
+      "cloudflareAccountId": "Cloudflare 账户 ID",
+      "cloudflareApiToken": "API 令牌",
+      "cloudflareAccountLabel": "Cloudflare 账户标签",
+      "embeddingRuntimeSecret": "嵌入运行时密钥",
+      "multimodalRuntimeSecret": "多模态运行时密钥",
+      "anthropicApiKey": "Anthropic API 密钥",
+      "customProviderApiKey": "自定义服务商 API 密钥",
+      "openAiApiKey": "OpenAI API 密钥"
     },
     "status": {
       "idle": "准备开始配置",
@@ -128,7 +136,118 @@
       "authorize": "授权 Cloudflare",
       "deploy": "部署运行时",
       "retry": "重试",
-      "reset": "重置"
+      "reset": "重置",
+      "writeSecrets": "写入密钥",
+      "writing": "写入中...",
+      "pasteSecret": "粘贴密钥",
+      "cancelSetup": "取消设置",
+      "verifyConnection": "验证连接",
+      "uninstall": "卸载"
+    },
+    "cloudflare": {
+      "oauthReady": "Cloudflare 已连接 - 重新连接",
+      "oauthConnect": "连接 / 重新连接 Cloudflare 账户",
+      "oauthHelp": "通过 OAuth 授权 SecondLoop 自动配置工作区。",
+      "closeSetup": "关闭设置",
+      "headerTitle": "基础设施连接",
+      "stepIntro": "第 1/4 步：连接你的边缘服务提供方，建立安全资料库环境。",
+      "integrationRequired": "需要 Cloudflare 集成",
+      "integrationDescriptionPrefix": "SecondLoop 使用 Cloudflare Workers 在边缘安全管理你的私有资料库操作。你可以在这里找到手动凭据：",
+      "dashboardApiTokens": "Cloudflare Dashboard -> API Tokens",
+      "ownershipNote": "所有基础设施（D1、KV、R2）和 Agent 运行时仍归你所有。服务提供方费用会直接计入你的账户。",
+      "securityFooter": "Cloudflare 管理授权仅用于设置辅助，不会作为持久业务配置保存。LLM/BYOK 密钥会直接写入你自己的 Cloudflare 运行时密钥；App 不会保存高权限明文令牌。",
+      "credentialHelp": "需要帮助查找凭据？",
+      "authorizationReady": "Cloudflare 授权已就绪。填写下方服务商密钥，然后写入密钥以部署并验证运行时，之后才会保存元数据。",
+      "errors": {
+        "oauthUnavailable": "当前本地构建尚不可用 Cloudflare OAuth 交接。请使用手动配置，或在设置辅助配置完成后重试。",
+        "accountSelectionRequired": "检测到多个 Cloudflare 账户。请先输入目标账户 ID 或名称，然后重试 OAuth。",
+        "oauthFailed": "Cloudflare OAuth 授权未完成。请重试并在浏览器中完成批准。",
+        "missingAccountId": "验证手动设置前，请输入 Cloudflare 账户 ID。",
+        "missingApiToken": "验证手动设置前，请输入仅限当前会话使用的 Cloudflare API 令牌。"
+      }
+    },
+    "manual": {
+      "advancedTitle": "高级：手动配置",
+      "accountIdPlaceholder": "例如 9a7806061c88ada191ed06f989cc3dac",
+      "apiTokenRequirement": "需要 'Workers: Edit'（最小权限）",
+      "apiTokenPlaceholder": "••••••••••••••••••••••••••••••••",
+      "footnote": "仅用于设置辅助。令牌只用于部署自动化，不会保存为业务配置。凭据生命周期仅限当前会话。",
+      "tokenHidden": "令牌保持隐藏"
+    },
+    "providerSecrets": {
+      "title": "服务商密钥",
+      "subtitle": "为你的个人 Agent 配置大语言模型引擎。",
+      "storedAsSecret": "保存为 Cloudflare 运行时密钥，不写入 App 存储。",
+      "secretValueEntered": "已输入密钥值",
+      "secretValueHidden": "密钥值保持隐藏",
+      "providers": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "custom": "自定义"
+      }
+    },
+    "progress": {
+      "cloudflareAuthorized": "Cloudflare 已授权",
+      "providerSecrets": "服务商密钥",
+      "capabilityChecks": "能力检查",
+      "runtimeManifest": "运行时清单"
+    },
+    "cards": {
+      "cloudflareAuthorization": "Cloudflare 授权",
+      "capabilityVerification": "能力验证",
+      "notRunYet": "尚未运行",
+      "lastRunLatest": "最近运行：最新",
+      "runtimeManifest": "运行时清单",
+      "safetyItems": {
+        "setupHelperOnly": {
+          "title": "仅用于设置辅助",
+          "body": "令牌只用于部署自动化。"
+        },
+        "notSaved": {
+          "title": "不会保存为业务配置",
+          "body": "凭据生命周期仅限当前会话。"
+        },
+        "revocable": {
+          "title": "部署后可撤销",
+          "body": "Workers 上线后即可移除 API 令牌。"
+        },
+        "resourcesOwned": {
+          "title": "资源归你所有",
+          "body": "Workers 与 KV 存储保留在你的账户中。"
+        }
+      },
+      "manifestFields": {
+        "endpointUrl": "端点 URL",
+        "vaultBinding": "资料库绑定",
+        "skillAvailabilityReport": "技能可用性报告",
+        "providerCostOwner": "服务商费用承担方",
+        "pending": "待完成",
+        "activeCount": "$active/$total 个已激活"
+      },
+      "capabilities": {
+        "structuredOutput": "结构化输出",
+        "secretaryMetadata": "秘书元数据",
+        "toolProposalDiscipline": "工具提议纪律",
+        "multimodalUnderstanding": "多模态理解",
+        "chineseIntentHandling": "中文意图处理",
+        "contextWindowLatency": "上下文窗口与延迟",
+        "clarificationBehavior": "澄清行为",
+        "sideEffectDiscipline": "副作用纪律"
+      },
+      "statuses": {
+        "pending": "待检查"
+      }
+    },
+    "runtimeManagement": {
+      "title": "运行时管理",
+      "subtitle": "从你的账户移除自托管运行时。",
+      "uninstalled": "自托管运行时连接已移除。",
+      "warning": "这会移除归你的 Cloudflare 账户所有的 Workers、绑定和运行时密钥。",
+      "uninstalling": "卸载中...",
+      "uninstallRuntime": "卸载运行时",
+      "dialogTitle": "卸载自管理运行时？",
+      "dialogBody": "SecondLoop 将使用你当前会话中的 Cloudflare 凭据移除运行时资源，然后清除已保存的连接。",
+      "uninstall": "卸载"
     }
   },
   "quickCaptureHotkey": {

@@ -20,6 +20,7 @@ final class _OperatingTopAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AgentOperatingSystemTokens.of(context);
+    final t = context.t.chat.operating.topBar;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.background,
@@ -58,7 +59,7 @@ final class _OperatingTopAppBar extends StatelessWidget {
                     ],
                     Expanded(
                       child: Text(
-                        webResearchActive ? 'SecondLoop' : 'SecondLoop Agent',
+                        webResearchActive ? context.t.app.title : t.brandAgent,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AgentOperatingSystemTokens.headlineMd,
@@ -93,12 +94,12 @@ final class _OperatingTopAppBar extends StatelessWidget {
                     ],
                     const SizedBox(width: 8),
                     IconButton(
-                      tooltip: 'Notifications',
+                      tooltip: t.notifications,
                       visualDensity: VisualDensity.compact,
                       onPressed: () {
                         final message = pendingApprovals == 0
-                            ? 'No pending approvals'
-                            : '$pendingApprovals pending approval(s)';
+                            ? t.noPendingApprovals
+                            : t.pendingApprovals(count: pendingApprovals);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text(message)),
                         );
@@ -136,6 +137,7 @@ final class _OperatingVaultUploadModeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AgentOperatingSystemTokens.of(context);
+    final t = context.t.chat.operating.topBar;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surfaceContainerHigh,
@@ -155,7 +157,7 @@ final class _OperatingVaultUploadModeChip extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             Text(
-              'Vault Upload',
+              t.vaultUpload,
               style: TextStyle(
                 color: colors.onSurfaceVariant,
                 fontSize: 10,
@@ -230,7 +232,7 @@ final class _OperatingWebResearchModeChip extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             Text(
-              'web-research',
+              context.t.chat.operating.researchRuntime.webResearch,
               style: TextStyle(
                 color: colors.onSurfaceVariant,
                 fontSize: 10,

@@ -8,6 +8,27 @@
     "review": "审核",
     "settings": "设置"
   },
+  "shell": {
+    "tabs": {
+      "review": "简报",
+      "conversation": "对话",
+      "notes": "资料库",
+      "memory": "任务",
+      "settings": "设置"
+    },
+    "desktop": {
+      "runtimeSynced": "运行时已同步",
+      "searchHint": "搜索运行资料库...",
+      "searchUnavailable": "运行资料库搜索需要先配置运行时搜索。(tool_unavailable)",
+      "syncTooltip": "同步",
+      "syncStatus": "运行时同步会跟随当前运行时连接。",
+      "accountTooltip": "账户",
+      "accountControls": "账户控制可在设置中使用。",
+      "memory": "记忆",
+      "approvals": "审批",
+      "connectors": "连接器"
+    }
+  },
   "web": {
     "title": "SecondLoop 网页版",
     "bootstrapFailed": "Web 应用启动失败：$error",

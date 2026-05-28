@@ -115,7 +115,15 @@
       "apiKeyLabel": "API key",
       "embeddingApiKeyLabel": "Embedding API key",
       "multimodalApiKeyLabel": "Multimodal LLM API key",
-      "accountLabel": "Cloudflare account"
+      "accountLabel": "Cloudflare account",
+      "cloudflareAccountId": "Cloudflare Account ID",
+      "cloudflareApiToken": "API Token",
+      "cloudflareAccountLabel": "Cloudflare Account Label",
+      "embeddingRuntimeSecret": "Embedding Runtime Secret",
+      "multimodalRuntimeSecret": "Multimodal Runtime Secret",
+      "anthropicApiKey": "Anthropic API Key",
+      "customProviderApiKey": "Custom Provider API Key",
+      "openAiApiKey": "OpenAI API Key"
     },
     "status": {
       "idle": "Ready to start setup",
@@ -128,7 +136,118 @@
       "authorize": "Authorize Cloudflare",
       "deploy": "Deploy runtime",
       "retry": "Retry",
-      "reset": "Reset"
+      "reset": "Reset",
+      "writeSecrets": "Write secrets",
+      "writing": "Writing...",
+      "pasteSecret": "Paste secret",
+      "cancelSetup": "Cancel Setup",
+      "verifyConnection": "Verify Connection",
+      "uninstall": "Uninstall"
+    },
+    "cloudflare": {
+      "oauthReady": "Cloudflare Connected - Reconnect",
+      "oauthConnect": "Connect / Reconnect Cloudflare Account",
+      "oauthHelp": "Authorize SecondLoop via OAuth for automated workspace configuration.",
+      "closeSetup": "Close setup",
+      "headerTitle": "Infrastructure Connection",
+      "stepIntro": "Step 1 of 4: Link your edge provider to establish the secure vault environment.",
+      "integrationRequired": "Cloudflare Integration Required",
+      "integrationDescriptionPrefix": "SecondLoop utilizes Cloudflare Workers to manage your private vault operations securely at the edge. You can find manual credentials in your ",
+      "dashboardApiTokens": "Cloudflare Dashboard -> API Tokens",
+      "ownershipNote": "All infrastructure (D1, KV, R2) and Agent runtimes remain under your ownership. Provider costs are billed directly to your account.",
+      "securityFooter": "Cloudflare management authorization is used only for setup helper and is not stored as a persistent business configuration. LLM/BYOK secrets are written directly to your own Cloudflare runtime secrets; the App does not store high-privilege plain-text tokens.",
+      "credentialHelp": "Need help finding your credentials?",
+      "authorizationReady": "Cloudflare authorization is ready. Fill Provider Secrets below, then write secrets to deploy and verify the runtime before metadata is saved.",
+      "errors": {
+        "oauthUnavailable": "Cloudflare OAuth handoff is not available in this local build yet. Use manual configuration or retry after the setup helper is configured.",
+        "accountSelectionRequired": "Multiple Cloudflare accounts are available. Enter the target account id or name before retrying OAuth.",
+        "oauthFailed": "Cloudflare OAuth authorization did not finish. Retry and complete the browser approval.",
+        "missingAccountId": "Enter the Cloudflare account id before verifying manual setup.",
+        "missingApiToken": "Enter a session-scoped Cloudflare API token before verifying manual setup."
+      }
+    },
+    "manual": {
+      "advancedTitle": "Advanced: Manual Configuration",
+      "accountIdPlaceholder": "e.g., 9a7806061c88ada191ed06f989cc3dac",
+      "apiTokenRequirement": "Requires 'Workers: Edit' (Least Privilege)",
+      "apiTokenPlaceholder": "••••••••••••••••••••••••••••••••",
+      "footnote": "Setup helper only. Tokens are used solely for deployment automation and are not saved as business config. Credential lifetime limited to active session.",
+      "tokenHidden": "Token stays hidden"
+    },
+    "providerSecrets": {
+      "title": "Provider Secrets",
+      "subtitle": "Configure the LLM engine for your personal agent.",
+      "storedAsSecret": "Stored as Cloudflare runtime secret, not in app storage.",
+      "secretValueEntered": "secret value entered",
+      "secretValueHidden": "Secret value stays hidden",
+      "providers": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "custom": "Custom"
+      }
+    },
+    "progress": {
+      "cloudflareAuthorized": "Cloudflare Authorized",
+      "providerSecrets": "Provider Secrets",
+      "capabilityChecks": "Capability Checks",
+      "runtimeManifest": "Runtime Manifest"
+    },
+    "cards": {
+      "cloudflareAuthorization": "Cloudflare Authorization",
+      "capabilityVerification": "Capability Verification",
+      "notRunYet": "Not run yet",
+      "lastRunLatest": "Last run: latest",
+      "runtimeManifest": "Runtime Manifest",
+      "safetyItems": {
+        "setupHelperOnly": {
+          "title": "Setup helper only",
+          "body": "Tokens are used solely for deployment automation."
+        },
+        "notSaved": {
+          "title": "Not saved as business config",
+          "body": "Credential lifetime limited to active session."
+        },
+        "revocable": {
+          "title": "Can be revoked after deployment",
+          "body": "Remove API tokens once workers are live."
+        },
+        "resourcesOwned": {
+          "title": "Resources owned by you",
+          "body": "Workers and KV stores stay in your account."
+        }
+      },
+      "manifestFields": {
+        "endpointUrl": "Endpoint URL",
+        "vaultBinding": "Vault Binding",
+        "skillAvailabilityReport": "Skill Availability Report",
+        "providerCostOwner": "Provider Cost Owner",
+        "pending": "pending",
+        "activeCount": "$active/$total active"
+      },
+      "capabilities": {
+        "structuredOutput": "Structured Output",
+        "secretaryMetadata": "Secretary Metadata",
+        "toolProposalDiscipline": "Tool Proposal Discipline",
+        "multimodalUnderstanding": "Multimodal Understanding",
+        "chineseIntentHandling": "Chinese Intent Handling",
+        "contextWindowLatency": "Context Window + Latency",
+        "clarificationBehavior": "Clarification Behavior",
+        "sideEffectDiscipline": "Side-effect Discipline"
+      },
+      "statuses": {
+        "pending": "PENDING"
+      }
+    },
+    "runtimeManagement": {
+      "title": "Runtime Management",
+      "subtitle": "Remove the self-managed runtime from your account.",
+      "uninstalled": "Self-managed runtime connection removed.",
+      "warning": "This removes workers, bindings, and runtime secrets owned by your Cloudflare account.",
+      "uninstalling": "Uninstalling...",
+      "uninstallRuntime": "Uninstall runtime",
+      "dialogTitle": "Uninstall self-managed runtime?",
+      "dialogBody": "SecondLoop will use your session Cloudflare credentials to remove the runtime resources and then clear the saved connection.",
+      "uninstall": "Uninstall"
     }
   },
   "quickCaptureHotkey": {

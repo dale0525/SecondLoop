@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../core/cloud/runtime_manifest.dart';
 import '../../core/cloud/self_managed_setup_controller.dart';
 import '../../core/cloud/self_managed_setup_models.dart';
+import '../../i18n/strings.g.dart';
 
 part 'self_managed_setup_sections_cards.dart';
 
@@ -89,11 +90,12 @@ class _ProgressRail extends StatelessWidget {
       SelfManagedSetupStep.ready => 3,
       _ => 1,
     };
-    const steps = [
-      _SetupProgressStep('Cloudflare Authorized', completed: true),
-      _SetupProgressStep('Provider Secrets'),
-      _SetupProgressStep('Capability Checks'),
-      _SetupProgressStep('Runtime Manifest'),
+    final t = context.t.settings.selfManagedSetup.progress;
+    final steps = [
+      _SetupProgressStep(t.cloudflareAuthorized, completed: true),
+      _SetupProgressStep(t.providerSecrets),
+      _SetupProgressStep(t.capabilityChecks),
+      _SetupProgressStep(t.runtimeManifest),
     ];
     return _SetupCard(
       padding: const EdgeInsets.all(16),
@@ -201,14 +203,15 @@ class _ProviderSecretsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.settings.selfManagedSetup;
     return _SetupCard(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(
-            title: 'Provider Secrets',
-            subtitle: 'Configure the LLM engine for your personal agent.',
+          _SectionTitle(
+            title: t.providerSecrets.title,
+            subtitle: t.providerSecrets.subtitle,
           ),
           const SizedBox(height: 16),
           _ProviderSegmentedControl(controller: providerController),
@@ -216,7 +219,7 @@ class _ProviderSecretsCard extends StatelessWidget {
           _SecretTextField(
             fieldKey: const ValueKey('self_managed_cloudflare_account'),
             controller: cloudflareAccountController,
-            label: 'Cloudflare Account Label',
+            label: t.fields.cloudflareAccountLabel,
             obscure: false,
           ),
           const SizedBox(height: 12),
@@ -230,7 +233,7 @@ class _ProviderSecretsCard extends StatelessWidget {
                 ),
                 pasteKey: const ValueKey('self_managed_api_key_paste'),
                 controller: apiKeyController,
-                label: _primaryKeyLabel(value.text),
+                label: _primaryKeyLabel(context, value.text),
               );
             },
           ),
@@ -244,7 +247,7 @@ class _ProviderSecretsCard extends StatelessWidget {
               'self_managed_embedding_api_key_paste',
             ),
             controller: embeddingApiKeyController,
-            label: 'Embedding Runtime Secret',
+            label: t.fields.embeddingRuntimeSecret,
           ),
           const SizedBox(height: 12),
           _SecretTextField(
@@ -256,12 +259,12 @@ class _ProviderSecretsCard extends StatelessWidget {
               'self_managed_multimodal_api_key_paste',
             ),
             controller: multimodalApiKeyController,
-            label: 'Multimodal Runtime Secret',
+            label: t.fields.multimodalRuntimeSecret,
           ),
           const SizedBox(height: 8),
-          const _InlineNote(
+          _InlineNote(
             icon: Icons.info_outline_rounded,
-            text: 'Stored as Cloudflare runtime secret, not in app storage.',
+            text: t.providerSecrets.storedAsSecret,
           ),
           if (state.hasError) ...[
             const SizedBox(height: 12),
@@ -282,18 +285,19 @@ class _ProviderSecretsCard extends StatelessWidget {
               ),
               side: const BorderSide(color: _SetupColors.outline),
             ),
-            child: Text(isBusy ? 'Writing...' : 'Write secrets'),
+            child: Text(isBusy ? t.actions.writing : t.actions.writeSecrets),
           ),
         ],
       ),
     );
   }
 
-  String _primaryKeyLabel(String provider) {
+  String _primaryKeyLabel(BuildContext context, String provider) {
+    final t = context.t.settings.selfManagedSetup.fields;
     return switch (provider.trim().toLowerCase()) {
-      'anthropic' => 'Anthropic API Key',
-      'custom' => 'Custom Provider API Key',
-      _ => 'OpenAI API Key',
+      'anthropic' => t.anthropicApiKey,
+      'custom' => t.customProviderApiKey,
+      _ => t.openAiApiKey,
     };
   }
 }
@@ -303,14 +307,15 @@ class _ProviderSegmentedControl extends StatelessWidget {
 
   final TextEditingController controller;
 
-  static const _options = [
-    _ProviderOption('openai', 'OpenAI'),
-    _ProviderOption('anthropic', 'Anthropic'),
-    _ProviderOption('custom', 'Custom'),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final providers =
+        context.t.settings.selfManagedSetup.providerSecrets.providers;
+    final options = [
+      _ProviderOption('openai', providers.openai),
+      _ProviderOption('anthropic', providers.anthropic),
+      _ProviderOption('custom', providers.custom),
+    ];
     return ValueListenableBuilder<TextEditingValue>(
       key: const ValueKey('self_managed_provider'),
       valueListenable: controller,
@@ -328,7 +333,7 @@ class _ProviderSegmentedControl extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (final option in _options)
+                  for (final option in options)
                     _ProviderSegment(
                       option: option,
                       selected: option.value == selected,
@@ -444,7 +449,7 @@ class _SecretTextField extends StatelessWidget {
           label: label,
           textField: true,
           obscured: obscure,
-          value: obscure ? _obscuredSemanticsValue : controller.text,
+          value: obscure ? _obscuredSemanticsValue(context) : controller.text,
           onSetText: _replaceText,
           onPaste: obscure ? _pasteFromClipboard : null,
           child: TextField(
@@ -487,9 +492,10 @@ class _SecretTextField extends StatelessWidget {
     );
   }
 
-  String get _obscuredSemanticsValue {
+  String _obscuredSemanticsValue(BuildContext context) {
     if (controller.text.isEmpty) return '';
-    return 'secret value entered';
+    return context
+        .t.settings.selfManagedSetup.providerSecrets.secretValueEntered;
   }
 
   Future<void> _pasteFromClipboard() async {
@@ -518,12 +524,13 @@ class _SecretFieldSuffix extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t.settings.selfManagedSetup;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
           key: pasteKey,
-          tooltip: 'Paste secret',
+          tooltip: t.actions.pasteSecret,
           onPressed: onPaste,
           icon: const Icon(
             Icons.content_paste_rounded,
@@ -534,11 +541,11 @@ class _SecretFieldSuffix extends StatelessWidget {
           constraints: const BoxConstraints.tightFor(width: 36, height: 36),
           visualDensity: VisualDensity.compact,
         ),
-        const Padding(
-          padding: EdgeInsets.only(right: 10),
+        Padding(
+          padding: const EdgeInsets.only(right: 10),
           child: Tooltip(
-            message: 'Secret value stays hidden',
-            child: Icon(
+            message: t.providerSecrets.secretValueHidden,
+            child: const Icon(
               Icons.visibility_off_outlined,
               size: 20,
               color: _SetupColors.onSurfaceVariant,
