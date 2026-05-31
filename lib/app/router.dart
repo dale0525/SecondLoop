@@ -18,8 +18,8 @@ import 'theme.dart';
 enum AppTab {
   review(Icons.summarize_outlined, Icons.summarize),
   conversation(Icons.chat_bubble_outline, Icons.chat_bubble),
-  notes(Icons.inventory_2_outlined, Icons.inventory_2),
-  memory(Icons.checklist_outlined, Icons.checklist),
+  notes(Icons.account_balance_wallet_outlined, Icons.account_balance_wallet),
+  memory(Icons.assignment_outlined, Icons.assignment),
   settings(Icons.settings_outlined, Icons.settings);
 
   const AppTab(this.icon, this.selectedIcon);
@@ -561,7 +561,7 @@ final class _AppShellChromeColors {
       border: Color(0xFFC6C6CD),
       text: Color(0xFF000000),
       muted: Color(0xFF45464D),
-      accent: Color(0xFF0051D5),
+      accent: Color(0xFF316BF3),
       onAccent: Color(0xFFFEFCFF),
       selected: Color(0xFFECEEF0),
       hover: Color(0xFFE6E8EA),

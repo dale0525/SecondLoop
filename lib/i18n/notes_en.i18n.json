@@ -1,5 +1,31 @@
 {
   "title": "Notes",
+  "vault": {
+    "brand": "SecondLoop",
+    "title": "Vault Index",
+    "searchPlaceholder": "Search memories, files, notes...",
+    "createNote": "Create note",
+    "notifications": "Notifications",
+    "categories": {
+      "memories": "Memories",
+      "memoriesCount": "2,401 entries",
+      "files": "Files",
+      "filesCount": "84 documents",
+      "notes": "Notes",
+      "notesSampleCount": "142 items",
+      "notesCount": "${count} items",
+      "research": "Research",
+      "researchCount": "38 dossiers"
+    },
+    "recent": {
+      "title": "Recent Additions",
+      "viewAll": "View All",
+      "viewDetail": "View Detail",
+      "memoryTitle": "Memory: Flight LX40 confirmation",
+      "researchTitle": "Research Note: Cloudflare D1 pricing",
+      "empty": "No matching notes"
+    }
+  },
   "fields": {
     "search": "Search",
     "title": "Title",

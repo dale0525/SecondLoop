@@ -26,7 +26,27 @@ void main() {
     expect(entries.single.baseRevision, 'rev-remote');
   });
 
-  testWidgets('delete action passes the selected entry with base revision',
+  testWidgets('renders the vault index structure from the Stitch design',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: NoteListPage(entries: <NoteListEntry>[]),
+        ),
+      ),
+    );
+
+    expect(find.text('Vault Index'), findsOneWidget);
+    expect(find.text('Search memories, files, notes...'), findsOneWidget);
+    expect(find.text('Memories'), findsOneWidget);
+    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Notes'), findsOneWidget);
+    expect(find.text('Research'), findsOneWidget);
+    expect(find.text('Recent Additions'), findsOneWidget);
+    expect(find.text('View All'), findsOneWidget);
+  });
+
+  testWidgets('long-press delete passes the selected entry with base revision',
       (tester) async {
     NoteListEntry? deleted;
 
@@ -51,7 +71,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('note_list_delete_note-1')));
+    await tester.longPress(find.byKey(const ValueKey('note_list_item_note-1')));
     await tester.pump();
 
     expect(deleted?.id, 'note-1');

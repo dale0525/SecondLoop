@@ -170,7 +170,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(savedTitle), findsOneWidget);
-      expect(find.text(savedBody), findsOneWidget);
+      expect(find.text('Recent Additions'), findsOneWidget);
       expect(tester.takeException(), isNull);
     } finally {
       await store.close();
@@ -218,7 +218,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Remote note'), findsOneWidget);
-      expect(find.text('Vault body'), findsOneWidget);
+      expect(find.text('Recent Additions'), findsOneWidget);
     } finally {
       await store.close();
       await fakeConnectivity.close();
