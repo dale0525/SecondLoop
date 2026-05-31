@@ -8,22 +8,19 @@
     "notifications": "通知",
     "categories": {
       "memories": "记忆",
-      "memoriesCount": "2,401 条记录",
+      "memoriesCount": "暂无数据",
       "files": "文件",
-      "filesCount": "84 份文档",
+      "filesCount": "暂无数据",
       "notes": "笔记",
-      "notesSampleCount": "142 项",
       "notesCount": "${count} 项",
       "research": "研究",
-      "researchCount": "38 份档案"
+      "researchCount": "暂无数据"
     },
     "recent": {
       "title": "最近添加",
       "viewAll": "查看全部",
       "viewDetail": "查看详情",
-      "memoryTitle": "记忆：LX40 航班确认",
-      "researchTitle": "研究笔记：Cloudflare D1 定价",
-      "empty": "没有匹配的笔记"
+      "empty": "暂无最近添加"
     }
   },
   "fields": {

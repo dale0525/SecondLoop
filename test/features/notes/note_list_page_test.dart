@@ -45,6 +45,11 @@ void main() {
     expect(find.text('Research'), findsOneWidget);
     expect(find.text('Recent Additions'), findsOneWidget);
     expect(find.text('View All'), findsOneWidget);
+    expect(find.text('0 items'), findsOneWidget);
+    expect(find.text('No data yet'), findsNWidgets(3));
+    expect(find.text('No recent additions'), findsOneWidget);
+    expect(find.text('2,401 entries'), findsNothing);
+    expect(find.text('142 items'), findsNothing);
   });
 
   testWidgets('hides duplicated brand bar inside desktop app shell',

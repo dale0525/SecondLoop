@@ -92,16 +92,13 @@ class _NoteListPageState extends State<NoteListPage> {
                 ),
                 const SizedBox(height: 32),
                 _VaultCategoryGrid(
-                  notesCount: widget.entries.isEmpty
-                      ? context.t.notes.vault.categories.notesSampleCount
-                      : context.t.notes.vault.categories
-                          .notesCount(count: widget.entries.length),
+                  notesCount: context.t.notes.vault.categories
+                      .notesCount(count: widget.entries.length),
                   onOpenNotes: widget.onCreateNote,
                 ),
                 const SizedBox(height: 40),
                 _VaultRecentSection(
                   items: visibleItems,
-                  showFallback: entries.isEmpty && query.isEmpty,
                   onViewAll: widget.onCreateNote,
                 ),
               ],
@@ -538,38 +535,23 @@ class _VaultIconTile extends StatelessWidget {
 class _VaultRecentSection extends StatelessWidget {
   const _VaultRecentSection({
     required this.items,
-    required this.showFallback,
     required this.onViewAll,
   });
 
   final List<_VaultRecentItem> items;
-  final bool showFallback;
   final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) {
     final displayItems = items.isNotEmpty
         ? items
-        : showFallback
-            ? [
-                _VaultRecentItem(
-                  title: context.t.notes.vault.recent.memoryTitle,
-                  icon: Icons.memory,
-                  color: _VaultColors.onSurface,
-                ),
-                _VaultRecentItem(
-                  title: context.t.notes.vault.recent.researchTitle,
-                  icon: Icons.travel_explore,
-                  color: _VaultColors.secondary,
-                ),
-              ]
-            : [
-                _VaultRecentItem(
-                  title: context.t.notes.vault.recent.empty,
-                  icon: Icons.edit_note,
-                  color: _VaultColors.onSurfaceVariant,
-                ),
-              ];
+        : [
+            _VaultRecentItem(
+              title: context.t.notes.vault.recent.empty,
+              icon: Icons.edit_note,
+              color: _VaultColors.onSurfaceVariant,
+            ),
+          ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
