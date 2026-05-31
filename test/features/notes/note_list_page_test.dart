@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/app/app_shell_style.dart';
 import 'package:secondloop/core/cloud/runtime_note_client.dart';
 import 'package:secondloop/core/offline_edit/local_edit_models.dart';
 import 'package:secondloop/features/notes/note_list_page.dart';
@@ -44,6 +45,23 @@ void main() {
     expect(find.text('Research'), findsOneWidget);
     expect(find.text('Recent Additions'), findsOneWidget);
     expect(find.text('View All'), findsOneWidget);
+  });
+
+  testWidgets('hides duplicated brand bar inside desktop app shell',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: AppShellLayoutScope(
+            desktopWorkbench: true,
+            child: NoteListPage(entries: <NoteListEntry>[]),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('SecondLoop'), findsNothing);
+    expect(find.text('Vault Index'), findsOneWidget);
   });
 
   testWidgets('long-press delete passes the selected entry with base revision',

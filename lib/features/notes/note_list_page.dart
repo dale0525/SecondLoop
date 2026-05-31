@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../app/app_shell_style.dart';
 import '../../core/cloud/runtime_note_client.dart';
 import '../../core/offline_edit/local_edit_models.dart';
 import '../../i18n/strings.g.dart';
@@ -70,14 +71,17 @@ class _NoteListPageState extends State<NoteListPage> {
         return a.id.compareTo(b.id);
       });
     final visibleItems = _recentItemsForEntries(context, entries);
+    final showVaultTopBar =
+        AppShellLayoutScope.desktopWorkbenchOf(context) != true;
 
     return Material(
       color: _VaultColors.surface,
       child: Column(
         children: [
-          _VaultTopBar(
-            title: context.t.notes.vault.brand,
-          ),
+          if (showVaultTopBar)
+            _VaultTopBar(
+              title: context.t.notes.vault.brand,
+            ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 32, 16, 84),
