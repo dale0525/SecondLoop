@@ -174,7 +174,9 @@ class _NotesHomePageState extends State<NotesHomePage> {
       await sync.flushPending();
     }
     if (!mounted) return;
-    setState(() => _loadFuture = _load());
+    setState(() {
+      _loadFuture = _load();
+    });
   }
 
   @override
@@ -260,7 +262,9 @@ class _NotesHomePageState extends State<NotesHomePage> {
     );
     controller.dispose();
     if (mounted) {
-      setState(() => _loadFuture = _load());
+      setState(() {
+        _loadFuture = _load();
+      });
     }
   }
 
@@ -275,7 +279,9 @@ class _NotesHomePageState extends State<NotesHomePage> {
       baseRevision: entry.baseRevision,
     );
     if (!mounted) return;
-    setState(() => _loadFuture = _load());
+    setState(() {
+      _loadFuture = _load();
+    });
   }
 
   int _nowMs() {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:connectivity_plus_platform_interface/connectivity_plus_platform_interface.dart';
 import 'package:flutter/material.dart';
@@ -74,6 +75,109 @@ void main() {
       }
     },
   );
+
+  testWidgets('creates managed-pro notes and reloads the remote list',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final oldPlatform = ConnectivityPlatform.instance;
+    final fakeConnectivity = _FakeConnectivityPlatform();
+    ConnectivityPlatform.instance = fakeConnectivity;
+    final store = LocalEditStore.inMemory();
+    var savedNoteId = '';
+    const savedTitle = 'Created remote note';
+    const savedBody = 'Created through the managed pro library UI.';
+    final httpClient = MockClient((request) async {
+      if (request.method == 'GET') {
+        expect(
+          request.url.toString(),
+          'https://runtime.test/v1/runtime/vaults/uid-1/notes?limit=100',
+        );
+        return http.Response(
+          jsonEncode({
+            'items': [
+              if (savedNoteId.isNotEmpty)
+                {
+                  'id': savedNoteId,
+                  'title': savedTitle,
+                  'body': savedBody,
+                  'revision': 'rev-1',
+                  'updated_at_ms': 1770000000000,
+                },
+            ],
+            'next_cursor': null,
+          }),
+          200,
+        );
+      }
+
+      expect(request.method, 'PUT');
+      expect(
+        request.url.path,
+        startsWith('/v1/runtime/vaults/uid-1/notes/'),
+      );
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      expect(body['title'], savedTitle);
+      expect(body['body'], savedBody);
+      savedNoteId = request.url.pathSegments.last;
+      return http.Response(
+        jsonEncode({
+          'id': savedNoteId,
+          'title': savedTitle,
+          'body': savedBody,
+          'revision': 'rev-1',
+          'updated_at_ms': 1770000000000,
+        }),
+        200,
+      );
+    });
+
+    try {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: CloudAuthScope(
+              controller: _CloudAuthController(),
+              gatewayConfig: const CloudGatewayConfig(
+                baseUrl: 'https://runtime.test',
+                modelName: 'cloud',
+              ),
+              child: NotesHomePage(
+                store: store,
+                noteHttpClient: httpClient,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('note_list_create_button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('note_editor_title_field')),
+        savedTitle,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('note_editor_body_field')),
+        savedBody,
+      );
+      await tester.tap(find.byKey(const ValueKey('note_editor_save_button')));
+      await tester.pumpAndSettle();
+      expect(savedNoteId, isNotEmpty);
+      expect(find.text('Saved'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.text(savedTitle), findsOneWidget);
+      expect(find.text(savedBody), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await store.close();
+      await fakeConnectivity.close();
+      ConnectivityPlatform.instance = oldPlatform;
+    }
+  });
 
   testWidgets('loads self-managed notes through the stored runtime connection',
       (tester) async {
