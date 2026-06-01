@@ -38,7 +38,6 @@ void main() {
     );
 
     expect(find.text('Vault Index'), findsOneWidget);
-    expect(find.text('Search memories, files, notes...'), findsOneWidget);
     expect(find.text('Memories'), findsOneWidget);
     expect(find.text('Files'), findsOneWidget);
     expect(find.text('Notes'), findsOneWidget);
@@ -51,6 +50,10 @@ void main() {
     expect(find.text('2,401 entries'), findsNothing);
     expect(find.text('142 items'), findsNothing);
     expect(find.byKey(const ValueKey('note_list_create_button')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('note_list_search_container')), findsNothing);
+    expect(find.byKey(const ValueKey('note_list_search_field')), findsNothing);
+    expect(find.byKey(const ValueKey('note_list_search_button')), findsNothing);
   });
 
   testWidgets('keeps vault actions focused on viewing existing content',
@@ -100,7 +103,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('keeps search field aligned across audited widths',
+  testWidgets('keeps vault content aligned without a duplicate search entry',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -115,37 +118,28 @@ void main() {
       );
       await tester.pump();
 
-      final containerRect = tester.getRect(
-        find.byKey(const ValueKey('note_list_search_container')),
-      );
-      final searchFieldRect = tester.getRect(
-        find.byKey(const ValueKey('note_list_search_field')),
-      );
-      final searchButtonRect = tester.getRect(
-        find.byKey(const ValueKey('note_list_search_button')),
+      final notesCardRect = tester.getRect(
+        find.byKey(const ValueKey('note_list_category_notes')),
       );
       final viewAllRect = tester.getRect(
         find.byKey(const ValueKey('note_list_view_all_button')),
       );
       final horizontalMargin = width >= 768 ? 32.0 : 16.0;
-      final expectedMaxWidth =
-          (width - horizontalMargin * 2).clamp(0.0, 672.0).toDouble();
 
-      expect(containerRect.left, greaterThanOrEqualTo(horizontalMargin - 0.1));
-      expect(containerRect.right,
+      expect(notesCardRect.left, greaterThanOrEqualTo(horizontalMargin - 0.1));
+      expect(notesCardRect.right,
           lessThanOrEqualTo(width - horizontalMargin + 0.1));
-      expect(containerRect.width, lessThanOrEqualTo(expectedMaxWidth + 0.1));
-      expect(containerRect.height, 45);
-      expect(searchFieldRect.left, greaterThan(containerRect.left));
-      expect(searchFieldRect.right, lessThanOrEqualTo(searchButtonRect.left));
-      expect(searchButtonRect.right, lessThanOrEqualTo(containerRect.right));
       expect(
           viewAllRect.right, lessThanOrEqualTo(width - horizontalMargin + 0.1));
       expect(
           find.byKey(const ValueKey('note_list_create_button')), findsNothing);
-      expect(find.byKey(const ValueKey('note_list_search_button')),
-          findsOneWidget);
-      expect(find.byIcon(Icons.keyboard_command_key), findsNothing);
+      expect(find.byKey(const ValueKey('note_list_search_container')),
+          findsNothing);
+      expect(
+          find.byKey(const ValueKey('note_list_search_field')), findsNothing);
+      expect(
+          find.byKey(const ValueKey('note_list_search_button')), findsNothing);
+      expect(find.text('Search memories, files, notes...'), findsNothing);
       expect(tester.takeException(), isNull, reason: 'width $width');
     }
   });

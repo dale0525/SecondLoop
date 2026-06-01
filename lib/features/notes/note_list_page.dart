@@ -44,26 +44,11 @@ class NoteListPage extends StatefulWidget {
 }
 
 class _NoteListPageState extends State<NoteListPage> {
-  final _searchController = TextEditingController();
   var _showAllRecentItems = false;
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final query = _searchController.text.trim().toLowerCase();
-    final entries = widget.entries
-        .where(
-          (entry) =>
-              query.isEmpty ||
-              entry.title.toLowerCase().contains(query) ||
-              entry.bodyPreview.toLowerCase().contains(query),
-        )
-        .toList()
+    final entries = widget.entries.toList()
       ..sort((a, b) {
         final result = b.updatedAtMs.compareTo(a.updatedAtMs);
         if (result != 0) return result;
@@ -111,10 +96,7 @@ class _NoteListPageState extends State<NoteListPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _VaultSearchHeader(
-                                controller: _searchController,
-                                onChanged: () => setState(() {}),
-                              ),
+                              const _VaultTitleHeader(),
                               const SizedBox(height: 32),
                               _VaultCategoryGrid(
                                 notesCount: context.t.notes.vault.categories
@@ -294,14 +276,8 @@ class _VaultAvatar extends StatelessWidget {
   }
 }
 
-class _VaultSearchHeader extends StatelessWidget {
-  const _VaultSearchHeader({
-    required this.controller,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final VoidCallback onChanged;
+class _VaultTitleHeader extends StatelessWidget {
+  const _VaultTitleHeader();
 
   @override
   Widget build(BuildContext context) {
@@ -316,87 +292,6 @@ class _VaultSearchHeader extends StatelessWidget {
             height: 34 / 28,
             fontWeight: FontWeight.w700,
             letterSpacing: 0,
-          ),
-        ),
-        const SizedBox(height: 22),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: _VaultMetrics.searchMaxWidth,
-            ),
-            child: DecoratedBox(
-              key: const ValueKey('note_list_search_container'),
-              decoration: BoxDecoration(
-                color: _VaultColors.lowestSurface,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: _VaultColors.outlineVariant),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x0F000000),
-                    blurRadius: 2,
-                    offset: Offset(0, 1),
-                  ),
-                ],
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                height: 45,
-                child: Row(
-                  children: [
-                    const SizedBox(
-                      width: 40,
-                      child: Icon(
-                        Icons.search,
-                        size: 20,
-                        color: _VaultColors.onSurfaceVariant,
-                      ),
-                    ),
-                    Expanded(
-                      child: TextField(
-                        key: const ValueKey('note_list_search_field'),
-                        controller: controller,
-                        textAlignVertical: TextAlignVertical.center,
-                        style: const TextStyle(
-                          color: _VaultColors.onSurface,
-                          fontSize: 14,
-                          height: 20 / 14,
-                          fontWeight: FontWeight.w400,
-                          letterSpacing: 0,
-                        ),
-                        decoration: InputDecoration.collapsed(
-                          hintText: context.t.notes.vault.searchPlaceholder,
-                          hintStyle: const TextStyle(
-                            color: _VaultColors.onSurfaceVariant,
-                            fontSize: 14,
-                            height: 20 / 14,
-                            fontWeight: FontWeight.w400,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                        onChanged: (_) => onChanged(),
-                        onSubmitted: (_) => onChanged(),
-                      ),
-                    ),
-                    IconButton(
-                      key: const ValueKey('note_list_search_button'),
-                      constraints: const BoxConstraints.tightFor(
-                        width: 44,
-                        height: 44,
-                      ),
-                      padding: EdgeInsets.zero,
-                      tooltip: context.t.common.actions.search,
-                      icon: const Icon(
-                        Icons.search,
-                        size: 20,
-                        color: _VaultColors.onSurfaceVariant,
-                      ),
-                      onPressed: onChanged,
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
         ),
       ],
@@ -787,7 +682,6 @@ abstract final class _VaultMetrics {
   static const desktopMargin = 32.0;
   static const desktopBreakpoint = 768.0;
   static const contentMaxWidth = 1280.0;
-  static const searchMaxWidth = 672.0;
 }
 
 List<NoteListEntry> mergeNoteListEntries(
