@@ -52,6 +52,103 @@ void main() {
     expect(find.text('142 items'), findsNothing);
   });
 
+  testWidgets('separates view-all/category navigation from note creation',
+      (tester) async {
+    var createCount = 0;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NoteListPage(
+            entries: const [
+              NoteListEntry(
+                id: 'note-1',
+                title: 'Alpha note',
+                updatedAtMs: 3000,
+              ),
+              NoteListEntry(
+                id: 'note-2',
+                title: 'Beta note',
+                updatedAtMs: 2000,
+              ),
+              NoteListEntry(
+                id: 'note-3',
+                title: 'Gamma note',
+                updatedAtMs: 1000,
+              ),
+            ],
+            onCreateNote: () => createCount++,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Alpha note'), findsOneWidget);
+    expect(find.text('Beta note'), findsOneWidget);
+    expect(find.text('Gamma note'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('note_list_view_all_button')));
+    await tester.pump();
+
+    expect(createCount, 0);
+    expect(find.text('Gamma note'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('note_list_category_notes')));
+    await tester.tap(find.byKey(const ValueKey('note_list_category_memories')));
+    await tester.tap(find.byKey(const ValueKey('note_list_category_files')));
+    await tester.tap(find.byKey(const ValueKey('note_list_category_research')));
+    await tester.pump();
+
+    expect(createCount, 0);
+
+    await tester.tap(find.byKey(const ValueKey('note_list_create_button')));
+    await tester.pump();
+
+    expect(createCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keeps search field aligned across audited widths',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    for (final width in <double>[320, 390, 768, 1200, 1600]) {
+      await tester.binding.setSurfaceSize(Size(width, 884));
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: NoteListPage(
+              entries: const <NoteListEntry>[],
+              onCreateNote: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final fieldRect = tester.getRect(
+        find.byKey(const ValueKey('note_list_search_field')),
+      );
+      final viewAllRect = tester.getRect(
+        find.byKey(const ValueKey('note_list_view_all_button')),
+      );
+      final createRect = tester.getRect(
+        find.byKey(const ValueKey('note_list_create_button')),
+      );
+      final horizontalMargin = width >= 768 ? 32.0 : 16.0;
+      final expectedMaxWidth =
+          (width - horizontalMargin * 2).clamp(0.0, 672.0).toDouble();
+
+      expect(fieldRect.left, greaterThanOrEqualTo(horizontalMargin - 0.1));
+      expect(
+          fieldRect.right, lessThanOrEqualTo(width - horizontalMargin + 0.1));
+      expect(fieldRect.width, lessThanOrEqualTo(expectedMaxWidth + 0.1));
+      expect(fieldRect.height, 45);
+      expect(viewAllRect.right, lessThanOrEqualTo(createRect.left + 0.1));
+      expect(tester.takeException(), isNull, reason: 'width $width');
+    }
+  });
+
   testWidgets('hides duplicated brand bar inside desktop app shell',
       (tester) async {
     await tester.pumpWidget(

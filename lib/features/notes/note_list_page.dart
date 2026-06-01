@@ -47,6 +47,7 @@ class NoteListPage extends StatefulWidget {
 
 class _NoteListPageState extends State<NoteListPage> {
   final _searchController = TextEditingController();
+  var _showAllRecentItems = false;
 
   @override
   void dispose() {
@@ -70,51 +71,94 @@ class _NoteListPageState extends State<NoteListPage> {
         if (result != 0) return result;
         return a.id.compareTo(b.id);
       });
-    final visibleItems = _recentItemsForEntries(context, entries);
+    final visibleItems = _recentItemsForEntries(
+      context,
+      entries,
+      limit: _showAllRecentItems ? null : 2,
+    );
     final showVaultTopBar =
         AppShellLayoutScope.desktopWorkbenchOf(context) != true;
 
     return Material(
       color: _VaultColors.surface,
-      child: Column(
-        children: [
-          if (showVaultTopBar)
-            _VaultTopBar(
-              title: context.t.notes.vault.brand,
-            ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 32, 16, 84),
-              children: [
-                _VaultSearchHeader(
-                  controller: _searchController,
-                  onChanged: () => setState(() {}),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final horizontalPadding =
+              constraints.maxWidth >= _VaultMetrics.desktopBreakpoint
+                  ? _VaultMetrics.desktopMargin
+                  : _VaultMetrics.mobileMargin;
+          return Column(
+            children: [
+              if (showVaultTopBar)
+                _VaultTopBar(
+                  title: context.t.notes.vault.brand,
                 ),
-                const SizedBox(height: 32),
-                _VaultCategoryGrid(
-                  notesCount: context.t.notes.vault.categories
-                      .notesCount(count: widget.entries.length),
-                  onOpenNotes: widget.onCreateNote,
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    32,
+                    horizontalPadding,
+                    84,
+                  ),
+                  children: [
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: _VaultMetrics.contentMaxWidth,
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _VaultSearchHeader(
+                                controller: _searchController,
+                                onChanged: () => setState(() {}),
+                              ),
+                              const SizedBox(height: 32),
+                              _VaultCategoryGrid(
+                                notesCount: context.t.notes.vault.categories
+                                    .notesCount(count: widget.entries.length),
+                                onOpenNotes: _showAllNotes,
+                              ),
+                              const SizedBox(height: 40),
+                              _VaultRecentSection(
+                                items: visibleItems,
+                                onViewAll: _showAllNotes,
+                                onCreateNote: widget.onCreateNote,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 40),
-                _VaultRecentSection(
-                  items: visibleItems,
-                  onViewAll: widget.onCreateNote,
-                ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
+  void _showAllNotes() {
+    if (_showAllRecentItems) return;
+    setState(() {
+      _showAllRecentItems = true;
+    });
+  }
+
   List<_VaultRecentItem> _recentItemsForEntries(
     BuildContext context,
-    List<NoteListEntry> entries,
-  ) {
+    List<NoteListEntry> entries, {
+    required int? limit,
+  }) {
     if (entries.isEmpty) return const <_VaultRecentItem>[];
-    return entries.take(2).map((entry) {
+    final visibleEntries = limit == null ? entries : entries.take(limit);
+    return visibleEntries.map((entry) {
       final title =
           entry.title.isEmpty ? context.t.notes.labels.untitled : entry.title;
       return _VaultRecentItem(
@@ -278,59 +322,78 @@ class _VaultSearchHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 22),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: _VaultColors.lowestSurface,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: _VaultColors.outlineVariant),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0F000000),
-                blurRadius: 2,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
-          child: SizedBox(
-            height: 45,
-            child: TextField(
-              key: const ValueKey('note_list_search_field'),
-              controller: controller,
-              textAlignVertical: TextAlignVertical.center,
-              style: const TextStyle(
-                color: _VaultColors.onSurface,
-                fontSize: 14,
-                height: 20 / 14,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 0,
-              ),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                isCollapsed: true,
-                hintText: context.t.notes.vault.searchPlaceholder,
-                hintStyle: const TextStyle(
-                  color: _VaultColors.onSurfaceVariant,
-                  fontSize: 14,
-                  height: 20 / 14,
-                  fontWeight: FontWeight.w400,
-                  letterSpacing: 0,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search,
-                  size: 20,
-                  color: _VaultColors.onSurfaceVariant,
-                ),
-                prefixIconConstraints: const BoxConstraints.tightFor(
-                  width: 40,
-                  height: 45,
-                ),
-                suffixIcon: const Center(child: _VaultCommandKey()),
-                suffixIconConstraints: const BoxConstraints.tightFor(
-                  width: 48,
-                  height: 45,
-                ),
-              ),
-              onChanged: (_) => onChanged(),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: _VaultMetrics.searchMaxWidth,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final showShortcut =
+                    constraints.maxWidth >= _VaultMetrics.shortcutMinWidth;
+                return DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _VaultColors.lowestSurface,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: _VaultColors.outlineVariant),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x0F000000),
+                        blurRadius: 2,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 45,
+                    child: TextField(
+                      key: const ValueKey('note_list_search_field'),
+                      controller: controller,
+                      textAlignVertical: TextAlignVertical.center,
+                      style: const TextStyle(
+                        color: _VaultColors.onSurface,
+                        fontSize: 14,
+                        height: 20 / 14,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0,
+                      ),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        isCollapsed: true,
+                        hintText: context.t.notes.vault.searchPlaceholder,
+                        hintStyle: const TextStyle(
+                          color: _VaultColors.onSurfaceVariant,
+                          fontSize: 14,
+                          height: 20 / 14,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 0,
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          size: 20,
+                          color: _VaultColors.onSurfaceVariant,
+                        ),
+                        prefixIconConstraints: const BoxConstraints.tightFor(
+                          width: 40,
+                          height: 45,
+                        ),
+                        suffixIcon: showShortcut
+                            ? const Center(child: _VaultCommandKey())
+                            : null,
+                        suffixIconConstraints: showShortcut
+                            ? const BoxConstraints.tightFor(
+                                width: 48,
+                                height: 45,
+                              )
+                            : null,
+                      ),
+                      onChanged: (_) => onChanged(),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -389,23 +452,26 @@ class _VaultCategoryGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final categories = [
       _VaultCategory(
+        key: const ValueKey('note_list_category_memories'),
         title: context.t.notes.vault.categories.memories,
         subtitle: context.t.notes.vault.categories.memoriesCount,
         icon: Icons.memory,
       ),
       _VaultCategory(
+        key: const ValueKey('note_list_category_files'),
         title: context.t.notes.vault.categories.files,
         subtitle: context.t.notes.vault.categories.filesCount,
         icon: Icons.folder_outlined,
       ),
       _VaultCategory(
-        key: const ValueKey('note_list_create_button'),
+        key: const ValueKey('note_list_category_notes'),
         title: context.t.notes.vault.categories.notes,
         subtitle: notesCount,
         icon: Icons.edit_note,
         onTap: onOpenNotes,
       ),
       _VaultCategory(
+        key: const ValueKey('note_list_category_research'),
         title: context.t.notes.vault.categories.research,
         subtitle: context.t.notes.vault.categories.researchCount,
         icon: Icons.travel_explore,
@@ -536,10 +602,12 @@ class _VaultRecentSection extends StatelessWidget {
   const _VaultRecentSection({
     required this.items,
     required this.onViewAll,
+    required this.onCreateNote,
   });
 
   final List<_VaultRecentItem> items;
   final VoidCallback? onViewAll;
+  final VoidCallback? onCreateNote;
 
   @override
   Widget build(BuildContext context) {
@@ -571,19 +639,29 @@ class _VaultRecentSection extends StatelessWidget {
                 ),
               ),
             ),
-            GestureDetector(
+            _VaultTextAction(
+              key: const ValueKey('note_list_view_all_button'),
+              label: context.t.notes.vault.recent.viewAll,
               onTap: onViewAll,
-              child: Text(
-                context.t.notes.vault.recent.viewAll,
-                style: const TextStyle(
-                  color: _VaultColors.secondary,
-                  fontSize: 11,
-                  height: 14 / 11,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0,
-                ),
-              ),
             ),
+            if (onCreateNote != null) ...[
+              const SizedBox(width: 10),
+              IconButton(
+                key: const ValueKey('note_list_create_button'),
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
+                ),
+                padding: EdgeInsets.zero,
+                tooltip: context.t.notes.vault.createNote,
+                icon: const Icon(
+                  Icons.add,
+                  size: 20,
+                  color: _VaultColors.onSurfaceVariant,
+                ),
+                onPressed: onCreateNote,
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 17),
@@ -605,6 +683,38 @@ class _VaultRecentSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _VaultTextAction extends StatelessWidget {
+  const _VaultTextAction({
+    required this.label,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: _VaultColors.secondary,
+            fontSize: 11,
+            height: 14 / 11,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -725,6 +835,15 @@ abstract final class _VaultColors {
   static const onSurface = Color(0xFF191C1E);
   static const onSurfaceVariant = Color(0xFF45464D);
   static const secondary = Color(0xFF0051D5);
+}
+
+abstract final class _VaultMetrics {
+  static const mobileMargin = 16.0;
+  static const desktopMargin = 32.0;
+  static const desktopBreakpoint = 768.0;
+  static const contentMaxWidth = 1280.0;
+  static const searchMaxWidth = 672.0;
+  static const shortcutMinWidth = 340.0;
 }
 
 List<NoteListEntry> mergeNoteListEntries(
