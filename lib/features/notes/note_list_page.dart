@@ -325,113 +325,81 @@ class _VaultSearchHeader extends StatelessWidget {
             constraints: const BoxConstraints(
               maxWidth: _VaultMetrics.searchMaxWidth,
             ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final showShortcut =
-                    constraints.maxWidth >= _VaultMetrics.shortcutMinWidth;
-                return DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: _VaultColors.lowestSurface,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: _VaultColors.outlineVariant),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x0F000000),
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
-                      ),
-                    ],
+            child: DecoratedBox(
+              key: const ValueKey('note_list_search_container'),
+              decoration: BoxDecoration(
+                color: _VaultColors.lowestSurface,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: _VaultColors.outlineVariant),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0F000000),
+                    blurRadius: 2,
+                    offset: Offset(0, 1),
                   ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 45,
-                    child: TextField(
-                      key: const ValueKey('note_list_search_field'),
-                      controller: controller,
-                      textAlignVertical: TextAlignVertical.center,
-                      style: const TextStyle(
-                        color: _VaultColors.onSurface,
-                        fontSize: 14,
-                        height: 20 / 14,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: 0,
+                ],
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                height: 45,
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 40,
+                      child: Icon(
+                        Icons.search,
+                        size: 20,
+                        color: _VaultColors.onSurfaceVariant,
                       ),
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        isCollapsed: true,
-                        hintText: context.t.notes.vault.searchPlaceholder,
-                        hintStyle: const TextStyle(
-                          color: _VaultColors.onSurfaceVariant,
+                    ),
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey('note_list_search_field'),
+                        controller: controller,
+                        textAlignVertical: TextAlignVertical.center,
+                        style: const TextStyle(
+                          color: _VaultColors.onSurface,
                           fontSize: 14,
                           height: 20 / 14,
                           fontWeight: FontWeight.w400,
                           letterSpacing: 0,
                         ),
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          size: 20,
-                          color: _VaultColors.onSurfaceVariant,
+                        decoration: InputDecoration.collapsed(
+                          hintText: context.t.notes.vault.searchPlaceholder,
+                          hintStyle: const TextStyle(
+                            color: _VaultColors.onSurfaceVariant,
+                            fontSize: 14,
+                            height: 20 / 14,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: 0,
+                          ),
                         ),
-                        prefixIconConstraints: const BoxConstraints.tightFor(
-                          width: 40,
-                          height: 45,
-                        ),
-                        suffixIcon: showShortcut
-                            ? const Center(child: _VaultCommandKey())
-                            : null,
-                        suffixIconConstraints: showShortcut
-                            ? const BoxConstraints.tightFor(
-                                width: 48,
-                                height: 45,
-                              )
-                            : null,
+                        onChanged: (_) => onChanged(),
+                        onSubmitted: (_) => onChanged(),
                       ),
-                      onChanged: (_) => onChanged(),
                     ),
-                  ),
-                );
-              },
+                    IconButton(
+                      key: const ValueKey('note_list_search_button'),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 44,
+                        height: 44,
+                      ),
+                      padding: EdgeInsets.zero,
+                      tooltip: context.t.common.actions.search,
+                      icon: const Icon(
+                        Icons.search,
+                        size: 20,
+                        color: _VaultColors.onSurfaceVariant,
+                      ),
+                      onPressed: onChanged,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _VaultCommandKey extends StatelessWidget {
-  const _VaultCommandKey();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 30,
-      decoration: BoxDecoration(
-        color: _VaultColors.lowestSurface,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: _VaultColors.outlineVariant),
-      ),
-      child: const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.keyboard_command_key,
-            size: 14,
-            color: _VaultColors.onSurfaceVariant,
-          ),
-          Text(
-            'K',
-            style: TextStyle(
-              color: _VaultColors.onSurfaceVariant,
-              fontSize: 10,
-              height: 1,
-              fontWeight: FontWeight.w400,
-              letterSpacing: 0,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -820,7 +788,6 @@ abstract final class _VaultMetrics {
   static const desktopBreakpoint = 768.0;
   static const contentMaxWidth = 1280.0;
   static const searchMaxWidth = 672.0;
-  static const shortcutMinWidth = 340.0;
 }
 
 List<NoteListEntry> mergeNoteListEntries(

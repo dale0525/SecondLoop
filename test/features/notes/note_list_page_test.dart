@@ -115,8 +115,14 @@ void main() {
       );
       await tester.pump();
 
-      final fieldRect = tester.getRect(
+      final containerRect = tester.getRect(
+        find.byKey(const ValueKey('note_list_search_container')),
+      );
+      final searchFieldRect = tester.getRect(
         find.byKey(const ValueKey('note_list_search_field')),
+      );
+      final searchButtonRect = tester.getRect(
+        find.byKey(const ValueKey('note_list_search_button')),
       );
       final viewAllRect = tester.getRect(
         find.byKey(const ValueKey('note_list_view_all_button')),
@@ -125,15 +131,21 @@ void main() {
       final expectedMaxWidth =
           (width - horizontalMargin * 2).clamp(0.0, 672.0).toDouble();
 
-      expect(fieldRect.left, greaterThanOrEqualTo(horizontalMargin - 0.1));
-      expect(
-          fieldRect.right, lessThanOrEqualTo(width - horizontalMargin + 0.1));
-      expect(fieldRect.width, lessThanOrEqualTo(expectedMaxWidth + 0.1));
-      expect(fieldRect.height, 45);
+      expect(containerRect.left, greaterThanOrEqualTo(horizontalMargin - 0.1));
+      expect(containerRect.right,
+          lessThanOrEqualTo(width - horizontalMargin + 0.1));
+      expect(containerRect.width, lessThanOrEqualTo(expectedMaxWidth + 0.1));
+      expect(containerRect.height, 45);
+      expect(searchFieldRect.left, greaterThan(containerRect.left));
+      expect(searchFieldRect.right, lessThanOrEqualTo(searchButtonRect.left));
+      expect(searchButtonRect.right, lessThanOrEqualTo(containerRect.right));
       expect(
           viewAllRect.right, lessThanOrEqualTo(width - horizontalMargin + 0.1));
       expect(
           find.byKey(const ValueKey('note_list_create_button')), findsNothing);
+      expect(find.byKey(const ValueKey('note_list_search_button')),
+          findsOneWidget);
+      expect(find.byIcon(Icons.keyboard_command_key), findsNothing);
       expect(tester.takeException(), isNull, reason: 'width $width');
     }
   });
