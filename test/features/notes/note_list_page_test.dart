@@ -50,17 +50,16 @@ void main() {
     expect(find.text('No recent additions'), findsOneWidget);
     expect(find.text('2,401 entries'), findsNothing);
     expect(find.text('142 items'), findsNothing);
+    expect(find.byKey(const ValueKey('note_list_create_button')), findsNothing);
   });
 
-  testWidgets('separates view-all/category navigation from note creation',
+  testWidgets('keeps vault actions focused on viewing existing content',
       (tester) async {
-    var createCount = 0;
-
     await tester.pumpWidget(
       wrapWithI18n(
-        MaterialApp(
+        const MaterialApp(
           home: NoteListPage(
-            entries: const [
+            entries: [
               NoteListEntry(
                 id: 'note-1',
                 title: 'Alpha note',
@@ -77,7 +76,6 @@ void main() {
                 updatedAtMs: 1000,
               ),
             ],
-            onCreateNote: () => createCount++,
           ),
         ),
       ),
@@ -90,7 +88,6 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('note_list_view_all_button')));
     await tester.pump();
 
-    expect(createCount, 0);
     expect(find.text('Gamma note'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('note_list_category_notes')));
@@ -99,12 +96,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('note_list_category_research')));
     await tester.pump();
 
-    expect(createCount, 0);
-
-    await tester.tap(find.byKey(const ValueKey('note_list_create_button')));
-    await tester.pump();
-
-    expect(createCount, 1);
+    expect(find.byKey(const ValueKey('note_list_create_button')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -116,11 +108,8 @@ void main() {
       await tester.binding.setSurfaceSize(Size(width, 884));
       await tester.pumpWidget(
         wrapWithI18n(
-          MaterialApp(
-            home: NoteListPage(
-              entries: const <NoteListEntry>[],
-              onCreateNote: () {},
-            ),
+          const MaterialApp(
+            home: NoteListPage(entries: <NoteListEntry>[]),
           ),
         ),
       );
@@ -132,9 +121,6 @@ void main() {
       final viewAllRect = tester.getRect(
         find.byKey(const ValueKey('note_list_view_all_button')),
       );
-      final createRect = tester.getRect(
-        find.byKey(const ValueKey('note_list_create_button')),
-      );
       final horizontalMargin = width >= 768 ? 32.0 : 16.0;
       final expectedMaxWidth =
           (width - horizontalMargin * 2).clamp(0.0, 672.0).toDouble();
@@ -144,7 +130,10 @@ void main() {
           fieldRect.right, lessThanOrEqualTo(width - horizontalMargin + 0.1));
       expect(fieldRect.width, lessThanOrEqualTo(expectedMaxWidth + 0.1));
       expect(fieldRect.height, 45);
-      expect(viewAllRect.right, lessThanOrEqualTo(createRect.left + 0.1));
+      expect(
+          viewAllRect.right, lessThanOrEqualTo(width - horizontalMargin + 0.1));
+      expect(
+          find.byKey(const ValueKey('note_list_create_button')), findsNothing);
       expect(tester.takeException(), isNull, reason: 'width $width');
     }
   });

@@ -202,7 +202,6 @@ class _NotesHomePageState extends State<NotesHomePage> {
         final target = result?.target;
         return NoteListPage(
           entries: result?.entries ?? const <NoteListEntry>[],
-          onCreateNote: () => unawaited(_openEditor(target)),
           onDeleteNote: target == null || !_isOnline
               ? null
               : (entry) => _deleteNote(target, entry),

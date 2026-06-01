@@ -32,13 +32,11 @@ class NoteListPage extends StatefulWidget {
     required this.entries,
     super.key,
     this.onOpenNote,
-    this.onCreateNote,
     this.onDeleteNote,
   });
 
   final List<NoteListEntry> entries;
   final ValueChanged<NoteListEntry>? onOpenNote;
-  final VoidCallback? onCreateNote;
   final NoteListDeleteCallback? onDeleteNote;
 
   @override
@@ -127,7 +125,6 @@ class _NoteListPageState extends State<NoteListPage> {
                               _VaultRecentSection(
                                 items: visibleItems,
                                 onViewAll: _showAllNotes,
-                                onCreateNote: widget.onCreateNote,
                               ),
                             ],
                           ),
@@ -602,12 +599,10 @@ class _VaultRecentSection extends StatelessWidget {
   const _VaultRecentSection({
     required this.items,
     required this.onViewAll,
-    required this.onCreateNote,
   });
 
   final List<_VaultRecentItem> items;
   final VoidCallback? onViewAll;
-  final VoidCallback? onCreateNote;
 
   @override
   Widget build(BuildContext context) {
@@ -644,24 +639,6 @@ class _VaultRecentSection extends StatelessWidget {
               label: context.t.notes.vault.recent.viewAll,
               onTap: onViewAll,
             ),
-            if (onCreateNote != null) ...[
-              const SizedBox(width: 10),
-              IconButton(
-                key: const ValueKey('note_list_create_button'),
-                constraints: const BoxConstraints.tightFor(
-                  width: 32,
-                  height: 32,
-                ),
-                padding: EdgeInsets.zero,
-                tooltip: context.t.notes.vault.createNote,
-                icon: const Icon(
-                  Icons.add,
-                  size: 20,
-                  color: _VaultColors.onSurfaceVariant,
-                ),
-                onPressed: onCreateNote,
-              ),
-            ],
           ],
         ),
         const SizedBox(height: 17),
