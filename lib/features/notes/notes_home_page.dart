@@ -14,8 +14,8 @@ import '../../core/cloud/runtime_profile.dart';
 import '../../core/offline_edit/local_edit_store.dart';
 import '../../core/offline_edit/local_edit_sync_service.dart';
 import '../../i18n/strings.g.dart';
+import 'note_detail_page.dart';
 import 'note_editor_controller.dart';
-import 'note_editor_page.dart';
 import 'note_list_page.dart';
 
 class NotesHomePage extends StatefulWidget {
@@ -206,7 +206,7 @@ class _NotesHomePageState extends State<NotesHomePage> {
               ? null
               : (entry) => _deleteNote(target, entry),
           onOpenNote: (entry) => unawaited(
-            _openEditor(
+            _openDetail(
               target,
               noteId: entry.id,
               baseRevision: entry.baseRevision,
@@ -217,9 +217,9 @@ class _NotesHomePageState extends State<NotesHomePage> {
     );
   }
 
-  Future<void> _openEditor(
+  Future<void> _openDetail(
     _NotesRuntimeTarget? target, {
-    String? noteId,
+    required String noteId,
     String? baseRevision,
   }) async {
     final store = await _resolveStore();
@@ -253,10 +253,7 @@ class _NotesHomePageState extends State<NotesHomePage> {
     if (!mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(title: Text(context.t.notes.title)),
-          body: NoteEditorPage(controller: controller),
-        ),
+        builder: (_) => NoteDetailPage(controller: controller),
       ),
     );
     controller.dispose();

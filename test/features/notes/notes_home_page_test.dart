@@ -87,6 +87,23 @@ void main() {
     const remoteBody = 'Existing content created through conversation.';
     final httpClient = MockClient((request) async {
       expect(request.method, 'GET');
+      if (request.url.path.endsWith('/notes/note-1')) {
+        expect(
+          request.url.toString(),
+          'https://runtime.test/v1/runtime/vaults/uid-1/notes/note-1',
+        );
+        return http.Response(
+          jsonEncode({
+            'id': 'note-1',
+            'title': remoteTitle,
+            'body': remoteBody,
+            'revision': 'rev-1',
+            'updated_at_ms': 1770000000000,
+          }),
+          200,
+        );
+      }
+
       expect(
         request.url.toString(),
         'https://runtime.test/v1/runtime/vaults/uid-1/notes?limit=100',
@@ -134,6 +151,17 @@ void main() {
           find.byKey(const ValueKey('note_list_create_button')), findsNothing);
       expect(
           find.byKey(const ValueKey('note_editor_title_field')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('note_list_item_note-1')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('note_detail_page')), findsOneWidget);
+      expect(find.byKey(const ValueKey('note_detail_title')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('note_detail_body_text')), findsOneWidget);
+      expect(find.text(remoteBody), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('note_editor_save_button')), findsNothing);
       expect(tester.takeException(), isNull);
     } finally {
       await store.close();
