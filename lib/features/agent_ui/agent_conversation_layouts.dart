@@ -64,9 +64,20 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
           _Composer(
             controller: _controller,
             focusNode: _focusNode,
-            busy: _sending || _thinking,
+            busy: _isComposerBusy,
+            recordingAudio: _recordingAudio,
+            supportsAudioRecording: _supportsComposerAudioRecording,
             attachments: _pendingAttachmentDrafts,
             onAttach: () => unawaited(_pickAttachments()),
+            onOpenMarkdownEditor: () =>
+                unawaited(_openComposerMarkdownEditor()),
+            onRecordAudio: () => unawaited(_recordAndAttachAudioFromSheet()),
+            onStopRecording: () => _completeAudioRecordingAction(
+              _AgentAudioRecordingSheetAction.stop,
+            ),
+            onCancelRecording: () => _completeAudioRecordingAction(
+              _AgentAudioRecordingSheetAction.cancel,
+            ),
             onRemoveAttachment: _removePendingAttachment,
             onSend: _send,
           ),
@@ -176,13 +187,24 @@ extension _AgentConversationLayouts on _AgentConversationPageState {
           _OperatingComposer(
             controller: _controller,
             focusNode: _focusNode,
-            busy: _sending || _thinking,
+            busy: _isComposerBusy,
+            recordingAudio: _recordingAudio,
+            supportsAudioRecording: _supportsComposerAudioRecording,
             placeholder: webResearchActive
                 ? context.t.chat.agentConversation.followUpComposerHint
                 : null,
             followUpMode: webResearchActive,
             attachments: _pendingAttachmentDrafts,
             onAttach: () => unawaited(_pickAttachments()),
+            onOpenMarkdownEditor: () =>
+                unawaited(_openComposerMarkdownEditor()),
+            onRecordAudio: () => unawaited(_recordAndAttachAudioFromSheet()),
+            onStopRecording: () => _completeAudioRecordingAction(
+              _AgentAudioRecordingSheetAction.stop,
+            ),
+            onCancelRecording: () => _completeAudioRecordingAction(
+              _AgentAudioRecordingSheetAction.cancel,
+            ),
             onRemoveAttachment: _removePendingAttachment,
             onSend: _send,
           ),

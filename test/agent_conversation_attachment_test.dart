@@ -19,7 +19,11 @@ import 'package:secondloop/core/platform/app_platform_capability_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/agent_ui/agent_conversation_page.dart';
+import 'package:secondloop/features/agent_ui/agent_recorded_audio_capture.dart';
 import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
+import 'package:secondloop/features/attachments/attachment_draft_send_contract.dart';
+import 'package:secondloop/features/chat/chat_markdown_editor_launcher.dart';
+import 'package:secondloop/features/chat/chat_markdown_editor_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -183,6 +187,223 @@ void main() {
         isNot(contains('image_url')));
   });
 
+  testWidgets('agent composer exposes restored actions on narrow layouts',
+      (tester) async {
+    final sender = _FakeRuntimeConversationSender();
+    await _pumpManagedProAgentConversation(
+      tester,
+      sender: sender,
+      surfaceSize: const Size(390, 720),
+      capabilities: _testCapabilities(supportsAudioRecording: true),
+    );
+
+    expect(find.byKey(const ValueKey('chat_input')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_attach')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('chat_markdown_editor_open')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_record_audio')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_send')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('chat_input')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('chat_markdown_editor_open')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(find.byKey(const ValueKey('chat_input')), 'Go');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chat_send')), findsOneWidget);
+
+    final actionsTop = tester
+        .getTopLeft(
+          find.byKey(const ValueKey('chat_composer_actions')),
+        )
+        .dy;
+    final inputBottom = tester
+        .getBottomLeft(
+          find.byKey(const ValueKey('chat_input')),
+        )
+        .dy;
+    final sendTop = tester
+        .getTopLeft(
+          find.byKey(const ValueKey('chat_send')),
+        )
+        .dy;
+    final sendLeft = tester
+        .getTopLeft(
+          find.byKey(const ValueKey('chat_send')),
+        )
+        .dx;
+    final actionsRight = tester
+        .getTopRight(
+          find.byKey(const ValueKey('chat_composer_actions')),
+        )
+        .dx;
+    expect(actionsTop, greaterThanOrEqualTo(inputBottom - 1));
+    expect(sendTop, greaterThanOrEqualTo(inputBottom - 1));
+    expect(sendLeft, greaterThan(actionsRight));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'agent composer keeps secondary actions before input on wide layouts',
+      (tester) async {
+    final sender = _FakeRuntimeConversationSender();
+    await _pumpManagedProAgentConversation(
+      tester,
+      sender: sender,
+      surfaceSize: const Size(1200, 760),
+      capabilities: _testCapabilities(supportsAudioRecording: true),
+    );
+    await tester.enterText(find.byKey(const ValueKey('chat_input')), 'Go');
+    await tester.pumpAndSettle();
+
+    final actionsRight = tester
+        .getTopRight(
+          find.byKey(const ValueKey('chat_composer_actions')),
+        )
+        .dx;
+    final inputLeft = tester
+        .getTopLeft(
+          find.byKey(const ValueKey('chat_input')),
+        )
+        .dx;
+    final inputRight = tester
+        .getTopRight(
+          find.byKey(const ValueKey('chat_input')),
+        )
+        .dx;
+    final sendLeft = tester
+        .getTopLeft(
+          find.byKey(const ValueKey('chat_send')),
+        )
+        .dx;
+
+    expect(actionsRight, lessThanOrEqualTo(inputLeft + 1));
+    expect(sendLeft, greaterThanOrEqualTo(inputRight - 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('agent composer hides recording on unsupported platforms',
+      (tester) async {
+    final sender = _FakeRuntimeConversationSender();
+    await _pumpManagedProAgentConversation(
+      tester,
+      sender: sender,
+      capabilities: _testCapabilities(supportsAudioRecording: false),
+    );
+
+    expect(find.byKey(const ValueKey('chat_attach')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('chat_markdown_editor_open')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('chat_input')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('chat_markdown_editor_open')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('chat_record_audio')), findsNothing);
+  });
+
+  testWidgets(
+    'agent composer applies Markdown editor result and draft attachments',
+    (tester) async {
+      final sender = _FakeRuntimeConversationSender();
+      await _pumpManagedProAgentConversation(
+        tester,
+        sender: sender,
+        markdownEditorRoutePusher: (_) async {
+          return ChatMarkdownEditorResult.saveWithAttachments(
+            '## Edited note',
+            [
+              AttachmentDraftPayload(
+                localId: 'markdown_draft_1',
+                filename: 'markdown-image.png',
+                mimeType: 'image/png',
+                bytes: Uint8List.fromList(<int>[4, 5, 6]),
+              ),
+            ],
+          );
+        },
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('chat_input')),
+        'draft',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('chat_markdown_editor_open')));
+      await tester.pumpAndSettle();
+
+      final input = tester.widget<TextField>(
+        find.byKey(const ValueKey('chat_input')),
+      );
+      expect(input.controller?.text, '## Edited note');
+      expect(find.text('markdown-image.png'), findsOneWidget);
+
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('chat_send')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+
+      expect(sender.sentMessages, <String>['## Edited note']);
+      expect(sender.sentMessageAttachments.single.single['filename'],
+          'markdown-image.png');
+      expect(sender.sentMessageAttachments.single.single['mime_type'],
+          'image/png');
+      expect(
+          sender.sentUploadAttachments.single.single['content_base64'], 'BAUG');
+    },
+  );
+
+  testWidgets('agent composer records audio into attachment draft',
+      (tester) async {
+    final capture = _FakeAgentRecordedAudioCapture(
+      bytes: Uint8List.fromList(<int>[9, 8, 7, 6]),
+    );
+    debugAgentRecordedAudioCaptureOverride = capture;
+    addTearDown(() {
+      debugAgentRecordedAudioCaptureOverride = null;
+    });
+
+    final sender = _FakeRuntimeConversationSender();
+    await _pumpManagedProAgentConversation(
+      tester,
+      sender: sender,
+      capabilities: _testCapabilities(supportsAudioRecording: true),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('chat_record_audio')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chat_recording_status')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_recording_cancel')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_record_audio')), findsNothing);
+    expect(capture.startCalls, 1);
+
+    await tester.tap(find.byKey(const ValueKey('chat_recording_stop')));
+    await tester.pumpAndSettle();
+
+    expect(capture.stopCalls, 1);
+    expect(capture.readPaths, <String>['/tmp/fake-recording.m4a']);
+    expect(capture.deletedPaths, <String>['/tmp/fake-recording.m4a']);
+    expect(find.textContaining('recording_'), findsOneWidget);
+
+    tester
+        .widget<FilledButton>(find.byKey(const ValueKey('chat_send')))
+        .onPressed!();
+    await tester.pumpAndSettle();
+
+    expect(sender.sentMessages, <String>['']);
+    expect(
+        sender.sentAttachmentIntents, <String?>['understand_uploaded_files']);
+    expect(sender.sentMessageAttachments.single.single['mime_type'],
+        kAgentRecordedAudioMimeType);
+    expect(sender.sentMessageAttachments.single.single['byte_size'], 4);
+    expect(sender.sentUploadAttachments.single.single['content_base64'],
+        'CQgHBg==');
+  });
+
   testWidgets(
     'agent conversation restores image preview from persisted runtime metadata',
     (tester) async {
@@ -320,8 +541,18 @@ Future<void> _pumpManagedProAgentConversation(
   WidgetTester tester, {
   required _FakeRuntimeConversationSender sender,
   RuntimeAgentStateRepository? runtimeAgentStateRepository,
+  Size surfaceSize = const Size(1012, 701),
+  AppPlatformCapabilities capabilities = const AppPlatformCapabilities(
+    supportsDesktopHotkey: true,
+    supportsAudioRecording: true,
+    supportsDesktopDrop: true,
+    supportsDesktopBootSettings: true,
+    supportsCameraCapture: false,
+    usesCloudSessionModel: false,
+  ),
+  ChatMarkdownEditorRoutePusher? markdownEditorRoutePusher,
 }) async {
-  await tester.binding.setSurfaceSize(const Size(1012, 701));
+  await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     wrapWithI18n(
@@ -329,14 +560,7 @@ Future<void> _pumpManagedProAgentConversation(
         home: AppBackendScope(
           backend: TestAppBackend(),
           child: AppPlatformCapabilityScope(
-            capabilities: const AppPlatformCapabilities(
-              supportsDesktopHotkey: true,
-              supportsAudioRecording: true,
-              supportsDesktopDrop: true,
-              supportsDesktopBootSettings: true,
-              supportsCameraCapture: false,
-              usesCloudSessionModel: false,
-            ),
+            capabilities: capabilities,
             child: CloudAuthScope(
               controller: _CloudAuthController(),
               gatewayConfig: const CloudGatewayConfig(
@@ -361,6 +585,7 @@ Future<void> _pumpManagedProAgentConversation(
                     runtimeConversationSender: sender,
                     runtimeAgentStateRepository: runtimeAgentStateRepository ??
                         _FakeRuntimeAgentStateRepository(sender),
+                    markdownEditorRoutePusher: markdownEditorRoutePusher,
                   ),
                 ),
               ),
@@ -371,6 +596,19 @@ Future<void> _pumpManagedProAgentConversation(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+AppPlatformCapabilities _testCapabilities({
+  required bool supportsAudioRecording,
+}) {
+  return AppPlatformCapabilities(
+    supportsDesktopHotkey: true,
+    supportsAudioRecording: supportsAudioRecording,
+    supportsDesktopDrop: true,
+    supportsDesktopBootSettings: true,
+    supportsCameraCapture: false,
+    usesCloudSessionModel: false,
+  );
 }
 
 final class _FakeFilePicker extends FilePicker {
@@ -553,6 +791,49 @@ final class _FakeRuntimeConversationSender
   }) async {
     fetchedAttachmentIds.add(attachmentId);
     return fetchedAttachmentBytes[attachmentId];
+  }
+}
+
+final class _FakeAgentRecordedAudioCapture
+    implements AgentRecordedAudioCapture {
+  _FakeAgentRecordedAudioCapture({required this.bytes});
+
+  final Uint8List bytes;
+  final List<String> readPaths = <String>[];
+  final List<String> deletedPaths = <String>[];
+  int startCalls = 0;
+  int stopCalls = 0;
+  bool disposed = false;
+
+  @override
+  Future<bool> hasPermission() async => true;
+
+  @override
+  Future<String> start({required DateTime startedAt}) async {
+    startCalls += 1;
+    return '/tmp/fake-recording.m4a';
+  }
+
+  @override
+  Future<String?> stop() async {
+    stopCalls += 1;
+    return '/tmp/fake-recording.m4a';
+  }
+
+  @override
+  Future<Uint8List> readBytes(String path) async {
+    readPaths.add(path);
+    return bytes;
+  }
+
+  @override
+  Future<void> deleteFile(String path) async {
+    deletedPaths.add(path);
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposed = true;
   }
 }
 

@@ -698,8 +698,14 @@ final class _Composer extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.busy,
+    required this.recordingAudio,
+    required this.supportsAudioRecording,
     required this.attachments,
     required this.onAttach,
+    required this.onOpenMarkdownEditor,
+    required this.onRecordAudio,
+    required this.onStopRecording,
+    required this.onCancelRecording,
     required this.onRemoveAttachment,
     required this.onSend,
   });
@@ -707,8 +713,14 @@ final class _Composer extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
+  final bool recordingAudio;
+  final bool supportsAudioRecording;
   final List<AttachmentDraftPayload> attachments;
   final VoidCallback onAttach;
+  final VoidCallback onOpenMarkdownEditor;
+  final VoidCallback onRecordAudio;
+  final VoidCallback onStopRecording;
+  final VoidCallback onCancelRecording;
   final ValueChanged<String> onRemoveAttachment;
   final VoidCallback onSend;
 
@@ -719,7 +731,8 @@ final class _Composer extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius:
+            BorderRadius.circular(AgentOperatingSystemTokens.radiusMd),
         border: Border.all(color: colors.outlineVariant),
         boxShadow: [
           BoxShadow(
@@ -742,9 +755,9 @@ final class _Composer extends StatelessWidget {
               ),
               const SizedBox(height: AgentDesignTokens.gapSm),
             ],
-            Row(
-              children: [
-                Expanded(
+            Builder(
+              builder: (context) {
+                final input = _ComposerTextInputShell(
                   child: TextField(
                     key: const ValueKey('chat_input'),
                     controller: controller,
@@ -752,47 +765,91 @@ final class _Composer extends StatelessWidget {
                     minLines: 1,
                     maxLines: 5,
                     textInputAction: TextInputAction.newline,
-                    decoration: InputDecoration(
+                    decoration: _composerTextInputDecoration(
                       hintText: t.composerHint,
-                      border: InputBorder.none,
-                      isDense: true,
                     ),
                     style: TextStyle(
                       color: colors.onSurface,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
-                IconButton(
-                  key: const ValueKey('chat_attach'),
-                  tooltip: t.attach,
-                  onPressed: busy ? null : onAttach,
-                  icon: const Icon(Icons.add_rounded),
-                ),
-                IconButton(
-                  tooltip: t.record,
-                  onPressed: busy ? null : () {},
-                  icon: const Icon(Icons.mic_none_rounded),
-                ),
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: controller,
-                  builder: (context, value, child) {
-                    final enabled = !busy &&
-                        (value.text.trim().isNotEmpty ||
-                            attachments.isNotEmpty);
-                    return FilledButton.icon(
-                      key: const ValueKey('chat_send'),
-                      onPressed: enabled ? onSend : null,
-                      icon: const Icon(Icons.send_rounded, size: 18),
-                      label: Text(busy ? t.working : t.send),
-                    );
-                  },
-                ),
-              ],
+                );
+                final actions = _ComposerActionButtons(
+                  busy: busy,
+                  recordingAudio: recordingAudio,
+                  focusNode: focusNode,
+                  supportsAudioRecording: supportsAudioRecording,
+                  onAttach: onAttach,
+                  onOpenMarkdownEditor: onOpenMarkdownEditor,
+                  onRecordAudio: onRecordAudio,
+                  foregroundColor: colors.onSurfaceVariant,
+                  disabledForegroundColor: colors.muted.withOpacity(0.5),
+                );
+                final send = _ComposerSendButton(
+                  controller: controller,
+                  busy: busy,
+                  hasAttachments: attachments.isNotEmpty,
+                  onSend: onSend,
+                );
+                return _ComposerResponsiveControls(
+                  actions: actions,
+                  input: input,
+                  send: send,
+                  recordingAudio: recordingAudio,
+                  onStopRecording: onStopRecording,
+                  onCancelRecording: onCancelRecording,
+                  compactBreakpoint: 560,
+                );
+              },
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+final class _ComposerSendButton extends StatelessWidget {
+  const _ComposerSendButton({
+    required this.controller,
+    required this.busy,
+    required this.hasAttachments,
+    required this.onSend,
+  });
+
+  final TextEditingController controller;
+  final bool busy;
+  final bool hasAttachments;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t.chat.agentConversation;
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, child) {
+        if (value.text.trim().isEmpty && !hasAttachments) {
+          return const SizedBox.shrink();
+        }
+        final enabled =
+            !busy && (value.text.trim().isNotEmpty || hasAttachments);
+        return SizedBox(
+          height: 40,
+          child: FilledButton.icon(
+            key: const ValueKey('chat_send'),
+            style: FilledButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  AgentOperatingSystemTokens.radiusMd,
+                ),
+              ),
+            ),
+            onPressed: enabled ? onSend : null,
+            icon: const Icon(Icons.send_rounded, size: 18),
+            label: Text(busy ? t.working : t.send),
+          ),
+        );
+      },
     );
   }
 }
