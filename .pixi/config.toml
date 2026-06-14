@@ -1,6 +1,0 @@
-[repodata-config]
-disable-sharded = false
-
-[concurrency]
-solves = 10
-downloads = 1

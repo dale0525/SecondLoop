@@ -32,6 +32,11 @@ Reference files:
   changes.
 - Use `AnimatedBuilder` when a `ChangeNotifier` controller owns the source of
   truth and the widget only renders it.
+- When a large page uses `part` files with extensions on the private
+  `State` class, keep direct `setState(...)` calls in instance methods on the
+  `State` subclass itself. Extension methods may call those private helpers,
+  but should not call `setState(...)` directly because Flutter marks it
+  protected and the analyzer reports `invalid_use_of_protected_member`.
 
 Reference files:
 

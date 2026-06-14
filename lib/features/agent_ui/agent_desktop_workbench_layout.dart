@@ -37,9 +37,20 @@ extension _AgentDesktopWorkbenchLayout on _AgentConversationPageState {
             bottomKey: _messageListBottomKey,
             controller: _controller,
             focusNode: _focusNode,
-            busy: _sending || _thinking,
+            busy: _isComposerBusy,
+            recordingAudio: _recordingAudio,
+            supportsAudioRecording: _supportsComposerAudioRecording,
             attachments: _pendingAttachmentDrafts,
             onAttach: () => unawaited(_pickAttachments()),
+            onOpenMarkdownEditor: () =>
+                unawaited(_openComposerMarkdownEditor()),
+            onRecordAudio: () => unawaited(_recordAndAttachAudioFromSheet()),
+            onStopRecording: () => _completeAudioRecordingAction(
+              _AgentAudioRecordingSheetAction.stop,
+            ),
+            onCancelRecording: () => _completeAudioRecordingAction(
+              _AgentAudioRecordingSheetAction.cancel,
+            ),
             onRemoveAttachment: _removePendingAttachment,
             onSend: _send,
             onLoadOlderTurns: _loadOlderRuntimeTurns,
@@ -91,8 +102,14 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.busy,
+    required this.recordingAudio,
+    required this.supportsAudioRecording,
     required this.attachments,
     required this.onAttach,
+    required this.onOpenMarkdownEditor,
+    required this.onRecordAudio,
+    required this.onStopRecording,
+    required this.onCancelRecording,
     required this.onRemoveAttachment,
     required this.onSend,
     required this.onLoadOlderTurns,
@@ -118,8 +135,14 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
+  final bool recordingAudio;
+  final bool supportsAudioRecording;
   final List<AttachmentDraftPayload> attachments;
   final VoidCallback onAttach;
+  final VoidCallback onOpenMarkdownEditor;
+  final VoidCallback onRecordAudio;
+  final VoidCallback onStopRecording;
+  final VoidCallback onCancelRecording;
   final ValueChanged<String> onRemoveAttachment;
   final VoidCallback onSend;
   final Future<void> Function() onLoadOlderTurns;
@@ -251,8 +274,14 @@ final class _DesktopWorkbenchChatColumn extends StatelessWidget {
             controller: controller,
             focusNode: focusNode,
             busy: busy,
+            recordingAudio: recordingAudio,
+            supportsAudioRecording: supportsAudioRecording,
             attachments: attachments,
             onAttach: onAttach,
+            onOpenMarkdownEditor: onOpenMarkdownEditor,
+            onRecordAudio: onRecordAudio,
+            onStopRecording: onStopRecording,
+            onCancelRecording: onCancelRecording,
             onRemoveAttachment: onRemoveAttachment,
             onSend: onSend,
           ),
@@ -750,8 +779,14 @@ final class _DesktopComposer extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.busy,
+    required this.recordingAudio,
+    required this.supportsAudioRecording,
     required this.attachments,
     required this.onAttach,
+    required this.onOpenMarkdownEditor,
+    required this.onRecordAudio,
+    required this.onStopRecording,
+    required this.onCancelRecording,
     required this.onRemoveAttachment,
     required this.onSend,
   });
@@ -759,8 +794,14 @@ final class _DesktopComposer extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
+  final bool recordingAudio;
+  final bool supportsAudioRecording;
   final List<AttachmentDraftPayload> attachments;
   final VoidCallback onAttach;
+  final VoidCallback onOpenMarkdownEditor;
+  final VoidCallback onRecordAudio;
+  final VoidCallback onStopRecording;
+  final VoidCallback onCancelRecording;
   final ValueChanged<String> onRemoveAttachment;
   final VoidCallback onSend;
 
@@ -785,7 +826,7 @@ final class _DesktopComposer extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.surface,
                 borderRadius:
-                    BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
+                    BorderRadius.circular(AgentOperatingSystemTokens.radiusMd),
                 border: Border.all(color: colors.outlineVariant),
               ),
               child: Padding(
@@ -800,53 +841,48 @@ final class _DesktopComposer extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                     ],
-                    Row(
-                      children: [
-                        IconButton(
-                          key: const ValueKey('chat_attach'),
-                          tooltip: t.attach,
-                          onPressed: busy ? null : onAttach,
-                          icon: const Icon(Icons.attach_file_rounded),
-                        ),
-                        Expanded(
+                    Builder(
+                      builder: (context) {
+                        final actions = _ComposerActionButtons(
+                          busy: busy,
+                          recordingAudio: recordingAudio,
+                          focusNode: focusNode,
+                          supportsAudioRecording: supportsAudioRecording,
+                          onAttach: onAttach,
+                          onOpenMarkdownEditor: onOpenMarkdownEditor,
+                          onRecordAudio: onRecordAudio,
+                          foregroundColor: colors.onSurfaceVariant,
+                          disabledForegroundColor:
+                              colors.muted.withOpacity(0.5),
+                        );
+                        final input = _ComposerTextInputShell(
                           child: TextField(
                             key: const ValueKey('chat_input'),
                             controller: controller,
                             focusNode: focusNode,
                             minLines: 1,
                             maxLines: 4,
-                            decoration: InputDecoration(
+                            textInputAction: TextInputAction.newline,
+                            decoration: _composerTextInputDecoration(
                               hintText: t.inputHint,
-                              border: InputBorder.none,
-                              isDense: true,
                             ),
                           ),
-                        ),
-                        ValueListenableBuilder<TextEditingValue>(
-                          valueListenable: controller,
-                          builder: (context, value, child) {
-                            final enabled = !busy &&
-                                (value.text.trim().isNotEmpty ||
-                                    attachments.isNotEmpty);
-                            return SizedBox.square(
-                              dimension: 40,
-                              child: FilledButton(
-                                key: const ValueKey('chat_send'),
-                                style: FilledButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      AgentOperatingSystemTokens.radiusSm,
-                                    ),
-                                  ),
-                                ),
-                                onPressed: enabled ? onSend : null,
-                                child: const Icon(Icons.send_rounded),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
+                        );
+                        final send = _DesktopComposerSendButton(
+                          controller: controller,
+                          busy: busy,
+                          hasAttachments: attachments.isNotEmpty,
+                          onSend: onSend,
+                        );
+                        return _ComposerResponsiveControls(
+                          actions: actions,
+                          input: input,
+                          send: send,
+                          recordingAudio: recordingAudio,
+                          onStopRecording: onStopRecording,
+                          onCancelRecording: onCancelRecording,
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -855,6 +891,50 @@ final class _DesktopComposer extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+final class _DesktopComposerSendButton extends StatelessWidget {
+  const _DesktopComposerSendButton({
+    required this.controller,
+    required this.busy,
+    required this.hasAttachments,
+    required this.onSend,
+  });
+
+  final TextEditingController controller;
+  final bool busy;
+  final bool hasAttachments;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, child) {
+        if (value.text.trim().isEmpty && !hasAttachments) {
+          return const SizedBox.shrink();
+        }
+        final enabled =
+            !busy && (value.text.trim().isNotEmpty || hasAttachments);
+        return SizedBox.square(
+          dimension: 40,
+          child: FilledButton(
+            key: const ValueKey('chat_send'),
+            style: FilledButton.styleFrom(
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  AgentOperatingSystemTokens.radiusMd,
+                ),
+              ),
+            ),
+            onPressed: enabled ? onSend : null,
+            child: const Icon(Icons.send_rounded),
+          ),
+        );
+      },
     );
   }
 }

@@ -522,10 +522,16 @@ final class _OperatingComposer extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.busy,
+    required this.recordingAudio,
     required this.placeholder,
     required this.followUpMode,
+    required this.supportsAudioRecording,
     required this.attachments,
     required this.onAttach,
+    required this.onOpenMarkdownEditor,
+    required this.onRecordAudio,
+    required this.onStopRecording,
+    required this.onCancelRecording,
     required this.onRemoveAttachment,
     required this.onSend,
   });
@@ -533,10 +539,16 @@ final class _OperatingComposer extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
+  final bool recordingAudio;
   final String? placeholder;
   final bool followUpMode;
+  final bool supportsAudioRecording;
   final List<AttachmentDraftPayload> attachments;
   final VoidCallback onAttach;
+  final VoidCallback onOpenMarkdownEditor;
+  final VoidCallback onRecordAudio;
+  final VoidCallback onStopRecording;
+  final VoidCallback onCancelRecording;
   final ValueChanged<String> onRemoveAttachment;
   final VoidCallback onSend;
 
@@ -548,10 +560,16 @@ final class _OperatingComposer extends StatelessWidget {
         controller: controller,
         focusNode: focusNode,
         busy: busy,
+        recordingAudio: recordingAudio,
         placeholder: placeholder ??
             context.t.chat.agentConversation.followUpComposerHint,
+        supportsAudioRecording: supportsAudioRecording,
         attachments: attachments,
         onAttach: onAttach,
+        onOpenMarkdownEditor: onOpenMarkdownEditor,
+        onRecordAudio: onRecordAudio,
+        onStopRecording: onStopRecording,
+        onCancelRecording: onCancelRecording,
         onRemoveAttachment: onRemoveAttachment,
         onSend: onSend,
       );
@@ -564,7 +582,7 @@ final class _OperatingComposer extends StatelessWidget {
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius:
-              BorderRadius.circular(AgentOperatingSystemTokens.radiusLg),
+              BorderRadius.circular(AgentOperatingSystemTokens.radiusMd),
           border: Border.all(color: colors.outlineVariant),
           boxShadow: [
             BoxShadow(
@@ -588,19 +606,20 @@ final class _OperatingComposer extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
               ],
-              Row(
-                children: [
-                  IconButton(
-                    key: const ValueKey('chat_attach'),
-                    tooltip: context.t.chat.operating.desktopWorkbench.attach,
-                    onPressed: busy ? null : onAttach,
-                    style: IconButton.styleFrom(
-                      foregroundColor: colors.onSurfaceVariant,
-                      disabledForegroundColor: colors.muted.withOpacity(0.5),
-                    ),
-                    icon: const Icon(Icons.attach_file_rounded),
-                  ),
-                  Expanded(
+              Builder(
+                builder: (context) {
+                  final actions = _ComposerActionButtons(
+                    busy: busy,
+                    recordingAudio: recordingAudio,
+                    focusNode: focusNode,
+                    supportsAudioRecording: supportsAudioRecording,
+                    onAttach: onAttach,
+                    onOpenMarkdownEditor: onOpenMarkdownEditor,
+                    onRecordAudio: onRecordAudio,
+                    foregroundColor: colors.onSurfaceVariant,
+                    disabledForegroundColor: colors.muted.withOpacity(0.5),
+                  );
+                  final input = _ComposerTextInputShell(
                     child: TextField(
                       key: const ValueKey('chat_input'),
                       controller: controller,
@@ -608,11 +627,9 @@ final class _OperatingComposer extends StatelessWidget {
                       minLines: 1,
                       maxLines: 4,
                       textInputAction: TextInputAction.newline,
-                      decoration: InputDecoration(
+                      decoration: _composerTextInputDecoration(
                         hintText: placeholder ??
                             context.t.chat.agentConversation.composerHint,
-                        border: InputBorder.none,
-                        isDense: true,
                         hintStyle: AgentOperatingSystemTokens.bodyMd.copyWith(
                           color: colors.muted,
                         ),
@@ -621,38 +638,31 @@ final class _OperatingComposer extends StatelessWidget {
                         color: colors.onSurface,
                       ),
                     ),
-                  ),
-                  ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: controller,
-                    builder: (context, value, child) {
-                      final enabled = !busy &&
-                          (value.text.trim().isNotEmpty ||
-                              attachments.isNotEmpty);
-                      return SizedBox.square(
-                        dimension: 40,
-                        child: FilledButton(
-                          key: const ValueKey('chat_send'),
-                          style: FilledButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            backgroundColor: colors.primaryContainer,
-                            foregroundColor: colors.onSecondaryContainer,
-                            disabledBackgroundColor:
-                                colors.surfaceContainerHigh,
-                            disabledForegroundColor:
-                                colors.onSurfaceVariant.withOpacity(0.45),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                AgentOperatingSystemTokens.radiusMd,
-                              ),
-                            ),
-                          ),
-                          onPressed: enabled ? onSend : null,
-                          child: const Icon(Icons.send_rounded, size: 20),
-                        ),
-                      );
-                    },
-                  ),
-                ],
+                  );
+                  final send = _OperatingComposerSendButton(
+                    controller: controller,
+                    busy: busy,
+                    hasAttachments: attachments.isNotEmpty,
+                    onSend: onSend,
+                    backgroundColor: colors.primaryContainer,
+                    foregroundColor: colors.onSecondaryContainer,
+                    disabledBackgroundColor: colors.surfaceContainerHigh,
+                    disabledForegroundColor:
+                        colors.onSurfaceVariant.withOpacity(0.45),
+                    icon: Icons.send_rounded,
+                    size: 40,
+                    radius: AgentOperatingSystemTokens.radiusMd,
+                  );
+                  return _ComposerResponsiveControls(
+                    actions: actions,
+                    input: input,
+                    send: send,
+                    recordingAudio: recordingAudio,
+                    onStopRecording: onStopRecording,
+                    onCancelRecording: onCancelRecording,
+                    compactBreakpoint: 500,
+                  );
+                },
               ),
             ],
           ),
@@ -667,9 +677,15 @@ final class _OperatingFollowUpComposer extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.busy,
+    required this.recordingAudio,
     required this.placeholder,
+    required this.supportsAudioRecording,
     required this.attachments,
     required this.onAttach,
+    required this.onOpenMarkdownEditor,
+    required this.onRecordAudio,
+    required this.onStopRecording,
+    required this.onCancelRecording,
     required this.onRemoveAttachment,
     required this.onSend,
   });
@@ -677,9 +693,15 @@ final class _OperatingFollowUpComposer extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
+  final bool recordingAudio;
   final String placeholder;
+  final bool supportsAudioRecording;
   final List<AttachmentDraftPayload> attachments;
   final VoidCallback onAttach;
+  final VoidCallback onOpenMarkdownEditor;
+  final VoidCallback onRecordAudio;
+  final VoidCallback onStopRecording;
+  final VoidCallback onCancelRecording;
   final ValueChanged<String> onRemoveAttachment;
   final VoidCallback onSend;
 
@@ -707,100 +729,20 @@ final class _OperatingFollowUpComposer extends StatelessWidget {
               ),
               const SizedBox(height: 8),
             ],
-            Row(
-              children: [
-                IconButton(
-                  key: const ValueKey('chat_attach'),
-                  tooltip: context.t.chat.operating.desktopWorkbench.attach,
-                  onPressed: busy ? null : onAttach,
-                  style: IconButton.styleFrom(
-                    foregroundColor: colors.onSurfaceVariant,
-                    disabledForegroundColor: colors.muted.withOpacity(0.5),
-                  ),
-                  icon: const Icon(Icons.add_circle_outline_rounded),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: colors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(
-                        AgentOperatingSystemTokens.radiusLg,
-                      ),
-                      border: Border.all(
-                        color: colors.outlineVariant,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            key: const ValueKey('chat_input'),
-                            controller: controller,
-                            focusNode: focusNode,
-                            minLines: 1,
-                            maxLines: 4,
-                            textInputAction: TextInputAction.newline,
-                            decoration: InputDecoration(
-                              hintText: placeholder,
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              hintStyle:
-                                  AgentOperatingSystemTokens.bodyMd.copyWith(
-                                color: colors.muted,
-                              ),
-                            ),
-                            style: AgentOperatingSystemTokens.bodyMd.copyWith(
-                              color: colors.onSurface,
-                            ),
-                          ),
-                        ),
-                        ValueListenableBuilder<TextEditingValue>(
-                          valueListenable: controller,
-                          builder: (context, value, child) {
-                            final enabled = !busy &&
-                                (value.text.trim().isNotEmpty ||
-                                    attachments.isNotEmpty);
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 6),
-                              child: SizedBox.square(
-                                dimension: 32,
-                                child: FilledButton(
-                                  key: const ValueKey('chat_send'),
-                                  style: FilledButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    backgroundColor: colors.secondary,
-                                    foregroundColor: colors.background,
-                                    disabledBackgroundColor:
-                                        colors.surfaceContainerHigh,
-                                    disabledForegroundColor: colors
-                                        .onSurfaceVariant
-                                        .withOpacity(0.45),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                        AgentOperatingSystemTokens.radiusLg,
-                                      ),
-                                    ),
-                                  ),
-                                  onPressed: enabled ? onSend : null,
-                                  child: const Icon(
-                                    Icons.arrow_upward_rounded,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            _OperatingFollowUpComposerInputRow(
+              controller: controller,
+              focusNode: focusNode,
+              busy: busy,
+              recordingAudio: recordingAudio,
+              placeholder: placeholder,
+              supportsAudioRecording: supportsAudioRecording,
+              hasAttachments: attachments.isNotEmpty,
+              onAttach: onAttach,
+              onOpenMarkdownEditor: onOpenMarkdownEditor,
+              onRecordAudio: onRecordAudio,
+              onStopRecording: onStopRecording,
+              onCancelRecording: onCancelRecording,
+              onSend: onSend,
             ),
           ],
         ),

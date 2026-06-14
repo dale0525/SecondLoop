@@ -18,6 +18,7 @@ import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/secretary_runtime_client.dart';
 import '../../core/cloud/secretary_runtime_conversation_sender.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
+import '../../core/platform/app_platform_capability_scope.dart';
 import '../../core/quick_capture/quick_capture_controller.dart';
 import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
@@ -55,10 +56,12 @@ import '../chat/chat_answer_citation_controller.dart';
 import '../chat/chat_answer_evidence_models.dart';
 import '../chat/chat_answer_evidence_parser.dart';
 import '../chat/chat_assistant_message_footer.dart';
+import '../chat/chat_markdown_editor_launcher.dart';
 import '../chat/chat_markdown_link_handler.dart';
 import '../chat/chat_markdown_preview.dart';
 import '../chat/message_deeplink.dart';
 import '../chat/message_viewer_page.dart';
+import 'agent_recorded_audio_capture.dart';
 import 'agent_design_tokens.dart';
 import 'agent_conversation_send.dart';
 import 'agent_status_chip.dart';
@@ -73,6 +76,8 @@ part 'agent_conversation_runtime_pagination.dart';
 part 'agent_conversation_runtime_connection.dart';
 part 'agent_conversation_runtime_helpers.dart';
 part 'agent_operating_top_app_bar.dart';
+part 'agent_conversation_composer_actions.dart';
+part 'agent_conversation_input_actions.dart';
 part 'agent_runtime_media_results.dart';
 part 'agent_runtime_media_result_widgets.dart';
 part 'agent_conversation_layouts.dart';
@@ -95,6 +100,7 @@ final class AgentConversationPage extends StatefulWidget {
     required this.isTabActive,
     this.runtimeConversationSender,
     this.runtimeAgentStateRepository,
+    this.markdownEditorRoutePusher,
     super.key,
   });
 
@@ -102,6 +108,7 @@ final class AgentConversationPage extends StatefulWidget {
   final bool isTabActive;
   final ChatRuntimeConversationSender? runtimeConversationSender;
   final RuntimeAgentStateRepository? runtimeAgentStateRepository;
+  final ChatMarkdownEditorRoutePusher? markdownEditorRoutePusher;
 
   @override
   State<AgentConversationPage> createState() => _AgentConversationPageState();
@@ -113,6 +120,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
   final _focusNode = FocusNode();
   final _scrollController = ScrollController();
   final _messageListBottomKey = GlobalKey();
+  AgentRecordedAudioCapture? _audioCaptureInstance;
   Future<List<Message>>? _messagesFuture;
   Future<List<Todo>>? _tasksFuture;
   Future<List<MemoryPageRecord>>? _memoryPagesFuture;
@@ -147,7 +155,15 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
   final Set<String> _busyApprovalIds = <String>{};
   bool _sending = false;
   bool _thinking = false;
+  bool _recordingAudio = false;
+  Completer<_AgentAudioRecordingSheetAction>? _audioRecordingActionCompleter;
   bool _loadingOlderRuntimeTurns = false;
+
+  bool get _isComposerBusy => _sending || _thinking || _recordingAudio;
+
+  bool get _supportsComposerAudioRecording {
+    return AppPlatformCapabilityScope.of(context).supportsAudioRecording;
+  }
 
   @override
   void initState() {
@@ -185,12 +201,20 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
 
   @override
   void dispose() {
+    final audioActionCompleter = _audioRecordingActionCompleter;
+    if (audioActionCompleter != null && !audioActionCompleter.isCompleted) {
+      audioActionCompleter.complete(_AgentAudioRecordingSheetAction.cancel);
+    }
     final oldEngine = _syncEngine;
     final oldListener = _syncListener;
     if (oldEngine != null && oldListener != null) {
       oldEngine.changes.removeListener(oldListener);
     }
     _quickCaptureController?.removeListener(_onQuickCaptureChanged);
+    final audioCapture = _audioCaptureInstance;
+    if (audioCapture != null) {
+      unawaited(audioCapture.dispose());
+    }
     _controller.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
@@ -399,7 +423,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
   }
 
   void _onQuickCaptureChanged() {
-    if (_sending || _thinking) return;
+    if (_isComposerBusy) return;
     final submission = _quickCaptureController?.consumePendingChatSubmission(
       widget.conversation.id,
     );
@@ -414,7 +438,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
   }
 
   Future<void> _pickAttachments() async {
-    if (_sending || _thinking) return;
+    if (_isComposerBusy) return;
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       withData: true,
@@ -438,6 +462,20 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
     }
     if (drafts.isEmpty) return;
 
+    _appendComposerAttachmentDrafts(drafts);
+  }
+
+  void _setComposerRecordingAudio(bool recording) {
+    if (!mounted || _recordingAudio == recording) return;
+    setState(() {
+      _recordingAudio = recording;
+    });
+  }
+
+  void _appendComposerAttachmentDrafts(
+    List<AttachmentDraftPayload> drafts,
+  ) {
+    if (drafts.isEmpty || !mounted) return;
     setState(() {
       _pendingAttachmentDrafts = dedupeAttachmentDraftPayloads([
         ..._pendingAttachmentDrafts,
@@ -467,7 +505,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
   }
 
   Future<void> _send() async {
-    if (_sending || _thinking) return;
+    if (_isComposerBusy) return;
 
     final text = _controller.text.trim();
     final attachments = List<AttachmentDraftPayload>.from(
@@ -486,7 +524,7 @@ final class _AgentConversationPageState extends State<AgentConversationPage>
     String text, {
     List<AttachmentDraftPayload> attachments = const <AttachmentDraftPayload>[],
   }) async {
-    if (_sending || _thinking) return;
+    if (_isComposerBusy) return;
 
     final normalizedText = text.trim();
     final dedupedAttachments = dedupeAttachmentDraftPayloads(attachments);
