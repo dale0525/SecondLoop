@@ -10,7 +10,7 @@ import { FoundationHeader } from "./Accounts";
 type MemoryProps = { embedded?: boolean; onBack: () => void };
 
 export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [records, setRecords] = useState<MemoryRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -77,29 +77,34 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
   };
 
   return (
-    <Root className="foundation-screen" aria-label="Memory ledger">
-      {embedded ? <header className="product-page-header"><Text className="foundation-kicker" size="1" weight="bold">PERSONAL CONTEXT</Text><Heading as="h1">{t("nav.memory")}</Heading><Text color="gray" size="2">Inspectable, sourced, and forgettable.</Text></header> : <FoundationHeader eyebrow="PERSONAL CONTEXT" onBack={onBack} subtitle="Inspectable, sourced, and forgettable" title="Memory ledger" />}
+    <Root className="foundation-screen" aria-label={t("foundation.memory.title")}>
+      {embedded ? <header className="product-page-header"><Text className="foundation-kicker" size="1" weight="bold">{t("foundation.memory.eyebrow")}</Text><Heading as="h1">{t("nav.memory")}</Heading><Text color="gray" size="2">{t("foundation.memory.subtitle")}</Text></header> : <FoundationHeader
+        eyebrow={t("foundation.memory.eyebrow")}
+        onBack={onBack}
+        subtitle={t("foundation.memory.subtitle")}
+        title={t("foundation.memory.title")}
+      />}
       <div className="memory-toolbar">
         <form onSubmit={submitSearch} role="search">
-          <TextField.Root aria-label="Search committed memories" onChange={(event) => setQuery(event.target.value)} placeholder="Search preferences, people, or projects" value={query}>
+          <TextField.Root aria-label={t("foundation.memory.searchLabel")} onChange={(event) => setQuery(event.target.value)} placeholder={t("foundation.memory.searchPlaceholder")} value={query}>
             <TextField.Slot><Search aria-hidden="true" size={15} /></TextField.Slot>
           </TextField.Root>
         </form>
-        <Button onClick={() => void exportLedger()} variant="soft"><Download aria-hidden="true" size={15} /> Export</Button>
+        <Button onClick={() => void exportLedger()} variant="soft"><Download aria-hidden="true" size={15} /> {t("foundation.memory.export")}</Button>
       </div>
       {error ? <div className="memory-error" role="alert"><ShieldAlert size={16} /> {error}</div> : null}
       <div className="foundation-page-shell memory-layout">
-        <section className="foundation-list-column memory-list" aria-label="Committed memories">
-          <div className="foundation-column-heading"><Text color="gray" size="1" weight="bold">COMMITTED LEDGER</Text><Badge color="gray" radius="full">{records.length}</Badge></div>
-          {loading ? <Flex align="center" gap="2" p="4"><LoaderCircle className="spin" size={16} /><Text color="gray" size="2">Searching scoped memory</Text></Flex> : null}
+        <section className="foundation-list-column memory-list" aria-label={t("foundation.memory.committedMemories")}>
+          <div className="foundation-column-heading"><Text color="gray" size="1" weight="bold">{t("foundation.memory.ledger")}</Text><Badge color="gray" radius="full">{records.length}</Badge></div>
+          {loading ? <Flex align="center" gap="2" p="4"><LoaderCircle className="spin" size={16} /><Text color="gray" size="2">{t("foundation.memory.loading")}</Text></Flex> : null}
           {!loading && !error && records.length === 0 ? (
-            <Card className="foundation-empty"><Flex align="center" direction="column" gap="2"><Brain size={22} /><Text weight="bold">Nothing committed here</Text><Text align="center" color="gray" size="2">Proposals appear only after confirmation. Try a different query or ask the Agent to remember a preference.</Text></Flex></Card>
+            <Card className="foundation-empty"><Flex align="center" direction="column" gap="2"><Brain size={22} /><Text weight="bold">{t("foundation.memory.emptyTitle")}</Text><Text align="center" color="gray" size="2">{t("foundation.memory.emptyDescription")}</Text></Flex></Card>
           ) : null}
           {records.map((record) => (
             <button aria-pressed={selectedId === record.id} className="memory-list-item" key={record.id} onClick={() => { setSelectedId(record.id); setDetailOpen(true); }} type="button">
               <span className="memory-kind">{kindLabel(record.kind)}</span>
               <strong>{record.value.text}</strong>
-              <small>{formatDate(record.updatedAt)} · v{record.version}</small>
+              <small>{formatDate(record.updatedAt, locale)} · v{record.version}</small>
             </button>
           ))}
         </section>
@@ -111,8 +116,8 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
         <Dialog.Portal>
           <Dialog.Overlay className="foundation-dialog-overlay memory-mobile-detail" />
           <Dialog.Content className="foundation-dialog-content memory-mobile-detail memory-mobile-detail-content">
-            <Dialog.Title className="sr-only">Memory details</Dialog.Title>
-            <Dialog.Close asChild><button aria-label="Close memory details" className="dialog-close mobile-detail-close" type="button"><X size={16} /></button></Dialog.Close>
+            <Dialog.Title className="sr-only">{t("foundation.memory.details")}</Dialog.Title>
+            <Dialog.Close asChild><button aria-label={t("foundation.memory.closeDetails")} className="dialog-close mobile-detail-close" type="button"><X size={16} /></button></Dialog.Close>
             {selected ? <MemoryDetail onForget={() => { setDetailOpen(false); setConfirmOpen(true); }} record={selected} /> : null}
           </Dialog.Content>
         </Dialog.Portal>
@@ -121,9 +126,9 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
         <Dialog.Portal>
           <Dialog.Overlay className="foundation-dialog-overlay" />
           <Dialog.Content className="foundation-dialog-content">
-            <Flex align="start" justify="between" gap="3"><div><Dialog.Title className="foundation-dialog-title">Forget this memory?</Dialog.Title><Dialog.Description className="foundation-dialog-description">The value and evidence will be scrubbed and removed from derived search. A non-sensitive tombstone remains for audit.</Dialog.Description></div><Dialog.Close asChild><button aria-label="Close confirmation" className="dialog-close" type="button"><X size={16} /></button></Dialog.Close></Flex>
+            <Flex align="start" justify="between" gap="3"><div><Dialog.Title className="foundation-dialog-title">{t("foundation.memory.forgetTitle")}</Dialog.Title><Dialog.Description className="foundation-dialog-description">{t("foundation.memory.forgetDescription")}</Dialog.Description></div><Dialog.Close asChild><button aria-label={t("foundation.memory.closeConfirmation")} className="dialog-close" type="button"><X size={16} /></button></Dialog.Close></Flex>
             <Card className="forget-preview"><Text size="2">{selected?.value.text}</Text></Card>
-            <Flex className="forget-dialog-actions" justify="end"><Dialog.Close asChild><Button disabled={forgetting} variant="soft">Keep memory</Button></Dialog.Close><Button color="red" disabled={forgetting} onClick={() => void forget()}><Trash2 size={15} />{forgetting ? "Forgetting…" : "Forget permanently"}</Button></Flex>
+            <Flex className="forget-dialog-actions" justify="end"><Dialog.Close asChild><Button disabled={forgetting} variant="soft">{t("foundation.memory.keep")}</Button></Dialog.Close><Button color="red" disabled={forgetting} onClick={() => void forget()}><Trash2 size={15} />{forgetting ? t("foundation.memory.forgetting") : t("foundation.memory.forgetPermanently")}</Button></Flex>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -132,14 +137,15 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
 }
 
 function MemoryDetail({ onForget, record }: { onForget: () => void; record: MemoryRecord }): JSX.Element {
+  const { locale, t } = useI18n();
   return (
     <Card className="foundation-detail-card memory-detail-card" size="4">
       <Flex align="start" justify="between" gap="4" wrap="wrap"><div><Text className="foundation-kicker" size="1" weight="bold">{kindLabel(record.kind)}</Text><Heading as="h2" mt="2" size="6">{record.value.text}</Heading></div><Badge color={sensitivityColor(record.sensitivity)} radius="full">{record.sensitivity}</Badge></Flex>
       <div className="foundation-rule" />
-      <dl className="foundation-facts"><Fact label="Confidence" value={`${Math.round(record.confidence / 100)}%`} /><Fact label="Version" value={`v${record.version}`} /><Fact label="Retention" value={record.retention.mode} /><Fact label="Updated" value={formatDate(record.updatedAt)} /></dl>
-      {Object.keys(record.value.attributes).length > 0 ? <section className="memory-section"><Text size="2" weight="bold">Attributes</Text>{Object.entries(record.value.attributes).map(([key, value]) => <div className="memory-attribute" key={key}><span>{key}</span><strong>{value}</strong></div>)}</section> : null}
-      <section className="memory-section"><Text size="2" weight="bold">Evidence &amp; provenance</Text>{record.evidence.map((evidence, index) => <div className="evidence-row" key={`${evidence.observedAt}-${index}`}><span className="evidence-mark" aria-hidden="true" /><div><strong>{sourceLabel(evidence.source)}</strong><small>{formatDate(evidence.observedAt)}{evidence.sourceId ? ` · ${evidence.sourceId}` : ""}</small>{evidence.excerpt ? <p>“{evidence.excerpt}”</p> : null}</div></div>)}</section>
-      <Flex align="center" justify="between" gap="3" mt="5" wrap="wrap"><Text color="gray" size="2">ID {record.id.slice(0, 8)}…</Text><Button color="red" onClick={onForget} variant="soft"><Trash2 size={15} /> Forget</Button></Flex>
+      <dl className="foundation-facts"><Fact label={t("foundation.memory.confidence")} value={`${Math.round(record.confidence / 100)}%`} /><Fact label={t("foundation.memory.version")} value={`v${record.version}`} /><Fact label={t("foundation.memory.retention")} value={record.retention.mode} /><Fact label={t("foundation.memory.updated")} value={formatDate(record.updatedAt, locale)} /></dl>
+      {Object.keys(record.value.attributes).length > 0 ? <section className="memory-section"><Text size="2" weight="bold">{t("foundation.memory.attributes")}</Text>{Object.entries(record.value.attributes).map(([key, value]) => <div className="memory-attribute" key={key}><span>{key}</span><strong>{value}</strong></div>)}</section> : null}
+      <section className="memory-section"><Text size="2" weight="bold">{t("foundation.memory.evidence")}</Text>{record.evidence.map((evidence, index) => <div className="evidence-row" key={`${evidence.observedAt}-${index}`}><span className="evidence-mark" aria-hidden="true" /><div><strong>{sourceLabel(evidence.source)}</strong><small>{formatDate(evidence.observedAt, locale)}{evidence.sourceId ? ` · ${evidence.sourceId}` : ""}</small>{evidence.excerpt ? <p>“{evidence.excerpt}”</p> : null}</div></div>)}</section>
+      <Flex align="center" justify="between" gap="3" mt="5" wrap="wrap"><Text color="gray" size="2">ID {record.id.slice(0, 8)}…</Text><Button color="red" onClick={onForget} variant="soft"><Trash2 size={15} /> {t("foundation.memory.forget")}</Button></Flex>
     </Card>
   );
 }
@@ -147,6 +153,6 @@ function MemoryDetail({ onForget, record }: { onForget: () => void; record: Memo
 function Fact({ label, value }: { label: string; value: string }): JSX.Element { return <div><dt>{label}</dt><dd>{value}</dd></div>; }
 function kindLabel(value: string): string { return value.split(".").map((part) => part.replaceAll("_", " ")).join(" / "); }
 function sourceLabel(value: string): string { return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase()); }
-function formatDate(value: string): string { return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
+function formatDate(value: string, locale: string): string { return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
 function sensitivityColor(value: string): "gray" | "amber" | "red" | "blue" { return value === "restricted" ? "red" : value === "sensitive" ? "amber" : value === "personal" ? "blue" : "gray"; }
 function errorMessage(value: unknown): string { return value instanceof Error ? value.message : "Memory request failed"; }

@@ -11,10 +11,12 @@ import {
   listMailAccounts
 } from "../api";
 import { AppIconButton } from "../components/AppIconButton";
+import { useI18n } from "../i18n/I18nProvider";
 
 type AccountsProps = { embedded?: boolean; onBack: () => void };
 
 export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Element {
+  const { t } = useI18n();
   const [accounts, setAccounts] = useState<MailAccount[]>([]);
   const [statuses, setStatuses] = useState<Record<string, MailAccountStatus>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -65,17 +67,26 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
   };
 
   return (
-    <Root className="foundation-screen" aria-label="Mail accounts">
-      {!embedded ? <FoundationHeader eyebrow="TRUSTED HOST" onBack={onBack} subtitle="Credentials never enter the renderer" title="Mail accounts" /> : null}
+    <Root className="foundation-screen" aria-label={t("foundation.accounts.title")}>
+      {!embedded ? <FoundationHeader
+        eyebrow={t("foundation.accounts.eyebrow")}
+        onBack={onBack}
+        subtitle={t("foundation.accounts.subtitle")}
+        title={t("foundation.accounts.title")}
+      /> : null}
       <div className="foundation-page-shell accounts-layout">
-        <aside className="foundation-list-column" aria-label="Available accounts">
+        <aside className="foundation-list-column" aria-label={t("foundation.accounts.available")}>
           <div className="foundation-column-heading">
-            <Text color="gray" size="1" weight="bold">ACCOUNTS</Text>
+            <Text color="gray" size="1" weight="bold">{t("foundation.accounts.list")}</Text>
             <Badge color="gray" radius="full">{accounts.length}</Badge>
           </div>
-          {loading ? <LoadingRow label="Reading account registry" /> : null}
+          {loading ? <LoadingRow label={t("foundation.accounts.loading")} /> : null}
           {!loading && accounts.length === 0 && !error ? (
-            <EmptyCard icon={<Mail size={20} />} title="No Mail account" text="Enable a conforming Mail connector in the Agent App manifest." />
+            <EmptyCard
+              icon={<Mail size={20} />}
+              text={t("foundation.accounts.emptyDescription")}
+              title={t("foundation.accounts.emptyTitle")}
+            />
           ) : null}
           {accounts.map((account) => {
             const itemStatus = statuses[account.id];
@@ -102,7 +113,7 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
                 <Flex align="center" gap="3">
                   <span className="account-monogram large" aria-hidden="true">{selected.displayName.slice(0, 1)}</span>
                   <div>
-                    <Text color="gray" size="1" weight="bold">ACTIVE ACCOUNT</Text>
+                    <Text color="gray" size="1" weight="bold">{t("foundation.accounts.active")}</Text>
                     <Heading as="h2" mt="1" size="6">{selected.displayName}</Heading>
                     <Text color="gray" size="2">{selected.primaryAddress.address}</Text>
                   </div>
@@ -111,14 +122,14 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
               </Flex>
               <div className="foundation-rule" />
               <dl className="foundation-facts">
-                <Fact label="Connector contract" value="agentweave-mail / v1" />
-                <Fact label="Account reference" value={selected.id} />
-                <Fact label="Credential access" value="Host vault only" />
-                <Fact label="Send policy" value="Exact preview approval" />
+                <Fact label={t("foundation.accounts.connectorContract")} value="agentweave-mail / v1" />
+                <Fact label={t("foundation.accounts.accountReference")} value={selected.id} />
+                <Fact label={t("foundation.accounts.credentialAccess")} value={t("foundation.accounts.hostVaultOnly")} />
+                <Fact label={t("foundation.accounts.sendPolicy")} value={t("foundation.accounts.exactPreviewApproval")} />
               </dl>
               {status.detail ? <Text className="foundation-note" size="2">{status.detail}</Text> : null}
               <Flex align="center" justify="between" gap="3" mt="5" wrap="wrap">
-                <Text color="gray" size="2">Connection changes are performed by the trusted host.</Text>
+                <Text color="gray" size="2">{t("foundation.accounts.hostChangeNotice")}</Text>
                 <Button
                   color={status.state === "connected" ? "red" : "green"}
                   disabled={busy}
@@ -126,7 +137,9 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
                   variant={status.state === "connected" ? "soft" : "solid"}
                 >
                   {busy ? <LoaderCircle className="spin" size={15} /> : status.state === "connected" ? <Unplug size={15} /> : <Plug size={15} />}
-                  {status.state === "connected" ? "Disconnect" : "Connect"}
+                  {status.state === "connected"
+                    ? t("foundation.accounts.disconnect")
+                    : t("foundation.accounts.connect")}
                 </Button>
               </Flex>
             </Card>
@@ -138,9 +151,10 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
 }
 
 export function FoundationHeader({ eyebrow, onBack, subtitle, title }: { eyebrow: string; onBack: () => void; subtitle: string; title: string }): JSX.Element {
+  const { t } = useI18n();
   return (
     <header className="foundation-header">
-      <AppIconButton label="Back to settings" onClick={onBack}><ArrowLeft aria-hidden="true" size={18} /></AppIconButton>
+      <AppIconButton label={t("common.backToSettings")} onClick={onBack}><ArrowLeft aria-hidden="true" size={18} /></AppIconButton>
       <div><Text className="foundation-kicker" size="1" weight="bold">{eyebrow}</Text><Heading as="h1" size="6">{title}</Heading><Text color="gray" size="2">{subtitle}</Text></div>
       <span className="top-bar-spacer" aria-hidden="true" />
     </header>
@@ -148,8 +162,9 @@ export function FoundationHeader({ eyebrow, onBack, subtitle, title }: { eyebrow
 }
 
 function AccountStateBadge({ state }: { state: MailAccountStatus["state"] }): JSX.Element {
+  const { t } = useI18n();
   const connected = state === "connected";
-  return <Badge color={connected ? "green" : state === "unavailable" ? "red" : "amber"} radius="full" size="2">{connected ? "Connected" : state === "unavailable" ? "Unavailable" : "Sign-in required"}</Badge>;
+  return <Badge color={connected ? "green" : state === "unavailable" ? "red" : "amber"} radius="full" size="2">{connected ? t("foundation.accounts.connected") : state === "unavailable" ? t("foundation.accounts.unavailable") : t("foundation.accounts.signInRequired")}</Badge>;
 }
 
 function StatusDot({ state }: { state?: MailAccountStatus["state"] }): JSX.Element {
@@ -169,7 +184,8 @@ function EmptyCard({ icon, text, title }: { icon: React.ReactNode; text: string;
 }
 
 function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }): JSX.Element {
-  return <Card className="foundation-error"><Flex align="start" gap="3"><CircleAlert aria-hidden="true" size={18} /><div><Text as="div" weight="bold">Foundation service unavailable</Text><Text as="div" color="gray" size="2">{message}</Text><Button mt="3" onClick={onRetry} variant="soft">Try again</Button></div></Flex></Card>;
+  const { t } = useI18n();
+  return <Card className="foundation-error"><Flex align="start" gap="3"><CircleAlert aria-hidden="true" size={18} /><div><Text as="div" weight="bold">{t("foundation.serviceUnavailable")}</Text><Text as="div" color="gray" size="2">{message}</Text><Button mt="3" onClick={onRetry} variant="soft">{t("foundation.tryAgain")}</Button></div></Flex></Card>;
 }
 
 function errorMessage(value: unknown): string {

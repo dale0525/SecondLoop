@@ -12,6 +12,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import { FoundationHeader } from "./Accounts";
 
 type FoundationActionsProps = { embedded?: boolean; onBack: () => void };
+type Translate = ReturnType<typeof useI18n>["t"];
 
 export function FoundationActions({ embedded = false, onBack }: FoundationActionsProps): JSX.Element {
   const { t } = useI18n();
@@ -80,12 +81,12 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
   };
 
   return (
-    <Root className="foundation-screen" aria-label="Foundation actions">
-      {embedded ? <header className="product-page-header"><Text className="foundation-kicker" size="1" weight="bold">TRUSTED ACTIONS</Text><Heading as="h1">{t("nav.actions")}</Heading><Text color="gray" size="2">Authoritative previews and durable delivery state.</Text></header> : <FoundationHeader
-        eyebrow="TRUSTED ACTIONS"
+    <Root className="foundation-screen" aria-label={t("foundation.actions.title")}>
+      {embedded ? <header className="product-page-header"><Text className="foundation-kicker" size="1" weight="bold">{t("foundation.actions.eyebrow")}</Text><Heading as="h1">{t("nav.actions")}</Heading><Text color="gray" size="2">{t("foundation.actions.subtitle")}</Text></header> : <FoundationHeader
+        eyebrow={t("foundation.actions.eyebrow")}
         onBack={onBack}
-        subtitle="Authoritative previews and durable delivery state"
-        title="Action desk"
+        subtitle={t("foundation.actions.subtitle")}
+        title={t("foundation.actions.title")}
       />}
       {error ? (
         <div className="memory-error" role="alert">
@@ -93,24 +94,24 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
         </div>
       ) : null}
       <div className="foundation-page-shell actions-layout">
-        <section className="foundation-list-column" aria-label="Action approvals">
+        <section className="foundation-list-column" aria-label={t("foundation.actions.approvals")}>
           <div className="foundation-column-heading">
-            <Text color="gray" size="1" weight="bold">ACTION LEDGER</Text>
+            <Text color="gray" size="1" weight="bold">{t("foundation.actions.ledger")}</Text>
             <Badge color="gray" radius="full">{actions.length}</Badge>
           </div>
           {loading ? (
             <Flex align="center" gap="2" p="4">
               <LoaderCircle className="spin" size={16} />
-              <Text color="gray" size="2">Reading durable actions</Text>
+              <Text color="gray" size="2">{t("foundation.actions.loading")}</Text>
             </Flex>
           ) : null}
           {!loading && !error && actions.length === 0 ? (
             <Card className="foundation-empty">
               <Flex align="center" direction="column" gap="2">
                 <MailCheck size={22} />
-                <Text weight="bold">No actions awaiting review</Text>
+                <Text weight="bold">{t("foundation.actions.emptyTitle")}</Text>
                 <Text align="center" color="gray" size="2">
-                  Mail sends appear here only after an authoritative preview is persisted.
+                  {t("foundation.actions.emptyDescription")}
                 </Text>
               </Flex>
             </Card>
@@ -123,7 +124,7 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
               onClick={() => select(item)}
               type="button"
             >
-              <span className="memory-kind">{actionStatusLabel(item)}</span>
+              <span className="memory-kind">{actionStatusLabel(item, t)}</span>
               <strong>{item.preview?.subject || item.approval.binding.action_name}</strong>
               <small>{item.approval.binding.resource_target}</small>
             </button>
@@ -144,10 +145,10 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
         <Dialog.Portal>
           <Dialog.Overlay className="foundation-dialog-overlay actions-mobile-detail" />
           <Dialog.Content className="foundation-dialog-content actions-mobile-detail memory-mobile-detail-content">
-            <Dialog.Title className="sr-only">Action details</Dialog.Title>
+            <Dialog.Title className="sr-only">{t("foundation.actions.details")}</Dialog.Title>
             <Dialog.Close asChild>
               <button
-                aria-label="Close action details"
+                aria-label={t("foundation.actions.closeDetails")}
                 className="dialog-close mobile-detail-close"
                 type="button"
               >
@@ -180,17 +181,18 @@ function ActionDetail({
   onReject: () => void;
   resolving: boolean;
 }): JSX.Element {
+  const { t } = useI18n();
   const preview = item.preview;
   const pending = item.approval.status === "pending" && item.action.status === "waiting_approval";
   return (
     <Card className="foundation-detail-card action-detail-card" size="4">
       <Flex align="start" justify="between" gap="4" wrap="wrap">
         <div>
-          <Text className="foundation-kicker" size="1" weight="bold">MAIL SEND</Text>
-          <Heading as="h2" mt="2" size="6">{preview?.subject || "External action"}</Heading>
+          <Text className="foundation-kicker" size="1" weight="bold">{t("foundation.actions.mailSend")}</Text>
+          <Heading as="h2" mt="2" size="6">{preview?.subject || t("foundation.actions.externalAction")}</Heading>
         </div>
         <Badge color={pending ? "amber" : statusColor(item.action.status)} radius="full">
-          {actionStatusLabel(item)}
+          {actionStatusLabel(item, t)}
         </Badge>
       </Flex>
       <div className="foundation-rule" />
@@ -200,18 +202,18 @@ function ActionDetail({
       </Text>
       {preview ? (
         <dl className="mail-preview-grid">
-          <PreviewFact label="Account" value={preview.accountId} />
-          <PreviewFact label="From" value={formatAddress(preview.from)} />
-          <PreviewFact label="To" value={formatAddresses(preview.to)} />
-          <PreviewFact label="CC / BCC" value={formatAddresses([...preview.cc, ...preview.bcc]) || "None"} />
-          <PreviewFact label="Draft revision" value={`v${preview.draftRevision}`} />
-          <PreviewFact label="Attachments" value={String(preview.attachments.length)} />
+          <PreviewFact label={t("foundation.actions.account")} value={preview.accountId} />
+          <PreviewFact label={t("foundation.actions.from")} value={formatAddress(preview.from)} />
+          <PreviewFact label={t("foundation.actions.to")} value={formatAddresses(preview.to)} />
+          <PreviewFact label={t("foundation.actions.ccBcc")} value={formatAddresses([...preview.cc, ...preview.bcc]) || t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.draftRevision")} value={`v${preview.draftRevision}`} />
+          <PreviewFact label={t("foundation.actions.attachments")} value={String(preview.attachments.length)} />
         </dl>
       ) : null}
       <section className="action-hashes">
-        <Text size="2" weight="bold">Immutable binding</Text>
-        <HashFact label="Arguments" value={item.action.arguments_sha256} />
-        {preview ? <HashFact label="Preview" value={preview.previewHash} /> : null}
+        <Text size="2" weight="bold">{t("foundation.actions.immutableBinding")}</Text>
+        <HashFact label={t("foundation.actions.arguments")} value={item.action.arguments_sha256} />
+        {preview ? <HashFact label={t("foundation.actions.preview")} value={preview.previewHash} /> : null}
       </section>
       {item.action.last_error ? (
         <Text className="action-error-detail" color="red" size="2">
@@ -221,15 +223,15 @@ function ActionDetail({
       {pending ? (
         <div className="action-decision-row">
           <Button disabled={resolving} onClick={onReject} variant="soft">
-            <XCircle size={15} /> Reject
+            <XCircle size={15} /> {t("foundation.actions.reject")}
           </Button>
           <Button disabled={resolving} onClick={onApprove}>
-            <Check size={15} /> {resolving ? "Applying…" : "Approve once"}
+            <Check size={15} /> {resolving ? t("foundation.actions.applying") : t("foundation.actions.approveOnce")}
           </Button>
         </div>
       ) : (
         <Text className="action-terminal-note" color="gray" size="2">
-          This action is immutable and no longer accepts a decision.
+          {t("foundation.actions.terminalNote")}
         </Text>
       )}
     </Card>
@@ -252,9 +254,11 @@ function formatAddresses(addresses: Array<{ name?: string | null; address: strin
   return addresses.map(formatAddress).join(", ");
 }
 
-function actionStatusLabel(item: PendingFoundationAction): string {
-  if (item.approval.status === "pending") return "Awaiting approval";
-  return item.action.status.replaceAll("_", " ");
+function actionStatusLabel(item: PendingFoundationAction, t: Translate): string {
+  if (item.approval.status === "pending") return t("foundation.actions.status.awaitingApproval");
+  const key = `foundation.actions.status.${item.action.status}`;
+  const localized = t(key);
+  return localized === key ? item.action.status.replaceAll("_", " ") : localized;
 }
 
 function statusColor(status: string): "gray" | "green" | "red" | "amber" {
