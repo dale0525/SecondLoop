@@ -3,15 +3,30 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { registerApprovalWindowController } from "../src/main/approvalWindow";
-import electronBuildConfig from "../vite.electron.config";
+import { getElectronBuildConfig } from "../vite.electron.config";
 import rendererConfig from "../vite.config";
 
 const APPROVAL_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 describe("independent approval window", () => {
   it("preserves runtime credentials and file-safe renderer assets in production bundles", () => {
-    expect(electronBuildConfig).toMatchObject({
-      define: { "process.env": "process.env" }
+    expect(getElectronBuildConfig("electron-main")).toMatchObject({
+      define: { "process.env": "process.env" },
+      build: {
+        emptyOutDir: true,
+        rollupOptions: { output: { entryFileNames: "main.cjs" } },
+      },
+    });
+    expect(getElectronBuildConfig("electron-preload")).toMatchObject({
+      build: {
+        emptyOutDir: false,
+        rollupOptions: {
+          output: {
+            entryFileNames: "preload.cjs",
+            inlineDynamicImports: true,
+          },
+        },
+      },
     });
     expect(rendererConfig).toMatchObject({ base: "./" });
   });

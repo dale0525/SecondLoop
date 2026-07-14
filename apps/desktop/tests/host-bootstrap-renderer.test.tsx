@@ -98,12 +98,46 @@ describe("trusted Renderer bootstrap", () => {
       .mockRejectedValueOnce(new Error("sidecar starting"))
       .mockResolvedValueOnce(discovery);
     window.agentWeave!.hostBootstrap = { load };
+    const ensureRunning = vi.fn().mockResolvedValue({
+      schemaVersion: 1,
+      mode: "managed",
+      state: "ready",
+      attempt: 2,
+      canEnsureRunning: false,
+      lastExit: null,
+    });
+    window.agentWeave!.sidecar = {
+      ensureRunning,
+      status: vi.fn(),
+    };
     window.history.replaceState(null, "", "/#settings");
     render(<App />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
 
     expect(await screen.findByText("Trusted App: Secretary 0.1.0")).toBeInTheDocument();
+    expect(ensureRunning).toHaveBeenCalledOnce();
     expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps bootstrap unavailable when sidecar recovery fails", async () => {
+    installHostBootstrap();
+    const load = vi.fn().mockRejectedValue(new Error("sidecar unavailable"));
+    window.agentWeave!.hostBootstrap = { load };
+    const ensureRunning = vi.fn().mockRejectedValue(new Error("launch failed"));
+    window.agentWeave!.sidecar = {
+      ensureRunning,
+      status: vi.fn(),
+    };
+    window.history.replaceState(null, "", "/#settings");
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Trusted App configuration is unavailable",
+    );
+    expect(ensureRunning).toHaveBeenCalledOnce();
+    expect(load).toHaveBeenCalledOnce();
   });
 });

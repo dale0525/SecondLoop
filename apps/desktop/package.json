@@ -6,8 +6,8 @@
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
-    "build": "vite build && vite build --config vite.electron.config.ts",
-    "build:electron": "vite build --config vite.electron.config.ts",
+    "build": "vite build && npm run build:electron",
+    "build:electron": "vite build --config vite.electron.config.ts --mode electron-main && vite build --config vite.electron.config.ts --mode electron-preload && vite build --config vite.electron.config.ts --mode electron-approval-preload && node scripts/check-preload-bundles.mjs",
     "dev": "vite",
     "start": "electron .",
     "test": "vitest run"

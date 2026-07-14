@@ -1,27 +1,47 @@
 import { resolve } from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, type UserConfig } from "vite";
 
-export default defineConfig({
-  define: {
-    "process.env": "process.env"
+const targets = {
+  "electron-main": {
+    clean: true,
+    input: "src/main/electronMain.ts",
+    output: "main.cjs",
   },
-  build: {
-    emptyOutDir: true,
-    minify: false,
-    outDir: "dist-electron",
-    rollupOptions: {
-      external: ["electron", "node:fs", "node:path", "node:url"],
-      input: {
-        "approval-preload": resolve(__dirname, "src/preload/approval.ts"),
-        main: resolve(__dirname, "src/main/electronMain.ts"),
-        preload: resolve(__dirname, "src/preload/index.ts")
-      },
-      output: {
-        chunkFileNames: "chunks/[name]-[hash].cjs",
-        entryFileNames: "[name].cjs",
-        format: "cjs"
-      }
+  "electron-preload": {
+    clean: false,
+    input: "src/preload/index.ts",
+    output: "preload.cjs",
+  },
+  "electron-approval-preload": {
+    clean: false,
+    input: "src/preload/approval.ts",
+    output: "approval-preload.cjs",
+  },
+} as const;
+
+export function getElectronBuildConfig(mode: string): UserConfig {
+  const target = targets[mode as keyof typeof targets];
+  if (!target) throw new Error(`Unsupported Electron build mode: ${mode}`);
+  return {
+    define: {
+      "process.env": "process.env"
     },
-    target: "node20"
-  }
-});
+    build: {
+      emptyOutDir: target.clean,
+      minify: false,
+      outDir: "dist-electron",
+      target: "node20",
+      rollupOptions: {
+        external: ["electron", "node:child_process", "node:fs", "node:path", "node:url"],
+        input: resolve(__dirname, target.input),
+        output: {
+          entryFileNames: target.output,
+          format: "cjs",
+          inlineDynamicImports: true,
+        }
+      }
+    }
+  };
+}
+
+export default defineConfig(({ mode }) => getElectronBuildConfig(mode));

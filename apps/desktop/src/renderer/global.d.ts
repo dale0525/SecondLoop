@@ -2,6 +2,7 @@
 
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
 import type { AgentAppHostDiscovery } from "../shared/hostBootstrap";
+import type { SidecarStatus } from "../shared/sidecarStatus";
 
 export {};
 
@@ -13,6 +14,10 @@ declare global {
     agentWeave?: {
       hostBootstrap?: {
         load(): Promise<AgentAppHostDiscovery>;
+      };
+      sidecar?: {
+        ensureRunning(): Promise<SidecarStatus>;
+        status(): Promise<SidecarStatus>;
       };
       owner: {
         principal(): Promise<unknown>;

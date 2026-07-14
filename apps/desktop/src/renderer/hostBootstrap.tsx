@@ -38,7 +38,19 @@ export function HostBootstrapProvider({ children }: { children: ReactNode }): JS
   const [attempt, setAttempt] = useState(0);
   const [discovery, setDiscovery] = useState<AgentAppHostDiscovery | null>(null);
   const [status, setStatus] = useState<HostBootstrapStatus>("loading");
-  const reload = useCallback(() => setAttempt((current) => current + 1), []);
+  const reload = useCallback(() => {
+    setDiscovery(null);
+    setStatus("loading");
+    const sidecar = window.agentWeave?.sidecar;
+    if (!sidecar) {
+      setAttempt((current) => current + 1);
+      return;
+    }
+    void Promise.resolve()
+      .then(() => sidecar.ensureRunning())
+      .then(() => setAttempt((current) => current + 1))
+      .catch(() => setStatus("unavailable"));
+  }, []);
 
   useEffect(() => {
     let active = true;

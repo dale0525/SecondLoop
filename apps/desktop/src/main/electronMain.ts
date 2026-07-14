@@ -8,15 +8,37 @@ import { registerHostBootstrapController } from "./hostBootstrapController";
 import { registerModelSettingsController } from "./modelSettingsController";
 import { startDesktopNotificationWorker } from "./notificationWorker";
 import { configureRequesterWindowSecurity } from "./requesterWindowSecurity";
+import {
+  createDesktopSidecarController,
+  installSidecarShutdownGate,
+  registerSidecarController,
+} from "./sidecarController";
+import { resolveDesktopSidecar } from "./sidecarRuntime";
 
 let mainWindow: BrowserWindow | null = null;
 let disposeApproval: (() => void) | null = null;
 let disposeModelSettings: (() => void) | null = null;
 let disposeHostBootstrap: (() => void) | null = null;
 let disposeNotifications: (() => void) | null = null;
+let disposeSidecar: (() => void) | null = null;
 
 app.whenReady().then(async () => {
   const rendererBase = process.env.AGENTWEAVE_DESKTOP_URL;
+  const sidecar = createDesktopSidecarController(resolveDesktopSidecar({
+    appPath: app.getAppPath(),
+    env: process.env,
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    userDataPath: app.getPath("userData"),
+  }), {
+    log: (stream, message) => console.log(`[sidecar:${stream}] ${message}`),
+  });
+  installSidecarShutdownGate({
+    app,
+    controller: sidecar,
+    onError: () => console.error("Failed to stop the managed sidecar"),
+  });
+  await sidecar.start();
   mainWindow = new BrowserWindow({
     ...getDesktopWindowConfig(),
     webPreferences: {
@@ -36,6 +58,11 @@ app.whenReady().then(async () => {
     trustedUrl: mainUrl,
     webContents: mainWindow.webContents
   });
+  disposeSidecar = registerSidecarController({
+    controller: sidecar,
+    ipcMain,
+    requesterWebContents: mainWindow.webContents,
+  });
   disposeApproval = registerApprovalWindowController({
     approvalPreload: path.join(__dirname, "approval-preload.cjs"),
     approvalUrl,
@@ -47,13 +74,13 @@ app.whenReady().then(async () => {
     ipcMain,
     requesterWebContents: mainWindow.webContents,
     safeStorage,
-    serverBaseUrl: process.env.AGENTWEAVE_SERVER_URL,
+    serverBaseUrl: sidecar.baseUrl,
     storagePath: path.join(app.getPath("userData"), "model-settings.v1.json")
   });
   disposeHostBootstrap = registerHostBootstrapController({
     ipcMain,
     requesterWebContents: mainWindow.webContents,
-    serverBaseUrl: process.env.AGENTWEAVE_SERVER_URL
+    serverBaseUrl: sidecar.baseUrl
   });
   disposeNotifications = startDesktopNotificationWorker({
     createNotification: (options) => {
@@ -67,7 +94,7 @@ app.whenReady().then(async () => {
       };
     },
     isSupported: () => Notification.isSupported(),
-    serverBaseUrl: process.env.AGENTWEAVE_SERVER_URL
+    serverBaseUrl: sidecar.baseUrl
   });
   await mainWindow.loadURL(mainUrl);
 });
@@ -81,6 +108,8 @@ app.on("window-all-closed", () => {
   disposeHostBootstrap = null;
   disposeNotifications?.();
   disposeNotifications = null;
+  disposeSidecar?.();
+  disposeSidecar = null;
   mainWindow = null;
   if (process.platform !== "darwin") app.quit();
 });

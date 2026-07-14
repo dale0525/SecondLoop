@@ -4,6 +4,12 @@ import {
   HOST_BOOTSTRAP_LOAD_CHANNEL,
   type AgentAppHostDiscovery,
 } from "../shared/hostBootstrap";
+import {
+  parseSidecarStatus,
+  SIDECAR_ENSURE_RUNNING_CHANNEL,
+  SIDECAR_STATUS_CHANNEL,
+  type SidecarStatus,
+} from "../shared/sidecarStatus";
 import { createOwnerTransport } from "./ownerTransport";
 
 type DesktopRuntimeInfo = {
@@ -15,6 +21,10 @@ export type DesktopPreloadApi = {
   getRuntimeInfo: () => DesktopRuntimeInfo;
   hostBootstrap: {
     load: () => Promise<AgentAppHostDiscovery>;
+  };
+  sidecar: {
+    ensureRunning: () => Promise<SidecarStatus>;
+    status: () => Promise<SidecarStatus>;
   };
   owner: ReturnType<typeof createOwnerTransport>;
   approval: {
@@ -42,6 +52,14 @@ export const desktopPreloadApi: DesktopPreloadApi = Object.freeze({
   hostBootstrap: Object.freeze({
     load: () =>
       ipcRenderer.invoke(HOST_BOOTSTRAP_LOAD_CHANNEL) as Promise<AgentAppHostDiscovery>
+  }),
+  sidecar: Object.freeze({
+    ensureRunning: async () => parseSidecarStatus(
+      await ipcRenderer.invoke(SIDECAR_ENSURE_RUNNING_CHANNEL),
+    ),
+    status: async () => parseSidecarStatus(
+      await ipcRenderer.invoke(SIDECAR_STATUS_CHANNEL),
+    ),
   }),
   owner,
   approval: Object.freeze({
