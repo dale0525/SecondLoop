@@ -14,7 +14,7 @@ use model_gateway::{
     provider::{EndpointType, ProviderProfile},
     responses::GatewayHttpClient,
 };
-use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 const DEFAULT_DATABASE_URL: &str = "sqlite://agentweave.db?mode=rwc";
 const DEFAULT_SKILLS_ROOT: &str = "skills";
@@ -139,13 +139,14 @@ async fn main() -> anyhow::Result<()> {
     };
     let state = state.with_default_automation(&automation_storage).await?;
     let state = Arc::new(state.with_skills_root(skills_root.clone()));
-    let app = if std::env::var("AGENTWEAVE_DEV_API").as_deref() == Ok("1") {
-        api::router_with_dev_routes(state)
-    } else {
-        api::router(state)
-    };
-    let addr = SocketAddr::from(([127, 0, 0, 1], 49321));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let transport = agent_server::local_transport::prepare_from_environment().await?;
+    let app = api::router_for_transport(
+        state,
+        std::env::var("AGENTWEAVE_DEV_API").as_deref() == Ok("1"),
+        transport.auth(),
+    );
+    let addr = transport.address();
+    let listener = transport.into_listener();
 
     let scheduler_cancellation = tokio_util::sync::CancellationToken::new();
     let scheduler_task = if std::env::var("AGENTWEAVE_SCHEDULER_WORKER").as_deref() == Ok("1") {

@@ -17,6 +17,7 @@ You can use it to build personal assistants, research assistants, content workfl
 | Build your own Agent App on the framework | [Developing Agent Apps](./DEVELOPING_AGENT_APPS.md) |
 | Contribute to the runtime, hosts, or Foundation Skills | [Contributing Guide](./CONTRIBUTING.md) |
 | Connect a real IMAP/SMTP mailbox | [Mail Connector Setup](./MAIL_CONNECTOR_SETUP.md) |
+| Integrate a managed desktop sidecar | [Local Sidecar Transport](./LOCAL_SIDECAR_TRANSPORT.md) |
 
 ## 5-minute quick start
 

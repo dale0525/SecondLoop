@@ -19,6 +19,7 @@ use axum::{
     Json, Router,
     extract::{Path, State},
     http::{HeaderValue, Method, StatusCode, header},
+    middleware,
     response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
@@ -495,6 +496,18 @@ impl IntoResponse for ApiError {
 }
 
 pub fn router(state: Arc<AppState>) -> Router {
+    router_for_transport(state, false, None)
+}
+
+pub fn router_with_dev_routes(state: Arc<AppState>) -> Router {
+    router_for_transport(state, true, None)
+}
+
+pub fn router_for_transport(
+    state: Arc<AppState>,
+    include_dev_routes: bool,
+    transport_auth: Option<crate::local_transport::TransportAuth>,
+) -> Router {
     let mut router = Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/model/test", post(test_model_connection))
@@ -512,11 +525,17 @@ pub fn router(state: Arc<AppState>) -> Router {
     if let Some(owner_routes) = crate::owner_api::router(&state) {
         router = router.merge(owner_routes);
     }
-    router.layer(desktop_cors_layer()).with_state(state)
-}
-
-pub fn router_with_dev_routes(state: Arc<AppState>) -> Router {
-    router(state.clone()).merge(crate::dev_api::router(state).layer(desktop_cors_layer()))
+    if include_dev_routes {
+        router = router.merge(crate::dev_api::routes());
+    }
+    match transport_auth {
+        Some(auth) => router.route_layer(middleware::from_fn_with_state(
+            auth,
+            crate::local_transport::require_transport,
+        )),
+        None => router.layer(desktop_cors_layer()),
+    }
+    .with_state(state)
 }
 
 impl AppState {

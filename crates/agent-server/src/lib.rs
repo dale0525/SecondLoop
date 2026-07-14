@@ -5,6 +5,7 @@ mod automation_api;
 mod dev_api;
 pub mod dev_skills;
 mod foundation_api;
+pub mod local_transport;
 pub mod owner_api;
 pub mod skill_release;
 mod tenant_attempt;

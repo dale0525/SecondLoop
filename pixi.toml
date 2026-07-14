@@ -18,6 +18,7 @@ bundle-skills = "cargo run -p agent-server --bin bundle-skills -- --source skill
 install-hooks = "node scripts/install-hooks.mjs"
 test-dev-script = "node --test scripts/*.test.mjs"
 source-lines = "node scripts/check-source-lines.mjs"
+sidecar-transport-check = "cargo build -p agent-server --bin agent-server && node scripts/check-local-transport.mjs"
 scaffold-agent-app = "node scripts/scaffold-agent-app.mjs"
 package-agent-app = "node scripts/package-agent-app.mjs"
 store-server-secret = "cargo run -p agent-server --bin store-secret --"

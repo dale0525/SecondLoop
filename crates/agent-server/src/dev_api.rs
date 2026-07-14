@@ -55,7 +55,7 @@ struct DevSkillReloadResponse {
     reload_status: &'static str,
 }
 
-pub fn router(state: Arc<AppState>) -> Router {
+pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/dev/tools", get(list_tools))
         .route("/dev/tool-discovery", get(discover_tools))
@@ -64,7 +64,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/dev/skills/validate", post(validate_skills))
         .route("/dev/skills/reload", post(reload_skills))
         .route("/dev/skills/{skill_id}", delete(delete_skill))
-        .with_state(state)
 }
 
 async fn list_tools(

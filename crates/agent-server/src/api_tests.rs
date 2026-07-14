@@ -1,4 +1,5 @@
 use super::*;
+use crate::local_transport::{TRANSPORT_HEADER, TransportAuth};
 use crate::owner_api::{OwnerApiConfig, OwnerAuth};
 use agent_runtime::{
     platform::{CapabilitySet, PlatformId},
@@ -100,6 +101,54 @@ async fn health_returns_ok() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn authenticated_router_protects_every_route_without_enabling_cors() {
+    const TOKEN: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ";
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let app = router_for_transport(
+        Arc::new(AppState::new(storage)),
+        false,
+        Some(TransportAuth::new(TOKEN).unwrap()),
+    );
+
+    for request in [
+        Request::builder()
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap(),
+        Request::builder()
+            .uri("/sessions")
+            .body(Body::empty())
+            .unwrap(),
+    ] {
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            read_json(response).await,
+            json!({ "error": "unauthorized" })
+        );
+    }
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .header(&TRANSPORT_HEADER, TOKEN)
+                .header(header::ORIGIN, "http://127.0.0.1:5173")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response
+            .headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .is_none()
+    );
 }
 
 #[tokio::test]

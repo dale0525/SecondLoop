@@ -25,6 +25,7 @@ tracing-subscriber.workspace = true
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
 uuid.workspace = true
+zeroize.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
