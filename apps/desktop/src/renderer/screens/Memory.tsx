@@ -4,11 +4,13 @@ import { Brain, Download, LoaderCircle, Search, ShieldAlert, Trash2, X } from "l
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { MemoryRecord, exportMemories, forgetMemory, listMemories } from "../api";
+import { useI18n } from "../i18n/I18nProvider";
 import { FoundationHeader } from "./Accounts";
 
-type MemoryProps = { onBack: () => void };
+type MemoryProps = { embedded?: boolean; onBack: () => void };
 
-export function Memory({ onBack }: MemoryProps): JSX.Element {
+export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
+  const { t } = useI18n();
   const [records, setRecords] = useState<MemoryRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -17,6 +19,7 @@ export function Memory({ onBack }: MemoryProps): JSX.Element {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const Root = embedded ? "section" : "main";
 
   const selected = useMemo(
     () => records.find((record) => record.id === selectedId) ?? null,
@@ -74,8 +77,8 @@ export function Memory({ onBack }: MemoryProps): JSX.Element {
   };
 
   return (
-    <main className="foundation-screen" aria-label="Memory ledger">
-      <FoundationHeader eyebrow="PERSONAL CONTEXT" onBack={onBack} subtitle="Inspectable, sourced, and forgettable" title="Memory ledger" />
+    <Root className="foundation-screen" aria-label="Memory ledger">
+      {embedded ? <header className="product-page-header"><Text className="foundation-kicker" size="1" weight="bold">PERSONAL CONTEXT</Text><Heading as="h1">{t("nav.memory")}</Heading><Text color="gray" size="2">Inspectable, sourced, and forgettable.</Text></header> : <FoundationHeader eyebrow="PERSONAL CONTEXT" onBack={onBack} subtitle="Inspectable, sourced, and forgettable" title="Memory ledger" />}
       <div className="memory-toolbar">
         <form onSubmit={submitSearch} role="search">
           <TextField.Root aria-label="Search committed memories" onChange={(event) => setQuery(event.target.value)} placeholder="Search preferences, people, or projects" value={query}>
@@ -124,7 +127,7 @@ export function Memory({ onBack }: MemoryProps): JSX.Element {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </main>
+    </Root>
   );
 }
 

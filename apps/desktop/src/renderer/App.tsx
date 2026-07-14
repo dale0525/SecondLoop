@@ -16,8 +16,11 @@ import { Settings } from "./screens/Settings";
 import { Accounts } from "./screens/Accounts";
 import { Memory } from "./screens/Memory";
 import { FoundationActions } from "./screens/FoundationActions";
+import { Connections } from "./product/Connections";
+import { SecondLoopShell, type SecondLoopView } from "./product/SecondLoopShell";
+import { Today } from "./product/Today";
 
-type AppView = "chat" | "settings" | "developer" | "owner-skills" | "accounts" | "memory" | "actions";
+type AppView = "today" | "chat" | "settings" | "developer" | "owner-skills" | "accounts" | "connections" | "memory" | "actions";
 
 function getViewFromHash(): AppView {
   if (typeof window !== "undefined") {
@@ -33,6 +36,8 @@ function getViewFromHash(): AppView {
       return "settings";
     }
 
+    if (window.location.hash === "#today") return "today";
+    if (window.location.hash === "#connections") return "connections";
     if (window.location.hash === "#accounts") return "accounts";
     if (window.location.hash === "#memory") return "memory";
     if (window.location.hash === "#actions") return "actions";
@@ -58,6 +63,7 @@ function AppContent(): JSX.Element {
   const [ownerPolicy, setOwnerPolicy] = useState<OwnerPolicy | null>(null);
   const bootstrap = useHostBootstrap();
   const { t } = useI18n();
+  const secondLoop = bootstrap.discovery?.identity.appId === "com.secondloop.secretary";
 
   useEffect(() => {
     let active = true;
@@ -96,27 +102,33 @@ function AppContent(): JSX.Element {
 
   const navigate = (nextView: AppView) => {
     setView(nextView);
-    const nextHash = nextView === "chat" ? "" : `#${nextView}`;
+    const nextHash = nextView === "chat" && !secondLoop ? "" : `#${nextView}`;
     if (typeof window !== "undefined" && window.location.hash !== nextHash) {
       window.location.hash = nextHash;
     }
   };
 
   useEffect(() => {
+    if (bootstrap.status !== "ready" || !secondLoop) return;
+    if (!window.location.hash) navigate("today");
+    if (view === "accounts") navigate("connections");
+  }, [bootstrap.status, secondLoop, view]);
+
+  useEffect(() => {
     if (
       bootstrap.status !== "loading"
-      && !isViewAllowed(view, bootstrap.features, ownerPolicy)
+      && !isViewAllowed(view, bootstrap.features, ownerPolicy, secondLoop)
     ) {
       navigate("settings");
     }
-  }, [bootstrap.features, bootstrap.status, ownerPolicy, view]);
+  }, [bootstrap.features, bootstrap.status, ownerPolicy, secondLoop, view]);
 
-  const activeView = isViewAllowed(view, bootstrap.features, ownerPolicy)
+  const activeView = isViewAllowed(view, bootstrap.features, ownerPolicy, secondLoop)
     ? view
     : "settings";
 
-  return (
-    <div className="app-root">
+  const screen = (
+    <>
       {activeView === "owner-skills" ? (
         canInspectOwnerSkills(ownerPolicy) ? (
           <OwnerSkills
@@ -138,23 +150,41 @@ function AppContent(): JSX.Element {
         <DeveloperTools onBack={() => navigate("settings")} />
       ) : activeView === "accounts" ? (
         <Accounts onBack={() => navigate("settings")} />
+      ) : activeView === "connections" ? (
+        <Connections />
       ) : activeView === "memory" ? (
-        <Memory onBack={() => navigate("settings")} />
+        <Memory embedded={secondLoop} onBack={() => navigate(secondLoop ? "today" : "settings")} />
       ) : activeView === "actions" ? (
-        <FoundationActions onBack={() => navigate("settings")} />
+        <FoundationActions embedded={secondLoop} onBack={() => navigate(secondLoop ? "today" : "settings")} />
       ) : activeView === "settings" ? (
         <Settings
-          onBack={() => navigate("chat")}
+          onBack={() => navigate(secondLoop ? "today" : "chat")}
           onOpenDeveloperTools={() => navigate("developer")}
           onOpenOwnerSkills={() => navigate("owner-skills")}
-          onOpenAccounts={() => navigate("accounts")}
+          onOpenAccounts={() => navigate(secondLoop ? "connections" : "accounts")}
           onOpenMemory={() => navigate("memory")}
           onOpenActions={() => navigate("actions")}
           ownerPolicy={ownerPolicy}
+          productMode={secondLoop}
         />
+      ) : activeView === "today" ? (
+        <Today />
       ) : (
         <Chat onOpenSettings={() => navigate("settings")} />
       )}
+    </>
+  );
+
+  return (
+    <div className="app-root">
+      {secondLoop ? (
+        <SecondLoopShell
+          activeView={activeView as SecondLoopView}
+          onNavigate={(nextView) => navigate(nextView)}
+        >
+          {screen}
+        </SecondLoopShell>
+      ) : screen}
     </div>
   );
 }
@@ -163,7 +193,10 @@ function isViewAllowed(
   view: AppView,
   features: DesktopHostFeatures,
   ownerPolicy: OwnerPolicy | null,
+  secondLoop: boolean,
 ): boolean {
+  if (view === "today") return secondLoop;
+  if (view === "connections") return secondLoop && features.accounts;
   if (view === "accounts") return features.accounts;
   if (view === "memory") return features.memory;
   if (view === "actions") return features.actions;

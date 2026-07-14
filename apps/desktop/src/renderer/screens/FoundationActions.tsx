@@ -8,17 +8,20 @@ import {
   listFoundationActions,
   resolveFoundationAction
 } from "../api";
+import { useI18n } from "../i18n/I18nProvider";
 import { FoundationHeader } from "./Accounts";
 
-type FoundationActionsProps = { onBack: () => void };
+type FoundationActionsProps = { embedded?: boolean; onBack: () => void };
 
-export function FoundationActions({ onBack }: FoundationActionsProps): JSX.Element {
+export function FoundationActions({ embedded = false, onBack }: FoundationActionsProps): JSX.Element {
+  const { t } = useI18n();
   const [actions, setActions] = useState<PendingFoundationAction[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const Root = embedded ? "section" : "main";
 
   const selected = useMemo(
     () => actions.find((item) => item.approval.approval_id === selectedId) ?? null,
@@ -77,13 +80,13 @@ export function FoundationActions({ onBack }: FoundationActionsProps): JSX.Eleme
   };
 
   return (
-    <main className="foundation-screen" aria-label="Foundation actions">
-      <FoundationHeader
+    <Root className="foundation-screen" aria-label="Foundation actions">
+      {embedded ? <header className="product-page-header"><Text className="foundation-kicker" size="1" weight="bold">TRUSTED ACTIONS</Text><Heading as="h1">{t("nav.actions")}</Heading><Text color="gray" size="2">Authoritative previews and durable delivery state.</Text></header> : <FoundationHeader
         eyebrow="TRUSTED ACTIONS"
         onBack={onBack}
         subtitle="Authoritative previews and durable delivery state"
         title="Action desk"
-      />
+      />}
       {error ? (
         <div className="memory-error" role="alert">
           <ShieldAlert size={16} /> {error}
@@ -162,7 +165,7 @@ export function FoundationActions({ onBack }: FoundationActionsProps): JSX.Eleme
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </main>
+    </Root>
   );
 }
 

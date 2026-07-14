@@ -19,6 +19,7 @@ type SettingsProps = {
   onOpenMemory: () => void;
   onOpenActions: () => void;
   ownerPolicy: OwnerPolicy | null;
+  productMode?: boolean;
 };
 
 export function Settings({
@@ -28,13 +29,14 @@ export function Settings({
   onOpenAccounts,
   onOpenMemory,
   onOpenActions,
-  ownerPolicy
+  ownerPolicy,
+  productMode = false,
 }: SettingsProps): JSX.Element {
   const { t } = useI18n();
   const bootstrap = useHostBootstrap();
   return (
     <main className="settings-screen" aria-label={t("settings.title")}>
-      <header className="top-bar settings-top-bar">
+      {!productMode ? <header className="top-bar settings-top-bar">
         <AppIconButton label={t("common.backToChat")} onClick={onBack}>
           <ArrowLeft size={18} aria-hidden="true" />
         </AppIconButton>
@@ -42,18 +44,19 @@ export function Settings({
           <h1>{t("settings.title")}</h1>
         </div>
         <span className="top-bar-spacer" aria-hidden="true" />
-      </header>
+      </header> : null}
+      {productMode ? <header className="product-page-header settings-product-header"><p className="foundation-kicker">PREFERENCES</p><h1>{t("settings.title")}</h1></header> : null}
       <div className="settings-shell">
         <SettingsHostBootstrap />
         <SettingsAppearance />
         <SettingsLanguage />
-        <SettingsFoundation
+        {!productMode ? <SettingsFoundation
           features={bootstrap.features}
           onOpenAccounts={onOpenAccounts}
           onOpenActions={onOpenActions}
           onOpenMemory={onOpenMemory}
-        />
-        <SettingsModel />
+        /> : null}
+        {!productMode ? <SettingsModel /> : null}
         {bootstrap.features.skillManagement && canInspectOwnerSkills(ownerPolicy) ? (
           <section className="settings-panel" aria-labelledby="settings-owner-title">
             <div className="settings-panel-heading">

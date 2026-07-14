@@ -12,15 +12,16 @@ import {
 } from "../api";
 import { AppIconButton } from "../components/AppIconButton";
 
-type AccountsProps = { onBack: () => void };
+type AccountsProps = { embedded?: boolean; onBack: () => void };
 
-export function Accounts({ onBack }: AccountsProps): JSX.Element {
+export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Element {
   const [accounts, setAccounts] = useState<MailAccount[]>([]);
   const [statuses, setStatuses] = useState<Record<string, MailAccountStatus>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const Root = embedded ? "section" : "main";
 
   const load = async () => {
     setLoading(true);
@@ -64,8 +65,8 @@ export function Accounts({ onBack }: AccountsProps): JSX.Element {
   };
 
   return (
-    <main className="foundation-screen" aria-label="Mail accounts">
-      <FoundationHeader eyebrow="TRUSTED HOST" onBack={onBack} subtitle="Credentials never enter the renderer" title="Mail accounts" />
+    <Root className="foundation-screen" aria-label="Mail accounts">
+      {!embedded ? <FoundationHeader eyebrow="TRUSTED HOST" onBack={onBack} subtitle="Credentials never enter the renderer" title="Mail accounts" /> : null}
       <div className="foundation-page-shell accounts-layout">
         <aside className="foundation-list-column" aria-label="Available accounts">
           <div className="foundation-column-heading">
@@ -132,7 +133,7 @@ export function Accounts({ onBack }: AccountsProps): JSX.Element {
           ) : null}
         </section>
       </div>
-    </main>
+    </Root>
   );
 }
 
