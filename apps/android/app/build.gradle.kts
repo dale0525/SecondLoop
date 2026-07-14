@@ -68,6 +68,17 @@ dependencies {
   androidTestImplementation(libs.junit)
 }
 
+val makeGeneratedAndroidAssetsWritable by tasks.registering(Exec::class) {
+  workingDir(rootProject.projectDir.resolve("../.."))
+  commandLine(
+    "node",
+    "scripts/build-android-rust.mjs",
+    "--make-generated-assets-writable",
+  )
+  inputs.file(rootProject.projectDir.resolve("../../scripts/build-android-rust.mjs"))
+  outputs.upToDateWhen { false }
+}
+
 val prepareAndroidSkillAssets by tasks.registering(Exec::class) {
   workingDir(rootProject.projectDir.resolve("../.."))
   commandLine("node", "scripts/build-android-rust.mjs", "--skills-only")
@@ -84,6 +95,7 @@ val prepareAndroidSkillAssets by tasks.registering(Exec::class) {
   inputs.file(rootProject.projectDir.resolve("../../scripts/build-android-rust.mjs"))
   outputs.dir(generatedSkillAssets)
   outputs.upToDateWhen { false }
+  dependsOn(makeGeneratedAndroidAssetsWritable)
 }
 
 val buildRustNativeDebug by tasks.registering(Exec::class) {

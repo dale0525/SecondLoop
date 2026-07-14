@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import {
+  chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +19,7 @@ import {
   androidRustLibraryPaths,
   androidNdkHostTag,
   createAndroidRustBuildConfig,
+  makeAndroidGeneratedAssetsWritable,
   prepareAndroidSkillAssetsAt,
   runAndroidBuildSequence,
 } from "./build-android-rust.mjs";
@@ -131,8 +135,48 @@ test("Gradle always regenerates skill assets before native and package tasks", (
   );
 
   assert.match(gradle, /outputs\.upToDateWhen\s*\{\s*false\s*\}/);
+  assert.match(
+    gradle,
+    /makeGeneratedAndroidAssetsWritable[\s\S]*--make-generated-assets-writable/,
+  );
+  assert.match(
+    gradle,
+    /prepareAndroidSkillAssets[\s\S]*dependsOn\(makeGeneratedAndroidAssetsWritable\)/,
+  );
   assert.match(gradle, /buildRustNativeDebug[\s\S]*dependsOn\(prepareAndroidSkillAssets\)/);
   assert.match(gradle, /tasks\.named\("preBuild"\)[\s\S]*dependsOn\(prepareAndroidSkillAssets\)/);
+});
+
+test("Gradle permission preparation makes verified assets replaceable without following symlinks", {
+  skip: process.platform === "win32",
+}, () => {
+  const root = mkdtempSync(join(tmpdir(), "agentweave-android-permissions-"));
+  const external = mkdtempSync(join(tmpdir(), "agentweave-android-external-"));
+  try {
+    const generatedRoot = androidSkillAssetPaths(root).generatedRoot;
+    const generation = join(generatedRoot, "builtin-skills/bundle/generations/test-generation");
+    const manifest = join(generation, "skill-bundle.json");
+    const externalFile = join(external, "must-remain-readonly.txt");
+    mkdirSync(generation, { recursive: true });
+    writeFileSync(manifest, "manifest");
+    writeFileSync(externalFile, "external");
+    symlinkSync(externalFile, join(generatedRoot, "external-link"));
+    chmodSync(manifest, 0o400);
+    chmodSync(generation, 0o500);
+    chmodSync(externalFile, 0o400);
+
+    assert.equal(lstatSync(generation).mode & 0o200, 0);
+    assert.equal(lstatSync(manifest).mode & 0o200, 0);
+    makeAndroidGeneratedAssetsWritable(root);
+
+    assert.notEqual(lstatSync(generation).mode & 0o200, 0);
+    assert.notEqual(lstatSync(manifest).mode & 0o200, 0);
+    assert.equal(lstatSync(externalFile).mode & 0o200, 0);
+    assert.doesNotThrow(() => rmSync(generatedRoot, { recursive: true }));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(external, { recursive: true, force: true });
+  }
 });
 
 test("Android asset preparation removes stale output and round-trips staged bundle hash", () => {

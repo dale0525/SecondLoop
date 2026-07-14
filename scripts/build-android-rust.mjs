@@ -93,6 +93,12 @@ export function androidSkillAssetPaths(projectRoot) {
   };
 }
 
+export function makeAndroidGeneratedAssetsWritable(root) {
+  const generatedRoot = androidSkillAssetPaths(root).generatedRoot;
+  makeTreeWritableNoFollow(generatedRoot);
+  return generatedRoot;
+}
+
 export function runAndroidBuildSequence({
   prepareSkills,
   buildRust,
@@ -406,14 +412,26 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const flags = new Set(process.argv.slice(2));
     for (const flag of flags) {
-      if (flag !== "--skills-only" && flag !== "--rust-only") {
+      if (
+        flag !== "--skills-only"
+        && flag !== "--rust-only"
+        && flag !== "--make-generated-assets-writable"
+      ) {
         throw new Error(`unknown argument: ${flag}`);
       }
     }
-    runAndroidRustBuild({
-      skillsOnly: flags.has("--skills-only"),
-      rustOnly: flags.has("--rust-only"),
-    });
+    if (flags.has("--make-generated-assets-writable")) {
+      if (flags.size !== 1) {
+        throw new Error("--make-generated-assets-writable cannot be combined with build flags");
+      }
+      const generatedRoot = makeAndroidGeneratedAssetsWritable(projectRoot);
+      console.log(`Prepared Android generated assets for replacement at ${generatedRoot}`);
+    } else {
+      runAndroidRustBuild({
+        skillsOnly: flags.has("--skills-only"),
+        rustOnly: flags.has("--rust-only"),
+      });
+    }
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
