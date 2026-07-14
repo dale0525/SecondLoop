@@ -184,4 +184,6 @@ Preview package 已实现并通过本地 package 校验，但 API、Provider/Con
 
 ## License
 
-Rust workspace 当前声明为 `Apache-2.0 OR MIT`。仓库尚未提供独立许可证文本时，不应仅凭该声明假设所有第三方资产都可以按相同条款再分发；引入 Skill、脚本、主题、协议或 Connector 时，仍需逐项保留并遵守其许可证与版权声明。
+除另行标识的第三方材料外，AgentWeave 由使用者任选 [Apache License 2.0](./LICENSE-APACHE) 或 [MIT License](./LICENSE-MIT) 授权。贡献条款见 [LICENSE](./LICENSE)，仓库级归属声明见 [NOTICE](./NOTICE)。
+
+第三方 Skill、脚本、主题、协议、Connector、依赖和资产继续适用各自的许可证与版权声明；再分发时必须保留对应 package 内的许可证和 notice 文件。

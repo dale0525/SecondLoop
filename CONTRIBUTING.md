@@ -159,6 +159,8 @@ git diff --check
 
 Repository maintainers use `Logic Tan <logictan89@gmail.com>` as the repository Git identity. External contributors may use their own verifiable identities and must not rewrite another contributor's authorship.
 
+Unless explicitly stated otherwise, contributions intentionally submitted for inclusion in AgentWeave are licensed under both the Apache License 2.0 and the MIT License, at the recipient's option, without additional terms or conditions. Do not contribute third-party material unless its license is compatible and its required notices are preserved.
+
 The PR description must include at least:
 
 - The problem and goal, including why the change belongs in the core, an optional package, or an example.

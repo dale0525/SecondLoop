@@ -159,6 +159,8 @@ git diff --check
 
 本仓库维护者使用 `Logic Tan <logictan89@gmail.com>` 作为仓库 Git 身份。外部贡献者可以使用自己的可验证身份，不应改写其他贡献者的作者信息。
 
+除非贡献者另有明确声明，主动提交并被 AgentWeave 接收的贡献同时按 Apache License 2.0 和 MIT License 授权，由接收者任选其一，且不附加额外条款。只有在许可证兼容且所需 notice 得到保留时，才能提交第三方材料。
+
 PR 描述至少应包含：
 
 - 问题与目标，以及为什么该改动属于核心、可选 package 或示例。

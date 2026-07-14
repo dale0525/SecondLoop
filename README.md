@@ -184,4 +184,6 @@ Contributions to reusable runtime capabilities, Host and Connector contracts, Fo
 
 ## License
 
-The Rust workspace currently declares `Apache-2.0 OR MIT`. Until the repository provides standalone license texts, do not assume from that declaration alone that all third-party assets may be redistributed under the same terms. Preserve and follow the license and copyright notice for every Skill, script, theme, protocol, or Connector you introduce.
+Except for separately identified third-party material, AgentWeave is dual-licensed under the [Apache License 2.0](./LICENSE-APACHE) or the [MIT License](./LICENSE-MIT), at your option. See [LICENSE](./LICENSE) for the contribution terms and [NOTICE](./NOTICE) for repository-level attributions.
+
+Third-party Skills, scripts, themes, protocols, Connectors, dependencies, and assets retain their own licenses and copyright notices. Preserve the package-local license and notice files when redistributing them.

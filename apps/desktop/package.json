@@ -1,6 +1,7 @@
 {
   "name": "agentweave-desktop",
   "version": "0.1.0",
+  "license": "(Apache-2.0 OR MIT)",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
