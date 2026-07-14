@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：已确认，实施中
+- 状态：Desktop Beta 已完成
 - 基线日期：2026-07-14
 - 当前产品仓库：`SecondLoop`
 - 上游仓库：`dale0525/agentweave`
@@ -11,7 +11,35 @@
 
 本文定义 SecondLoop 基于 AgentWeave 完全重构的仓库策略、上游协作方式、技术边界、阶段计划、开发量、质量门禁和交付标准。
 
-本文是实施计划，不代表立即执行仓库替换、提交、推送或发布。涉及旧仓库归档、GitHub fork 创建、历史切换和远程仓库调整的操作，必须在执行前单独确认。
+本文最初用于约束实施范围，现同时保留最终实施和验收记录。后续若再次执行仓库替换、旧历史删除、远程调整或正式发布，仍需单独确认，不得把本次授权自动扩展到新的破坏性操作。
+
+## 1.1 最终实施结果
+
+Desktop Beta 已按本文的上下游边界完成，最终状态如下：
+
+- `origin` 继续指向现有 `dale0525/SecondLoop` 仓库；GitHub repository ID 保持为 `R_kgDOQ6OZmQ`，没有删除或重建仓库对象。
+- 旧版本保存在远程分支 `legacy/secondloop-v1` 和不可变 tag `legacy-secondloop-v1-2026-07-14`。
+- `upstream` 指向 `dale0525/agentweave`；产品主线只集成已经被上游采纳的通用实现。
+- 上游 PR #1–#21 已全部合并，覆盖许可证、可信 Host discovery、Renderer bootstrap、受管 sidecar、安全传输、会话与流式恢复、macOS 打包、Foundation Host 能力、附件、数据保护、发布契约校验、窄窗口、未配置 Mail、备份品牌化和 Android verified asset 重建。
+- SecondLoop 产品层完成正式 App Definition、六路由、响应式导航、产品 Prompt、私有 routines Skill、Today 任务与提醒、附件 Composer、连接引导、Action/Memory 空态与详情占位、数据保护设置和产品 README。
+- 最终 macOS 产物位于 `dist/macos/secondloop/SecondLoop-darwin-arm64/SecondLoop.app`，包含受管 Rust sidecar、带锁 Agent App、Foundation packages、双许可证和 NOTICE，并通过 `codesign --verify --deep --strict`。
+
+最终质量证据：
+
+| 门禁 | 结果 |
+| --- | --- |
+| Agent App、Foundation Catalog、SecondLoop Manifest 与 locale 校验 | 通过 |
+| Node 开发与发布脚本测试 | 55 项通过 |
+| Desktop 单元/集成测试 | 30 个测试文件、179 项通过 |
+| Desktop TypeScript | 通过 |
+| Rust workspace fmt、Clippy、测试 | 通过；Agent Runtime 891 项通过、3 项显式忽略，其他 workspace suites 全部通过 |
+| `mobile-mvp-check` | 通过；Rust Android native、Android 单元测试、`assembleDebug` 和 APK 资产检查全部通过 |
+| macOS 正式打包 | 通过；sidecar 动态端口启动、可信 bootstrap、六路由和许可证资源均已核对 |
+| 三档视觉 QA | 19 张截图全部通过，console warning/error 为 0，无横向溢出 |
+
+视觉截图保存在 `output/playwright/secondloop-final/`，覆盖六路由的 `1440 × 900`、`1280 × 800`、`390 × 844`，并额外覆盖窄窗口 More Sheet。视觉验收允许的偏差只有：隔离 QA 使用空 Action/Memory 状态、Chat 使用模型未配置状态、Connections 使用 Mail 未配置状态，以及长设置页在窄窗口内正常纵向滚动。
+
+本次交付仍遵守原定非目标：不建设云端 Server、托管模型、跨设备同步、Android 产品 UI、旧数据自动迁移、OCR 或音频工作流。真实模型和真实 IMAP/SMTP 仍需使用者提供自己的端点与专用账户；默认门禁不读取真实凭据。
 
 ## 2. 已确认的决策
 

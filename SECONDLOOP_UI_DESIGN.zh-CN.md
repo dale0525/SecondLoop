@@ -139,3 +139,27 @@ Narrow：单列分组，行高至少 52px。危险数据操作与普通外观选
 | Settings | 分组设置 | 通过 | 通过 | 通过 | 完整 | 可实现 |
 
 实现完成后必须在三个目标视口分别截图，逐项检查布局、间距、字号层级、颜色、状态、响应式行为和文本适配。截图基线通过前，M2 不视为完成。
+
+## 8. 最终实现验收
+
+- 验收状态：通过
+- 验收产物：`dist/macos/secondloop/SecondLoop-darwin-arm64/SecondLoop.app`
+- 截图目录：`output/playwright/secondloop-final/`
+- 截图数量：19 张
+
+六个路由在 `1440 × 900`、`1280 × 800` 和 `390 × 844` 均通过；窄窗口 More Sheet 也通过。所有截图的像素尺寸都经过核对，所有路由的 `document.scrollWidth` 与 `clientWidth` 相等，console warning、error 和未捕获异常均为 0。
+
+关键结果：
+
+- Today 在桌面保持非对称双列，在窄窗口按“今日重点、等待批准、需要回复、已确认承诺”排列。
+- Chat 桌面阅读列不超过 820px；窄窗口 Composer 与底部导航没有重叠。
+- Action 和 Memory 的桌面列表/详情结构清晰，窄窗口正确收敛为分层或单列空态。
+- Connections 和 Settings 的长内容只产生纵向滚动，不产生横向溢出，也不被底部导航遮挡。
+- 390px 下主要按钮、底栏项、Composer 和 Sheet 控件的有效触控区域均至少为 `44 × 44`。
+- More Sheet 打开后焦点落在关闭按钮；关闭按钮为 `44 × 44`，连接和设置两行均高于 44px。
+
+可接受偏差：
+
+- 隔离 QA 没有真实 Action 或 Memory 数据，因此这两路由验收空态和详情占位；真实详情契约由自动化测试覆盖。
+- Chat 采用模型未配置引导态，Connections 采用 Mail 未配置态；两者都是本文冻结的合法产品状态。
+- Connections 和 Settings 在 390px 下需要纵向滚动，符合单列设计，不视为布局偏差。
