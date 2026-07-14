@@ -653,6 +653,10 @@ impl AppState {
         self.automation_tools.clone()
     }
 
+    pub fn has_automation_tools(&self) -> bool {
+        self.automation_tools.is_some()
+    }
+
     pub(crate) fn connector_tools(
         &self,
     ) -> Option<agent_runtime::connector_tools::ConnectorToolRuntime> {

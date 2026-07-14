@@ -582,7 +582,20 @@ struct DeclarativeScheduledPayload {
     #[serde(default)]
     result: Value,
     #[serde(default)]
-    notifications: Vec<NotificationRequest>,
+    notifications: Vec<ScheduledNotificationRequest>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ScheduledNotificationRequest {
+    channel: String,
+    title: String,
+    body: String,
+    dedupe_key: String,
+    not_before: DateTime<Utc>,
+    quiet_hours: Option<QuietHours>,
+    #[serde(default)]
+    data: Value,
 }
 
 #[async_trait]
@@ -596,7 +609,22 @@ impl ScheduledRunExecutor for DeclarativeScheduledRunExecutor {
                 "dueAt": claim.due_at,
                 "output": payload.result,
             }),
-            notifications: payload.notifications,
+            notifications: payload
+                .notifications
+                .into_iter()
+                .map(|notification| NotificationRequest {
+                    app_id: claim.app_id.clone(),
+                    tenant_id: claim.tenant_id.clone(),
+                    user_id: claim.user_id.clone(),
+                    channel: notification.channel,
+                    title: notification.title,
+                    body: notification.body,
+                    dedupe_key: notification.dedupe_key,
+                    not_before: notification.not_before,
+                    quiet_hours: notification.quiet_hours,
+                    data: notification.data,
+                })
+                .collect(),
         })
     }
 }
