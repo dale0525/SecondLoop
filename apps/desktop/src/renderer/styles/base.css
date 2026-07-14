@@ -18,7 +18,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -28,6 +29,7 @@ button {
 
 button:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 [role="tab"]:focus-visible,
 [role="switch"]:focus-visible {
   outline: 2px solid var(--color-primary);
@@ -130,7 +132,7 @@ input:focus-visible,
 }
 
 .search-box input,
-.composer-input-row input,
+.composer-input-row textarea,
 .settings-field input {
   width: 100%;
   min-width: 0;

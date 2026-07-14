@@ -3,7 +3,9 @@ import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { AppIconButton } from "../components/AppIconButton";
 import { SettingsAppearance } from "../components/SettingsAppearance";
 import { SettingsDeveloperTools } from "../components/SettingsDeveloperTools";
+import { SettingsDataProtection } from "../components/SettingsDataProtection";
 import { SettingsModel } from "../components/SettingsModel";
+import { SettingsAbout, SettingsNotifications } from "../components/SettingsProductInfo";
 import { SettingsFoundation } from "../components/SettingsFoundation";
 import { SettingsHostBootstrap } from "../components/SettingsHostBootstrap";
 import { useHostBootstrap } from "../hostBootstrap";
@@ -46,10 +48,13 @@ export function Settings({
         <span className="top-bar-spacer" aria-hidden="true" />
       </header> : null}
       {productMode ? <header className="product-page-header settings-product-header"><p className="foundation-kicker">{t("settings.productEyebrow")}</p><h1>{t("settings.title")}</h1></header> : null}
-      <div className="settings-shell">
+      <div className={`settings-shell${productMode ? " product-settings-shell" : ""}`}>
         <SettingsHostBootstrap />
         <SettingsAppearance />
         <SettingsLanguage />
+        {productMode ? <SettingsDataProtection /> : null}
+        {productMode ? <SettingsNotifications /> : null}
+        {productMode ? <SettingsAbout /> : null}
         {!productMode ? <SettingsFoundation
           features={bootstrap.features}
           onOpenAccounts={onOpenAccounts}
@@ -72,10 +77,12 @@ export function Settings({
             </button>
           </section>
         ) : null}
-        <SettingsDeveloperTools
-          enabled={bootstrap.features.skillManagement}
-          onOpenDeveloperTools={onOpenDeveloperTools}
-        />
+        {!productMode ? (
+          <SettingsDeveloperTools
+            enabled={bootstrap.features.skillManagement}
+            onOpenDeveloperTools={onOpenDeveloperTools}
+          />
+        ) : null}
       </div>
     </main>
   );

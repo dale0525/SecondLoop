@@ -90,7 +90,7 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
       />}
       {error ? (
         <div className="memory-error" role="alert">
-          <ShieldAlert size={16} /> {error}
+          <ShieldAlert size={16} /> {embedded ? t("actions.requestFailed") : error}
         </div>
       ) : null}
       <div className="foundation-page-shell actions-layout">
@@ -137,8 +137,15 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
               onApprove={() => void resolve("approve_once")}
               onReject={() => void resolve("reject")}
               resolving={resolving}
+              sanitizeErrors={embedded}
             />
-          ) : null}
+          ) : (
+            <Card className="foundation-detail-card foundation-detail-placeholder" size="4">
+              <ShieldAlert aria-hidden="true" size={24} />
+              <Heading as="h2" size="4">{t("actions.detailEmptyTitle")}</Heading>
+              <Text color="gray" size="2">{t("actions.detailEmptyDescription")}</Text>
+            </Card>
+          )}
         </section>
       </div>
       <Dialog.Root onOpenChange={setDetailOpen} open={detailOpen}>
@@ -161,6 +168,7 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
                 onApprove={() => void resolve("approve_once")}
                 onReject={() => void resolve("reject")}
                 resolving={resolving}
+                sanitizeErrors={embedded}
               />
             ) : null}
           </Dialog.Content>
@@ -174,12 +182,14 @@ function ActionDetail({
   item,
   onApprove,
   onReject,
-  resolving
+  resolving,
+  sanitizeErrors,
 }: {
   item: PendingFoundationAction;
   onApprove: () => void;
   onReject: () => void;
   resolving: boolean;
+  sanitizeErrors: boolean;
 }): JSX.Element {
   const { t } = useI18n();
   const preview = item.preview;
@@ -217,7 +227,7 @@ function ActionDetail({
       </section>
       {item.action.last_error ? (
         <Text className="action-error-detail" color="red" size="2">
-          {item.action.last_error}
+          {sanitizeErrors ? t("actions.actionFailed") : item.action.last_error}
         </Text>
       ) : null}
       {pending ? (

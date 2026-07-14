@@ -34,6 +34,10 @@
         "version": "=0.1.0"
       },
       {
+        "id": "agentweave.foundation.documents",
+        "version": "=0.2.0"
+      },
+      {
         "id": "com.secondloop.routines",
         "version": "=0.1.0"
       }
@@ -49,7 +53,9 @@
       "mail-connector",
       "task-provider",
       "scheduler",
-      "host-tools"
+      "host-tools",
+      "attachments",
+      "data-protection"
     ],
     "runtimeTools": [
       "memory_search",
@@ -95,7 +101,11 @@
       "notification_list",
       "notification_get",
       "notification_enqueue",
-      "notification_cancel"
+      "notification_cancel",
+      "attachment_list",
+      "attachment_get",
+      "attachment_read",
+      "attachment_delete"
     ],
     "connectors": [
       "agentweave-mail"
@@ -107,6 +117,8 @@
     "mail-workflows",
     "task-workflows",
     "local-notifications",
+    "attachments",
+    "data-protection",
     "secondloop-navigation",
     "today-dashboard"
   ],

@@ -100,6 +100,63 @@ describe("SecondLoop product shell", () => {
     expect(container.querySelector(".connections-screen")).toBeInTheDocument();
   });
 
+  it("exports and restores encrypted data through the trusted Desktop bridge", async () => {
+    const exportBackup = vi.fn(async () => ({
+      bytes: 4096,
+      createdAt: "2026-07-14T10:00:00Z",
+      exported: true as const,
+      sha256: "a".repeat(64),
+    }));
+    const restoreBackup = vi.fn(async () => ({
+      accepted: true as const,
+      backup: {
+        appId: "com.secondloop.secretary",
+        createdAt: "2026-07-14T10:00:00Z",
+        envelopeSha256: "b".repeat(64),
+        plaintextBytes: 2048,
+        plaintextSha256: "c".repeat(64),
+      },
+      restarted: true as const,
+    }));
+    window.agentWeave = {
+      approval: { open: async () => { throw new Error("unavailable"); } },
+      dataProtection: {
+        exportBackup,
+        restoreBackup,
+        status: async () => ({
+          atRestEncryption: "not_provided",
+          backupEncryption: "aes-256-gcm",
+          backupFormat: "agentweave-backup-v1",
+          enabled: true,
+          pendingRestart: false,
+          restoreRollbackAvailable: false,
+        }),
+      },
+      owner: {} as NonNullable<Window["agentWeave"]>["owner"],
+    };
+    installSecondLoopBootstrap();
+    stubFoundationFetch();
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    await waitFor(() => expect(window.location.hash).toBe("#today"));
+    const settings = container.querySelectorAll<HTMLButtonElement>(
+      ".secondloop-sidebar .secondloop-nav-item",
+    )[5];
+    await user.click(settings);
+    expect(await screen.findByText("settings.dataProtection.encryptedBackupReady"))
+      .toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "settings.dataProtection.export" }));
+    await waitFor(() => expect(exportBackup).toHaveBeenCalledOnce());
+    expect(screen.getByText("settings.dataProtection.exported")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "settings.dataProtection.restore" }));
+    await user.click(screen.getByRole("button", { name: "settings.dataProtection.confirmRestore" }));
+    await waitFor(() => expect(restoreBackup).toHaveBeenCalledOnce());
+    expect(screen.getByText("settings.dataProtection.restored")).toBeVisible();
+  });
+
   it("keeps the Memory, Mail, and approval workflow authoritative and single-use", async () => {
     installSecondLoopBootstrap();
     const fetch = stubVerticalSliceFetch();
@@ -187,6 +244,26 @@ function installSecondLoopBootstrap(): void {
       packageId: "com.secondloop.app",
       displayName: "SecondLoop",
       shortName: "SecondLoop",
+    },
+    features: [...base.features, "attachments", "data-protection", "local-notifications"],
+    requirements: {
+      ...base.requirements,
+      capabilities: [
+        ...base.requirements.capabilities,
+        "attachments",
+        "data-protection",
+        "scheduler",
+      ],
+      packages: [
+        ...base.requirements.packages,
+        { id: "agentweave.foundation.documents", version: "=0.2.0" },
+      ],
+      runtimeTools: [
+        ...base.requirements.runtimeTools,
+        "attachment_get",
+        "attachment_read",
+        "notification_enqueue",
+      ],
     },
   };
   installHostBootstrap(discovery);

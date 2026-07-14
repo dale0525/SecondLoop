@@ -64,6 +64,10 @@ function AppContent(): JSX.Element {
   const bootstrap = useHostBootstrap();
   const { t } = useI18n();
   const secondLoop = bootstrap.discovery?.identity.appId === "com.secondloop.secretary";
+  const attachmentsEnabled = secondLoop
+    && bootstrap.discovery?.requirements.capabilities.includes("attachments") === true
+    && bootstrap.discovery.requirements.runtimeTools.includes("attachment_read")
+    && bootstrap.discovery.requirements.runtimeTools.includes("attachment_get");
 
   useEffect(() => {
     let active = true;
@@ -170,7 +174,12 @@ function AppContent(): JSX.Element {
       ) : activeView === "today" ? (
         <Today />
       ) : (
-        <Chat onOpenSettings={() => navigate("settings")} />
+        <Chat
+          attachmentsEnabled={attachmentsEnabled}
+          onOpenConnections={() => navigate("connections")}
+          onOpenSettings={() => navigate("settings")}
+          productMode={secondLoop}
+        />
       )}
     </>
   );
@@ -196,7 +205,7 @@ function isViewAllowed(
   secondLoop: boolean,
 ): boolean {
   if (view === "today") return secondLoop;
-  if (view === "connections") return secondLoop && features.accounts;
+  if (view === "connections") return secondLoop;
   if (view === "accounts") return features.accounts;
   if (view === "memory") return features.memory;
   if (view === "actions") return features.actions;

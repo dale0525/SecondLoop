@@ -92,7 +92,11 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
         </form>
         <Button onClick={() => void exportLedger()} variant="soft"><Download aria-hidden="true" size={15} /> {t("foundation.memory.export")}</Button>
       </div>
-      {error ? <div className="memory-error" role="alert"><ShieldAlert size={16} /> {error}</div> : null}
+      {error ? (
+        <div className="memory-error" role="alert">
+          <ShieldAlert size={16} /> {embedded ? t("memory.requestFailed") : error}
+        </div>
+      ) : null}
       <div className="foundation-page-shell memory-layout">
         <section className="foundation-list-column memory-list" aria-label={t("foundation.memory.committedMemories")}>
           <div className="foundation-column-heading"><Text color="gray" size="1" weight="bold">{t("foundation.memory.ledger")}</Text><Badge color="gray" radius="full">{records.length}</Badge></div>
@@ -109,7 +113,15 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
           ))}
         </section>
         <section className="foundation-detail-column memory-detail" aria-live="polite">
-          {selected ? <MemoryDetail onForget={() => setConfirmOpen(true)} record={selected} /> : null}
+          {selected ? (
+            <MemoryDetail onForget={() => setConfirmOpen(true)} record={selected} />
+          ) : (
+            <Card className="foundation-detail-card foundation-detail-placeholder" size="4">
+              <Brain aria-hidden="true" size={24} />
+              <Heading as="h2" size="4">{t("memory.detailEmptyTitle")}</Heading>
+              <Text color="gray" size="2">{t("memory.detailEmptyDescription")}</Text>
+            </Card>
+          )}
         </section>
       </div>
       <Dialog.Root onOpenChange={setDetailOpen} open={detailOpen}>
