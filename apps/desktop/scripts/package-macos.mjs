@@ -135,6 +135,7 @@ export function prepareDesktopStaging({
   copyTree(electronRoot, join(payloadRoot, "dist-electron"));
   writeFileSync(join(payloadRoot, "package.json"), `${JSON.stringify({
     name: plan.appBundleId.toLowerCase().replaceAll(".", "-"),
+    productName: plan.name,
     version: plan.appVersion,
     private: true,
     main: "dist-electron/main.cjs",

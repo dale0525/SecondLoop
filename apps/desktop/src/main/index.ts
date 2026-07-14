@@ -15,7 +15,7 @@ export type DesktopWindowConfig = {
 export const desktopWindowConfig: DesktopWindowConfig = {
   height: 900,
   minHeight: 720,
-  minWidth: 1024,
+  minWidth: 360,
   // Electron hosts should point BrowserWindow at the compiled preload bundle.
   preload: "dist/preload/index.js",
   title: "AgentWeave",

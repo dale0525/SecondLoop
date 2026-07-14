@@ -37,6 +37,13 @@ pub(super) struct ResolvedServerApp {
     pub(super) host_discovery: Option<AgentAppHostDiscovery>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MailConnectorMode {
+    Unconfigured,
+    Fake,
+    ImapSmtp,
+}
+
 pub(super) async fn resolve_app(
     manager: &SkillManager,
     runtime_config: &RuntimeConfig,
@@ -232,51 +239,59 @@ pub(super) async fn resolve_connector_tools(
     );
     let vault = resolve_credential_vault(storage).await?;
     let (mail, display_name, deterministic): (Arc<dyn MailConnector>, &str, bool) =
-        if std::env::var("AGENTWEAVE_MAIL_CONNECTOR").as_deref() == Ok("imap-smtp") {
-            let config = load_imap_smtp_config().await?;
-            anyhow::ensure!(
-                config.credential_scope.app_id == app_prompt.identity.app_id,
-                "IMAP/SMTP credential scope App does not match the active Agent App"
-            );
-            let configured_vault = vault.as_ref().ok_or_else(|| {
-                anyhow::anyhow!("IMAP/SMTP requires the persistent Credential Vault")
-            })?;
-            configured_vault
-                .register_account_persistent(ConnectorAccount {
-                    account_id: config.account.id.clone(),
-                    connector_id: "agentweave.connector.mail.imap-smtp".into(),
-                    provider_id: "imap-smtp".into(),
-                    secret_id: config.credential_secret_id.clone(),
-                    scope: config.credential_scope.clone(),
-                    granted_scopes: BTreeSet::from([
-                        "mail.message.read".into(),
-                        "mail.message.organize".into(),
-                        "mail.message.send".into(),
-                    ]),
-                    expires_at: None,
-                })
-                .await?;
-            (
-                Arc::new(ImapSmtpMailConnector::new(
-                    config,
-                    Arc::new(configured_vault.clone()),
-                )?),
-                "IMAP/SMTP Mail",
-                false,
-            )
-        } else {
-            let fake = Arc::new(FakeMailConnector::new());
-            fake.add_account(MailAccount {
-                id: "primary".into(),
-                display_name: "Example Mail".into(),
-                primary_address: MailAddress {
-                    name: Some("Local User".into()),
-                    address: "local@example.test".into(),
-                },
-                addresses: Vec::new(),
-                provider_reference: None,
-            })?;
-            (fake, "Fake Mail", true)
+        match mail_connector_mode_from_lookup(|name| std::env::var_os(name))? {
+            MailConnectorMode::ImapSmtp => {
+                let config = load_imap_smtp_config().await?;
+                anyhow::ensure!(
+                    config.credential_scope.app_id == app_prompt.identity.app_id,
+                    "IMAP/SMTP credential scope App does not match the active Agent App"
+                );
+                let configured_vault = vault.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("IMAP/SMTP requires the persistent Credential Vault")
+                })?;
+                configured_vault
+                    .register_account_persistent(ConnectorAccount {
+                        account_id: config.account.id.clone(),
+                        connector_id: "agentweave.connector.mail.imap-smtp".into(),
+                        provider_id: "imap-smtp".into(),
+                        secret_id: config.credential_secret_id.clone(),
+                        scope: config.credential_scope.clone(),
+                        granted_scopes: BTreeSet::from([
+                            "mail.message.read".into(),
+                            "mail.message.organize".into(),
+                            "mail.message.send".into(),
+                        ]),
+                        expires_at: None,
+                    })
+                    .await?;
+                (
+                    Arc::new(ImapSmtpMailConnector::new(
+                        config,
+                        Arc::new(configured_vault.clone()),
+                    )?),
+                    "IMAP/SMTP Mail",
+                    false,
+                )
+            }
+            MailConnectorMode::Fake => {
+                let fake = Arc::new(FakeMailConnector::new());
+                fake.add_account(MailAccount {
+                    id: "primary".into(),
+                    display_name: "Example Mail".into(),
+                    primary_address: MailAddress {
+                        name: Some("Local User".into()),
+                        address: "local@example.test".into(),
+                    },
+                    addresses: Vec::new(),
+                    provider_reference: None,
+                })?;
+                (fake, "Fake Mail", true)
+            }
+            MailConnectorMode::Unconfigured => (
+                Arc::new(FakeMailConnector::new()),
+                "Unconfigured Mail",
+                true,
+            ),
         };
     let runtime = Arc::new(ConnectorRuntime::new_with_ledger(
         vault,
@@ -308,6 +323,29 @@ pub(super) async fn resolve_connector_tools(
     )
     .await?;
     Ok(Some(ResolvedConnectorFoundation { tools, actions }))
+}
+
+fn mail_connector_mode_from_lookup<F>(lookup: F) -> anyhow::Result<MailConnectorMode>
+where
+    F: Fn(&str) -> Option<std::ffi::OsString>,
+{
+    let connector = lookup("AGENTWEAVE_MAIL_CONNECTOR")
+        .map(|value| {
+            value
+                .into_string()
+                .map_err(|_| anyhow::anyhow!("AGENTWEAVE_MAIL_CONNECTOR must be valid UTF-8"))
+        })
+        .transpose()?;
+    match connector.as_deref() {
+        Some("imap-smtp") => Ok(MailConnectorMode::ImapSmtp),
+        Some(value) => anyhow::bail!("unsupported AGENTWEAVE_MAIL_CONNECTOR '{value}'"),
+        None if lookup("AGENTWEAVE_FAKE_MAIL").as_deref()
+            == Some(std::ffi::OsStr::new("enabled")) =>
+        {
+            Ok(MailConnectorMode::Fake)
+        }
+        None => Ok(MailConnectorMode::Unconfigured),
+    }
 }
 
 async fn load_imap_smtp_config() -> anyhow::Result<ImapSmtpMailConfig> {
@@ -357,4 +395,44 @@ async fn resolve_credential_vault(
     Ok(Some(
         agent_runtime::credential::CredentialVault::new_persistent(store, metadata),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::ffi::OsString;
+
+    fn connector_mode(values: &[(&str, &str)]) -> anyhow::Result<MailConnectorMode> {
+        let values = values
+            .iter()
+            .map(|(name, value)| ((*name).to_string(), OsString::from(value)))
+            .collect::<HashMap<_, _>>();
+        mail_connector_mode_from_lookup(|name| values.get(name).cloned())
+    }
+
+    #[test]
+    fn mail_connector_defaults_to_an_unconfigured_account_set() {
+        assert_eq!(
+            connector_mode(&[]).unwrap(),
+            MailConnectorMode::Unconfigured
+        );
+    }
+
+    #[test]
+    fn fake_mail_requires_an_explicit_test_flag() {
+        assert_eq!(
+            connector_mode(&[("AGENTWEAVE_FAKE_MAIL", "enabled")]).unwrap(),
+            MailConnectorMode::Fake
+        );
+    }
+
+    #[test]
+    fn imap_smtp_is_selected_explicitly_and_unknown_connectors_fail_closed() {
+        assert_eq!(
+            connector_mode(&[("AGENTWEAVE_MAIL_CONNECTOR", "imap-smtp")]).unwrap(),
+            MailConnectorMode::ImapSmtp
+        );
+        assert!(connector_mode(&[("AGENTWEAVE_MAIL_CONNECTOR", "unknown")]).is_err());
+    }
 }

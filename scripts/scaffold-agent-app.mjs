@@ -11,6 +11,8 @@ import {
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { validateSkillPackageContract } from "./validate-skill-package.mjs";
+
 import {
   VSCODE_BUILTIN_THEME_IDS,
   parseJsonc,
@@ -769,6 +771,7 @@ function collectAppLocalPackages(appRoot) {
     if (!existsSync(manifestPath)) continue;
     const manifest = readJson(manifestPath, `${entry.name} manifest`);
     rejectEmbeddedSecrets(manifest);
+    validateSkillPackageContract(manifest, `${entry.name} manifest`);
     requireSchemaVersion(
       manifest.schemaVersion,
       SUPPORTED_PACKAGE_SCHEMA_VERSION,

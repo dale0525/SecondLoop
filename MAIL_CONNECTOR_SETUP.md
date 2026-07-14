@@ -2,7 +2,7 @@
 
 English | [简体中文](./MAIL_CONNECTOR_SETUP.zh-CN.md)
 
-AgentWeave uses the Fake Mail Connector by default. When IMAP/SMTP is enabled, the account configuration file still stores only an opaque secret ID. The mailbox password is never written to the Agent App Manifest, model input, Renderer state, or ordinary logs.
+AgentWeave exposes an unconfigured Mail state by default and does not invent a connected account. Set `AGENTWEAVE_FAKE_MAIL=enabled` only for deterministic development or test data. When IMAP/SMTP is enabled, the account configuration file still stores only an opaque secret ID. The mailbox password is never written to the Agent App Manifest, model input, Renderer state, or ordinary logs.
 
 ## 1. Security prerequisites
 

@@ -2,7 +2,7 @@
 
 [English](./MAIL_CONNECTOR_SETUP.md) | 简体中文
 
-AgentWeave 默认使用 Fake Mail Connector。启用 IMAP/SMTP 时，账号配置文件仍然只保存 opaque secret ID；邮箱密码不会写入 Agent App Manifest、模型输入、Renderer 状态或普通日志。
+AgentWeave 默认显示未配置的 Mail 状态，不会虚构一个已连接账户。只有需要确定性开发或测试数据时，才应设置 `AGENTWEAVE_FAKE_MAIL=enabled`。启用 IMAP/SMTP 时，账号配置文件仍然只保存 opaque secret ID；邮箱密码不会写入 Agent App Manifest、模型输入、Renderer 状态或普通日志。
 
 ## 1. 安全前提
 

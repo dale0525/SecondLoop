@@ -87,6 +87,7 @@ test("staging carries the sidecar, locked App, first-party skills, and licenses"
     assert.equal(existsSync(join(staging.resourcesRoot, "skills/com.example.secretary.routines")), false);
     const payload = readJson(join(staging.payloadRoot, "package.json"));
     assert.equal(payload.name, "com-example-secretary-agent-app");
+    assert.equal(payload.productName, plan.name);
     assert.equal(payload.main, "dist-electron/main.cjs");
     for (const file of ["LICENSE", "LICENSE-APACHE", "LICENSE-MIT", "NOTICE"]) {
       assert.equal(existsSync(join(staging.resourcesRoot, "licenses", file)), true);

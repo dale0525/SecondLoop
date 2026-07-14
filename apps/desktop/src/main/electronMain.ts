@@ -132,15 +132,17 @@ app.whenReady().then(async () => {
   });
   disposeDataProtection = registerDataProtectionController({
     chooseBackupDestination: async () => {
+      const productName = app.getName();
       const result = await dialog.showSaveDialog(mainWindow!, {
-        defaultPath: `AgentWeave-${new Date().toISOString().slice(0, 10)}.agentweave-backup`,
-        filters: [{ name: "AgentWeave encrypted backup", extensions: ["agentweave-backup"] }],
+        defaultPath: `${productName}-${new Date().toISOString().slice(0, 10)}.agentweave-backup`,
+        filters: [{ name: `${productName} encrypted backup`, extensions: ["agentweave-backup"] }],
       });
       return result.canceled ? null : (result.filePath ?? null);
     },
     chooseBackupSource: async () => {
+      const productName = app.getName();
       const result = await dialog.showOpenDialog(mainWindow!, {
-        filters: [{ name: "AgentWeave encrypted backup", extensions: ["agentweave-backup"] }],
+        filters: [{ name: `${productName} encrypted backup`, extensions: ["agentweave-backup"] }],
         properties: ["openFile"],
       });
       return result.canceled ? null : (result.filePaths[0] ?? null);
