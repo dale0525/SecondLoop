@@ -142,6 +142,8 @@ async fn main() -> anyhow::Result<()> {
         (state, storage)
     };
     let state = state.with_default_automation(&automation_storage).await?;
+    let scheduler_worker_enabled = state.has_automation_tools()
+        || std::env::var("AGENTWEAVE_SCHEDULER_WORKER").as_deref() == Ok("1");
     let state = Arc::new(state.with_skills_root(skills_root.clone()));
     let transport = agent_server::local_transport::prepare_from_environment().await?;
     let app = api::router_for_transport(
@@ -151,9 +153,8 @@ async fn main() -> anyhow::Result<()> {
     );
     let addr = transport.address();
     let listener = transport.into_listener();
-
     let scheduler_cancellation = tokio_util::sync::CancellationToken::new();
-    let scheduler_task = if std::env::var("AGENTWEAVE_SCHEDULER_WORKER").as_deref() == Ok("1") {
+    let scheduler_task = if scheduler_worker_enabled {
         Some(
             server_automation::start_scheduler_worker(
                 &automation_storage,
@@ -164,7 +165,6 @@ async fn main() -> anyhow::Result<()> {
     } else {
         None
     };
-
     tracing::info!("agent server listening on http://{addr}");
     let serve_result = axum::serve(listener, app).await;
     scheduler_cancellation.cancel();

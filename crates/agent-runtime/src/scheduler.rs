@@ -161,6 +161,9 @@ pub struct ScheduledClaim {
     pub claim_id: String,
     pub job_id: String,
     pub run_id: String,
+    pub app_id: String,
+    pub tenant_id: String,
+    pub user_id: String,
     pub due_at: DateTime<Utc>,
     pub claimed_by: String,
     pub claim_until: DateTime<Utc>,
@@ -496,7 +499,7 @@ impl SchedulerStore {
         );
         let mut tx = self.pool.begin().await?;
         let expired = sqlx::query(
-            "SELECT c.claim_id, c.job_id, c.run_id, c.due_at, c.claim_until, j.payload_json FROM schedule_claims c JOIN scheduled_jobs j ON j.id = c.job_id WHERE c.status = 'claimed' AND c.claim_until <= ? ORDER BY c.due_at, c.claim_id LIMIT ?",
+            "SELECT c.claim_id, c.job_id, c.run_id, c.due_at, c.claim_until, j.app_id, j.tenant_id, j.user_id, j.payload_json FROM schedule_claims c JOIN scheduled_jobs j ON j.id = c.job_id WHERE c.status = 'claimed' AND c.claim_until <= ? ORDER BY c.due_at, c.claim_id LIMIT ?",
         )
         .bind(now.to_rfc3339())
         .bind(limit as i64)
@@ -521,6 +524,9 @@ impl SchedulerStore {
                     claim_id,
                     job_id: row.try_get("job_id")?,
                     run_id: row.try_get("run_id")?,
+                    app_id: row.try_get("app_id")?,
+                    tenant_id: row.try_get("tenant_id")?,
+                    user_id: row.try_get("user_id")?,
                     due_at: DateTime::parse_from_rfc3339(row.try_get("due_at")?)?
                         .with_timezone(&Utc),
                     claimed_by: worker.to_string(),
@@ -534,7 +540,7 @@ impl SchedulerStore {
             return Ok(claims);
         }
         let rows = sqlx::query(
-            "SELECT id, schedule_json, misfire_json, payload_json, next_run_at FROM scheduled_jobs WHERE status = 'active' AND next_run_at <= ? ORDER BY next_run_at, id LIMIT ?",
+            "SELECT id, app_id, tenant_id, user_id, schedule_json, misfire_json, payload_json, next_run_at FROM scheduled_jobs WHERE status = 'active' AND next_run_at <= ? ORDER BY next_run_at, id LIMIT ?",
         )
         .bind(now.to_rfc3339())
         .bind((limit - claims.len()) as i64)
@@ -553,6 +559,9 @@ impl SchedulerStore {
                     claim_id: Uuid::new_v4().to_string(),
                     job_id: job_id.clone(),
                     run_id: format!("scheduled:{job_id}:{}", due_at.timestamp_micros()),
+                    app_id: row.try_get("app_id")?,
+                    tenant_id: row.try_get("tenant_id")?,
+                    user_id: row.try_get("user_id")?,
                     due_at,
                     claimed_by: worker.to_string(),
                     claim_until: now + lease,

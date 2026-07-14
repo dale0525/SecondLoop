@@ -15,4 +15,9 @@ Status changes use the current optimistic version and fail on stale state.
 
 Claims bind job ID, deterministic run ID, due time, worker, lease, and payload. An expired claim is recovered with the same run identity.
 
+Every claim also carries the trusted schedule scope. Declarative notification
+requests omit scope and inherit App, tenant, and user exclusively from that
+claim. A payload that attempts to provide scope is invalid and cannot enqueue a
+notification.
+
 Misfire policy is explicit: skip with grace, fire once, or bounded catch-up. The host owns persistence, worker lifecycle, concurrency, and audit.
