@@ -75,6 +75,36 @@ impl ToolRegistry {
         )
     }
 
+    pub(super) async fn dispatch_attachment_tools(
+        &self,
+        name: &str,
+        call_id: &str,
+        arguments: &Value,
+        started: Instant,
+    ) -> Option<ToolDispatchOutcome> {
+        let attachments = self.attachment_tools.as_ref()?;
+        if !attachments.handles(name) {
+            return None;
+        }
+        Some(
+            self.dispatch_scoped_host_tool(
+                HostDispatchCall {
+                    name,
+                    call_id,
+                    arguments,
+                    started,
+                },
+                HostDispatchSpec {
+                    definitions: attachments.definitions(),
+                    label: "Attachment",
+                    error_code: "attachment_error",
+                },
+                |arguments| attachments.execute(name, arguments),
+            )
+            .await,
+        )
+    }
+
     async fn dispatch_scoped_host_tool<F, Fut>(
         &self,
         call: HostDispatchCall<'_>,

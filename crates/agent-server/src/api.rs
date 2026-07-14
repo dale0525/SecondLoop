@@ -38,6 +38,8 @@ use std::{
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
+mod runtime_tools;
+
 #[derive(Clone)]
 pub struct AppState {
     storage: Storage,
@@ -55,6 +57,7 @@ pub struct AppState {
     memory_tools: Option<agent_runtime::memory_tools::MemoryToolRuntime>,
     task_tools: Option<agent_runtime::task_tools::TaskToolRuntime>,
     automation_tools: Option<agent_runtime::automation_tools::AutomationToolRuntime>,
+    attachment_tools: Option<agent_runtime::attachment_tools::AttachmentToolRuntime>,
     connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
     mail_actions: Option<agent_runtime::foundation_actions::MailActionService>,
     automation: Option<crate::automation_api::AutomationApiState>,
@@ -114,6 +117,7 @@ impl AppState {
             memory_tools,
             task_tools,
             automation_tools,
+            attachment_tools,
             connector_tools,
         } = foundations;
         let mut runner = TurnRunner::new_with_manager_and_config(
@@ -135,6 +139,9 @@ impl AppState {
         if let Some(automation) = &automation_tools {
             runner = runner.with_automation_tools(automation.clone());
         }
+        if let Some(attachments) = &attachment_tools {
+            runner = runner.with_attachment_tools(attachments.clone());
+        }
         if let Some(connectors) = &connector_tools {
             runner = runner.with_connector_tools(connectors.clone());
         }
@@ -155,6 +162,7 @@ impl AppState {
             memory_tools,
             task_tools,
             automation_tools,
+            attachment_tools,
             connector_tools,
             mail_actions: None,
             automation: None,
@@ -219,6 +227,7 @@ impl AppState {
             memory_tools,
             task_tools,
             automation_tools,
+            attachment_tools,
             connector_tools,
         } = foundations;
         let mut runner = TurnRunner::new_with_manager_and_config(
@@ -241,6 +250,9 @@ impl AppState {
         if let Some(automation) = &automation_tools {
             runner = runner.with_automation_tools(automation.clone());
         }
+        if let Some(attachments) = &attachment_tools {
+            runner = runner.with_attachment_tools(attachments.clone());
+        }
         if let Some(connectors) = &connector_tools {
             runner = runner.with_connector_tools(connectors.clone());
         }
@@ -261,6 +273,7 @@ impl AppState {
             memory_tools,
             task_tools,
             automation_tools,
+            attachment_tools,
             connector_tools,
             mail_actions: None,
             automation: None,
@@ -316,6 +329,7 @@ impl AppState {
             memory_tools: None,
             task_tools: None,
             automation_tools: None,
+            attachment_tools: None,
             connector_tools: None,
             mail_actions: None,
             automation: None,
@@ -365,6 +379,14 @@ impl AppState {
         automation_tools: agent_runtime::automation_tools::AutomationToolRuntime,
     ) -> Self {
         self.automation_tools = Some(automation_tools);
+        self
+    }
+
+    pub fn with_attachment_foundation(
+        mut self,
+        attachment_tools: agent_runtime::attachment_tools::AttachmentToolRuntime,
+    ) -> Self {
+        self.attachment_tools = Some(attachment_tools);
         self
     }
 
@@ -495,6 +517,7 @@ pub(crate) enum ApiError {
     Conflict(&'static str),
     ConnectionFailed(anyhow::Error),
     NotFound(&'static str),
+    PayloadTooLarge(&'static str),
     Internal(anyhow::Error),
 }
 
@@ -508,6 +531,7 @@ impl IntoResponse for ApiError {
                 format!("connection failed: {error}"),
             ),
             Self::NotFound(message) => (StatusCode::NOT_FOUND, message.to_string()),
+            Self::PayloadTooLarge(message) => (StatusCode::PAYLOAD_TOO_LARGE, message.to_string()),
             Self::Internal(error) => {
                 tracing::error!(?error, "agent-server request failed");
                 (
@@ -545,6 +569,7 @@ pub fn router_for_transport(
     router = router
         .merge(crate::foundation_api::router())
         .merge(crate::task_api::router())
+        .merge(crate::attachment_api::router())
         .merge(crate::automation_api::router());
     if let Some(owner_routes) = crate::owner_api::router(&state) {
         router = router.merge(owner_routes);
@@ -620,47 +645,6 @@ impl AppState {
 
     pub(crate) fn turn_coordinator(&self) -> &crate::turn_api::TurnCoordinator {
         &self.turn_coordinator
-    }
-
-    pub(crate) fn configured_tool_registry(&self) -> anyhow::Result<ToolRegistry> {
-        let mut registry = ToolRegistry::try_new(self.skills(), &self.runtime_config)?;
-        if let Some(memory) = &self.memory_tools {
-            registry = registry.try_with_memory_tools(memory.clone())?;
-        }
-        if let Some(tasks) = &self.task_tools {
-            registry = registry.try_with_task_tools(tasks.clone())?;
-        }
-        if let Some(automation) = &self.automation_tools {
-            registry = registry.try_with_automation_tools(automation.clone())?;
-        }
-        if let Some(connectors) = &self.connector_tools {
-            registry = registry.try_with_connector_tools(connectors.clone())?;
-        }
-        Ok(registry)
-    }
-
-    pub(crate) fn memory_tools(&self) -> Option<agent_runtime::memory_tools::MemoryToolRuntime> {
-        self.memory_tools.clone()
-    }
-
-    pub(crate) fn task_tools(&self) -> Option<agent_runtime::task_tools::TaskToolRuntime> {
-        self.task_tools.clone()
-    }
-
-    pub(crate) fn automation_tools(
-        &self,
-    ) -> Option<agent_runtime::automation_tools::AutomationToolRuntime> {
-        self.automation_tools.clone()
-    }
-
-    pub fn has_automation_tools(&self) -> bool {
-        self.automation_tools.is_some()
-    }
-
-    pub(crate) fn connector_tools(
-        &self,
-    ) -> Option<agent_runtime::connector_tools::ConnectorToolRuntime> {
-        self.connector_tools.clone()
     }
 
     pub(crate) fn mail_actions(
@@ -860,6 +844,9 @@ async fn run_agent_turn_internal(
         }
         if let Some(automation) = &state.automation_tools {
             runner = runner.with_automation_tools(automation.clone());
+        }
+        if let Some(attachments) = &state.attachment_tools {
+            runner = runner.with_attachment_tools(attachments.clone());
         }
         if let Some(connectors) = &state.connector_tools {
             runner = runner.with_connector_tools(connectors.clone());

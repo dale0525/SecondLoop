@@ -2,6 +2,7 @@
 
 pub mod api;
 mod api_foundations;
+mod attachment_api;
 mod automation_api;
 mod conversation_api;
 mod dev_api;
@@ -18,6 +19,8 @@ mod tenant_initialization_tests;
 pub mod tenant_skills;
 mod turn_api;
 
+#[cfg(test)]
+mod api_attachment_tests;
 #[cfg(test)]
 mod skill_release_tests;
 #[cfg(test)]

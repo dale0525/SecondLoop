@@ -1,6 +1,8 @@
 use agent_runtime::app_definition::{
     AgentAppHostDiscovery, AgentAppRuntimeInventory, ResolvedAgentApp,
 };
+use agent_runtime::attachment_tools::AttachmentToolRuntime;
+use agent_runtime::attachments::{AttachmentScope, SqliteAttachmentStore};
 use agent_runtime::automation_tools::{AutomationScope, AutomationToolRuntime};
 use agent_runtime::connector::ConnectorRuntime;
 use agent_runtime::connector_tools::{ConnectorToolRuntime, EphemeralConnectorContextProvider};
@@ -112,6 +114,7 @@ fn first_party_capabilities() -> impl Iterator<Item = String> {
         "host-tools",
         "task-provider",
         "scheduler",
+        "attachments",
     ]
     .into_iter()
     .map(str::to_string)
@@ -122,6 +125,7 @@ fn first_party_tool_names() -> impl Iterator<Item = String> {
         .into_iter()
         .chain(agent_runtime::task_tools::TASK_TOOL_NAMES)
         .chain(agent_runtime::automation_tools::AUTOMATION_TOOL_NAMES)
+        .chain(agent_runtime::attachment_tools::ATTACHMENT_TOOL_NAMES)
         .chain(MAIL_TOOL_NAMES)
         .map(str::to_string)
 }
@@ -187,6 +191,25 @@ pub(super) async fn resolve_automation_tools(
     )
     .await
     .map(Some)
+}
+
+pub(super) async fn resolve_attachment_tools(
+    storage: &Storage,
+    app_prompt: &AppPromptConfig,
+) -> anyhow::Result<Option<AttachmentToolRuntime>> {
+    let enabled = app_prompt
+        .identity
+        .enabled_capabilities
+        .iter()
+        .any(|capability| capability == "attachments")
+        || std::env::var("AGENTWEAVE_ATTACHMENTS").as_deref() == Ok("enabled");
+    if !enabled {
+        return Ok(None);
+    }
+    Ok(Some(AttachmentToolRuntime::new(
+        SqliteAttachmentStore::from_storage(storage).await?,
+        AttachmentScope::new(&app_prompt.identity.app_id, "local", "local-user")?,
+    )))
 }
 
 pub(super) async fn resolve_connector_tools(

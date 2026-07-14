@@ -62,6 +62,7 @@ pub struct TurnRunner<C> {
     memory_candidate_extractor: Option<Arc<dyn crate::memory_lifecycle::MemoryCandidateExtractor>>,
     task_tools: Option<crate::task_tools::TaskToolRuntime>,
     automation_tools: Option<crate::automation_tools::AutomationToolRuntime>,
+    attachment_tools: Option<crate::attachment_tools::AttachmentToolRuntime>,
     connector_tools: Option<crate::connector_tools::ConnectorToolRuntime>,
 }
 
@@ -112,6 +113,7 @@ where
             memory_candidate_extractor: None,
             task_tools: None,
             automation_tools: None,
+            attachment_tools: None,
             connector_tools: None,
         }
     }
@@ -157,6 +159,14 @@ where
         automation_tools: crate::automation_tools::AutomationToolRuntime,
     ) -> Self {
         self.automation_tools = Some(automation_tools);
+        self
+    }
+
+    pub fn with_attachment_tools(
+        mut self,
+        attachment_tools: crate::attachment_tools::AttachmentToolRuntime,
+    ) -> Self {
+        self.attachment_tools = Some(attachment_tools);
         self
     }
 
@@ -223,6 +233,9 @@ where
         }
         if let Some(automation) = &self.automation_tools {
             tools = tools.try_with_automation_tools(automation.clone())?;
+        }
+        if let Some(attachments) = &self.attachment_tools {
+            tools = tools.try_with_attachment_tools(attachments.clone())?;
         }
         if let Some(connectors) = &self.connector_tools {
             tools = tools.try_with_connector_tools(connectors.clone())?;

@@ -524,7 +524,7 @@
     },
     {
       "id": "agentweave.foundation.documents",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "displayName": "Documents",
       "description": "Document reading, extraction, rendering, conversion, creation, and visual quality checks.",
       "audience": [
@@ -539,29 +539,32 @@
         "server"
       ],
       "dependencies": {
-        "packages": [
-          "agentweave.core.filesystem"
-        ],
+        "packages": [],
         "runtimeFeatures": [
+          "attachment-store",
           "artifact-store",
           "content-safety",
           "render-verification"
         ],
         "runtimeCapabilities": [
-          "host-tools"
+          "host-tools",
+          "attachments"
         ],
         "connectors": [],
         "hostTools": [
-          "agentweave.host.documents/v1"
+          "attachment_list",
+          "attachment_get",
+          "attachment_read",
+          "attachment_delete"
         ]
       },
       "permissions": {
         "required": [
-          "read_workspace"
+          "attachment.read_sensitive"
         ],
         "conditional": [
-          "write_workspace",
-          "artifact.write"
+          "artifact.write",
+          "attachment.delete"
         ]
       },
       "dataSensitivity": {
@@ -569,6 +572,7 @@
         "categories": [
           "document_content",
           "document_metadata",
+          "attachment_bytes",
           "rendered_artifacts"
         ]
       },
@@ -580,7 +584,8 @@
         "requirements": [
           "Preserve source files unless replacement is explicit.",
           "Keep generated artifacts traceable to their inputs.",
-          "Verify layout-sensitive outputs before delivery."
+          "Verify layout-sensitive outputs before delivery.",
+          "Keep attachment scope Host-injected and read content only in bounded chunks."
         ]
       },
       "localPackage": {

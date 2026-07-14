@@ -3,6 +3,8 @@
 pub mod app_definition;
 pub mod app_manifest;
 pub mod approval;
+pub mod attachment_tools;
+pub mod attachments;
 pub mod automation;
 pub mod automation_tools;
 pub mod calendar;

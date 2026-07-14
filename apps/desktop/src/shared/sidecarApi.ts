@@ -3,6 +3,9 @@ export const SIDECAR_API_REQUEST_CHANNEL = "agentweave:sidecar-api:request";
 export type SidecarApiOperation =
   | "actions.list"
   | "actions.resolve"
+  | "attachments.delete"
+  | "attachments.get"
+  | "attachments.list"
   | "devSkills.delete"
   | "devSkills.list"
   | "devSkills.reload"

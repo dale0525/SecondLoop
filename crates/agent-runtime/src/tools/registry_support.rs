@@ -1,6 +1,46 @@
 use super::*;
 
 impl ToolRegistry {
+    pub fn try_with_memory_tools(
+        mut self,
+        memory: crate::memory_tools::MemoryToolRuntime,
+    ) -> anyhow::Result<Self> {
+        self.memory = Some(memory);
+        self.validate()
+    }
+
+    pub fn try_with_task_tools(
+        mut self,
+        tasks: crate::task_tools::TaskToolRuntime,
+    ) -> anyhow::Result<Self> {
+        self.task_tools = Some(tasks);
+        self.validate()
+    }
+
+    pub fn try_with_automation_tools(
+        mut self,
+        automation: crate::automation_tools::AutomationToolRuntime,
+    ) -> anyhow::Result<Self> {
+        self.automation_tools = Some(automation);
+        self.validate()
+    }
+
+    pub fn try_with_attachment_tools(
+        mut self,
+        attachments: crate::attachment_tools::AttachmentToolRuntime,
+    ) -> anyhow::Result<Self> {
+        self.attachment_tools = Some(attachments);
+        self.validate()
+    }
+
+    pub fn try_with_connector_tools(
+        mut self,
+        connectors: crate::connector_tools::ConnectorToolRuntime,
+    ) -> anyhow::Result<Self> {
+        self.connector_tools = Some(connectors);
+        self.validate()
+    }
+
     pub fn parallel_safe(&self, name: &str) -> bool {
         if self
             .task_tools
@@ -13,6 +53,13 @@ impl ToolRegistry {
             .automation_tools
             .as_ref()
             .is_some_and(|automation| automation.parallel_safe(name))
+        {
+            return true;
+        }
+        if self
+            .attachment_tools
+            .as_ref()
+            .is_some_and(|attachments| attachments.parallel_safe(name))
         {
             return true;
         }
@@ -47,6 +94,10 @@ impl ToolRegistry {
                 .automation_tools
                 .as_ref()
                 .is_some_and(|automation| automation.handles(name))
+            || self
+                .attachment_tools
+                .as_ref()
+                .is_some_and(|attachments| attachments.handles(name))
             || self
                 .connector_tools
                 .as_ref()
@@ -88,6 +139,10 @@ impl ToolRegistry {
                 .automation_tools
                 .as_ref()
                 .is_some_and(|automation| automation.handles(name))
+            || self
+                .attachment_tools
+                .as_ref()
+                .is_some_and(|attachments| attachments.handles(name))
             || self
                 .connector_tools
                 .as_ref()

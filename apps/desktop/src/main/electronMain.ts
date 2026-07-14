@@ -1,8 +1,10 @@
-import { app, BrowserWindow, ipcMain, Notification, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from "electron";
+import { open } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { registerApprovalWindowController } from "./approvalWindow";
+import { registerAttachmentController } from "./attachmentController";
 import { getDesktopWindowConfig } from "./index";
 import { registerHostBootstrapController } from "./hostBootstrapController";
 import { registerModelSettingsController } from "./modelSettingsController";
@@ -19,6 +21,7 @@ import { registerSidecarApiController } from "./sidecarApiController";
 
 let mainWindow: BrowserWindow | null = null;
 let disposeApproval: (() => void) | null = null;
+let disposeAttachments: (() => void) | null = null;
 let disposeModelSettings: (() => void) | null = null;
 let disposeHostBootstrap: (() => void) | null = null;
 let disposeNotifications: (() => void) | null = null;
@@ -87,6 +90,29 @@ app.whenReady().then(async () => {
     requesterWebContents: mainWindow.webContents,
     sidecarRequest: sidecar.request,
   });
+  disposeAttachments = registerAttachmentController({
+    ipcMain,
+    pickFile: async () => {
+      const result = await dialog.showOpenDialog(mainWindow!, {
+        properties: ["openFile"],
+      });
+      return result.canceled ? null : (result.filePaths[0] ?? null);
+    },
+    readFile: async (filePath) => {
+      const handle = await open(filePath, "r");
+      try {
+        const metadata = await handle.stat();
+        if (!metadata.isFile() || metadata.size > 16 * 1024 * 1024) {
+          throw new Error("Selected attachment is not an allowed file");
+        }
+        return new Uint8Array(await handle.readFile());
+      } finally {
+        await handle.close();
+      }
+    },
+    requesterWebContents: mainWindow.webContents,
+    sidecarRequest: sidecar.request,
+  });
   disposeModelSettings = registerModelSettingsController({
     ipcMain,
     requesterWebContents: mainWindow.webContents,
@@ -119,6 +145,8 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   disposeApproval?.();
   disposeApproval = null;
+  disposeAttachments?.();
+  disposeAttachments = null;
   disposeModelSettings?.();
   disposeModelSettings = null;
   disposeHostBootstrap?.();

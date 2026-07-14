@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
+import type { AttachmentMetadata } from "../shared/attachments";
 import type { AgentAppHostDiscovery } from "../shared/hostBootstrap";
 import type { SidecarStatus } from "../shared/sidecarStatus";
 import type { SidecarApiOperation } from "../shared/sidecarApi";
@@ -13,6 +14,9 @@ declare global {
 
   interface Window {
     agentWeave?: {
+      attachments?: {
+        pickAndImport(): Promise<AttachmentMetadata | null>;
+      };
       hostBootstrap?: {
         load(): Promise<AgentAppHostDiscovery>;
       };

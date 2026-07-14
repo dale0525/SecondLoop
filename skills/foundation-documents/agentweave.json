@@ -1,15 +1,20 @@
 {
   "schemaVersion": 1,
   "id": "agentweave.foundation.documents",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Documents",
   "kind": "host_tools_only",
   "package": { "includeInstructions": true, "includeRuntime": false },
   "compatibility": { "platforms": ["desktop", "server"] },
   "requires": {
-    "packages": ["agentweave.core.filesystem"],
-    "capabilities": ["host-tools"],
-    "runtimeTools": ["agentweave.host.documents/v1"],
+    "packages": [],
+    "capabilities": ["host-tools", "attachments"],
+    "runtimeTools": [
+      "attachment_list",
+      "attachment_get",
+      "attachment_read",
+      "attachment_delete"
+    ],
     "connectors": []
   }
 }

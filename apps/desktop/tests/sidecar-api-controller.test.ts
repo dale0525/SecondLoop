@@ -167,6 +167,44 @@ describe("trusted sidecar API controller", () => {
     );
   });
 
+  it("maps attachment metadata operations without exposing attachment bytes", async () => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn(async () => new Response(JSON.stringify([])));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+    const id = "123e4567-e89b-12d3-a456-426614174000";
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { input: { limit: 10 }, operation: "attachments.list" },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/foundation/attachments?limit=10",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { input: { id }, operation: "attachments.get" },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      `/foundation/attachments/${id}`,
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { input: { id }, operation: "attachments.delete" },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      `/foundation/attachments/${id}`,
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
   it.each([
     ["invalid task identifier", { input: { id: "../secret" }, operation: "tasks.get" }, /id is invalid/],
     ["oversized title", taskCreate({ title: "x".repeat(1_025) }, "create-1"), /title is invalid/],

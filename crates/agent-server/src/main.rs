@@ -35,7 +35,9 @@ use server_skill_startup::{
 };
 #[cfg(test)]
 use server_skill_startup::{ManagedSkillsConfig, load_skill_manager};
-use server_tenant_startup::{build_managed_tenant_registry, build_tenant_app_state};
+use server_tenant_startup::{
+    build_managed_tenant_registry, build_tenant_app_state, sqlite_database_path,
+};
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -107,6 +109,8 @@ async fn main() -> anyhow::Result<()> {
         let task_tools = server_app::resolve_task_tools(&storage, &resolved_app.prompt).await?;
         let automation_tools =
             server_app::resolve_automation_tools(&storage, &resolved_app.prompt).await?;
+        let attachment_tools =
+            server_app::resolve_attachment_tools(&storage, &resolved_app.prompt).await?;
         let connector_foundation =
             server_app::resolve_connector_tools(&storage, &resolved_app.prompt).await?;
         let connector_tools = connector_foundation
@@ -120,7 +124,8 @@ async fn main() -> anyhow::Result<()> {
                 runtime_config,
                 resolved_app.prompt,
                 api::AppFoundationRuntimes::new(memory_tools, task_tools, connector_tools)
-                    .with_automation_tools(automation_tools),
+                    .with_automation_tools(automation_tools)
+                    .with_attachment_tools(attachment_tools),
                 owner_management,
             )
         } else {
@@ -131,7 +136,8 @@ async fn main() -> anyhow::Result<()> {
                 runtime_config,
                 resolved_app.prompt,
                 api::AppFoundationRuntimes::new(memory_tools, task_tools, connector_tools)
-                    .with_automation_tools(automation_tools),
+                    .with_automation_tools(automation_tools)
+                    .with_attachment_tools(attachment_tools),
             )
         }
         .with_host_discovery(resolved_app.host_discovery)?;
@@ -214,15 +220,6 @@ fn skills_root_from_env() -> PathBuf {
     std::env::var("AGENTWEAVE_SKILLS_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(DEFAULT_SKILLS_ROOT))
-}
-
-fn sqlite_database_path(url: &str) -> Option<PathBuf> {
-    let value = url
-        .strip_prefix("sqlite://")
-        .or_else(|| url.strip_prefix("sqlite:"))?
-        .split('?')
-        .next()?;
-    (!value.is_empty() && value != ":memory:").then(|| PathBuf::from(value))
 }
 
 #[derive(Clone)]

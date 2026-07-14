@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
 import {
+  ATTACHMENT_PICK_IMPORT_CHANNEL,
+  parseAttachmentMetadata,
+  type AttachmentMetadata,
+} from "../shared/attachments";
+import {
   HOST_BOOTSTRAP_LOAD_CHANNEL,
   type AgentAppHostDiscovery,
 } from "../shared/hostBootstrap";
@@ -22,6 +27,9 @@ type DesktopRuntimeInfo = {
 };
 
 export type DesktopPreloadApi = {
+  attachments: {
+    pickAndImport: () => Promise<AttachmentMetadata | null>;
+  };
   getRuntimeInfo: () => DesktopRuntimeInfo;
   hostBootstrap: {
     load: () => Promise<AgentAppHostDiscovery>;
@@ -57,6 +65,12 @@ const runtimeInfo: DesktopRuntimeInfo = {
 };
 
 export const desktopPreloadApi: DesktopPreloadApi = Object.freeze({
+  attachments: Object.freeze({
+    pickAndImport: async (): Promise<AttachmentMetadata | null> => {
+      const value = await ipcRenderer.invoke(ATTACHMENT_PICK_IMPORT_CHANNEL) as unknown;
+      return value === null ? null : parseAttachmentMetadata(value);
+    },
+  }),
   getRuntimeInfo: () => runtimeInfo,
   hostBootstrap: Object.freeze({
     load: () =>

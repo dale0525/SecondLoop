@@ -51,6 +51,7 @@ dependencies = [
  "anyhow",
  "async-imap",
  "async-trait",
+ "base64",
  "chrono",
  "chrono-tz",
  "cron",

@@ -121,6 +121,18 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
       });
     case "memory.export":
       return get("/foundation/memory/export");
+    case "attachments.list": {
+      const input = exactRecord(request.input, ["limit"], true);
+      const limit = optionalInteger(input, "limit", 1, 100) ?? 25;
+      return get(`/foundation/attachments?${new URLSearchParams({ limit: String(limit) })}`);
+    }
+    case "attachments.get":
+      return get(`/foundation/attachments/${uuidIdentifier(request.input, "id")}`);
+    case "attachments.delete":
+      return {
+        method: "DELETE",
+        pathname: `/foundation/attachments/${uuidIdentifier(request.input, "id")}`,
+      };
     case "tasks.list": {
       const input = exactRecord(
         request.input,
@@ -314,6 +326,14 @@ function identifier(value: unknown, name: string): string {
     throw new Error(`${name} is invalid`);
   }
   return encodeURIComponent(id);
+}
+
+function uuidIdentifier(value: unknown, name: string): string {
+  const id = fieldString(exactRecord(value, [name]), name, 36);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error(`${name} is invalid`);
+  }
+  return id;
 }
 
 function taskContent(value: unknown): Record<string, unknown> {
@@ -553,6 +573,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const OPERATIONS = new Set<SidecarApiOperation>([
   "actions.list",
   "actions.resolve",
+  "attachments.delete",
+  "attachments.get",
+  "attachments.list",
   "devSkills.delete",
   "devSkills.list",
   "devSkills.reload",

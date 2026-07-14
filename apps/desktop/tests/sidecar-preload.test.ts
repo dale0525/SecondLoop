@@ -2,6 +2,7 @@ import { ipcRenderer } from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { desktopPreloadApi } from "../src/preload";
+import { ATTACHMENT_PICK_IMPORT_CHANNEL } from "../src/shared/attachments";
 import { SIDECAR_API_REQUEST_CHANNEL } from "../src/shared/sidecarApi";
 import {
   SIDECAR_ENSURE_RUNNING_CHANNEL,
@@ -73,5 +74,21 @@ describe("sidecar preload capability", () => {
       input: { status: "open", limit: 25 },
     });
     expect(Object.keys(desktopPreloadApi.server)).toEqual(["request"]);
+  });
+
+  it("exposes trusted attachment selection as metadata only", async () => {
+    const metadata = {
+      id: "123e4567-e89b-12d3-a456-426614174000",
+      fileName: "brief.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 4,
+      sha256: "a".repeat(64),
+      createdAt: "2026-07-14T10:00:00Z",
+    };
+    vi.mocked(ipcRenderer.invoke).mockResolvedValue(metadata);
+
+    await expect(desktopPreloadApi.attachments.pickAndImport()).resolves.toEqual(metadata);
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith(ATTACHMENT_PICK_IMPORT_CHANNEL);
+    expect(Object.keys(desktopPreloadApi.attachments)).toEqual(["pickAndImport"]);
   });
 });

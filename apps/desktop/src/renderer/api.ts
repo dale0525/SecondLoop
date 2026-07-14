@@ -1,4 +1,5 @@
 import { ModelSettings } from "./types";
+import type { AttachmentMetadata } from "../shared/attachments";
 import type {
   FoundationMisfirePolicy,
   FoundationNotificationRecord,
@@ -30,6 +31,8 @@ export type {
   FoundationTaskRecord,
   FoundationTaskStatus,
 } from "../shared/sidecarApi";
+
+export type { AttachmentMetadata } from "../shared/attachments";
 
 export type ServerSession = {
   created_at: string;
@@ -558,6 +561,39 @@ export async function forgetMemory(id: string, expectedVersion: number): Promise
 
 export async function exportMemories(): Promise<MemoryExport> {
   return requestServer<MemoryExport>("memory.export", undefined, "/foundation/memory/export", { method: "GET" });
+}
+
+export async function listAttachments(limit = 25): Promise<AttachmentMetadata[]> {
+  return requestServer<AttachmentMetadata[]>(
+    "attachments.list",
+    { limit },
+    `/foundation/attachments?${new URLSearchParams({ limit: String(limit) })}`,
+    { method: "GET" },
+  );
+}
+
+export async function getAttachment(id: string): Promise<AttachmentMetadata> {
+  return requestServer<AttachmentMetadata>(
+    "attachments.get",
+    { id },
+    `/foundation/attachments/${encodeURIComponent(id)}`,
+    { method: "GET" },
+  );
+}
+
+export async function deleteAttachment(id: string): Promise<unknown> {
+  return requestServer(
+    "attachments.delete",
+    { id },
+    `/foundation/attachments/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function pickAndImportAttachment(): Promise<AttachmentMetadata | null> {
+  const bridge = window.agentWeave?.attachments;
+  if (!bridge) throw new Error("Trusted attachment import is unavailable");
+  return bridge.pickAndImport();
 }
 
 export async function listFoundationTasks(

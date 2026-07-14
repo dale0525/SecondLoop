@@ -236,6 +236,7 @@ pub struct ToolRegistry {
     memory: Option<crate::memory_tools::MemoryToolRuntime>,
     task_tools: Option<crate::task_tools::TaskToolRuntime>,
     automation_tools: Option<crate::automation_tools::AutomationToolRuntime>,
+    attachment_tools: Option<crate::attachment_tools::AttachmentToolRuntime>,
     workspace_root: PathBuf,
     cwd: PathBuf,
     mode: RuntimeMode,
@@ -259,6 +260,7 @@ impl std::fmt::Debug for ToolRegistry {
             .field("has_memory", &self.memory.is_some())
             .field("has_task_tools", &self.task_tools.is_some())
             .field("has_automation_tools", &self.automation_tools.is_some())
+            .field("has_attachment_tools", &self.attachment_tools.is_some())
             .field("has_connector_tools", &self.connector_tools.is_some())
             .field("has_management", &self.management.is_some())
             .field("has_execution_observer", &self.execution_observer.is_some())
@@ -303,6 +305,7 @@ impl ToolRegistry {
             memory: None,
             task_tools: None,
             automation_tools: None,
+            attachment_tools: None,
             workspace_root: config.workspace_root.clone(),
             cwd: config.cwd.clone(),
             mode: config.mode,
@@ -322,38 +325,6 @@ impl ToolRegistry {
     pub fn with_execution_observer(mut self, observer: Arc<dyn ToolExecutionObserver>) -> Self {
         self.execution_observer = Some(observer);
         self
-    }
-
-    pub fn try_with_memory_tools(
-        mut self,
-        memory: crate::memory_tools::MemoryToolRuntime,
-    ) -> anyhow::Result<Self> {
-        self.memory = Some(memory);
-        self.validate()
-    }
-
-    pub fn try_with_task_tools(
-        mut self,
-        tasks: crate::task_tools::TaskToolRuntime,
-    ) -> anyhow::Result<Self> {
-        self.task_tools = Some(tasks);
-        self.validate()
-    }
-
-    pub fn try_with_automation_tools(
-        mut self,
-        automation: crate::automation_tools::AutomationToolRuntime,
-    ) -> anyhow::Result<Self> {
-        self.automation_tools = Some(automation);
-        self.validate()
-    }
-
-    pub fn try_with_connector_tools(
-        mut self,
-        connectors: crate::connector_tools::ConnectorToolRuntime,
-    ) -> anyhow::Result<Self> {
-        self.connector_tools = Some(connectors);
-        self.validate()
     }
 
     pub(crate) fn with_turn_execution_lease(
@@ -407,6 +378,9 @@ impl ToolRegistry {
         }
         if let Some(automation) = &self.automation_tools {
             definitions.extend(automation.definitions());
+        }
+        if let Some(attachments) = &self.attachment_tools {
+            definitions.extend(attachments.definitions());
         }
         if let Some(connectors) = &self.connector_tools {
             definitions.extend(connectors.definitions());
@@ -627,6 +601,12 @@ impl ToolRegistry {
         }
         if let Some(outcome) = self
             .dispatch_automation_tools(name, call_id, &arguments, started)
+            .await
+        {
+            return outcome;
+        }
+        if let Some(outcome) = self
+            .dispatch_attachment_tools(name, call_id, &arguments, started)
             .await
         {
             return outcome;

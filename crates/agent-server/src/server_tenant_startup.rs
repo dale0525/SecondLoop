@@ -9,13 +9,22 @@ use agent_server::tenant_skills::{
     FilesystemTenantSkillManagerFactory, TenantSkillManagerConfig, TenantSkillManagerRegistry,
     TenantSkillRuntime,
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::server_skill_startup::{
     BuiltinSkillsMode, ManagedSkillsConfig, load_app_package_source_from_env,
     load_builtin_skill_source,
 };
+
+pub(super) fn sqlite_database_path(url: &str) -> Option<PathBuf> {
+    let value = url
+        .strip_prefix("sqlite://")
+        .or_else(|| url.strip_prefix("sqlite:"))?
+        .split('?')
+        .next()?;
+    (!value.is_empty() && value != ":memory:").then(|| PathBuf::from(value))
+}
 
 pub(super) async fn build_managed_tenant_registry(
     skills_root: &Path,
@@ -58,6 +67,8 @@ where
     let task_tools = super::server_app::resolve_task_tools(&runtime.storage, &app_prompt).await?;
     let automation_tools =
         super::server_app::resolve_automation_tools(&runtime.storage, &app_prompt).await?;
+    let attachment_tools =
+        super::server_app::resolve_attachment_tools(&runtime.storage, &app_prompt).await?;
     let connector_foundation =
         super::server_app::resolve_connector_tools(&runtime.storage, &app_prompt).await?;
     let connector_tools = connector_foundation
@@ -71,7 +82,8 @@ where
             runtime_config,
             app_prompt,
             api::AppFoundationRuntimes::new(memory_tools, task_tools, connector_tools)
-                .with_automation_tools(automation_tools),
+                .with_automation_tools(automation_tools)
+                .with_attachment_tools(attachment_tools),
             owner_management,
         )
     } else {
@@ -82,7 +94,8 @@ where
             runtime_config,
             app_prompt,
             api::AppFoundationRuntimes::new(memory_tools, task_tools, connector_tools)
-                .with_automation_tools(automation_tools),
+                .with_automation_tools(automation_tools)
+                .with_attachment_tools(attachment_tools),
         )
     };
     Ok(match connector_foundation {
