@@ -16,6 +16,7 @@ describe("Chat", () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     window.history.replaceState(null, "", "/");
+    delete window.agentWeave;
   });
 
   it("creates a session, posts a user message, and displays the assistant response", async () => {
@@ -58,7 +59,7 @@ describe("Chat", () => {
       1,
       "/__agentweave/sessions",
       expect.objectContaining({
-        body: JSON.stringify({ title: "Provider adapter MVP" }),
+        body: JSON.stringify({ title: "Run the renderer smoke test" }),
         method: "POST"
       })
     );
@@ -358,6 +359,105 @@ describe("Chat", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("restores, renames, and deletes authoritative Electron history", async () => {
+    const user = userEvent.setup();
+    const session = {
+      created_at: "2026-07-14T10:00:00Z",
+      id: "session-1",
+      title: "Persistent plan",
+      updated_at: "2026-07-14T11:00:00Z",
+    };
+    const updated = {
+      ...session,
+      title: "Renamed plan",
+      updated_at: "2026-07-14T12:00:00Z",
+    };
+    const request = vi.fn(async (operation: string) => {
+      if (operation === "sessions.list") return { items: [session], nextCursor: null };
+      if (operation === "sessions.load") {
+        return {
+          events: [],
+          messages: [
+            {
+              content: "Persist this",
+              created_at: "2026-07-14T10:00:00Z",
+              id: "message-1",
+              role: "user",
+              session_id: session.id,
+            },
+            {
+              content: "Persisted",
+              created_at: "2026-07-14T10:00:01Z",
+              id: "message-2",
+              role: "assistant",
+              session_id: session.id,
+            },
+          ],
+          session,
+        };
+      }
+      if (operation === "sessions.update") return updated;
+      if (operation === "sessions.delete") return {};
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installServerBridge(request);
+
+    render(<Chat />);
+
+    expect(await screen.findByText("Persist this")).toBeVisible();
+    expect(screen.getByText("Persisted")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Open conversations" }));
+    expect(screen.getByRole("button", { name: /^Persistent plan/ })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Rename Persistent plan" }));
+    const title = screen.getByRole("textbox", { name: "Conversation title" });
+    await user.clear(title);
+    await user.type(title, "Renamed plan{Enter}");
+    expect(await screen.findByRole("button", { name: /^Renamed plan/ })).toBeVisible();
+    expect(request).toHaveBeenCalledWith("sessions.update", expect.objectContaining({
+      expectedUpdatedAt: session.updated_at,
+      id: session.id,
+      title: "Renamed plan",
+    }));
+
+    await user.click(screen.getByRole("button", { name: "Delete Renamed plan" }));
+    await user.click(screen.getByRole("button", { name: "Delete conversation" }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith(
+      "sessions.delete",
+      expect.objectContaining({ id: session.id }),
+    ));
+    expect(screen.getByText("Hello! How can I help you today?")).toBeVisible();
+  });
+
+  it("cancels inline rename with Escape without closing the conversation drawer", async () => {
+    const user = userEvent.setup();
+    const session = {
+      created_at: "2026-07-14T10:00:00Z",
+      id: "session-1",
+      title: "Persistent plan",
+      updated_at: "2026-07-14T11:00:00Z",
+    };
+    installServerBridge(vi.fn(async (operation: string) => {
+      if (operation === "sessions.list") return { items: [session], nextCursor: null };
+      if (operation === "sessions.load") {
+        return { events: [], messages: [], session };
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    }));
+
+    render(<Chat />);
+
+    await user.click(screen.getByRole("button", { name: "Open conversations" }));
+    await user.click(await screen.findByRole("button", { name: "Rename Persistent plan" }));
+    const title = screen.getByRole("textbox", { name: "Conversation title" });
+    await user.clear(title);
+    await user.type(title, "Discarded title{Escape}");
+
+    expect(screen.getByRole("dialog", { name: "Conversations" })).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Conversation title" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Persistent plan/ })).toBeVisible();
+  });
+
   it("ignores an in-flight assistant response after starting a new chat", async () => {
     const user = userEvent.setup();
     const pendingMessage = createDeferred<Response>();
@@ -433,6 +533,7 @@ describe("App navigation", () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     window.history.replaceState(null, "", "/");
+    delete window.agentWeave;
   });
 
   it("updates the active view when the location hash changes", async () => {
@@ -645,5 +746,19 @@ function createStableId() {
   return () => {
     index += 1;
     return `test-id-${index}`;
+  };
+}
+
+function installServerBridge(
+  request: (operation: string, input?: unknown) => Promise<unknown>,
+): void {
+  window.agentWeave = {
+    approval: {
+      open: async () => {
+        throw new Error("Approval is unavailable in this test");
+      },
+    },
+    owner: {} as NonNullable<Window["agentWeave"]>["owner"],
+    server: { request },
   };
 }

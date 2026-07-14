@@ -2,6 +2,7 @@
 
 pub mod api;
 mod automation_api;
+mod conversation_api;
 mod dev_api;
 pub mod dev_skills;
 mod foundation_api;

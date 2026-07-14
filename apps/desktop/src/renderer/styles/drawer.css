@@ -77,43 +77,174 @@
   width: 100%;
   min-height: 54px;
   align-items: center;
+  gap: 2px;
+  padding: 3px;
   border: 1px solid transparent;
   border-radius: var(--radius-content);
   background: transparent;
   color: var(--color-text);
-  cursor: pointer;
   text-align: left;
 }
 
-.conversation-row:hover {
+.conversation-row:hover,
+.conversation-row:focus-within,
+.conversation-row.is-active {
   border-color: var(--color-border);
   background: var(--color-surface-muted);
 }
 
-.conversation-row span {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  padding: 8px;
+.conversation-row.is-active {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  box-shadow: inset 2px 0 0 var(--color-primary);
 }
 
-.conversation-row strong,
-.conversation-row small {
+.conversation-row-main {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.conversation-row-main strong,
+.conversation-row-main small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.conversation-row strong {
+.conversation-row-main strong {
   font-size: 14px;
   font-weight: 600;
   line-height: 20px;
 }
 
-.conversation-row small {
+.conversation-row-main small {
   color: var(--color-text-subtle);
   font-size: 12px;
   line-height: 16px;
+}
+
+.conversation-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.conversation-row:hover .conversation-row-actions,
+.conversation-row:focus-within .conversation-row-actions,
+.conversation-row.is-active .conversation-row-actions {
+  opacity: 1;
+}
+
+.conversation-row-actions .icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.conversation-row-editing input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: var(--color-background);
+  color: var(--color-text);
+  box-shadow: var(--shadow-focus);
+}
+
+.conversation-drawer-state {
+  margin: 12px 8px;
+  padding: 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-content);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.conversation-drawer-state p {
+  margin: 0 0 10px;
+}
+
+.conversation-drawer-state button,
+.conversation-load-more {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.conversation-load-more {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 14px 8px 0;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(10, 11, 12, 0.66);
+  backdrop-filter: blur(3px);
+}
+
+.modal-content {
+  position: fixed;
+  z-index: 41;
+  top: 50%;
+  left: 50%;
+  width: min(440px, calc(100vw - 32px));
+  padding: 22px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  outline: 0;
+  background: var(--color-surface);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+}
+
+.modal-content h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.modal-content p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.dialog-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.dialog-actions .danger-button {
+  border-color: color-mix(in srgb, var(--color-danger) 65%, var(--color-border));
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
 }
 
 @media (max-width: 640px) {
@@ -124,5 +255,20 @@
   .conversation-drawer-content {
     width: calc(100vw - 24px);
     max-width: none;
+  }
+
+  .conversation-drawer-header .icon-button,
+  .conversation-row-actions .icon-button,
+  .conversation-row-editing .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .conversation-drawer-new {
+    min-height: 44px;
+  }
+
+  .conversation-row-actions {
+    opacity: 1;
   }
 }

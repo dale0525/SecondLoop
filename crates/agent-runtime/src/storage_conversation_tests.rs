@@ -143,3 +143,103 @@ async fn conversation_search_is_scoped_and_bounded() {
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn session_pages_use_a_stable_scoped_cursor() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let scope = ConversationScope::local("com.example.pages");
+    let first = storage
+        .create_scoped_session(&scope, "First")
+        .await
+        .unwrap();
+    let second = storage
+        .create_scoped_session(&scope, "Second")
+        .await
+        .unwrap();
+    let third = storage
+        .create_scoped_session(&scope, "Third")
+        .await
+        .unwrap();
+    for (session, timestamp) in [
+        (&first, "2025-01-03T00:00:00+00:00"),
+        (&second, "2025-01-02T00:00:00+00:00"),
+        (&third, "2025-01-01T00:00:00+00:00"),
+    ] {
+        sqlx::query("UPDATE sessions SET updated_at = ? WHERE id = ?")
+            .bind(timestamp)
+            .bind(&session.id)
+            .execute(storage.pool())
+            .await
+            .unwrap();
+    }
+
+    let first_page = storage
+        .list_scoped_sessions_page(&scope, None, 2)
+        .await
+        .unwrap();
+    assert_eq!(
+        first_page
+            .items
+            .iter()
+            .map(|session| session.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![first.id.as_str(), second.id.as_str()]
+    );
+    let cursor = first_page.next_cursor.unwrap();
+    let second_page = storage
+        .list_scoped_sessions_page(&scope, Some(&cursor), 2)
+        .await
+        .unwrap();
+    assert_eq!(second_page.items.len(), 1);
+    assert_eq!(second_page.items[0].id, third.id);
+    assert!(second_page.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn session_title_and_delete_use_optimistic_concurrency() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let scope = ConversationScope::local("com.example.mutations");
+    let session = storage
+        .create_scoped_session(&scope, "Original")
+        .await
+        .unwrap();
+
+    let updated = storage
+        .update_scoped_session_title(&scope, &session.id, "Renamed", session.updated_at)
+        .await
+        .unwrap();
+    let SessionMutation::Applied(updated) = updated else {
+        panic!("title update was not applied");
+    };
+    assert_eq!(updated.title, "Renamed");
+    assert!(updated.updated_at > session.updated_at);
+
+    assert!(matches!(
+        storage
+            .update_scoped_session_title(&scope, &session.id, "Stale", session.updated_at)
+            .await
+            .unwrap(),
+        SessionMutation::Conflict(authoritative) if authoritative.title == "Renamed"
+    ));
+    assert!(matches!(
+        storage
+            .delete_scoped_session_if_unchanged(&scope, &session.id, session.updated_at)
+            .await
+            .unwrap(),
+        SessionMutation::Conflict(_)
+    ));
+    assert!(matches!(
+        storage
+            .delete_scoped_session_if_unchanged(&scope, &session.id, updated.updated_at)
+            .await
+            .unwrap(),
+        SessionMutation::Applied(_)
+    ));
+    assert!(
+        storage
+            .get_scoped_session(&scope, &session.id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}

@@ -55,12 +55,6 @@ export type ChatMessage =
   | ToolCallMessage
   | ToolResultMessage;
 
-export type ConversationSummary = {
-  id: string;
-  title: string;
-  updatedAt: string;
-};
-
 export type EndpointType = "responses" | "chat_completions" | "completion";
 
 export type ModelSettings = {

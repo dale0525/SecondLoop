@@ -2,8 +2,30 @@ import { ModelSettings } from "./types";
 import type { SidecarApiOperation } from "../shared/sidecarApi";
 
 export type ServerSession = {
+  created_at: string;
   id: string;
   title: string;
+  updated_at: string;
+};
+
+export type ServerSessionPage = {
+  items: ServerSession[];
+  nextCursor: string | null;
+};
+
+export type ServerConversationEvent = {
+  created_at: string;
+  event_index: number;
+  id: string;
+  kind: string;
+  payload: RuntimeEvent;
+  session_id: string;
+};
+
+export type ServerSessionDetail = {
+  events: ServerConversationEvent[];
+  messages: ServerMessage[];
+  session: ServerSession;
 };
 
 export type RuntimeEvent = {
@@ -302,6 +324,54 @@ export async function createServerSession(title: string): Promise<ServerSession>
     body: JSON.stringify({ title }),
     method: "POST"
   });
+}
+
+export async function listServerSessions(
+  cursor?: string,
+  limit = 50,
+): Promise<ServerSessionPage> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return requestServer<ServerSessionPage>(
+    "sessions.list",
+    { cursor, limit },
+    `/sessions?${params}`,
+    { method: "GET" },
+  );
+}
+
+export async function loadServerSession(id: string): Promise<ServerSessionDetail> {
+  return requestServer<ServerSessionDetail>(
+    "sessions.load",
+    { id },
+    `/sessions/${encodeURIComponent(id)}`,
+    { method: "GET" },
+  );
+}
+
+export async function updateServerSession(
+  session: ServerSession,
+  title: string,
+): Promise<ServerSession> {
+  return requestServer<ServerSession>(
+    "sessions.update",
+    { expectedUpdatedAt: session.updated_at, id: session.id, title },
+    `/sessions/${encodeURIComponent(session.id)}`,
+    {
+      body: JSON.stringify({ expectedUpdatedAt: session.updated_at, title }),
+      method: "PATCH",
+    },
+  );
+}
+
+export async function deleteServerSession(session: ServerSession): Promise<unknown> {
+  const params = new URLSearchParams({ expectedUpdatedAt: session.updated_at });
+  return requestServer(
+    "sessions.delete",
+    { expectedUpdatedAt: session.updated_at, id: session.id },
+    `/sessions/${encodeURIComponent(session.id)}?${params}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function postSessionMessage(

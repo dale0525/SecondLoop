@@ -15,7 +15,11 @@ export type SidecarApiOperation =
   | "memory.forget"
   | "memory.get"
   | "memory.list"
-  | "sessions.create";
+  | "sessions.create"
+  | "sessions.delete"
+  | "sessions.list"
+  | "sessions.load"
+  | "sessions.update";
 
 export type SidecarApiRequest = Readonly<{
   input?: unknown;

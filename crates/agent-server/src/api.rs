@@ -3,7 +3,7 @@ use agent_runtime::{
     app_definition::AgentAppHostDiscovery,
     events::RuntimeEvent,
     prompt_composer::AppPromptConfig,
-    session::{ConversationScope, Message, Session, messages_to_model_history},
+    session::{ConversationScope, Message, messages_to_model_history},
     skill::SkillRegistry,
     skill_catalog::SkillCatalog,
     skill_manager::SkillManager,
@@ -21,7 +21,7 @@ use axum::{
     http::{HeaderValue, Method, StatusCode, header},
     middleware,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 use model_gateway::{
     provider::{EndpointType, ProviderProfile},
@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
@@ -48,6 +48,7 @@ pub struct AppState {
     app_prompt: AppPromptConfig,
     host_discovery: Option<AgentAppHostDiscovery>,
     conversation_scope: ConversationScope,
+    conversation_locks: Arc<Mutex<BTreeMap<String, Weak<Mutex<()>>>>>,
     memory_tools: Option<agent_runtime::memory_tools::MemoryToolRuntime>,
     connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
     mail_actions: Option<agent_runtime::foundation_actions::MailActionService>,
@@ -151,6 +152,7 @@ impl AppState {
             app_prompt,
             host_discovery: None,
             conversation_scope,
+            conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
             memory_tools,
             connector_tools,
             mail_actions: None,
@@ -245,6 +247,7 @@ impl AppState {
             app_prompt,
             host_discovery: None,
             conversation_scope,
+            conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
             memory_tools,
             connector_tools,
             mail_actions: None,
@@ -296,6 +299,7 @@ impl AppState {
             app_prompt: AppPromptConfig::default(),
             host_discovery: None,
             conversation_scope: ConversationScope::default(),
+            conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
             memory_tools: None,
             connector_tools: None,
             mail_actions: None,
@@ -410,17 +414,6 @@ impl AgentRunner for DeterministicAgent {
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct CreateSessionRequest {
-    pub title: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CreateSessionResponse {
-    pub id: String,
-    pub title: String,
-}
-
 #[derive(Debug, Serialize)]
 pub struct AppDiagnosticsResponse {
     pub app_id: String,
@@ -513,12 +506,8 @@ pub fn router_for_transport(
         .route("/model/test", post(test_model_connection))
         .route("/host/bootstrap", get(host_bootstrap))
         .route("/diagnostics/app", get(app_diagnostics))
-        .route("/sessions", get(list_sessions).post(create_session))
-        .route("/sessions/{session_id}", delete(delete_session))
-        .route(
-            "/sessions/{session_id}/messages",
-            get(get_messages).post(post_message),
-        );
+        .route("/sessions/{session_id}/messages", post(post_message))
+        .merge(crate::conversation_api::routes());
     router = router
         .merge(crate::foundation_api::router())
         .merge(crate::automation_api::router());
@@ -577,6 +566,21 @@ impl AppState {
 
     pub(crate) fn conversation_scope(&self) -> &ConversationScope {
         &self.conversation_scope
+    }
+
+    pub(crate) fn storage(&self) -> &Storage {
+        &self.storage
+    }
+
+    pub(crate) async fn conversation_lock(&self, session_id: &str) -> Arc<Mutex<()>> {
+        let mut locks = self.conversation_locks.lock().await;
+        locks.retain(|_, lock| lock.strong_count() > 0);
+        if let Some(lock) = locks.get(session_id).and_then(Weak::upgrade) {
+            return lock;
+        }
+        let lock = Arc::new(Mutex::new(()));
+        locks.insert(session_id.to_string(), Arc::downgrade(&lock));
+        lock
     }
 
     pub(crate) fn configured_tool_registry(&self) -> anyhow::Result<ToolRegistry> {
@@ -657,70 +661,6 @@ async fn test_model_connection(
     }))
 }
 
-async fn create_session(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<CreateSessionRequest>,
-) -> Result<Json<CreateSessionResponse>, ApiError> {
-    let title = request.title.unwrap_or_else(|| "New Session".to_string());
-    let session = state
-        .storage
-        .create_scoped_session(state.conversation_scope(), &title)
-        .await
-        .map_err(ApiError::Internal)?;
-
-    Ok(Json(CreateSessionResponse {
-        id: session.id,
-        title: session.title,
-    }))
-}
-
-async fn list_sessions(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Session>>, ApiError> {
-    state
-        .storage
-        .list_scoped_sessions(state.conversation_scope())
-        .await
-        .map(Json)
-        .map_err(ApiError::Internal)
-}
-
-async fn get_messages(
-    Path(session_id): Path<String>,
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<Message>>, ApiError> {
-    if !state
-        .storage
-        .session_exists_scoped(state.conversation_scope(), &session_id)
-        .await
-        .map_err(ApiError::Internal)?
-    {
-        return Err(ApiError::NotFound("session not found"));
-    }
-    state
-        .storage
-        .list_scoped_messages(state.conversation_scope(), &session_id)
-        .await
-        .map(Json)
-        .map_err(ApiError::Internal)
-}
-
-async fn delete_session(
-    Path(session_id): Path<String>,
-    State(state): State<Arc<AppState>>,
-) -> Result<StatusCode, ApiError> {
-    if let Some(memory) = state.memory_tools() {
-        memory
-            .on_session_end(&session_id, Vec::new())
-            .await
-            .map_err(ApiError::Internal)?;
-    }
-    state
-        .storage
-        .delete_scoped_session(state.conversation_scope(), &session_id)
-        .await
-        .map_err(ApiError::Internal)?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
 async fn post_message(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
@@ -735,6 +675,8 @@ pub(crate) async fn post_message_for_actor(
     request: UserMessageRequest,
     actor: ActorContext,
 ) -> Result<Json<UserMessageResponse>, ApiError> {
+    let conversation_lock = state.conversation_lock(&session_id).await;
+    let _conversation_guard = conversation_lock.lock().await;
     let session_exists = state
         .storage
         .session_exists_scoped(state.conversation_scope(), &session_id)

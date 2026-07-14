@@ -55,6 +55,27 @@ pub struct Session {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionPageCursor {
+    pub snapshot_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionPage {
+    pub items: Vec<Session>,
+    pub next_cursor: Option<SessionPageCursor>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionMutation {
+    Applied(Session),
+    Conflict(Session),
+    NotFound,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Message {
     pub id: String,

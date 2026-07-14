@@ -18,6 +18,7 @@ You can use it to build personal assistants, research assistants, content workfl
 | Contribute to the runtime, hosts, or Foundation Skills | [Contributing Guide](./CONTRIBUTING.md) |
 | Connect a real IMAP/SMTP mailbox | [Mail Connector Setup](./MAIL_CONNECTOR_SETUP.md) |
 | Integrate a managed desktop sidecar | [Local Sidecar Transport](./LOCAL_SIDECAR_TRANSPORT.md) |
+| Integrate durable conversation history | [Conversation Lifecycle](./CONVERSATION_LIFECYCLE.md) |
 
 ## 5-minute quick start
 

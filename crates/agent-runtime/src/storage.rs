@@ -1,6 +1,9 @@
 use crate::events::RuntimeEvent;
 use crate::model_config::StoredModelConfig;
-use crate::session::{ConversationEventRecord, ConversationScope, Message, Session};
+use crate::session::{
+    ConversationEventRecord, ConversationScope, Message, Session, SessionMutation, SessionPage,
+    SessionPageCursor,
+};
 use chrono::{DateTime, Duration, Utc};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
 use sqlx::{Executor, Row, Sqlite, SqlitePool};
@@ -340,6 +343,168 @@ impl Storage {
         Ok(sessions)
     }
 
+    pub async fn get_scoped_session(
+        &self,
+        scope: &ConversationScope,
+        session_id: &str,
+    ) -> anyhow::Result<Option<Session>> {
+        scope.validate()?;
+        let row = sqlx::query(
+            "SELECT id, title, created_at, updated_at FROM sessions WHERE id = ? AND app_id = ? AND agent_id = ? AND tenant_id = ? AND user_id = ? AND device_id = ?",
+        )
+        .bind(session_id)
+        .bind(&scope.app_id)
+        .bind(&scope.agent_id)
+        .bind(&scope.tenant_id)
+        .bind(&scope.user_id)
+        .bind(&scope.device_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(session_from_row).transpose()
+    }
+
+    pub async fn list_scoped_sessions_page(
+        &self,
+        scope: &ConversationScope,
+        cursor: Option<&SessionPageCursor>,
+        limit: usize,
+    ) -> anyhow::Result<SessionPage> {
+        scope.validate()?;
+        anyhow::ensure!((1..=100).contains(&limit), "session page limit is invalid");
+        let snapshot_at = cursor.map_or_else(Utc::now, |value| value.snapshot_at);
+        let mut query = String::from(
+            "SELECT id, title, created_at, updated_at FROM sessions WHERE app_id = ? AND agent_id = ? AND tenant_id = ? AND user_id = ? AND device_id = ? AND julianday(updated_at) <= julianday(?)",
+        );
+        if cursor.is_some() {
+            query.push_str(
+                " AND (julianday(updated_at) < julianday(?) OR (julianday(updated_at) = julianday(?) AND julianday(created_at) < julianday(?)) OR (julianday(updated_at) = julianday(?) AND julianday(created_at) = julianday(?) AND id > ?))",
+            );
+        }
+        query.push_str(
+            " ORDER BY julianday(updated_at) DESC, julianday(created_at) DESC, id ASC LIMIT ?",
+        );
+        let mut query = sqlx::query(&query)
+            .bind(&scope.app_id)
+            .bind(&scope.agent_id)
+            .bind(&scope.tenant_id)
+            .bind(&scope.user_id)
+            .bind(&scope.device_id)
+            .bind(snapshot_at.to_rfc3339());
+        if let Some(cursor) = cursor {
+            query = query
+                .bind(cursor.updated_at.to_rfc3339())
+                .bind(cursor.updated_at.to_rfc3339())
+                .bind(cursor.created_at.to_rfc3339())
+                .bind(cursor.updated_at.to_rfc3339())
+                .bind(cursor.created_at.to_rfc3339())
+                .bind(&cursor.id);
+        }
+        let rows = query
+            .bind(i64::try_from(limit + 1)?)
+            .fetch_all(&self.pool)
+            .await?;
+        let mut items = rows
+            .into_iter()
+            .map(session_from_row)
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let has_more = items.len() > limit;
+        items.truncate(limit);
+        let next_cursor = has_more && !items.is_empty();
+        Ok(SessionPage {
+            next_cursor: next_cursor.then(|| {
+                let last = items.last().expect("nonempty session page");
+                SessionPageCursor {
+                    snapshot_at,
+                    updated_at: last.updated_at,
+                    created_at: last.created_at,
+                    id: last.id.clone(),
+                }
+            }),
+            items,
+        })
+    }
+
+    pub async fn update_scoped_session_title(
+        &self,
+        scope: &ConversationScope,
+        session_id: &str,
+        title: &str,
+        expected_updated_at: DateTime<Utc>,
+    ) -> anyhow::Result<SessionMutation> {
+        scope.validate()?;
+        let Some(current) = self.get_scoped_session(scope, session_id).await? else {
+            return Ok(SessionMutation::NotFound);
+        };
+        if current.updated_at != expected_updated_at {
+            return Ok(SessionMutation::Conflict(current));
+        }
+        let updated_at = std::cmp::max(Utc::now(), current.updated_at + Duration::microseconds(1));
+        let result = sqlx::query(
+            "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ? AND app_id = ? AND agent_id = ? AND tenant_id = ? AND user_id = ? AND device_id = ? AND updated_at = ?",
+        )
+        .bind(title)
+        .bind(updated_at.to_rfc3339())
+        .bind(session_id)
+        .bind(&scope.app_id)
+        .bind(&scope.agent_id)
+        .bind(&scope.tenant_id)
+        .bind(&scope.user_id)
+        .bind(&scope.device_id)
+        .bind(expected_updated_at.to_rfc3339())
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() == 1 {
+            return Ok(SessionMutation::Applied(Session {
+                id: current.id,
+                title: title.to_string(),
+                created_at: current.created_at,
+                updated_at,
+            }));
+        }
+        Ok(match self.get_scoped_session(scope, session_id).await? {
+            Some(authoritative) => SessionMutation::Conflict(authoritative),
+            None => SessionMutation::NotFound,
+        })
+    }
+
+    pub async fn delete_scoped_session_if_unchanged(
+        &self,
+        scope: &ConversationScope,
+        session_id: &str,
+        expected_updated_at: DateTime<Utc>,
+    ) -> anyhow::Result<SessionMutation> {
+        scope.validate()?;
+        let mut tx = self.pool.begin().await?;
+        let result = sqlx::query(
+            "UPDATE sessions SET id = id WHERE id = ? AND app_id = ? AND agent_id = ? AND tenant_id = ? AND user_id = ? AND device_id = ? AND updated_at = ?",
+        )
+        .bind(session_id)
+        .bind(&scope.app_id)
+        .bind(&scope.agent_id)
+        .bind(&scope.tenant_id)
+        .bind(&scope.user_id)
+        .bind(&scope.device_id)
+        .bind(expected_updated_at.to_rfc3339())
+        .execute(&mut *tx)
+        .await?;
+        if result.rows_affected() != 1 {
+            tx.rollback().await?;
+            return Ok(match self.get_scoped_session(scope, session_id).await? {
+                Some(authoritative) => SessionMutation::Conflict(authoritative),
+                None => SessionMutation::NotFound,
+            });
+        }
+        let current = session_from_row(
+            sqlx::query("SELECT id, title, created_at, updated_at FROM sessions WHERE id = ?")
+                .bind(session_id)
+                .fetch_one(&mut *tx)
+                .await?,
+        )?;
+        delete_session_rows(&mut tx, session_id).await?;
+        tx.commit().await?;
+        Ok(SessionMutation::Applied(current))
+    }
+
     pub async fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
         self.delete_scoped_session(&ConversationScope::default(), session_id)
             .await
@@ -355,18 +520,7 @@ impl Storage {
         if !scoped_session_exists(&mut *tx, scope, session_id).await? {
             return Ok(());
         }
-        sqlx::query("DELETE FROM conversation_events WHERE session_id = ?")
-            .bind(session_id)
-            .execute(&mut *tx)
-            .await?;
-        sqlx::query("DELETE FROM messages WHERE session_id = ?")
-            .bind(session_id)
-            .execute(&mut *tx)
-            .await?;
-        sqlx::query("DELETE FROM sessions WHERE id = ?")
-            .bind(session_id)
-            .execute(&mut *tx)
-            .await?;
+        delete_session_rows(&mut tx, session_id).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -504,6 +658,36 @@ fn message_from_row(row: SqliteRow) -> anyhow::Result<Message> {
         content: row.try_get("content")?,
         created_at: DateTime::parse_from_rfc3339(&created_at)?.with_timezone(&Utc),
     })
+}
+
+fn session_from_row(row: SqliteRow) -> anyhow::Result<Session> {
+    let created_at: String = row.try_get("created_at")?;
+    let updated_at: String = row.try_get("updated_at")?;
+    Ok(Session {
+        id: row.try_get("id")?,
+        title: row.try_get("title")?,
+        created_at: DateTime::parse_from_rfc3339(&created_at)?.with_timezone(&Utc),
+        updated_at: DateTime::parse_from_rfc3339(&updated_at)?.with_timezone(&Utc),
+    })
+}
+
+async fn delete_session_rows(
+    transaction: &mut sqlx::Transaction<'_, Sqlite>,
+    session_id: &str,
+) -> anyhow::Result<()> {
+    sqlx::query("DELETE FROM conversation_events WHERE session_id = ?")
+        .bind(session_id)
+        .execute(&mut **transaction)
+        .await?;
+    sqlx::query("DELETE FROM messages WHERE session_id = ?")
+        .bind(session_id)
+        .execute(&mut **transaction)
+        .await?;
+    sqlx::query("DELETE FROM sessions WHERE id = ?")
+        .bind(session_id)
+        .execute(&mut **transaction)
+        .await?;
+    Ok(())
 }
 
 async fn scoped_session_exists<'a, E>(

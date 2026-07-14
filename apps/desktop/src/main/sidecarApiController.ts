@@ -17,7 +17,7 @@ type IpcMainLike = {
 
 type RequestDescription = {
   body?: unknown;
-  method: "DELETE" | "GET" | "POST";
+  method: "DELETE" | "GET" | "PATCH" | "POST";
   pathname: string;
 };
 
@@ -57,6 +57,28 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
       return json("POST", "/sessions", {
         title: fieldString(request.input, "title", 256),
       });
+    case "sessions.list": {
+      const limit = optionalInteger(request.input, "limit", 1, 100) ?? 50;
+      const cursor = optionalString(request.input, "cursor", 2_048);
+      return get(`/sessions?${new URLSearchParams({
+        limit: String(limit),
+        ...(cursor ? { cursor } : {}),
+      })}`);
+    }
+    case "sessions.load":
+      return get(`/sessions/${identifier(request.input, "id")}`);
+    case "sessions.update":
+      return json("PATCH", `/sessions/${identifier(request.input, "id")}`, {
+        title: fieldString(request.input, "title", 256),
+        expectedUpdatedAt: fieldString(request.input, "expectedUpdatedAt", 64),
+      });
+    case "sessions.delete": {
+      const expectedUpdatedAt = fieldString(request.input, "expectedUpdatedAt", 64);
+      return {
+        method: "DELETE",
+        pathname: `/sessions/${identifier(request.input, "id")}?${new URLSearchParams({ expectedUpdatedAt })}`,
+      };
+    }
     case "memory.list": {
       const query = fieldString(request.input, "query", 4_096, true);
       const limit = fieldInteger(request.input, "limit", 1, 100);
@@ -134,7 +156,11 @@ function get(pathname: string): RequestDescription {
   return { method: "GET", pathname };
 }
 
-function json(method: "DELETE" | "POST", pathname: string, body: unknown): RequestDescription {
+function json(
+  method: "DELETE" | "PATCH" | "POST",
+  pathname: string,
+  body: unknown,
+): RequestDescription {
   return { body, method, pathname };
 }
 
@@ -160,6 +186,21 @@ function fieldInteger(value: unknown, name: string, minimum: number, maximum: nu
     throw new Error(`${name} is invalid`);
   }
   return field as number;
+}
+
+function optionalString(value: unknown, name: string, maximum: number): string | undefined {
+  if (!isRecord(value) || value[name] === undefined) return undefined;
+  return fieldString(value, name, maximum);
+}
+
+function optionalInteger(
+  value: unknown,
+  name: string,
+  minimum: number,
+  maximum: number,
+): number | undefined {
+  if (!isRecord(value) || value[name] === undefined) return undefined;
+  return fieldInteger(value, name, minimum, maximum);
 }
 
 function recordField(value: unknown, name: string): unknown {
@@ -195,4 +236,8 @@ const OPERATIONS = new Set<SidecarApiOperation>([
   "memory.get",
   "memory.list",
   "sessions.create",
+  "sessions.delete",
+  "sessions.list",
+  "sessions.load",
+  "sessions.update",
 ]);

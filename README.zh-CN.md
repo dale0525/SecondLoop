@@ -18,6 +18,7 @@ AgentWeave 是一个面向开发者的 **Agent App Framework**。它提供可复
 | 为 runtime、宿主或 Foundation Skill 贡献代码 | [贡献指南](./CONTRIBUTING.zh-CN.md) |
 | 接入真实 IMAP/SMTP 邮箱 | [Mail Connector 配置](./MAIL_CONNECTOR_SETUP.zh-CN.md) |
 | 集成受管桌面 sidecar | [本地 Sidecar 传输协议](./LOCAL_SIDECAR_TRANSPORT.zh-CN.md) |
+| 集成持久对话历史 | [对话生命周期](./CONVERSATION_LIFECYCLE.zh-CN.md) |
 
 ## 5 分钟快速开始
 

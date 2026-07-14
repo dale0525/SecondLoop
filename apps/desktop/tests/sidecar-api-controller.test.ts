@@ -23,6 +23,28 @@ describe("trusted sidecar API controller", () => {
       "/foundation/memory?query=flight&limit=25",
       expect.objectContaining({ method: "GET" }),
     );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: {
+          expectedUpdatedAt: "2026-07-14T10:00:00Z",
+          id: "session-1",
+          title: "Renamed",
+        },
+        operation: "sessions.update",
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/sessions/session-1",
+      expect.objectContaining({
+        body: JSON.stringify({
+          title: "Renamed",
+          expectedUpdatedAt: "2026-07-14T10:00:00Z",
+        }),
+        method: "PATCH",
+      }),
+    );
   });
 
   it("rejects other renderers and arbitrary operations before sidecar access", async () => {
