@@ -22,6 +22,18 @@
         "version": "=0.1.0"
       },
       {
+        "id": "agentweave.foundation.tasks",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.scheduler",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.notifications",
+        "version": "=0.1.0"
+      },
+      {
         "id": "com.secondloop.routines",
         "version": "=0.1.0"
       }
@@ -35,6 +47,8 @@
       "approval-engine",
       "credential-vault",
       "mail-connector",
+      "task-provider",
+      "scheduler",
       "host-tools"
     ],
     "runtimeTools": [
@@ -67,7 +81,21 @@
       "mail_draft_delete",
       "mail_send_preview",
       "mail_send",
-      "mail_delivery_status"
+      "mail_delivery_status",
+      "task_list",
+      "task_get",
+      "task_create",
+      "task_update",
+      "task_set_status",
+      "task_delete",
+      "schedule_list",
+      "schedule_get",
+      "schedule_create",
+      "schedule_set_status",
+      "notification_list",
+      "notification_get",
+      "notification_enqueue",
+      "notification_cancel"
     ],
     "connectors": [
       "agentweave-mail"
@@ -77,13 +105,15 @@
     "action-center",
     "memory-management",
     "mail-workflows",
+    "task-workflows",
+    "local-notifications",
     "secondloop-navigation",
     "today-dashboard"
   ],
   "policy": {
     "externalSideEffects": "require_approval",
     "network": "declared_only",
-    "backgroundExecution": "disabled",
+    "backgroundExecution": "declared_only",
     "memoryPersistence": "local_only",
     "skillManagement": "disabled"
   },
