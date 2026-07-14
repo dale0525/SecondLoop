@@ -2,6 +2,11 @@
 
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
 import type { AttachmentMetadata } from "../shared/attachments";
+import type {
+  BackupExportReceipt,
+  BackupRestoreReceipt,
+  DataProtectionStatus,
+} from "../shared/dataProtection";
 import type { AgentAppHostDiscovery } from "../shared/hostBootstrap";
 import type { SidecarStatus } from "../shared/sidecarStatus";
 import type { SidecarApiOperation } from "../shared/sidecarApi";
@@ -16,6 +21,11 @@ declare global {
     agentWeave?: {
       attachments?: {
         pickAndImport(): Promise<AttachmentMetadata | null>;
+      };
+      dataProtection?: {
+        exportBackup(): Promise<BackupExportReceipt | null>;
+        restoreBackup(): Promise<BackupRestoreReceipt | null>;
+        status(): Promise<DataProtectionStatus>;
       };
       hostBootstrap?: {
         load(): Promise<AgentAppHostDiscovery>;

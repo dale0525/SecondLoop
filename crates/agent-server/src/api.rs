@@ -58,6 +58,7 @@ pub struct AppState {
     task_tools: Option<agent_runtime::task_tools::TaskToolRuntime>,
     automation_tools: Option<agent_runtime::automation_tools::AutomationToolRuntime>,
     attachment_tools: Option<agent_runtime::attachment_tools::AttachmentToolRuntime>,
+    data_protection: Option<crate::data_protection::DataProtectionService>,
     connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
     mail_actions: Option<agent_runtime::foundation_actions::MailActionService>,
     automation: Option<crate::automation_api::AutomationApiState>,
@@ -163,6 +164,7 @@ impl AppState {
             task_tools,
             automation_tools,
             attachment_tools,
+            data_protection: None,
             connector_tools,
             mail_actions: None,
             automation: None,
@@ -274,6 +276,7 @@ impl AppState {
             task_tools,
             automation_tools,
             attachment_tools,
+            data_protection: None,
             connector_tools,
             mail_actions: None,
             automation: None,
@@ -330,6 +333,7 @@ impl AppState {
             task_tools: None,
             automation_tools: None,
             attachment_tools: None,
+            data_protection: None,
             connector_tools: None,
             mail_actions: None,
             automation: None,
@@ -570,6 +574,7 @@ pub fn router_for_transport(
         .merge(crate::foundation_api::router())
         .merge(crate::task_api::router())
         .merge(crate::attachment_api::router())
+        .merge(crate::data_protection_api::router())
         .merge(crate::automation_api::router());
     if let Some(owner_routes) = crate::owner_api::router(&state) {
         router = router.merge(owner_routes);

@@ -20,6 +20,7 @@ You can use it to build personal assistants, research assistants, content workfl
 | Integrate a managed desktop sidecar | [Local Sidecar Transport](./LOCAL_SIDECAR_TRANSPORT.md) |
 | Integrate durable conversation history | [Conversation Lifecycle](./CONVERSATION_LIFECYCLE.md) |
 | Stream, stop, and recover turns | [Streaming Turn Lifecycle](./STREAMING_TURN_LIFECYCLE.md) |
+| Add encrypted local backup and restore | [Local Data Protection and Backup](./DATA_PROTECTION.md) |
 
 ## 5-minute quick start
 
@@ -181,6 +182,7 @@ When reporting a potential security issue, do not include real credentials, mail
 - [Minimal Agent](./examples/minimal-agent/README.md): the smallest consumer application.
 - [Secretary Agent](./examples/secretary-agent/README.md): a reference app combining Mail, Memory, and an app-private Skill.
 - [Mail Connector Setup](./MAIL_CONNECTOR_SETUP.md): local IMAP/SMTP and Credential Vault configuration.
+- [Local Data Protection and Backup](./DATA_PROTECTION.md): encrypted backup, trusted Desktop key handling, and restart-safe restore.
 - [Repository collaboration rules](./AGENTS.md): architecture boundaries, tooling, coding, and repository-level constraints.
 
 ## Contributing

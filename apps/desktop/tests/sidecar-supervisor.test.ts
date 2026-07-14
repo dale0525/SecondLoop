@@ -32,6 +32,18 @@ describe("Desktop sidecar supervisor", () => {
     expect(JSON.stringify(spawnImpl.mock.calls[0])).not.toContain(child.launch?.transportToken);
   });
 
+  it("passes the data protection key only through the inherited launch pipe", async () => {
+    const child = new MockChild();
+    const key = Buffer.alloc(32, 7);
+    const spawnImpl = spawnSequence(child);
+    const supervisor = createSupervisor({ dataProtectionKey: key, spawnImpl });
+
+    await supervisor.start();
+
+    expect(child.launch?.dataProtectionKeyHex).toBe(key.toString("hex"));
+    expect(JSON.stringify(spawnImpl.mock.calls[0]?.[2]?.env)).not.toContain(key.toString("hex"));
+  });
+
   it("fails a timed-out startup and terminates that child", async () => {
     const child = new MockChild({ exitOnSignal: true });
     const spawnImpl = spawnSequence(child);
@@ -269,7 +281,11 @@ class MockChild extends EventEmitter {
   ] as const;
   readonly signals: string[] = [];
   readonly pid = 20_000 + MockChild.nextPid++;
-  launch: { launchId: string; transportToken: string } | null = null;
+  launch: {
+    dataProtectionKeyHex?: string;
+    launchId: string;
+    transportToken: string;
+  } | null = null;
   exitCode: number | null = null;
   signalCode: NodeJS.Signals | null = null;
   readonly exitOnSignal: boolean;

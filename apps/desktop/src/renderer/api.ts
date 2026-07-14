@@ -1,6 +1,11 @@
 import { ModelSettings } from "./types";
 import type { AttachmentMetadata } from "../shared/attachments";
 import type {
+  BackupExportReceipt,
+  BackupRestoreReceipt,
+  DataProtectionStatus,
+} from "../shared/dataProtection";
+import type {
   FoundationMisfirePolicy,
   FoundationNotificationRecord,
   FoundationNotificationStatus,
@@ -33,6 +38,11 @@ export type {
 } from "../shared/sidecarApi";
 
 export type { AttachmentMetadata } from "../shared/attachments";
+export type {
+  BackupExportReceipt,
+  BackupRestoreReceipt,
+  DataProtectionStatus,
+} from "../shared/dataProtection";
 
 export type ServerSession = {
   created_at: string;
@@ -594,6 +604,24 @@ export async function pickAndImportAttachment(): Promise<AttachmentMetadata | nu
   const bridge = window.agentWeave?.attachments;
   if (!bridge) throw new Error("Trusted attachment import is unavailable");
   return bridge.pickAndImport();
+}
+
+export async function getDataProtectionStatus(): Promise<DataProtectionStatus> {
+  const bridge = window.agentWeave?.dataProtection;
+  if (!bridge) throw new Error("Trusted data protection is unavailable");
+  return bridge.status();
+}
+
+export async function exportEncryptedBackup(): Promise<BackupExportReceipt | null> {
+  const bridge = window.agentWeave?.dataProtection;
+  if (!bridge) throw new Error("Trusted data protection is unavailable");
+  return bridge.exportBackup();
+}
+
+export async function restoreEncryptedBackup(): Promise<BackupRestoreReceipt | null> {
+  const bridge = window.agentWeave?.dataProtection;
+  if (!bridge) throw new Error("Trusted data protection is unavailable");
+  return bridge.restoreBackup();
 }
 
 export async function listFoundationTasks(

@@ -1,11 +1,12 @@
 #![cfg_attr(test, allow(deprecated))]
 
+#[cfg(test)]
+use agent_runtime::tools::RuntimeConfig;
 use agent_runtime::{
     skill_management::OwnerSkillManagementService,
     skill_policy::{ActorContext, SkillGrant, SkillManagementMode, SkillManagementPolicy},
     skill_state::SkillStateStore,
     storage::Storage,
-    tools::{CommandMode, RuntimeConfig},
 };
 use agent_server::api;
 use agent_server::owner_api::{OwnerApiConfig, OwnerAuth};
@@ -14,7 +15,9 @@ use model_gateway::{
     provider::{EndpointType, ProviderProfile},
     responses::GatewayHttpClient,
 };
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+#[cfg(test)]
+use std::path::PathBuf;
+use std::{collections::BTreeMap, sync::Arc};
 
 const DEFAULT_DATABASE_URL: &str = "sqlite://agentweave.db?mode=rwc";
 const DEFAULT_SKILLS_ROOT: &str = "skills";
@@ -36,13 +39,16 @@ use server_skill_startup::{
 #[cfg(test)]
 use server_skill_startup::{ManagedSkillsConfig, load_skill_manager};
 use server_tenant_startup::{
-    build_managed_tenant_registry, build_tenant_app_state, sqlite_database_path,
+    build_managed_tenant_registry, build_tenant_app_state, runtime_config_from_env,
+    skills_root_from_env, sqlite_database_path,
 };
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
+    let mut transport = agent_server::local_transport::prepare_from_environment().await?;
+    let data_protection_key = transport.take_data_protection_key();
 
     let skills_root = skills_root_from_env();
     let managed_skills = managed_skills_config_from_lookup(|name| std::env::var_os(name))?;
@@ -55,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
         .map(|connector| connector.id.clone())
         .collect::<Vec<_>>();
     let model = GatewayHttpClient::new(model_profile_from_env());
-    let (state, automation_storage) = if let Some(managed_skills) = managed_skills {
+    let (state, automation_storage, database_path) = if let Some(managed_skills) = managed_skills {
         let policy = owner_host
             .as_ref()
             .map(|host| host.policy.clone())
@@ -67,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
             build_managed_tenant_registry(&skills_root, managed_skills, builtin_mode, policy)
                 .await?;
         let runtime = registry.for_tenant(SINGLE_USER_TENANT_ID).await?;
+        let database_path = runtime.database_path.clone();
         let control_roots = vec![
             skills_root.clone(),
             runtime.data_root.clone(),
@@ -87,10 +94,14 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?
         .with_host_discovery(resolved_app.host_discovery)?;
-        (state, storage)
+        (state, storage, Some(database_path))
     } else {
         let database_url = std::env::var("AGENTWEAVE_DATABASE_URL")
             .unwrap_or_else(|_| DEFAULT_DATABASE_URL.into());
+        let database_path = sqlite_database_path(&database_url);
+        if let Some(path) = &database_path {
+            agent_server::data_protection::apply_pending_restore(path).await?;
+        }
         let storage = Storage::connect(&database_url).await?;
         let loaded =
             load_skill_manager_with_mode(&skills_root, storage.clone(), None, builtin_mode).await?;
@@ -145,13 +156,16 @@ async fn main() -> anyhow::Result<()> {
             Some(foundation) => state.with_mail_actions(foundation.actions),
             None => state,
         };
-        (state, storage)
+        (state, storage, database_path)
     };
     let state = state.with_default_automation(&automation_storage).await?;
+    let state = match (data_protection_key, database_path) {
+        (Some(key), Some(path)) => state.with_data_protection(path, key)?,
+        _ => state,
+    };
     let scheduler_worker_enabled = state.has_automation_tools()
         || std::env::var("AGENTWEAVE_SCHEDULER_WORKER").as_deref() == Ok("1");
     let state = Arc::new(state.with_skills_root(skills_root.clone()));
-    let transport = agent_server::local_transport::prepare_from_environment().await?;
     let app = api::router_for_transport(
         state,
         std::env::var("AGENTWEAVE_DEV_API").as_deref() == Ok("1"),
@@ -199,27 +213,6 @@ async fn build_tenant_owner_api_config(
         .await?
         .with_connector_catalog(connector_catalog)?;
     Ok(Some(OwnerApiConfig::new(service, owner_auth(host)?)))
-}
-
-fn runtime_config_from_env() -> RuntimeConfig {
-    let workspace_root = std::env::var("AGENTWEAVE_WORKSPACE_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-    let mut config = RuntimeConfig::workspace_write(workspace_root.clone(), workspace_root)
-        .without_builtin_tools();
-    if std::env::var("AGENTWEAVE_COMMAND_MODE").as_deref() == Ok("allowed") {
-        config = config.with_command_mode(CommandMode::Allowed);
-    }
-    if let Ok(app_root) = std::env::var("AGENTWEAVE_APP_ROOT") {
-        config = config.excluding_workspace_roots([PathBuf::from(app_root)]);
-    }
-    config
-}
-
-fn skills_root_from_env() -> PathBuf {
-    std::env::var("AGENTWEAVE_SKILLS_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(DEFAULT_SKILLS_ROOT))
 }
 
 #[derive(Clone)]

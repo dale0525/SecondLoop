@@ -17,6 +17,7 @@ mod conversation_migration;
 pub mod credential;
 pub mod credential_file;
 pub mod credential_sqlite;
+pub mod data_protection;
 pub mod documents;
 pub mod durable_run;
 pub mod events;

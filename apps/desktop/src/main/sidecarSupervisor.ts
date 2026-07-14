@@ -33,6 +33,7 @@ export type SidecarSupervisorOptions = {
   args?: string[];
   command: string;
   cwd: string;
+  dataProtectionKey?: Buffer;
   env: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   healthPollMs?: number;
@@ -72,8 +73,9 @@ type ActiveTransport = {
 };
 
 export class DesktopSidecarSupervisor {
-  private readonly options: Required<Omit<SidecarSupervisorOptions, "args" | "fetchImpl" | "log" | "now" | "spawnImpl" | "wait">> & Pick<SidecarSupervisorOptions, "log"> & {
+  private readonly options: Required<Omit<SidecarSupervisorOptions, "args" | "dataProtectionKey" | "fetchImpl" | "log" | "now" | "spawnImpl" | "wait">> & Pick<SidecarSupervisorOptions, "log"> & {
     args: string[];
+    dataProtectionKey: Buffer | null;
     fetchImpl: typeof fetch;
     now: () => number;
     spawnImpl: SidecarSpawn;
@@ -98,6 +100,9 @@ export class DesktopSidecarSupervisor {
     this.options = {
       command: options.command,
       args: [...(options.args ?? [])],
+      dataProtectionKey: options.dataProtectionKey
+        ? Buffer.from(options.dataProtectionKey)
+        : null,
       cwd: options.cwd,
       env: { ...options.env },
       startupTimeoutMs: options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS,
@@ -226,7 +231,12 @@ export class DesktopSidecarSupervisor {
 
     let ready = false;
     try {
-      await writeLaunchConfig(child.stdio[LAUNCH_CONFIG_FD], launchId, token);
+      await writeLaunchConfig(
+        child.stdio[LAUNCH_CONFIG_FD],
+        launchId,
+        token,
+        this.options.dataProtectionKey,
+      );
       const origin = await readLaunchResult(
         child,
         child.stdio[LAUNCH_RESULT_FD],
@@ -434,12 +444,20 @@ function defaultSpawn(
   return spawnChild(command, args, options) as unknown as SidecarChild;
 }
 
-function writeLaunchConfig(stream: Writable, launchId: string, token: Buffer): Promise<void> {
+function writeLaunchConfig(
+  stream: Writable,
+  launchId: string,
+  token: Buffer,
+  dataProtectionKey: Buffer | null,
+): Promise<void> {
   if (!stream || stream.destroyed) throw new Error("Sidecar launch pipe is unavailable");
   const document = JSON.stringify({
     schemaVersion: 1,
     launchId,
     transportToken: token.toString("base64url"),
+    ...(dataProtectionKey
+      ? { dataProtectionKeyHex: dataProtectionKey.toString("hex") }
+      : {}),
   });
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -580,6 +598,9 @@ function wait(milliseconds: number): Promise<void> {
 
 function validateOptions(options: DesktopSidecarSupervisor["options"]): void {
   if (!options.command || !options.cwd) throw new Error("Sidecar launch paths are required");
+  if (options.dataProtectionKey && options.dataProtectionKey.byteLength !== 32) {
+    throw new Error("Sidecar data protection key must be 32 bytes");
+  }
   for (const [label, value] of [
     ["startup timeout", options.startupTimeoutMs],
     ["health poll", options.healthPollMs],

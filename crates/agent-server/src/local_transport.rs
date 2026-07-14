@@ -27,6 +27,8 @@ struct LaunchConfigWire {
     schema_version: u8,
     launch_id: String,
     transport_token: String,
+    #[serde(default)]
+    data_protection_key_hex: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -72,15 +74,23 @@ impl TransportAuth {
 struct LaunchConfig {
     launch_id: String,
     auth: TransportAuth,
+    data_protection_key: Option<agent_runtime::credential::SecretMaterial>,
 }
 
 pub struct PreparedLocalTransport {
     listener: TcpListener,
     auth: Option<TransportAuth>,
     address: SocketAddr,
+    data_protection_key: Option<agent_runtime::credential::SecretMaterial>,
 }
 
 impl PreparedLocalTransport {
+    pub fn take_data_protection_key(
+        &mut self,
+    ) -> Option<agent_runtime::credential::SecretMaterial> {
+        self.data_protection_key.take()
+    }
+
     pub fn auth(&self) -> Option<TransportAuth> {
         self.auth.clone()
     }
@@ -103,6 +113,7 @@ pub async fn prepare_from_environment() -> anyhow::Result<PreparedLocalTransport
             listener,
             auth: None,
             address,
+            data_protection_key: None,
         });
     };
 
@@ -128,6 +139,7 @@ pub async fn prepare_from_environment() -> anyhow::Result<PreparedLocalTransport
             listener,
             auth: Some(config.auth),
             address,
+            data_protection_key: config.data_protection_key,
         })
     }
 }
@@ -198,6 +210,7 @@ fn read_launch_config(mut reader: impl Read) -> anyhow::Result<LaunchConfig> {
 
 fn validate_launch_config(wire: LaunchConfigWire) -> anyhow::Result<LaunchConfig> {
     let mut token = wire.transport_token.into_bytes();
+    let mut data_protection_key = wire.data_protection_key_hex.map(|value| value.into_bytes());
     let result = (|| {
         anyhow::ensure!(
             wire.schema_version == LAUNCH_SCHEMA_VERSION,
@@ -210,12 +223,32 @@ fn validate_launch_config(wire: LaunchConfigWire) -> anyhow::Result<LaunchConfig
             "local transport launch identifier is invalid"
         );
         let auth = TransportAuth::new(&token)?;
+        let data_protection_key = data_protection_key
+            .as_deref()
+            .map(|value| {
+                anyhow::ensure!(
+                    value.len() == 64
+                        && value
+                            .iter()
+                            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')),
+                    "data protection key is invalid"
+                );
+                let decoded = hex::decode(value)
+                    .map_err(|_| anyhow::anyhow!("data protection key is invalid"))?;
+                anyhow::ensure!(decoded.len() == 32, "data protection key is invalid");
+                agent_runtime::credential::SecretMaterial::new(decoded)
+            })
+            .transpose()?;
         Ok(LaunchConfig {
             launch_id: launch_id.to_string(),
             auth,
+            data_protection_key,
         })
     })();
     token.zeroize();
+    if let Some(key) = &mut data_protection_key {
+        key.zeroize();
+    }
     result
 }
 
@@ -277,11 +310,25 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(&TRANSPORT_HEADER, HeaderValue::from_static(TOKEN));
         assert!(config.auth.authenticate(&headers));
+        assert!(config.data_protection_key.is_none());
+
+        let protected = read_launch_config(
+            format!(
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"{}"}}"#,
+                "ab".repeat(32),
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+        assert!(protected.data_protection_key.is_some());
 
         for invalid in [
             format!(r#"{{"schemaVersion":2,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}"}}"#),
             format!(r#"{{"schemaVersion":1,"launchId":"not-a-uuid","transportToken":"{TOKEN}"}}"#),
             format!(r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"short"}}"#),
+            format!(
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"short"}}"#
+            ),
             format!(
                 r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","extra":true}}"#
             ),

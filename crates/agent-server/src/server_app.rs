@@ -115,6 +115,7 @@ fn first_party_capabilities() -> impl Iterator<Item = String> {
         "task-provider",
         "scheduler",
         "attachments",
+        "data-protection",
     ]
     .into_iter()
     .map(str::to_string)

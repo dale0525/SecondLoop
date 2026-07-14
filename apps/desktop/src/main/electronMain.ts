@@ -1,10 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from "electron";
-import { open } from "node:fs/promises";
+import { open, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { registerApprovalWindowController } from "./approvalWindow";
 import { registerAttachmentController } from "./attachmentController";
+import {
+  loadOrCreateDataProtectionKey,
+  unwrapDataProtectionKey,
+  type DesktopDataProtectionKey,
+} from "./dataProtectionKey";
+import { registerDataProtectionController } from "./dataProtectionController";
 import { getDesktopWindowConfig } from "./index";
 import { registerHostBootstrapController } from "./hostBootstrapController";
 import { registerModelSettingsController } from "./modelSettingsController";
@@ -22,6 +28,7 @@ import { registerSidecarApiController } from "./sidecarApiController";
 let mainWindow: BrowserWindow | null = null;
 let disposeApproval: (() => void) | null = null;
 let disposeAttachments: (() => void) | null = null;
+let disposeDataProtection: (() => void) | null = null;
 let disposeModelSettings: (() => void) | null = null;
 let disposeHostBootstrap: (() => void) | null = null;
 let disposeNotifications: (() => void) | null = null;
@@ -31,6 +38,15 @@ let disposeOwner: (() => void) | null = null;
 
 app.whenReady().then(async () => {
   const rendererBase = process.env.AGENTWEAVE_DESKTOP_URL;
+  let dataProtection: DesktopDataProtectionKey | null = null;
+  try {
+    dataProtection = loadOrCreateDataProtectionKey({
+      safeStorage,
+      storagePath: path.join(app.getPath("userData"), "data-protection-key.v1.json"),
+    });
+  } catch {
+    console.error("Data protection key is unavailable");
+  }
   const sidecar = createDesktopSidecarController(resolveDesktopSidecar({
     appPath: app.getAppPath(),
     env: process.env,
@@ -38,6 +54,7 @@ app.whenReady().then(async () => {
     resourcesPath: process.resourcesPath,
     userDataPath: app.getPath("userData"),
   }), {
+    ...(dataProtection ? { dataProtectionKey: dataProtection.key } : {}),
     log: (stream, message) => console.log(`[sidecar:${stream}] ${message}`),
   });
   installSidecarShutdownGate({
@@ -113,6 +130,60 @@ app.whenReady().then(async () => {
     requesterWebContents: mainWindow.webContents,
     sidecarRequest: sidecar.request,
   });
+  disposeDataProtection = registerDataProtectionController({
+    chooseBackupDestination: async () => {
+      const result = await dialog.showSaveDialog(mainWindow!, {
+        defaultPath: `AgentWeave-${new Date().toISOString().slice(0, 10)}.agentweave-backup`,
+        filters: [{ name: "AgentWeave encrypted backup", extensions: ["agentweave-backup"] }],
+      });
+      return result.canceled ? null : (result.filePath ?? null);
+    },
+    chooseBackupSource: async () => {
+      const result = await dialog.showOpenDialog(mainWindow!, {
+        filters: [{ name: "AgentWeave encrypted backup", extensions: ["agentweave-backup"] }],
+        properties: ["openFile"],
+      });
+      return result.canceled ? null : (result.filePaths[0] ?? null);
+    },
+    ipcMain,
+    readFile: async (filePath) => {
+      const handle = await open(filePath, "r");
+      try {
+        const metadata = await handle.stat();
+        if (!metadata.isFile() || metadata.size > 256 * 1024 * 1024 + 1024) {
+          throw new Error("Selected backup is not an allowed file");
+        }
+        return new Uint8Array(await handle.readFile());
+      } finally {
+        await handle.close();
+      }
+    },
+    requesterWebContents: mainWindow.webContents,
+    sidecar,
+    ...(dataProtection
+      ? {
+          unwrapKey: (wrappedKey: string) => unwrapDataProtectionKey(wrappedKey, safeStorage),
+          wrappedKey: dataProtection.wrappedKey,
+        }
+      : {}),
+    writeFile: async (filePath, bytes) => {
+      const temporary = `${filePath}.tmp-${process.pid}`;
+      const handle = await open(temporary, "wx", 0o600);
+      try {
+        await handle.writeFile(bytes);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      try {
+        await rename(temporary, filePath);
+      } finally {
+        await rm(temporary, { force: true });
+      }
+    },
+  });
+  dataProtection?.key.fill(0);
+  dataProtection = null;
   disposeModelSettings = registerModelSettingsController({
     ipcMain,
     requesterWebContents: mainWindow.webContents,
@@ -147,6 +218,8 @@ app.on("window-all-closed", () => {
   disposeApproval = null;
   disposeAttachments?.();
   disposeAttachments = null;
+  disposeDataProtection?.();
+  disposeDataProtection = null;
   disposeModelSettings?.();
   disposeModelSettings = null;
   disposeHostBootstrap?.();

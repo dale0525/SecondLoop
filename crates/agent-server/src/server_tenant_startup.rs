@@ -2,7 +2,7 @@ use crate::api;
 use agent_runtime::platform::{CapabilitySet, PlatformId};
 use agent_runtime::prompt_composer::AppPromptConfig;
 use agent_runtime::skill_policy::SkillManagementPolicy;
-use agent_runtime::tools::RuntimeConfig;
+use agent_runtime::tools::{CommandMode, RuntimeConfig};
 use agent_runtime::turn::ModelClient;
 use agent_server::owner_api::OwnerApiConfig;
 use agent_server::tenant_skills::{
@@ -16,6 +16,27 @@ use super::server_skill_startup::{
     BuiltinSkillsMode, ManagedSkillsConfig, load_app_package_source_from_env,
     load_builtin_skill_source,
 };
+
+pub(super) fn skills_root_from_env() -> PathBuf {
+    std::env::var("AGENTWEAVE_SKILLS_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(super::DEFAULT_SKILLS_ROOT))
+}
+
+pub(super) fn runtime_config_from_env() -> RuntimeConfig {
+    let workspace_root = std::env::var("AGENTWEAVE_WORKSPACE_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let mut config = RuntimeConfig::workspace_write(workspace_root.clone(), workspace_root)
+        .without_builtin_tools();
+    if std::env::var("AGENTWEAVE_COMMAND_MODE").as_deref() == Ok("allowed") {
+        config = config.with_command_mode(CommandMode::Allowed);
+    }
+    if let Ok(app_root) = std::env::var("AGENTWEAVE_APP_ROOT") {
+        config = config.excluding_workspace_roots([PathBuf::from(app_root)]);
+    }
+    config
+}
 
 pub(super) fn sqlite_database_path(url: &str) -> Option<PathBuf> {
     let value = url

@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { desktopPreloadApi } from "../src/preload";
 import { ATTACHMENT_PICK_IMPORT_CHANNEL } from "../src/shared/attachments";
+import {
+  DATA_PROTECTION_EXPORT_CHANNEL,
+  DATA_PROTECTION_RESTORE_CHANNEL,
+  DATA_PROTECTION_STATUS_CHANNEL,
+} from "../src/shared/dataProtection";
 import { SIDECAR_API_REQUEST_CHANNEL } from "../src/shared/sidecarApi";
 import {
   SIDECAR_ENSURE_RUNNING_CHANNEL,
@@ -90,5 +95,32 @@ describe("sidecar preload capability", () => {
     await expect(desktopPreloadApi.attachments.pickAndImport()).resolves.toEqual(metadata);
     expect(ipcRenderer.invoke).toHaveBeenCalledWith(ATTACHMENT_PICK_IMPORT_CHANNEL);
     expect(Object.keys(desktopPreloadApi.attachments)).toEqual(["pickAndImport"]);
+  });
+
+  it("exposes data protection operations without paths or raw bytes", async () => {
+    const status = {
+      enabled: true,
+      atRestEncryption: "not_provided",
+      backupEncryption: "aes-256-gcm",
+      backupFormat: "agentweave-backup-v1",
+      pendingRestart: false,
+      restoreRollbackAvailable: false,
+    };
+    vi.mocked(ipcRenderer.invoke)
+      .mockResolvedValueOnce(status)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
+    await expect(desktopPreloadApi.dataProtection.status()).resolves.toEqual(status);
+    await expect(desktopPreloadApi.dataProtection.exportBackup()).resolves.toBeNull();
+    await expect(desktopPreloadApi.dataProtection.restoreBackup()).resolves.toBeNull();
+    expect(ipcRenderer.invoke).toHaveBeenNthCalledWith(1, DATA_PROTECTION_STATUS_CHANNEL);
+    expect(ipcRenderer.invoke).toHaveBeenNthCalledWith(2, DATA_PROTECTION_EXPORT_CHANNEL);
+    expect(ipcRenderer.invoke).toHaveBeenNthCalledWith(3, DATA_PROTECTION_RESTORE_CHANNEL);
+    expect(Object.keys(desktopPreloadApi.dataProtection).sort()).toEqual([
+      "exportBackup",
+      "restoreBackup",
+      "status",
+    ]);
   });
 });

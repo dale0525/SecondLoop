@@ -28,11 +28,12 @@ The first descriptor is host-to-child. The host writes one bounded JSON document
 {
   "schemaVersion": 1,
   "launchId": "7f21b128-918e-4b03-91f9-14a95c842ee4",
-  "transportToken": "a-base64url-credential-with-at-least-256-bits-of-entropy"
+  "transportToken": "a-base64url-credential-with-at-least-256-bits-of-entropy",
+  "dataProtectionKeyHex": "optional-64-character-lowercase-hex-key"
 }
 ```
 
-The input is limited to 4096 bytes, rejects unknown fields, requires a canonical UUID, and accepts only a 43-to-128-character base64url-compatible credential.
+The input is limited to 4096 bytes, rejects unknown fields, requires a canonical UUID, and accepts only a 43-to-128-character base64url-compatible transport credential. `dataProtectionKeyHex` is optional; when present, it must decode to exactly 32 bytes and is consumed as secret material by the sidecar.
 
 The second descriptor is child-to-host. After binding the listener, the sidecar writes one newline-terminated JSON document and closes the pipe:
 
@@ -54,6 +55,8 @@ Managed Electron launches always use this contract. Main owns the launch pipes, 
 Session, Foundation, development, Host bootstrap, model, notification, Owner, and Approver traffic all travels through Main. The transport header is added after Renderer-controlled data has been removed. Owner and Approver calls add their separate Bearer authorization in Main, so possession of one authorization layer cannot replace the other.
 
 Every crash restart creates a new launch UUID, endpoint, and credential. The prior credential buffer is cleared when its child generation stops being authoritative. Public sidecar status never includes any of these private transport details.
+
+When local data protection is enabled, Electron Main also passes its operating-system-protected backup key through the launch pipe. The key never appears in the child environment or launch result. See [Local Data Protection and Backup](./DATA_PROTECTION.md) for its narrower purpose and recovery boundary.
 
 ## Development compatibility
 

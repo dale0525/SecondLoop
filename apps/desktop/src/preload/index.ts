@@ -6,6 +6,17 @@ import {
   type AttachmentMetadata,
 } from "../shared/attachments";
 import {
+  DATA_PROTECTION_EXPORT_CHANNEL,
+  DATA_PROTECTION_RESTORE_CHANNEL,
+  DATA_PROTECTION_STATUS_CHANNEL,
+  parseBackupExportReceipt,
+  parseBackupRestoreReceipt,
+  parseDataProtectionStatus,
+  type BackupExportReceipt,
+  type BackupRestoreReceipt,
+  type DataProtectionStatus,
+} from "../shared/dataProtection";
+import {
   HOST_BOOTSTRAP_LOAD_CHANNEL,
   type AgentAppHostDiscovery,
 } from "../shared/hostBootstrap";
@@ -29,6 +40,11 @@ type DesktopRuntimeInfo = {
 export type DesktopPreloadApi = {
   attachments: {
     pickAndImport: () => Promise<AttachmentMetadata | null>;
+  };
+  dataProtection: {
+    exportBackup: () => Promise<BackupExportReceipt | null>;
+    restoreBackup: () => Promise<BackupRestoreReceipt | null>;
+    status: () => Promise<DataProtectionStatus>;
   };
   getRuntimeInfo: () => DesktopRuntimeInfo;
   hostBootstrap: {
@@ -70,6 +86,17 @@ export const desktopPreloadApi: DesktopPreloadApi = Object.freeze({
       const value = await ipcRenderer.invoke(ATTACHMENT_PICK_IMPORT_CHANNEL) as unknown;
       return value === null ? null : parseAttachmentMetadata(value);
     },
+  }),
+  dataProtection: Object.freeze({
+    exportBackup: async () => parseBackupExportReceipt(
+      await ipcRenderer.invoke(DATA_PROTECTION_EXPORT_CHANNEL) as unknown,
+    ),
+    restoreBackup: async () => parseBackupRestoreReceipt(
+      await ipcRenderer.invoke(DATA_PROTECTION_RESTORE_CHANNEL) as unknown,
+    ),
+    status: async () => parseDataProtectionStatus(
+      await ipcRenderer.invoke(DATA_PROTECTION_STATUS_CHANNEL) as unknown,
+    ),
   }),
   getRuntimeInfo: () => runtimeInfo,
   hostBootstrap: Object.freeze({

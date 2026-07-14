@@ -28,11 +28,12 @@ AGENTWEAVE_LAUNCH_RESULT_FD
 {
   "schemaVersion": 1,
   "launchId": "7f21b128-918e-4b03-91f9-14a95c842ee4",
-  "transportToken": "a-base64url-credential-with-at-least-256-bits-of-entropy"
+  "transportToken": "a-base64url-credential-with-at-least-256-bits-of-entropy",
+  "dataProtectionKeyHex": "optional-64-character-lowercase-hex-key"
 }
 ```
 
-输入上限为 4096 字节；未知字段会被拒绝；`launchId` 必须是规范 UUID；凭据只能由 base64url 兼容字符组成，长度为 43～128 个字符。
+输入上限为 4096 字节；未知字段会被拒绝；`launchId` 必须是规范 UUID；传输凭据只能由 base64url 兼容字符组成，长度为 43～128 个字符。`dataProtectionKeyHex` 是可选字段；一旦提供，就必须恰好解码为 32 字节，并由 sidecar 作为 secret material 使用。
 
 第二条管道由子进程写向宿主。sidecar 完成监听端口绑定后，写入一份以换行结束的 JSON 文档，然后关闭管道：
 
@@ -54,6 +55,8 @@ AGENTWEAVE_LAUNCH_RESULT_FD
 Session、Foundation、开发接口、Host bootstrap、模型、通知、Owner 和 Approver 流量都经过 Main。Renderer 可控数据被移除后，Main 才添加 transport header。Owner 与 Approver 调用还会在 Main 中添加各自独立的 Bearer 授权，因此持有任意一层授权都不能替代另一层。
 
 每次崩溃重启都会创建新的 launch UUID、端点和凭据。旧 child generation 不再权威时，上一份凭据 buffer 会被清除。公开 sidecar 状态不包含这些私有传输细节。
+
+启用本地数据保护时，Electron Main 还会通过启动管道传入由操作系统保护的备份密钥。该密钥不会进入子进程环境变量或启动结果。它的限定用途和恢复边界见[本地数据保护与备份](./DATA_PROTECTION.zh-CN.md)。
 
 ## 开发兼容模式
 

@@ -1,6 +1,48 @@
 use super::*;
 
 impl AppState {
+    pub fn with_data_protection(
+        mut self,
+        database_path: impl Into<std::path::PathBuf>,
+        key: agent_runtime::credential::SecretMaterial,
+    ) -> anyhow::Result<Self> {
+        if !self
+            .app_prompt
+            .identity
+            .enabled_capabilities
+            .iter()
+            .any(|capability| capability == "data-protection")
+        {
+            return Ok(self);
+        }
+        self.data_protection = Some(crate::data_protection::DataProtectionService::new(
+            self.storage.clone(),
+            database_path,
+            &self.app_prompt.identity.app_id,
+            key,
+        )?);
+        Ok(self)
+    }
+
+    #[cfg(test)]
+    pub fn with_test_data_protection(
+        mut self,
+        database_path: impl Into<std::path::PathBuf>,
+        key: agent_runtime::credential::SecretMaterial,
+    ) -> anyhow::Result<Self> {
+        self.data_protection = Some(crate::data_protection::DataProtectionService::new(
+            self.storage.clone(),
+            database_path,
+            &self.app_prompt.identity.app_id,
+            key,
+        )?);
+        Ok(self)
+    }
+
+    pub(crate) fn data_protection(&self) -> Option<&crate::data_protection::DataProtectionService> {
+        self.data_protection.as_ref()
+    }
+
     pub(crate) fn configured_tool_registry(&self) -> anyhow::Result<ToolRegistry> {
         let mut registry = ToolRegistry::try_new(self.skills(), &self.runtime_config)?;
         if let Some(memory) = &self.memory_tools {

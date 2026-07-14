@@ -7,6 +7,7 @@ use crate::session::{
 use chrono::{DateTime, Duration, Utc};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
 use sqlx::{Executor, Row, Sqlite, SqlitePool};
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration as StdDuration;
 use uuid::Uuid;
@@ -99,6 +100,18 @@ impl Storage {
 
     pub fn is_closed(&self) -> bool {
         self.pool.is_closed()
+    }
+
+    pub async fn create_consistent_snapshot(&self, destination: &Path) -> anyhow::Result<()> {
+        anyhow::ensure!(!destination.exists(), "snapshot destination already exists");
+        let destination = destination
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("snapshot destination is invalid"))?;
+        sqlx::query("VACUUM INTO ?")
+            .bind(destination)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     pub async fn create_session(&self, title: &str) -> anyhow::Result<Session> {

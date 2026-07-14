@@ -294,6 +294,9 @@ impl FilesystemTenantSkillManagerFactory {
         let data_root = cleanup.data.path.clone();
         let cache_root = cleanup.cache.path.clone();
         let database_path = data_root.join("state.db");
+        crate::data_protection::apply_pending_restore(&database_path)
+            .await
+            .context("tenant pending database restore failed")?;
         cleanup
             .prepare_database()
             .await

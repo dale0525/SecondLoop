@@ -5,6 +5,8 @@ mod api_foundations;
 mod attachment_api;
 mod automation_api;
 mod conversation_api;
+pub mod data_protection;
+mod data_protection_api;
 mod dev_api;
 pub mod dev_skills;
 mod foundation_api;
@@ -21,6 +23,8 @@ mod turn_api;
 
 #[cfg(test)]
 mod api_attachment_tests;
+#[cfg(test)]
+mod api_data_protection_tests;
 #[cfg(test)]
 mod skill_release_tests;
 #[cfg(test)]
