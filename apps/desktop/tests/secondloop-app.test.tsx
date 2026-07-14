@@ -47,6 +47,9 @@ describe("SecondLoop product shell", () => {
     await user.click(desktopRoutes[1]);
     expect(window.location.hash).toBe("#chat");
     expect(container.querySelector(".chat-shell")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+    });
 
     await user.click(desktopRoutes[2]);
     expect(window.location.hash).toBe("#actions");

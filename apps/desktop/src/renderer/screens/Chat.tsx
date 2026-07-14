@@ -474,6 +474,7 @@ export function Chat({
         draft={draft}
         error={attachmentError ?? apiError}
         isImportingAttachment={isImportingAttachment}
+        isSendDisabled={productMode && modelConfigured === false}
         isSending={isSending}
         isStopping={isStopping}
         onAddAttachment={attachmentsEnabled ? () => void handleAddAttachment() : undefined}

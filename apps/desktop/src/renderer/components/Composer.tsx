@@ -10,6 +10,7 @@ type ComposerProps = {
   error: string | null;
   attachments?: AttachmentMetadata[];
   isImportingAttachment?: boolean;
+  isSendDisabled?: boolean;
   isSending: boolean;
   isStopping: boolean;
   onAddAttachment?: () => void;
@@ -26,6 +27,7 @@ export function Composer({
   error,
   attachments = [],
   isImportingAttachment = false,
+  isSendDisabled = false,
   isSending,
   isStopping,
   onAddAttachment,
@@ -110,7 +112,7 @@ export function Composer({
             <Square fill="currentColor" size={14} aria-hidden="true" />
           </AppIconButton>
         ) : (
-          <AppIconButton label={t("composer.send")} type="submit">
+          <AppIconButton disabled={isSendDisabled} label={t("composer.send")} type="submit">
             <Send size={18} aria-hidden="true" />
           </AppIconButton>
         )}
