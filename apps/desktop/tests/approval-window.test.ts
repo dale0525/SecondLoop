@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { registerApprovalWindowController } from "../src/main/approvalWindow";
+import { APPROVAL_REQUEST_CHANNEL } from "../src/shared/approvalRequest";
 import { getElectronBuildConfig } from "../vite.electron.config";
 import rendererConfig from "../vite.config";
 
@@ -43,13 +44,17 @@ describe("independent approval window", () => {
       removeHandler: vi.fn()
     };
     const createWindow = vi.fn(() => approval);
+    const sidecarRequest = vi.fn(async (_path: string, _init: RequestInit = {}) =>
+      new Response(JSON.stringify({ status: "approved" })));
 
     registerApprovalWindowController({
+      approverToken: "approver-main-secret",
       approvalPreload: "/app/dist-electron/approval-preload.cjs",
       approvalUrl: "http://127.0.0.1:4173/approval.html",
       createWindow,
       ipcMain,
-      requesterWebContents: requester
+      requesterWebContents: requester,
+      sidecarRequest,
     });
 
     const open = handlers.get("agentweave:approval:open")!;
@@ -71,6 +76,15 @@ describe("independent approval window", () => {
     );
     expect(approval.webContents.openHandler).toBeTypeOf("function");
     expect(approval.webContents.openHandler!()).toEqual({ action: "deny" });
+
+    await expect(handlers.get(APPROVAL_REQUEST_CHANNEL)!(
+      { sender: approval.webContents },
+      { approvalId: APPROVAL_ID, decision: "approve", operation: "resolve" },
+    )).resolves.toEqual({ status: "approved" });
+    const [approvalPath, approvalInit] = sidecarRequest.mock.calls[0];
+    expect(approvalPath).toBe(`/owner/skills/approvals/${APPROVAL_ID}`);
+    expect(new Headers(approvalInit!.headers).get("Authorization"))
+      .toBe("Bearer approver-main-secret");
 
     expect(() => complete(
       { sender: requester },

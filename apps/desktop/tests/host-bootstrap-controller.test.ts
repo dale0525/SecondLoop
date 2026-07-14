@@ -10,19 +10,18 @@ import { hostDiscoveryFixture } from "./hostBootstrapFixture";
 describe("Host bootstrap controller", () => {
   it("loads and validates discovery through a fixed requester-only channel", async () => {
     const harness = ipcHarness();
-    const fetchImpl = vi.fn(async () => jsonResponse(hostDiscoveryFixture()));
+    const sidecarRequest = vi.fn(async () => jsonResponse(hostDiscoveryFixture()));
     const dispose = registerHostBootstrapController({
-      fetchImpl,
       ipcMain: harness.ipcMain,
       requesterWebContents: { id: 41 },
-      serverBaseUrl: "http://127.0.0.1:53119/private/path",
+      sidecarRequest,
     });
 
     const result = await harness.invoke({ sender: { id: 41 } });
 
     expect(result).toEqual(hostDiscoveryFixture());
-    expect(fetchImpl).toHaveBeenCalledWith(
-      new URL("http://127.0.0.1:53119/host/bootstrap"),
+    expect(sidecarRequest).toHaveBeenCalledWith(
+      "/host/bootstrap",
       expect.objectContaining({
         cache: "no-store",
         headers: { Accept: "application/json" },
@@ -35,25 +34,25 @@ describe("Host bootstrap controller", () => {
 
   it("rejects other renderer windows before contacting the sidecar", async () => {
     const harness = ipcHarness();
-    const fetchImpl = vi.fn(async () => jsonResponse(hostDiscoveryFixture()));
+    const sidecarRequest = vi.fn(async () => jsonResponse(hostDiscoveryFixture()));
     registerHostBootstrapController({
-      fetchImpl,
       ipcMain: harness.ipcMain,
       requesterWebContents: { id: 41 },
+      sidecarRequest,
     });
 
     await expect(harness.invoke({ sender: { id: 99 } })).rejects.toThrow(
       "Host bootstrap is restricted to the requester window",
     );
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(sidecarRequest).not.toHaveBeenCalled();
   });
 
   it("rejects unknown fields and unsupported schemas from the sidecar", async () => {
     const harness = ipcHarness();
     registerHostBootstrapController({
-      fetchImpl: async () => jsonResponse({ ...hostDiscoveryFixture(), schemaVersion: 2 }),
       ipcMain: harness.ipcMain,
       requesterWebContents: { id: 41 },
+      sidecarRequest: async () => jsonResponse({ ...hostDiscoveryFixture(), schemaVersion: 2 }),
     });
 
     await expect(harness.invoke({ sender: { id: 41 } })).rejects.toThrow(
@@ -68,9 +67,9 @@ describe("Host bootstrap controller", () => {
   it("rejects a valid discovery snapshot for another Host platform", async () => {
     const harness = ipcHarness();
     registerHostBootstrapController({
-      fetchImpl: async () => jsonResponse({ ...hostDiscoveryFixture(), platform: "server" }),
       ipcMain: harness.ipcMain,
       requesterWebContents: { id: 41 },
+      sidecarRequest: async () => jsonResponse({ ...hostDiscoveryFixture(), platform: "server" }),
     });
 
     await expect(harness.invoke({ sender: { id: 41 } })).rejects.toThrow(
@@ -81,10 +80,10 @@ describe("Host bootstrap controller", () => {
   it("does not forward sidecar error bodies to the renderer", async () => {
     const harness = ipcHarness();
     registerHostBootstrapController({
-      fetchImpl: async () =>
-        new Response(JSON.stringify({ error: "secret internal path" }), { status: 500 }),
       ipcMain: harness.ipcMain,
       requesterWebContents: { id: 41 },
+      sidecarRequest: async () =>
+        new Response(JSON.stringify({ error: "secret internal path" }), { status: 500 }),
     });
 
     await expect(harness.invoke({ sender: { id: 41 } })).rejects.toThrow(

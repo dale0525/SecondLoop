@@ -47,6 +47,14 @@ AGENTWEAVE_LAUNCH_RESULT_FD
 
 启动结果不会包含传输凭据。宿主必须验证每个字段，核对启动标识与进程标识，确认 origin 是使用动态端口的 loopback HTTP 地址，并在认定 sidecar 就绪前完成带认证的健康检查。
 
+## Electron 集成
+
+受管 Electron 启动始终采用本协议。Main 进程独占启动管道、经过校验的 origin、凭据、健康检查和全部 HTTP 请求。普通 Preload 与审批 Preload 只通过绑定 requester 的 IPC 暴露封闭的强类型操作；它们都不接受 Renderer 传入原始 URL、路径、方法、header 或凭据。
+
+Session、Foundation、开发接口、Host bootstrap、模型、通知、Owner 和 Approver 流量都经过 Main。Renderer 可控数据被移除后，Main 才添加 transport header。Owner 与 Approver 调用还会在 Main 中添加各自独立的 Bearer 授权，因此持有任意一层授权都不能替代另一层。
+
+每次崩溃重启都会创建新的 launch UUID、端点和凭据。旧 child generation 不再权威时，上一份凭据 buffer 会被清除。公开 sidecar 状态不包含这些私有传输细节。
+
 ## 开发兼容模式
 
 当两个描述符变量都不存在时，`agent-server` 保留显式开发行为：在 `127.0.0.1:49321` 上提供不带传输认证的服务。只设置一个变量、描述符无效或启动文档无效时，进程会中止启动。
@@ -56,3 +64,5 @@ AGENTWEAVE_LAUNCH_RESULT_FD
 ```bash
 pixi run sidecar-transport-check
 ```
+
+浏览器开发只能通过 Vite 开发代理访问固定端口。显式 Electron external 模式使用 `AGENTWEAVE_SERVER_URL`；非 loopback URL 必须使用 HTTPS，并提供 base64url 兼容的 `AGENTWEAVE_SERVER_TOKEN`。External 模式不会让 Electron 获得该 server 进程的所有权。

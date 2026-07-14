@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 
 const preloadPaths = [
   new URL("../dist-electron/preload.cjs", import.meta.url),
@@ -17,4 +17,29 @@ for (const preloadPath of preloadPaths) {
   }
 }
 
-console.log("Sandboxed preload bundles are self-contained");
+const rendererAssets = await readdir(new URL("../dist/assets/", import.meta.url));
+const untrustedBundlePaths = [
+  ...preloadPaths,
+  ...rendererAssets
+    .filter((name) => name.endsWith(".js"))
+    .map((name) => new URL(`../dist/assets/${name}`, import.meta.url)),
+];
+const forbiddenTransportDetails = [
+  "127.0.0.1:49321",
+  "AGENTWEAVE_APPROVER_TOKEN",
+  "AGENTWEAVE_OWNER_TOKEN",
+  "AGENTWEAVE_SERVER_TOKEN",
+  "X-AgentWeave-Transport",
+  "transportToken",
+];
+for (const bundlePath of untrustedBundlePaths) {
+  const source = await readFile(bundlePath, "utf8");
+  const forbidden = forbiddenTransportDetails.filter((value) => source.includes(value));
+  if (forbidden.length > 0) {
+    throw new Error(
+      `Renderer-facing bundle contains private transport details: ${forbidden.join(", ")}`,
+    );
+  }
+}
+
+console.log("Renderer-facing bundles are self-contained and transport-private");

@@ -1,9 +1,10 @@
 import {
   spawn as spawnChild,
-  type ChildProcessByStdio,
+  type ChildProcess,
   type SpawnOptions,
 } from "node:child_process";
-import type { Readable } from "node:stream";
+import { randomBytes, randomUUID } from "node:crypto";
+import type { Readable, Writable } from "node:stream";
 
 import {
   SIDECAR_STATUS_SCHEMA_VERSION,
@@ -11,10 +12,15 @@ import {
   type SidecarState,
 } from "../shared/sidecarStatus";
 
-type SidecarChild = ChildProcessByStdio<null, Readable, Readable>;
+type SidecarChild = ChildProcess & {
+  stderr: Readable;
+  stdin: null;
+  stdio: [null, Readable, Readable, Writable, Readable];
+  stdout: Readable;
+};
 
 type SidecarSpawnOptions = SpawnOptions & {
-  stdio: ["ignore", "pipe", "pipe"];
+  stdio: ["ignore", "pipe", "pipe", "pipe", "pipe"];
 };
 
 export type SidecarSpawn = (
@@ -25,7 +31,6 @@ export type SidecarSpawn = (
 
 export type SidecarSupervisorOptions = {
   args?: string[];
-  baseUrl: string;
   command: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
@@ -43,6 +48,11 @@ export type SidecarSupervisorOptions = {
   wait?: (milliseconds: number) => Promise<void>;
 };
 
+export type SidecarRequest = (
+  pathname: string,
+  init?: RequestInit,
+) => Promise<Response>;
+
 const DEFAULT_STARTUP_TIMEOUT_MS = 15_000;
 const DEFAULT_HEALTH_POLL_MS = 100;
 const DEFAULT_HEALTH_TIMEOUT_MS = 1_000;
@@ -50,6 +60,16 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000;
 const DEFAULT_RESTART_WINDOW_MS = 60_000;
 const DEFAULT_RESTART_BACKOFF_MS = 250;
 const DEFAULT_MAX_UNEXPECTED_EXITS = 3;
+const LAUNCH_CONFIG_FD = 3;
+const LAUNCH_RESULT_FD = 4;
+const MAX_HANDSHAKE_BYTES = 4_096;
+const TRANSPORT_HEADER = "X-AgentWeave-Transport";
+
+type ActiveTransport = {
+  generation: number;
+  origin: string;
+  token: Buffer;
+};
 
 export class DesktopSidecarSupervisor {
   private readonly options: Required<Omit<SidecarSupervisorOptions, "args" | "fetchImpl" | "log" | "now" | "spawnImpl" | "wait">> & Pick<SidecarSupervisorOptions, "log"> & {
@@ -72,6 +92,7 @@ export class DesktopSidecarSupervisor {
   private readonly handledChildren = new WeakSet<SidecarChild>();
   private readonly readyChildren = new WeakSet<SidecarChild>();
   private unexpectedExitTimes: number[] = [];
+  private transport: ActiveTransport | null = null;
 
   constructor(options: SidecarSupervisorOptions) {
     this.options = {
@@ -79,7 +100,6 @@ export class DesktopSidecarSupervisor {
       args: [...(options.args ?? [])],
       cwd: options.cwd,
       env: { ...options.env },
-      baseUrl: options.baseUrl,
       startupTimeoutMs: options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS,
       healthPollMs: options.healthPollMs ?? DEFAULT_HEALTH_POLL_MS,
       healthTimeoutMs: options.healthTimeoutMs ?? DEFAULT_HEALTH_TIMEOUT_MS,
@@ -105,6 +125,14 @@ export class DesktopSidecarSupervisor {
       canEnsureRunning: !new Set<SidecarState>(["ready", "starting", "stopping"]).has(this.state),
       lastExit: this.lastExit,
     });
+  }
+
+  request(pathname: string, init: RequestInit = {}): Promise<Response> {
+    const transport = this.transport;
+    if (this.state !== "ready" || !transport || transport.generation !== this.generation) {
+      return Promise.reject(new Error("Managed sidecar is not ready"));
+    }
+    return requestTransport(this.options.fetchImpl, transport, pathname, init);
   }
 
   start(): Promise<SidecarStatus> {
@@ -158,8 +186,11 @@ export class DesktopSidecarSupervisor {
   private async launchOnce(): Promise<SidecarStatus> {
     const generation = this.generation + 1;
     this.generation = generation;
+    this.clearTransport();
     this.state = "starting";
     this.attempt += 1;
+    const launchId = randomUUID();
+    const token = randomBytes(32);
     let child: SidecarChild;
     try {
       child = this.options.spawnImpl(
@@ -168,12 +199,17 @@ export class DesktopSidecarSupervisor {
         {
           cwd: this.options.cwd,
           detached: false,
-          env: { ...this.options.env },
-          stdio: ["ignore", "pipe", "pipe"],
+          env: {
+            ...this.options.env,
+            AGENTWEAVE_LAUNCH_CONFIG_FD: String(LAUNCH_CONFIG_FD),
+            AGENTWEAVE_LAUNCH_RESULT_FD: String(LAUNCH_RESULT_FD),
+          },
+          stdio: ["ignore", "pipe", "pipe", "pipe", "pipe"],
           windowsHide: true,
         },
       );
     } catch {
+      token.fill(0);
       this.state = "failed";
       return this.status();
     }
@@ -188,7 +224,23 @@ export class DesktopSidecarSupervisor {
     });
     this.attachLogs(child);
 
-    const ready = await this.waitForHealth(child, generation);
+    let ready = false;
+    try {
+      await writeLaunchConfig(child.stdio[LAUNCH_CONFIG_FD], launchId, token);
+      const origin = await readLaunchResult(
+        child,
+        child.stdio[LAUNCH_RESULT_FD],
+        launchId,
+        this.options.startupTimeoutMs,
+      );
+      if (this.child === child && this.generation === generation) {
+        this.transport = { generation, origin, token };
+        ready = await this.waitForHealth(child, generation);
+      }
+    } catch {
+      token.fill(0);
+    }
+    if (this.transport?.token !== token) token.fill(0);
     if (ready && this.child === child && this.generation === generation) {
       this.readyChildren.add(child);
       this.state = "ready";
@@ -197,6 +249,7 @@ export class DesktopSidecarSupervisor {
     if (this.child === child && this.generation === generation) {
       this.intentionalChildren.add(child);
       this.state = "failed";
+      this.clearTransport(generation);
       await this.terminateChild(child);
       if (this.child === child) this.child = null;
     }
@@ -214,8 +267,12 @@ export class DesktopSidecarSupervisor {
       && this.options.now() < deadline
     ) {
       try {
-        const response = await this.options.fetchImpl(
-          new URL("/health", this.options.baseUrl),
+        const transport = this.transport;
+        if (!transport || transport.generation !== generation) return false;
+        const response = await requestTransport(
+          this.options.fetchImpl,
+          transport,
+          "/health",
           {
             cache: "no-store",
             method: "GET",
@@ -244,6 +301,7 @@ export class DesktopSidecarSupervisor {
     if (this.child === child) {
       this.child = null;
     }
+    this.clearTransport(generation);
     this.lastExit = Object.freeze({ code, signal });
     if (this.intentionalChildren.has(child) || this.generation !== generation) return;
 
@@ -277,6 +335,7 @@ export class DesktopSidecarSupervisor {
 
   private async stopOnce(): Promise<SidecarStatus> {
     this.generation += 1;
+    this.clearTransport();
     const child = this.child;
     if (!child) {
       this.state = "stopped";
@@ -310,6 +369,14 @@ export class DesktopSidecarSupervisor {
     if (!this.options.log) return;
     attachSanitizedLines(child.stdout, "stdout", this.options.log);
     attachSanitizedLines(child.stderr, "stderr", this.options.log);
+  }
+
+  private clearTransport(generation?: number): void {
+    if (!this.transport || (generation !== undefined && this.transport.generation !== generation)) {
+      return;
+    }
+    this.transport.token.fill(0);
+    this.transport = null;
   }
 }
 
@@ -364,7 +431,147 @@ function defaultSpawn(
   args: string[],
   options: SidecarSpawnOptions,
 ): SidecarChild {
-  return spawnChild(command, args, options);
+  return spawnChild(command, args, options) as unknown as SidecarChild;
+}
+
+function writeLaunchConfig(stream: Writable, launchId: string, token: Buffer): Promise<void> {
+  if (!stream || stream.destroyed) throw new Error("Sidecar launch pipe is unavailable");
+  const document = JSON.stringify({
+    schemaVersion: 1,
+    launchId,
+    transportToken: token.toString("base64url"),
+  });
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      stream.removeListener("error", onError);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onError = () => finish(new Error("Sidecar launch pipe failed"));
+    stream.once("error", onError);
+    stream.end(document, () => finish());
+  });
+}
+
+function readLaunchResult(
+  child: SidecarChild,
+  stream: Readable,
+  launchId: string,
+  timeoutMs: number,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = Buffer.alloc(0);
+    let settled = false;
+    const finish = (error: Error | null, origin?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      stream.removeListener("data", onData);
+      child.removeListener("error", onTermination);
+      child.removeListener("exit", onTermination);
+      if (error) reject(error);
+      else resolve(origin!);
+    };
+    const onTermination = () => finish(new Error("Sidecar exited before launch handshake"));
+    const onData = (chunk: Buffer | string) => {
+      data = Buffer.concat([data, Buffer.from(chunk)]);
+      if (data.byteLength > MAX_HANDSHAKE_BYTES) {
+        finish(new Error("Sidecar launch handshake is too large"));
+        return;
+      }
+      const newline = data.indexOf(0x0a);
+      if (newline < 0) return;
+      try {
+        const trailing = data.subarray(newline + 1).toString("utf8").trim();
+        if (trailing) throw new Error("trailing launch data");
+        finish(null, validateLaunchResult(
+          JSON.parse(data.subarray(0, newline).toString("utf8")),
+          launchId,
+          child.pid,
+        ));
+      } catch {
+        finish(new Error("Sidecar launch handshake is invalid"));
+      }
+    };
+    const timer = setTimeout(
+      () => finish(new Error("Sidecar launch handshake timed out")),
+      timeoutMs,
+    );
+    child.once("error", onTermination);
+    child.once("exit", onTermination);
+    stream.on("data", onData);
+  });
+}
+
+function validateLaunchResult(value: unknown, launchId: string, pid: number | undefined): string {
+  if (!isRecord(value) || Object.keys(value).sort().join(",") !== "launchId,origin,pid,schemaVersion") {
+    throw new Error("invalid launch result shape");
+  }
+  if (value.schemaVersion !== 1 || value.launchId !== launchId || value.pid !== pid) {
+    throw new Error("mismatched launch result");
+  }
+  if (typeof value.origin !== "string") throw new Error("invalid launch origin");
+  const url = new URL(value.origin);
+  if (
+    url.protocol !== "http:"
+    || url.hostname !== "127.0.0.1"
+    || !url.port
+    || url.username
+    || url.password
+    || url.pathname !== "/"
+    || url.search
+    || url.hash
+  ) {
+    throw new Error("unsafe launch origin");
+  }
+  return url.origin;
+}
+
+function requestTransport(
+  fetchImpl: typeof fetch,
+  transport: ActiveTransport,
+  pathname: string,
+  init: RequestInit,
+): Promise<Response> {
+  const url = normalizeSidecarRequestUrl(transport.origin, pathname);
+  const headers = new Headers(init.headers);
+  headers.delete("cookie");
+  headers.set(TRANSPORT_HEADER, transport.token.toString("base64url"));
+  return fetchImpl(url, {
+    ...init,
+    credentials: "omit",
+    headers,
+    redirect: "error",
+  });
+}
+
+export function normalizeSidecarRequestUrl(origin: string, pathname: string): URL {
+  if (!pathname.startsWith("/") || pathname.startsWith("//") || pathname.includes("\\")) {
+    throw new Error("Sidecar request path is not allowed");
+  }
+  const rawPath = pathname.split(/[?#]/, 1)[0];
+  try {
+    if (rawPath.split("/").some((segment) => {
+      const decoded = decodeURIComponent(segment);
+      return decoded === "." || decoded === "..";
+    })) {
+      throw new Error("dot segment");
+    }
+  } catch {
+    throw new Error("Sidecar request path is not allowed");
+  }
+  const url = new URL(pathname, origin);
+  if (url.origin !== origin || url.username || url.password || url.hash) {
+    throw new Error("Sidecar request path is not allowed");
+  }
+  return url;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -373,7 +580,6 @@ function wait(milliseconds: number): Promise<void> {
 
 function validateOptions(options: DesktopSidecarSupervisor["options"]): void {
   if (!options.command || !options.cwd) throw new Error("Sidecar launch paths are required");
-  new URL(options.baseUrl);
   for (const [label, value] of [
     ["startup timeout", options.startupTimeoutMs],
     ["health poll", options.healthPollMs],

@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import { createApprovalTransport } from "./approvalTransport";
 
 const transport = createApprovalTransport(
-  process.env.AGENTWEAVE_APPROVER_TOKEN ?? ""
+  (channel, value) => ipcRenderer.invoke(channel, value) as Promise<unknown>,
 );
 
 const approvalApi = Object.freeze({

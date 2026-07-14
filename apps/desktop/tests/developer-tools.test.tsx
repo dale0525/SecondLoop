@@ -267,7 +267,7 @@ describe("DeveloperTools", () => {
       expect(screen.getByText("No skill packages found")).toBeInTheDocument();
     });
     expect(fetchMock).toHaveBeenLastCalledWith(
-      "http://127.0.0.1:49321/dev/skills/echo",
+      "/__agentweave/dev/skills/echo",
       expect.objectContaining({ method: "DELETE" })
     );
   });

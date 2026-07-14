@@ -29,7 +29,7 @@ describe("Foundation host screens", () => {
 
     expect(await screen.findByText("Sign-in required")).toBeVisible();
     expect(fetch).toHaveBeenLastCalledWith(
-      "http://127.0.0.1:49321/foundation/mail/accounts/primary",
+      "/__agentweave/foundation/mail/accounts/primary",
       expect.objectContaining({ method: "DELETE" })
     );
   });

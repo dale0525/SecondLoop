@@ -26,6 +26,18 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      "/__agentweave": {
+        target: "http://127.0.0.1:49321",
+        changeOrigin: false,
+        rewrite: (path) => path.replace(/^\/__agentweave/, ""),
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyRequest) => {
+            proxyRequest.removeHeader("authorization");
+            proxyRequest.removeHeader("cookie");
+            proxyRequest.removeHeader("x-agentweave-transport");
+          });
+        },
+      },
       "/__owner/requester": ownerProxy(process.env.AGENTWEAVE_OWNER_TOKEN),
     }
   },

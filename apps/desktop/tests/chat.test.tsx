@@ -56,7 +56,7 @@ describe("Chat", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "http://127.0.0.1:49321/sessions",
+      "/__agentweave/sessions",
       expect.objectContaining({
         body: JSON.stringify({ title: "Provider adapter MVP" }),
         method: "POST"
@@ -64,7 +64,7 @@ describe("Chat", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "http://127.0.0.1:49321/sessions/session-1/messages",
+      "/__agentweave/sessions/session-1/messages",
       expect.objectContaining({
         body: JSON.stringify({ content: "Run the renderer smoke test" }),
         method: "POST"
@@ -528,7 +528,7 @@ describe("App navigation", () => {
 
     expect(await screen.findByText("Connection: Connection succeeded")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:49321/model/test",
+      "/__agentweave/model/test",
       expect.objectContaining({
         body: JSON.stringify({
           apiKey: "local-secret",

@@ -25,6 +25,11 @@ describe("Desktop sidecar supervisor", () => {
     expect(first.state).toBe("ready");
     expect(second).toEqual(first);
     expect(first.attempt).toBe(1);
+    const healthHeaders = new Headers(fetchImpl.mock.calls[1][1]?.headers);
+    expect(healthHeaders.get("X-AgentWeave-Transport")).toBe(child.launch?.transportToken);
+    expect(String(fetchImpl.mock.calls[1][0])).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/health$/);
+    expect(JSON.stringify(first)).not.toContain(child.launch?.transportToken);
+    expect(JSON.stringify(spawnImpl.mock.calls[0])).not.toContain(child.launch?.transportToken);
   });
 
   it("fails a timed-out startup and terminates that child", async () => {
@@ -154,6 +159,33 @@ describe("Desktop sidecar supervisor", () => {
     });
   });
 
+  it("rotates the private endpoint credential after a crash", async () => {
+    const first = new MockChild();
+    const second = new MockChild();
+    const fetchImpl = vi.fn(async (
+      _url: RequestInfo | URL,
+      _init: RequestInit = {},
+    ) => new Response("ok"));
+    const supervisor = createSupervisor({
+      fetchImpl,
+      spawnImpl: spawnSequence(first, second),
+    });
+    await supervisor.start();
+    await supervisor.request("/sessions");
+    const firstToken = new Headers(fetchImpl.mock.calls.at(-1)?.[1]?.headers)
+      .get("X-AgentWeave-Transport");
+
+    first.emitExit(1, null);
+    await waitForStatus(supervisor, "ready");
+    await supervisor.request("/sessions");
+    const secondToken = new Headers(fetchImpl.mock.calls.at(-1)?.[1]?.headers)
+      .get("X-AgentWeave-Transport");
+
+    expect(firstToken).toBe(first.launch?.transportToken);
+    expect(secondToken).toBe(second.launch?.transportToken);
+    expect(secondToken).not.toBe(firstToken);
+  });
+
   it("bounds and redacts child diagnostics", () => {
     const longToken = "a".repeat(80);
     const sanitized = sanitizeSidecarLog(
@@ -198,7 +230,6 @@ type SupervisorOverrides = Partial<ConstructorParameters<typeof DesktopSidecarSu
 
 function createSupervisor(overrides: SupervisorOverrides = {}): DesktopSidecarSupervisor {
   return new DesktopSidecarSupervisor({
-    baseUrl: "http://127.0.0.1:49321",
     command: "/app/agent-server",
     cwd: "/app",
     env: { PATH: "/usr/bin" },
@@ -214,17 +245,31 @@ function createSupervisor(overrides: SupervisorOverrides = {}): DesktopSidecarSu
 function spawnSequence(...children: MockChild[]): ReturnType<typeof vi.fn<SidecarSpawn>> {
   const spawn = vi.fn<SidecarSpawn>();
   for (const child of children) {
-    spawn.mockReturnValueOnce(child as unknown as ReturnType<SidecarSpawn>);
+    spawn.mockImplementationOnce((_command, _args, options) => {
+      child.acceptLaunch(options.env ?? {});
+      return child as unknown as ReturnType<SidecarSpawn>;
+    });
   }
   return spawn;
 }
 
 class MockChild extends EventEmitter {
+  private static nextPid = 1;
   readonly stdout = new PassThrough();
   readonly stderr = new PassThrough();
+  readonly launchConfig = new PassThrough();
+  readonly launchResult = new PassThrough();
   readonly stdin = null;
-  readonly stdio = [null, this.stdout, this.stderr] as const;
+  readonly stdio = [
+    null,
+    this.stdout,
+    this.stderr,
+    this.launchConfig,
+    this.launchResult,
+  ] as const;
   readonly signals: string[] = [];
+  readonly pid = 20_000 + MockChild.nextPid++;
+  launch: { launchId: string; transportToken: string } | null = null;
   exitCode: number | null = null;
   signalCode: NodeJS.Signals | null = null;
   readonly exitOnSignal: boolean;
@@ -232,6 +277,26 @@ class MockChild extends EventEmitter {
   constructor(options: { exitOnSignal?: boolean } = {}) {
     super();
     this.exitOnSignal = options.exitOnSignal ?? false;
+  }
+
+  acceptLaunch(env: NodeJS.ProcessEnv): void {
+    if (env.AGENTWEAVE_LAUNCH_CONFIG_FD !== "3" || env.AGENTWEAVE_LAUNCH_RESULT_FD !== "4") {
+      throw new Error("Launch descriptors were not configured");
+    }
+    let config = "";
+    this.launchConfig.on("data", (chunk) => {
+      config += chunk.toString();
+    });
+    this.launchConfig.once("finish", () => {
+      const launch = JSON.parse(config) as { launchId: string; transportToken: string };
+      this.launch = launch;
+      this.launchResult.end(`${JSON.stringify({
+        schemaVersion: 1,
+        launchId: launch.launchId,
+        pid: this.pid,
+        origin: `http://127.0.0.1:${40_000 + this.pid % 10_000}`,
+      })}\n`);
+    });
   }
 
   kill(signal: NodeJS.Signals = "SIGTERM"): boolean {
@@ -245,6 +310,7 @@ class MockChild extends EventEmitter {
     this.signalCode = signal;
     this.emit("exit", code, signal);
   }
+
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -258,6 +324,7 @@ async function waitForStatus(
   for (let index = 0; index < 40; index += 1) {
     if (supervisor.status().state === expected) return;
     await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error(`Sidecar did not reach ${expected}; current=${supervisor.status().state}`);
 }
@@ -266,6 +333,7 @@ async function waitForCallback(read: () => (() => void) | undefined): Promise<vo
   for (let index = 0; index < 40; index += 1) {
     if (read()) return;
     await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error("Expected callback was not installed");
 }

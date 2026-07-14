@@ -74,7 +74,7 @@ The discovery wire contract has its own schema version so Hosts can reject incom
 
 When `AGENTWEAVE_APP_ROOT` resolves successfully, the local sidecar retains the discovery snapshot alongside the matching App prompt and serves it from `GET /host/bootstrap`. The sidecar rejects a discovery snapshot whose identity or capability set does not match the active prompt. If no App is configured, the endpoint returns `404` instead of synthesizing product capabilities.
 
-Electron Main requests this fixed endpoint using its privileged sidecar base URL, accepts calls only from the main Renderer window, limits the response size, and validates the complete discovery wire contract before returning it through `window.agentWeave.hostBootstrap.load()`. The Preload bridge does not expose a Manifest path, a configurable endpoint, credentials, or direct file access. Local transport authentication remains a separate Host responsibility; discovery does not replace it.
+Electron Main requests this fixed API path through its private authenticated sidecar transport, accepts calls only from the main Renderer window, limits the response size, and validates the complete discovery wire contract before returning it through `window.agentWeave.hostBootstrap.load()`. The Preload bridge does not expose a Manifest path, endpoint, transport credential, configurable headers, or direct file access. Host discovery and local transport authentication remain separate checks; neither one replaces the other.
 
 The Desktop Renderer always keeps Chat and Settings reachable. It opens optional surfaces only when all relevant declarations agree:
 

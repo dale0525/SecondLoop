@@ -3,6 +3,7 @@ import {
   parseHostDiscovery,
   type AgentAppHostDiscovery,
 } from "../shared/hostBootstrap";
+import type { SidecarRequest } from "./sidecarSupervisor";
 
 const MAX_BOOTSTRAP_BYTES = 256 * 1024;
 const BOOTSTRAP_TIMEOUT_MS = 5_000;
@@ -15,10 +16,9 @@ type IpcMainLike = {
 };
 
 export type HostBootstrapControllerOptions = {
-  fetchImpl?: typeof fetch;
   ipcMain: IpcMainLike;
   requesterWebContents: { id: number };
-  serverBaseUrl?: string;
+  sidecarRequest: SidecarRequest;
 };
 
 export function registerHostBootstrapController(
@@ -37,10 +37,9 @@ export function registerHostBootstrapController(
 async function loadHostBootstrap(
   options: HostBootstrapControllerOptions,
 ): Promise<AgentAppHostDiscovery> {
-  const baseUrl = options.serverBaseUrl ?? "http://127.0.0.1:49321";
   let response: Response;
   try {
-    response = await (options.fetchImpl ?? fetch)(new URL("/host/bootstrap", baseUrl), {
+    response = await options.sidecarRequest("/host/bootstrap", {
       cache: "no-store",
       headers: { Accept: "application/json" },
       method: "GET",

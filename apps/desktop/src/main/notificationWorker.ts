@@ -10,10 +10,9 @@ type DesktopNotification = {
 
 export type DesktopNotificationWorkerOptions = {
   createNotification(options: { body: string; title: string }): DesktopNotification;
-  fetch?: typeof fetch;
   intervalMs?: number;
   isSupported(): boolean;
-  serverBaseUrl?: string;
+  request: SidecarRequest;
 };
 
 export function startDesktopNotificationWorker(
@@ -45,14 +44,13 @@ export async function deliverDesktopNotificationsOnce(
   options: DesktopNotificationWorkerOptions,
 ): Promise<number> {
   if (!options.isSupported()) return 0;
-  const request = options.fetch ?? fetch;
-  const baseUrl = options.serverBaseUrl ?? "http://127.0.0.1:49321";
+  const request = options.request;
   const query = new URLSearchParams({
     channel: "desktop",
     worker: "desktop-electron",
     limit: "25",
   });
-  const response = await request(new URL(`/foundation/notifications/claim?${query}`, baseUrl));
+  const response = await request(`/foundation/notifications/claim?${query}`);
   if (!response.ok) throw new Error(`Notification claim failed with HTTP ${response.status}`);
   const notifications = (await response.json()) as ClaimedNotification[];
   for (const notification of notifications) {
@@ -73,7 +71,7 @@ export async function deliverDesktopNotificationsOnce(
       };
     }
     const finish = await request(
-      new URL(`/foundation/notifications/${encodeURIComponent(notification.notification_id)}`, baseUrl),
+      `/foundation/notifications/${encodeURIComponent(notification.notification_id)}`,
       {
         body: JSON.stringify({ worker: "desktop-electron", outcome }),
         headers: { "Content-Type": "application/json" },
@@ -108,3 +106,4 @@ function showNotification(notification: DesktopNotification): Promise<void> {
     }
   });
 }
+import type { SidecarRequest } from "./sidecarSupervisor";

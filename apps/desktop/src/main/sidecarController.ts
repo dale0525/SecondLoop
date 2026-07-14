@@ -9,6 +9,8 @@ import {
 import type { DesktopSidecarResolution } from "./sidecarRuntime";
 import {
   DesktopSidecarSupervisor,
+  normalizeSidecarRequestUrl,
+  type SidecarRequest,
   type SidecarSupervisorOptions,
 } from "./sidecarSupervisor";
 
@@ -19,11 +21,14 @@ type IpcMainLike = {
   removeHandler(channel: string): void;
 };
 
-type SupervisorLike = Pick<DesktopSidecarSupervisor, "ensureRunning" | "start" | "status" | "stop">;
+type SupervisorLike = Pick<
+  DesktopSidecarSupervisor,
+  "ensureRunning" | "request" | "start" | "status" | "stop"
+>;
 
 export type DesktopSidecarController = Readonly<{
-  baseUrl: string;
   ensureRunning(): Promise<SidecarStatus>;
+  request: SidecarRequest;
   start(): Promise<SidecarStatus>;
   status(): SidecarStatus;
   stop(): Promise<SidecarStatus>;
@@ -40,7 +45,7 @@ export function createDesktopSidecarController(
   dependencies: DesktopSidecarControllerDependencies = {},
 ): DesktopSidecarController {
   if (resolution.mode !== "managed") {
-    return staticController(resolution.baseUrl, resolution.mode);
+    return staticController(resolution);
   }
 
   try {
@@ -56,21 +61,20 @@ export function createDesktopSidecarController(
       ?? ((options: SidecarSupervisorOptions) => new DesktopSidecarSupervisor(options));
     const supervisor = createSupervisor({
       args: [...resolution.args],
-      baseUrl: resolution.baseUrl,
       command: resolution.command,
       cwd: resolution.cwd,
       env: resolution.env,
       log: dependencies.log,
     });
     return Object.freeze({
-      baseUrl: resolution.baseUrl,
       ensureRunning: () => supervisor.ensureRunning(),
+      request: (pathname, init) => supervisor.request(pathname, init),
       start: () => supervisor.start(),
       status: () => supervisor.status(),
       stop: () => supervisor.stop(),
     });
   } catch {
-    return staticController(resolution.baseUrl, "unavailable");
+    return staticController({ mode: "unavailable", reason: "missing-executable" });
   }
 }
 
@@ -126,9 +130,9 @@ export function installSidecarShutdownGate(options: {
 }
 
 function staticController(
-  baseUrl: string,
-  mode: "external" | "unavailable",
+  resolution: Extract<DesktopSidecarResolution, { mode: "external" | "unavailable" }>,
 ): DesktopSidecarController {
+  const mode = resolution.mode;
   const status = Object.freeze<SidecarStatus>({
     schemaVersion: SIDECAR_STATUS_SCHEMA_VERSION,
     mode,
@@ -138,12 +142,34 @@ function staticController(
     lastExit: null,
   });
   return Object.freeze({
-    baseUrl,
     ensureRunning: async () => status,
+    request: mode === "external"
+      ? externalRequest(resolution.baseUrl, resolution.transportToken)
+      : async () => Promise.reject(new Error("Desktop sidecar is unavailable")),
     start: async () => status,
     status: () => status,
     stop: async () => status,
   });
+}
+
+function externalRequest(baseUrl: string, transportToken: string | null): SidecarRequest {
+  return (pathname, init = {}) => {
+    let url: URL;
+    try {
+      url = normalizeSidecarRequestUrl(new URL(baseUrl).origin, pathname);
+    } catch {
+      return Promise.reject(new Error("Sidecar request path is not allowed"));
+    }
+    const headers = new Headers(init.headers);
+    headers.delete("cookie");
+    if (transportToken) headers.set("X-AgentWeave-Transport", transportToken);
+    return fetch(url, {
+      ...init,
+      credentials: "omit",
+      headers,
+      redirect: "error",
+    });
+  };
 }
 
 function preparePrivateDirectory(directory: string): void {

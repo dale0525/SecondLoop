@@ -3,6 +3,7 @@
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
 import type { AgentAppHostDiscovery } from "../shared/hostBootstrap";
 import type { SidecarStatus } from "../shared/sidecarStatus";
+import type { SidecarApiOperation } from "../shared/sidecarApi";
 
 export {};
 
@@ -18,6 +19,9 @@ declare global {
       sidecar?: {
         ensureRunning(): Promise<SidecarStatus>;
         status(): Promise<SidecarStatus>;
+      };
+      server?: {
+        request(operation: SidecarApiOperation, input?: unknown): Promise<unknown>;
       };
       owner: {
         principal(): Promise<unknown>;

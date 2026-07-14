@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import type { SidecarRequest } from "./sidecarSupervisor";
 
 export const MODEL_SETTINGS_LOAD_CHANNEL = "agentweave:model-settings:load";
 export const MODEL_SETTINGS_SAVE_CHANNEL = "agentweave:model-settings:save";
@@ -59,7 +60,7 @@ export type ModelSettingsControllerOptions = {
   ipcMain: IpcMainLike;
   requesterWebContents: { id: number };
   safeStorage: SafeStorageLike;
-  serverBaseUrl?: string;
+  sidecarRequest: SidecarRequest;
   storagePath: string;
 };
 
@@ -104,14 +105,14 @@ export function registerModelSettingsController(
   options.ipcMain.handle(MODEL_SETTINGS_TEST_CHANNEL, async (event) => {
     assertRequester(event);
     const settings = materializeSettings(options);
-    return postJson(options.serverBaseUrl, "/model/test", settings);
+    return postJson(options.sidecarRequest, "/model/test", settings);
   });
   options.ipcMain.handle(MODEL_SETTINGS_MESSAGE_CHANNEL, async (event, value) => {
     assertRequester(event);
     const request = validateMessageRequest(value);
     const settings = materializeSettings(options);
     return postJson(
-      options.serverBaseUrl,
+      options.sidecarRequest,
       `/sessions/${encodeURIComponent(request.sessionId)}/messages`,
       { content: request.content, modelSettings: settings },
     );
@@ -149,9 +150,13 @@ function validateSettingsInput(value: unknown): ModelSettingsInput {
 function validateMessageRequest(value: unknown): { content: string; sessionId: string } {
   if (!value || typeof value !== "object") throw new Error("Message request is required");
   const request = value as Record<string, unknown>;
+  const sessionId = boundedString(request.sessionId, "Session identifier", 256);
+  if (!/^[A-Za-z0-9._-]+$/.test(sessionId) || sessionId === "." || sessionId === "..") {
+    throw new Error("Session identifier is invalid");
+  }
   return {
     content: boundedString(request.content, "Message", 1_000_000),
-    sessionId: boundedString(request.sessionId, "Session identifier", 256),
+    sessionId,
   };
 }
 
@@ -255,9 +260,8 @@ function publicSettings(settings: StoredModelSettings | null): PublicModelSettin
       };
 }
 
-async function postJson(serverBaseUrl: string | undefined, pathname: string, body: unknown): Promise<unknown> {
-  const baseUrl = serverBaseUrl ?? "http://127.0.0.1:49321";
-  const response = await fetch(new URL(pathname, baseUrl), {
+async function postJson(request: SidecarRequest, pathname: string, body: unknown): Promise<unknown> {
+  const response = await request(pathname, {
     body: JSON.stringify(body),
     headers: { "Content-Type": "application/json" },
     method: "POST",

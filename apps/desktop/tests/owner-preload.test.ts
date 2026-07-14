@@ -25,32 +25,25 @@ describe("owner preload capability", () => {
     );
   });
 
-  it("sets security headers itself and never accepts renderer headers", async () => {
-    const fetcher = vi.fn(async () =>
-      new Response(JSON.stringify({ effective: [], managed: [] }), { status: 200 })
-    );
-    const transport = createOwnerTransport({ requesterToken: "requester-secret", fetcher });
+  it("exposes only typed owner operations over one trusted IPC channel", async () => {
+    const invoke = vi.fn(async () => ({ effective: [], managed: [] }));
+    const transport = createOwnerTransport({ invoke });
 
     await transport.listSkills();
 
-    expect(fetcher).toHaveBeenCalledWith(
-      "http://127.0.0.1:49321/owner/skills",
-      expect.objectContaining({
-        method: "GET",
-        credentials: "omit",
-        headers: { Authorization: "Bearer requester-secret" }
-      })
+    expect(invoke).toHaveBeenCalledWith(
+      "agentweave:owner:request",
+      { operation: "listSkills" },
     );
   });
 
   it("does not expose approver identity or resolution capability to requester renderer", () => {
     const transport = createOwnerTransport({
-      requesterToken: "requester-secret",
-      fetcher: vi.fn()
+      invoke: vi.fn(),
     });
 
     expect("approverPrincipal" in transport).toBe(false);
     expect("resolveApproval" in transport).toBe(false);
-    expect(Object.keys(transport)).not.toContain("approverToken");
+    expect(Object.keys(transport)).not.toContain("request");
   });
 });

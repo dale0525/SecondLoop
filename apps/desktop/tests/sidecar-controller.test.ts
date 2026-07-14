@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createDesktopSidecarController,
@@ -22,11 +22,14 @@ const readyStatus = Object.freeze<SidecarStatus>({
   lastExit: null,
 });
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe("desktop sidecar controller", () => {
   it("prepares managed directories and delegates lifecycle operations", async () => {
     const prepareDirectory = vi.fn();
     const supervisor = {
       ensureRunning: vi.fn(async () => readyStatus),
+      request: vi.fn(async () => new Response("ok")),
       start: vi.fn(async () => readyStatus),
       status: vi.fn(() => readyStatus),
       stop: vi.fn(async () => readyStatus),
@@ -43,7 +46,6 @@ describe("desktop sidecar controller", () => {
       "/user/sidecar/workspace",
     ]);
     expect(supervisorFactory).toHaveBeenCalledWith(expect.objectContaining({
-      baseUrl: "http://127.0.0.1:49321",
       command: "/app/agent-server",
       cwd: "/app",
     }));
@@ -57,6 +59,7 @@ describe("desktop sidecar controller", () => {
     const controller = createDesktopSidecarController({
       baseUrl: "https://sidecar.example.test/",
       mode: "external",
+      transportToken: null,
     }, { supervisorFactory });
 
     await expect(controller.start()).resolves.toMatchObject({
@@ -65,6 +68,23 @@ describe("desktop sidecar controller", () => {
     });
     await expect(controller.stop()).resolves.toMatchObject({ state: "external" });
     expect(supervisorFactory).not.toHaveBeenCalled();
+  });
+
+  it("requires Main-owned transport authentication for a trusted external server", async () => {
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit = {}) => new Response("ok"));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = createDesktopSidecarController({
+      baseUrl: "https://sidecar.example.test/",
+      mode: "external",
+      transportToken: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+    });
+
+    await controller.request("/health");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("https://sidecar.example.test/health");
+    expect(new Headers(init!.headers).get("X-AgentWeave-Transport"))
+      .toBe("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ");
   });
 
   it("restricts status and recovery IPC to the requester web contents", async () => {
@@ -76,8 +96,8 @@ describe("desktop sidecar controller", () => {
       removeHandler: vi.fn((channel: string) => handlers.delete(channel)),
     };
     const controller = {
-      baseUrl: "http://127.0.0.1:49321",
       ensureRunning: vi.fn(async () => readyStatus),
+      request: vi.fn(async () => new Response("ok")),
       start: vi.fn(async () => readyStatus),
       status: vi.fn(() => readyStatus),
       stop: vi.fn(async () => readyStatus),
@@ -138,7 +158,6 @@ describe("desktop sidecar controller", () => {
 function managedResolution(): ManagedSidecarResolution {
   return {
     args: [],
-    baseUrl: "http://127.0.0.1:49321",
     cacheRoot: "/user/sidecar/cache",
     command: "/app/agent-server",
     cwd: "/app",

@@ -47,6 +47,14 @@ The second descriptor is child-to-host. After binding the listener, the sidecar 
 
 The launch result never contains the transport credential. The host must validate every field, match the launch and process identifiers, require loopback HTTP with an ephemeral port, and perform an authenticated health check before declaring the sidecar ready.
 
+## Electron integration
+
+Managed Electron launches always use this contract. Main owns the launch pipes, validated origin, credential, health check, and all HTTP requests. The regular and approval Preloads expose closed typed operations over requester-bound IPC; neither Preload accepts a raw URL, path, method, header, or credential from Renderer.
+
+Session, Foundation, development, Host bootstrap, model, notification, Owner, and Approver traffic all travels through Main. The transport header is added after Renderer-controlled data has been removed. Owner and Approver calls add their separate Bearer authorization in Main, so possession of one authorization layer cannot replace the other.
+
+Every crash restart creates a new launch UUID, endpoint, and credential. The prior credential buffer is cleared when its child generation stops being authoritative. Public sidecar status never includes any of these private transport details.
+
 ## Development compatibility
 
 When neither descriptor variable is present, `agent-server` keeps the explicit development behavior and listens without transport authentication on `127.0.0.1:49321`. Supplying only one descriptor variable, invalid descriptors, or an invalid launch document aborts startup.
@@ -56,3 +64,5 @@ The fixed unauthenticated port is a development compatibility mode, not a produc
 ```bash
 pixi run sidecar-transport-check
 ```
+
+Browser development reaches the fixed port only through the Vite development proxy. Explicit Electron external mode uses `AGENTWEAVE_SERVER_URL`; non-loopback URLs require HTTPS and a base64url-compatible `AGENTWEAVE_SERVER_TOKEN`. External mode never grants Electron ownership of that server process.

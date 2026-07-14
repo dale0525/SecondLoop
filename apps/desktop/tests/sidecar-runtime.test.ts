@@ -2,10 +2,9 @@ import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  MANAGED_SIDECAR_BASE_URL,
-  resolveDesktopSidecar,
-} from "../src/main/sidecarRuntime";
+import { resolveDesktopSidecar } from "../src/main/sidecarRuntime";
+
+const TRANSPORT_TOKEN = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ";
 
 const baseOptions = {
   appPath: "/repo/apps/desktop",
@@ -27,6 +26,7 @@ describe("desktop sidecar runtime resolution", () => {
       ...baseOptions,
       env: {
         AGENTWEAVE_SERVER_URL: "https://sidecar.example.test",
+        AGENTWEAVE_SERVER_TOKEN: TRANSPORT_TOKEN,
         AGENTWEAVE_SIDECAR_EXECUTABLE: "/ignored/agent-server",
       },
       isExecutable,
@@ -35,6 +35,7 @@ describe("desktop sidecar runtime resolution", () => {
     expect(resolution).toEqual({
       baseUrl: "https://sidecar.example.test/",
       mode: "external",
+      transportToken: TRANSPORT_TOKEN,
     });
     expect(isExecutable).not.toHaveBeenCalled();
   });
@@ -45,6 +46,19 @@ describe("desktop sidecar runtime resolution", () => {
       env: { AGENTWEAVE_SERVER_URL: "file:///tmp/server.sock" },
       isExecutable: () => true,
     })).toMatchObject({ mode: "unavailable", reason: "invalid-server-url" });
+    expect(resolveDesktopSidecar({
+      ...baseOptions,
+      env: { AGENTWEAVE_SERVER_URL: "https://sidecar.example.test" },
+      isExecutable: () => true,
+    })).toMatchObject({ mode: "unavailable", reason: "missing-server-token" });
+    expect(resolveDesktopSidecar({
+      ...baseOptions,
+      env: {
+        AGENTWEAVE_SERVER_TOKEN: "short",
+        AGENTWEAVE_SERVER_URL: "http://127.0.0.1:49321",
+      },
+      isExecutable: () => true,
+    })).toMatchObject({ mode: "unavailable", reason: "invalid-server-token" });
     expect(resolveDesktopSidecar({
       ...baseOptions,
       env: { AGENTWEAVE_SERVER_URL: "http://sidecar.example.test" },
@@ -67,7 +81,6 @@ describe("desktop sidecar runtime resolution", () => {
     });
 
     expect(resolution).toMatchObject({
-      baseUrl: MANAGED_SIDECAR_BASE_URL,
       command: packagedExecutable,
       cwd: "/app/resources",
       mode: "managed",

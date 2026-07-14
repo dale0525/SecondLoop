@@ -1,6 +1,5 @@
 import { ModelSettings } from "./types";
-
-const SERVER_ORIGIN = "http://127.0.0.1:49321";
+import type { SidecarApiOperation } from "../shared/sidecarApi";
 
 export type ServerSession = {
   id: string;
@@ -299,7 +298,7 @@ type ErrorPayload = {
 };
 
 export async function createServerSession(title: string): Promise<ServerSession> {
-  return requestJson<ServerSession>("/sessions", {
+  return requestServer<ServerSession>("sessions.create", { title }, "/sessions", {
     body: JSON.stringify({ title }),
     method: "POST"
   });
@@ -314,7 +313,7 @@ export async function postSessionMessage(
   if (secureBridge) {
     return secureBridge.postSessionMessage(sessionId, content) as Promise<PostMessageResponse>;
   }
-  return requestJson<PostMessageResponse>(`/sessions/${sessionId}/messages`, {
+  return requestDevelopmentJson<PostMessageResponse>(`/sessions/${sessionId}/messages`, {
     body: JSON.stringify({
       content,
       ...(modelSettings ? { modelSettings } : {})
@@ -330,7 +329,7 @@ export async function testModelConnection(
   if (secureBridge) {
     return secureBridge.testConnection() as Promise<ModelConnectionTestResponse>;
   }
-  return requestJson<ModelConnectionTestResponse>("/model/test", {
+  return requestDevelopmentJson<ModelConnectionTestResponse>("/model/test", {
     body: JSON.stringify(settings),
     method: "POST"
   });
@@ -338,60 +337,78 @@ export async function testModelConnection(
 
 export async function listMemories(query = "", limit = 50): Promise<MemoryRecord[]> {
   const params = new URLSearchParams({ query, limit: String(limit) });
-  return requestJson<MemoryRecord[]>(`/foundation/memory?${params}`, { method: "GET" });
+  return requestServer<MemoryRecord[]>(
+    "memory.list",
+    { limit, query },
+    `/foundation/memory?${params}`,
+    { method: "GET" },
+  );
 }
 
 export async function getMemory(id: string): Promise<MemoryRecord> {
-  return requestJson<MemoryRecord>(`/foundation/memory/${encodeURIComponent(id)}`, {
+  return requestServer<MemoryRecord>("memory.get", { id }, `/foundation/memory/${encodeURIComponent(id)}`, {
     method: "GET"
   });
 }
 
 export async function forgetMemory(id: string, expectedVersion: number): Promise<unknown> {
-  return requestJson(`/foundation/memory/${encodeURIComponent(id)}`, {
+  return requestServer("memory.forget", { expectedVersion, id }, `/foundation/memory/${encodeURIComponent(id)}`, {
     body: JSON.stringify({ expectedVersion }),
     method: "DELETE"
   });
 }
 
 export async function exportMemories(): Promise<MemoryExport> {
-  return requestJson<MemoryExport>("/foundation/memory/export", { method: "GET" });
+  return requestServer<MemoryExport>("memory.export", undefined, "/foundation/memory/export", { method: "GET" });
 }
 
 export async function listMailAccounts(): Promise<MailAccount[]> {
-  return requestJson<MailAccount[]>("/foundation/mail/accounts", { method: "GET" });
+  return requestServer<MailAccount[]>("mail.list", undefined, "/foundation/mail/accounts", { method: "GET" });
 }
 
 export async function getMailAccountStatus(id: string): Promise<MailAccountStatus> {
-  return requestJson<MailAccountStatus>(
+  return requestServer<MailAccountStatus>(
+    "mail.status",
+    { id },
     `/foundation/mail/accounts/${encodeURIComponent(id)}`,
     { method: "GET" }
   );
 }
 
 export async function connectMailAccount(id: string): Promise<MailAccountStatus> {
-  return requestJson<MailAccountStatus>(
+  return requestServer<MailAccountStatus>(
+    "mail.connect",
+    { id },
     `/foundation/mail/accounts/${encodeURIComponent(id)}`,
     { method: "POST" }
   );
 }
 
 export async function disconnectMailAccount(id: string): Promise<MailAccountStatus> {
-  return requestJson<MailAccountStatus>(
+  return requestServer<MailAccountStatus>(
+    "mail.disconnect",
+    { id },
     `/foundation/mail/accounts/${encodeURIComponent(id)}`,
     { method: "DELETE" }
   );
 }
 
 export async function listFoundationActions(): Promise<PendingFoundationAction[]> {
-  return requestJson<PendingFoundationAction[]>("/foundation/actions", { method: "GET" });
+  return requestServer<PendingFoundationAction[]>(
+    "actions.list",
+    undefined,
+    "/foundation/actions",
+    { method: "GET" },
+  );
 }
 
 export async function resolveFoundationAction(
   approvalId: string,
   decision: "approve_once" | "reject"
 ): Promise<FoundationActionResolution> {
-  return requestJson<FoundationActionResolution>(
+  return requestServer<FoundationActionResolution>(
+    "actions.resolve",
+    { approvalId, decision },
     `/foundation/actions/${encodeURIComponent(approvalId)}`,
     {
       body: JSON.stringify({ decision }),
@@ -401,23 +418,23 @@ export async function resolveFoundationAction(
 }
 
 export async function listDevSkills(): Promise<DevSkillInventory> {
-  return requestJson<DevSkillInventory>("/dev/skills", { method: "GET" });
+  return requestServer<DevSkillInventory>("devSkills.list", undefined, "/dev/skills", { method: "GET" });
 }
 
 export async function validateDevSkills(): Promise<DevSkillInventory> {
-  return requestJson<DevSkillInventory>("/dev/skills/validate", {
+  return requestServer<DevSkillInventory>("devSkills.validate", undefined, "/dev/skills/validate", {
     method: "POST"
   });
 }
 
 export async function reloadDevSkills(): Promise<DevSkillReloadResponse> {
-  return requestJson<DevSkillReloadResponse>("/dev/skills/reload", {
+  return requestServer<DevSkillReloadResponse>("devSkills.reload", undefined, "/dev/skills/reload", {
     method: "POST"
   });
 }
 
 export async function deleteDevSkill(id: string): Promise<DevSkillInventory> {
-  return requestJson<DevSkillInventory>(`/dev/skills/${encodeURIComponent(id)}`, {
+  return requestServer<DevSkillInventory>("devSkills.delete", { id }, `/dev/skills/${encodeURIComponent(id)}`, {
     method: "DELETE"
   });
 }
@@ -444,8 +461,20 @@ export function extractAssistantText(response: PostMessageResponse): string {
   return response.assistant_message?.content ?? "";
 }
 
-async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
-  const response = await fetch(`${SERVER_ORIGIN}${path}`, {
+async function requestServer<T>(
+  operation: SidecarApiOperation,
+  input: unknown,
+  developmentPath: string,
+  developmentInit: RequestInit,
+): Promise<T> {
+  const bridge = window.agentWeave?.server;
+  if (bridge) return bridge.request(operation, input) as Promise<T>;
+  return requestDevelopmentJson<T>(developmentPath, developmentInit);
+}
+
+async function requestDevelopmentJson<T>(path: string, init: RequestInit): Promise<T> {
+  if (!import.meta.env.DEV) throw new Error("Trusted sidecar IPC is unavailable");
+  const response = await fetch(`/__agentweave${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",

@@ -21,12 +21,12 @@ describe("desktop notification host", () => {
         },
         show: () => show(),
       }),
-      fetch: fetchMock,
       isSupported: () => true,
+      request: fetchMock,
     });
 
     expect(count).toBe(1);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("channel=desktop");
+    expect(fetchMock.mock.calls[0][0]).toContain("channel=desktop");
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
       worker: "desktop-electron",
       outcome: { kind: "delivered", delivery_id: "electron:notification-1" },
@@ -37,8 +37,8 @@ describe("desktop notification host", () => {
     const fetchMock = vi.fn();
     await expect(deliverDesktopNotificationsOnce({
       createNotification: () => { throw new Error("unused"); },
-      fetch: fetchMock,
       isSupported: () => false,
+      request: fetchMock,
     })).resolves.toBe(0);
     expect(fetchMock).not.toHaveBeenCalled();
   });

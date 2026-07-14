@@ -1,16 +1,7 @@
 import { accessSync, constants, statSync } from "node:fs";
 import path from "node:path";
 
-import type { SidecarMode } from "../shared/sidecarStatus";
-
-export const MANAGED_SIDECAR_BASE_URL = "http://127.0.0.1:49321";
-
-type SidecarResolutionBase = Readonly<{
-  baseUrl: string;
-  mode: SidecarMode;
-}>;
-
-export type ManagedSidecarResolution = SidecarResolutionBase & Readonly<{
+export type ManagedSidecarResolution = Readonly<{
   args: readonly string[];
   cacheRoot: string;
   command: string;
@@ -21,13 +12,20 @@ export type ManagedSidecarResolution = SidecarResolutionBase & Readonly<{
   workspaceRoot: string;
 }>;
 
-export type ExternalSidecarResolution = SidecarResolutionBase & Readonly<{
+export type ExternalSidecarResolution = Readonly<{
+  baseUrl: string;
   mode: "external";
+  transportToken: string | null;
 }>;
 
-export type UnavailableSidecarResolution = SidecarResolutionBase & Readonly<{
+export type UnavailableSidecarResolution = Readonly<{
   mode: "unavailable";
-  reason: "invalid-executable" | "invalid-server-url" | "missing-executable";
+  reason:
+    | "invalid-executable"
+    | "invalid-server-token"
+    | "invalid-server-url"
+    | "missing-executable"
+    | "missing-server-token";
 }>;
 
 export type DesktopSidecarResolution =
@@ -50,9 +48,13 @@ export function resolveDesktopSidecar(
 ): DesktopSidecarResolution {
   if (options.env.AGENTWEAVE_SERVER_URL !== undefined) {
     const baseUrl = normalizeExternalBaseUrl(options.env.AGENTWEAVE_SERVER_URL);
-    return baseUrl
-      ? Object.freeze({ baseUrl, mode: "external" })
-      : unavailable("invalid-server-url");
+    if (!baseUrl) return unavailable("invalid-server-url");
+    const transportToken = normalizeExternalToken(options.env.AGENTWEAVE_SERVER_TOKEN);
+    if (transportToken === undefined) return unavailable("invalid-server-token");
+    if (!isLoopbackHostname(new URL(baseUrl).hostname) && transportToken === null) {
+      return unavailable("missing-server-token");
+    }
+    return Object.freeze({ baseUrl, mode: "external", transportToken });
   }
 
   const platform = options.platform ?? process.platform;
@@ -97,7 +99,6 @@ export function resolveDesktopSidecar(
 
   return Object.freeze({
     args: Object.freeze([]),
-    baseUrl: MANAGED_SIDECAR_BASE_URL,
     cacheRoot,
     command,
     cwd,
@@ -119,8 +120,11 @@ function managedEnvironment(options: {
 }): NodeJS.ProcessEnv {
   const env = allowedHostEnvironment(options.env);
   delete env.AGENTWEAVE_SERVER_URL;
+  delete env.AGENTWEAVE_SERVER_TOKEN;
   delete env.AGENTWEAVE_SIDECAR_EXECUTABLE;
   delete env.AGENTWEAVE_DESKTOP_URL;
+  delete env.AGENTWEAVE_LAUNCH_CONFIG_FD;
+  delete env.AGENTWEAVE_LAUNCH_RESULT_FD;
   env.AGENTWEAVE_APP_DATA_ROOT = options.dataRoot;
   env.AGENTWEAVE_CACHE_ROOT = options.cacheRoot;
   env.AGENTWEAVE_DATABASE_URL = `sqlite://${path.join(options.dataRoot, "agentweave.db")}?mode=rwc`;
@@ -182,6 +186,15 @@ function normalizeExternalBaseUrl(value: string): string | null {
   }
 }
 
+function normalizeExternalToken(value: string | undefined): string | null | undefined {
+  if (value === undefined || value === "") return null;
+  return value.length >= 43
+    && value.length <= 128
+    && /^[A-Za-z0-9_-]+$/.test(value)
+    ? value
+    : undefined;
+}
+
 function isLoopbackHostname(hostname: string): boolean {
   return hostname === "localhost"
     || hostname === "[::1]"
@@ -201,7 +214,6 @@ function executableExists(candidate: string, platform: NodeJS.Platform): boolean
 
 function unavailable(reason: UnavailableSidecarResolution["reason"]): UnavailableSidecarResolution {
   return Object.freeze({
-    baseUrl: MANAGED_SIDECAR_BASE_URL,
     mode: "unavailable",
     reason,
   });

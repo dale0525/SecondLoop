@@ -46,12 +46,12 @@ describe("desktop model credential storage", () => {
 
   it("injects the credential only in main-process server requests", async () => {
     const fixture = createFixture();
-    const fetchMock = vi.fn(async (_url: URL, init: RequestInit) =>
+    const sidecarRequest = vi.fn(async (_path: string, init: RequestInit = {}) =>
       new Response(JSON.stringify({ accepted: true, received: JSON.parse(String(init.body)) }), {
         headers: { "Content-Type": "application/json" },
       }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    fixture.sidecarRequest.mockImplementation(sidecarRequest);
     await fixture.handlers.get(MODEL_SETTINGS_SAVE_CHANNEL)!(fixture.requesterEvent, {
       apiKey: "desktop-secret",
       baseUrl: "https://models.example.test/v1",
@@ -71,9 +71,7 @@ describe("desktop model credential storage", () => {
         modelSettings: { apiKey: "desktop-secret" },
       },
     });
-    expect(String(fetchMock.mock.calls[0][0])).toBe(
-      "http://127.0.0.1:49321/sessions/session-1/messages",
-    );
+    expect(sidecarRequest.mock.calls[0][0]).toBe("/sessions/session-1/messages");
   });
 
   it("clears a credential, rejects other renderers, and fails closed without encryption", async () => {
@@ -104,6 +102,7 @@ function createFixture(encryptionAvailable = true) {
   const handlers = new Map<string, Handler>();
   const requesterEvent = { sender: { id: 7 } };
   const storagePath = join(root, "model-settings.v1.json");
+  const sidecarRequest = vi.fn(async (_path: string, _init?: RequestInit) => new Response("{}"));
   registerModelSettingsController({
     ipcMain: {
       handle: (channel, handler) => handlers.set(channel, handler),
@@ -115,9 +114,10 @@ function createFixture(encryptionAvailable = true) {
       encryptString: (value) => Buffer.from(`enc:${value}`),
       decryptString: (value) => value.toString().replace(/^enc:/, ""),
     },
+    sidecarRequest,
     storagePath,
   });
-  return { handlers, requesterEvent, storagePath };
+  return { handlers, requesterEvent, sidecarRequest, storagePath };
 }
 
 function validSettings(apiKey: string) {

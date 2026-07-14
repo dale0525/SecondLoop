@@ -2,6 +2,11 @@ import type {
   ApprovalDecision,
   ApprovalObservationResult
 } from "../shared/approvalObservation";
+import {
+  APPROVAL_REQUEST_CHANNEL,
+  type ApprovalRequest,
+} from "../shared/approvalRequest";
+import type { SidecarRequest } from "./sidecarSupervisor";
 
 export const APPROVAL_OPEN_CHANNEL = "agentweave:approval:open";
 export const APPROVAL_COMPLETE_CHANNEL = "agentweave:approval:complete";
@@ -41,6 +46,7 @@ export type ApprovalWindowOptions = {
 };
 
 type ApprovalWindowControllerOptions = {
+  approverToken?: string;
   approvalPreload: string;
   approvalUrl: string;
   createWindow(options: ApprovalWindowOptions): ApprovalWindow;
@@ -49,6 +55,7 @@ type ApprovalWindowControllerOptions = {
     removeHandler(channel: string): void;
   };
   requesterWebContents: ApprovalWebContents;
+  sidecarRequest?: SidecarRequest;
 };
 
 type Completion = {
@@ -138,6 +145,36 @@ export function registerApprovalWindowController(
     return { accepted: true };
   });
 
+  options.ipcMain.handle(APPROVAL_REQUEST_CHANNEL, async (event, value) => {
+    const pending = byWebContents.get(event.sender.id);
+    if (!pending || event.sender !== pending.window.webContents) {
+      throw new Error("Approval request must originate from the isolated approval window");
+    }
+    if (!options.approverToken || !options.sidecarRequest) {
+      throw new Error("Independent approver credential is not configured");
+    }
+    const request = parseApprovalRequest(value, pending.approvalId);
+    const description = approvalDescription(request);
+    const response = await options.sidecarRequest(description.path, {
+      body: description.body === undefined ? undefined : JSON.stringify(description.body),
+      headers: {
+        Authorization: `Bearer ${options.approverToken}`,
+        ...(description.body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      method: description.method,
+    });
+    const text = await response.text();
+    const payload = text ? parsePayload(text) : {};
+    if (!response.ok) {
+      throw new Error(
+        isRecord(payload) && typeof payload.error === "string"
+          ? payload.error.slice(0, 1_024)
+          : `AgentWeave server returned HTTP ${response.status}`,
+      );
+    }
+    return payload;
+  });
+
   function settle(pending: PendingWindow, value: ApprovalObservationResult): void {
     if (byApproval.get(pending.approvalId) !== pending) return;
     byApproval.delete(pending.approvalId);
@@ -149,11 +186,46 @@ export function registerApprovalWindowController(
     options.ipcMain.removeHandler(APPROVAL_OPEN_CHANNEL);
     options.ipcMain.removeHandler(APPROVAL_COMPLETE_CHANNEL);
     options.ipcMain.removeHandler(APPROVAL_CLOSE_CHANNEL);
+    options.ipcMain.removeHandler(APPROVAL_REQUEST_CHANNEL);
     for (const pending of byApproval.values()) {
       settle(pending, { approvalId: pending.approvalId, status: "disposed" });
       if (!pending.window.isDestroyed()) pending.window.close();
     }
   };
+}
+
+function parseApprovalRequest(value: unknown, expectedApprovalId: string): ApprovalRequest {
+  if (!isRecord(value) || typeof value.operation !== "string") {
+    throw new Error("Approval request is invalid");
+  }
+  if (value.operation === "principal") return { operation: "principal" };
+  const approvalId = approvalUuid(value.approvalId);
+  if (approvalId !== expectedApprovalId) throw new Error("Approval request identifier does not match");
+  if (value.operation === "approval") return { approvalId, operation: "approval" };
+  if (value.operation === "resolve" && (value.decision === "approve" || value.decision === "reject")) {
+    return { approvalId, decision: value.decision, operation: "resolve" };
+  }
+  throw new Error("Approval request is invalid");
+}
+
+function approvalDescription(request: ApprovalRequest): {
+  body?: unknown;
+  method: "GET" | "POST";
+  path: string;
+} {
+  if (request.operation === "principal") return { method: "GET", path: "/owner/principal" };
+  const path = `/owner/skills/approvals/${request.approvalId}`;
+  return request.operation === "approval"
+    ? { method: "GET", path }
+    : { body: { decision: request.decision }, method: "POST", path };
+}
+
+function parsePayload(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text.slice(0, 1_024) };
+  }
 }
 
 function approvalTarget(base: string, approvalId: string): string {

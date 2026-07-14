@@ -32,7 +32,15 @@ export function getElectronBuildConfig(mode: string): UserConfig {
       outDir: "dist-electron",
       target: "node20",
       rollupOptions: {
-        external: ["electron", "node:child_process", "node:fs", "node:path", "node:url"],
+        external: [
+          "electron",
+          "node:child_process",
+          "node:crypto",
+          "node:fs",
+          "node:path",
+          "node:stream",
+          "node:url",
+        ],
         input: resolve(__dirname, target.input),
         output: {
           entryFileNames: target.output,

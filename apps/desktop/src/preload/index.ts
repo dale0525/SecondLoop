@@ -10,6 +10,10 @@ import {
   SIDECAR_STATUS_CHANNEL,
   type SidecarStatus,
 } from "../shared/sidecarStatus";
+import {
+  SIDECAR_API_REQUEST_CHANNEL,
+  type SidecarApiOperation,
+} from "../shared/sidecarApi";
 import { createOwnerTransport } from "./ownerTransport";
 
 type DesktopRuntimeInfo = {
@@ -26,6 +30,9 @@ export type DesktopPreloadApi = {
     ensureRunning: () => Promise<SidecarStatus>;
     status: () => Promise<SidecarStatus>;
   };
+  server: {
+    request: (operation: SidecarApiOperation, input?: unknown) => Promise<unknown>;
+  };
   owner: ReturnType<typeof createOwnerTransport>;
   approval: {
     open: (approvalId: string) => Promise<ApprovalObservationResult>;
@@ -39,8 +46,9 @@ export type DesktopPreloadApi = {
   };
 };
 
-const ownerToken = process.env.AGENTWEAVE_OWNER_TOKEN ?? "";
-const owner = createOwnerTransport({ requesterToken: ownerToken });
+const owner = createOwnerTransport({
+  invoke: (channel, value) => ipcRenderer.invoke(channel, value) as Promise<unknown>,
+});
 
 const runtimeInfo: DesktopRuntimeInfo = {
   platform: typeof process === "undefined" ? "browser" : process.platform,
@@ -60,6 +68,13 @@ export const desktopPreloadApi: DesktopPreloadApi = Object.freeze({
     status: async () => parseSidecarStatus(
       await ipcRenderer.invoke(SIDECAR_STATUS_CHANNEL),
     ),
+  }),
+  server: Object.freeze({
+    request: (operation: SidecarApiOperation, input?: unknown) =>
+      ipcRenderer.invoke(SIDECAR_API_REQUEST_CHANNEL, {
+        operation,
+        ...(input === undefined ? {} : { input }),
+      }) as Promise<unknown>,
   }),
   owner,
   approval: Object.freeze({
