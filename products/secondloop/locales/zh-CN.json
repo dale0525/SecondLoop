@@ -91,6 +91,7 @@
   "connections.mailDiagnostic": "连接器报告了需要处理的状态。请重新连接，或稍后重试诊断。",
   "connections.mailDetailEmptyTitle": "尚未选择邮箱账户",
   "connections.mailDetailEmptyDescription": "连接可用账户后，这里会显示授权范围与发送审批策略。",
+  "foundation.accounts.emptyDescription": "当前没有已连接的邮箱账户。配置受支持的 Mail Connector 后，再回来检查连接状态。",
   "actions.requestFailed": "行动账本暂时不可用。没有行动会在此状态下自动执行。",
   "actions.actionFailed": "这项行动失败了。请核对权威状态后再决定下一步。",
   "actions.detailEmptyTitle": "选择一项行动查看权威预览",

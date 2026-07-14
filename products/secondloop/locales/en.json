@@ -91,6 +91,7 @@
   "connections.mailDiagnostic": "The connector reported a state that needs attention. Reconnect it or retry diagnostics later.",
   "connections.mailDetailEmptyTitle": "No Mail account selected",
   "connections.mailDetailEmptyDescription": "Connect an available account to inspect its scopes and send-approval policy here.",
+  "foundation.accounts.emptyDescription": "No Mail account is connected. Configure a supported Mail Connector, then return to check its status.",
   "actions.requestFailed": "The action ledger is temporarily unavailable. No action will execute automatically in this state.",
   "actions.actionFailed": "This action failed. Reconcile its authoritative state before choosing a next step.",
   "actions.detailEmptyTitle": "Select an action to inspect its authoritative preview",
