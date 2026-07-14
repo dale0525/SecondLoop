@@ -1,0 +1,4 @@
+interface:
+  display_name: "SecondLoop Routines"
+  short_description: "Prepare source-backed briefs and follow-up lists"
+  default_prompt: "Use $secondloop-routines to prepare a concise, source-backed personal secretary brief."

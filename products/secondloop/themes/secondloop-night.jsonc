@@ -1,0 +1,31 @@
+{
+  "name": "SecondLoop Night",
+  "type": "dark",
+  "colors": {
+    "foreground": "#D8D7D0",
+    "descriptionForeground": "#97978F",
+    "disabledForeground": "#686A64",
+    "focusBorder": "#79B493",
+    "editor.background": "#111411",
+    "editor.foreground": "#D8D7D0",
+    "sideBar.background": "#171B17",
+    "sideBar.border": "#2B322B",
+    "panel.background": "#171B17",
+    "panel.border": "#2B322B",
+    "editorWidget.background": "#1D221D",
+    "editorWidget.border": "#343C34",
+    "input.background": "#1D221D",
+    "input.border": "#3A443B",
+    "button.background": "#4F8067",
+    "button.foreground": "#F8FBF8",
+    "button.hoverBackground": "#5E9276",
+    "textLink.foreground": "#86BE9E",
+    "list.hoverBackground": "#252C25",
+    "list.inactiveSelectionBackground": "#29332C",
+    "chat.requestBubbleBackground": "#263029",
+    "errorForeground": "#E49A83",
+    "inputValidation.errorBackground": "#38231E",
+    "inputValidation.errorBorder": "#A85C48"
+  },
+  "tokenColors": []
+}

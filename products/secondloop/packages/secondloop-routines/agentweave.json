@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "com.secondloop.routines",
+  "version": "0.1.0",
+  "displayName": "SecondLoop Routines",
+  "kind": "instruction_only",
+  "package": {
+    "includeInstructions": true,
+    "includeRuntime": false
+  },
+  "compatibility": {
+    "platforms": [
+      "desktop"
+    ]
+  },
+  "requires": {
+    "packages": [],
+    "capabilities": [],
+    "runtimeTools": [],
+    "connectors": []
+  }
+}
