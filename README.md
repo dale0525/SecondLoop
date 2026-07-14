@@ -19,6 +19,7 @@ You can use it to build personal assistants, research assistants, content workfl
 | Connect a real IMAP/SMTP mailbox | [Mail Connector Setup](./MAIL_CONNECTOR_SETUP.md) |
 | Integrate a managed desktop sidecar | [Local Sidecar Transport](./LOCAL_SIDECAR_TRANSPORT.md) |
 | Integrate durable conversation history | [Conversation Lifecycle](./CONVERSATION_LIFECYCLE.md) |
+| Stream, stop, and recover turns | [Streaming Turn Lifecycle](./STREAMING_TURN_LIFECYCLE.md) |
 
 ## 5-minute quick start
 

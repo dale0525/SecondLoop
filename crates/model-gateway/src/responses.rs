@@ -174,6 +174,14 @@ impl GatewayHttpClient {
             anyhow::bail!("{}", upstream_error_message(status, &url, &body));
         }
 
+        if crate::streaming_transport::is_event_stream(&response) {
+            return Ok(crate::streaming_transport::into_gateway_event_stream(
+                response,
+                self.profile.endpoint_type,
+                tool_map,
+            ));
+        }
+
         let response = response.json().await?;
         let events = parse_gateway_response_with_tool_map(&self.profile, response, &tool_map)?;
 
@@ -229,7 +237,7 @@ fn gateway_base_body(
         "model": model,
         "input": mapped_input(request.input, tool_map)?,
         "tools": mapped_base_tools(request.tools, tool_map)?,
-        "stream": false,
+        "stream": true,
     }))
 }
 
@@ -242,7 +250,7 @@ fn gateway_responses_body(
         "model": model,
         "input": responses_input_items(mapped_input(request.input, tool_map)?),
         "tools": responses_tools(request.tools, tool_map)?,
-        "stream": false,
+        "stream": true,
     }))
 }
 
@@ -660,7 +668,7 @@ mod tests {
         let wire = body["tools"][0]["function"]["name"].as_str().unwrap();
         assert_ne!(wire, "echo");
         assert!(wire.len() <= 64);
-        assert_eq!(body["stream"], false);
+        assert_eq!(body["stream"], true);
     }
 
     #[test]

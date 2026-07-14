@@ -41,6 +41,7 @@ export type DesktopPreloadApi = {
     clearApiKey: () => Promise<unknown>;
     load: () => Promise<unknown>;
     postSessionMessage: (sessionId: string, content: string) => Promise<unknown>;
+    startSessionTurn: (sessionId: string, requestId: string, content: string) => Promise<unknown>;
     save: (settings: unknown) => Promise<unknown>;
     testConnection: () => Promise<unknown>;
   };
@@ -90,6 +91,12 @@ export const desktopPreloadApi: DesktopPreloadApi = Object.freeze({
     load: () => ipcRenderer.invoke("agentweave:model-settings:load") as Promise<unknown>,
     postSessionMessage: (sessionId: string, content: string) =>
       ipcRenderer.invoke("agentweave:model-settings:message", { sessionId, content }) as Promise<unknown>,
+    startSessionTurn: (sessionId: string, requestId: string, content: string) =>
+      ipcRenderer.invoke("agentweave:model-settings:turn", {
+        content,
+        requestId,
+        sessionId,
+      }) as Promise<unknown>,
     save: (settings: unknown) =>
       ipcRenderer.invoke("agentweave:model-settings:save", settings) as Promise<unknown>,
     testConnection: () => ipcRenderer.invoke("agentweave:model-settings:test") as Promise<unknown>

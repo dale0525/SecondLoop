@@ -2,14 +2,19 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Menu, Settings } from "lucide-react";
 
 import {
+  cancelServerTurn,
   createServerSession,
   deleteServerSession,
   listServerSessions,
+  listServerTurnEvents,
   loadServerSession,
-  postSessionMessage,
+  startSessionTurn,
   updateServerSession,
-  type ServerMessage,
+  type RuntimeEvent,
+  type ServerConversationEvent,
   type ServerSession,
+  type ServerSessionDetail,
+  type ServerTurn,
 } from "../api";
 import { buildAssistantTurnMessages } from "../chatEventMessages";
 import { AppIconButton } from "../components/AppIconButton";
@@ -34,15 +39,23 @@ function createMessageId(): string {
 
 export function Chat({ onOpenSettings = () => undefined }: ChatProps): JSX.Element {
   const { t } = useI18n();
+  const shouldRestoreOnMount = useRef(canRestoreConversationOnMount()).current;
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    shouldRestoreOnMount ? [] : starterMessages,
+  );
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ServerSession[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(shouldRestoreOnMount);
+  const [isRestoringHistory, setIsRestoringHistory] = useState(shouldRestoreOnMount);
   const [isSending, setIsSending] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [turnNotice, setTurnNotice] = useState<string | null>(null);
+  const [activeTurn, setActiveTurn] = useState<{ sessionId: string; turnId: string } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const historyLoadedRef = useRef(false);
   const requestGenerationRef = useRef(0);
@@ -51,29 +64,109 @@ export function Chat({ onOpenSettings = () => undefined }: ChatProps): JSX.Eleme
     starterMessages.map((message) => ({ ...message, body: t("chat.starter") }))
   ), [t]);
 
+  const applyTurnFeedback = useCallback((turn: ServerTurn) => {
+    setApiError(null);
+    setTurnNotice(null);
+    if (turn.status === "cancelled") setTurnNotice(t("chat.cancelled"));
+    if (turn.status === "failed") setApiError(t("chat.turnFailed"));
+    if (turn.status === "interrupted") setApiError(t("chat.interrupted"));
+  }, [t]);
+
+  const consumeTurn = useCallback(async (
+    activeSessionId: string,
+    turnId: string,
+    requestGeneration: number,
+    initialEvents: ServerConversationEvent[] = [],
+    initialCursor = -1,
+  ) => {
+    let cursor = initialCursor;
+    let events = [...initialEvents];
+    const isCurrentRequest = () => requestGenerationRef.current === requestGeneration;
+    setActiveTurn({ sessionId: activeSessionId, turnId });
+    setIsSending(true);
+    setIsStopping(false);
+    setTurnNotice(null);
+    try {
+      while (isCurrentRequest()) {
+        let page;
+        try {
+          page = await listServerTurnEvents(activeSessionId, turnId, cursor);
+          if (isCurrentRequest()) setIsReconnecting(false);
+        } catch (error) {
+          if (!await recoverManagedSidecar(() => isCurrentRequest(), setIsReconnecting)) {
+            throw error;
+          }
+          continue;
+        }
+        if (!isCurrentRequest()) return;
+        events = appendUniqueEvents(events, page.events);
+        cursor = page.nextCursor;
+        setMessages((current) => replaceTurnMessages(
+          current,
+          turnId,
+          messagesFromTurn(events.map((event) => event.payload), page.turn, t("chat.working")),
+        ));
+        if (!page.turn.status || page.turn.status === "running") continue;
+        applyTurnFeedback(page.turn);
+        if (window.agentWeave?.server) {
+          try {
+            const detail = await loadServerSession(activeSessionId);
+            if (!isCurrentRequest()) return;
+            setMessages(messagesFromHistory(detail, localizedStarter(), t("chat.working")));
+            setSessions((current) => upsertSession(current, detail.session));
+          } catch {
+            // Cursor replay already rendered the authoritative terminal event.
+          }
+        }
+        return;
+      }
+    } catch {
+      if (isCurrentRequest()) setApiError(t("chat.sendError"));
+    } finally {
+      if (isCurrentRequest()) {
+        setActiveTurn(null);
+        setIsReconnecting(false);
+        setIsSending(false);
+        setIsStopping(false);
+      }
+    }
+  }, [applyTurnFeedback, localizedStarter, t]);
+
   const loadConversation = useCallback(async (
     session: ServerSession,
     closeDrawer = true,
-  ) => {
+  ): Promise<boolean> => {
     const requestGeneration = requestGenerationRef.current + 1;
     requestGenerationRef.current = requestGeneration;
     setIsHistoryLoading(true);
     setHistoryError(null);
     try {
       const detail = await loadServerSession(session.id);
-      if (requestGenerationRef.current !== requestGeneration) return;
+      if (requestGenerationRef.current !== requestGeneration) return false;
       setSessionId(detail.session.id);
-      setMessages(messagesFromHistory(detail.messages, localizedStarter()));
+      setMessages(messagesFromHistory(detail, localizedStarter(), t("chat.working")));
       setSessions((current) => upsertSession(current, detail.session));
+      const latestTurn = detail.turns?.at(-1);
+      if (latestTurn) applyTurnFeedback(latestTurn);
+      if (latestTurn?.status === "running") {
+        const turnEvents = detail.events.filter((event) => event.turn_id === latestTurn.id);
+        const cursor = turnEvents.at(-1)?.event_index ?? -1;
+        void consumeTurn(detail.session.id, latestTurn.id, requestGeneration, turnEvents, cursor);
+      } else {
+        setActiveTurn(null);
+        setIsSending(false);
+      }
       if (closeDrawer) setIsDrawerOpen(false);
+      return true;
     } catch {
       if (requestGenerationRef.current === requestGeneration) {
         setHistoryError(t("conversation.loadError"));
       }
+      return false;
     } finally {
       if (requestGenerationRef.current === requestGeneration) setIsHistoryLoading(false);
     }
-  }, [localizedStarter, t]);
+  }, [applyTurnFeedback, consumeTurn, localizedStarter, t]);
 
   const refreshSessions = useCallback(async (cursor?: string, restore = false) => {
     setIsHistoryLoading(true);
@@ -85,13 +178,19 @@ export function Chat({ onOpenSettings = () => undefined }: ChatProps): JSX.Eleme
         ? deduplicateSessions([...current, ...page.items])
         : page.items);
       setNextCursor(page.nextCursor);
-      if (restore && page.items[0]) await loadConversation(page.items[0], false);
+      if (restore) {
+        const restored = page.items[0]
+          ? await loadConversation(page.items[0], false)
+          : false;
+        if (!restored) setMessages(localizedStarter());
+      }
     } catch {
+      if (restore) setMessages(localizedStarter());
       setHistoryError(t("conversation.listError"));
     } finally {
       setIsHistoryLoading(false);
     }
-  }, [loadConversation, t]);
+  }, [loadConversation, localizedStarter, t]);
 
   useEffect(() => {
     setMessages((current) => current.map((message) => (
@@ -100,17 +199,24 @@ export function Chat({ onOpenSettings = () => undefined }: ChatProps): JSX.Eleme
   }, [t]);
 
   useEffect(() => {
-    if (!window.agentWeave?.server || historyLoadedRef.current) return;
-    void refreshSessions(undefined, true);
-  }, [refreshSessions]);
+    if (!shouldRestoreOnMount || historyLoadedRef.current) return;
+    void refreshSessions(undefined, true).finally(() => setIsRestoringHistory(false));
+  }, [refreshSessions, shouldRestoreOnMount]);
 
   const handleNewChat = () => {
+    if (activeTurn) {
+      void cancelServerTurn(activeTurn.sessionId, activeTurn.turnId).catch(() => undefined);
+    }
     requestGenerationRef.current += 1;
     setMessages(localizedStarter());
     setSessionId(null);
     setApiError(null);
     setHistoryError(null);
     setIsSending(false);
+    setIsStopping(false);
+    setIsReconnecting(false);
+    setTurnNotice(null);
+    setActiveTurn(null);
     setIsDrawerOpen(false);
   };
 
@@ -154,10 +260,12 @@ export function Chat({ onOpenSettings = () => undefined }: ChatProps): JSX.Eleme
     if (!text || isSending) return;
 
     const pendingReasoningId = createMessageId();
+    const localUserMessageId = createMessageId();
     setApiError(null);
+    setTurnNotice(null);
     setMessages((current) => [
       ...current,
-      { body: text, id: createMessageId(), role: "user" },
+      { body: text, id: localUserMessageId, role: "user" },
       {
         id: pendingReasoningId,
         kind: "reasoning",
@@ -174,6 +282,7 @@ export function Chat({ onOpenSettings = () => undefined }: ChatProps): JSX.Eleme
 
     try {
       setIsSending(true);
+      setIsStopping(false);
       let activeSessionId = sessionId;
       if (!activeSessionId) {
         const session = await createServerSession(titleFromMessage(text));
@@ -183,25 +292,47 @@ export function Chat({ onOpenSettings = () => undefined }: ChatProps): JSX.Eleme
         if (session.updated_at) setSessions((current) => upsertSession(current, session));
       }
 
-      const response = await postSessionMessage(
-        activeSessionId,
-        text,
-        await loadSavedModelSettings(),
-      );
+      const requestId = createMessageId();
+      const settings = await loadSavedModelSettings();
+      let response;
+      try {
+        response = await startSessionTurn(activeSessionId, requestId, text, settings);
+      } catch (error) {
+        if (!await recoverManagedSidecar(isCurrentRequest, setIsReconnecting)) throw error;
+        response = await startSessionTurn(activeSessionId, requestId, text, settings);
+      }
       if (!isCurrentRequest()) return;
-      const assistantMessages = buildAssistantTurnMessages(response, createMessageId);
-      setMessages((current) => [
-        ...current.filter((message) => message.id !== pendingReasoningId),
-        ...assistantMessages,
-      ]);
-      if (window.agentWeave?.server) void refreshSessions();
+      setMessages((current) => current.map((message) => {
+        if (message.id === localUserMessageId) {
+          return { ...message, id: response.userMessage.id };
+        }
+        if (message.id === pendingReasoningId) {
+          return { ...message, id: `turn:${response.turn.id}:working` };
+        }
+        return message;
+      }));
+      await consumeTurn(activeSessionId, response.turn.id, requestGeneration);
     } catch {
       if (isCurrentRequest()) {
         setMessages((current) => current.filter((message) => message.id !== pendingReasoningId));
         setApiError(t("chat.sendError"));
+        setActiveTurn(null);
+        setIsReconnecting(false);
+        setIsSending(false);
+        setIsStopping(false);
       }
-    } finally {
-      if (isCurrentRequest()) setIsSending(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (!activeTurn || isStopping) return;
+    setIsStopping(true);
+    setTurnNotice(t("chat.stopping"));
+    try {
+      await cancelServerTurn(activeTurn.sessionId, activeTurn.turnId);
+    } catch {
+      setApiError(t("chat.sendError"));
+      setIsStopping(false);
     }
   };
 
@@ -234,30 +365,126 @@ export function Chat({ onOpenSettings = () => undefined }: ChatProps): JSX.Eleme
           <Settings size={18} aria-hidden="true" />
         </AppIconButton>
       </header>
-      <MessageList messages={messages} />
+      {isRestoringHistory ? (
+        <section className="message-list chat-history-loading" aria-label="Conversation">
+          <div className="chat-history-loading-status" role="status">
+            <span aria-hidden="true" className="chat-history-loading-dot" />
+            {t("conversation.loading")}
+          </div>
+        </section>
+      ) : (
+        <MessageList messages={messages} />
+      )}
       <Composer
         draft={draft}
         error={apiError}
         isSending={isSending}
+        isStopping={isStopping}
         onChange={setDraft}
+        onStop={() => void handleStop()}
         onSubmit={handleSubmit}
+        status={isReconnecting ? t("chat.reconnecting") : turnNotice}
       />
     </main>
   );
 }
 
+function canRestoreConversationOnMount(): boolean {
+  return Boolean(window.agentWeave?.server) || import.meta.env.MODE === "development";
+}
+
 function messagesFromHistory(
-  messages: ServerMessage[],
+  detail: ServerSessionDetail,
   fallback: ChatMessage[],
+  workingLabel: string,
 ): ChatMessage[] {
-  const history = messages
-    .filter((message) => message.role === "user" || message.role === "assistant")
-    .map((message): ChatMessage => ({
+  const turnsByUserMessage = new Map(
+    (detail.turns ?? []).map((turn) => [turn.user_message_id, turn]),
+  );
+  const history: ChatMessage[] = [];
+  for (const message of detail.messages) {
+    if (message.role !== "user" && message.role !== "assistant") continue;
+    history.push({
       body: message.content,
       id: message.id,
       role: message.role as "assistant" | "user",
-    }));
+    });
+    const turn = turnsByUserMessage.get(message.id);
+    if (!turn) continue;
+    const events = detail.events
+      .filter((event) => event.turn_id === turn.id)
+      .map((event) => event.payload);
+    const turnMessages = messagesFromTurn(events, turn, workingLabel);
+    history.push(...(turn.assistant_message_id
+      ? turnMessages.filter(isActivityMessage)
+      : turnMessages));
+  }
   return history.length > 0 ? history : fallback;
+}
+
+function messagesFromTurn(
+  events: RuntimeEvent[],
+  turn: ServerTurn,
+  workingLabel: string,
+): ChatMessage[] {
+  let index = 0;
+  const messages = buildAssistantTurnMessages(
+    { accepted: true, events },
+    () => `turn:${turn.id}:${index++}`,
+  );
+  if (turn.status === "running" && messages.length === 0) {
+    return [{
+      id: `turn:${turn.id}:working`,
+      kind: "reasoning",
+      role: "assistant",
+      status: "running",
+      text: workingLabel,
+    }];
+  }
+  return messages;
+}
+
+function replaceTurnMessages(
+  current: ChatMessage[],
+  turnId: string,
+  replacement: ChatMessage[],
+): ChatMessage[] {
+  const prefix = `turn:${turnId}:`;
+  return [...current.filter((message) => !message.id.startsWith(prefix)), ...replacement];
+}
+
+function appendUniqueEvents(
+  current: ServerConversationEvent[],
+  next: ServerConversationEvent[],
+): ServerConversationEvent[] {
+  const unique = new Map(current.map((event) => [event.id, event]));
+  for (const event of next) unique.set(event.id, event);
+  return [...unique.values()].sort((left, right) => left.event_index - right.event_index);
+}
+
+function isActivityMessage(message: ChatMessage): boolean {
+  return "kind" in message && new Set(["reasoning", "tool_call", "tool_result"]).has(
+    message.kind ?? "",
+  );
+}
+
+async function recoverManagedSidecar(
+  isCurrent: () => boolean,
+  setReconnecting: (value: boolean) => void,
+): Promise<boolean> {
+  const sidecar = window.agentWeave?.sidecar;
+  if (!sidecar || !isCurrent()) return false;
+  setReconnecting(true);
+  for (let attempt = 0; attempt < 3 && isCurrent(); attempt += 1) {
+    try {
+      const status = await sidecar.ensureRunning();
+      if (status.state === "ready") return true;
+    } catch {
+      // The supervisor exposes the authoritative state on the next bounded retry.
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 150 * (attempt + 1)));
+  }
+  return false;
 }
 
 function titleFromMessage(value: string): string {

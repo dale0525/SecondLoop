@@ -131,7 +131,7 @@ export function buildAssistantTurnMessages(
   const callsById = new Map<string, ToolCallMessage>();
   let syntheticToolIndex = 0;
   const terminal = (response.events ?? []).some((event) =>
-    ["assistant_message_finished", "turn_finished", "turn_failed"].includes(event.type)
+    ["assistant_message_finished", "turn_finished", "turn_cancelled", "turn_failed"].includes(event.type)
   );
 
   for (const event of response.events ?? []) {

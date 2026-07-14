@@ -10,7 +10,7 @@ use agent_runtime::{
     skill_policy::ActorContext,
     storage::Storage,
     tools::{RuntimeConfig, ToolRegistry},
-    turn::{AgentRunner, ModelClient, TurnRunner},
+    turn::{AgentRunner, ModelClient, RuntimeEventObserver, TurnRunner},
     turn_request::TurnRequest,
 };
 #[cfg(test)]
@@ -23,6 +23,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use futures::StreamExt;
 use model_gateway::{
     provider::{EndpointType, ProviderProfile},
     responses::{GatewayHttpClient, GatewayRequest},
@@ -49,6 +50,7 @@ pub struct AppState {
     host_discovery: Option<AgentAppHostDiscovery>,
     conversation_scope: ConversationScope,
     conversation_locks: Arc<Mutex<BTreeMap<String, Weak<Mutex<()>>>>>,
+    turn_coordinator: crate::turn_api::TurnCoordinator,
     memory_tools: Option<agent_runtime::memory_tools::MemoryToolRuntime>,
     connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
     mail_actions: Option<agent_runtime::foundation_actions::MailActionService>,
@@ -153,6 +155,7 @@ impl AppState {
             host_discovery: None,
             conversation_scope,
             conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
+            turn_coordinator: crate::turn_api::TurnCoordinator::default(),
             memory_tools,
             connector_tools,
             mail_actions: None,
@@ -248,6 +251,7 @@ impl AppState {
             host_discovery: None,
             conversation_scope,
             conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
+            turn_coordinator: crate::turn_api::TurnCoordinator::default(),
             memory_tools,
             connector_tools,
             mail_actions: None,
@@ -300,6 +304,7 @@ impl AppState {
             host_discovery: None,
             conversation_scope: ConversationScope::default(),
             conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
+            turn_coordinator: crate::turn_api::TurnCoordinator::default(),
             memory_tools: None,
             connector_tools: None,
             mail_actions: None,
@@ -461,6 +466,7 @@ pub struct ErrorResponse {
 #[derive(Debug)]
 pub(crate) enum ApiError {
     BadRequest(&'static str),
+    Conflict(&'static str),
     ConnectionFailed(anyhow::Error),
     NotFound(&'static str),
     Internal(anyhow::Error),
@@ -470,6 +476,7 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, error) = match self {
             Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message.to_string()),
+            Self::Conflict(message) => (StatusCode::CONFLICT, message.to_string()),
             Self::ConnectionFailed(error) => (
                 StatusCode::BAD_GATEWAY,
                 format!("connection failed: {error}"),
@@ -507,7 +514,8 @@ pub fn router_for_transport(
         .route("/host/bootstrap", get(host_bootstrap))
         .route("/diagnostics/app", get(app_diagnostics))
         .route("/sessions/{session_id}/messages", post(post_message))
-        .merge(crate::conversation_api::routes());
+        .merge(crate::conversation_api::routes())
+        .merge(crate::turn_api::routes());
     router = router
         .merge(crate::foundation_api::router())
         .merge(crate::automation_api::router());
@@ -583,6 +591,10 @@ impl AppState {
         lock
     }
 
+    pub(crate) fn turn_coordinator(&self) -> &crate::turn_api::TurnCoordinator {
+        &self.turn_coordinator
+    }
+
     pub(crate) fn configured_tool_registry(&self) -> anyhow::Result<ToolRegistry> {
         let mut registry = ToolRegistry::try_new(self.skills(), &self.runtime_config)?;
         if let Some(memory) = &self.memory_tools {
@@ -640,7 +652,13 @@ pub(crate) fn desktop_cors_layer() -> CorsLayer {
             HeaderValue::from_static("http://127.0.0.1:5173"),
             HeaderValue::from_static("http://localhost:5173"),
         ])
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+        ])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
 }
 
@@ -650,10 +668,19 @@ async fn test_model_connection(
     let profile = provider_profile_from_request(request)?;
     let client = GatewayHttpClient::new(profile);
 
-    let _events = client
+    let mut events = client
         .stream(test_connection_gateway_request())
         .await
         .map_err(ApiError::ConnectionFailed)?;
+    while let Some(event) = events.next().await {
+        match event.map_err(ApiError::ConnectionFailed)? {
+            model_gateway::responses::GatewayEvent::Error { message } => {
+                return Err(ApiError::ConnectionFailed(anyhow::anyhow!(message)));
+            }
+            model_gateway::responses::GatewayEvent::Completed => break,
+            _ => {}
+        }
+    }
 
     Ok(Json(ModelConnectionTestResponse {
         ok: true,
@@ -722,6 +749,47 @@ async fn run_agent_turn_for_actor(
     actor: ActorContext,
     history: Vec<serde_json::Value>,
 ) -> Result<Vec<RuntimeEvent>, ApiError> {
+    run_agent_turn_internal(state, session_id, request, actor, history, None).await
+}
+
+pub(crate) async fn run_agent_turn_observed_for_actor(
+    state: &AppState,
+    session_id: &str,
+    turn_id: &str,
+    request: &UserMessageRequest,
+    actor: ActorContext,
+    history: Vec<serde_json::Value>,
+    observer: RuntimeEventObserver,
+) -> Result<Vec<RuntimeEvent>, ApiError> {
+    run_agent_turn_internal(
+        state,
+        session_id,
+        request,
+        actor,
+        history,
+        Some((turn_id, observer)),
+    )
+    .await
+}
+
+async fn run_agent_turn_internal(
+    state: &AppState,
+    session_id: &str,
+    request: &UserMessageRequest,
+    actor: ActorContext,
+    history: Vec<serde_json::Value>,
+    observer: Option<(&str, RuntimeEventObserver)>,
+) -> Result<Vec<RuntimeEvent>, ApiError> {
+    let build_request = |turn_id: Option<&str>| {
+        let request = TurnRequest::new(&request.content)
+            .with_session_id(session_id)
+            .with_conversation_history(history.clone())
+            .with_actor_context(actor.clone());
+        match turn_id {
+            Some(turn_id) => request.with_turn_id(turn_id),
+            None => request,
+        }
+    };
     if let Some(model_settings) = request.model_settings.clone() {
         let profile = provider_profile_from_request(model_settings)?;
         let mut runner = TurnRunner::new_with_manager_and_config(
@@ -744,27 +812,27 @@ async fn run_agent_turn_for_actor(
             runner = runner.with_connector_tools(connectors.clone());
         }
 
-        return runner
-            .run_request(
-                TurnRequest::new(&request.content)
-                    .with_session_id(session_id)
-                    .with_conversation_history(history)
-                    .with_actor_context(actor),
-            )
-            .await
-            .map_err(agent_turn_error);
+        return match observer {
+            Some((turn_id, observer)) => {
+                runner
+                    .run_request_observed(build_request(Some(turn_id)), observer)
+                    .await
+            }
+            None => runner.run_request(build_request(None)).await,
+        }
+        .map_err(agent_turn_error);
     }
 
-    state
-        .agent
-        .run_request(
-            TurnRequest::new(&request.content)
-                .with_session_id(session_id)
-                .with_conversation_history(history)
-                .with_actor_context(actor),
-        )
-        .await
-        .map_err(agent_turn_error)
+    match observer {
+        Some((turn_id, observer)) => {
+            state
+                .agent
+                .run_request_observed(build_request(Some(turn_id)), observer)
+                .await
+        }
+        None => state.agent.run_request(build_request(None)).await,
+    }
+    .map_err(agent_turn_error)
 }
 
 fn agent_turn_error(error: anyhow::Error) -> ApiError {

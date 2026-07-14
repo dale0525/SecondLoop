@@ -4,6 +4,7 @@ pub mod chat;
 pub mod provider;
 pub mod responses;
 pub mod streaming;
+mod streaming_transport;
 pub mod tool_identity;
 
 #[cfg(test)]

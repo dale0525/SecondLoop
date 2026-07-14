@@ -20,12 +20,52 @@ export type ServerConversationEvent = {
   kind: string;
   payload: RuntimeEvent;
   session_id: string;
+  turn_id?: string;
+};
+
+export type ServerTurnStatus =
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "interrupted";
+
+export type ServerTurn = {
+  assistant_message_id: string | null;
+  failure_message: string | null;
+  finished_at: string | null;
+  id: string;
+  request_id: string;
+  session_id: string;
+  started_at: string;
+  status: ServerTurnStatus;
+  updated_at: string;
+  user_message_id: string;
 };
 
 export type ServerSessionDetail = {
   events: ServerConversationEvent[];
   messages: ServerMessage[];
   session: ServerSession;
+  turns: ServerTurn[];
+};
+
+export type StartTurnResponse = {
+  reused: boolean;
+  turn: ServerTurn;
+  userMessage: ServerMessage;
+};
+
+export type TurnEventsResponse = {
+  events: ServerConversationEvent[];
+  hasMore: boolean;
+  nextCursor: number;
+  turn: ServerTurn;
+};
+
+export type CancelTurnResponse = {
+  accepted: boolean;
+  turn: ServerTurn;
 };
 
 export type RuntimeEvent = {
@@ -390,6 +430,64 @@ export async function postSessionMessage(
     }),
     method: "POST"
   });
+}
+
+export async function startSessionTurn(
+  sessionId: string,
+  requestId: string,
+  content: string,
+  modelSettings?: ModelSettings | null,
+): Promise<StartTurnResponse> {
+  const secureBridge = window.agentWeave?.modelSettings;
+  if (secureBridge?.startSessionTurn) {
+    return secureBridge.startSessionTurn(
+      sessionId,
+      requestId,
+      content,
+    ) as Promise<StartTurnResponse>;
+  }
+  return requestDevelopmentJson<StartTurnResponse>(
+    `/sessions/${encodeURIComponent(sessionId)}/turns`,
+    {
+      body: JSON.stringify({
+        content,
+        requestId,
+        ...(modelSettings ? { modelSettings } : {}),
+      }),
+      method: "POST",
+    },
+  );
+}
+
+export async function listServerTurnEvents(
+  sessionId: string,
+  turnId: string,
+  after = -1,
+  waitMs = 20_000,
+): Promise<TurnEventsResponse> {
+  const params = new URLSearchParams({
+    after: String(after),
+    limit: "100",
+    waitMs: String(waitMs),
+  });
+  return requestServer<TurnEventsResponse>(
+    "turns.events",
+    { after, limit: 100, sessionId, turnId, waitMs },
+    `/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/events?${params}`,
+    { method: "GET" },
+  );
+}
+
+export async function cancelServerTurn(
+  sessionId: string,
+  turnId: string,
+): Promise<CancelTurnResponse> {
+  return requestServer<CancelTurnResponse>(
+    "turns.cancel",
+    { sessionId, turnId },
+    `/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/cancel`,
+    { method: "POST" },
+  );
 }
 
 export async function testModelConnection(

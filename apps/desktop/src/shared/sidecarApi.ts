@@ -19,7 +19,9 @@ export type SidecarApiOperation =
   | "sessions.delete"
   | "sessions.list"
   | "sessions.load"
-  | "sessions.update";
+  | "sessions.update"
+  | "turns.cancel"
+  | "turns.events";
 
 export type SidecarApiRequest = Readonly<{
   input?: unknown;

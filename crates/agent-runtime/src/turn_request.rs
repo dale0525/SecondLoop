@@ -21,6 +21,7 @@ pub struct TurnRequest {
     pub token_budget: Option<u64>,
     pub context_budget_bytes: Option<usize>,
     pub session_id: Option<String>,
+    pub turn_id: Option<String>,
     pub actor_context: ActorContext,
 }
 
@@ -33,6 +34,7 @@ impl TurnRequest {
             token_budget: None,
             context_budget_bytes: None,
             session_id: None,
+            turn_id: None,
             actor_context: ActorContext::anonymous(),
         }
     }
@@ -62,6 +64,11 @@ impl TurnRequest {
 
     pub fn with_session_id(mut self, session_id: impl Into<String>) -> Self {
         self.session_id = Some(session_id.into());
+        self
+    }
+
+    pub fn with_turn_id(mut self, turn_id: impl Into<String>) -> Self {
+        self.turn_id = Some(turn_id.into());
         self
     }
 

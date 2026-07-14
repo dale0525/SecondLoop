@@ -643,6 +643,7 @@ impl OwnerApiError {
     fn from_api(error: ApiError) -> Self {
         match error {
             ApiError::BadRequest(_) => Self::BadRequest,
+            ApiError::Conflict(_) => Self::Conflict,
             ApiError::NotFound(_) => Self::NotFound,
             ApiError::ConnectionFailed(error) | ApiError::Internal(error) => Self::Internal(error),
         }

@@ -316,7 +316,7 @@ async fn test_model_connection_uses_supplied_chat_completions_profile() {
         .expect("provider should receive test request");
     assert_eq!(captured.authorization, Some("Bearer local-secret".into()));
     assert_eq!(captured.body["model"], "qwen2.5");
-    assert_eq!(captured.body["stream"], false);
+    assert_eq!(captured.body["stream"], true);
     assert_eq!(captured.body["messages"][0]["role"], "user");
 }
 

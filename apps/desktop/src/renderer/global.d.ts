@@ -42,6 +42,7 @@ declare global {
         clearApiKey(): Promise<unknown>;
         load(): Promise<unknown>;
         postSessionMessage(sessionId: string, content: string): Promise<unknown>;
+        startSessionTurn(sessionId: string, requestId: string, content: string): Promise<unknown>;
         save(settings: unknown): Promise<unknown>;
         testConnection(): Promise<unknown>;
       };

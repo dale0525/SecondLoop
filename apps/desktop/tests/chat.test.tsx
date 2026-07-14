@@ -23,22 +23,15 @@ describe("Chat", () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch([
       jsonResponse({ id: "session-1", title: "Provider adapter MVP" }),
-      jsonResponse({
-        accepted: true,
-        assistant_message: {
-          id: "assistant-1",
-          role: "assistant",
-          content: "MVP agent received: Run the renderer smoke test"
-        },
-        events: [
+      jsonResponse(turnAccepted()),
+      jsonResponse(turnPage([
           { type: "turn_started", turn_id: "turn-1" },
           {
             type: "assistant_message_finished",
             text: "MVP agent received: Run the renderer smoke test"
           },
           { type: "turn_finished", turn_id: "turn-1" }
-        ]
-      })
+      ]))
     ]);
 
     render(<Chat />);
@@ -54,7 +47,7 @@ describe("Chat", () => {
     expect(
       await screen.findByText("MVP agent received: Run the renderer smoke test")
     ).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/__agentweave/sessions",
@@ -65,11 +58,16 @@ describe("Chat", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/__agentweave/sessions/session-1/messages",
+      "/__agentweave/sessions/session-1/turns",
       expect.objectContaining({
-        body: JSON.stringify({ content: "Run the renderer smoke test" }),
+        body: expect.stringContaining('"content":"Run the renderer smoke test"'),
         method: "POST"
       })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining("/__agentweave/sessions/session-1/turns/turn-1/events?"),
+      expect.objectContaining({ method: "GET" }),
     );
   });
 
@@ -77,14 +75,8 @@ describe("Chat", () => {
     const user = userEvent.setup();
     mockFetch([
       jsonResponse({ id: "session-1", title: "Provider adapter MVP" }),
-      jsonResponse({
-        accepted: true,
-        assistant_message: {
-          id: "assistant-1",
-          role: "assistant",
-          content: "The renderer can show the full turn."
-        },
-        events: [
+      jsonResponse(turnAccepted()),
+      jsonResponse(turnPage([
           { type: "turn_started", turn_id: "turn-1" },
           {
             type: "reasoning_delta",
@@ -118,8 +110,7 @@ describe("Chat", () => {
             text: "The renderer can show the full turn."
           },
           { type: "turn_finished", turn_id: "turn-1" }
-        ]
-      })
+      ]))
     ]);
 
     render(<Chat />);
@@ -153,6 +144,7 @@ describe("Chat", () => {
     const pendingMessage = createDeferred<Response>();
     mockFetch([
       jsonResponse({ id: "session-1", title: "Provider adapter MVP" }),
+      jsonResponse(turnAccepted()),
       pendingMessage.promise
     ]);
 
@@ -167,27 +159,216 @@ describe("Chat", () => {
     ).toBeInTheDocument();
 
     pendingMessage.resolve(
-      jsonResponse({
-        accepted: true,
-        assistant_message: {
-          content: "Finished after loading",
-          created_at: "2026-06-28T00:00:00.000Z",
-          id: "assistant-1",
-          role: "assistant",
-          session_id: "session-1"
-        },
-        events: [
+      jsonResponse(turnPage([
           {
             type: "assistant_message_finished",
             text: "Finished after loading"
           },
           { type: "turn_finished", turn_id: "turn-1" }
-        ]
-      })
+      ]))
     );
 
     expect(await screen.findByText("Finished after loading")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Thinking/i })).not.toBeInTheDocument();
+  });
+
+  it("stops a streamed turn and keeps cursor-replayed partial output", async () => {
+    const user = userEvent.setup();
+    const terminalPage = createDeferred<Response>();
+    const fetchMock = mockFetch([
+      jsonResponse({ id: "session-1", title: "Stop turn" }),
+      jsonResponse(turnAccepted()),
+      jsonResponse(turnPage([
+        { type: "turn_started", turn_id: "turn-1" },
+        { type: "assistant_text_delta", text: "Partial answer" },
+      ], "running")),
+      terminalPage.promise,
+      jsonResponse({ accepted: true, turn: turnRecord("running") }),
+    ]);
+
+    render(<Chat />);
+
+    await user.type(screen.getByLabelText("Message AgentWeave"), "Long task");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    expect(await screen.findByText("Partial answer")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Stop generation" }));
+    expect(screen.getByText("Stopping after the current safe boundary…")).toBeVisible();
+    expect(fetchMock.mock.calls.some(([path]) => String(path).endsWith("/turn-1/cancel"))).toBe(true);
+
+    terminalPage.resolve(jsonResponse(turnPage([
+      { type: "turn_cancelled", turn_id: "turn-1" },
+    ], "cancelled", 2)));
+
+    expect(await screen.findByText(
+      "Generation stopped. Saved progress remains in this conversation.",
+    )).toBeVisible();
+    expect(screen.getByText("Partial answer")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled();
+  });
+
+  it("reconnects the managed sidecar and resumes from the last cursor", async () => {
+    const user = userEvent.setup();
+    const recovered = createDeferred<ReturnType<typeof sidecarReadyStatus>>();
+    const failedRequest = createDeferred<Response>();
+    const ensureRunning = vi.fn(() => recovered.promise);
+    window.agentWeave = {
+      approval: { open: async () => { throw new Error("unavailable"); } },
+      owner: {} as NonNullable<Window["agentWeave"]>["owner"],
+      sidecar: {
+        ensureRunning,
+        status: async () => sidecarReadyStatus(),
+      },
+    };
+    mockFetch([
+      jsonResponse({ id: "session-1", title: "Recover turn" }),
+      jsonResponse(turnAccepted()),
+      failedRequest.promise,
+      jsonResponse(turnPage([
+        { type: "assistant_message_finished", text: "Recovered answer" },
+        { type: "turn_finished", turn_id: "turn-1" },
+      ])),
+    ]);
+
+    render(<Chat />);
+    await user.type(screen.getByLabelText("Message AgentWeave"), "Recover this");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    await screen.findByRole("button", { name: "Stop generation" });
+    failedRequest.reject(new Error("sidecar exited"));
+
+    expect(await screen.findByText(
+      "Reconnecting to the local agent and resuming from saved progress…",
+    )).toBeVisible();
+    recovered.resolve(sidecarReadyStatus());
+    expect(await screen.findByText("Recovered answer")).toBeVisible();
+    expect(ensureRunning).toHaveBeenCalledOnce();
+  });
+
+  it("renders an interrupted persisted turn after Desktop restart", async () => {
+    const session = {
+      created_at: "2026-07-14T10:00:00Z",
+      id: "session-1",
+      title: "Recovered history",
+      updated_at: "2026-07-14T10:00:01Z",
+    };
+    const interrupted = turnRecord("interrupted");
+    const page = turnPage([
+      { type: "assistant_text_delta", text: "Saved partial response" },
+      { type: "turn_failed", turn_id: "turn-1", message: "turn interrupted by runtime restart" },
+    ], "interrupted");
+    installServerBridge(vi.fn(async (operation: string) => {
+      if (operation === "sessions.list") return { items: [session], nextCursor: null };
+      if (operation === "sessions.load") {
+        return {
+          events: page.events,
+          messages: [{
+            content: "Please continue",
+            created_at: "2026-07-14T10:00:00Z",
+            id: interrupted.user_message_id,
+            role: "user",
+            session_id: session.id,
+          }],
+          session,
+          turns: [interrupted],
+        };
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    }));
+
+    render(<Chat />);
+
+    expect(await screen.findByText("Saved partial response")).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The local agent restarted during this turn. Saved progress was recovered.",
+    );
+    expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled();
+  });
+
+  it("shows a history loading state instead of flashing the starter during restore", async () => {
+    const listed = createDeferred<unknown>();
+    installServerBridge(vi.fn((operation: string) => operation === "sessions.list" ? listed.promise : Promise.reject(new Error(`Unexpected operation: ${operation}`))));
+    render(<Chat />);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading conversations…");
+    expect(screen.queryByText("Hello! How can I help you today?")).not.toBeInTheDocument();
+    listed.resolve({ items: [], nextCursor: null });
+    expect(await screen.findByText("Hello! How can I help you today?")).toBeVisible();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("resumes a running persisted turn from the last loaded cursor", async () => {
+    const session = {
+      created_at: "2026-07-14T10:00:00Z",
+      id: "session-1",
+      title: "Resume history",
+      updated_at: "2026-07-14T10:00:01Z",
+    };
+    const running = turnRecord("running");
+    const completed = turnRecord("completed");
+    const initial = turnPage([
+      { type: "turn_started", turn_id: "turn-1" },
+      { type: "assistant_text_delta", text: "Saved " },
+    ], "running");
+    const terminal = turnPage([
+      { type: "assistant_text_delta", text: "continuation" },
+      { type: "assistant_message_finished", text: "Saved continuation" },
+      { type: "turn_finished", turn_id: "turn-1" },
+    ], "completed", 2);
+    let loadCount = 0;
+    const request = vi.fn(async (operation: string, input?: unknown) => {
+      if (operation === "sessions.list") return { items: [session], nextCursor: null };
+      if (operation === "turns.events") return terminal;
+      if (operation === "sessions.load") {
+        loadCount += 1;
+        if (loadCount === 1) {
+          return {
+            events: initial.events,
+            messages: [{
+              content: "Resume this",
+              created_at: "2026-07-14T10:00:00Z",
+              id: running.user_message_id,
+              role: "user",
+              session_id: session.id,
+            }],
+            session,
+            turns: [running],
+          };
+        }
+        return {
+          events: [...initial.events, ...terminal.events],
+          messages: [
+            {
+              content: "Resume this",
+              created_at: "2026-07-14T10:00:00Z",
+              id: completed.user_message_id,
+              role: "user",
+              session_id: session.id,
+            },
+            {
+              content: "Saved continuation",
+              created_at: "2026-07-14T10:00:01Z",
+              id: completed.assistant_message_id,
+              role: "assistant",
+              session_id: session.id,
+            },
+          ],
+          session,
+          turns: [completed],
+        };
+      }
+      throw new Error(`Unexpected operation: ${operation} ${JSON.stringify(input)}`);
+    });
+    installServerBridge(request);
+
+    render(<Chat />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Saved continuation")).toBeVisible();
+    });
+    expect(request).toHaveBeenCalledWith("turns.events", expect.objectContaining({
+      after: 1,
+      sessionId: session.id,
+      turnId: running.id,
+    }));
+    expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled();
   });
 
   it("keeps partial runtime events marked as streaming activity", () => {
@@ -244,14 +425,11 @@ describe("Chat", () => {
     );
     const fetchMock = mockFetch([
       jsonResponse({ id: "session-1", title: "Provider adapter MVP" }),
-      jsonResponse({
-        accepted: true,
-        assistant_message: {
-          id: "assistant-1",
-          role: "assistant",
-          content: "configured model response"
-        }
-      })
+      jsonResponse(turnAccepted()),
+      jsonResponse(turnPage([
+        { type: "assistant_message_finished", text: "configured model response" },
+        { type: "turn_finished", turn_id: "turn-1" },
+      ]))
     ]);
 
     render(<Chat />);
@@ -263,7 +441,8 @@ describe("Chat", () => {
     const messageBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
     expect(messageBody).toEqual({
       content: "Use my provider",
-      modelSettings: savedSettings
+      modelSettings: savedSettings,
+      requestId: expect.any(String),
     });
   });
 
@@ -463,6 +642,7 @@ describe("Chat", () => {
     const pendingMessage = createDeferred<Response>();
     mockFetch([
       jsonResponse({ id: "session-1", title: "Provider adapter MVP" }),
+      jsonResponse(turnAccepted()),
       pendingMessage.promise
     ]);
 
@@ -476,16 +656,10 @@ describe("Chat", () => {
     await user.click(screen.getByRole("button", { name: "New chat" }));
 
     pendingMessage.resolve(
-      jsonResponse({
-        accepted: true,
-        assistant_message: {
-          content: "Stale assistant response",
-          created_at: "2026-06-25T00:00:00.000Z",
-          id: "assistant-1",
-          role: "assistant",
-          session_id: "session-1"
-        }
-      })
+      jsonResponse(turnPage([
+        { type: "assistant_message_finished", text: "Stale assistant response" },
+        { type: "turn_finished", turn_id: "turn-1" },
+      ]))
     );
 
     await waitFor(() => {
@@ -703,6 +877,67 @@ function jsonResponse(body: unknown): Response {
     headers: { "Content-Type": "application/json" },
     status: 200
   });
+}
+
+function turnAccepted() {
+  return {
+    reused: false,
+    turn: turnRecord("running"),
+    userMessage: {
+      content: "request",
+      created_at: "2026-07-14T10:00:00Z",
+      id: "user-1",
+      role: "user",
+      session_id: "session-1",
+    },
+  };
+}
+
+function turnPage(
+  events: Array<Record<string, unknown>>,
+  status: "completed" | "failed" | "cancelled" | "interrupted" | "running" = "completed",
+  startIndex = 0,
+) {
+  return {
+    events: events.map((payload, offset) => ({
+      created_at: "2026-07-14T10:00:00Z",
+      event_index: startIndex + offset,
+      id: `event-${startIndex + offset}`,
+      kind: payload.type,
+      payload,
+      session_id: "session-1",
+      turn_id: "turn-1",
+    })),
+    hasMore: false,
+    nextCursor: startIndex + events.length - 1,
+    turn: turnRecord(status),
+  };
+}
+
+function sidecarReadyStatus() {
+  return {
+    attempt: 2,
+    canEnsureRunning: false,
+    lastExit: null,
+    mode: "managed" as const,
+    schemaVersion: 1 as const,
+    state: "ready" as const,
+  };
+}
+
+function turnRecord(status: string) {
+  return {
+    assistant_message_id: status === "completed" ? "assistant-1" : null,
+    failure_message: null,
+    finished_at: status === "running" ? null : "2026-07-14T10:00:01Z",
+    id: "turn-1",
+    request_id: "request-1",
+    session_id: "session-1",
+    started_at: "2026-07-14T10:00:00Z",
+    status,
+    updated_at: "2026-07-14T10:00:01Z",
+    user_message_id: "user-1",
+  };
 }
 
 function mockFetch(responses: Array<Response | Promise<Response>>) {

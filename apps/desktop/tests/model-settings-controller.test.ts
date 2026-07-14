@@ -9,6 +9,7 @@ import {
   MODEL_SETTINGS_LOAD_CHANNEL,
   MODEL_SETTINGS_MESSAGE_CHANNEL,
   MODEL_SETTINGS_SAVE_CHANNEL,
+  MODEL_SETTINGS_TURN_CHANNEL,
   registerModelSettingsController,
 } from "../src/main/modelSettingsController";
 
@@ -72,6 +73,19 @@ describe("desktop model credential storage", () => {
       },
     });
     expect(sidecarRequest.mock.calls[0][0]).toBe("/sessions/session-1/messages");
+
+    const turn = await fixture.handlers.get(MODEL_SETTINGS_TURN_CHANNEL)!(
+      fixture.requesterEvent,
+      { sessionId: "session-1", requestId: "request-1", content: "Stream" },
+    );
+    expect(turn).toMatchObject({
+      received: {
+        content: "Stream",
+        modelSettings: { apiKey: "desktop-secret" },
+        requestId: "request-1",
+      },
+    });
+    expect(sidecarRequest.mock.calls[1][0]).toBe("/sessions/session-1/turns");
   });
 
   it("clears a credential, rejects other renderers, and fails closed without encryption", async () => {

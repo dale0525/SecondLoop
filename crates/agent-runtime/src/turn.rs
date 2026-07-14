@@ -19,6 +19,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub type ModelEventStream = Pin<Box<dyn Stream<Item = anyhow::Result<GatewayEvent>> + Send>>;
+pub type RuntimeEventObserver = Arc<dyn Fn(RuntimeEvent) + Send + Sync>;
 
 #[async_trait]
 pub trait ModelClient: Send + Sync {
@@ -34,6 +35,18 @@ pub trait AgentRunner: Send + Sync {
             anyhow::bail!("agent runner does not accept a host-authenticated actor");
         }
         self.run(&request.user_text).await
+    }
+
+    async fn run_request_observed(
+        &self,
+        request: TurnRequest,
+        observer: RuntimeEventObserver,
+    ) -> anyhow::Result<Vec<RuntimeEvent>> {
+        let events = self.run_request(request).await?;
+        for event in &events {
+            observer(event.clone());
+        }
+        Ok(events)
     }
 }
 
@@ -145,13 +158,24 @@ where
 
     pub async fn run_request(&self, request: TurnRequest) -> anyhow::Result<Vec<RuntimeEvent>> {
         let lease = self.skill_manager.lease_snapshot_for_turn().await?;
-        self.run_with_snapshot(request, lease).await
+        self.run_with_snapshot(request, lease, None).await
+    }
+
+    pub async fn run_request_observed(
+        &self,
+        request: TurnRequest,
+        observer: RuntimeEventObserver,
+    ) -> anyhow::Result<Vec<RuntimeEvent>> {
+        let lease = self.skill_manager.lease_snapshot_for_turn().await?;
+        self.run_with_snapshot(request, lease, Some(&observer))
+            .await
     }
 
     async fn run_with_snapshot(
         &self,
         request: TurnRequest,
         lease: SkillSnapshotLease,
+        observer: Option<&RuntimeEventObserver>,
     ) -> anyhow::Result<Vec<RuntimeEvent>> {
         let snapshot = lease.snapshot();
         let management = self
@@ -161,7 +185,7 @@ where
                 service: service.clone(),
                 actor: request.actor_context.clone(),
             });
-        let observer = self
+        let tool_observer = self
             .execution_observer
             .clone()
             .unwrap_or_else(|| Arc::new(self.skill_manager.clone()));
@@ -182,12 +206,20 @@ where
         }
         let tools = tools
             .with_turn_execution_lease(execution_lease.clone())
-            .with_execution_observer(observer);
+            .with_execution_observer(tool_observer);
         let skill_catalog = snapshot.catalog();
-        let turn_id = Uuid::new_v4().to_string();
-        let mut events = vec![RuntimeEvent::TurnStarted {
-            turn_id: turn_id.clone(),
-        }];
+        let turn_id = request
+            .turn_id
+            .clone()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let mut events = Vec::new();
+        emit(
+            &mut events,
+            observer,
+            RuntimeEvent::TurnStarted {
+                turn_id: turn_id.clone(),
+            },
+        );
         let mut budget = BudgetPolicy::new(request.token_budget);
         let mut instruction_config =
             InstructionConfig::new(self.config.workspace_root.clone(), self.config.cwd.clone());
@@ -203,26 +235,38 @@ where
                                 &records,
                             )?,
                         );
-                        events.push(RuntimeEvent::MemoryRecalled {
-                            memory_ids: records
-                                .iter()
-                                .map(|record| record.id.as_str().to_string())
-                                .collect(),
-                        });
+                        emit(
+                            &mut events,
+                            observer,
+                            RuntimeEvent::MemoryRecalled {
+                                memory_ids: records
+                                    .iter()
+                                    .map(|record| record.id.as_str().to_string())
+                                    .collect(),
+                            },
+                        );
                     }
                 }
-                Err(error) => events.push(RuntimeEvent::MemoryRecallFailed {
-                    message: error.to_string(),
-                }),
+                Err(error) => emit(
+                    &mut events,
+                    observer,
+                    RuntimeEvent::MemoryRecallFailed {
+                        message: error.to_string(),
+                    },
+                ),
             }
         }
         instruction_config.skill_summaries = skill_catalog.summaries().to_vec();
         let triggered_skills = skill_catalog.triggered_skills(&request.user_text);
         for selection in &triggered_skills {
-            events.push(RuntimeEvent::SkillSelected {
-                skill_name: selection.name.clone(),
-                reason: selection.reason,
-            });
+            emit(
+                &mut events,
+                observer,
+                RuntimeEvent::SkillSelected {
+                    skill_name: selection.name.clone(),
+                    reason: selection.reason,
+                },
+            );
         }
         let triggered_skill_names = triggered_skills
             .iter()
@@ -237,10 +281,14 @@ where
                     instruction_config.skill_instructions = documents;
                 }
                 Err(error) => {
-                    events.push(RuntimeEvent::TurnFailed {
-                        turn_id,
-                        message: error.to_string(),
-                    });
+                    emit(
+                        &mut events,
+                        observer,
+                        RuntimeEvent::TurnFailed {
+                            turn_id,
+                            message: error.to_string(),
+                        },
+                    );
                     return Ok(events);
                 }
             }
@@ -253,24 +301,36 @@ where
             && exceeds_budget(&input, context_budget_bytes)?
         {
             let compacted = compact_model_input_with_stats(input, context_budget_bytes)?;
-            events.push(RuntimeEvent::ContextCompacted {
-                original_items: compacted.original_items,
-                compacted_items: compacted.compacted_items,
-                budget_bytes: context_budget_bytes,
-            });
+            emit(
+                &mut events,
+                observer,
+                RuntimeEvent::ContextCompacted {
+                    original_items: compacted.original_items,
+                    compacted_items: compacted.compacted_items,
+                    budget_bytes: context_budget_bytes,
+                },
+            );
             input = compacted.input;
             if let (Some(memory), Some(session_id)) = (&self.memory, request.session_id.as_deref())
             {
                 match memory.on_compaction(session_id, Vec::new()).await {
-                    Ok(records) => events.push(RuntimeEvent::MemoryCompactionSynced {
-                        memory_ids: records
-                            .iter()
-                            .map(|record| record.id.as_str().to_string())
-                            .collect(),
-                    }),
-                    Err(error) => events.push(RuntimeEvent::MemoryCandidateExtractionFailed {
-                        message: error.to_string(),
-                    }),
+                    Ok(records) => emit(
+                        &mut events,
+                        observer,
+                        RuntimeEvent::MemoryCompactionSynced {
+                            memory_ids: records
+                                .iter()
+                                .map(|record| record.id.as_str().to_string())
+                                .collect(),
+                        },
+                    ),
+                    Err(error) => emit(
+                        &mut events,
+                        observer,
+                        RuntimeEvent::MemoryCandidateExtractionFailed {
+                            message: error.to_string(),
+                        },
+                    ),
                 }
             }
         }
@@ -281,7 +341,7 @@ where
 
         for _step in 0..self.max_steps {
             if turn_lease_is_invalid(execution_lease.as_ref()).await {
-                push_turn_lease_fenced(&mut events, &turn_id);
+                push_turn_lease_fenced(&mut events, observer, &turn_id);
                 return Ok(events);
             }
             let stream_request = GatewayRequest {
@@ -294,7 +354,7 @@ where
                 Some(cancellation) => tokio::select! {
                     biased;
                     _ = cancellation.cancelled() => {
-                        push_turn_lease_fenced(&mut events, &turn_id);
+                        push_turn_lease_fenced(&mut events, observer, &turn_id);
                         return Ok(events);
                     }
                     stream = &mut stream => stream?,
@@ -308,7 +368,7 @@ where
                     Some(cancellation) => tokio::select! {
                         biased;
                         _ = cancellation.cancelled() => {
-                            push_turn_lease_fenced(&mut events, &turn_id);
+                            push_turn_lease_fenced(&mut events, observer, &turn_id);
                             return Ok(events);
                         }
                         event = stream.next() => event,
@@ -321,10 +381,14 @@ where
                 match event? {
                     GatewayEvent::TextDelta { text } => {
                         final_text.push_str(&text);
-                        events.push(RuntimeEvent::AssistantTextDelta { text });
+                        emit(
+                            &mut events,
+                            observer,
+                            RuntimeEvent::AssistantTextDelta { text },
+                        );
                     }
                     GatewayEvent::ReasoningDelta { text } => {
-                        events.push(RuntimeEvent::ReasoningDelta { text });
+                        emit(&mut events, observer, RuntimeEvent::ReasoningDelta { text });
                     }
                     GatewayEvent::ToolCall {
                         call_id,
@@ -333,25 +397,33 @@ where
                         arguments,
                     } => {
                         if turn_lease_is_invalid(execution_lease.as_ref()).await {
-                            push_turn_lease_fenced(&mut events, &turn_id);
+                            push_turn_lease_fenced(&mut events, observer, &turn_id);
                             return Ok(events);
                         }
                         saw_tool = true;
                         tool_calls += 1;
                         if tool_calls > self.config.max_tool_calls_per_turn {
-                            events.push(RuntimeEvent::TurnFailed {
-                                turn_id: turn_id.clone(),
-                                message: "max tool calls exceeded".into(),
-                            });
+                            emit(
+                                &mut events,
+                                observer,
+                                RuntimeEvent::TurnFailed {
+                                    turn_id: turn_id.clone(),
+                                    message: "max tool calls exceeded".into(),
+                                },
+                            );
                             return Ok(events);
                         }
                         if let Some(requirement) = tools.approval_requirement(&name) {
-                            events.push(RuntimeEvent::ApprovalRequired {
-                                call_id: call_id.clone(),
-                                name: name.clone(),
-                                permission: requirement.permission,
-                                policy: requirement.policy,
-                            });
+                            emit(
+                                &mut events,
+                                observer,
+                                RuntimeEvent::ApprovalRequired {
+                                    call_id: call_id.clone(),
+                                    name: name.clone(),
+                                    permission: requirement.permission,
+                                    policy: requirement.policy,
+                                },
+                            );
                             let result = ToolResult::failure(
                                 name.clone(),
                                 call_id.clone(),
@@ -363,10 +435,14 @@ where
                                 ToolResultMetadata::default(),
                             )
                             .into_value();
-                            events.push(RuntimeEvent::ToolCallFinished {
-                                call_id: call_id.clone(),
-                                result: result.clone(),
-                            });
+                            emit(
+                                &mut events,
+                                observer,
+                                RuntimeEvent::ToolCallFinished {
+                                    call_id: call_id.clone(),
+                                    result: result.clone(),
+                                },
+                            );
                             input.push(serde_json::json!({
                                 "role": "assistant",
                                 "tool_calls": [
@@ -387,11 +463,15 @@ where
                             }));
                             continue;
                         }
-                        events.push(RuntimeEvent::ToolCallStarted {
-                            call_id: call_id.clone(),
-                            name: name.clone(),
-                            arguments: arguments.clone(),
-                        });
+                        emit(
+                            &mut events,
+                            observer,
+                            RuntimeEvent::ToolCallStarted {
+                                call_id: call_id.clone(),
+                                name: name.clone(),
+                                arguments: arguments.clone(),
+                            },
+                        );
                         input.push(serde_json::json!({
                             "role": "assistant",
                             "tool_calls": [
@@ -416,7 +496,7 @@ where
                             Some(cancellation) => tokio::select! {
                                 biased;
                                 _ = cancellation.cancelled() => {
-                                    push_turn_lease_fenced(&mut events, &turn_id);
+                                    push_turn_lease_fenced(&mut events, observer, &turn_id);
                                     return Ok(events);
                                 }
                                 result = &mut execution => result,
@@ -427,21 +507,29 @@ where
                             .as_ref()
                             .is_some_and(|lease| lease.is_fenced())
                         {
-                            push_turn_lease_fenced(&mut events, &turn_id);
+                            push_turn_lease_fenced(&mut events, observer, &turn_id);
                             return Ok(events);
                         }
                         let result = result.into_value();
                         memory_tool_results.push(result.clone());
-                        events.extend(tools.take_observer_diagnostics().into_iter().map(
-                            |diagnostic| RuntimeEvent::ToolObserverDiagnostic {
-                                operation: diagnostic.operation.into(),
-                                message: diagnostic.message,
+                        for diagnostic in tools.take_observer_diagnostics() {
+                            emit(
+                                &mut events,
+                                observer,
+                                RuntimeEvent::ToolObserverDiagnostic {
+                                    operation: diagnostic.operation.into(),
+                                    message: diagnostic.message,
+                                },
+                            );
+                        }
+                        emit(
+                            &mut events,
+                            observer,
+                            RuntimeEvent::ToolCallFinished {
+                                call_id: call_id.clone(),
+                                result: result.clone(),
                             },
-                        ));
-                        events.push(RuntimeEvent::ToolCallFinished {
-                            call_id: call_id.clone(),
-                            result: result.clone(),
-                        });
+                        );
                         input.push(serde_json::json!({
                             "role": "tool",
                             "tool_call_id": call_id,
@@ -450,10 +538,14 @@ where
                     }
                     GatewayEvent::Completed => {}
                     GatewayEvent::Error { message } => {
-                        events.push(RuntimeEvent::TurnFailed {
-                            turn_id: turn_id.clone(),
-                            message,
-                        });
+                        emit(
+                            &mut events,
+                            observer,
+                            RuntimeEvent::TurnFailed {
+                                turn_id: turn_id.clone(),
+                                message,
+                            },
+                        );
                         return Ok(events);
                     }
                     GatewayEvent::Usage {
@@ -461,17 +553,25 @@ where
                         output_tokens,
                     } => {
                         let usage = budget.record_usage(input_tokens, output_tokens);
-                        events.push(RuntimeEvent::UsageReported {
-                            input_tokens: usage.input_tokens,
-                            output_tokens: usage.output_tokens,
-                            total_tokens: usage.total_tokens,
-                            exceeded: usage.exceeded,
-                        });
+                        emit(
+                            &mut events,
+                            observer,
+                            RuntimeEvent::UsageReported {
+                                input_tokens: usage.input_tokens,
+                                output_tokens: usage.output_tokens,
+                                total_tokens: usage.total_tokens,
+                                exceeded: usage.exceeded,
+                            },
+                        );
                         if usage.exceeded {
-                            events.push(RuntimeEvent::TurnFailed {
-                                turn_id: turn_id.clone(),
-                                message: "token budget exceeded".into(),
-                            });
+                            emit(
+                                &mut events,
+                                observer,
+                                RuntimeEvent::TurnFailed {
+                                    turn_id: turn_id.clone(),
+                                    message: "token budget exceeded".into(),
+                                },
+                            );
                             return Ok(events);
                         }
                     }
@@ -484,29 +584,42 @@ where
                 .is_some_and(|lease| lease.is_fenced())
                 || turn_lease_is_invalid(execution_lease.as_ref()).await
             {
-                push_turn_lease_fenced(&mut events, &turn_id);
+                push_turn_lease_fenced(&mut events, observer, &turn_id);
                 return Ok(events);
             }
             if !saw_tool {
-                events.push(RuntimeEvent::AssistantMessageFinished {
-                    text: final_text.clone(),
-                });
+                emit(
+                    &mut events,
+                    observer,
+                    RuntimeEvent::AssistantMessageFinished {
+                        text: final_text.clone(),
+                    },
+                );
                 self.extract_memory_candidates(
                     &request,
                     &final_text,
                     memory_tool_results,
                     &mut events,
+                    observer,
                 )
                 .await;
-                events.push(RuntimeEvent::TurnFinished { turn_id });
+                emit(
+                    &mut events,
+                    observer,
+                    RuntimeEvent::TurnFinished { turn_id },
+                );
                 return Ok(events);
             }
         }
 
-        events.push(RuntimeEvent::TurnFailed {
-            turn_id,
-            message: "max agent steps exceeded".into(),
-        });
+        emit(
+            &mut events,
+            observer,
+            RuntimeEvent::TurnFailed {
+                turn_id,
+                message: "max agent steps exceeded".into(),
+            },
+        );
         Ok(events)
     }
 
@@ -516,6 +629,7 @@ where
         assistant_text: &str,
         tool_results: Vec<serde_json::Value>,
         events: &mut Vec<RuntimeEvent>,
+        observer: Option<&RuntimeEventObserver>,
     ) {
         let (Some(memory), Some(extractor), Some(session_id)) = (
             &self.memory,
@@ -537,26 +651,53 @@ where
         .await;
         match result {
             Ok(records) if !records.is_empty() => {
-                events.push(RuntimeEvent::MemoryCandidatesProposed {
-                    memory_ids: records
-                        .iter()
-                        .map(|record| record.id.as_str().to_string())
-                        .collect(),
-                });
+                emit(
+                    events,
+                    observer,
+                    RuntimeEvent::MemoryCandidatesProposed {
+                        memory_ids: records
+                            .iter()
+                            .map(|record| record.id.as_str().to_string())
+                            .collect(),
+                    },
+                );
             }
             Ok(_) => {}
-            Err(error) => events.push(RuntimeEvent::MemoryCandidateExtractionFailed {
-                message: error.to_string(),
-            }),
+            Err(error) => emit(
+                events,
+                observer,
+                RuntimeEvent::MemoryCandidateExtractionFailed {
+                    message: error.to_string(),
+                },
+            ),
         }
     }
 }
 
-fn push_turn_lease_fenced(events: &mut Vec<RuntimeEvent>, turn_id: &str) {
-    events.push(RuntimeEvent::TurnFailed {
-        turn_id: turn_id.to_string(),
-        message: crate::skill_snapshot::TURN_LEASE_FENCED_MESSAGE.into(),
-    });
+fn push_turn_lease_fenced(
+    events: &mut Vec<RuntimeEvent>,
+    observer: Option<&RuntimeEventObserver>,
+    turn_id: &str,
+) {
+    emit(
+        events,
+        observer,
+        RuntimeEvent::TurnFailed {
+            turn_id: turn_id.to_string(),
+            message: crate::skill_snapshot::TURN_LEASE_FENCED_MESSAGE.into(),
+        },
+    );
+}
+
+fn emit(
+    events: &mut Vec<RuntimeEvent>,
+    observer: Option<&RuntimeEventObserver>,
+    event: RuntimeEvent,
+) {
+    if let Some(observer) = observer {
+        observer(event.clone());
+    }
+    events.push(event);
 }
 
 async fn turn_lease_is_invalid(lease: Option<&crate::skill_snapshot::TurnExecutionLease>) -> bool {
@@ -583,6 +724,14 @@ where
 
     async fn run_request(&self, request: TurnRequest) -> anyhow::Result<Vec<RuntimeEvent>> {
         TurnRunner::run_request(self, request).await
+    }
+
+    async fn run_request_observed(
+        &self,
+        request: TurnRequest,
+        observer: RuntimeEventObserver,
+    ) -> anyhow::Result<Vec<RuntimeEvent>> {
+        TurnRunner::run_request_observed(self, request, observer).await
     }
 }
 

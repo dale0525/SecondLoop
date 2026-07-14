@@ -89,10 +89,75 @@ pub struct Message {
 pub struct ConversationEventRecord {
     pub id: String,
     pub session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
     pub event_index: i64,
     pub kind: String,
     pub payload: serde_json::Value,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationTurnStatus {
+    Running,
+    Completed,
+    Failed,
+    Cancelled,
+    Interrupted,
+}
+
+impl ConversationTurnStatus {
+    pub fn is_terminal(self) -> bool {
+        self != Self::Running
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+            Self::Interrupted => "interrupted",
+        }
+    }
+}
+
+impl std::str::FromStr for ConversationTurnStatus {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "running" => Ok(Self::Running),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            "cancelled" => Ok(Self::Cancelled),
+            "interrupted" => Ok(Self::Interrupted),
+            _ => anyhow::bail!("unknown conversation turn status"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ConversationTurn {
+    pub id: String,
+    pub session_id: String,
+    pub request_id: String,
+    pub status: ConversationTurnStatus,
+    pub user_message_id: String,
+    pub assistant_message_id: Option<String>,
+    pub failure_message: Option<String>,
+    pub started_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub finished_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConversationTurnEventPage {
+    pub turn: ConversationTurn,
+    pub events: Vec<ConversationEventRecord>,
+    pub next_cursor: i64,
+    pub has_more: bool,
 }
 
 pub fn messages_to_model_history(messages: &[Message]) -> anyhow::Result<Vec<serde_json::Value>> {

@@ -18,7 +18,7 @@ type ConversationDrawerProps = {
   onOpenChange: (isOpen: boolean) => void;
   onRename: (session: ServerSession, title: string) => Promise<void>;
   onRetry: () => Promise<void>;
-  onSelect: (session: ServerSession) => Promise<void>;
+  onSelect: (session: ServerSession) => Promise<boolean>;
   sessions: ServerSession[];
 };
 
@@ -245,9 +245,12 @@ function relativeTime(
   if (!Number.isFinite(date.getTime())) return value;
   const elapsedMinutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60_000));
   if (elapsedMinutes < 1) return t("conversation.justNow");
+  if (elapsedMinutes === 1) return t("conversation.minuteAgo");
   if (elapsedMinutes < 60) return t("conversation.minutesAgo", { count: String(elapsedMinutes) });
   if (elapsedMinutes < 1_440) {
-    return t("conversation.hoursAgo", { count: String(Math.floor(elapsedMinutes / 60)) });
+    const elapsedHours = Math.floor(elapsedMinutes / 60);
+    if (elapsedHours === 1) return t("conversation.hourAgo");
+    return t("conversation.hoursAgo", { count: String(elapsedHours) });
   }
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
 }

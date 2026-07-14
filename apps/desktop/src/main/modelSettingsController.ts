@@ -17,6 +17,7 @@ export const MODEL_SETTINGS_SAVE_CHANNEL = "agentweave:model-settings:save";
 export const MODEL_SETTINGS_CLEAR_KEY_CHANNEL = "agentweave:model-settings:clear-key";
 export const MODEL_SETTINGS_TEST_CHANNEL = "agentweave:model-settings:test";
 export const MODEL_SETTINGS_MESSAGE_CHANNEL = "agentweave:model-settings:message";
+export const MODEL_SETTINGS_TURN_CHANNEL = "agentweave:model-settings:turn";
 
 const endpointTypes = new Set(["responses", "chat_completions", "completion"]);
 
@@ -117,6 +118,20 @@ export function registerModelSettingsController(
       { content: request.content, modelSettings: settings },
     );
   });
+  options.ipcMain.handle(MODEL_SETTINGS_TURN_CHANNEL, async (event, value) => {
+    assertRequester(event);
+    const request = validateTurnRequest(value);
+    const settings = materializeSettings(options);
+    return postJson(
+      options.sidecarRequest,
+      `/sessions/${encodeURIComponent(request.sessionId)}/turns`,
+      {
+        content: request.content,
+        modelSettings: settings,
+        requestId: request.requestId,
+      },
+    );
+  });
 
   return () => {
     options.ipcMain.removeHandler(MODEL_SETTINGS_LOAD_CHANNEL);
@@ -124,6 +139,7 @@ export function registerModelSettingsController(
     options.ipcMain.removeHandler(MODEL_SETTINGS_CLEAR_KEY_CHANNEL);
     options.ipcMain.removeHandler(MODEL_SETTINGS_TEST_CHANNEL);
     options.ipcMain.removeHandler(MODEL_SETTINGS_MESSAGE_CHANNEL);
+    options.ipcMain.removeHandler(MODEL_SETTINGS_TURN_CHANNEL);
   };
 }
 
@@ -158,6 +174,18 @@ function validateMessageRequest(value: unknown): { content: string; sessionId: s
     content: boundedString(request.content, "Message", 1_000_000),
     sessionId,
   };
+}
+
+function validateTurnRequest(
+  value: unknown,
+): { content: string; requestId: string; sessionId: string } {
+  const request = validateMessageRequest(value);
+  const record = value as Record<string, unknown>;
+  const requestId = boundedString(record.requestId, "Turn request identifier", 128);
+  if (!/^[A-Za-z0-9._-]+$/.test(requestId) || requestId === "." || requestId === "..") {
+    throw new Error("Turn request identifier is invalid");
+  }
+  return { ...request, requestId };
 }
 
 function boundedString(value: unknown, label: string, maximum: number): string {

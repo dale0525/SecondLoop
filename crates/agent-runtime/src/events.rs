@@ -112,6 +112,9 @@ pub enum RuntimeEvent {
     TurnFinished {
         turn_id: String,
     },
+    TurnCancelled {
+        turn_id: String,
+    },
     TurnFailed {
         turn_id: String,
         message: String,

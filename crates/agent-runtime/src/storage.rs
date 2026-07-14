@@ -23,6 +23,7 @@ impl Storage {
             storage.close().await;
             return Err(error);
         }
+        storage.recover_interrupted_turns().await?;
         Ok(storage)
     }
 
@@ -532,7 +533,7 @@ impl Storage {
     ) -> anyhow::Result<Vec<ConversationEventRecord>> {
         scope.validate()?;
         let rows = sqlx::query(
-            "SELECT e.id, e.session_id, e.event_index, e.kind, e.payload_json, e.created_at FROM conversation_events e INNER JOIN sessions s ON s.id = e.session_id WHERE e.session_id = ? AND s.app_id = ? AND s.agent_id = ? AND s.tenant_id = ? AND s.user_id = ? AND s.device_id = ? ORDER BY e.event_index",
+            "SELECT e.id, e.session_id, e.turn_id, e.event_index, e.kind, e.payload_json, e.created_at FROM conversation_events e INNER JOIN sessions s ON s.id = e.session_id WHERE e.session_id = ? AND s.app_id = ? AND s.agent_id = ? AND s.tenant_id = ? AND s.user_id = ? AND s.device_id = ? ORDER BY e.event_index",
         )
         .bind(session_id)
         .bind(&scope.app_id)
@@ -549,6 +550,7 @@ impl Storage {
                 Ok(ConversationEventRecord {
                     id: row.try_get("id")?,
                     session_id: row.try_get("session_id")?,
+                    turn_id: row.try_get("turn_id")?,
                     event_index: row.try_get("event_index")?,
                     kind: row.try_get("kind")?,
                     payload: serde_json::from_str(&payload_json)?,
@@ -718,6 +720,7 @@ async fn insert_runtime_events(
     events: &[RuntimeEvent],
     created_at: DateTime<Utc>,
 ) -> anyhow::Result<()> {
+    let turn_id = events.iter().find_map(runtime_event_turn_id);
     let first_index: i64 = sqlx::query_scalar(
         "SELECT COALESCE(MAX(event_index) + 1, 0) FROM conversation_events WHERE session_id = ?",
     )
@@ -731,10 +734,11 @@ async fn insert_runtime_events(
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| anyhow::anyhow!("runtime event is missing a type"))?;
         sqlx::query(
-            "INSERT INTO conversation_events(id, session_id, event_index, kind, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO conversation_events(id, session_id, turn_id, event_index, kind, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(Uuid::new_v4().to_string())
         .bind(session_id)
+        .bind(turn_id)
         .bind(first_index + offset as i64)
         .bind(kind)
         .bind(serde_json::to_string(&payload)?)
@@ -743,6 +747,16 @@ async fn insert_runtime_events(
         .await?;
     }
     Ok(())
+}
+
+fn runtime_event_turn_id(event: &RuntimeEvent) -> Option<&str> {
+    match event {
+        RuntimeEvent::TurnStarted { turn_id }
+        | RuntimeEvent::TurnFinished { turn_id }
+        | RuntimeEvent::TurnCancelled { turn_id }
+        | RuntimeEvent::TurnFailed { turn_id, .. } => Some(turn_id),
+        _ => None,
+    }
 }
 
 async fn touch_session<'a, E>(

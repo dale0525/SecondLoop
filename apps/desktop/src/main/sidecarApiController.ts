@@ -79,6 +79,23 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
         pathname: `/sessions/${identifier(request.input, "id")}?${new URLSearchParams({ expectedUpdatedAt })}`,
       };
     }
+    case "turns.events": {
+      const sessionId = identifier(request.input, "sessionId");
+      const turnId = identifier(request.input, "turnId");
+      const after = optionalInteger(request.input, "after", -1, Number.MAX_SAFE_INTEGER) ?? -1;
+      const limit = optionalInteger(request.input, "limit", 1, 100) ?? 100;
+      const waitMs = optionalInteger(request.input, "waitMs", 0, 25_000) ?? 0;
+      return get(`/sessions/${sessionId}/turns/${turnId}/events?${new URLSearchParams({
+        after: String(after),
+        limit: String(limit),
+        waitMs: String(waitMs),
+      })}`);
+    }
+    case "turns.cancel":
+      return {
+        method: "POST",
+        pathname: `/sessions/${identifier(request.input, "sessionId")}/turns/${identifier(request.input, "turnId")}/cancel`,
+      };
     case "memory.list": {
       const query = fieldString(request.input, "query", 4_096, true);
       const limit = fieldInteger(request.input, "limit", 1, 100);
@@ -240,4 +257,6 @@ const OPERATIONS = new Set<SidecarApiOperation>([
   "sessions.list",
   "sessions.load",
   "sessions.update",
+  "turns.cancel",
+  "turns.events",
 ]);

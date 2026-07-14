@@ -45,6 +45,30 @@ describe("trusted sidecar API controller", () => {
         method: "PATCH",
       }),
     );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: { after: 7, limit: 50, sessionId: "session-1", turnId: "turn-1", waitMs: 5000 },
+        operation: "turns.events",
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/sessions/session-1/turns/turn-1/events?after=7&limit=50&waitMs=5000",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: { sessionId: "session-1", turnId: "turn-1" },
+        operation: "turns.cancel",
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/sessions/session-1/turns/turn-1/cancel",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("rejects other renderers and arbitrary operations before sidecar access", async () => {

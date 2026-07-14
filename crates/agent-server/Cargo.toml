@@ -11,6 +11,7 @@ async-trait.workspace = true
 axum.workspace = true
 chrono.workspace = true
 fs2.workspace = true
+futures.workspace = true
 hex.workspace = true
 model-gateway = { path = "../model-gateway" }
 rustix.workspace = true
@@ -31,6 +32,5 @@ zeroize.workspace = true
 windows-sys.workspace = true
 
 [dev-dependencies]
-futures.workspace = true
 sqlx.workspace = true
 tempfile = "3"

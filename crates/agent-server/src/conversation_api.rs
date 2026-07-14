@@ -1,6 +1,6 @@
 use crate::api::{ApiError, AppState};
 use agent_runtime::session::{
-    ConversationEventRecord, Message, Session, SessionMutation, SessionPageCursor,
+    ConversationEventRecord, ConversationTurn, Message, Session, SessionMutation, SessionPageCursor,
 };
 use axum::{
     Json, Router,
@@ -56,6 +56,7 @@ struct SessionDetailResponse {
     session: Session,
     messages: Vec<Message>,
     events: Vec<ConversationEventRecord>,
+    turns: Vec<ConversationTurn>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -135,10 +136,16 @@ async fn load_session(
         .list_conversation_events(state.conversation_scope(), &session_id)
         .await
         .map_err(ApiError::Internal)?;
+    let turns = state
+        .storage()
+        .list_scoped_turns(state.conversation_scope(), &session_id)
+        .await
+        .map_err(ApiError::Internal)?;
     Ok(Json(SessionDetailResponse {
         session,
         messages,
         events,
+        turns,
     }))
 }
 

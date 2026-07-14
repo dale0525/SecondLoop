@@ -1,7 +1,7 @@
 use sqlx::{Row, Sqlite, SqlitePool, Transaction};
 
 const COMPONENT: &str = "conversation";
-const CURRENT_VERSION: i64 = 1;
+const CURRENT_VERSION: i64 = 2;
 
 pub(crate) async fn migrate(pool: &SqlitePool) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
@@ -47,6 +47,25 @@ pub(crate) async fn migrate(pool: &SqlitePool) -> anyhow::Result<()> {
     )
     .execute(&mut *tx)
     .await?;
+    ensure_column(&mut tx, "conversation_events", "turn_id", "TEXT").await?;
+    sqlx::query(
+        r#"CREATE TABLE IF NOT EXISTS conversation_turns (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            request_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            user_message_id TEXT NOT NULL,
+            assistant_message_id TEXT,
+            failure_message TEXT,
+            started_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            finished_at TEXT,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+            UNIQUE(session_id, request_id)
+        )"#,
+    )
+    .execute(&mut *tx)
+    .await?;
     sqlx::query(
         "CREATE INDEX IF NOT EXISTS sessions_scope_updated_idx ON sessions(app_id, agent_id, tenant_id, user_id, device_id, updated_at)",
     )
@@ -54,6 +73,16 @@ pub(crate) async fn migrate(pool: &SqlitePool) -> anyhow::Result<()> {
     .await?;
     sqlx::query(
         "CREATE INDEX IF NOT EXISTS messages_session_created_idx ON messages(session_id, created_at)",
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS conversation_events_turn_idx ON conversation_events(turn_id, event_index)",
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS conversation_turns_session_status_idx ON conversation_turns(session_id, status, started_at)",
     )
     .execute(&mut *tx)
     .await?;
@@ -74,7 +103,26 @@ async fn ensure_scope_column(
     column: &str,
     default_value: &str,
 ) -> anyhow::Result<()> {
-    let columns = sqlx::query("PRAGMA table_info(sessions)")
+    ensure_column(
+        tx,
+        "sessions",
+        column,
+        &format!("TEXT NOT NULL DEFAULT '{default_value}'"),
+    )
+    .await
+}
+
+async fn ensure_column(
+    tx: &mut Transaction<'_, Sqlite>,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        matches!(table, "sessions" | "conversation_events"),
+        "conversation migration table is invalid"
+    );
+    let columns = sqlx::query(&format!("PRAGMA table_info({table})"))
         .fetch_all(&mut **tx)
         .await?;
     if columns
@@ -83,8 +131,7 @@ async fn ensure_scope_column(
     {
         return Ok(());
     }
-    let statement =
-        format!("ALTER TABLE sessions ADD COLUMN {column} TEXT NOT NULL DEFAULT '{default_value}'");
+    let statement = format!("ALTER TABLE {table} ADD COLUMN {column} {definition}");
     sqlx::query(&statement).execute(&mut **tx).await?;
     Ok(())
 }
