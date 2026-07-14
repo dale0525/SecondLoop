@@ -13,12 +13,14 @@ import {
   buildModifySkillPrompt
 } from "../src/renderer/devSkillPrompts";
 import { DeveloperTools } from "../src/renderer/screens/DeveloperTools";
+import { installHostBootstrap } from "./hostBootstrapFixture";
 
 afterEach(() => {
   cleanup();
   window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  delete window.agentWeave;
 });
 
 describe("developer skill prompts", () => {
@@ -75,6 +77,7 @@ describe("developer skill prompts", () => {
 
 describe("DeveloperTools", () => {
   it("routes #developer to the developer tools screen", async () => {
+    installHostBootstrap();
     window.history.replaceState(null, "", "/#developer");
     mockFetch([
       jsonResponse({
@@ -91,6 +94,7 @@ describe("DeveloperTools", () => {
   });
 
   it("shows settings developer entry only when the dev API is available", async () => {
+    installHostBootstrap();
     const user = userEvent.setup();
     mockFetch([
       jsonResponse({ root: "/repo/skills", packages: [] }),
@@ -107,6 +111,7 @@ describe("DeveloperTools", () => {
   });
 
   it("hides settings developer entry when the dev API is unavailable", async () => {
+    installHostBootstrap();
     mockFetch([new Response(JSON.stringify({ error: "not found" }), { status: 404 })]);
 
     render(<App />);

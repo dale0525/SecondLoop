@@ -8,6 +8,7 @@ import { OwnerPolicy } from "../src/renderer/ownerBridge";
 import { OwnerSkills } from "../src/renderer/screens/OwnerSkills";
 import type { ApprovalObservationResult } from "../src/shared/approvalObservation";
 import detailFixture from "./fixtures/owner-package-detail.json";
+import { installHostBootstrap } from "./hostBootstrapFixture";
 
 class TestResizeObserver implements ResizeObserver {
   disconnect(): void {}
@@ -586,6 +587,7 @@ function installBridge(options: {
     }))
   };
   window.agentWeave = { owner: api, approval: { open: openApproval } };
+  installHostBootstrap();
   return { ...api, openApproval };
 }
 

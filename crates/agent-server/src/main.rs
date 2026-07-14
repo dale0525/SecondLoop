@@ -72,15 +72,20 @@ async fn main() -> anyhow::Result<()> {
             runtime.database_path.clone(),
         ];
         let runtime_config = base_runtime_config.excluding_workspace_roots(control_roots);
-        let app_prompt = server_app::resolve_app_prompt(&runtime.manager, &runtime_config).await?;
+        let resolved_app = server_app::resolve_app(&runtime.manager, &runtime_config).await?;
         let owner_management =
             build_tenant_owner_api_config(owner_host, &runtime, connector_catalog).await?;
         let storage = runtime.storage.clone();
-        (
-            build_tenant_app_state(runtime, model, runtime_config, app_prompt, owner_management)
-                .await?,
-            storage,
+        let state = build_tenant_app_state(
+            runtime,
+            model,
+            runtime_config,
+            resolved_app.prompt,
+            owner_management,
         )
+        .await?
+        .with_host_discovery(resolved_app.host_discovery)?;
+        (state, storage)
     } else {
         let database_url = std::env::var("AGENTWEAVE_DATABASE_URL")
             .unwrap_or_else(|_| DEFAULT_DATABASE_URL.into());
@@ -95,12 +100,12 @@ async fn main() -> anyhow::Result<()> {
             control_roots.push(database_path);
         }
         let runtime_config = base_runtime_config.excluding_workspace_roots(control_roots);
-        let app_prompt = server_app::resolve_app_prompt(&loaded.manager, &runtime_config).await?;
+        let resolved_app = server_app::resolve_app(&loaded.manager, &runtime_config).await?;
         let owner_management =
             build_owner_api_config(owner_host, &loaded, storage.clone(), connector_catalog).await?;
-        let memory_tools = server_app::resolve_memory_tools(&storage, &app_prompt).await?;
+        let memory_tools = server_app::resolve_memory_tools(&storage, &resolved_app.prompt).await?;
         let connector_foundation =
-            server_app::resolve_connector_tools(&storage, &app_prompt).await?;
+            server_app::resolve_connector_tools(&storage, &resolved_app.prompt).await?;
         let connector_tools = connector_foundation
             .as_ref()
             .map(|foundation| foundation.tools.clone());
@@ -110,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
                 model,
                 loaded.manager,
                 runtime_config,
-                app_prompt,
+                resolved_app.prompt,
                 api::AppFoundationRuntimes::new(memory_tools, connector_tools),
                 owner_management,
             )
@@ -120,11 +125,12 @@ async fn main() -> anyhow::Result<()> {
                 model,
                 loaded.manager,
                 runtime_config,
-                app_prompt,
+                resolved_app.prompt,
                 memory_tools,
                 connector_tools,
             )
-        };
+        }
+        .with_host_discovery(resolved_app.host_discovery)?;
         let state = match connector_foundation {
             Some(foundation) => state.with_mail_actions(foundation.actions),
             None => state,

@@ -5,10 +5,12 @@ import { listDevSkills } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 
 type SettingsDeveloperToolsProps = {
+  enabled: boolean;
   onOpenDeveloperTools: () => void;
 };
 
 export function SettingsDeveloperTools({
+  enabled,
   onOpenDeveloperTools
 }: SettingsDeveloperToolsProps): JSX.Element | null {
   const { t } = useI18n();
@@ -16,6 +18,13 @@ export function SettingsDeveloperTools({
 
   useEffect(() => {
     let active = true;
+
+    if (!enabled) {
+      setIsAvailable(false);
+      return () => {
+        active = false;
+      };
+    }
 
     listDevSkills()
       .then(() => {
@@ -32,7 +41,7 @@ export function SettingsDeveloperTools({
     return () => {
       active = false;
     };
-  }, []);
+  }, [enabled]);
 
   if (!isAvailable) {
     return null;

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
+import type { AgentAppHostDiscovery } from "../shared/hostBootstrap";
 
 export {};
 
@@ -10,6 +11,9 @@ declare global {
 
   interface Window {
     agentWeave?: {
+      hostBootstrap?: {
+        load(): Promise<AgentAppHostDiscovery>;
+      };
       owner: {
         principal(): Promise<unknown>;
         listSkills(): Promise<unknown>;

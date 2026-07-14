@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 
 import { registerApprovalWindowController } from "./approvalWindow";
 import { getDesktopWindowConfig } from "./index";
+import { registerHostBootstrapController } from "./hostBootstrapController";
 import { registerModelSettingsController } from "./modelSettingsController";
 import { startDesktopNotificationWorker } from "./notificationWorker";
 import { configureRequesterWindowSecurity } from "./requesterWindowSecurity";
@@ -11,6 +12,7 @@ import { configureRequesterWindowSecurity } from "./requesterWindowSecurity";
 let mainWindow: BrowserWindow | null = null;
 let disposeApproval: (() => void) | null = null;
 let disposeModelSettings: (() => void) | null = null;
+let disposeHostBootstrap: (() => void) | null = null;
 let disposeNotifications: (() => void) | null = null;
 
 app.whenReady().then(async () => {
@@ -48,6 +50,11 @@ app.whenReady().then(async () => {
     serverBaseUrl: process.env.AGENTWEAVE_SERVER_URL,
     storagePath: path.join(app.getPath("userData"), "model-settings.v1.json")
   });
+  disposeHostBootstrap = registerHostBootstrapController({
+    ipcMain,
+    requesterWebContents: mainWindow.webContents,
+    serverBaseUrl: process.env.AGENTWEAVE_SERVER_URL
+  });
   disposeNotifications = startDesktopNotificationWorker({
     createNotification: (options) => {
       const notification = new Notification(options);
@@ -70,6 +77,8 @@ app.on("window-all-closed", () => {
   disposeApproval = null;
   disposeModelSettings?.();
   disposeModelSettings = null;
+  disposeHostBootstrap?.();
+  disposeHostBootstrap = null;
   disposeNotifications?.();
   disposeNotifications = null;
   mainWindow = null;

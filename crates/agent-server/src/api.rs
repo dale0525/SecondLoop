@@ -1,5 +1,6 @@
 use crate::owner_api::OwnerApiConfig;
 use agent_runtime::{
+    app_definition::AgentAppHostDiscovery,
     events::RuntimeEvent,
     prompt_composer::AppPromptConfig,
     session::{ConversationScope, Message, Session, messages_to_model_history},
@@ -26,7 +27,11 @@ use model_gateway::{
     responses::{GatewayHttpClient, GatewayRequest},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
@@ -40,6 +45,7 @@ pub struct AppState {
     dev_skill_mutations: Arc<Mutex<()>>,
     owner_management: Option<OwnerApiConfig>,
     app_prompt: AppPromptConfig,
+    host_discovery: Option<AgentAppHostDiscovery>,
     conversation_scope: ConversationScope,
     memory_tools: Option<agent_runtime::memory_tools::MemoryToolRuntime>,
     connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
@@ -142,6 +148,7 @@ impl AppState {
             dev_skill_mutations: Arc::new(Mutex::new(())),
             owner_management: None,
             app_prompt,
+            host_discovery: None,
             conversation_scope,
             memory_tools,
             connector_tools,
@@ -235,6 +242,7 @@ impl AppState {
             dev_skill_mutations: Arc::new(Mutex::new(())),
             owner_management: Some(owner_management),
             app_prompt,
+            host_discovery: None,
             conversation_scope,
             memory_tools,
             connector_tools,
@@ -285,6 +293,7 @@ impl AppState {
             dev_skill_mutations: Arc::new(Mutex::new(())),
             owner_management: None,
             app_prompt: AppPromptConfig::default(),
+            host_discovery: None,
             conversation_scope: ConversationScope::default(),
             memory_tools: None,
             connector_tools: None,
@@ -339,6 +348,33 @@ impl AppState {
     pub fn with_skills_root(mut self, skills_root: PathBuf) -> Self {
         self.skills_root = Some(skills_root);
         self
+    }
+
+    pub fn with_host_discovery(
+        mut self,
+        host_discovery: Option<AgentAppHostDiscovery>,
+    ) -> anyhow::Result<Self> {
+        if let Some(discovery) = &host_discovery {
+            anyhow::ensure!(
+                discovery.identity.app_id == self.app_prompt.identity.app_id
+                    && discovery.identity.version == self.app_prompt.identity.version
+                    && discovery.identity.display_name == self.app_prompt.identity.display_name,
+                "Host discovery identity does not match the active App prompt"
+            );
+            let prompt_capabilities = self
+                .app_prompt
+                .identity
+                .enabled_capabilities
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            anyhow::ensure!(
+                discovery.requirements.capabilities == prompt_capabilities,
+                "Host discovery capabilities do not match the active App prompt"
+            );
+        }
+        self.host_discovery = host_discovery;
+        Ok(self)
     }
 }
 
@@ -462,6 +498,7 @@ pub fn router(state: Arc<AppState>) -> Router {
     let mut router = Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/model/test", post(test_model_connection))
+        .route("/host/bootstrap", get(host_bootstrap))
         .route("/diagnostics/app", get(app_diagnostics))
         .route("/sessions", get(list_sessions).post(create_session))
         .route("/sessions/{session_id}", delete(delete_session))
@@ -515,6 +552,10 @@ impl AppState {
         &self.app_prompt
     }
 
+    pub(crate) fn host_discovery(&self) -> Option<&AgentAppHostDiscovery> {
+        self.host_discovery.as_ref()
+    }
+
     pub(crate) fn conversation_scope(&self) -> &ConversationScope {
         &self.conversation_scope
     }
@@ -558,6 +599,16 @@ async fn app_diagnostics(State(state): State<Arc<AppState>>) -> Json<AppDiagnost
         version: identity.version.clone(),
         display_name: identity.display_name.clone(),
     })
+}
+
+async fn host_bootstrap(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<AgentAppHostDiscovery>, ApiError> {
+    state
+        .host_discovery()
+        .cloned()
+        .map(Json)
+        .ok_or(ApiError::NotFound("resolved Agent App is unavailable"))
 }
 
 pub(crate) fn desktop_cors_layer() -> CorsLayer {
@@ -825,6 +876,10 @@ fn deterministic_assistant_reply(content: &str) -> String {
 #[cfg(test)]
 #[path = "api_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "api_host_bootstrap_tests.rs"]
+mod host_bootstrap_tests;
 
 #[cfg(test)]
 #[path = "api_conversation_tests.rs"]

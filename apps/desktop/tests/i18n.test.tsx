@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import App from "../src/renderer/App";
 import { getBundledLocalization } from "../src/renderer/i18n/I18nProvider";
+import { installHostBootstrap } from "./hostBootstrapFixture";
 
 describe("desktop localization", () => {
   afterEach(() => {
@@ -11,6 +12,7 @@ describe("desktop localization", () => {
     window.localStorage.clear();
     window.history.replaceState(null, "", "/");
     document.documentElement.lang = "";
+    delete window.agentWeave;
   });
 
   it("bundles English and Simplified Chinese host catalogs", () => {
@@ -23,6 +25,7 @@ describe("desktop localization", () => {
 
   it("switches language immediately and persists the selection", async () => {
     const user = userEvent.setup();
+    installHostBootstrap();
     window.history.replaceState(null, "", "/#settings");
     render(<App />);
 
@@ -38,6 +41,7 @@ describe("desktop localization", () => {
 
   it("localizes the developer workbench shell", async () => {
     window.localStorage.setItem("agentweave.localization.locale.v1", "zh-CN");
+    installHostBootstrap();
     window.history.replaceState(null, "", "/#developer");
     render(<App />);
 

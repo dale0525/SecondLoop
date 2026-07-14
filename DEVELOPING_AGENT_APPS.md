@@ -70,7 +70,22 @@ Discovery is not a permission grant. The `features` array can describe product b
 
 The discovery wire contract has its own schema version so Hosts can reject incompatible future snapshots without weakening Runtime compatibility checks. The Manifest hash lets a Host verify that presentation decisions and the active App instructions came from the same resolved package.
 
-### 2.2 Choose themes and fonts
+### 2.2 Bootstrap the Desktop Renderer
+
+When `AGENTWEAVE_APP_ROOT` resolves successfully, the local sidecar retains the discovery snapshot alongside the matching App prompt and serves it from `GET /host/bootstrap`. The sidecar rejects a discovery snapshot whose identity or capability set does not match the active prompt. If no App is configured, the endpoint returns `404` instead of synthesizing product capabilities.
+
+Electron Main requests this fixed endpoint using its privileged sidecar base URL, accepts calls only from the main Renderer window, limits the response size, and validates the complete discovery wire contract before returning it through `window.agentWeave.hostBootstrap.load()`. The Preload bridge does not expose a Manifest path, a configurable endpoint, credentials, or direct file access. Local transport authentication remains a separate Host responsibility; discovery does not replace it.
+
+The Desktop Renderer always keeps Chat and Settings reachable. It opens optional surfaces only when all relevant declarations agree:
+
+- Memory requires `memory-management`, `memory-provider`, and a `memoryPersistence` policy other than `disabled`.
+- Mail accounts require `mail-workflows`, `mail-connector`, and at least one declared Connector.
+- Pending actions require `action-center`, `durable-actions`, `approval-engine`, and an external-side-effect policy other than `deny`.
+- Owner Skills and Developer Tools require an App `skillManagement` policy other than `disabled`, in addition to their existing authenticated Host policy or development API checks.
+
+Loading, malformed, unsupported, unavailable, and non-Desktop bootstrap results all fail closed. Direct navigation to a closed route returns to Settings without briefly rendering the restricted surface. The Renderer may show a retry action, but it must not cache a failed or stale discovery snapshot as authority.
+
+### 2.3 Choose themes and fonts
 
 The Desktop Host reads the optional `appearance` configuration from `agent-app.json`. `themes.builtins` determines which built-in themes are visible in the final App, while `defaultTheme` determines the theme used on first launch. New scaffolds include the same 19 color themes as the current VS Code 1.128 release and use `vscode.dark-2026` by default.
 
@@ -114,7 +129,7 @@ AGENTWEAVE_APP_ROOT=output/my-agent pixi run npm --prefix apps/desktop run build
 
 Themes and fonts contribute to the App content hash. Regenerate and validate release artifacts after changing any related file.
 
-### 2.3 Manage interface languages
+### 2.4 Manage interface languages
 
 `localization` declares the interface languages an App can provide, the default language, and the corresponding UTF-8 JSON dictionaries. Dictionaries use stable flat keys so they are easy to review, merge, and process with translation tools:
 

@@ -1,4 +1,6 @@
-use agent_runtime::app_definition::{AgentAppRuntimeInventory, ResolvedAgentApp};
+use agent_runtime::app_definition::{
+    AgentAppHostDiscovery, AgentAppRuntimeInventory, ResolvedAgentApp,
+};
 use agent_runtime::connector::ConnectorRuntime;
 use agent_runtime::connector_tools::{ConnectorToolRuntime, EphemeralConnectorContextProvider};
 use agent_runtime::credential::{ConnectorAccount, CredentialScope};
@@ -25,12 +27,20 @@ pub(super) struct ResolvedConnectorFoundation {
     pub(super) actions: agent_runtime::foundation_actions::MailActionService,
 }
 
-pub(super) async fn resolve_app_prompt(
+pub(super) struct ResolvedServerApp {
+    pub(super) prompt: AppPromptConfig,
+    pub(super) host_discovery: Option<AgentAppHostDiscovery>,
+}
+
+pub(super) async fn resolve_app(
     manager: &SkillManager,
     runtime_config: &RuntimeConfig,
-) -> anyhow::Result<AppPromptConfig> {
+) -> anyhow::Result<ResolvedServerApp> {
     let Ok(root) = std::env::var("AGENTWEAVE_APP_ROOT") else {
-        return Ok(AppPromptConfig::default());
+        return Ok(ResolvedServerApp {
+            prompt: AppPromptConfig::default(),
+            host_discovery: None,
+        });
     };
     let snapshot = manager.current_snapshot();
     let capabilities = manager
@@ -77,11 +87,13 @@ pub(super) async fn resolve_app_prompt(
             .chain([MAIL_CONNECTOR_ID.to_string()])
             .collect(),
     };
-    Ok(
-        ResolvedAgentApp::load(PathBuf::from(root).as_path(), &inventory, 64 * 1024)
-            .await?
-            .prompt,
-    )
+    let resolved =
+        ResolvedAgentApp::load(PathBuf::from(root).as_path(), &inventory, 64 * 1024).await?;
+    let host_discovery = resolved.host_discovery().clone();
+    Ok(ResolvedServerApp {
+        prompt: resolved.prompt,
+        host_discovery: Some(host_discovery),
+    })
 }
 
 fn first_party_capabilities() -> impl Iterator<Item = String> {

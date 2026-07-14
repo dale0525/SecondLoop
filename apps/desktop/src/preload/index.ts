@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
+import {
+  HOST_BOOTSTRAP_LOAD_CHANNEL,
+  type AgentAppHostDiscovery,
+} from "../shared/hostBootstrap";
 import { createOwnerTransport } from "./ownerTransport";
 
 type DesktopRuntimeInfo = {
@@ -9,6 +13,9 @@ type DesktopRuntimeInfo = {
 
 export type DesktopPreloadApi = {
   getRuntimeInfo: () => DesktopRuntimeInfo;
+  hostBootstrap: {
+    load: () => Promise<AgentAppHostDiscovery>;
+  };
   owner: ReturnType<typeof createOwnerTransport>;
   approval: {
     open: (approvalId: string) => Promise<ApprovalObservationResult>;
@@ -32,6 +39,10 @@ const runtimeInfo: DesktopRuntimeInfo = {
 
 export const desktopPreloadApi: DesktopPreloadApi = Object.freeze({
   getRuntimeInfo: () => runtimeInfo,
+  hostBootstrap: Object.freeze({
+    load: () =>
+      ipcRenderer.invoke(HOST_BOOTSTRAP_LOAD_CHANNEL) as Promise<AgentAppHostDiscovery>
+  }),
   owner,
   approval: Object.freeze({
     open: (approvalId: string): Promise<ApprovalObservationResult> => {

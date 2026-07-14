@@ -5,6 +5,8 @@ import { SettingsAppearance } from "../components/SettingsAppearance";
 import { SettingsDeveloperTools } from "../components/SettingsDeveloperTools";
 import { SettingsModel } from "../components/SettingsModel";
 import { SettingsFoundation } from "../components/SettingsFoundation";
+import { SettingsHostBootstrap } from "../components/SettingsHostBootstrap";
+import { useHostBootstrap } from "../hostBootstrap";
 import { SettingsLanguage } from "../components/SettingsLanguage";
 import { useI18n } from "../i18n/I18nProvider";
 import { OwnerPolicy, canInspectOwnerSkills } from "../ownerBridge";
@@ -29,6 +31,7 @@ export function Settings({
   ownerPolicy
 }: SettingsProps): JSX.Element {
   const { t } = useI18n();
+  const bootstrap = useHostBootstrap();
   return (
     <main className="settings-screen" aria-label={t("settings.title")}>
       <header className="top-bar settings-top-bar">
@@ -41,15 +44,17 @@ export function Settings({
         <span className="top-bar-spacer" aria-hidden="true" />
       </header>
       <div className="settings-shell">
+        <SettingsHostBootstrap />
         <SettingsAppearance />
         <SettingsLanguage />
         <SettingsFoundation
+          features={bootstrap.features}
           onOpenAccounts={onOpenAccounts}
           onOpenActions={onOpenActions}
           onOpenMemory={onOpenMemory}
         />
         <SettingsModel />
-        {canInspectOwnerSkills(ownerPolicy) ? (
+        {bootstrap.features.skillManagement && canInspectOwnerSkills(ownerPolicy) ? (
           <section className="settings-panel" aria-labelledby="settings-owner-title">
             <div className="settings-panel-heading">
               <h2 id="settings-owner-title">{t("settings.ownerSkills")}</h2>
@@ -64,7 +69,10 @@ export function Settings({
             </button>
           </section>
         ) : null}
-        <SettingsDeveloperTools onOpenDeveloperTools={onOpenDeveloperTools} />
+        <SettingsDeveloperTools
+          enabled={bootstrap.features.skillManagement}
+          onOpenDeveloperTools={onOpenDeveloperTools}
+        />
       </div>
     </main>
   );

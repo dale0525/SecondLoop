@@ -415,6 +415,7 @@ describe("Chat", () => {
     expect(css).not.toMatch(/\.chat-shell[\s\S]*?--color-background:/);
     expect(css).toMatch(/\.top-bar[\s\S]*?\{/);
     expect(css).toMatch(/\.top-bar-title[\s\S]*?\{/);
+    expect(css).toMatch(/\.settings-panel[\s\S]*?flex:\s*0 0 auto/);
     expect(css).toMatch(/\.message-list[\s\S]*?\{/);
     expect(css).toMatch(/\.message-bubble[\s\S]*?\{/);
     expect(css).toMatch(/\.message-bubble-assistant[\s\S]*?\{/);
@@ -507,7 +508,6 @@ describe("App navigation", () => {
   it("tests the configured model connection from settings", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch([
-      new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
       jsonResponse({ ok: true, message: "Connection succeeded" })
     ]);
     window.history.replaceState(null, "", "/#settings");

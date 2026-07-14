@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 
 import { AppearanceProvider } from "./appearance/AppearanceProvider";
-import { I18nProvider } from "./i18n/I18nProvider";
+import { HostBootstrapProvider, useHostBootstrap } from "./hostBootstrap";
+import type { DesktopHostFeatures } from "./hostFeatures";
+import { I18nProvider, useI18n } from "./i18n/I18nProvider";
 import {
   OwnerPolicy,
   canInspectOwnerSkills,
@@ -43,7 +45,9 @@ export default function App(): JSX.Element {
   return (
     <I18nProvider>
       <AppearanceProvider>
-        <AppContent />
+        <HostBootstrapProvider>
+          <AppContent />
+        </HostBootstrapProvider>
       </AppearanceProvider>
     </I18nProvider>
   );
@@ -52,9 +56,18 @@ export default function App(): JSX.Element {
 function AppContent(): JSX.Element {
   const [view, setView] = useState<AppView>(getViewFromHash);
   const [ownerPolicy, setOwnerPolicy] = useState<OwnerPolicy | null>(null);
+  const bootstrap = useHostBootstrap();
+  const { t } = useI18n();
 
   useEffect(() => {
     let active = true;
+    if (!bootstrap.features.skillManagement) {
+      setOwnerPolicy({ mode: "disabled", actorId: "anonymous", role: "anonymous", grants: [] });
+      return () => {
+        active = false;
+      };
+    }
+    setOwnerPolicy(null);
     getOwnerPolicy()
       .then((policy) => {
         if (active) setOwnerPolicy(policy);
@@ -67,7 +80,11 @@ function AppContent(): JSX.Element {
     return () => {
       active = false;
     };
-  }, []);
+  }, [bootstrap.features.skillManagement]);
+
+  useEffect(() => {
+    document.title = bootstrap.discovery?.identity.displayName ?? t("app.name");
+  }, [bootstrap.discovery, t]);
 
   useEffect(() => {
     const syncViewFromHash = () => setView(getViewFromHash());
@@ -86,14 +103,21 @@ function AppContent(): JSX.Element {
   };
 
   useEffect(() => {
-    if (view === "owner-skills" && ownerPolicy && !canInspectOwnerSkills(ownerPolicy)) {
+    if (
+      bootstrap.status !== "loading"
+      && !isViewAllowed(view, bootstrap.features, ownerPolicy)
+    ) {
       navigate("settings");
     }
-  }, [ownerPolicy, view]);
+  }, [bootstrap.features, bootstrap.status, ownerPolicy, view]);
+
+  const activeView = isViewAllowed(view, bootstrap.features, ownerPolicy)
+    ? view
+    : "settings";
 
   return (
     <div className="app-root">
-      {view === "owner-skills" ? (
+      {activeView === "owner-skills" ? (
         canInspectOwnerSkills(ownerPolicy) ? (
           <OwnerSkills
             onBack={() => navigate("settings")}
@@ -110,15 +134,15 @@ function AppContent(): JSX.Element {
             ownerPolicy={ownerPolicy}
           />
         )
-      ) : view === "developer" ? (
+      ) : activeView === "developer" ? (
         <DeveloperTools onBack={() => navigate("settings")} />
-      ) : view === "accounts" ? (
+      ) : activeView === "accounts" ? (
         <Accounts onBack={() => navigate("settings")} />
-      ) : view === "memory" ? (
+      ) : activeView === "memory" ? (
         <Memory onBack={() => navigate("settings")} />
-      ) : view === "actions" ? (
+      ) : activeView === "actions" ? (
         <FoundationActions onBack={() => navigate("settings")} />
-      ) : view === "settings" ? (
+      ) : activeView === "settings" ? (
         <Settings
           onBack={() => navigate("chat")}
           onOpenDeveloperTools={() => navigate("developer")}
@@ -133,4 +157,19 @@ function AppContent(): JSX.Element {
       )}
     </div>
   );
+}
+
+function isViewAllowed(
+  view: AppView,
+  features: DesktopHostFeatures,
+  ownerPolicy: OwnerPolicy | null,
+): boolean {
+  if (view === "accounts") return features.accounts;
+  if (view === "memory") return features.memory;
+  if (view === "actions") return features.actions;
+  if (view === "developer") return features.skillManagement;
+  if (view === "owner-skills") {
+    return features.skillManagement && canInspectOwnerSkills(ownerPolicy);
+  }
+  return true;
 }

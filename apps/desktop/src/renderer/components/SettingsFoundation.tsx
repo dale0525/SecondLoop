@@ -3,17 +3,26 @@ import { Brain, ChevronRight, Mail, ShieldCheck } from "lucide-react";
 import { useI18n } from "../i18n/I18nProvider";
 
 type SettingsFoundationProps = {
+  features: {
+    accounts: boolean;
+    actions: boolean;
+    memory: boolean;
+  };
   onOpenAccounts: () => void;
   onOpenMemory: () => void;
   onOpenActions: () => void;
 };
 
 export function SettingsFoundation({
+  features,
   onOpenAccounts,
   onOpenActions,
   onOpenMemory
-}: SettingsFoundationProps): JSX.Element {
+}: SettingsFoundationProps): JSX.Element | null {
   const { t } = useI18n();
+  if (!features.accounts && !features.actions && !features.memory) {
+    return null;
+  }
   return (
     <section className="settings-panel foundation-settings-panel" aria-labelledby="foundation-title">
       <div className="settings-panel-heading">
@@ -22,7 +31,7 @@ export function SettingsFoundation({
         <p>{t("foundation.description")}</p>
       </div>
       <Flex direction={{ initial: "column", sm: "row" }} gap="3">
-        <Card className="foundation-entry-card" size="2">
+        {features.accounts ? <Card className="foundation-entry-card" size="2">
           <Flex align="center" gap="3">
             <span className="foundation-entry-icon" aria-hidden="true"><Mail size={18} /></span>
             <Flex direction="column" gap="1" style={{ flex: 1 }}>
@@ -33,8 +42,8 @@ export function SettingsFoundation({
               {t("foundation.open")} <ChevronRight aria-hidden="true" size={15} />
             </Button>
           </Flex>
-        </Card>
-        <Card className="foundation-entry-card" size="2">
+        </Card> : null}
+        {features.actions ? <Card className="foundation-entry-card" size="2">
           <Flex align="center" gap="3">
             <span className="foundation-entry-icon approval" aria-hidden="true"><ShieldCheck size={18} /></span>
             <Flex direction="column" gap="1" style={{ flex: 1 }}>
@@ -45,8 +54,8 @@ export function SettingsFoundation({
               {t("foundation.open")} <ChevronRight aria-hidden="true" size={15} />
             </Button>
           </Flex>
-        </Card>
-        <Card className="foundation-entry-card" size="2">
+        </Card> : null}
+        {features.memory ? <Card className="foundation-entry-card" size="2">
           <Flex align="center" gap="3">
             <span className="foundation-entry-icon memory" aria-hidden="true"><Brain size={18} /></span>
             <Flex direction="column" gap="1" style={{ flex: 1 }}>
@@ -57,7 +66,7 @@ export function SettingsFoundation({
               {t("foundation.open")} <ChevronRight aria-hidden="true" size={15} />
             </Button>
           </Flex>
-        </Card>
+        </Card> : null}
       </Flex>
     </section>
   );
