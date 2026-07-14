@@ -90,6 +90,7 @@ impl CapabilitySet {
             "task-provider",
             "structured-content",
             "host-tools",
+            "attachments",
         ])
     }
 
@@ -111,6 +112,7 @@ impl CapabilitySet {
             "task-provider",
             "structured-content",
             "host-tools",
+            "attachments",
         ])
     }
 
@@ -167,6 +169,7 @@ mod tests {
         assert!(capabilities.contains_name("shell.process"));
         assert!(capabilities.contains_name("model.http_provider"));
         assert!(capabilities.contains_name("task-provider"));
+        assert!(capabilities.contains_name("attachments"));
         assert!(!capabilities.contains_name("secure_storage"));
     }
 
@@ -179,6 +182,7 @@ mod tests {
         assert!(capabilities.contains_name("shell.process"));
         assert!(capabilities.contains_name("model.http_provider"));
         assert!(capabilities.contains_name("task-provider"));
+        assert!(capabilities.contains_name("attachments"));
         assert!(!capabilities.contains_name("secure_storage"));
     }
 }
