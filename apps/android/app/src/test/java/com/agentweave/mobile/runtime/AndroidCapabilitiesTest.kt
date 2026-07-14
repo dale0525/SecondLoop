@@ -10,12 +10,12 @@ class AndroidCapabilitiesTest {
   fun androidMvpCapabilitiesContainOnlyMobileSafeCoreCapabilities() {
     val capabilities = androidMvpCapabilities()
 
-    assertEquals(15, capabilities.size)
+    assertEquals(14, capabilities.size)
     assertTrue(capabilities.contains("network.http"))
     assertTrue(capabilities.contains("memory-provider"))
     assertTrue(capabilities.contains("approval-engine"))
     assertTrue(capabilities.contains("scheduler"))
-    assertTrue(capabilities.contains("task-provider"))
+    assertFalse(capabilities.contains("task-provider"))
     assertTrue(capabilities.contains("mail-connector"))
     assertTrue(capabilities.contains("host-tools"))
     assertFalse(capabilities.contains("shell.process"))

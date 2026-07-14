@@ -5,11 +5,18 @@
   "displayName": "Tasks and Reminders",
   "kind": "host_tools_only",
   "package": { "includeInstructions": true, "includeRuntime": false },
-  "compatibility": { "platforms": ["android", "desktop", "server"] },
+  "compatibility": { "platforms": ["desktop", "server"] },
   "requires": {
     "packages": [],
     "capabilities": ["host-tools", "task-provider"],
-    "runtimeTools": ["agentweave.host.tasks/v1"],
+    "runtimeTools": [
+      "task_list",
+      "task_get",
+      "task_create",
+      "task_update",
+      "task_set_status",
+      "task_delete"
+    ],
     "connectors": []
   }
 }

@@ -4,6 +4,7 @@ use chrono_tz::Tz;
 use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Row, SqlitePool};
 use std::str::FromStr;
@@ -148,6 +149,13 @@ pub struct ScheduledJob {
     pub version: i64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScheduleScope<'a> {
+    pub app_id: &'a str,
+    pub tenant_id: &'a str,
+    pub user_id: &'a str,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ScheduledClaim {
     pub claim_id: String,
@@ -240,6 +248,21 @@ impl SchedulerStore {
         .execute(&mut *tx)
         .await?;
         sqlx::query(
+            r#"CREATE TABLE IF NOT EXISTS schedule_idempotency (
+                app_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL,
+                request_sha256 TEXT NOT NULL,
+                job_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(app_id, tenant_id, user_id, idempotency_key),
+                FOREIGN KEY(job_id) REFERENCES scheduled_jobs(id)
+            )"#,
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
             "CREATE INDEX IF NOT EXISTS scheduled_jobs_due_idx ON scheduled_jobs(status, next_run_at)",
         )
         .execute(&mut *tx)
@@ -292,6 +315,77 @@ impl SchedulerStore {
         Ok(job)
     }
 
+    pub async fn create_job_idempotent(
+        &self,
+        request: ScheduledJobRequest,
+        idempotency_key: &str,
+        now: DateTime<Utc>,
+    ) -> anyhow::Result<ScheduledJob> {
+        validate_request(&request)?;
+        validate_idempotency_key(idempotency_key)?;
+        let request_sha256 = hex::encode(Sha256::digest(serde_json::to_vec(&request)?));
+        if let Some(row) = sqlx::query(
+            "SELECT request_sha256, job_id FROM schedule_idempotency WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND idempotency_key = ?",
+        )
+        .bind(&request.app_id)
+        .bind(&request.tenant_id)
+        .bind(&request.user_id)
+        .bind(idempotency_key)
+        .fetch_optional(&self.pool)
+        .await?
+        {
+            let existing_hash: String = row.try_get("request_sha256")?;
+            anyhow::ensure!(
+                existing_hash == request_sha256,
+                "schedule idempotency conflict"
+            );
+            let job_id: String = row.try_get("job_id")?;
+            return self
+                .get_job(&job_id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("idempotent schedule is unavailable"));
+        }
+
+        let job = self.create_job(request, now).await?;
+        let inserted = sqlx::query(
+            "INSERT OR IGNORE INTO schedule_idempotency(app_id, tenant_id, user_id, idempotency_key, request_sha256, job_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&job.request.app_id)
+        .bind(&job.request.tenant_id)
+        .bind(&job.request.user_id)
+        .bind(idempotency_key)
+        .bind(&request_sha256)
+        .bind(&job.id)
+        .bind(now.to_rfc3339())
+        .execute(&self.pool)
+        .await?;
+        if inserted.rows_affected() == 1 {
+            return Ok(job);
+        }
+        sqlx::query("DELETE FROM scheduled_jobs WHERE id = ?")
+            .bind(&job.id)
+            .execute(&self.pool)
+            .await?;
+        let row = sqlx::query(
+            "SELECT request_sha256, job_id FROM schedule_idempotency WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND idempotency_key = ?",
+        )
+        .bind(&job.request.app_id)
+        .bind(&job.request.tenant_id)
+        .bind(&job.request.user_id)
+        .bind(idempotency_key)
+        .fetch_one(&self.pool)
+        .await?;
+        let existing_hash: String = row.try_get("request_sha256")?;
+        anyhow::ensure!(
+            existing_hash == request_sha256,
+            "schedule idempotency conflict"
+        );
+        let job_id: String = row.try_get("job_id")?;
+        self.get_job(&job_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("idempotent schedule is unavailable"))
+    }
+
     pub async fn set_status(
         &self,
         job_id: &str,
@@ -337,6 +431,51 @@ impl SchedulerStore {
             .fetch_optional(&self.pool)
             .await?;
         row.map(scheduled_job_from_row).transpose()
+    }
+
+    pub async fn get_job_for_scope(
+        &self,
+        app_id: &str,
+        tenant_id: &str,
+        user_id: &str,
+        job_id: &str,
+    ) -> anyhow::Result<Option<ScheduledJob>> {
+        validate_scope(app_id, tenant_id, user_id)?;
+        validate_uuid(job_id, "schedule ID")?;
+        let row = sqlx::query(
+            "SELECT * FROM scheduled_jobs WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND id = ?",
+        )
+        .bind(app_id)
+        .bind(tenant_id)
+        .bind(user_id)
+        .bind(job_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(scheduled_job_from_row).transpose()
+    }
+
+    pub async fn set_status_for_scope(
+        &self,
+        scope: ScheduleScope<'_>,
+        job_id: &str,
+        expected_version: i64,
+        status: ScheduledJobStatus,
+        now: DateTime<Utc>,
+    ) -> anyhow::Result<Option<ScheduledJob>> {
+        if self
+            .get_job_for_scope(scope.app_id, scope.tenant_id, scope.user_id, job_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        anyhow::ensure!(
+            self.set_status(job_id, expected_version, status, now)
+                .await?,
+            "scheduled job version conflict"
+        );
+        self.get_job_for_scope(scope.app_id, scope.tenant_id, scope.user_id, job_id)
+            .await
     }
 
     pub async fn claim_due(
@@ -544,6 +683,28 @@ fn validate_request(request: &ScheduledJobRequest) -> anyhow::Result<()> {
         );
     }
     request.schedule.validate()
+}
+
+fn validate_scope(app_id: &str, tenant_id: &str, user_id: &str) -> anyhow::Result<()> {
+    for value in [app_id, tenant_id, user_id] {
+        anyhow::ensure!(!value.trim().is_empty(), "schedule scope is required");
+        anyhow::ensure!(value.len() <= 255, "schedule scope is too long");
+    }
+    Ok(())
+}
+
+fn validate_uuid(value: &str, label: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(Uuid::parse_str(value).is_ok(), "{label} is invalid");
+    Ok(())
+}
+
+fn validate_idempotency_key(value: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !value.trim().is_empty(),
+        "schedule idempotency key is required"
+    );
+    anyhow::ensure!(value.len() <= 512, "schedule idempotency key is too long");
+    Ok(())
 }
 
 fn scheduled_job_from_row(row: sqlx::sqlite::SqliteRow) -> anyhow::Result<ScheduledJob> {

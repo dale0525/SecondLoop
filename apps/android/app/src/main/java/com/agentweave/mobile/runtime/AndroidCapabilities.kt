@@ -15,6 +15,5 @@ fun androidMvpCapabilities(): List<String> =
     "credential-vault",
     "mail-connector",
     "scheduler",
-    "task-provider",
     "host-tools",
   )

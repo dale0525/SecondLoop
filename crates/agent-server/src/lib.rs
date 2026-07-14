@@ -1,6 +1,7 @@
 #![cfg_attr(test, allow(deprecated))]
 
 pub mod api;
+mod api_foundations;
 mod automation_api;
 mod conversation_api;
 mod dev_api;
@@ -9,6 +10,7 @@ mod foundation_api;
 pub mod local_transport;
 pub mod owner_api;
 pub mod skill_release;
+mod task_api;
 mod tenant_attempt;
 mod tenant_initialization;
 #[cfg(test)]

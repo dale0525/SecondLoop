@@ -37,14 +37,17 @@ async fn task_provider_is_scoped_idempotent_and_versioned() {
                 &scope("other"),
                 TaskQuery {
                     status: None,
+                    due_after: None,
                     due_before: None,
                     tag: None,
                     text: None,
+                    cursor: None,
                     limit: 10
                 }
             )
             .await
             .unwrap()
+            .tasks
             .is_empty()
     );
     let completed = provider
@@ -61,6 +64,68 @@ async fn task_provider_is_scoped_idempotent_and_versioned() {
             .to_string()
             .contains("version")
     );
+}
+
+#[tokio::test]
+async fn task_provider_rejects_idempotency_conflicts_and_pages_stably() {
+    let provider = FakeTaskProvider::default();
+    let first = provider
+        .create(&scope("user"), content("First"), "task-1")
+        .await
+        .unwrap();
+    assert_eq!(
+        provider
+            .create(&scope("user"), content("Different"), "task-1")
+            .await
+            .unwrap_err(),
+        TaskError::IdempotencyConflict
+    );
+    provider
+        .create(&scope("user"), content("Second"), "task-2")
+        .await
+        .unwrap();
+
+    let first_page = provider
+        .list(
+            &scope("user"),
+            TaskQuery {
+                status: None,
+                due_after: None,
+                due_before: None,
+                tag: None,
+                text: None,
+                cursor: None,
+                limit: 1,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(first_page.tasks.len(), 1);
+    let second_page = provider
+        .list(
+            &scope("user"),
+            TaskQuery {
+                status: None,
+                due_after: None,
+                due_before: None,
+                tag: None,
+                text: None,
+                cursor: first_page.next_cursor,
+                limit: 1,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(second_page.tasks.len(), 1);
+    assert_ne!(first_page.tasks[0].id, second_page.tasks[0].id);
+    assert!(second_page.next_cursor.is_none());
+
+    provider.delete(&scope("user"), &first.id, 1).await.unwrap();
+    let recreated = provider
+        .create(&scope("user"), content("Different"), "task-1")
+        .await
+        .unwrap();
+    assert_ne!(first.id, recreated.id);
 }
 
 #[test]

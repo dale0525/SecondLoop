@@ -398,7 +398,6 @@
       "stability": "preview",
       "wave": "available",
       "platforms": [
-        "android",
         "desktop",
         "server"
       ],
@@ -414,7 +413,12 @@
         ],
         "connectors": [],
         "hostTools": [
-          "agentweave.host.tasks/v1"
+          "task_list",
+          "task_get",
+          "task_create",
+          "task_update",
+          "task_set_status",
+          "task_delete"
         ]
       },
       "permissions": {
@@ -665,7 +669,6 @@
       "stability": "preview",
       "wave": "available",
       "platforms": [
-        "android",
         "desktop",
         "server"
       ],
@@ -682,7 +685,10 @@
         ],
         "connectors": [],
         "hostTools": [
-          "agentweave.host.scheduler/v1"
+          "schedule_list",
+          "schedule_get",
+          "schedule_create",
+          "schedule_set_status"
         ]
       },
       "permissions": {
@@ -730,7 +736,6 @@
       "stability": "preview",
       "wave": "available",
       "platforms": [
-        "android",
         "desktop",
         "server"
       ],
@@ -747,7 +752,10 @@
         ],
         "connectors": [],
         "hostTools": [
-          "agentweave.host.notifications/v1"
+          "notification_list",
+          "notification_get",
+          "notification_enqueue",
+          "notification_cancel"
         ]
       },
       "permissions": {

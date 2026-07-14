@@ -71,6 +71,134 @@ describe("trusted sidecar API controller", () => {
     );
   });
 
+  it("maps every task operation to the fixed Foundation Tasks API", async () => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn(async () => new Response(JSON.stringify({ id: "task-1" })));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+    const content = {
+      title: "Prepare briefing",
+      notes: "Use the latest figures",
+      dueAt: "2026-07-16T09:30:00+08:00",
+      timezone: "Asia/Shanghai",
+      recurrence: null,
+      priority: "high",
+      tags: ["work"],
+    };
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: {
+          cursor: "next-page",
+          dueAfter: "2026-07-15T00:00:00Z",
+          dueBefore: "2026-07-20T00:00:00Z",
+          limit: 25,
+          status: "open",
+          tag: "work",
+          text: "briefing",
+        },
+        operation: "tasks.list",
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/foundation/tasks?status=open&dueAfter=2026-07-15T00%3A00%3A00Z&dueBefore=2026-07-20T00%3A00%3A00Z&tag=work&text=briefing&limit=25&cursor=next-page",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { input: { id: "task-1" }, operation: "tasks.get" },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/foundation/tasks/task-1",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { input: { content, idempotencyKey: "create-1" }, operation: "tasks.create" },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/foundation/tasks",
+      expect.objectContaining({
+        body: JSON.stringify({ content, idempotencyKey: "create-1" }),
+        method: "POST",
+      }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { input: { content, expectedVersion: 2, id: "task-1" }, operation: "tasks.update" },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/foundation/tasks/task-1",
+      expect.objectContaining({
+        body: JSON.stringify({ content, expectedVersion: 2 }),
+        method: "PATCH",
+      }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: { expectedVersion: 3, id: "task-1", status: "completed" },
+        operation: "tasks.setStatus",
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/foundation/tasks/task-1/status",
+      expect.objectContaining({
+        body: JSON.stringify({ expectedVersion: 3, status: "completed" }),
+        method: "POST",
+      }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { input: { expectedVersion: 4, id: "task-1" }, operation: "tasks.delete" },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/foundation/tasks/task-1",
+      expect.objectContaining({ body: JSON.stringify({ expectedVersion: 4 }), method: "DELETE" }),
+    );
+  });
+
+  it.each([
+    ["invalid task identifier", { input: { id: "../secret" }, operation: "tasks.get" }, /id is invalid/],
+    ["oversized title", taskCreate({ title: "x".repeat(1_025) }, "create-1"), /title is invalid/],
+    ["oversized notes", taskCreate({ notes: "x".repeat(65_537) }, "create-1"), /notes is invalid/],
+    ["oversized idempotency key", taskCreate({}, "x".repeat(513)), /idempotencyKey is invalid/],
+    ["blank idempotency key", taskCreate({}, "   "), /idempotencyKey is invalid/],
+    ["invalid version", {
+      input: { expectedVersion: 0, id: "task-1", status: "completed" },
+      operation: "tasks.setStatus",
+    }, /expectedVersion is invalid/],
+    ["invalid status", {
+      input: { expectedVersion: 1, id: "task-1", status: "archived" },
+      operation: "tasks.setStatus",
+    }, /status is invalid/],
+    ["unknown input field", {
+      input: { id: "task-1", path: "/etc/passwd" },
+      operation: "tasks.get",
+    }, /unknown fields/],
+    ["unknown content field", taskCreate({ path: "/etc/passwd" }, "create-1"), /unknown fields/],
+  ])("rejects %s before task sidecar access", async (_name, request, error) => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn();
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await expect(harness.invoke({ sender: { id: 42 } }, request)).rejects.toThrow(error as RegExp);
+    expect(sidecarRequest).not.toHaveBeenCalled();
+  });
+
   it("rejects other renderers and arbitrary operations before sidecar access", async () => {
     const harness = ipcHarness();
     const sidecarRequest = vi.fn();
@@ -95,6 +223,21 @@ describe("trusted sidecar API controller", () => {
     expect(sidecarRequest).not.toHaveBeenCalled();
   });
 });
+
+function taskCreate(overrides: Record<string, unknown>, idempotencyKey: string) {
+  return {
+    input: {
+      content: {
+        title: "Prepare briefing",
+        priority: "normal",
+        tags: [],
+        ...overrides,
+      },
+      idempotencyKey,
+    },
+    operation: "tasks.create",
+  };
+}
 
 function ipcHarness() {
   let handler: ((event: { sender: { id: number } }, value: unknown) => unknown) | null = null;

@@ -89,6 +89,10 @@ impl Storage {
         crate::memory_sqlite::SqliteMemoryProvider::from_pool(self.pool.clone())
     }
 
+    pub fn local_task_provider(&self) -> crate::task_sqlite::SqliteTaskProvider {
+        crate::task_sqlite::SqliteTaskProvider::from_pool(self.pool.clone())
+    }
+
     pub async fn close(&self) {
         self.pool.close().await;
     }

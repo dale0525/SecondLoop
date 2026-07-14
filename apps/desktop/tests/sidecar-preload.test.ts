@@ -2,6 +2,7 @@ import { ipcRenderer } from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { desktopPreloadApi } from "../src/preload";
+import { SIDECAR_API_REQUEST_CHANNEL } from "../src/shared/sidecarApi";
 import {
   SIDECAR_ENSURE_RUNNING_CHANNEL,
   SIDECAR_STATUS_CHANNEL,
@@ -58,5 +59,19 @@ describe("sidecar preload capability", () => {
     await expect(desktopPreloadApi.sidecar.status()).rejects.toThrow(
       "Sidecar mode and state are inconsistent",
     );
+  });
+
+  it("forwards typed task operations without exposing an arbitrary path", async () => {
+    vi.mocked(ipcRenderer.invoke).mockResolvedValue({ tasks: [], nextCursor: null });
+
+    await expect(desktopPreloadApi.server.request("tasks.list", {
+      status: "open",
+      limit: 25,
+    })).resolves.toEqual({ tasks: [], nextCursor: null });
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith(SIDECAR_API_REQUEST_CHANNEL, {
+      operation: "tasks.list",
+      input: { status: "open", limit: 25 },
+    });
+    expect(Object.keys(desktopPreloadApi.server)).toEqual(["request"]);
   });
 });

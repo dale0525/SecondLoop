@@ -104,6 +104,9 @@ async fn main() -> anyhow::Result<()> {
         let owner_management =
             build_owner_api_config(owner_host, &loaded, storage.clone(), connector_catalog).await?;
         let memory_tools = server_app::resolve_memory_tools(&storage, &resolved_app.prompt).await?;
+        let task_tools = server_app::resolve_task_tools(&storage, &resolved_app.prompt).await?;
+        let automation_tools =
+            server_app::resolve_automation_tools(&storage, &resolved_app.prompt).await?;
         let connector_foundation =
             server_app::resolve_connector_tools(&storage, &resolved_app.prompt).await?;
         let connector_tools = connector_foundation
@@ -116,7 +119,8 @@ async fn main() -> anyhow::Result<()> {
                 loaded.manager,
                 runtime_config,
                 resolved_app.prompt,
-                api::AppFoundationRuntimes::new(memory_tools, connector_tools),
+                api::AppFoundationRuntimes::new(memory_tools, task_tools, connector_tools)
+                    .with_automation_tools(automation_tools),
                 owner_management,
             )
         } else {
@@ -126,8 +130,8 @@ async fn main() -> anyhow::Result<()> {
                 loaded.manager,
                 runtime_config,
                 resolved_app.prompt,
-                memory_tools,
-                connector_tools,
+                api::AppFoundationRuntimes::new(memory_tools, task_tools, connector_tools)
+                    .with_automation_tools(automation_tools),
             )
         }
         .with_host_discovery(resolved_app.host_discovery)?;

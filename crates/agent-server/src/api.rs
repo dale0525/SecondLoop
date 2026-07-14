@@ -1,3 +1,4 @@
+pub use crate::api_foundations::AppFoundationRuntimes;
 use crate::owner_api::OwnerApiConfig;
 use agent_runtime::{
     app_definition::AgentAppHostDiscovery,
@@ -52,26 +53,11 @@ pub struct AppState {
     conversation_locks: Arc<Mutex<BTreeMap<String, Weak<Mutex<()>>>>>,
     turn_coordinator: crate::turn_api::TurnCoordinator,
     memory_tools: Option<agent_runtime::memory_tools::MemoryToolRuntime>,
+    task_tools: Option<agent_runtime::task_tools::TaskToolRuntime>,
+    automation_tools: Option<agent_runtime::automation_tools::AutomationToolRuntime>,
     connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
     mail_actions: Option<agent_runtime::foundation_actions::MailActionService>,
     automation: Option<crate::automation_api::AutomationApiState>,
-}
-
-pub struct AppFoundationRuntimes {
-    pub memory_tools: Option<agent_runtime::memory_tools::MemoryToolRuntime>,
-    pub connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
-}
-
-impl AppFoundationRuntimes {
-    pub fn new(
-        memory_tools: Option<agent_runtime::memory_tools::MemoryToolRuntime>,
-        connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
-    ) -> Self {
-        Self {
-            memory_tools,
-            connector_tools,
-        }
-    }
 }
 
 impl AppState {
@@ -109,8 +95,7 @@ impl AppState {
             skill_manager,
             runtime_config,
             app_prompt,
-            None,
-            None,
+            AppFoundationRuntimes::new(None, None, None),
         )
     }
 
@@ -120,12 +105,17 @@ impl AppState {
         skill_manager: SkillManager,
         runtime_config: RuntimeConfig,
         app_prompt: AppPromptConfig,
-        memory_tools: Option<agent_runtime::memory_tools::MemoryToolRuntime>,
-        connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
+        foundations: AppFoundationRuntimes,
     ) -> Self
     where
         C: ModelClient + 'static,
     {
+        let AppFoundationRuntimes {
+            memory_tools,
+            task_tools,
+            automation_tools,
+            connector_tools,
+        } = foundations;
         let mut runner = TurnRunner::new_with_manager_and_config(
             model,
             skill_manager.clone(),
@@ -138,6 +128,12 @@ impl AppState {
                 .with_memory_candidate_extractor(Arc::new(
                     agent_runtime::memory_lifecycle::ExplicitMemoryCandidateExtractor,
                 ));
+        }
+        if let Some(tasks) = &task_tools {
+            runner = runner.with_task_tools(tasks.clone());
+        }
+        if let Some(automation) = &automation_tools {
+            runner = runner.with_automation_tools(automation.clone());
         }
         if let Some(connectors) = &connector_tools {
             runner = runner.with_connector_tools(connectors.clone());
@@ -157,6 +153,8 @@ impl AppState {
             conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
             turn_coordinator: crate::turn_api::TurnCoordinator::default(),
             memory_tools,
+            task_tools,
+            automation_tools,
             connector_tools,
             mail_actions: None,
             automation: None,
@@ -200,7 +198,7 @@ impl AppState {
             skill_manager,
             runtime_config,
             app_prompt,
-            AppFoundationRuntimes::new(None, None),
+            AppFoundationRuntimes::new(None, None, None),
             owner_management,
         )
     }
@@ -219,6 +217,8 @@ impl AppState {
     {
         let AppFoundationRuntimes {
             memory_tools,
+            task_tools,
+            automation_tools,
             connector_tools,
         } = foundations;
         let mut runner = TurnRunner::new_with_manager_and_config(
@@ -234,6 +234,12 @@ impl AppState {
                 .with_memory_candidate_extractor(Arc::new(
                     agent_runtime::memory_lifecycle::ExplicitMemoryCandidateExtractor,
                 ));
+        }
+        if let Some(tasks) = &task_tools {
+            runner = runner.with_task_tools(tasks.clone());
+        }
+        if let Some(automation) = &automation_tools {
+            runner = runner.with_automation_tools(automation.clone());
         }
         if let Some(connectors) = &connector_tools {
             runner = runner.with_connector_tools(connectors.clone());
@@ -253,6 +259,8 @@ impl AppState {
             conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
             turn_coordinator: crate::turn_api::TurnCoordinator::default(),
             memory_tools,
+            task_tools,
+            automation_tools,
             connector_tools,
             mail_actions: None,
             automation: None,
@@ -306,6 +314,8 @@ impl AppState {
             conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
             turn_coordinator: crate::turn_api::TurnCoordinator::default(),
             memory_tools: None,
+            task_tools: None,
+            automation_tools: None,
             connector_tools: None,
             mail_actions: None,
             automation: None,
@@ -339,6 +349,22 @@ impl AppState {
     ) -> Self {
         self.connector_tools = Some(connector_tools);
         self.mail_actions = Some(mail_actions);
+        self
+    }
+
+    pub fn with_task_foundation(
+        mut self,
+        task_tools: agent_runtime::task_tools::TaskToolRuntime,
+    ) -> Self {
+        self.task_tools = Some(task_tools);
+        self
+    }
+
+    pub fn with_automation_foundation(
+        mut self,
+        automation_tools: agent_runtime::automation_tools::AutomationToolRuntime,
+    ) -> Self {
+        self.automation_tools = Some(automation_tools);
         self
     }
 
@@ -518,6 +544,7 @@ pub fn router_for_transport(
         .merge(crate::turn_api::routes());
     router = router
         .merge(crate::foundation_api::router())
+        .merge(crate::task_api::router())
         .merge(crate::automation_api::router());
     if let Some(owner_routes) = crate::owner_api::router(&state) {
         router = router.merge(owner_routes);
@@ -600,6 +627,12 @@ impl AppState {
         if let Some(memory) = &self.memory_tools {
             registry = registry.try_with_memory_tools(memory.clone())?;
         }
+        if let Some(tasks) = &self.task_tools {
+            registry = registry.try_with_task_tools(tasks.clone())?;
+        }
+        if let Some(automation) = &self.automation_tools {
+            registry = registry.try_with_automation_tools(automation.clone())?;
+        }
         if let Some(connectors) = &self.connector_tools {
             registry = registry.try_with_connector_tools(connectors.clone())?;
         }
@@ -608,6 +641,16 @@ impl AppState {
 
     pub(crate) fn memory_tools(&self) -> Option<agent_runtime::memory_tools::MemoryToolRuntime> {
         self.memory_tools.clone()
+    }
+
+    pub(crate) fn task_tools(&self) -> Option<agent_runtime::task_tools::TaskToolRuntime> {
+        self.task_tools.clone()
+    }
+
+    pub(crate) fn automation_tools(
+        &self,
+    ) -> Option<agent_runtime::automation_tools::AutomationToolRuntime> {
+        self.automation_tools.clone()
     }
 
     pub(crate) fn connector_tools(
@@ -808,6 +851,12 @@ async fn run_agent_turn_internal(
                     agent_runtime::memory_lifecycle::ExplicitMemoryCandidateExtractor,
                 ));
         }
+        if let Some(tasks) = &state.task_tools {
+            runner = runner.with_task_tools(tasks.clone());
+        }
+        if let Some(automation) = &state.automation_tools {
+            runner = runner.with_automation_tools(automation.clone());
+        }
         if let Some(connectors) = &state.connector_tools {
             runner = runner.with_connector_tools(connectors.clone());
         }
@@ -921,3 +970,7 @@ mod automation_tests;
 #[cfg(test)]
 #[path = "api_foundation_tests.rs"]
 mod foundation_tests;
+
+#[cfg(test)]
+#[path = "api_task_tests.rs"]
+mod task_tests;

@@ -1,10 +1,9 @@
 use crate::api::{ApiError, AppState};
 use agent_runtime::automation::{
-    NotificationDeliveryOutcome, NotificationRecord, NotificationScope, NotificationStore,
+    NotificationDeliveryOutcome, NotificationRecord, NotificationScope, NotificationStatus,
+    NotificationStore, QuietHours,
 };
-use agent_runtime::scheduler::{
-    ScheduledJob, ScheduledJobRequest, ScheduledJobStatus, SchedulerStore,
-};
+use agent_runtime::scheduler::{MisfirePolicy, ScheduleSpec, ScheduledJob, ScheduledJobStatus};
 use agent_runtime::storage::Storage;
 use axum::{
     Json, Router,
@@ -13,18 +12,17 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use serde::Deserialize;
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub(crate) struct AutomationApiState {
-    scheduler: SchedulerStore,
     notifications: NotificationStore,
 }
 
 impl AutomationApiState {
     pub(crate) async fn from_storage(storage: &Storage) -> anyhow::Result<Self> {
         Ok(Self {
-            scheduler: SchedulerStore::from_storage(storage).await?,
             notifications: NotificationStore::from_storage(storage).await?,
         })
     }
@@ -40,10 +38,18 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
             "/foundation/schedules/{job_id}",
             get(get_schedule).post(set_schedule_status),
         )
+        .route(
+            "/foundation/notifications",
+            get(list_notifications).post(enqueue_notification),
+        )
         .route("/foundation/notifications/claim", get(claim_notifications))
         .route(
             "/foundation/notifications/{notification_id}",
-            post(finish_notification),
+            get(get_notification).post(finish_notification),
+        )
+        .route(
+            "/foundation/notifications/{notification_id}/cancel",
+            post(cancel_notification),
         )
 }
 
@@ -59,6 +65,38 @@ struct ScheduleListQuery {
 struct SetScheduleStatusRequest {
     expected_version: i64,
     status: ScheduledJobStatus,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CreateScheduleRequest {
+    name: String,
+    schedule: ScheduleSpec,
+    misfire: MisfirePolicy,
+    #[serde(default)]
+    payload: Value,
+    idempotency_key: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NotificationListQuery {
+    status: Option<NotificationStatus>,
+    #[serde(default = "default_limit")]
+    limit: usize,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct EnqueueNotificationRequest {
+    channel: String,
+    title: String,
+    body: String,
+    dedupe_key: String,
+    not_before: chrono::DateTime<Utc>,
+    quiet_hours: Option<QuietHours>,
+    #[serde(default)]
+    data: Value,
 }
 
 #[derive(Deserialize)]
@@ -82,57 +120,46 @@ async fn list_schedules(
     Query(query): Query<ScheduleListQuery>,
 ) -> Result<Json<Vec<ScheduledJob>>, ApiError> {
     validate_limit(query.limit)?;
-    state
-        .automation()
-        .ok_or(ApiError::NotFound("Automation Foundation is disabled"))?
-        .scheduler
-        .list_jobs(
-            &state.app_prompt().identity.app_id,
-            "local",
-            "local-user",
-            query.limit,
-        )
+    automation_runtime(&state)?
+        .execute("schedule_list", json!({"limit":query.limit}))
         .await
+        .map_err(map_automation_error)
+        .and_then(decode)
         .map(Json)
-        .map_err(ApiError::Internal)
 }
 
 async fn create_schedule(
     State(state): State<Arc<AppState>>,
-    Json(request): Json<ScheduledJobRequest>,
+    Json(request): Json<CreateScheduleRequest>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
-    if request.app_id != state.app_prompt().identity.app_id
-        || request.tenant_id != "local"
-        || request.user_id != "local-user"
-    {
-        return Err(ApiError::BadRequest(
-            "schedule scope does not match the active App",
-        ));
-    }
-    state
-        .automation()
-        .ok_or(ApiError::NotFound("Automation Foundation is disabled"))?
-        .scheduler
-        .create_job(request, Utc::now())
+    automation_runtime(&state)?
+        .execute(
+            "schedule_create",
+            json!({
+                "name":request.name,
+                "schedule":request.schedule,
+                "misfire":request.misfire,
+                "payload":request.payload,
+                "idempotencyKey":request.idempotency_key,
+            }),
+        )
         .await
+        .map_err(map_automation_error)
+        .and_then(decode)
         .map(Json)
-        .map_err(ApiError::Internal)
 }
 
 async fn get_schedule(
     State(state): State<Arc<AppState>>,
     Path(job_id): Path<String>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
-    let job = state
-        .automation()
-        .ok_or(ApiError::NotFound("Automation Foundation is disabled"))?
-        .scheduler
-        .get_job(&job_id)
+    let value = automation_runtime(&state)?
+        .execute("schedule_get", json!({"id":job_id}))
         .await
-        .map_err(ApiError::Internal)?
-        .ok_or(ApiError::NotFound("scheduled job not found"))?;
-    ensure_job_scope(&state, &job)?;
-    Ok(Json(job))
+        .map_err(map_automation_error)?;
+    let job: Option<ScheduledJob> = decode(value)?;
+    job.map(Json)
+        .ok_or(ApiError::NotFound("scheduled job not found"))
 }
 
 async fn set_schedule_status(
@@ -140,36 +167,84 @@ async fn set_schedule_status(
     Path(job_id): Path<String>,
     Json(request): Json<SetScheduleStatusRequest>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
-    let automation = state
-        .automation()
-        .ok_or(ApiError::NotFound("Automation Foundation is disabled"))?;
-    let current = automation
-        .scheduler
-        .get_job(&job_id)
-        .await
-        .map_err(ApiError::Internal)?
-        .ok_or(ApiError::NotFound("scheduled job not found"))?;
-    ensure_job_scope(&state, &current)?;
-    let updated = automation
-        .scheduler
-        .set_status(
-            &job_id,
-            request.expected_version,
-            request.status,
-            Utc::now(),
+    let value = automation_runtime(&state)?
+        .execute(
+            "schedule_set_status",
+            json!({
+                "id":job_id,
+                "expectedVersion":request.expected_version,
+                "status":request.status,
+            }),
         )
         .await
-        .map_err(ApiError::Internal)?;
-    if !updated {
-        return Err(ApiError::BadRequest("scheduled job version conflict"));
-    }
-    automation
-        .scheduler
-        .get_job(&job_id)
-        .await
-        .map_err(ApiError::Internal)?
-        .map(Json)
+        .map_err(map_automation_error)?;
+    let job: Option<ScheduledJob> = decode(value)?;
+    job.map(Json)
         .ok_or(ApiError::NotFound("scheduled job not found"))
+}
+
+async fn list_notifications(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<NotificationListQuery>,
+) -> Result<Json<Vec<NotificationRecord>>, ApiError> {
+    let value = automation_runtime(&state)?
+        .execute(
+            "notification_list",
+            json!({"status":query.status,"limit":query.limit}),
+        )
+        .await
+        .map_err(map_automation_error)?;
+    decode(value).map(Json)
+}
+
+async fn get_notification(
+    State(state): State<Arc<AppState>>,
+    Path(notification_id): Path<String>,
+) -> Result<Json<NotificationRecord>, ApiError> {
+    let value = automation_runtime(&state)?
+        .execute("notification_get", json!({"id":notification_id}))
+        .await
+        .map_err(map_automation_error)?;
+    let record: Option<NotificationRecord> = decode(value)?;
+    record
+        .map(Json)
+        .ok_or(ApiError::NotFound("notification not found"))
+}
+
+async fn enqueue_notification(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<EnqueueNotificationRequest>,
+) -> Result<Json<NotificationRecord>, ApiError> {
+    let value = automation_runtime(&state)?
+        .execute(
+            "notification_enqueue",
+            json!({
+                "channel":request.channel,
+                "title":request.title,
+                "body":request.body,
+                "dedupeKey":request.dedupe_key,
+                "notBefore":request.not_before,
+                "quietHours":request.quiet_hours,
+                "data":request.data,
+            }),
+        )
+        .await
+        .map_err(map_automation_error)?;
+    decode(value).map(Json)
+}
+
+async fn cancel_notification(
+    State(state): State<Arc<AppState>>,
+    Path(notification_id): Path<String>,
+) -> Result<Json<NotificationRecord>, ApiError> {
+    let value = automation_runtime(&state)?
+        .execute("notification_cancel", json!({"id":notification_id}))
+        .await
+        .map_err(map_automation_error)?;
+    let record: Option<NotificationRecord> = decode(value)?;
+    record
+        .map(Json)
+        .ok_or(ApiError::NotFound("notification not found"))
 }
 
 async fn claim_notifications(
@@ -223,14 +298,31 @@ async fn finish_notification(
         .map_err(ApiError::Internal)
 }
 
-fn ensure_job_scope(state: &AppState, job: &ScheduledJob) -> Result<(), ApiError> {
-    if job.request.app_id == state.app_prompt().identity.app_id
-        && job.request.tenant_id == "local"
-        && job.request.user_id == "local-user"
+fn automation_runtime(
+    state: &AppState,
+) -> Result<agent_runtime::automation_tools::AutomationToolRuntime, ApiError> {
+    state
+        .automation_tools()
+        .ok_or(ApiError::NotFound("Automation Foundation is disabled"))
+}
+
+fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ApiError> {
+    serde_json::from_value(value).map_err(|error| ApiError::Internal(error.into()))
+}
+
+fn map_automation_error(error: anyhow::Error) -> ApiError {
+    let message = error.to_string();
+    if message.contains("version conflict") || message.contains("idempotency conflict") {
+        ApiError::Conflict("automation state conflict")
+    } else if message.contains("invalid")
+        || message.contains("required")
+        || message.contains("too long")
+        || message.contains("cannot be cancelled")
+        || message.contains("exceeds limit")
     {
-        Ok(())
+        ApiError::BadRequest("automation request is invalid")
     } else {
-        Err(ApiError::NotFound("scheduled job not found"))
+        ApiError::Internal(error)
     }
 }
 

@@ -194,9 +194,102 @@ impl NotificationStore {
         .bind(now.to_rfc3339())
         .execute(&self.pool)
         .await?;
-        self.get_by_key(&request)
+        let record = self
+            .get_by_key(&request)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("notification record was not persisted"))
+            .ok_or_else(|| anyhow::anyhow!("notification record was not persisted"))?;
+        anyhow::ensure!(
+            same_deduplicated_request(&record.request, &request),
+            "notification deduplication conflict"
+        );
+        Ok(record)
+    }
+
+    pub async fn list_for_scope(
+        &self,
+        scope: NotificationScope<'_>,
+        status: Option<NotificationStatus>,
+        limit: usize,
+    ) -> anyhow::Result<Vec<NotificationRecord>> {
+        validate_notification_scope(scope.app_id, scope.tenant_id, scope.user_id)?;
+        anyhow::ensure!(
+            (1..=100).contains(&limit),
+            "notification list limit is invalid"
+        );
+        let rows = if let Some(status) = status {
+            sqlx::query(
+                "SELECT * FROM notification_outbox WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND status = ? ORDER BY not_before DESC, notification_id LIMIT ?",
+            )
+            .bind(scope.app_id)
+            .bind(scope.tenant_id)
+            .bind(scope.user_id)
+            .bind(status.as_str())
+            .bind(limit as i64)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query(
+                "SELECT * FROM notification_outbox WHERE app_id = ? AND tenant_id = ? AND user_id = ? ORDER BY not_before DESC, notification_id LIMIT ?",
+            )
+            .bind(scope.app_id)
+            .bind(scope.tenant_id)
+            .bind(scope.user_id)
+            .bind(limit as i64)
+            .fetch_all(&self.pool)
+            .await?
+        };
+        rows.into_iter().map(notification_from_row).collect()
+    }
+
+    pub async fn get_for_scope(
+        &self,
+        scope: NotificationScope<'_>,
+        notification_id: &str,
+    ) -> anyhow::Result<Option<NotificationRecord>> {
+        validate_notification_scope(scope.app_id, scope.tenant_id, scope.user_id)?;
+        validate_uuid(notification_id, "notification ID")?;
+        let row = sqlx::query(
+            "SELECT * FROM notification_outbox WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND notification_id = ?",
+        )
+        .bind(scope.app_id)
+        .bind(scope.tenant_id)
+        .bind(scope.user_id)
+        .bind(notification_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(notification_from_row).transpose()
+    }
+
+    pub async fn cancel_for_scope(
+        &self,
+        scope: NotificationScope<'_>,
+        notification_id: &str,
+        now: DateTime<Utc>,
+    ) -> anyhow::Result<Option<NotificationRecord>> {
+        let Some(current) = self.get_for_scope(scope, notification_id).await? else {
+            return Ok(None);
+        };
+        if current.status == NotificationStatus::Cancelled {
+            return Ok(Some(current));
+        }
+        anyhow::ensure!(
+            matches!(
+                current.status,
+                NotificationStatus::Pending | NotificationStatus::Failed
+            ),
+            "notification cannot be cancelled after delivery begins"
+        );
+        sqlx::query(
+            "UPDATE notification_outbox SET status = 'cancelled', updated_at = ? WHERE app_id = ? AND tenant_id = ? AND user_id = ? AND notification_id = ? AND status IN ('pending', 'failed')",
+        )
+        .bind(now.to_rfc3339())
+        .bind(scope.app_id)
+        .bind(scope.tenant_id)
+        .bind(scope.user_id)
+        .bind(notification_id)
+        .execute(&self.pool)
+        .await?;
+        self.get_for_scope(scope, notification_id).await
     }
 
     pub async fn claim_due(
@@ -677,6 +770,26 @@ fn validate_notification_scope(app_id: &str, tenant_id: &str, user_id: &str) -> 
         anyhow::ensure!(value.len() <= 512, "notification scope is too long");
     }
     Ok(())
+}
+
+fn validate_uuid(value: &str, label: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(Uuid::parse_str(value).is_ok(), "{label} is invalid");
+    Ok(())
+}
+
+fn same_deduplicated_request(
+    existing: &NotificationRequest,
+    requested: &NotificationRequest,
+) -> bool {
+    existing.app_id == requested.app_id
+        && existing.tenant_id == requested.tenant_id
+        && existing.user_id == requested.user_id
+        && existing.channel == requested.channel
+        && existing.title == requested.title
+        && existing.body == requested.body
+        && existing.dedupe_key == requested.dedupe_key
+        && existing.quiet_hours == requested.quiet_hours
+        && existing.data == requested.data
 }
 
 fn notification_from_row(row: sqlx::sqlite::SqliteRow) -> anyhow::Result<NotificationRecord> {

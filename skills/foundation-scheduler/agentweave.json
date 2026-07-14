@@ -5,11 +5,16 @@
   "displayName": "Scheduler",
   "kind": "host_tools_only",
   "package": { "includeInstructions": true, "includeRuntime": false },
-  "compatibility": { "platforms": ["android", "desktop", "server"] },
+  "compatibility": { "platforms": ["desktop", "server"] },
   "requires": {
     "packages": [],
     "capabilities": ["host-tools", "scheduler"],
-    "runtimeTools": ["agentweave.host.scheduler/v1"],
+    "runtimeTools": [
+      "schedule_list",
+      "schedule_get",
+      "schedule_create",
+      "schedule_set_status"
+    ],
     "connectors": []
   }
 }

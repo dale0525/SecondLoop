@@ -91,6 +91,49 @@ async fn one_shot_survives_restart_and_is_claimed_exactly_once() {
 }
 
 #[tokio::test]
+async fn schedule_creation_is_idempotent_and_scope_bound() {
+    let store = SchedulerStore::connect("sqlite::memory:").await.unwrap();
+    let now = Utc::now();
+    let scheduled_request = request(
+        ScheduleSpec::OneShot {
+            at: now + Duration::hours(1),
+        },
+        MisfirePolicy::FireOnce,
+    );
+    let first = store
+        .create_job_idempotent(scheduled_request.clone(), "schedule-1", now)
+        .await
+        .unwrap();
+    let repeated = store
+        .create_job_idempotent(scheduled_request, "schedule-1", now)
+        .await
+        .unwrap();
+    assert_eq!(first.id, repeated.id);
+    assert!(
+        store
+            .get_job_for_scope("other", "local", "user", &first.id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    let conflicting = request(
+        ScheduleSpec::OneShot {
+            at: now + Duration::hours(2),
+        },
+        MisfirePolicy::FireOnce,
+    );
+    assert!(
+        store
+            .create_job_idempotent(conflicting, "schedule-1", now)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("idempotency conflict")
+    );
+}
+
+#[tokio::test]
 async fn catch_up_is_bounded_and_run_ids_are_stable() {
     let store = SchedulerStore::connect("sqlite::memory:").await.unwrap();
     let now = Utc::now();

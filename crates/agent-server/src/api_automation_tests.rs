@@ -1,5 +1,6 @@
 use super::*;
 use agent_runtime::automation::{NotificationRequest, NotificationStore};
+use agent_runtime::automation_tools::{AutomationScope, AutomationToolRuntime};
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode, header};
 use chrono::{Duration, Utc};
@@ -28,7 +29,14 @@ async fn automation_api_manages_scoped_schedules_and_notification_delivery() {
         )
         .await
         .unwrap();
+    let tools = AutomationToolRuntime::from_storage(
+        &storage,
+        AutomationScope::new("dev.agentweave.default", "local", "local-user").unwrap(),
+    )
+    .await
+    .unwrap();
     let state = AppState::new(storage.clone())
+        .with_automation_foundation(tools)
         .with_default_automation(&storage)
         .await
         .unwrap();
@@ -39,16 +47,14 @@ async fn automation_api_manages_scoped_schedules_and_notification_delivery() {
         .oneshot(json_request(
             "/foundation/schedules",
             json!({
-                "app_id": "dev.agentweave.default",
-                "tenant_id": "local",
-                "user_id": "local-user",
                 "name": "Morning brief",
                 "schedule": {
                     "kind": "one_shot",
                     "at": (Utc::now() + Duration::hours(1)).to_rfc3339()
                 },
                 "misfire": {"kind": "fire_once"},
-                "payload": {"task": "briefing"}
+                "payload": {"task": "briefing"},
+                "idempotencyKey": "morning-brief-1"
             }),
         ))
         .await
@@ -77,6 +83,35 @@ async fn automation_api_manages_scoped_schedules_and_notification_delivery() {
     assert_eq!(paused.status(), StatusCode::OK);
     assert_eq!(read_json(paused).await["status"], "paused");
 
+    let queued = app
+        .clone()
+        .oneshot(json_request(
+            "/foundation/notifications",
+            json!({
+                "channel":"desktop",
+                "title":"Follow up",
+                "body":"Prepare the response",
+                "dedupeKey":"follow-up-1",
+                "notBefore":(Utc::now() + Duration::hours(2)).to_rfc3339(),
+                "data":{}
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(queued.status(), StatusCode::OK);
+    let queued = read_json(queued).await;
+    let queued_id = queued["notification_id"].as_str().unwrap();
+    let cancelled = app
+        .clone()
+        .oneshot(json_request(
+            &format!("/foundation/notifications/{queued_id}/cancel"),
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(cancelled.status(), StatusCode::OK);
+    assert_eq!(read_json(cancelled).await["status"], "cancelled");
+
     let claimed = app
         .clone()
         .oneshot(get_request(
@@ -104,7 +139,7 @@ async fn automation_api_manages_scoped_schedules_and_notification_delivery() {
 }
 
 #[tokio::test]
-async fn automation_api_rejects_foreign_schedule_scope_and_invalid_limits() {
+async fn automation_api_rejects_caller_scope_and_isolates_foreign_records() {
     let storage = Storage::connect("sqlite::memory:").await.unwrap();
     let notifications = NotificationStore::from_storage(&storage).await.unwrap();
     notifications
@@ -125,7 +160,14 @@ async fn automation_api_rejects_foreign_schedule_scope_and_invalid_limits() {
         )
         .await
         .unwrap();
+    let tools = AutomationToolRuntime::from_storage(
+        &storage,
+        AutomationScope::new("dev.agentweave.default", "local", "local-user").unwrap(),
+    )
+    .await
+    .unwrap();
     let state = AppState::new(storage.clone())
+        .with_automation_foundation(tools)
         .with_default_automation(&storage)
         .await
         .unwrap();
@@ -145,12 +187,13 @@ async fn automation_api_rejects_foreign_schedule_scope_and_invalid_limits() {
                     "at": (Utc::now() + Duration::hours(1)).to_rfc3339()
                 },
                 "misfire": {"kind": "fire_once"},
-                "payload": {}
+                "payload": {},
+                "idempotencyKey":"foreign-1"
             }),
         ))
         .await
         .unwrap();
-    assert_eq!(foreign.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(foreign.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     let invalid_limit = app
         .clone()

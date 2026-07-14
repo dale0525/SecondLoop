@@ -60,6 +60,8 @@ pub struct TurnRunner<C> {
     app_prompt: AppPromptConfig,
     memory: Option<crate::memory_tools::MemoryToolRuntime>,
     memory_candidate_extractor: Option<Arc<dyn crate::memory_lifecycle::MemoryCandidateExtractor>>,
+    task_tools: Option<crate::task_tools::TaskToolRuntime>,
+    automation_tools: Option<crate::automation_tools::AutomationToolRuntime>,
     connector_tools: Option<crate::connector_tools::ConnectorToolRuntime>,
 }
 
@@ -108,6 +110,8 @@ where
             app_prompt: AppPromptConfig::default(),
             memory: None,
             memory_candidate_extractor: None,
+            task_tools: None,
+            automation_tools: None,
             connector_tools: None,
         }
     }
@@ -140,6 +144,19 @@ where
         connector_tools: crate::connector_tools::ConnectorToolRuntime,
     ) -> Self {
         self.connector_tools = Some(connector_tools);
+        self
+    }
+
+    pub fn with_task_tools(mut self, task_tools: crate::task_tools::TaskToolRuntime) -> Self {
+        self.task_tools = Some(task_tools);
+        self
+    }
+
+    pub fn with_automation_tools(
+        mut self,
+        automation_tools: crate::automation_tools::AutomationToolRuntime,
+    ) -> Self {
+        self.automation_tools = Some(automation_tools);
         self
     }
 
@@ -200,6 +217,12 @@ where
         )?;
         if let Some(memory) = &self.memory {
             tools = tools.try_with_memory_tools(memory.clone())?;
+        }
+        if let Some(tasks) = &self.task_tools {
+            tools = tools.try_with_task_tools(tasks.clone())?;
+        }
+        if let Some(automation) = &self.automation_tools {
+            tools = tools.try_with_automation_tools(automation.clone())?;
         }
         if let Some(connectors) = &self.connector_tools {
             tools = tools.try_with_connector_tools(connectors.clone())?;
