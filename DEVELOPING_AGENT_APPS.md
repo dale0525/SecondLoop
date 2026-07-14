@@ -60,7 +60,17 @@ pixi run scaffold-agent-app -- --validate output/my-agent
 
 Validation rejects future schemas, unknown fields, path escapes, symbolic links, missing packages, platform incompatibilities, undeclared dependencies, and secrets embedded in the Manifest.
 
-### 2.1 Choose themes and fonts
+### 2.1 Discover trusted Host features
+
+After an App Manifest has been loaded and validated against the active Runtime inventory, `ResolvedAgentApp::host_discovery()` returns a versioned, serializable snapshot for Host feature decisions. The snapshot contains the trusted App identity and public branding, the effective platform and Runtime version, the Manifest content hash, declared `features`, validated package/capability/runtime-tool/Connector requirements, and App policies.
+
+Hosts use this snapshot to decide whether optional surfaces such as Memory, accounts, approvals, or Skill management should be reachable. Until discovery succeeds, a Host must fail closed and expose only its minimum safe surface. Unknown feature identifiers remain in the snapshot for forward compatibility, but a Host ignores identifiers it does not understand.
+
+Discovery is not a permission grant. The `features` array can describe product behavior and presentation, while capabilities, policies, Actor grants, and Runtime state remain the authority for access and external side effects. A Host must not infer permissions from Prompt text, package directory names, branding, or an unverified Renderer configuration.
+
+The discovery wire contract has its own schema version so Hosts can reject incompatible future snapshots without weakening Runtime compatibility checks. The Manifest hash lets a Host verify that presentation decisions and the active App instructions came from the same resolved package.
+
+### 2.2 Choose themes and fonts
 
 The Desktop Host reads the optional `appearance` configuration from `agent-app.json`. `themes.builtins` determines which built-in themes are visible in the final App, while `defaultTheme` determines the theme used on first launch. New scaffolds include the same 19 color themes as the current VS Code 1.128 release and use `vscode.dark-2026` by default.
 
@@ -104,7 +114,7 @@ AGENTWEAVE_APP_ROOT=output/my-agent pixi run npm --prefix apps/desktop run build
 
 Themes and fonts contribute to the App content hash. Regenerate and validate release artifacts after changing any related file.
 
-### 2.2 Manage interface languages
+### 2.3 Manage interface languages
 
 `localization` declares the interface languages an App can provide, the default language, and the corresponding UTF-8 JSON dictionaries. Dictionaries use stable flat keys so they are easy to review, merge, and process with translation tools:
 

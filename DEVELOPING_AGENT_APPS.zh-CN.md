@@ -60,7 +60,17 @@ pixi run scaffold-agent-app -- --validate output/my-agent
 
 校验会拒绝未来 schema、未知字段、路径逃逸、符号链接、缺失 package、平台不兼容、未声明依赖和嵌入 Manifest 的 secret。
 
-### 2.1 选择主题与字体
+### 2.1 发现可信 Host 能力
+
+App Manifest 完成加载并通过当前 Runtime inventory 校验后，`ResolvedAgentApp::host_discovery()` 会返回一个带版本、可序列化的快照，供 Host 决定功能入口。快照包含可信 App 身份与公开品牌信息、有效平台和 Runtime 版本、Manifest 内容哈希、声明的 `features`、已经校验的 package/capability/runtime tool/Connector 需求，以及 App policies。
+
+Host 使用该快照判断 Memory、账号、审批或 Skill 管理等可选界面是否可达。在 discovery 成功前，Host 必须 fail closed，只暴露最小安全界面。未知 feature identifier 会保留在快照中以支持向前兼容，但 Host 必须忽略自己不理解的 identifier。
+
+Discovery 不是权限授予。`features` 数组可以描述产品行为和界面呈现，但访问与外部副作用仍以 capabilities、policies、Actor grants 和 Runtime 状态为准。Host 不得根据 Prompt 文本、package 目录名、品牌信息或未经验证的 Renderer 配置推断权限。
+
+Discovery wire contract 使用独立 schema version，使 Host 可以拒绝不兼容的未来快照，同时不削弱 Runtime compatibility 校验。Manifest hash 用于确认界面决策与当前 App instructions 来自同一个已解析 package。
+
+### 2.2 选择主题与字体
 
 Desktop Host 读取 `agent-app.json` 的可选 `appearance` 配置。`themes.builtins` 决定最终 App 中可见的内置主题，`defaultTheme` 决定首次启动时使用的主题。新脚手架预置与当前 VS Code 1.128 相同的 19 个颜色主题，并默认使用 `vscode.dark-2026`。
 
@@ -104,7 +114,7 @@ AGENTWEAVE_APP_ROOT=output/my-agent pixi run npm --prefix apps/desktop run build
 
 主题与字体会进入 App 内容哈希。修改任何相关文件后，都应重新生成并验证发布产物。
 
-### 2.2 管理界面语言
+### 2.3 管理界面语言
 
 `localization` 声明 App 可提供的界面语言、默认语言和对应的 UTF-8 JSON 词典。词典使用稳定的扁平 key，便于审阅、合并和交给翻译工具处理：
 
