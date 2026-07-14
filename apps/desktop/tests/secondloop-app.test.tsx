@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "../src/renderer/App";
 import type { AgentAppHostDiscovery } from "../src/shared/hostBootstrap";
@@ -8,6 +8,16 @@ import {
   hostDiscoveryFixture,
   installHostBootstrap,
 } from "./hostBootstrapFixture";
+
+class TestResizeObserver implements ResizeObserver {
+  disconnect(): void {}
+  observe(): void {}
+  unobserve(): void {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", TestResizeObserver);
+});
 
 describe("SecondLoop product shell", () => {
   afterEach(() => {
@@ -127,6 +137,44 @@ describe("SecondLoop product shell", () => {
       && init?.method === "POST"
     ))).toHaveLength(1);
   });
+
+  it("shows authoritative tasks and schedules and completes a task once", async () => {
+    installSecondLoopBootstrap();
+    const fetch = stubTodayWorkflowFetch();
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByText("Prepare the briefing")).toBeInTheDocument();
+    expect(screen.getByText("Morning reminder")).toBeInTheDocument();
+    expect(screen.getByText("today.sourceTasks · today.sourceStatus.ready")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "today.completeTask" }));
+
+    await waitFor(() => expect(fetch.mock.calls.some(([input, init]) => (
+      String(input).includes("/foundation/tasks/task-1/status")
+      && init?.method === "POST"
+    ))).toBe(true));
+    expect(screen.queryByText("Prepare the briefing")).not.toBeInTheDocument();
+  });
+
+  it("captures one task and one independently scheduled reminder", async () => {
+    installSecondLoopBootstrap();
+    const fetch = stubTodayWorkflowFetch();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "today.addTask" }));
+    await user.type(screen.getByPlaceholderText("today.taskPlaceholder"), "Reply to Ada");
+    await user.click(screen.getByRole("button", { name: "today.saveTask" }));
+
+    await waitFor(() => {
+      expect(fetch.mock.calls.filter(([input, init]) => (
+        String(input).endsWith("/foundation/tasks") && init?.method === "POST"
+      ))).toHaveLength(1);
+      expect(fetch.mock.calls.filter(([input, init]) => (
+        String(input).endsWith("/foundation/schedules") && init?.method === "POST"
+      ))).toHaveLength(1);
+    });
+  });
 });
 
 function installSecondLoopBootstrap(): void {
@@ -145,10 +193,12 @@ function installSecondLoopBootstrap(): void {
 }
 
 function stubFoundationFetch(): void {
-  vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  })));
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+    const url = String(input);
+    return jsonResponse(url.includes("/foundation/tasks?")
+      ? { tasks: [], nextCursor: null }
+      : []);
+  }));
 }
 
 function stubVerticalSliceFetch() {
@@ -168,10 +218,75 @@ function stubVerticalSliceFetch() {
       });
     }
     if (url.endsWith("/foundation/actions")) return jsonResponse([actionFixture()]);
+    if (url.includes("/foundation/tasks?")) return jsonResponse({ tasks: [], nextCursor: null });
+    if (url.includes("/foundation/schedules?")) return jsonResponse([]);
     throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
   });
   vi.stubGlobal("fetch", fetch);
   return fetch;
+}
+
+function stubTodayWorkflowFetch() {
+  const due = new Date(Date.now() + 30 * 60_000).toISOString();
+  const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes("/foundation/tasks?")) {
+      return jsonResponse({ tasks: [taskFixture(due)], nextCursor: null });
+    }
+    if (url.includes("/foundation/schedules?")) return jsonResponse([scheduleFixture(due)]);
+    if (url.endsWith("/foundation/tasks/task-1/status") && init?.method === "POST") {
+      return jsonResponse({ ...taskFixture(due), status: "completed", version: 2 });
+    }
+    if (url.endsWith("/foundation/tasks") && init?.method === "POST") {
+      return jsonResponse({ ...taskFixture(due), id: "task-created" });
+    }
+    if (url.endsWith("/foundation/schedules") && init?.method === "POST") {
+      return jsonResponse({ ...scheduleFixture(due), id: "schedule-created" });
+    }
+    if (url.endsWith("/foundation/actions")) return jsonResponse([]);
+    if (url.endsWith("/foundation/mail/accounts")) return jsonResponse([]);
+    throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
+  });
+  vi.stubGlobal("fetch", fetch);
+  return fetch;
+}
+
+function taskFixture(dueAt: string) {
+  return {
+    id: "task-1",
+    content: {
+      title: "Prepare the briefing",
+      notes: null,
+      dueAt,
+      timezone: "Asia/Shanghai",
+      recurrence: null,
+      priority: "high",
+      tags: [],
+    },
+    status: "open",
+    version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    completedAt: null,
+  };
+}
+
+function scheduleFixture(nextRunAt: string) {
+  return {
+    id: "schedule-1",
+    request: {
+      app_id: "com.secondloop.secretary",
+      tenant_id: "local",
+      user_id: "local-user",
+      name: "Morning reminder",
+      schedule: { kind: "one_shot", at: nextRunAt },
+      misfire: { kind: "fire_once" },
+      payload: {},
+    },
+    status: "active",
+    next_run_at: nextRunAt,
+    version: 1,
+  };
 }
 
 function accountFixture() {

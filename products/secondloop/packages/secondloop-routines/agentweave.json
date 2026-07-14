@@ -14,9 +14,28 @@
     ]
   },
   "requires": {
-    "packages": [],
-    "capabilities": [],
-    "runtimeTools": [],
+    "packages": [
+      "agentweave.foundation.tasks",
+      "agentweave.foundation.scheduler",
+      "agentweave.foundation.notifications"
+    ],
+    "capabilities": ["task-provider", "scheduler", "host-tools"],
+    "runtimeTools": [
+      "task_list",
+      "task_get",
+      "task_create",
+      "task_update",
+      "task_set_status",
+      "task_delete",
+      "schedule_list",
+      "schedule_get",
+      "schedule_create",
+      "schedule_set_status",
+      "notification_list",
+      "notification_get",
+      "notification_enqueue",
+      "notification_cancel"
+    ],
     "connectors": []
   }
 }

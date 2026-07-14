@@ -135,7 +135,7 @@
 
 .today-header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
 }
@@ -158,12 +158,30 @@
   text-transform: uppercase;
 }
 
+.today-header-actions {
+  display: grid;
+  min-width: max-content;
+  justify-items: end;
+  gap: 10px;
+}
+
+.today-capture-button { min-height: 44px; }
+
+.today-source-list {
+  display: flex;
+  min-width: max-content;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .today-source-state {
   display: flex;
   flex: 0 0 auto;
+  min-width: max-content;
   align-items: center;
-  gap: 8px;
-  padding: 8px 11px;
+  gap: 6px;
+  padding: 6px 9px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-surface);
@@ -171,14 +189,18 @@
   white-space: nowrap;
 }
 
-.today-source-state > span {
-  width: 8px;
-  height: 8px;
+.today-source-state > i {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: var(--color-danger);
 }
 
-.today-source-state > span.ready { background: var(--color-primary-text); }
+.today-source-state > span { flex: 0 0 auto; }
+.today-source-state.is-ready > i { background: var(--color-primary-text); }
+.today-source-state.is-missing > i { background: var(--color-warning); }
+.today-source-state.is-error { border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-border)); }
 
 .today-grid {
   display: grid;
@@ -215,8 +237,54 @@
 .today-card-icon { display: inline-grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: var(--color-primary-soft); color: var(--color-primary-text); }
 .today-commitment-mark { font-size: 14px; font-weight: 800; }
 .today-card-body { min-height: 76px; padding-top: 14px; }
-.today-empty { margin: 0; color: var(--color-text-subtle); font-size: 13px; line-height: 1.6; }
+.today-empty { display: grid; justify-items: start; gap: 6px; color: var(--color-text-subtle); font-size: 13px; line-height: 1.6; }
+.today-empty p { margin: 0; }
+.today-empty button { min-height: 36px; }
 .today-loading { display: flex; align-items: center; gap: 8px; color: var(--color-text-muted); font-size: 13px; }
+
+.today-record-list { display: grid; }
+
+.today-record-row {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 0;
+}
+
+.today-record-row + .today-record-row { border-top: 1px solid var(--color-border); }
+
+.today-complete-task,
+.today-schedule-mark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.today-complete-task {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-text);
+  cursor: pointer;
+}
+
+.today-complete-task > span {
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid var(--color-text-subtle);
+  border-radius: 50%;
+}
+
+.today-complete-task:hover { background: var(--color-primary-soft); }
+.today-schedule-mark { background: var(--color-primary-soft); color: var(--color-primary-text); }
+.today-record-copy { min-width: 0; }
+.today-record-copy strong,
+.today-record-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-record-copy strong { color: var(--color-text); font-size: 14px; font-weight: 600; }
+.today-record-copy small { margin-top: 3px; color: var(--color-text-subtle); font-size: 12px; }
 
 .today-action-row {
   display: flex;
@@ -231,6 +299,20 @@
 .today-action-row strong,
 .today-action-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .today-action-row small { margin-top: 3px; color: var(--color-text-subtle); font-size: 12px; }
+
+.today-capture-dialog { border: 1px solid var(--color-border); }
+.today-capture-dialog > p { color: var(--color-text-muted); }
+.today-capture-form { display: grid; gap: 16px; margin-top: 20px; }
+.today-capture-form > label { display: grid; gap: 7px; }
+.today-capture-form input { min-height: 44px; }
+.today-reminder-toggle { display: grid !important; min-height: 54px; grid-template-columns: 24px 1fr; align-items: center; gap: 10px !important; padding: 8px 0; }
+.today-reminder-toggle button { width: 20px; height: 20px; }
+.today-reminder-toggle strong,
+.today-reminder-toggle small { display: block; }
+.today-reminder-toggle strong { color: var(--color-text); font-size: 13px; }
+.today-reminder-toggle small { margin-top: 2px; color: var(--color-text-subtle); font-size: 12px; }
+.today-capture-error { margin: 0; color: var(--color-danger); font-size: 13px; }
+.today-capture-form button { min-height: 44px; }
 
 .today-error {
   display: flex;
@@ -326,6 +408,8 @@
   .today-header,
   .product-page-header { padding: 24px 16px 18px; }
   .today-header { display: grid; align-items: start; }
+  .today-header-actions { min-width: 0; justify-items: start; }
+  .today-source-list { min-width: 0; justify-content: flex-start; }
   .today-source-state { width: fit-content; }
   .today-grid { grid-template-columns: 1fr; gap: 16px; padding: 0 16px 28px; }
   .today-side-column { display: contents; }
@@ -334,5 +418,7 @@
   .today-side-column > :first-child { order: 2; }
   .today-main-column > :last-child { order: 3; }
   .today-side-column > :last-child { order: 4; }
+  .today-record-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .today-record-row > [data-accent-color] { grid-column: 2; justify-self: start; }
   .connections-model { padding-inline: 14px; }
 }
