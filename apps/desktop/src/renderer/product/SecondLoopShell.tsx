@@ -50,7 +50,7 @@ export function SecondLoopShell({
       <aside className="secondloop-sidebar" aria-label="SecondLoop">
         <div className="secondloop-brand">
           <span aria-hidden="true" className="secondloop-mark"><i /><i /></span>
-          <span><strong>SecondLoop</strong><small>Personal desk</small></span>
+          <span><strong>SecondLoop</strong><small>{t("shell.personalDesk")}</small></span>
         </div>
         <nav className="secondloop-nav" aria-label="Primary">
           {primaryItems.map((item) => (

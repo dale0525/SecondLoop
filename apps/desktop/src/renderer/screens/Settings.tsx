@@ -45,7 +45,7 @@ export function Settings({
         </div>
         <span className="top-bar-spacer" aria-hidden="true" />
       </header> : null}
-      {productMode ? <header className="product-page-header settings-product-header"><p className="foundation-kicker">PREFERENCES</p><h1>{t("settings.title")}</h1></header> : null}
+      {productMode ? <header className="product-page-header settings-product-header"><p className="foundation-kicker">{t("settings.productEyebrow")}</p><h1>{t("settings.title")}</h1></header> : null}
       <div className="settings-shell">
         <SettingsHostBootstrap />
         <SettingsAppearance />

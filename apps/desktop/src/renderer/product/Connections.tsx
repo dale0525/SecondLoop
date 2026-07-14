@@ -9,9 +9,9 @@ export function Connections(): JSX.Element {
   return (
     <main className="connections-screen" aria-label={t("nav.connections")}>
       <header className="product-page-header">
-        <Text className="foundation-kicker" size="1" weight="bold">TRUSTED CONNECTIONS</Text>
+        <Text className="foundation-kicker" size="1" weight="bold">{t("connections.eyebrow")}</Text>
         <Heading as="h1">{t("nav.connections")}</Heading>
-        <Text color="gray" size="2">Model and Mail credentials remain with the trusted host.</Text>
+        <Text color="gray" size="2">{t("connections.subtitle")}</Text>
       </header>
       <div className="connections-model"><SettingsModel /></div>
       <Accounts embedded onBack={() => undefined} />

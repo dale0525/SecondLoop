@@ -16,11 +16,11 @@ export function Today(): JSX.Element {
   const [actions, setActions] = useState<PendingFoundationAction[]>([]);
   const [mailConnected, setMailConnected] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [sourceError, setSourceError] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    setError(null);
+    setSourceError(false);
     const results = await Promise.allSettled([
       bootstrap.features.actions ? listFoundationActions() : Promise.resolve([]),
       bootstrap.features.accounts ? listMailAccounts() : Promise.resolve([]),
@@ -30,7 +30,7 @@ export function Today(): JSX.Element {
     if (actionResult.status === "fulfilled") setActions(actionResult.value);
     if (mailResult.status === "fulfilled") setMailConnected(mailResult.value.length > 0);
     if (results.every((result) => result.status === "rejected")) {
-      setError("The local sources for Today are temporarily unavailable.");
+      setSourceError(true);
     }
     setLoading(false);
   };
@@ -57,12 +57,12 @@ export function Today(): JSX.Element {
         </div>
         <div className="today-source-state">
           <span className={mailConnected ? "ready" : "missing"} />
-          <Text size="2">{mailConnected ? "Mail source ready" : "Mail source not connected"}</Text>
+          <Text size="2">{mailConnected ? t("today.sourceReady") : t("today.sourceMissing")}</Text>
         </div>
       </header>
-      {error ? (
+      {sourceError ? (
         <button className="today-error" onClick={() => void load()} type="button">
-          <CircleAlert size={17} /> <span>{error} Retry.</span>
+          <CircleAlert size={17} /> <span>{t("today.sourcesUnavailable")} {t("today.retry")}.</span>
         </button>
       ) : null}
       <div className="today-grid">
@@ -79,7 +79,7 @@ export function Today(): JSX.Element {
             {loading ? <LoadingRows compact /> : pending.length > 0 ? pending.map((item) => (
               <article className="today-action-row" key={item.approval.approval_id}>
                 <span><strong>{item.preview?.subject || item.approval.binding.action_name}</strong><small>{item.approval.binding.resource_target}</small></span>
-                <Badge color="amber" radius="full">Pending</Badge>
+                <Badge color="amber" radius="full">{t("today.pending")}</Badge>
               </article>
             )) : <EmptyState text={t("today.noItems")} />}
           </TodaySection>
@@ -116,10 +116,11 @@ function TodaySection({
 }
 
 function LoadingRows({ compact = false }: { compact?: boolean }): JSX.Element {
+  const { t } = useI18n();
   return (
     <div className="today-loading" role="status">
       <LoaderCircle className="spin" size={16} />
-      <span>{compact ? "Checking approvals…" : "Checking authoritative sources…"}</span>
+      <span>{compact ? t("today.checkingApprovals") : t("today.checkingSources")}</span>
     </div>
   );
 }
