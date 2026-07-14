@@ -75,6 +75,8 @@ AGENTWEAVE_APP_ROOT=output/research-agent pixi run dev
 
 生成目录中的 `agent-app.json` 定义应用身份、兼容性、可用语言、能力和安全策略，`locales/` 管理界面词典，`prompts/` 定义 Agent 行为，`packages/` 放应用私有 Skills。完整的 Manifest、i18n、主题、字体、Skill 和发布说明见 [开发 Agent App](./DEVELOPING_AGENT_APPS.zh-CN.md)。
 
+如需生成包含 Rust sidecar 和带锁 App 资源的自包含 macOS 应用，请参阅 [macOS Desktop 打包](./DESKTOP_PACKAGING.zh-CN.md)。
+
 ## 框架如何组合
 
 ```text

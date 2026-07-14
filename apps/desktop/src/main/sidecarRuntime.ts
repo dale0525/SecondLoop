@@ -129,10 +129,13 @@ function managedEnvironment(options: {
   env.AGENTWEAVE_CACHE_ROOT = options.cacheRoot;
   env.AGENTWEAVE_DATABASE_URL = `sqlite://${path.join(options.dataRoot, "agentweave.db")}?mode=rwc`;
   env.AGENTWEAVE_MANAGED_SKILLS ??= "1";
-  env.AGENTWEAVE_SKILLS_ROOT ??= path.join(
-    options.isPackaged ? options.resourcesPath : options.cwd,
-    "skills",
-  );
+  if (options.isPackaged) {
+    env.AGENTWEAVE_APP_ROOT = path.join(options.resourcesPath, "agent-app", "app");
+    env.AGENTWEAVE_BUILTIN_SKILLS_MODE = "directory";
+    env.AGENTWEAVE_SKILLS_ROOT = path.join(options.resourcesPath, "skills");
+  } else {
+    env.AGENTWEAVE_SKILLS_ROOT ??= path.join(options.cwd, "skills");
+  }
   env.AGENTWEAVE_WORKSPACE_ROOT = options.workspaceRoot;
   return env;
 }

@@ -1,0 +1,54 @@
+name: macOS Desktop package
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/macos-desktop-package.yml"
+      - "apps/desktop/**"
+      - "crates/**"
+      - "examples/**"
+      - "scripts/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "pixi.lock"
+      - "pixi.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.app }}
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - minimal-agent
+          - secretary-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.0
+        with:
+          cache: true
+      - name: Install Desktop dependencies
+        run: pixi run npm --prefix apps/desktop ci
+      - name: Build development package
+        run: >-
+          pixi run package-macos
+          --input examples/${{ matrix.app }}
+          --output dist/macos/${{ matrix.app }}
+          --overwrite
+      - name: Archive App bundle
+        shell: bash
+        run: |
+          app_path="$(find "dist/macos/${{ matrix.app }}" -mindepth 2 -maxdepth 2 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          /usr/bin/ditto -c -k --keepParent "$app_path" "dist/macos/${{ matrix.app }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentweave-${{ matrix.app }}-macos
+          path: dist/macos/${{ matrix.app }}.zip
+          if-no-files-found: error
+          retention-days: 7

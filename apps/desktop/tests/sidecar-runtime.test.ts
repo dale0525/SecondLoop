@@ -89,7 +89,9 @@ describe("desktop sidecar runtime resolution", () => {
     });
     if (resolution.mode !== "managed") throw new Error("Expected managed resolution");
     expect(resolution.env).toMatchObject({
+      AGENTWEAVE_APP_ROOT: "/app/resources/agent-app/app",
       AGENTWEAVE_APP_DATA_ROOT: "/user/AgentWeave/sidecar/data",
+      AGENTWEAVE_BUILTIN_SKILLS_MODE: "directory",
       AGENTWEAVE_CACHE_ROOT: "/user/AgentWeave/sidecar/cache",
       AGENTWEAVE_DATABASE_URL: "sqlite:///user/AgentWeave/sidecar/data/agentweave.db?mode=rwc",
       AGENTWEAVE_MANAGED_SKILLS: "1",

@@ -75,6 +75,8 @@ AGENTWEAVE_APP_ROOT=output/research-agent pixi run dev
 
 In the generated directory, `agent-app.json` defines the application identity, compatibility, available languages, capabilities, and security policies. The `locales/` directory contains UI dictionaries, `prompts/` defines Agent behavior, and `packages/` contains app-private Skills. See [Developing Agent Apps](./DEVELOPING_AGENT_APPS.md) for complete guidance on the Manifest, i18n, themes, fonts, Skills, and release artifacts.
 
+For a self-contained macOS application with the bundled Rust sidecar and locked App resources, see [macOS Desktop Packaging](./DESKTOP_PACKAGING.md).
+
 ## How the framework fits together
 
 ```text
