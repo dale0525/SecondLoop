@@ -7,6 +7,7 @@ import { SettingsModel } from "../components/SettingsModel";
 import { useI18n } from "../i18n/I18nProvider";
 import { loadModelSettings } from "../modelSettings";
 import { Accounts } from "../screens/Accounts";
+import { MailAccountOnboarding } from "./MailAccountOnboarding";
 
 type Readiness = "checking" | "error" | "missing" | "ready";
 
@@ -14,6 +15,7 @@ export function Connections(): JSX.Element {
   const { t } = useI18n();
   const [model, setModel] = useState<Readiness>("checking");
   const [mail, setMail] = useState<Readiness>("checking");
+  const [mailRevision, setMailRevision] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -24,6 +26,14 @@ export function Connections(): JSX.Element {
       .catch(() => {
         if (active) setModel("error");
       });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setMail("checking");
     void listMailAccounts()
       .then(async (accounts) => {
         if (accounts.length === 0) return "missing" as const;
@@ -43,7 +53,7 @@ export function Connections(): JSX.Element {
     return () => {
       active = false;
     };
-  }, []);
+  }, [mailRevision]);
 
   return (
     <main className="connections-screen" aria-label={t("nav.connections")}>
@@ -68,7 +78,8 @@ export function Connections(): JSX.Element {
       </div>
       <div className="connections-model" id="secondloop-model-connection"><SettingsModel /></div>
       <div className="connections-mail" id="secondloop-mail-connection">
-        <Accounts embedded onBack={() => undefined} />
+        <MailAccountOnboarding onChanged={() => setMailRevision((revision) => revision + 1)} />
+        <Accounts embedded key={mailRevision} onBack={() => undefined} />
       </div>
     </main>
   );

@@ -103,6 +103,119 @@ describe("SecondLoop product shell", () => {
     expect(container.querySelector(".connections-screen")).toBeInTheDocument();
   });
 
+  it("onboards Mail through the trusted configuration flow and clears the password", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch();
+    window.history.replaceState(null, "", "/#connections");
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", {
+      name: /Add account|connections\.mailOnboarding\.add$/,
+    }));
+    await user.type(screen.getByLabelText(
+      /Email address|connections\.mailOnboarding\.email/,
+    ), "user@example.test");
+    await user.type(screen.getByLabelText(
+      /App password|connections\.mailOnboarding\.password/,
+    ), "one-time-password-marker");
+    await user.click(screen.getByRole("button", {
+      name: /Save and test|connections\.mailOnboarding\.saveAndTest/,
+    }));
+
+    await waitFor(() => expect(mail.saved).not.toBeNull());
+    expect(mail.saved?.password).toBe("one-time-password-marker");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(document.body).not.toHaveTextContent("one-time-password-marker");
+    expect((await screen.findAllByText("user@example.test")).length).toBeGreaterThan(0);
+    expect(mail.fetch.mock.calls.some(([input, init]) => (
+      String(input).includes("/foundation/mail/accounts/") && init?.method === "POST"
+    ))).toBe(true);
+  });
+
+  it("keeps editable Mail fields but clears the password after a failed live test", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch({ failConnect: true });
+    window.history.replaceState(null, "", "/#connections");
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", {
+      name: /Add account|connections\.mailOnboarding\.add$/,
+    }));
+    const email = screen.getByLabelText(
+      /Email address|connections\.mailOnboarding\.email/,
+    );
+    const password = screen.getByLabelText(
+      /App password|connections\.mailOnboarding\.password/,
+    );
+    await user.type(email, "retry@example.test");
+    await user.type(password, "failed-test-secret");
+    await user.click(screen.getByRole("button", {
+      name: /Save and test|connections\.mailOnboarding\.saveAndTest/,
+    }));
+
+    expect(await screen.findByRole("alert"))
+      .toHaveTextContent(/The settings were saved|connections\.mailOnboarding\.testFailed/);
+    expect(email).toHaveValue("retry@example.test");
+    expect(password).toHaveValue("");
+    expect(mail.saved?.password).toBe("failed-test-secret");
+    expect(screen.getByRole("button", {
+      name: /Test again|connections\.mailOnboarding\.retryTest/,
+    })).toBeEnabled();
+  });
+
+  it("edits a Mail account only with an explicit credential rotation", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch({ initialConfiguration: mailConfigurationFixture() });
+    window.history.replaceState(null, "", "/#connections");
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", {
+      name: /Edit|connections\.mailOnboarding\.edit/,
+    }));
+    expect(screen.getByLabelText(
+      /Email address|connections\.mailOnboarding\.email/,
+    )).toHaveValue("user@example.test");
+    const password = screen.getByLabelText(
+      /App password|connections\.mailOnboarding\.password/,
+    );
+    expect(password).toHaveValue("");
+    await user.type(password, "rotated-secret");
+    await user.click(screen.getByRole("button", {
+      name: /Save and test|connections\.mailOnboarding\.saveAndTest/,
+    }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(mail.saved?.password).toBe("rotated-secret");
+    expect(mail.saved).not.toHaveProperty("id");
+  });
+
+  it("removes Mail settings and credentials only after confirmation", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch({ initialConfiguration: mailConfigurationFixture() });
+    window.history.replaceState(null, "", "/#connections");
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", {
+      name: /Remove|connections\.mailOnboarding\.remove/,
+    }));
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(mail.deleted).toBe(false);
+    await user.click(screen.getByRole("button", {
+      name: /Remove account|connections\.mailOnboarding\.confirmRemove/,
+    }));
+
+    await waitFor(() => expect(mail.deleted).toBe(true));
+    expect(await screen.findByText(
+      /No Mail account is configured|connections\.mailOnboarding\.emptyTitle/,
+    )).toBeVisible();
+  });
+
   it("exports and restores encrypted data through the trusted Desktop bridge", async () => {
     const exportBackup = vi.fn(async () => ({
       bytes: 4096,
@@ -285,6 +398,7 @@ function stubVerticalSliceFetch() {
   const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/foundation/memory?")) return jsonResponse([memoryFixture()]);
+    if (url.endsWith("/foundation/mail/account-configurations")) return jsonResponse([]);
     if (url.endsWith("/foundation/mail/accounts")) return jsonResponse([accountFixture()]);
     if (url.endsWith("/foundation/mail/accounts/primary")) {
       return jsonResponse({ account: accountFixture(), detail: null, state: "connected" });
@@ -304,6 +418,101 @@ function stubVerticalSliceFetch() {
   });
   vi.stubGlobal("fetch", fetch);
   return fetch;
+}
+
+function stubMailOnboardingFetch({
+  failConnect = false,
+  initialConfiguration = null,
+}: {
+  failConnect?: boolean;
+  initialConfiguration?: Record<string, unknown> | null;
+} = {}) {
+  let configuration = initialConfiguration;
+  const state: {
+    deleted: boolean;
+    saved: Record<string, unknown> | null;
+    fetch: ReturnType<typeof vi.fn>;
+  } = {
+    deleted: false,
+    saved: null,
+    fetch: vi.fn(),
+  };
+  state.fetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/foundation/mail/account-configurations") && init?.method !== "PUT") {
+      return jsonResponse(configuration ? [configuration] : []);
+    }
+    if (url.includes("/foundation/mail/account-configurations/") && init?.method === "PUT") {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      const id = decodeURIComponent(url.split("/").at(-1) ?? "primary");
+      state.saved = body;
+      configuration = { ...body, id, credentialConfigured: true };
+      return jsonResponse(configuration);
+    }
+    if (url.includes("/foundation/mail/account-configurations/") && init?.method === "DELETE") {
+      configuration = null;
+      state.deleted = true;
+      return jsonResponse({ deleted: true });
+    }
+    if (url.endsWith("/foundation/mail/accounts")) {
+      return jsonResponse(configuration ? [{
+        addresses: [],
+        displayName: configuration.displayName,
+        id: configuration.id,
+        primaryAddress: {
+          address: configuration.primaryAddress,
+          name: configuration.primaryName ?? null,
+        },
+      }] : []);
+    }
+    if (url.includes("/foundation/mail/accounts/") && init?.method === "POST" && failConnect) {
+      return new Response(JSON.stringify({ error: "connection failed" }), {
+        headers: { "content-type": "application/json" },
+        status: 503,
+      });
+    }
+    if (url.includes("/foundation/mail/accounts/")) {
+      const account = {
+        addresses: [],
+        displayName: configuration?.displayName ?? "Gmail",
+        id: configuration?.id ?? "primary",
+        primaryAddress: {
+          address: configuration?.primaryAddress ?? "user@example.test",
+          name: configuration?.primaryName ?? null,
+        },
+      };
+      return jsonResponse({ account, detail: null, state: "connected" });
+    }
+    if (url.includes("/foundation/tasks?")) {
+      return jsonResponse({ tasks: [], nextCursor: null });
+    }
+    if (url.includes("/foundation/schedules?")) return jsonResponse([]);
+    if (url.endsWith("/foundation/actions")) return jsonResponse([]);
+    throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
+  });
+  vi.stubGlobal("fetch", state.fetch);
+  return state;
+}
+
+function mailConfigurationFixture(): Record<string, unknown> {
+  return {
+    archiveMailbox: "Archive",
+    credentialConfigured: true,
+    displayName: "Work Mail",
+    draftsMailbox: "Drafts",
+    id: "primary",
+    imapHost: "imap.example.test",
+    imapPort: 993,
+    imapTls: "implicit",
+    primaryAddress: "user@example.test",
+    primaryName: "Local User",
+    sentMailbox: "Sent",
+    smtpHost: "smtp.example.test",
+    smtpPort: 587,
+    smtpTls: "start_tls",
+    trashMailbox: "Trash",
+    username: "user@example.test",
+  };
 }
 
 function stubTodayWorkflowFetch() {
