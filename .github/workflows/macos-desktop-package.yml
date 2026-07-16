@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/macos-desktop-package.yml"
+      - "app/**"
       - "apps/desktop/**"
       - "crates/**"
       - "examples/**"

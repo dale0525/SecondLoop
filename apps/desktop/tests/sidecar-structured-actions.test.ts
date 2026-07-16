@@ -47,6 +47,20 @@ describe("trusted structured action bridge", () => {
     );
   });
 
+  it.each([undefined, null])(
+    "returns only the receipt when the Host directive is %s",
+    async (hostDirective) => {
+      const openExternal = vi.fn();
+      const receipt = { action_id: "connect", binding_id: "binding-1" };
+      await expect(handleStructuredActionResponse({
+        openExternal,
+        sidecarRequest: vi.fn(),
+        value: { hostDirective, receipt },
+      })).resolves.toEqual(receipt);
+      expect(openExternal).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([
     ["HTTP", "http://accounts.example.test/oauth", "http://accounts.example.test"],
     ["another origin", "https://attacker.example.test/oauth", "https://accounts.example.test"],
