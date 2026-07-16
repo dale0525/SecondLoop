@@ -806,8 +806,7 @@ fn validate_dependency_closure(
 fn validate_package_path(package: &super::SkillBundlePackage) -> anyhow::Result<()> {
     canonical_relative_path(&package.path)?;
     anyhow::ensure!(
-        package.path == PathBuf::from(package.id.as_str())
-            && package.path.components().count() == 1,
+        package.path == Path::new(package.id.as_str()) && package.path.components().count() == 1,
         "bundle package path must equal package id: {}",
         package.path.display()
     );

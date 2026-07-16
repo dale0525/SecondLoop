@@ -3,8 +3,10 @@ use agent_runtime::connector::{ConnectorRuntime, connector_action_hash};
 use agent_runtime::connector_tools::{ConnectorToolRuntime, EphemeralConnectorContextProvider};
 use agent_runtime::credential::CredentialScope;
 use agent_runtime::durable_run::{DurableRunStore, QueueActionRequest, RunScope, RunStatus};
+use agent_runtime::foundation_action_envelope::FoundationActionEnvelope;
 use agent_runtime::foundation_actions::MailActionService;
 use agent_runtime::mail::*;
+use agent_runtime::mail_action_envelope::{CanonicalMailSendEnvelope, MAIL_SEND_ACTION_KIND};
 use agent_runtime::mail_connector_transport::{MAIL_CONNECTOR_ID, MailConnectorTransport};
 use agent_runtime::mail_fake::{FakeMailConnector, SeedBodyPart, SeedMessage};
 use agent_runtime::memory::*;
@@ -376,6 +378,9 @@ async fn trusted_host_mail_approval_survives_restart_and_resumes_once() {
         .request_send(preview, Some("session-1".into()), Utc::now())
         .await
         .unwrap();
+    assert_eq!(pending.action.action_name, MAIL_SEND_ACTION_KIND);
+    let canonical = FoundationActionEnvelope::from_action(&pending.action).unwrap();
+    CanonicalMailSendEnvelope::from_foundation_action(&canonical).unwrap();
     assert_eq!(
         pending.action.status,
         agent_runtime::durable_run::ActionStatus::WaitingApproval

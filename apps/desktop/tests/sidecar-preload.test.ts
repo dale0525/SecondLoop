@@ -100,7 +100,7 @@ describe("sidecar preload capability", () => {
   it("exposes data protection operations without paths or raw bytes", async () => {
     const status = {
       enabled: true,
-      atRestEncryption: "not_provided",
+      atRestEncryption: "configured",
       backupEncryption: "aes-256-gcm",
       backupFormat: "agentweave-backup-v1",
       pendingRestart: false,
@@ -122,5 +122,13 @@ describe("sidecar preload capability", () => {
       "restoreBackup",
       "status",
     ]);
+
+    vi.mocked(ipcRenderer.invoke).mockResolvedValue({
+      ...status,
+      atRestEncryption: "encrypted",
+    });
+    await expect(desktopPreloadApi.dataProtection.status()).rejects.toThrow(
+      "Data protection status is invalid",
+    );
   });
 });

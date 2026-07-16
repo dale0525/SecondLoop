@@ -1,5 +1,5 @@
 use super::{
-    RuntimeConfig, ToolDefinition, ToolPermission, ToolSource,
+    RuntimeConfig, ToolDefinition, ToolPermission, ToolPersistence, ToolSource,
     result::{ToolError, ToolResult, ToolResultMetadata},
 };
 use serde_json::{Value, json};
@@ -35,6 +35,7 @@ pub fn definition() -> ToolDefinition {
         }),
         output_schema: None,
         permission: ToolPermission::ReadWorkspace,
+        persistence: ToolPersistence::Full,
         source: ToolSource::BuiltIn,
     }
 }

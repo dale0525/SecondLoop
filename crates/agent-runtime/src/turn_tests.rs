@@ -319,9 +319,9 @@ async fn builtin_create_directory_creates_workspace_directory_through_turn_loop(
     let result = events
         .iter()
         .find_map(|event| match event {
-            RuntimeEvent::ToolCallFinished { call_id, result } if call_id == "call-create" => {
-                Some(result)
-            }
+            RuntimeEvent::ToolCallFinished {
+                call_id, result, ..
+            } if call_id == "call-create" => Some(result),
             _ => None,
         })
         .unwrap();
@@ -769,9 +769,9 @@ async fn read_only_mode_denies_create_directory_and_does_not_create_folder() {
     let result = events
         .iter()
         .find_map(|event| match event {
-            RuntimeEvent::ToolCallFinished { call_id, result } if call_id == "call-denied" => {
-                Some(result)
-            }
+            RuntimeEvent::ToolCallFinished {
+                call_id, result, ..
+            } if call_id == "call-denied" => Some(result),
             _ => None,
         })
         .unwrap();
@@ -984,3 +984,6 @@ async fn write_turn_runtime_package(package_root: &Path, tool_name: &str) {
 
 #[path = "turn_snapshot_followup_tests.rs"]
 mod snapshot_followup_tests;
+
+#[path = "turn_persistence_tests.rs"]
+mod persistence_tests;

@@ -12,6 +12,14 @@ This capability does not encrypt the live SQLite database at rest. The status AP
 
 The backup contains the AgentWeave SQLite database only. It does not contain workspace files, packaged App resources, model API keys stored by Electron, Connector secret files, or arbitrary files referenced by an attachment.
 
+## Connector credential isolation
+
+Connector secret bytes remain in the Host secret store. SQLite stores only scoped provider-principal metadata, opaque secret IDs, and Connector account bindings.
+
+A provider credential is keyed by App, tenant, user, and credential ID. Each Connector account is keyed separately by App, tenant, user, Connector ID, and account ID, then references one provider credential with an allowed scope subset. Calendar and Contacts can therefore both use an account named `primary` without overwriting each other, while still sharing one Google or Microsoft principal when the user authorizes both.
+
+Removing one Connector binding does not revoke or delete a shared credential. The Host can revoke the credential and scrub its referenced secret material only after the final binding has been removed. Every lease checks the exact Connector and account binding, the binding scope subset, the provider grant, expiry, and revocation state before reading secret material.
+
 ## Desktop key handling
 
 Electron Main creates a random 32-byte key and stores only its operating-system-encrypted form in the App data directory. The raw key is passed to the managed Rust sidecar through the inherited launch pipe. It is not placed in the child environment, Renderer, Preload result, logs, prompts, or backup metadata.

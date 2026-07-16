@@ -69,6 +69,7 @@ describe("Automation Foundation sidecar controller", () => {
     const sidecarRequest = vi.fn(async () => response({}));
     registerSidecarApiController({
       ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
       requesterWebContents: { id: 42 },
       sidecarRequest,
     });
@@ -111,6 +112,7 @@ describe("Automation Foundation sidecar controller", () => {
     const sidecarRequest = vi.fn();
     registerSidecarApiController({
       ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
       requesterWebContents: { id: 42 },
       sidecarRequest,
     });

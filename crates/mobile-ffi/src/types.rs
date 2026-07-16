@@ -2,8 +2,10 @@ use agent_runtime::skill_management::{SkillActionFacts, SkillPackageStatus};
 use agent_runtime::skill_policy::{ActorContext, SkillManagementPolicy};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt;
+use zeroize::Zeroize;
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct MobileInitConfig {
     pub app_data_dir: String,
     #[serde(default)]
@@ -18,6 +20,40 @@ pub struct MobileInitConfig {
     pub actor_context: ActorContext,
     pub platform: String,
     pub capabilities: Vec<String>,
+    #[serde(default, skip_serializing)]
+    pub storage_protection_key_hex: Option<String>,
+}
+
+impl fmt::Debug for MobileInitConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MobileInitConfig")
+            .field("app_data_dir", &self.app_data_dir)
+            .field("app_package_dir", &self.app_package_dir)
+            .field("cache_dir", &self.cache_dir)
+            .field("database_path", &self.database_path)
+            .field("builtin_skills_dir", &self.builtin_skills_dir)
+            .field("managed_skills_dir", &self.managed_skills_dir)
+            .field("staging_skills_dir", &self.staging_skills_dir)
+            .field("quarantine_skills_dir", &self.quarantine_skills_dir)
+            .field("skill_policy", &self.skill_policy)
+            .field("actor_context", &self.actor_context)
+            .field("platform", &self.platform)
+            .field("capabilities", &self.capabilities)
+            .field(
+                "storage_protection_key_configured",
+                &self.storage_protection_key_hex.is_some(),
+            )
+            .finish()
+    }
+}
+
+impl Drop for MobileInitConfig {
+    fn drop(&mut self) {
+        if let Some(key) = &mut self.storage_protection_key_hex {
+            key.zeroize();
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -28,6 +64,7 @@ pub struct MobileDiagnostics {
     pub platform: String,
     pub capabilities: Vec<String>,
     pub database_ready: bool,
+    pub storage_protection_state: String,
     pub skills_ready: bool,
     pub model_configured: bool,
     pub skill_management_mode: String,

@@ -4,7 +4,7 @@ use crate::skill_management::{
 use crate::skill_package::SkillPackageKind;
 use crate::skill_policy::{ActorContext, SkillManagementPolicy, SkillOperation};
 use crate::tools::result::{ToolError, ToolResult, ToolResultMetadata};
-use crate::tools::{ToolDefinition, ToolPermission, ToolSource};
+use crate::tools::{ToolDefinition, ToolPermission, ToolPersistence, ToolSource};
 use serde_json::{Value, json};
 
 pub const CREATE_SKILL_DRAFT_TOOL: &str = "create_skill_draft";
@@ -225,6 +225,7 @@ fn definition(name: &str, description: &str, input_schema: Value) -> ToolDefinit
         input_schema,
         output_schema: None,
         permission: ToolPermission::ManageSkills,
+        persistence: ToolPersistence::Full,
         source: ToolSource::BuiltIn,
     }
 }

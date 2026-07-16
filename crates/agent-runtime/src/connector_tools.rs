@@ -3,7 +3,7 @@ use crate::connector::{
     ConnectorToolRisk, ConnectorToolSpec, connector_action_hash,
 };
 use crate::credential::CredentialScope;
-use crate::tools::{ToolDefinition, ToolPermission, ToolSource};
+use crate::tools::{ToolDefinition, ToolPermission, ToolPersistence, ToolSource};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -302,9 +302,19 @@ fn tool_definition(binding: &ConnectorToolBinding, name: String) -> ToolDefiniti
         input_schema: binding.spec.input_schema.clone(),
         output_schema: binding.spec.output_schema.clone(),
         permission: permission_for_risk(binding.spec.risk),
+        persistence: persistence_for_risk(binding.spec.risk),
         source: ToolSource::AppConnector {
             connector: binding.descriptor.id.clone(),
         },
+    }
+}
+
+fn persistence_for_risk(risk: ConnectorToolRisk) -> ToolPersistence {
+    match risk {
+        ConnectorToolRisk::Read | ConnectorToolRisk::SensitiveRead => ToolPersistence::MetadataOnly,
+        ConnectorToolRisk::PersistentWrite
+        | ConnectorToolRisk::Write
+        | ConnectorToolRisk::DestructiveWrite => ToolPersistence::Full,
     }
 }
 
@@ -340,6 +350,25 @@ mod tests {
     use async_trait::async_trait;
     use serde_json::json;
 
+    #[test]
+    fn connector_reads_are_always_metadata_only() {
+        assert_eq!(
+            persistence_for_risk(ConnectorToolRisk::Read),
+            ToolPersistence::MetadataOnly
+        );
+        assert_eq!(
+            persistence_for_risk(ConnectorToolRisk::SensitiveRead),
+            ToolPersistence::MetadataOnly
+        );
+        for risk in [
+            ConnectorToolRisk::PersistentWrite,
+            ConnectorToolRisk::Write,
+            ConnectorToolRisk::DestructiveWrite,
+        ] {
+            assert_eq!(persistence_for_risk(risk), ToolPersistence::Full);
+        }
+    }
+
     struct EchoTransport;
 
     #[async_trait]
@@ -349,16 +378,11 @@ mod tests {
         }
 
         async fn list_tools(&self) -> anyhow::Result<Vec<ConnectorToolSpec>> {
-            Ok(vec![ConnectorToolSpec {
-                name: "write".into(),
-                description: "Write one value.".into(),
-                input_schema: json!({"type": "object"}),
-                output_schema: None,
-                risk: ConnectorToolRisk::Write,
-                required_scopes: Default::default(),
-                parallel_safe: false,
-                supports_idempotency: true,
-            }])
+            Ok(vec![
+                connector_spec("read", ConnectorToolRisk::Read),
+                connector_spec("sensitive", ConnectorToolRisk::SensitiveRead),
+                connector_spec("write", ConnectorToolRisk::Write),
+            ])
         }
 
         async fn call(&self, request: ConnectorTransportCall) -> anyhow::Result<Value> {
@@ -371,6 +395,19 @@ mod tests {
 
         async fn stop(&self) -> anyhow::Result<()> {
             Ok(())
+        }
+    }
+
+    fn connector_spec(name: &str, risk: ConnectorToolRisk) -> ConnectorToolSpec {
+        ConnectorToolSpec {
+            name: name.into(),
+            description: format!("Run {name}."),
+            input_schema: json!({"type": "object"}),
+            output_schema: None,
+            risk,
+            required_scopes: Default::default(),
+            parallel_safe: !risk.is_write(),
+            supports_idempotency: risk.is_write(),
         }
     }
 
@@ -448,5 +485,31 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(names.contains(&"write".to_string()));
         assert!(names.contains(&"connector__example__write".to_string()));
+    }
+
+    #[tokio::test]
+    async fn discovered_connector_read_definitions_are_metadata_only() {
+        let (runtime, _) = runtime().await;
+        let definitions = runtime.definitions();
+
+        for name in ["read", "sensitive"] {
+            let definition = definitions
+                .iter()
+                .find(|definition| definition.name == name)
+                .unwrap();
+            assert_eq!(definition.persistence, ToolPersistence::MetadataOnly);
+            assert_eq!(
+                definition.effective_persistence(),
+                ToolPersistence::MetadataOnly
+            );
+        }
+        assert_eq!(
+            definitions
+                .iter()
+                .find(|definition| definition.name == "write")
+                .unwrap()
+                .persistence,
+            ToolPersistence::Full
+        );
     }
 }

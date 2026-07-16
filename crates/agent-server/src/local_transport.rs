@@ -29,6 +29,8 @@ struct LaunchConfigWire {
     transport_token: String,
     #[serde(default)]
     data_protection_key_hex: Option<String>,
+    #[serde(default)]
+    credential_vault_key_hex: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -75,6 +77,7 @@ struct LaunchConfig {
     launch_id: String,
     auth: TransportAuth,
     data_protection_key: Option<agent_runtime::credential::SecretMaterial>,
+    credential_vault_key: Option<agent_runtime::credential::SecretMaterial>,
 }
 
 pub struct PreparedLocalTransport {
@@ -82,6 +85,7 @@ pub struct PreparedLocalTransport {
     auth: Option<TransportAuth>,
     address: SocketAddr,
     data_protection_key: Option<agent_runtime::credential::SecretMaterial>,
+    credential_vault_key: Option<agent_runtime::credential::SecretMaterial>,
 }
 
 impl PreparedLocalTransport {
@@ -89,6 +93,12 @@ impl PreparedLocalTransport {
         &mut self,
     ) -> Option<agent_runtime::credential::SecretMaterial> {
         self.data_protection_key.take()
+    }
+
+    pub fn take_credential_vault_key(
+        &mut self,
+    ) -> Option<agent_runtime::credential::SecretMaterial> {
+        self.credential_vault_key.take()
     }
 
     pub fn auth(&self) -> Option<TransportAuth> {
@@ -114,6 +124,7 @@ pub async fn prepare_from_environment() -> anyhow::Result<PreparedLocalTransport
             auth: None,
             address,
             data_protection_key: None,
+            credential_vault_key: None,
         });
     };
 
@@ -140,6 +151,7 @@ pub async fn prepare_from_environment() -> anyhow::Result<PreparedLocalTransport
             auth: Some(config.auth),
             address,
             data_protection_key: config.data_protection_key,
+            credential_vault_key: config.credential_vault_key,
         })
     }
 }
@@ -211,6 +223,9 @@ fn read_launch_config(mut reader: impl Read) -> anyhow::Result<LaunchConfig> {
 fn validate_launch_config(wire: LaunchConfigWire) -> anyhow::Result<LaunchConfig> {
     let mut token = wire.transport_token.into_bytes();
     let mut data_protection_key = wire.data_protection_key_hex.map(|value| value.into_bytes());
+    let mut credential_vault_key = wire
+        .credential_vault_key_hex
+        .map(|value| value.into_bytes());
     let result = (|| {
         anyhow::ensure!(
             wire.schema_version == LAUNCH_SCHEMA_VERSION,
@@ -223,33 +238,49 @@ fn validate_launch_config(wire: LaunchConfigWire) -> anyhow::Result<LaunchConfig
             "local transport launch identifier is invalid"
         );
         let auth = TransportAuth::new(&token)?;
-        let data_protection_key = data_protection_key
-            .as_deref()
-            .map(|value| {
-                anyhow::ensure!(
-                    value.len() == 64
-                        && value
-                            .iter()
-                            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')),
-                    "data protection key is invalid"
-                );
-                let decoded = hex::decode(value)
-                    .map_err(|_| anyhow::anyhow!("data protection key is invalid"))?;
-                anyhow::ensure!(decoded.len() == 32, "data protection key is invalid");
-                agent_runtime::credential::SecretMaterial::new(decoded)
-            })
-            .transpose()?;
+        let data_protection_key = decode_launch_key(
+            data_protection_key.as_deref(),
+            "data protection key is invalid",
+        )?;
+        let credential_vault_key = decode_launch_key(
+            credential_vault_key.as_deref(),
+            "credential Vault key is invalid",
+        )?;
         Ok(LaunchConfig {
             launch_id: launch_id.to_string(),
             auth,
             data_protection_key,
+            credential_vault_key,
         })
     })();
     token.zeroize();
     if let Some(key) = &mut data_protection_key {
         key.zeroize();
     }
+    if let Some(key) = &mut credential_vault_key {
+        key.zeroize();
+    }
     result
+}
+
+fn decode_launch_key(
+    value: Option<&[u8]>,
+    invalid_message: &'static str,
+) -> anyhow::Result<Option<agent_runtime::credential::SecretMaterial>> {
+    value
+        .map(|value| {
+            anyhow::ensure!(
+                value.len() == 64
+                    && value
+                        .iter()
+                        .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')),
+                invalid_message
+            );
+            let decoded = hex::decode(value).map_err(|_| anyhow::anyhow!(invalid_message))?;
+            anyhow::ensure!(decoded.len() == 32, invalid_message);
+            agent_runtime::credential::SecretMaterial::new(decoded)
+        })
+        .transpose()
 }
 
 fn valid_token(token: &[u8]) -> bool {
@@ -311,16 +342,19 @@ mod tests {
         headers.insert(&TRANSPORT_HEADER, HeaderValue::from_static(TOKEN));
         assert!(config.auth.authenticate(&headers));
         assert!(config.data_protection_key.is_none());
+        assert!(config.credential_vault_key.is_none());
 
         let protected = read_launch_config(
             format!(
-                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"{}"}}"#,
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"{}","credentialVaultKeyHex":"{}"}}"#,
                 "ab".repeat(32),
+                "cd".repeat(32),
             )
             .as_bytes(),
         )
         .unwrap();
         assert!(protected.data_protection_key.is_some());
+        assert!(protected.credential_vault_key.is_some());
 
         for invalid in [
             format!(r#"{{"schemaVersion":2,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}"}}"#),
@@ -328,6 +362,9 @@ mod tests {
             format!(r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"short"}}"#),
             format!(
                 r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"short"}}"#
+            ),
+            format!(
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","credentialVaultKeyHex":"short"}}"#
             ),
             format!(
                 r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","extra":true}}"#

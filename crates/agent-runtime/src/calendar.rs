@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CalendarScope {
     pub app_id: String,
@@ -39,15 +39,31 @@ pub struct CalendarEventContent {
 
 impl CalendarEventContent {
     pub fn validate(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            !self.calendar_id.trim().is_empty(),
-            "calendar id is required"
-        );
-        anyhow::ensure!(!self.title.trim().is_empty(), "event title is required");
+        validate_text(&self.calendar_id, 512, "calendar id")?;
+        validate_text(&self.title, 1024, "event title")?;
         anyhow::ensure!(self.end > self.start, "event end must be after start");
-        anyhow::ensure!(self.title.len() <= 1024, "event title is too long");
         anyhow::ensure!(self.attendees.len() <= 500, "event has too many attendees");
+        if let Some(description) = &self.description {
+            anyhow::ensure!(
+                description.len() <= 64 * 1024,
+                "event description is too long"
+            );
+        }
+        validate_text(&self.timezone, 255, "event timezone")?;
         self.timezone.parse::<chrono_tz::Tz>()?;
+        if let Some(location) = &self.location {
+            validate_text(location, 2048, "event location")?;
+        }
+        if let Some(recurrence) = &self.recurrence {
+            validate_text(recurrence, 16 * 1024, "event recurrence")?;
+        }
+        for attendee in &self.attendees {
+            validate_text(&attendee.address, 512, "attendee address")?;
+            validate_text(&attendee.response, 64, "attendee response")?;
+            if let Some(display_name) = &attendee.display_name {
+                validate_text(display_name, 1024, "attendee display name")?;
+            }
+        }
         Ok(())
     }
 }
@@ -90,6 +106,7 @@ pub enum CalendarMutationKind {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CalendarMutationPreview {
     pub preview_id: String,
+    pub account_id: String,
     pub kind: CalendarMutationKind,
     pub event_id: Option<String>,
     pub expected_version: Option<u64>,
@@ -98,6 +115,83 @@ pub struct CalendarMutationPreview {
     pub attendee_visible: bool,
     pub preview_hash: String,
     pub idempotency_key: String,
+}
+
+impl CalendarMutationPreview {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        validate_text(&self.preview_id, 512, "calendar preview id")?;
+        validate_text(&self.account_id, 255, "calendar account id")?;
+        validate_text(&self.idempotency_key, 512, "calendar idempotency key")?;
+        validate_sha256(&self.preview_hash, "calendar preview hash")?;
+        anyhow::ensure!(
+            self.conflicts.len() <= 500,
+            "calendar preview has too many conflicts"
+        );
+        for conflict in &self.conflicts {
+            anyhow::ensure!(
+                conflict.end > conflict.start,
+                "calendar conflict interval is invalid"
+            );
+            if let Some(event_id) = &conflict.event_id {
+                validate_text(event_id, 512, "calendar conflict event id")?;
+            }
+        }
+        match self.kind {
+            CalendarMutationKind::Create => {
+                anyhow::ensure!(
+                    self.event_id.is_none() && self.expected_version.is_none(),
+                    "calendar create preview has an existing event binding"
+                );
+                self.content
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("calendar create content is required"))?
+                    .validate()?;
+            }
+            CalendarMutationKind::Update => {
+                validate_text(
+                    self.event_id
+                        .as_deref()
+                        .ok_or_else(|| anyhow::anyhow!("calendar event id is required"))?,
+                    512,
+                    "calendar event id",
+                )?;
+                anyhow::ensure!(
+                    self.expected_version.is_some_and(|version| version > 0),
+                    "calendar expected version is invalid"
+                );
+                self.content
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("calendar update content is required"))?
+                    .validate()?;
+            }
+            CalendarMutationKind::Cancel => {
+                validate_text(
+                    self.event_id
+                        .as_deref()
+                        .ok_or_else(|| anyhow::anyhow!("calendar event id is required"))?,
+                    512,
+                    "calendar event id",
+                )?;
+                anyhow::ensure!(
+                    self.expected_version.is_some_and(|version| version > 0),
+                    "calendar expected version is invalid"
+                );
+                anyhow::ensure!(
+                    self.content.is_none(),
+                    "calendar cancel preview cannot replace event content"
+                );
+            }
+        }
+        let expected_attendee_visible = self
+            .content
+            .as_ref()
+            .is_some_and(|content| !content.attendees.is_empty());
+        anyhow::ensure!(
+            self.attendee_visible == expected_attendee_visible,
+            "calendar attendee visibility binding is invalid"
+        );
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -110,6 +204,11 @@ pub struct ApprovedCalendarMutation {
 
 #[async_trait]
 pub trait CalendarConnector: Send + Sync {
+    async fn get_event(
+        &self,
+        scope: &CalendarScope,
+        event_id: &str,
+    ) -> anyhow::Result<Option<CalendarEvent>>;
     async fn list_events(
         &self,
         scope: &CalendarScope,
@@ -157,9 +256,9 @@ pub struct FakeCalendarConnector {
 
 #[derive(Default)]
 struct FakeCalendarState {
-    events: BTreeMap<String, (CalendarScope, CalendarEvent)>,
+    events: BTreeMap<(CalendarScope, String), CalendarEvent>,
     previews: HashMap<String, (CalendarScope, CalendarMutationPreview)>,
-    results: HashMap<String, CalendarEvent>,
+    results: BTreeMap<(CalendarScope, String), CalendarEvent>,
 }
 
 impl FakeCalendarConnector {
@@ -168,7 +267,7 @@ impl FakeCalendarConnector {
             .lock()
             .expect("calendar lock poisoned")
             .events
-            .insert(event.id.clone(), (scope, event));
+            .insert((scope, event.id.clone()), event);
     }
 
     fn preview(
@@ -189,9 +288,9 @@ impl FakeCalendarConnector {
         }
         let state = self.state.lock().expect("calendar lock poisoned");
         if let (Some(id), Some(version)) = (&event_id, expected_version) {
-            let (_, event) = state
+            let event = state
                 .events
-                .get(id)
+                .get(&(scope.clone(), id.clone()))
                 .ok_or_else(|| anyhow::anyhow!("calendar event not found"))?;
             anyhow::ensure!(event.version == version, "calendar event version conflict");
         }
@@ -200,8 +299,8 @@ impl FakeCalendarConnector {
             .map(|candidate| {
                 state
                     .events
-                    .values()
-                    .filter(|(event_scope, event)| {
+                    .iter()
+                    .filter(|((event_scope, _), event)| {
                         event_scope == scope
                             && event.status == CalendarEventStatus::Confirmed
                             && event.content.start < candidate.end
@@ -219,6 +318,7 @@ impl FakeCalendarConnector {
         drop(state);
         let preview_id = Uuid::new_v4().to_string();
         let hash_input = serde_json::to_vec(&(
+            scope,
             kind,
             &event_id,
             expected_version,
@@ -228,6 +328,7 @@ impl FakeCalendarConnector {
         ))?;
         let preview = CalendarMutationPreview {
             preview_id: preview_id.clone(),
+            account_id: scope.account_id.clone(),
             kind,
             event_id,
             expected_version,
@@ -239,9 +340,18 @@ impl FakeCalendarConnector {
             preview_hash: hex::encode(Sha256::digest(hash_input)),
             idempotency_key,
         };
-        self.state
-            .lock()
-            .expect("calendar lock poisoned")
+        preview.validate()?;
+        let mut state = self.state.lock().expect("calendar lock poisoned");
+        if let Some((_, existing)) = state.previews.values().find(|(existing_scope, existing)| {
+            existing_scope == scope && existing.idempotency_key == preview.idempotency_key
+        }) {
+            anyhow::ensure!(
+                existing.preview_hash == preview.preview_hash,
+                "calendar idempotency key conflicts with another preview"
+            );
+            return Ok(existing.clone());
+        }
+        state
             .previews
             .insert(preview_id, (scope.clone(), preview.clone()));
         Ok(preview)
@@ -250,6 +360,21 @@ impl FakeCalendarConnector {
 
 #[async_trait]
 impl CalendarConnector for FakeCalendarConnector {
+    async fn get_event(
+        &self,
+        scope: &CalendarScope,
+        event_id: &str,
+    ) -> anyhow::Result<Option<CalendarEvent>> {
+        validate_text(event_id, 512, "calendar event id")?;
+        Ok(self
+            .state
+            .lock()
+            .expect("calendar lock poisoned")
+            .events
+            .get(&(scope.clone(), event_id.to_string()))
+            .cloned())
+    }
+
     async fn list_events(
         &self,
         scope: &CalendarScope,
@@ -262,12 +387,12 @@ impl CalendarConnector for FakeCalendarConnector {
             .lock()
             .expect("calendar lock poisoned")
             .events
-            .values()
-            .filter(|(event_scope, event)| {
+            .iter()
+            .filter(|((event_scope, _), event)| {
                 event_scope == scope && event.content.start < end && event.content.end > start
             })
             .map(|(_, event)| event.clone())
-            .collect())
+            .collect::<Vec<_>>())
     }
 
     async fn free_busy(
@@ -359,7 +484,8 @@ impl CalendarConnector for FakeCalendarConnector {
             &preview_scope == scope && approval.preview_hash == preview.preview_hash,
             "calendar approval does not match preview"
         );
-        if let Some(existing) = state.results.get(&preview.idempotency_key) {
+        let result_key = (scope.clone(), preview.idempotency_key.clone());
+        if let Some(existing) = state.results.get(&result_key) {
             return Ok(existing.clone());
         }
         let event = match preview.kind {
@@ -375,39 +501,57 @@ impl CalendarConnector for FakeCalendarConnector {
                 let id = preview.event_id.unwrap();
                 let stored = state
                     .events
-                    .get_mut(&id)
+                    .get_mut(&(scope.clone(), id))
                     .ok_or_else(|| anyhow::anyhow!("calendar event not found"))?;
                 anyhow::ensure!(
-                    stored.1.version == preview.expected_version.unwrap(),
+                    stored.version == preview.expected_version.unwrap(),
                     "calendar event version conflict"
                 );
-                stored.1.content = preview.content.unwrap();
-                stored.1.version += 1;
-                stored.1.updated_at = Utc::now();
-                stored.1.clone()
+                stored.content = preview.content.unwrap();
+                stored.version += 1;
+                stored.updated_at = Utc::now();
+                stored.clone()
             }
             CalendarMutationKind::Cancel => {
                 let id = preview.event_id.unwrap();
                 let stored = state
                     .events
-                    .get_mut(&id)
+                    .get_mut(&(scope.clone(), id))
                     .ok_or_else(|| anyhow::anyhow!("calendar event not found"))?;
                 anyhow::ensure!(
-                    stored.1.version == preview.expected_version.unwrap(),
+                    stored.version == preview.expected_version.unwrap(),
                     "calendar event version conflict"
                 );
-                stored.1.status = CalendarEventStatus::Cancelled;
-                stored.1.version += 1;
-                stored.1.updated_at = Utc::now();
-                stored.1.clone()
+                stored.status = CalendarEventStatus::Cancelled;
+                stored.version += 1;
+                stored.updated_at = Utc::now();
+                stored.clone()
             }
         };
         state
             .events
-            .insert(event.id.clone(), (scope.clone(), event.clone()));
-        state.results.insert(preview.idempotency_key, event.clone());
+            .insert((scope.clone(), event.id.clone()), event.clone());
+        state.results.insert(result_key, event.clone());
         Ok(event)
     }
+}
+
+fn validate_text(value: &str, max: usize, name: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(!value.trim().is_empty(), "{name} is required");
+    anyhow::ensure!(value.len() <= max, "{name} is too long");
+    anyhow::ensure!(
+        !value.chars().any(char::is_control),
+        "{name} contains control characters"
+    );
+    Ok(())
+}
+
+fn validate_sha256(value: &str, name: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "{name} is invalid"
+    );
+    Ok(())
 }
 
 #[cfg(test)]

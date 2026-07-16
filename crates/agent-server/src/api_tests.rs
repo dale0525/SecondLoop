@@ -122,6 +122,20 @@ async fn authenticated_router_protects_every_route_without_enabling_cors() {
             .uri("/sessions")
             .body(Body::empty())
             .unwrap(),
+        Request::builder()
+            .method("POST")
+            .uri("/host/oauth/authorizations")
+            .body(Body::empty())
+            .unwrap(),
+        Request::builder()
+            .uri("/host/oauth/authorizations/authorization-id")
+            .body(Body::empty())
+            .unwrap(),
+        Request::builder()
+            .method("DELETE")
+            .uri("/host/oauth/authorizations/authorization-id")
+            .body(Body::empty())
+            .unwrap(),
     ] {
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -149,6 +163,23 @@ async fn authenticated_router_protects_every_route_without_enabling_cors() {
             .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
             .is_none()
     );
+
+    let callback = router_for_transport(
+        Arc::new(AppState::new(
+            Storage::connect("sqlite::memory:").await.unwrap(),
+        )),
+        false,
+        Some(TransportAuth::new(TOKEN).unwrap()),
+    )
+    .oneshot(
+        Request::builder()
+            .uri(format!("/oauth/callback?state={}", "a".repeat(64)))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(callback.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

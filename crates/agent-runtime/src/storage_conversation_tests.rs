@@ -1,5 +1,6 @@
 use super::*;
 use crate::session::messages_to_model_history;
+use crate::tools::ToolPersistence;
 
 #[tokio::test]
 async fn conversation_scope_isolates_apps_users_and_devices() {
@@ -76,6 +77,83 @@ async fn runtime_events_are_committed_with_the_turn_and_can_be_replayed() {
     assert_eq!(persisted[0].kind, "turn_started");
     assert_eq!(persisted[1].kind, "turn_finished");
     assert_eq!(persisted[0].payload["turn_id"], "turn-1");
+}
+
+#[tokio::test]
+async fn batch_event_persistence_projects_sensitive_tool_payloads() {
+    let root = tempfile::tempdir().unwrap();
+    let database = root.path().join("metadata-only-events.db");
+    let url = format!("sqlite://{}?mode=rwc", database.display());
+    let scope = ConversationScope::local("com.example.metadata-only-batch");
+    let storage = Storage::connect(&url).await.unwrap();
+    let session = storage
+        .create_scoped_session(&scope, "Sensitive batch")
+        .await
+        .unwrap();
+    let events = vec![
+        RuntimeEvent::ToolCallStarted {
+            call_id: "call-sensitive".into(),
+            name: "connector__mail__read".into(),
+            arguments: serde_json::json!({"query": "batch-argument-secret"}),
+            persistence: ToolPersistence::MetadataOnly,
+        },
+        RuntimeEvent::ToolCallFinished {
+            call_id: "call-sensitive".into(),
+            result: serde_json::json!({
+                "ok": true,
+                "data": {"body": "batch-result-secret"},
+                "error": null,
+                "metadata": {"duration_ms": 7, "output_truncated": false}
+            }),
+            persistence: ToolPersistence::MetadataOnly,
+        },
+    ];
+
+    storage
+        .append_scoped_turn_with_events(&scope, &session.id, "read", "done", &events)
+        .await
+        .unwrap();
+    storage.close().await;
+
+    let restarted = Storage::connect(&url).await.unwrap();
+    let persisted = restarted
+        .list_conversation_events(&scope, &session.id)
+        .await
+        .unwrap();
+    let encoded = serde_json::to_string(&persisted).unwrap();
+    assert!(!encoded.contains("batch-argument-secret"));
+    assert!(!encoded.contains("batch-result-secret"));
+    assert!(persisted[0].payload.get("arguments").is_none());
+    assert!(persisted[0].payload.get("arguments_metadata").is_some());
+    assert!(persisted[1].payload.get("result").is_none());
+    assert_eq!(persisted[1].payload["result_metadata"]["ok"], true);
+}
+
+#[tokio::test]
+async fn batch_event_persistence_keeps_full_tool_payloads_when_allowed() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let scope = ConversationScope::local("com.example.full-events");
+    let session = storage
+        .create_scoped_session(&scope, "Full events")
+        .await
+        .unwrap();
+    let event = RuntimeEvent::ToolCallStarted {
+        call_id: "call-public".into(),
+        name: "echo".into(),
+        arguments: serde_json::json!({"text": "public-value"}),
+        persistence: ToolPersistence::Full,
+    };
+
+    storage
+        .append_scoped_turn_with_events(&scope, &session.id, "echo", "done", &[event])
+        .await
+        .unwrap();
+    let persisted = storage
+        .list_conversation_events(&scope, &session.id)
+        .await
+        .unwrap();
+
+    assert_eq!(persisted[0].payload["arguments"]["text"], "public-value");
 }
 
 #[tokio::test]

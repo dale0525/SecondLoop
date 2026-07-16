@@ -1,4 +1,42 @@
 use super::*;
+use agent_runtime::credential::SecretMaterial;
+use agent_runtime::storage_protection::StorageOpenOptions;
+use zeroize::{Zeroize, Zeroizing};
+
+pub(super) fn decode_storage_protection_key(
+    encoded_key: Option<String>,
+) -> Result<Option<Arc<SecretMaterial>>> {
+    let Some(mut encoded_key) = encoded_key else {
+        return Ok(None);
+    };
+    let mut key = Zeroizing::new([0_u8; 32]);
+    let decoded = hex::decode_to_slice(encoded_key.as_bytes(), key.as_mut());
+    encoded_key.zeroize();
+    if decoded.is_err() {
+        anyhow::bail!("storage protection key must be exactly 64 hexadecimal characters");
+    }
+    let secret = SecretMaterial::new(key.to_vec())?;
+    drop(key);
+    Ok(Some(Arc::new(secret)))
+}
+
+pub(super) fn open_mobile_storage(
+    tokio: &Runtime,
+    database_path: &Path,
+    storage_protection_key: Option<Arc<SecretMaterial>>,
+) -> Result<Storage> {
+    if let Some(parent) = database_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let database_url = format!("sqlite://{}?mode=rwc", database_path.display());
+    let storage_options = storage_protection_key
+        .map(|key| StorageOpenOptions::default().with_key(key))
+        .unwrap_or_default();
+    tokio.block_on(Storage::connect_with_options(
+        &database_url,
+        storage_options,
+    ))
+}
 
 pub(super) struct MonotonicReloadStatus {
     generation: AtomicU64,

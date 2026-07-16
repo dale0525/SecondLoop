@@ -50,6 +50,10 @@ pub struct EncryptedBackupCodec {
 
 impl EncryptedBackupCodec {
     pub fn new(key: SecretMaterial) -> Result<Self, DataProtectionError> {
+        Self::new_borrowed(&key)
+    }
+
+    pub fn new_borrowed(key: &SecretMaterial) -> Result<Self, DataProtectionError> {
         if key.expose_bytes().len() != 32 {
             return Err(DataProtectionError::InvalidRequest);
         }

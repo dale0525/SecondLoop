@@ -1,4 +1,7 @@
-use crate::app_manifest::{AgentAppManifest, AgentAppPolicy, LoadedAgentAppManifest};
+use crate::app_manifest::{
+    AgentAppManifest, AgentAppPolicy, AppNetworkPolicy, BackgroundExecutionPolicy,
+    ExternalSideEffectPolicy, LoadedAgentAppManifest,
+};
 use crate::platform::PlatformId;
 use crate::prompt_composer::AppPromptConfig;
 use semver::Version;
@@ -23,6 +26,73 @@ pub struct ResolvedAgentApp {
     pub loaded: LoadedAgentAppManifest,
     pub prompt: AppPromptConfig,
     host_discovery: AgentAppHostDiscovery,
+    runtime_policy: AgentAppRuntimePolicy,
+}
+
+/// A fail-closed dispatch policy compiled from one validated App manifest.
+/// Restricted network modes deny process-capable tools; they do not claim OS-level isolation.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentAppRuntimePolicy {
+    external_side_effects: ExternalSideEffectPolicy,
+    network: AppNetworkPolicy,
+    background_execution: BackgroundExecutionPolicy,
+    declared_runtime_tools: BTreeSet<String>,
+    declared_connectors: BTreeSet<String>,
+}
+
+impl AgentAppRuntimePolicy {
+    pub fn compile(manifest: &AgentAppManifest) -> Self {
+        Self {
+            external_side_effects: manifest.policy.external_side_effects,
+            network: manifest.policy.network,
+            background_execution: manifest.policy.background_execution,
+            declared_runtime_tools: manifest
+                .requires
+                .runtime_tools
+                .iter()
+                .map(|tool| tool.as_str().to_string())
+                .collect(),
+            declared_connectors: manifest
+                .requires
+                .connectors
+                .iter()
+                .map(|connector| connector.as_str().to_string())
+                .collect(),
+        }
+    }
+
+    pub fn external_side_effects(&self) -> ExternalSideEffectPolicy {
+        self.external_side_effects
+    }
+
+    pub fn network(&self) -> AppNetworkPolicy {
+        self.network
+    }
+
+    pub fn background_execution(&self) -> BackgroundExecutionPolicy {
+        self.background_execution
+    }
+
+    pub fn declares_runtime_tool(&self, tool: &str) -> bool {
+        self.declared_runtime_tools.contains(tool)
+    }
+
+    pub fn declares_connector(&self, connector: &str) -> bool {
+        self.declared_connectors.contains(connector)
+    }
+
+    pub fn allows_background_execution(
+        &self,
+        declared_by_app: bool,
+        enabled_by_host: bool,
+    ) -> bool {
+        match self.background_execution {
+            BackgroundExecutionPolicy::Disabled => false,
+            BackgroundExecutionPolicy::DeclaredOnly => declared_by_app,
+            BackgroundExecutionPolicy::Enabled => declared_by_app || enabled_by_host,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -171,10 +241,12 @@ impl ResolvedAgentApp {
             loaded.manifest_sha256(),
             inventory,
         );
+        let runtime_policy = AgentAppRuntimePolicy::compile(&loaded.manifest);
         Ok(Self {
             loaded,
             prompt,
             host_discovery,
+            runtime_policy,
         })
     }
 
@@ -189,6 +261,10 @@ impl ResolvedAgentApp {
 
     pub fn host_discovery(&self) -> &AgentAppHostDiscovery {
         &self.host_discovery
+    }
+
+    pub fn runtime_policy(&self) -> &AgentAppRuntimePolicy {
+        &self.runtime_policy
     }
 }
 
@@ -400,6 +476,26 @@ mod tests {
         assert!(!discovery.requires_capability("host.unrelated"));
         assert!(!discovery.requires_runtime_tool("host.unrelated"));
         assert!(!discovery.requires_connector("host.unrelated"));
+    }
+
+    #[test]
+    fn runtime_policy_compiles_only_enforceable_manifest_declarations() {
+        let policy = AgentAppRuntimePolicy::compile(&manifest());
+
+        assert_eq!(
+            policy.external_side_effects(),
+            ExternalSideEffectPolicy::RequireApproval
+        );
+        assert_eq!(policy.network(), AppNetworkPolicy::DeclaredOnly);
+        assert_eq!(
+            policy.background_execution(),
+            BackgroundExecutionPolicy::Disabled
+        );
+        assert!(policy.declares_runtime_tool("memory.search"));
+        assert!(!policy.declares_runtime_tool("host.unrelated"));
+        assert!(policy.declares_connector("mail.fake"));
+        assert!(!policy.declares_connector("host.unrelated"));
+        assert!(!policy.allows_background_execution(true, true));
     }
 
     #[test]

@@ -12,6 +12,14 @@ AgentWeave 提供一项可选的 Host 能力，用于加密本地备份和可安
 
 备份只包含 AgentWeave SQLite 数据库，不包含工作区文件、已打包的 App 资源、Electron 保存的模型 API Key、Connector secret 文件，也不会自动包含附件所引用的任意外部文件。
 
+## Connector 凭据隔离
+
+Connector secret 原始字节仍保存在 Host secret store 中。SQLite 只保存经过 scope 隔离的 provider principal 元数据、opaque secret ID 和 Connector account 绑定。
+
+Provider credential 以 App、tenant、user 和 credential ID 为联合键。每个 Connector account 则单独以 App、tenant、user、Connector ID 和 account ID 为联合键，并引用一条 provider credential，同时只允许使用其授权 scope 的子集。因此 Calendar 和 Contacts 都可以使用名为 `primary` 的账号而不互相覆盖；当用户同时授权两项能力时，它们也可以安全共享同一个 Google 或 Microsoft principal。
+
+删除一个 Connector 绑定不会撤销或删除仍被共享的 credential。只有最后一个绑定已移除，Host 才能撤销 credential 并清除它引用的 secret material。每次 lease 都会在读取 secret material 前检查精确的 Connector 与 account 绑定、绑定 scope 子集、provider grant、过期时间和撤销状态。
+
 ## Desktop 密钥处理
 
 Electron Main 会生成一个随机 32 字节密钥，并且只在 App 数据目录中保存经操作系统加密后的形式。原始密钥通过继承的启动管道传给受管 Rust sidecar，不会进入子进程环境变量、Renderer、Preload 返回值、日志、Prompt 或备份元数据。

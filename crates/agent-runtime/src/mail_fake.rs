@@ -606,11 +606,13 @@ impl MailConnector for FakeMailConnector {
                 .attachments
                 .iter()
                 .map(|attachment| DraftAttachment {
+                    host_attachment_id: None,
                     source_message_id: Some(original.summary.id.clone()),
                     source_attachment_id: Some(attachment.id.clone()),
                     file_name: attachment.file_name.clone(),
                     mime_type: attachment.mime_type.clone(),
                     size_bytes: attachment.size_bytes,
+                    sha256: None,
                 })
                 .collect(),
             reply_context: None,

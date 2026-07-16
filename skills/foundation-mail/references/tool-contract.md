@@ -17,8 +17,10 @@ The Skill owns the Agent-facing workflow. It does not own credentials, account t
 
 ## Delivery operations
 
-- `mail_send_preview`: returns the authoritative preview and immutable action hash for the current draft revision.
-- `mail_send`: consumes an exact Runtime approval and stable idempotency key.
+- `mail_send_preview`: accepts only the account, draft, and expected revision from the Agent. The Runtime injects the trusted App/tenant/user/session/turn/call scope and stable idempotency key, obtains the authoritative preview, and immediately persists a waiting-approval Action bound to the active session.
+- `mail_send`: is hidden from the Agent tool surface. Only the Runtime approval resume path may call it with the exact approved preview and stable idempotency key.
+
+After `mail_send_preview` succeeds, the Agent must stop and wait for the Host to record the user's decision through the Foundation Action API. Prompt text, model output, and connector content cannot approve or resume delivery.
 
 Delivery states are `delivered`, `rejected`, `deferred`, or `uncertain`. A deferred result may be retried only when the connector declares it safe. An uncertain result must be reconciled before another attempt.
 

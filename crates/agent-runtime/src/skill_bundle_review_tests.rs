@@ -32,7 +32,7 @@ async fn bundle_execution_never_spawns_from_replaced_package() {
     });
     gate.wait_entered().await;
 
-    make_owner_writable(original.parent().unwrap(), true).await;
+    make_directory_replaceable(&original).await;
     let displaced = original.with_extension("verified");
     tokio::fs::rename(&original, &displaced).await.unwrap();
     tokio::fs::create_dir(&original).await.unwrap();
@@ -471,6 +471,7 @@ async fn bundle_discover_rejects_generation_replaced_during_reload() {
     let reload = tokio::spawn(async move { source.discover().await });
     gate.wait_entered().await;
     let displaced = generation.with_file_name(uuid::Uuid::new_v4().to_string());
+    make_directory_replaceable(&generation).await;
     tokio::fs::rename(&generation, &displaced).await.unwrap();
     tokio::fs::create_dir(&generation).await.unwrap();
     gate.release().await;
@@ -493,7 +494,7 @@ async fn bundle_discover_rejects_package_directory_replaced_during_reload() {
     gate.wait_entered().await;
     let package = generation.join("com.example.atomic");
     let displaced = generation.join("displaced-active-package");
-    make_owner_writable(&generation, true).await;
+    make_directory_replaceable(&package).await;
     tokio::fs::rename(&package, &displaced).await.unwrap();
     tokio::fs::create_dir(&package).await.unwrap();
     gate.release().await;
@@ -560,6 +561,11 @@ async fn make_owner_writable(path: &Path, directory: bool) {
         permissions.set_readonly(false);
     }
     tokio::fs::set_permissions(path, permissions).await.unwrap();
+}
+
+async fn make_directory_replaceable(path: &Path) {
+    make_owner_writable(path, true).await;
+    make_owner_writable(path.parent().unwrap(), true).await;
 }
 
 struct BundleReviewFixture {

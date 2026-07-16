@@ -146,11 +146,13 @@ fn empty_draft_content() -> DraftContent {
             html: Some("<p>Here is the status update.</p>".into()),
         },
         attachments: vec![DraftAttachment {
+            host_attachment_id: None,
             source_message_id: Some("message-1".into()),
             source_attachment_id: Some("attachment-1".into()),
             file_name: "agenda.txt".into(),
             mime_type: "text/plain".into(),
             size_bytes: 10,
+            sha256: None,
         }],
         reply_context: None,
         forward_context: None,

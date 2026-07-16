@@ -28,7 +28,7 @@ async fn data_protection_status(
         state
             .data_protection()
             .map(DataProtectionService::status)
-            .unwrap_or_else(disabled_status),
+            .unwrap_or_else(|| disabled_status(state.storage().protection_status().state())),
     )
 }
 

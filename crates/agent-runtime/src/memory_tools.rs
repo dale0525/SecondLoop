@@ -4,7 +4,7 @@ use crate::memory::{
     MemoryRecallRequest, MemoryRecord, MemoryScope, MemorySensitivity, MemoryTombstoneReason,
     MemoryUpdate,
 };
-use crate::tools::{ToolDefinition, ToolPermission, ToolSource};
+use crate::tools::{ToolDefinition, ToolPermission, ToolPersistence, ToolSource};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -371,6 +371,7 @@ fn definition(
         input_schema,
         output_schema: None,
         permission,
+        persistence: ToolPersistence::for_permission(permission),
         source: ToolSource::HostCapability {
             capability: "agentweave.host.memory/v1".into(),
         },

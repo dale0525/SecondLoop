@@ -1,3 +1,4 @@
+use crate::event_persistence::project_runtime_event_for_persistence;
 use crate::events::RuntimeEvent;
 use crate::session::{
     ConversationEventRecord, ConversationScope, ConversationTurn, ConversationTurnEventPage,
@@ -38,7 +39,7 @@ impl Storage {
         scope.validate()?;
         validate_request_id(request_id)?;
         anyhow::ensure!(!user_content.trim().is_empty(), "turn content is required");
-        let mut tx = self.pool().begin().await?;
+        let mut tx = self.pool().begin_with("BEGIN IMMEDIATE").await?;
         ensure_scoped_session(&mut tx, scope, session_id).await?;
         if let Some(turn) = get_turn_by_request(&mut tx, scope, session_id, request_id).await? {
             let user_message = get_message(&mut tx, &turn.user_message_id).await?;
@@ -164,11 +165,13 @@ impl Storage {
         event: &RuntimeEvent,
     ) -> anyhow::Result<Option<ConversationEventRecord>> {
         scope.validate()?;
-        let mut tx = self.pool().begin().await?;
+        let mut tx = self.pool().begin_with("BEGIN IMMEDIATE").await?;
         let Some(turn) = get_turn(&mut tx, scope, session_id, turn_id).await? else {
+            tx.rollback().await?;
             return Ok(None);
         };
         if turn.status.is_terminal() {
+            tx.rollback().await?;
             return Ok(None);
         }
         let record = insert_turn_event(&mut tx, session_id, turn_id, event, Utc::now()).await?;
@@ -196,7 +199,7 @@ impl Storage {
             failure_message,
         } = completion;
         anyhow::ensure!(status.is_terminal(), "turn terminal status is required");
-        let mut tx = self.pool().begin().await?;
+        let mut tx = self.pool().begin_with("BEGIN IMMEDIATE").await?;
         let turn = get_turn(&mut tx, scope, session_id, turn_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("turn not found in conversation scope"))?;
@@ -292,7 +295,7 @@ impl Storage {
         for row in rows {
             let turn_id: String = row.try_get("id")?;
             let session_id: String = row.try_get("session_id")?;
-            let mut tx = self.pool().begin().await?;
+            let mut tx = self.pool().begin_with("BEGIN IMMEDIATE").await?;
             let status: Option<String> =
                 sqlx::query_scalar("SELECT status FROM conversation_turns WHERE id = ?")
                     .bind(&turn_id)
@@ -423,7 +426,7 @@ async fn insert_turn_event(
     .bind(session_id)
     .fetch_one(&mut **tx)
     .await?;
-    let payload = serde_json::to_value(event)?;
+    let payload = project_runtime_event_for_persistence(event)?;
     let kind = payload
         .get("type")
         .and_then(serde_json::Value::as_str)

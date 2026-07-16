@@ -75,7 +75,26 @@ pixi run server
 
 At startup, the Runtime validates the configuration, App scope, secret ID, and Connector account authorization. The Server fails closed if the Vault is missing, the scope does not match, the TLS policy is unsafe, or the configuration file is a symbolic link.
 
-## 5. Known compatibility boundaries
+## 5. Run the dedicated live smoke
+
+The default pull request gate only compiles the ignored live test. It never reads repository secrets and never connects to an external mailbox. A maintainer can run `.github/workflows/live-mail-smoke.yml` manually after configuring the protected `live-mail-smoke` environment.
+
+The environment requires these secrets:
+
+- `LIVE_MAIL_IMAP_HOST`
+- `LIVE_MAIL_IMAP_PORT`
+- `LIVE_MAIL_SMTP_HOST`
+- `LIVE_MAIL_SMTP_PORT`
+- `LIVE_MAIL_USERNAME`
+- `LIVE_MAIL_PASSWORD`
+- `LIVE_MAIL_FROM_ADDRESS`
+- `LIVE_MAIL_TO_ADDRESS`
+
+`LIVE_MAIL_INBOX` is optional and defaults to `INBOX`. `LIVE_MAIL_SMTP_TLS` is optional and defaults to `start_tls`; its other supported value is `implicit`. IMAP always uses implicit TLS.
+
+The sender and recipient must be the same dedicated account. The smoke lists the real IMAP mailboxes, creates a uniquely identified local draft, binds an exact send preview and approval, submits it through SMTP, and waits for the same Message-ID to appear through IMAP. Configuration values, credentials, and message content are not printed. A missing secret, an external recipient, a TLS failure, an uncertain SMTP result, or an unobserved delivery fails the workflow.
+
+## 6. Known compatibility boundaries
 
 - IMAP supports mailbox listing, search, read, mark-as-read, and move operations. When the server does not provide thread IDs, thread semantics conservatively treat each message as a separate thread.
 - Drafts are stored in a local deterministic draft store by default because IMAP providers vary widely in their Drafts folder behavior.
@@ -83,4 +102,4 @@ At startup, the Runtime validates the configuration, App scope, secret ID, and C
 - HTML mail is treated as untrusted content. Active content is not executed, and prompt-like text in external mail cannot alter Runtime instructions or approval policy.
 - OAuth, the Gmail API, and Microsoft Graph should be integrated as separate adapters instead of adding vendor behavior to the Mail Foundation Skill.
 
-The repository's default conformance gate uses a local Fake IMAP/SMTP server and requires no real account. Run live provider validation separately and use a dedicated test account.
+The repository's default conformance gate uses a local Fake IMAP/SMTP server and requires no real account. The protected live smoke is an additional, explicitly triggered provider check.

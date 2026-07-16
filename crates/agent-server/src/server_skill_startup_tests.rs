@@ -1,5 +1,6 @@
 use super::server_skill_startup::{
-    BuiltinSkillsMode, load_skill_manager, load_skill_manager_with_mode,
+    BuiltinSkillsMode, app_packages_root_from_lookup, load_skill_manager,
+    load_skill_manager_with_mode,
 };
 use agent_runtime::platform::PlatformId;
 use agent_runtime::skill_bundle::{BuildSkillBundleRequest, build_skill_bundle};
@@ -26,6 +27,40 @@ impl TestDir {
 impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn explicit_packaged_app_source_overrides_source_tree_packages() {
+    let values = std::collections::BTreeMap::from([
+        ("AGENTWEAVE_APP_ROOT", "/release/agent-app/app"),
+        (
+            "AGENTWEAVE_APP_PACKAGES_ROOT",
+            "/release/agent-app/packages",
+        ),
+    ]);
+    let root = app_packages_root_from_lookup(|name| values.get(name).map(Into::into)).unwrap();
+
+    assert_eq!(root, Some("/release/agent-app/packages".into()));
+}
+
+#[test]
+fn development_app_source_defaults_to_app_local_packages() {
+    let root = app_packages_root_from_lookup(|name| {
+        (name == "AGENTWEAVE_APP_ROOT").then(|| "/source/example-app".into())
+    })
+    .unwrap();
+
+    assert_eq!(root, Some("/source/example-app/packages".into()));
+}
+
+#[test]
+fn explicit_app_packages_source_requires_an_absolute_nonempty_path() {
+    for value in ["", "relative/packages"] {
+        let result = app_packages_root_from_lookup(|name| {
+            (name == "AGENTWEAVE_APP_PACKAGES_ROOT").then(|| value.into())
+        });
+        assert!(result.is_err());
     }
 }
 

@@ -12,7 +12,7 @@ use crate::skill_store_secure_roots::{
     PreparedStoreDirectory, ensure_directory, open_prepared_directory, opened_package_snapshot,
     reserve_opened_directory,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub(crate) struct PreparedManagedActivation {
@@ -226,7 +226,7 @@ impl PreparedManagedActivation {
             && binding.storage_path == self.destination_path
             && binding.store.paths.identity == self.store.paths.identity
             && self.promotion.content_hash == self.expectation.content_hash
-            && PathBuf::from(&self.promotion.storage_path) == self.destination_path;
+            && Path::new(&self.promotion.storage_path) == self.destination_path;
         if !exact {
             return Err(SkillStoreBoundaryError::Conflict(anyhow::anyhow!(
                 "prepared activation destination changed"

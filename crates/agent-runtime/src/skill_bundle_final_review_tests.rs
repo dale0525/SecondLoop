@@ -28,6 +28,7 @@ async fn generation_replacement_after_final_validation_returns_error_with_previo
     let publishing = tokio::spawn(async move { build_skill_bundle(request).await });
     let generation = gate.wait_entered().await;
     let displaced = generation.with_file_name(uuid::Uuid::new_v4().to_string());
+    make_directory_replaceable(&generation).await;
     tokio::fs::rename(&generation, &displaced).await.unwrap();
     tokio::fs::create_dir(&generation).await.unwrap();
     tokio::fs::write(generation.join("attacker"), "replacement")
@@ -94,6 +95,7 @@ async fn first_publication_generation_replacement_returns_error_without_authorit
     let publishing = tokio::spawn(async move { build_skill_bundle(request).await });
     let generation = gate.wait_entered().await;
     let displaced = generation.with_file_name(uuid::Uuid::new_v4().to_string());
+    make_directory_replaceable(&generation).await;
     tokio::fs::rename(&generation, &displaced).await.unwrap();
     tokio::fs::create_dir(&generation).await.unwrap();
     tokio::fs::write(generation.join("attacker"), "replacement")
@@ -379,6 +381,7 @@ async fn committed_generation_replacement_falls_back_to_explicit_previous_genera
         .join("generations")
         .join(current["active"]["generation"].as_str().unwrap());
     let displaced = active.with_file_name(uuid::Uuid::new_v4().to_string());
+    make_directory_replaceable(&active).await;
     tokio::fs::rename(&active, &displaced).await.unwrap();
     tokio::fs::create_dir(&active).await.unwrap();
     tokio::fs::write(active.join("attacker"), "replacement")
@@ -815,6 +818,20 @@ async fn wait_for_path(path: &Path) {
     })
     .await
     .unwrap_or_else(|_| panic!("timed out waiting for {}", path.display()));
+}
+
+async fn make_directory_replaceable(path: &Path) {
+    for path in [path, path.parent().unwrap()] {
+        let mut permissions = tokio::fs::metadata(path).await.unwrap().permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(permissions.mode() | 0o300);
+        }
+        #[cfg(not(unix))]
+        permissions.set_readonly(false);
+        tokio::fs::set_permissions(path, permissions).await.unwrap();
+    }
 }
 
 struct FinalReviewFixture {

@@ -4,6 +4,7 @@ pub struct AppFoundationRuntimes {
     pub automation_tools: Option<agent_runtime::automation_tools::AutomationToolRuntime>,
     pub attachment_tools: Option<agent_runtime::attachment_tools::AttachmentToolRuntime>,
     pub connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
+    pub mail_actions: Option<agent_runtime::foundation_actions::MailActionService>,
 }
 
 impl AppFoundationRuntimes {
@@ -18,6 +19,7 @@ impl AppFoundationRuntimes {
             automation_tools: None,
             attachment_tools: None,
             connector_tools,
+            mail_actions: None,
         }
     }
 
@@ -36,4 +38,59 @@ impl AppFoundationRuntimes {
         self.attachment_tools = attachment_tools;
         self
     }
+
+    pub fn with_mail_actions(
+        mut self,
+        mail_actions: Option<agent_runtime::foundation_actions::MailActionService>,
+    ) -> Self {
+        self.mail_actions = mail_actions;
+        self
+    }
 }
+
+impl AppState {
+    pub(crate) fn mail_account_manager(
+        &self,
+    ) -> Option<std::sync::Arc<agent_runtime::mail_imap_smtp_accounts::ImapSmtpMailAccountManager>>
+    {
+        self.mail_account_manager.clone()
+    }
+
+    pub fn with_mail_account_manager(
+        mut self,
+        manager: std::sync::Arc<agent_runtime::mail_imap_smtp_accounts::ImapSmtpMailAccountManager>,
+    ) -> Self {
+        self.mail_account_manager = Some(manager);
+        self
+    }
+    pub fn with_mail_foundation(
+        mut self,
+        connector_tools: agent_runtime::connector_tools::ConnectorToolRuntime,
+        mail_actions: agent_runtime::foundation_actions::MailActionService,
+    ) -> Self {
+        self.connector_tools = Some(connector_tools);
+        self.mail_actions = Some(mail_actions);
+        self
+    }
+
+    pub fn with_calendar_foundation(
+        mut self,
+        connector_tools: agent_runtime::connector_tools::ConnectorToolRuntime,
+        calendar_actions: agent_runtime::calendar_actions::CalendarActionService,
+    ) -> Self {
+        self.connector_tools = Some(connector_tools);
+        self.calendar_actions = Some(calendar_actions);
+        self
+    }
+
+    pub fn with_contacts_foundation(
+        mut self,
+        connector_tools: agent_runtime::connector_tools::ConnectorToolRuntime,
+        contacts_actions: agent_runtime::contacts_actions::ContactsActionService,
+    ) -> Self {
+        self.connector_tools = Some(connector_tools);
+        self.contacts_actions = Some(contacts_actions);
+        self
+    }
+}
+use crate::api::AppState;

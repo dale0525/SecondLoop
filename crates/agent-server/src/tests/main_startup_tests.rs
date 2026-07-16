@@ -14,6 +14,8 @@ async fn production_registry_selects_local_and_isolates_two_tenant_routers() {
         },
         server_skill_startup::BuiltinSkillsMode::Directory,
         SkillManagementPolicy::owner_only(),
+        None,
+        None,
     )
     .await
     .unwrap();
@@ -83,10 +85,9 @@ async fn session_status(app: &axum::Router, session_id: &str) -> StatusCode {
     app.clone()
         .oneshot(
             Request::builder()
-                .method("POST")
-                .uri(format!("/sessions/{session_id}/messages"))
-                .header("content-type", "application/json")
-                .body(Body::from(r#"{"content":"tenant check"}"#))
+                .method("GET")
+                .uri(format!("/sessions/{session_id}"))
+                .body(Body::empty())
                 .unwrap(),
         )
         .await

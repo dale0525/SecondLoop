@@ -12,12 +12,14 @@ agent-runtime = { path = "../agent-runtime" }
 anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
+hex.workspace = true
 model-gateway = { path = "../model-gateway" }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 sqlx.workspace = true

@@ -3,6 +3,8 @@ resolver = "2"
 members = [
   "crates/model-gateway",
   "crates/agent-runtime",
+  "crates/storage-sqlcipher",
+  "crates/provider-adapters",
   "crates/agent-server",
   "crates/mobile-ffi",
 ]
@@ -30,6 +32,7 @@ reqwest = { version = "0.12", features = ["json", "stream"] }
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "pool", "smtp-transport", "tokio1-native-tls"] }
 mail-parser = { version = "0.11", features = ["full_encoding"] }
 native-tls = "0.2"
+percent-encoding = "2"
 rustix = { version = "1", features = ["fs", "process"] }
 same-file = "1"
 semver = { version = "1", features = ["serde"] }
@@ -45,6 +48,7 @@ tokio-util = { version = "0.7", features = ["rt"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-normalization = "0.1"
+url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 zeroize = "1"
 windows-sys = { version = "0.61", features = [

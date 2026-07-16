@@ -64,6 +64,7 @@ pub struct MobileRuntimeHost<C> {
     conversation_scope: ConversationScope,
     memory: Option<crate::memory_tools::MemoryToolRuntime>,
     connector_tools: Option<crate::connector_tools::ConnectorToolRuntime>,
+    mail_actions: Option<crate::foundation_actions::MailActionService>,
 }
 
 impl<C> MobileRuntimeHost<C>
@@ -109,12 +110,21 @@ where
             conversation_scope,
             memory: None,
             connector_tools: None,
+            mail_actions: None,
         })
     }
 
     pub fn with_app_prompt(mut self, app_prompt: AppPromptConfig) -> Self {
         self.conversation_scope = ConversationScope::local(&app_prompt.identity.app_id);
         self.app_prompt = app_prompt;
+        self
+    }
+
+    pub fn with_mail_actions(
+        mut self,
+        mail_actions: Option<crate::foundation_actions::MailActionService>,
+    ) -> Self {
+        self.mail_actions = mail_actions;
         self
     }
 
@@ -218,6 +228,9 @@ where
         if let Some(connectors) = &self.connector_tools {
             runner = runner.with_connector_tools(connectors.clone());
         }
+        if let Some(actions) = &self.mail_actions {
+            runner = runner.with_mail_actions(actions.clone());
+        }
         let events = runner
             .run_request(
                 crate::turn_request::TurnRequest::new(content)
@@ -253,6 +266,7 @@ pub struct HttpMobileRuntimeHost<R> {
     conversation_scope: ConversationScope,
     memory: Option<crate::memory_tools::MemoryToolRuntime>,
     connector_tools: Option<crate::connector_tools::ConnectorToolRuntime>,
+    mail_actions: Option<crate::foundation_actions::MailActionService>,
 }
 
 impl<R> HttpMobileRuntimeHost<R>
@@ -310,12 +324,21 @@ where
             conversation_scope,
             memory: None,
             connector_tools: None,
+            mail_actions: None,
         })
     }
 
     pub fn with_app_prompt(mut self, app_prompt: AppPromptConfig) -> Self {
         self.conversation_scope = ConversationScope::local(&app_prompt.identity.app_id);
         self.app_prompt = app_prompt;
+        self
+    }
+
+    pub fn with_mail_actions(
+        mut self,
+        mail_actions: Option<crate::foundation_actions::MailActionService>,
+    ) -> Self {
+        self.mail_actions = mail_actions;
         self
     }
 
@@ -434,6 +457,9 @@ where
         }
         if let Some(connectors) = &self.connector_tools {
             runner = runner.with_connector_tools(connectors.clone());
+        }
+        if let Some(actions) = &self.mail_actions {
+            runner = runner.with_mail_actions(actions.clone());
         }
         let events = if let Some((service, actor)) = &self.management {
             runner = runner.with_skill_management(service.clone());

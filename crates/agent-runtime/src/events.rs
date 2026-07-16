@@ -1,6 +1,6 @@
 use crate::policy::ApprovalPolicy;
 use crate::skill_policy::SkillOperation;
-use crate::tools::ToolPermission;
+use crate::tools::{ToolPermission, ToolPersistence};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -64,10 +64,14 @@ pub enum RuntimeEvent {
         call_id: String,
         name: String,
         arguments: Value,
+        #[serde(default)]
+        persistence: ToolPersistence,
     },
     ToolCallFinished {
         call_id: String,
         result: Value,
+        #[serde(default)]
+        persistence: ToolPersistence,
     },
     ToolObserverDiagnostic {
         operation: String,

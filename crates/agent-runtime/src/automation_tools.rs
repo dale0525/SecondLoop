@@ -6,7 +6,7 @@ use crate::scheduler::{
     SchedulerStore,
 };
 use crate::storage::Storage;
-use crate::tools::{ToolDefinition, ToolPermission, ToolSource};
+use crate::tools::{ToolDefinition, ToolPermission, ToolPersistence, ToolSource};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -348,6 +348,7 @@ fn definition(
         input_schema,
         output_schema: None,
         permission,
+        persistence: ToolPersistence::for_permission(permission),
         source: ToolSource::HostCapability {
             capability: "agentweave.host.automation/v1".into(),
         },

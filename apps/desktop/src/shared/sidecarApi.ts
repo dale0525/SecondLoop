@@ -11,6 +11,10 @@ export type SidecarApiOperation =
   | "devSkills.reload"
   | "devSkills.validate"
   | "mail.connect"
+  | "mail.configuration.delete"
+  | "mail.configuration.get"
+  | "mail.configuration.list"
+  | "mail.configuration.put"
   | "mail.disconnect"
   | "mail.list"
   | "mail.status"
@@ -22,6 +26,9 @@ export type SidecarApiOperation =
   | "notifications.enqueue"
   | "notifications.get"
   | "notifications.list"
+  | "oauth.cancel"
+  | "oauth.start"
+  | "oauth.status"
   | "schedules.create"
   | "schedules.get"
   | "schedules.list"
@@ -41,6 +48,34 @@ export type SidecarApiOperation =
   | "turns.events";
 
 export type FoundationTaskStatus = "open" | "completed" | "cancelled";
+
+export type FoundationMailTlsMode = "implicit" | "start_tls" | "none";
+
+export type FoundationMailConfigurationInput = Readonly<{
+  id: string;
+  displayName: string;
+  primaryName?: string;
+  primaryAddress: string;
+  username: string;
+  password: string;
+  imapHost: string;
+  imapPort: number;
+  imapTls: FoundationMailTlsMode;
+  smtpHost: string;
+  smtpPort: number;
+  smtpTls: FoundationMailTlsMode;
+  archiveMailbox?: string;
+  sentMailbox?: string;
+  draftsMailbox?: string;
+  trashMailbox?: string;
+  allowInsecureLocalhost?: boolean;
+}>;
+
+export type FoundationMailConfiguration = Readonly<
+  Omit<FoundationMailConfigurationInput, "password"> & {
+    credentialConfigured: boolean;
+  }
+>;
 
 export type FoundationTaskPriority = "low" | "normal" | "high" | "urgent";
 
@@ -145,4 +180,35 @@ export type FoundationNotificationRecord = Readonly<{
 export type SidecarApiRequest = Readonly<{
   input?: unknown;
   operation: SidecarApiOperation;
+}>;
+
+export type OAuthAuthorizationStatus =
+  | "cancelled"
+  | "completed"
+  | "denied"
+  | "exchanging"
+  | "expired"
+  | "failed"
+  | "preparing"
+  | "pending";
+
+export type OAuthAuthorizationSummary = Readonly<{
+  authorizationId: string;
+  expiresAt: string;
+  providerId: string;
+  status: OAuthAuthorizationStatus;
+}>;
+
+export type OAuthAuthorizationBinding = Readonly<{
+  accountId: string;
+  connectorId: string;
+}>;
+
+export type OAuthAuthorizationView = OAuthAuthorizationSummary & Readonly<{
+  bindings: readonly OAuthAuthorizationBinding[];
+  connectorIds: readonly string[];
+  createdAt: string;
+  errorCode: string | null;
+  requestedCapabilities: readonly string[];
+  updatedAt: string;
 }>;

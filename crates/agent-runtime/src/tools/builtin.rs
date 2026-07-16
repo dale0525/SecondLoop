@@ -1,6 +1,6 @@
 use super::{
-    CommandMode, RuntimeConfig, ToolDefinition, ToolPermission, ToolSource, command, patch, path,
-    permission_allowed,
+    CommandMode, RuntimeConfig, ToolDefinition, ToolPermission, ToolPersistence, ToolSource,
+    command, patch, path, permission_allowed,
     result::{ToolError, ToolResult, ToolResultMetadata},
     search,
 };
@@ -423,6 +423,7 @@ fn tool_definition(
         input_schema,
         output_schema: None,
         permission,
+        persistence: ToolPersistence::for_permission(permission),
         source: ToolSource::BuiltIn,
     }
 }

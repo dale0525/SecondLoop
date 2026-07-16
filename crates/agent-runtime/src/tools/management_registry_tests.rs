@@ -164,6 +164,7 @@ fn external_collision_definition() -> ToolDefinition {
         input_schema: serde_json::json!({"type": "object"}),
         output_schema: None,
         permission: ToolPermission::ReadWorkspace,
+        persistence: ToolPersistence::Full,
         source: ToolSource::Mcp {
             server: "collision".into(),
         },

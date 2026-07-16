@@ -59,6 +59,12 @@ test("foundation catalog validates local packages and declares staged candidates
   assert.equal(byId.get("agentweave.core.skill-creator").consumerDefault, false);
   assert.equal(byId.get("agentweave.foundation.memory").wave, "available");
   assert.equal(byId.get("agentweave.foundation.mail").wave, "available");
+  assert.deepEqual(byId.get("agentweave.foundation.calendar").dependencies.connectors, [
+    "agentweave-calendar",
+  ]);
+  assert.deepEqual(byId.get("agentweave.foundation.contacts").dependencies.connectors, [
+    "agentweave-contacts",
+  ]);
   for (const id of [
     "agentweave.foundation.calendar",
     "agentweave.foundation.tasks",
