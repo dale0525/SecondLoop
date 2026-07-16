@@ -31,7 +31,7 @@ export async function handleStructuredActionResponse(options: {
 }): Promise<unknown> {
   const response = exactRecord(options.value, ["hostDirective", "receipt"]);
   const receipt = boundedJson(response.receipt, "receipt");
-  if (response.hostDirective === undefined) return receipt;
+  if (response.hostDirective === undefined || response.hostDirective === null) return receipt;
   const directive = exactRecord(response.hostDirective, [
     "authorization_id",
     "expected_origin",
