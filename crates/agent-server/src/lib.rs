@@ -9,6 +9,7 @@ pub mod data_protection;
 mod data_protection_api;
 mod dev_api;
 mod dev_skill_authoring;
+mod dev_skill_authoring_error;
 pub mod dev_skills;
 mod event_visibility;
 mod foundation_api;

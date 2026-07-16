@@ -12,6 +12,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 
+use crate::dev_skill_authoring_error::DevSkillAuthoringError;
 use crate::dev_skills::{
     DevSkillInventory, ensure_package_is_not_required, scan_skill_packages,
     scan_skill_packages_with_candidate,
@@ -135,7 +136,7 @@ where
     let current = capture_editable_package(&target, directory).await?;
     anyhow::ensure!(
         current.source.source_revision == request.expected_revision,
-        "skill package revision conflict"
+        DevSkillAuthoringError::conflict("skill package revision conflict")
     );
     let staging = temporary_path(&canonical_root, "update");
     let backup = temporary_path(&canonical_root, "backup");
@@ -148,7 +149,8 @@ where
         ensure_inventory_has_no_validation_errors(&candidate_inventory)?;
         let published = capture_editable_package(&staging, directory).await?;
         if published.package_id != current.package_id {
-            ensure_package_is_not_required(&candidate_inventory, &current.package_id)?;
+            ensure_package_is_not_required(&candidate_inventory, &current.package_id)
+                .map_err(classify_unprocessable)?;
         }
         pre_publish().await;
         ensure_package_unchanged(&target, directory, &current.snapshot).await?;
@@ -198,7 +200,7 @@ pub(crate) async fn delete_skill(
     let current = capture_editable_package(&target, directory).await?;
     anyhow::ensure!(
         current.source.source_revision == request.expected_revision,
-        "skill package revision conflict"
+        DevSkillAuthoringError::conflict("skill package revision conflict")
     );
 
     let backup = temporary_path(&canonical_root, "delete");
@@ -217,7 +219,8 @@ pub(crate) async fn delete_skill(
         .await
         .and_then(|inventory| {
             ensure_inventory_has_no_validation_errors(&inventory)?;
-            ensure_package_is_not_required(&inventory, &current.package_id)?;
+            ensure_package_is_not_required(&inventory, &current.package_id)
+                .map_err(classify_unprocessable)?;
             Ok(inventory)
         }) {
         Ok(inventory) => inventory,
@@ -258,9 +261,14 @@ fn ensure_inventory_has_no_validation_errors(inventory: &DevSkillInventory) -> a
             .packages
             .iter()
             .all(|package| package.validation.errors.is_empty()),
-        "skill inventory validation failed"
+        DevSkillAuthoringError::unprocessable("skill inventory validation failed")
     );
     Ok(())
+}
+
+fn classify_unprocessable(error: anyhow::Error) -> anyhow::Error {
+    let message = error.to_string();
+    error.context(DevSkillAuthoringError::unprocessable(message))
 }
 
 async fn canonical_root(root: &Path) -> anyhow::Result<PathBuf> {
@@ -291,16 +299,19 @@ fn validate_directory(value: &str) -> anyhow::Result<()> {
                 .all(|(index, byte)| byte.is_ascii_lowercase()
                     || byte.is_ascii_digit()
                     || (byte == b'-' && index > 0)),
-        "skill package directory is invalid"
+        DevSkillAuthoringError::bad_request("skill package directory is invalid")
     );
-    anyhow::ensure!(!value.ends_with('-'), "skill package directory is invalid");
+    anyhow::ensure!(
+        !value.ends_with('-'),
+        DevSkillAuthoringError::bad_request("skill package directory is invalid")
+    );
     Ok(())
 }
 
 fn validate_revision(value: &str) -> anyhow::Result<()> {
     anyhow::ensure!(
         value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()),
-        "skill package revision is invalid"
+        DevSkillAuthoringError::bad_request("skill package revision is invalid")
     );
     Ok(())
 }
@@ -308,37 +319,45 @@ fn validate_revision(value: &str) -> anyhow::Result<()> {
 fn validate_source(skill_md: &str, manifest: &Value) -> anyhow::Result<SkillPackageDescriptor> {
     anyhow::ensure!(
         !skill_md.trim().is_empty() && skill_md.len() <= MAX_SKILL_MD_BYTES,
-        "SKILL.md content is invalid"
+        DevSkillAuthoringError::bad_request("SKILL.md content is invalid")
     );
     let manifest_bytes = serde_json::to_vec(manifest)?;
     anyhow::ensure!(
         manifest_bytes.len() <= MAX_MANIFEST_BYTES,
-        "skill package manifest is too large"
+        DevSkillAuthoringError::bad_request("skill package manifest is too large")
     );
-    let descriptor: SkillPackageDescriptor = serde_json::from_value(manifest.clone())?;
+    let descriptor: SkillPackageDescriptor = serde_json::from_value(manifest.clone()).context(
+        DevSkillAuthoringError::bad_request("skill package manifest is invalid"),
+    )?;
     anyhow::ensure!(
         matches!(
             descriptor.kind,
             SkillPackageKind::InstructionOnly | SkillPackageKind::HostToolsOnly
         ),
-        "development editor supports instruction-only and host-tools-only packages"
+        DevSkillAuthoringError::unprocessable(
+            "development editor supports instruction-only and host-tools-only packages",
+        )
     );
     Ok(descriptor)
 }
 
 async fn safe_existing_package(root: &Path, directory: &str) -> anyhow::Result<PathBuf> {
     let target = root.join(directory);
-    let metadata = tokio::fs::symlink_metadata(&target)
-        .await
-        .context("skill package not found")?;
+    let metadata = match tokio::fs::symlink_metadata(&target).await {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(DevSkillAuthoringError::not_found("skill package not found").into());
+        }
+        Err(error) => return Err(error).context("failed to inspect skill package"),
+    };
     anyhow::ensure!(
         metadata.is_dir() && !metadata.file_type().is_symlink(),
-        "skill package must be a real directory"
+        DevSkillAuthoringError::bad_request("skill package must be a real directory")
     );
     let canonical = tokio::fs::canonicalize(&target).await?;
     anyhow::ensure!(
         canonical.parent() == Some(root),
-        "unsafe skill package path"
+        DevSkillAuthoringError::bad_request("unsafe skill package path")
     );
     Ok(canonical)
 }
@@ -368,15 +387,17 @@ async fn capture_editable_package(
             descriptor.kind,
             SkillPackageKind::InstructionOnly | SkillPackageKind::HostToolsOnly
         ),
-        "runtime skill packages are read-only"
+        DevSkillAuthoringError::unprocessable("runtime skill packages are read-only")
     );
     anyhow::ensure!(
         !descriptor.id.as_str().starts_with("agentweave.foundation."),
-        "Foundation skill packages are read-only"
+        DevSkillAuthoringError::unprocessable("Foundation skill packages are read-only")
     );
     let package_id = descriptor.id.as_str().to_string();
     match tokio::fs::symlink_metadata(package.join("skill.json")).await {
-        Ok(_) => anyhow::bail!("runtime skill packages are read-only"),
+        Ok(_) => anyhow::bail!(DevSkillAuthoringError::unprocessable(
+            "runtime skill packages are read-only"
+        )),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
@@ -405,10 +426,10 @@ async fn ensure_package_unchanged(
 ) -> anyhow::Result<()> {
     let actual = capture_editable_package(package, directory)
         .await
-        .map_err(|_| anyhow::anyhow!("skill package changed during update"))?;
+        .map_err(|_| DevSkillAuthoringError::conflict("skill package changed during update"))?;
     anyhow::ensure!(
         actual.snapshot == *expected,
-        "skill package changed during update"
+        DevSkillAuthoringError::conflict("skill package changed during update")
     );
     Ok(())
 }
@@ -424,7 +445,7 @@ fn hash_tree_entry(root: &Path, relative: &Path, digest: &mut Sha256) -> anyhow:
     let metadata = std::fs::symlink_metadata(&path)?;
     anyhow::ensure!(
         !metadata.file_type().is_symlink(),
-        "skill package cannot contain symbolic links"
+        DevSkillAuthoringError::bad_request("skill package cannot contain symbolic links")
     );
     hash_bytes(digest, relative.to_string_lossy().as_bytes());
     hash_metadata(digest, &path, &metadata)?;
@@ -440,7 +461,9 @@ fn hash_tree_entry(root: &Path, relative: &Path, digest: &mut Sha256) -> anyhow:
         digest.update([b'f']);
         hash_bytes(digest, &std::fs::read(path)?);
     } else {
-        anyhow::bail!("skill package contains an unsupported entry");
+        anyhow::bail!(DevSkillAuthoringError::bad_request(
+            "skill package contains an unsupported entry"
+        ));
     }
     Ok(())
 }
@@ -513,7 +536,9 @@ fn hash_platform_metadata(_digest: &mut Sha256, _metadata: &std::fs::Metadata) {
 
 async fn source_from_package(package: &Path, directory: &str) -> anyhow::Result<DevSkillSource> {
     let skill_md_bytes = read_confined_file(package, "SKILL.md", MAX_SKILL_MD_BYTES).await?;
-    let skill_md = String::from_utf8(skill_md_bytes).context("SKILL.md must be valid UTF-8")?;
+    let skill_md = String::from_utf8(skill_md_bytes).context(
+        DevSkillAuthoringError::bad_request("SKILL.md must be valid UTF-8"),
+    )?;
     let manifest_bytes = read_confined_file(package, "agentweave.json", MAX_MANIFEST_BYTES).await?;
     let manifest: Value = serde_json::from_slice(&manifest_bytes)?;
     validate_source(&skill_md, &manifest)?;
@@ -528,7 +553,9 @@ async fn source_from_package(package: &Path, directory: &str) -> anyhow::Result<
 async fn read_confined_file(package: &Path, name: &str, maximum: usize) -> anyhow::Result<Vec<u8>> {
     read_package_regular_file_nofollow(package, Path::new(name), maximum)
         .await
-        .with_context(|| format!("{name} must be a confined regular file"))
+        .context(DevSkillAuthoringError::bad_request(format!(
+            "{name} must be a confined regular file"
+        )))
 }
 
 async fn write_source_tree(
@@ -571,7 +598,7 @@ async fn validate_staged_package(root: &Path, package: &Path) -> anyhow::Result<
     let loaded = SkillPackageDescriptor::load(package).await?;
     anyhow::ensure!(
         loaded.descriptor.package.include_instructions,
-        "edited package must include instructions"
+        DevSkillAuthoringError::bad_request("edited package must include instructions")
     );
     SkillCatalog::read_development_skill_summary(root, &package.join("SKILL.md")).await?;
     Ok(())
@@ -595,7 +622,7 @@ fn copy_tree_sync(source: &Path, destination: &Path) -> anyhow::Result<()> {
         let file_type = entry.file_type()?;
         anyhow::ensure!(
             !file_type.is_symlink(),
-            "skill package cannot contain symbolic links"
+            DevSkillAuthoringError::bad_request("skill package cannot contain symbolic links")
         );
         let target = destination.join(entry.file_name());
         if file_type.is_dir() {
@@ -603,7 +630,9 @@ fn copy_tree_sync(source: &Path, destination: &Path) -> anyhow::Result<()> {
         } else if file_type.is_file() {
             std::fs::copy(entry.path(), target)?;
         } else {
-            anyhow::bail!("skill package contains an unsupported entry");
+            anyhow::bail!(DevSkillAuthoringError::bad_request(
+                "skill package contains an unsupported entry"
+            ));
         }
     }
     Ok(())
@@ -617,7 +646,7 @@ async fn restore_moved_package(target: &Path, backup: &Path) -> anyhow::Result<(
 
 async fn ensure_path_absent(path: &Path, occupied_message: &str) -> anyhow::Result<()> {
     match tokio::fs::symlink_metadata(path).await {
-        Ok(_) => anyhow::bail!(occupied_message.to_string()),
+        Ok(_) => anyhow::bail!(DevSkillAuthoringError::conflict(occupied_message)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
     }

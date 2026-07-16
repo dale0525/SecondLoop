@@ -4,6 +4,7 @@ use agent_runtime::structured_content::{
     StructuredActionConstraints, StructuredActionExecution, StructuredActionIntent,
     StructuredActionReceipt, StructuredContent, StructuredContentAudience,
 };
+use agent_runtime::structured_content_error::{StructuredContentError, StructuredContentErrorKind};
 use agent_runtime::structured_content_store::StructuredActionClaim;
 use axum::{
     Json, Router,
@@ -330,26 +331,20 @@ fn no_store_json<T: Serialize>(value: T) -> Response {
 }
 
 fn map_structured_error(error: anyhow::Error) -> ApiError {
-    let message = error.to_string();
-    if message.contains("not found") || message.contains("unavailable") || message.contains("scope")
-    {
-        ApiError::NotFound("structured content resource was not found")
-    } else if message.contains("conflict")
-        || message.contains("stale")
-        || message.contains("not executable")
-    {
-        ApiError::Conflict("structured content changed; reload and try again")
-    } else if message.contains("expired") {
-        ApiError::Conflict("structured action expired")
-    } else if message.contains("invalid")
-        || message.contains("unknown")
-        || message.contains("required")
-        || message.contains("too")
-        || message.contains("exceed")
-    {
-        ApiError::BadRequest("structured content request is invalid")
-    } else {
-        ApiError::Internal(error)
+    let Some(classified) = error.downcast_ref::<StructuredContentError>() else {
+        return ApiError::Internal(error);
+    };
+    match classified.kind() {
+        StructuredContentErrorKind::Invalid => {
+            ApiError::BadRequest("structured content request is invalid")
+        }
+        StructuredContentErrorKind::NotFound => {
+            ApiError::NotFound("structured content resource was not found")
+        }
+        StructuredContentErrorKind::Conflict => {
+            ApiError::Conflict("structured content changed; reload and try again")
+        }
+        StructuredContentErrorKind::Expired => ApiError::Conflict("structured action expired"),
     }
 }
 

@@ -20,6 +20,24 @@ use chrono::Duration;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
+#[test]
+fn structured_error_mapping_requires_an_explicit_runtime_classification() {
+    assert!(matches!(
+        map_structured_error(anyhow::anyhow!(
+            "database resource not found while decoding an invalid row"
+        )),
+        ApiError::Internal(_)
+    ));
+    assert!(matches!(
+        map_structured_error(StructuredContentError::not_found("missing binding").into()),
+        ApiError::NotFound(_)
+    ));
+    assert!(matches!(
+        map_structured_error(StructuredContentError::conflict("stale binding").into()),
+        ApiError::Conflict(_)
+    ));
+}
+
 #[tokio::test]
 async fn schedule_action_is_scoped_idempotent_and_advances_the_card() {
     let storage = Storage::connect("sqlite::memory:").await.unwrap();

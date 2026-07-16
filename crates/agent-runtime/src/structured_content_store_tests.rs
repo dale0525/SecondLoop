@@ -482,6 +482,64 @@ async fn untrusted_payloads_and_action_inputs_fail_closed() {
 }
 
 #[tokio::test]
+async fn a2ui_payloads_are_structurally_validated_before_persistence() {
+    let (_storage, _scope, session_id, service) = fixture("a2ui-validation").await;
+    let now = Utc::now();
+    let mut valid = card_request(None, Vec::new());
+    valid.content_id = Some("a2ui-valid".into());
+    valid.mime_type = "application/vnd.a2ui.safe-card+json".into();
+    valid.schema_version = "0.8".into();
+    valid.payload = serde_json::json!({
+        "components": [
+            {"type":"text","style":"heading","text":"Connect workspace"},
+            {"type":"status","label":"Not connected","tone":"warning"},
+            {"type":"field","label":"Provider","value":"Workspace"},
+            {"type":"list","items":["Mail","Calendar"]}
+        ]
+    });
+    service
+        .publish(&session_id, None, valid.clone(), now)
+        .await
+        .unwrap();
+
+    for (content_id, schema_version, payload) in [
+        (
+            "a2ui-unknown-component",
+            "0.8",
+            serde_json::json!({"components":[{"type":"button","label":"Unsafe"}]}),
+        ),
+        (
+            "a2ui-unknown-field",
+            "0.8",
+            serde_json::json!({"components":[{"type":"text","text":"Hi","extra":true}]}),
+        ),
+        (
+            "a2ui-unsupported-schema",
+            "2",
+            serde_json::json!({"components":[{"type":"text","text":"Hi"}]}),
+        ),
+    ] {
+        let mut invalid = valid.clone();
+        invalid.content_id = Some(content_id.into());
+        invalid.schema_version = schema_version.into();
+        invalid.payload = payload;
+        assert!(
+            service
+                .publish(&session_id, None, invalid, now)
+                .await
+                .is_err()
+        );
+        assert!(
+            service
+                .get(&session_id, content_id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+}
+
+#[tokio::test]
 async fn executing_actions_fence_content_updates_and_deletion() {
     let (_storage, _scope, session_id, service) = fixture("execution-fence").await;
     let now = Utc::now();

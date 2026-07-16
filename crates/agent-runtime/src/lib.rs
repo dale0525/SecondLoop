@@ -119,6 +119,8 @@ mod skill_verified;
 pub mod storage;
 pub mod storage_protection;
 pub mod structured_content;
+pub mod structured_content_error;
+mod structured_content_payload;
 mod structured_content_preview;
 pub mod structured_content_store;
 pub mod structured_content_tools;

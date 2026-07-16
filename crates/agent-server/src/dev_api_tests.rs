@@ -24,6 +24,34 @@ use std::{
 };
 use tower::ServiceExt;
 
+use super::dev_skill_authoring_status;
+use crate::dev_skill_authoring_error::DevSkillAuthoringError;
+
+#[test]
+fn authoring_error_mapping_requires_an_explicit_classification() {
+    assert_eq!(
+        dev_skill_authoring_status(anyhow::anyhow!(
+            "filesystem unavailable while reading an invalid package"
+        )),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
+        dev_skill_authoring_status(DevSkillAuthoringError::bad_request("invalid directory").into()),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        dev_skill_authoring_status(DevSkillAuthoringError::conflict("revision changed").into()),
+        StatusCode::CONFLICT
+    );
+    let dependency_error = anyhow::Error::msg("package dependency failed").context(
+        DevSkillAuthoringError::unprocessable("skill inventory validation failed"),
+    );
+    assert_eq!(
+        dev_skill_authoring_status(dependency_error),
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+}
+
 struct TestAgent;
 
 struct DeleteDiagnosticsRootOnReloadSource {

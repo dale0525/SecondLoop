@@ -20,6 +20,7 @@ use crate::dev_skill_authoring::{
     DevSkillCreateRequest, DevSkillDeleteRequest, DevSkillMutationResponse, DevSkillSource,
     DevSkillUpdateRequest,
 };
+use crate::dev_skill_authoring_error::{DevSkillAuthoringError, DevSkillAuthoringErrorKind};
 use crate::dev_skills::DevSkillInventory;
 
 #[derive(Debug, Serialize)]
@@ -255,28 +256,14 @@ async fn delete_skill(
 }
 
 fn dev_skill_authoring_status(error: anyhow::Error) -> StatusCode {
-    let message = error.to_string();
-    if message.contains("revision conflict")
-        || message.contains("changed during update")
-        || message.contains("already exists")
-    {
-        StatusCode::CONFLICT
-    } else if message.contains("not found") || message.contains("unavailable") {
-        StatusCode::NOT_FOUND
-    } else if message.contains("supports instruction-only")
-        || message.contains("read-only")
-        || message.contains("inventory validation failed")
-    {
-        StatusCode::UNPROCESSABLE_ENTITY
-    } else if message.contains("invalid")
-        || message.contains("unsafe")
-        || message.contains("symbolic")
-        || message.contains("must")
-        || message.contains("too large")
-    {
-        StatusCode::BAD_REQUEST
-    } else {
-        StatusCode::INTERNAL_SERVER_ERROR
+    let Some(classified) = error.downcast_ref::<DevSkillAuthoringError>() else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+    match classified.kind() {
+        DevSkillAuthoringErrorKind::BadRequest => StatusCode::BAD_REQUEST,
+        DevSkillAuthoringErrorKind::NotFound => StatusCode::NOT_FOUND,
+        DevSkillAuthoringErrorKind::Conflict => StatusCode::CONFLICT,
+        DevSkillAuthoringErrorKind::Unprocessable => StatusCode::UNPROCESSABLE_ENTITY,
     }
 }
 

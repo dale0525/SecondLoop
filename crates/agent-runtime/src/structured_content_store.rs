@@ -7,16 +7,19 @@ use crate::structured_content::{
     StructuredActionIntent, StructuredActionReceipt, StructuredContent, StructuredContentAudience,
     validate_id, validate_input, validate_public_payload,
 };
+use crate::structured_content_error::StructuredContentError;
+#[cfg(test)]
+use crate::structured_content_payload::AGENTWEAVE_CARD_MIME;
+use crate::structured_content_payload::{supports_interactive_mime, validate_payload_for_mime};
 use crate::structured_content_preview::apply_authoritative_action_preview as preview;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sqlx::{Row, Sqlite, Transaction};
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use uuid::Uuid;
-const AGENTWEAVE_CARD_MIME: &str = "application/vnd.agentweave.card+json";
 const ACTION_LEASE_SECONDS: i64 = 120;
 #[path = "structured_content_updates.rs"]
 mod updates;
@@ -128,7 +131,7 @@ impl StructuredContentService {
             .map(|binding| (binding.action_id.clone(), Uuid::new_v4().to_string()))
             .collect::<BTreeMap<_, _>>();
         let payload = attach_public_binding_ids(payload, &binding_ids)?;
-        validate_payload_for_mime(&request.mime_type, &payload)?;
+        validate_payload_for_mime(&request.mime_type, &request.schema_version, &payload)?;
         let content = StructuredContent {
             content_id: content_id.clone(),
             mime_type: request.mime_type,
@@ -312,7 +315,8 @@ impl StructuredContentService {
         session_id: &str,
         audience: StructuredContentAudience,
     ) -> anyhow::Result<Vec<StructuredContent>> {
-        validate_session_id(session_id)?;
+        validate_session_id(session_id)
+            .map_err(|error| StructuredContentError::invalid(error.to_string()))?;
         let rows = sqlx::query(
             "SELECT c.content_json FROM structured_content_state c INNER JOIN sessions s ON s.id = c.session_id WHERE c.session_id = ? AND c.deleted = 0 AND s.app_id = ? AND s.agent_id = ? AND s.tenant_id = ? AND s.user_id = ? AND s.device_id = ? ORDER BY c.updated_at, c.content_id",
         )
@@ -342,8 +346,10 @@ impl StructuredContentService {
         input: Value,
         now: DateTime<Utc>,
     ) -> anyhow::Result<StructuredActionClaim> {
-        validate_session_id(session_id)?;
-        validate_id(binding_id, "action binding id")?;
+        validate_session_id(session_id)
+            .map_err(|error| StructuredContentError::invalid(error.to_string()))?;
+        validate_id(binding_id, "action binding id")
+            .map_err(|error| StructuredContentError::invalid(error.to_string()))?;
         let mut tx = self.storage.pool().begin_with("BEGIN IMMEDIATE").await?;
         ensure_scoped_session(&mut tx, &self.scope, session_id).await?;
         if let Some(receipt) =
@@ -362,9 +368,14 @@ impl StructuredContentService {
         .bind(session_id)
         .fetch_optional(&mut *tx)
         .await?
-        .ok_or_else(|| anyhow::anyhow!("structured action binding is unavailable"))?;
+        .ok_or_else(|| {
+            StructuredContentError::not_found("structured action binding is unavailable")
+        })?;
         let expires_at = parse_time(&row.try_get::<String, _>("expires_at")?)?;
-        anyhow::ensure!(expires_at > now, "structured action binding expired");
+        anyhow::ensure!(
+            expires_at > now,
+            StructuredContentError::expired("structured action binding expired")
+        );
         let state: String = row.try_get("state")?;
         let lease_expires_at = row
             .try_get::<Option<String>, _>("lease_expires_at")?
@@ -374,7 +385,7 @@ impl StructuredContentService {
         anyhow::ensure!(
             state == "pending"
                 || (state == "executing" && lease_expires_at.is_some_and(|lease| lease <= now)),
-            "structured action binding is not executable"
+            StructuredContentError::conflict("structured action binding is not executable")
         );
         let content_id: String = row.try_get("content_id")?;
         let content_revision = u64::try_from(row.try_get::<i64, _>("content_revision")?)?;
@@ -387,11 +398,12 @@ impl StructuredContentService {
         .await?;
         anyhow::ensure!(
             u64::try_from(current_revision)? == content_revision,
-            "structured action revision is stale"
+            StructuredContentError::conflict("structured action revision is stale")
         );
         let input_schema: Value =
             serde_json::from_str(&row.try_get::<String, _>("input_schema_json")?)?;
-        validate_input(&input_schema, &input)?;
+        validate_input(&input_schema, &input)
+            .map_err(|error| StructuredContentError::invalid(error.to_string()))?;
         release_expired_content_claims(&mut tx, session_id, &content_id, now).await?;
         let lease_expires_at = now + Duration::seconds(ACTION_LEASE_SECONDS);
         let claim_token = Uuid::new_v4().to_string();
@@ -422,7 +434,7 @@ impl StructuredContentService {
         .await?;
         anyhow::ensure!(
             updated.rows_affected() == 1,
-            "structured action claim conflict"
+            StructuredContentError::conflict("structured action claim conflict")
         );
         let execution = StructuredActionExecution {
             binding_id: binding_id.to_string(),
@@ -469,21 +481,25 @@ impl StructuredContentService {
         .bind(&self.scope.device_id)
         .fetch_optional(&mut *tx)
         .await?
-        .ok_or_else(|| anyhow::anyhow!("structured action binding is unavailable"))?;
+        .ok_or_else(|| {
+            StructuredContentError::not_found("structured action binding is unavailable")
+        })?;
         let state: String = row.try_get("state")?;
         let claim_token: Option<String> = row.try_get("claim_token")?;
         let claim_epoch = u64::try_from(row.try_get::<i64, _>("claim_epoch")?)?;
         anyhow::ensure!(
             claim_token.as_deref() == Some(&execution.claim_token)
                 && claim_epoch == execution.claim_epoch,
-            "structured action claim conflict"
+            StructuredContentError::conflict("structured action claim conflict")
         );
         anyhow::ensure!(
             row.try_get::<String, _>("content_id")? == execution.content_id
                 && row.try_get::<String, _>("action_id")? == execution.action_id
                 && StructuredActionIntent::from_str(&row.try_get::<String, _>("intent")?)?
                     == execution.intent,
-            "structured action execution does not match its binding"
+            StructuredContentError::conflict(
+                "structured action execution does not match its binding"
+            )
         );
         if state == "completed" {
             let receipt = receipt_for_binding(
@@ -500,7 +516,10 @@ impl StructuredContentService {
                 ..receipt
             });
         }
-        anyhow::ensure!(state == "executing", "structured action is not executing");
+        anyhow::ensure!(
+            state == "executing",
+            StructuredContentError::conflict("structured action is not executing")
+        );
         let lease_expires_at = row
             .try_get::<Option<String>, _>("lease_expires_at")?
             .as_deref()
@@ -508,7 +527,7 @@ impl StructuredContentService {
             .transpose()?;
         anyhow::ensure!(
             lease_expires_at.is_some_and(|lease| lease > now),
-            "structured action lease expired"
+            StructuredContentError::conflict("structured action lease expired")
         );
         let receipt = StructuredActionReceipt {
             binding_id: Some(execution.binding_id.clone()),
@@ -535,7 +554,7 @@ impl StructuredContentService {
         .await?;
         anyhow::ensure!(
             updated.rows_affected() == 1,
-            "structured action completion conflict"
+            StructuredContentError::conflict("structured action completion conflict")
         );
         sqlx::query(
             "INSERT INTO structured_action_receipts(binding_id, result_json, completed_at) VALUES (?, ?, ?)",
@@ -592,7 +611,7 @@ impl StructuredContentService {
         .await?;
         anyhow::ensure!(
             updated.rows_affected() == 1,
-            "structured action release conflict"
+            StructuredContentError::conflict("structured action release conflict")
         );
         tx.commit().await?;
         Ok(())
@@ -704,7 +723,10 @@ async fn ensure_scoped_session(
     .bind(&scope.device_id)
     .fetch_one(&mut **tx)
     .await?;
-    anyhow::ensure!(exists != 0, "session not found in structured content scope");
+    anyhow::ensure!(
+        exists != 0,
+        StructuredContentError::not_found("session not found in structured content scope")
+    );
     Ok(())
 }
 
@@ -724,7 +746,9 @@ async fn ensure_no_executing_action(
     .await?;
     anyhow::ensure!(
         executing == 0,
-        "structured content action is executing; retry after completion"
+        StructuredContentError::conflict(
+            "structured content action is executing; retry after completion"
+        )
     );
     Ok(())
 }
@@ -827,7 +851,7 @@ fn validate_binding_action_ids(
         return Ok(());
     }
     anyhow::ensure!(
-        mime_type == AGENTWEAVE_CARD_MIME || mime_type.starts_with("application/vnd.a2ui."),
+        supports_interactive_mime(mime_type),
         "interactive actions require a supported structured content MIME type"
     );
     let actions = payload
@@ -852,134 +876,6 @@ fn validate_binding_action_ids(
         "structured content actions and bindings do not match"
     );
     Ok(())
-}
-
-fn validate_payload_for_mime(mime_type: &str, payload: &Value) -> anyhow::Result<()> {
-    validate_public_payload(payload)?;
-    if mime_type == AGENTWEAVE_CARD_MIME {
-        validate_agentweave_card(payload)?;
-    }
-    Ok(())
-}
-
-fn validate_agentweave_card(payload: &Value) -> anyhow::Result<()> {
-    let card = payload
-        .as_object()
-        .ok_or_else(|| anyhow::anyhow!("AgentWeave card payload must be an object"))?;
-    anyhow::ensure!(
-        card.keys().all(|key| matches!(
-            key.as_str(),
-            "title" | "summary" | "status" | "fields" | "actions" | "actionBindings"
-        )),
-        "AgentWeave card payload contains unknown fields"
-    );
-    bounded_text(card, "title", 256, true)?;
-    bounded_text(card, "summary", 4_096, false)?;
-    if let Some(status) = card.get("status") {
-        let status = exact_object(status, &["label", "tone"], "card status")?;
-        bounded_text(status, "label", 128, true)?;
-        let tone = status
-            .get("tone")
-            .and_then(Value::as_str)
-            .ok_or_else(|| anyhow::anyhow!("card status tone is invalid"))?;
-        anyhow::ensure!(
-            matches!(tone, "neutral" | "info" | "success" | "warning" | "danger"),
-            "card status tone is invalid"
-        );
-    }
-    validate_card_rows(card, "fields", &["label", "value"], 32)?;
-    if let Some(actions) = card.get("actions") {
-        let actions = actions
-            .as_array()
-            .ok_or_else(|| anyhow::anyhow!("card actions are invalid"))?;
-        anyhow::ensure!(actions.len() <= 8, "card has too many actions");
-        for action in actions {
-            let action = exact_object(action, &["id", "label", "style"], "card action")?;
-            let id = bounded_text(action, "id", 255, true)?
-                .ok_or_else(|| anyhow::anyhow!("card action id is required"))?;
-            validate_id(id, "card action id")?;
-            bounded_text(action, "label", 128, true)?;
-            if let Some(style) = action.get("style") {
-                anyhow::ensure!(
-                    matches!(style.as_str(), Some("primary" | "secondary" | "danger")),
-                    "card action style is invalid"
-                );
-            }
-        }
-    }
-    if let Some(bindings) = card.get("actionBindings") {
-        let bindings = bindings
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("card action bindings are invalid"))?;
-        anyhow::ensure!(bindings.len() <= 8, "card has too many action bindings");
-        for (action_id, binding_id) in bindings {
-            validate_id(action_id, "card action id")?;
-            validate_id(
-                binding_id
-                    .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("card action binding is invalid"))?,
-                "card action binding",
-            )?;
-        }
-    }
-    Ok(())
-}
-
-fn validate_card_rows(
-    card: &Map<String, Value>,
-    name: &str,
-    keys: &[&str],
-    maximum: usize,
-) -> anyhow::Result<()> {
-    let Some(rows) = card.get(name) else {
-        return Ok(());
-    };
-    let rows = rows
-        .as_array()
-        .ok_or_else(|| anyhow::anyhow!("card {name} are invalid"))?;
-    anyhow::ensure!(rows.len() <= maximum, "card {name} exceed limit");
-    for row in rows {
-        let row = exact_object(row, keys, "card row")?;
-        for key in keys {
-            bounded_text(row, key, 4_096, true)?;
-        }
-    }
-    Ok(())
-}
-
-fn exact_object<'a>(
-    value: &'a Value,
-    keys: &[&str],
-    label: &str,
-) -> anyhow::Result<&'a Map<String, Value>> {
-    let object = value
-        .as_object()
-        .ok_or_else(|| anyhow::anyhow!("{label} is invalid"))?;
-    anyhow::ensure!(
-        object.keys().all(|key| keys.contains(&key.as_str())),
-        "{label} contains unknown fields"
-    );
-    Ok(object)
-}
-
-fn bounded_text<'a>(
-    object: &'a Map<String, Value>,
-    key: &str,
-    maximum: usize,
-    required: bool,
-) -> anyhow::Result<Option<&'a str>> {
-    let Some(value) = object.get(key) else {
-        anyhow::ensure!(!required, "card {key} is required");
-        return Ok(None);
-    };
-    let value = value
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("card {key} is invalid"))?;
-    anyhow::ensure!(
-        !value.trim().is_empty() && value.len() <= maximum,
-        "card {key} is invalid"
-    );
-    Ok(Some(value))
 }
 
 fn validate_session_id(value: &str) -> anyhow::Result<()> {

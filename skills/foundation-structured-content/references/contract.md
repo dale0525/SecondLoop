@@ -36,6 +36,8 @@ Use MIME `application/vnd.a2ui.safe-card+json` with schema version `0.8` or `1`.
 
 Text styles are `heading`, `body`, and `caption`. The adapter rejects every other component, property, active-content field, URL field, or credential-shaped field and falls back to plain text. The Runtime adds opaque `actionBindings`; never include them in model-authored payloads.
 
+The Runtime validates this same allowlisted A2UI structure before persistence. Unsupported schema versions, components, properties, action shapes, or action-to-binding mappings fail the publish operation instead of being stored as malformed cards.
+
 ## Binding
 
 Each binding contains `actionId`, `intent`, `idempotencyKey`, `expiresAt`, private `parameters`, an optional restricted `inputSchema`, and optional `constraints`.
