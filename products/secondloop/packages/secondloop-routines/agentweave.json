@@ -24,8 +24,6 @@
     "capabilities": [
       "task-provider",
       "scheduler",
-      "calendar-connector",
-      "contacts-connector",
       "host-tools"
     ],
     "runtimeTools": [
