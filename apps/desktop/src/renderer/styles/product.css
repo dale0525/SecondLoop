@@ -90,7 +90,7 @@
 }
 
 .secondloop-nav-item {
-  min-height: 42px;
+  min-height: 44px;
   gap: 10px;
   padding: 9px 11px;
   border-radius: 8px;
@@ -521,6 +521,10 @@
   background: color-mix(in srgb, var(--color-surface-muted) 72%, transparent) !important;
 }
 
+.mail-onboarding-empty > .rt-Button {
+  min-height: 44px;
+}
+
 .mail-onboarding-empty-icon {
   display: grid;
   width: 42px;
@@ -580,7 +584,7 @@
 .mail-configuration-endpoints small { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
 .mail-configuration-endpoints strong { margin-top: 2px; overflow: hidden; color: var(--color-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .mail-configuration-actions { padding-top: 2px; border-top: 1px solid var(--color-border); }
-.mail-configuration-actions button { min-height: 40px; }
+.mail-configuration-actions button { min-height: 44px; }
 
 .mail-dialog-overlay {
   position: fixed;
@@ -664,6 +668,7 @@
 }
 
 .connections-screen .accounts-layout { min-height: 370px; }
+.connections-mail .foundation-detail-card .rt-Button { min-height: 44px; }
 
 .secondloop-more-overlay {
   position: fixed;
@@ -706,8 +711,7 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
     padding: 5px 6px env(safe-area-inset-bottom);
     border-top: 1px solid var(--color-border);
-    background: color-mix(in srgb, var(--color-surface) 96%, transparent);
-    backdrop-filter: blur(16px);
+    background: var(--color-background);
   }
   .secondloop-mobile-nav .secondloop-nav-item,
   .secondloop-mobile-nav-item {

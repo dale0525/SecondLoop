@@ -159,25 +159,29 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
         <Dialog.Portal>
           <Dialog.Overlay className="foundation-dialog-overlay actions-mobile-detail" />
           <Dialog.Content className="foundation-dialog-content actions-mobile-detail memory-mobile-detail-content">
-            <Dialog.Title className="sr-only">{t("foundation.actions.details")}</Dialog.Title>
-            <Dialog.Close asChild>
-              <button
-                aria-label={t("foundation.actions.closeDetails")}
-                className="dialog-close mobile-detail-close"
-                type="button"
-              >
-                <X size={16} />
-              </button>
-            </Dialog.Close>
-            {selected ? (
-              <ActionDetail
-                item={selected}
-                onApprove={() => void resolve("approve_once")}
-                onReject={() => void resolve("reject")}
-                resolving={resolving}
-                sanitizeErrors={embedded}
-              />
-            ) : null}
+            <div className="mobile-detail-header">
+              <Dialog.Title className="foundation-dialog-title">{t("foundation.actions.details")}</Dialog.Title>
+              <Dialog.Close asChild>
+                <button
+                  aria-label={t("foundation.actions.closeDetails")}
+                  className="dialog-close mobile-detail-close"
+                  type="button"
+                >
+                  <X size={16} />
+                </button>
+              </Dialog.Close>
+            </div>
+            <div className="mobile-detail-body">
+              {selected ? (
+                <ActionDetail
+                  item={selected}
+                  onApprove={() => void resolve("approve_once")}
+                  onReject={() => void resolve("reject")}
+                  resolving={resolving}
+                  sanitizeErrors={embedded}
+                />
+              ) : null}
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

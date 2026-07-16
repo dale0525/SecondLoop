@@ -187,3 +187,25 @@ Narrow：单列分组，行高至少 52px。危险数据操作与普通外观选
 - 隔离 QA 没有真实 Action 或 Memory 数据，因此这两路由验收空态和详情占位；真实详情契约由自动化测试覆盖。
 - Chat 采用模型未配置引导态，Connections 采用 Mail 未配置态；两者都是本文冻结的合法产品状态。
 - Connections 和 Settings 在 390px 下需要纵向滚动，符合单列设计，不视为布局偏差。
+
+## 9. Workspace Foundations 增补验收
+
+- 验收状态：通过
+- 验收日期：2026-07-16
+- 验收范围：Today、Connections、Action Center
+- 验收视口：`1440 × 900`、`1280 × 800`、`390 × 844`
+- 截图目录：`output/qa-secondloop/screenshots/`
+- 截图数量：13 张
+
+本轮使用产品化 Renderer 和隔离 Host mock 验收 Workspace OAuth、Calendar、Contacts 及其 Action 预览。三个目标视口的页面宽度均与视口宽度一致，没有横向滚动；浏览器 console warning、error 和未捕获异常均为 0。
+
+Connections 在两个桌面视口都保持四张就绪卡和两张 Provider 卡的两列布局，在 `390 × 844` 收敛为单列。授权按钮、模型输入、邮箱账户动作、侧栏导航和移动底栏的可见交互区域均不小于 `44 × 44`。滚动到移动端页面末尾后，邮箱连接动作仍完整位于底栏上方。
+
+Today 在桌面保持双栏，在窄窗口按“今日重点、等待批准、需要回复、已确认承诺”的视觉顺序排列。真实 Calendar 事件与 Tasks、Schedules 同时进入今日重点，五个来源标签在三个视口中均能完整适配。
+
+Action Center 在桌面直接切换 Calendar 与 Contacts 预览，不会误开窄窗口 Dialog。窄窗口从列表进入详情后，独立的固定标题栏把关闭按钮与正文隔开，长参数哈希没有撑宽页面；详情滚动到底部时，拒绝和批准按钮仍完整可见。桌面与移动端的两个决策按钮高度均为 44px。
+
+可接受偏差：
+
+- OAuth 验收使用未授权状态，不在隔离页面发起真实第三方登录；授权状态机和脱敏响应由自动化测试覆盖。
+- QA 数据只覆盖 Calendar update 与 Contacts update 的权威预览；Mail 及其他 Calendar 动作的确定性分派由自动化测试覆盖。
